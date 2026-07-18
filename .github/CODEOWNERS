@@ -1,0 +1,9 @@
+# Code owners for Atlas.
+#
+# The listed owner's review is REQUIRED on every pull request that touches
+# matching files (enforced via branch protection: "Require review from Code Owners").
+# This makes @sspartorg's approval mandatory before any PR can be merged into `main`.
+#
+# Docs: https://docs.github.com/articles/about-code-owners
+
+* @sspartorg
