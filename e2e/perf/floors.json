@@ -1,0 +1,164 @@
+{
+  "generated_at": "2026-06-26",
+  "source": "W7 chunk 1 perf-baseline.ndjson (CI artifact, not committed)",
+  "metric": "nav_timing.load_ms",
+  "notes": "Floors are CURRENT p95 + 25% headroom. They lock in dev-mode-on-Windows worst-case; CI on Linux + Vite dev still hits Vite cold-compile tail. Goal per master plan is p95 < 200ms — that requires production-build perf measurement, currently deferred. These floors catch regressions, not absolute SLOs.",
+  "routes": {
+    "/": {
+      "samples": 23,
+      "p50_ms": 8537,
+      "p95_ms": 27555,
+      "floor_ms": 34444
+    },
+    "/agents": {
+      "samples": 41,
+      "p50_ms": 10018,
+      "p95_ms": 24365,
+      "floor_ms": 30457
+    },
+    "/agents/marketplace": {
+      "samples": 32,
+      "p50_ms": 10115,
+      "p95_ms": 23467,
+      "floor_ms": 29334
+    },
+    "/agents/mcp-tools": {
+      "samples": 21,
+      "p50_ms": 8495,
+      "p95_ms": 30360,
+      "floor_ms": 37950
+    },
+    "/analytics": {
+      "samples": 44,
+      "p50_ms": 11983,
+      "p95_ms": 17446,
+      "floor_ms": 21808
+    },
+    "/epics": {
+      "samples": 35,
+      "p50_ms": 9308,
+      "p95_ms": 23090,
+      "floor_ms": 28863
+    },
+    "/epics/new": {
+      "samples": 19,
+      "p50_ms": 6417,
+      "p95_ms": 21775,
+      "floor_ms": 27219
+    },
+    "/guardrails": {
+      "samples": 21,
+      "p50_ms": 7186,
+      "p95_ms": 20059,
+      "floor_ms": 25074
+    },
+    "/issues": {
+      "samples": 59,
+      "p50_ms": 11101,
+      "p95_ms": 36351,
+      "floor_ms": 45439
+    },
+    "/notifications": {
+      "samples": 20,
+      "p50_ms": 5845,
+      "p95_ms": 20228,
+      "floor_ms": 25285
+    },
+    "/projects": {
+      "samples": 48,
+      "p50_ms": 10659,
+      "p95_ms": 24168,
+      "floor_ms": 30210
+    },
+    "/projects/e2e-terminal-project": {
+      "samples": 9,
+      "p50_ms": 242,
+      "p95_ms": 285,
+      "floor_ms": 357
+    },
+    "/projects/e2e-terminal-project/guardrails": {
+      "samples": 12,
+      "p50_ms": 237,
+      "p95_ms": 304,
+      "floor_ms": 380
+    },
+    "/projects/e2e-terminal-project?tab=epics": {
+      "samples": 2,
+      "p50_ms": 141,
+      "p95_ms": 141,
+      "floor_ms": 177
+    },
+    "/projects/e2e-terminal-project?tab=guardrails": {
+      "samples": 2,
+      "p50_ms": 143,
+      "p95_ms": 143,
+      "floor_ms": 179
+    },
+    "/projects/e2e-terminal-project?tab=history": {
+      "samples": 2,
+      "p50_ms": 129,
+      "p95_ms": 129,
+      "floor_ms": 162
+    },
+    "/projects/e2e-terminal-project?tab=issues": {
+      "samples": 2,
+      "p50_ms": 141,
+      "p95_ms": 141,
+      "floor_ms": 177
+    },
+    "/projects/e2e-terminal-project?tab=overview": {
+      "samples": 3,
+      "p50_ms": 260,
+      "p95_ms": 260,
+      "floor_ms": 325
+    },
+    "/queue": {
+      "samples": 20,
+      "p50_ms": 6053,
+      "p95_ms": 17880,
+      "floor_ms": 22350
+    },
+    "/reminders": {
+      "samples": 20,
+      "p50_ms": 8095,
+      "p95_ms": 23279,
+      "floor_ms": 29099
+    },
+    "/scratch-pad": {
+      "samples": 21,
+      "p50_ms": 3568,
+      "p95_ms": 21596,
+      "floor_ms": 26995
+    },
+    "/search": {
+      "samples": 20,
+      "p50_ms": 4523,
+      "p95_ms": 25549,
+      "floor_ms": 31937
+    },
+    "/settings": {
+      "samples": 20,
+      "p50_ms": 9462,
+      "p95_ms": 19638,
+      "floor_ms": 24548
+    },
+    "/settings/credentials": {
+      "samples": 21,
+      "p50_ms": 6934,
+      "p95_ms": 15621,
+      "floor_ms": 19527
+    },
+    "/terminal": {
+      "samples": 33,
+      "p50_ms": 11376,
+      "p95_ms": 29252,
+      "floor_ms": 36565
+    },
+    "/terminal/layout": {
+      "samples": 20,
+      "p50_ms": 5611,
+      "p95_ms": 26500,
+      "floor_ms": 33125
+    }
+  }
+}

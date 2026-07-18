@@ -1,0 +1,70 @@
+node_modules/
+dist/
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.local
+.env.backup
+.env.bak
+.env.prod
+.superpowers/
+.DS_Store
+Thumbs.db
+*.stackdump
+*.log
+logs/
+coverage/
+# Theme 12 — `tools/coverage/` helpers are source scripts, not
+# vitest output. Negate the `coverage/` rule for that path.
+!tools/coverage/
+.vite/
+# Playwright MCP scratch
+.playwright-mcp/
+# Ad-hoc verification screenshots produced by Playwright MCP — artifacts of
+# a verification cycle, not source of truth. Repo audits should re-take
+# these on demand rather than commit them.
+verification-*.png
+# Local visual-audit artifacts (screenshots + DEVIATIONS.md). Not source of truth.
+docs/visual-audit/
+# Confluence documentation screenshots — local only, staged for manual upload to
+# the internal Atlas Confluence space. Never publish to remote.
+docs/atlas-screenshots/
+# Generated at API boot by mcp-config-writer — agent-runner passes this to
+# `claude --mcp-config` so the spawned subprocess can reach Atlas MCP.
+packages/api/mcp-config.generated.json
+# Theme 13 — Playwright artifacts. Snapshots in e2e/**/__screenshots__
+# ARE committed (the visual regression baseline); everything else is
+# scratch and stays local.
+test-results/
+playwright-report/
+playwright-forensic-report/
+playwright/.cache/
+e2e-logs/*
+!e2e-logs/README.md
+# Audit docs (markdown) under baseline-*/ and forensic-*/ are tracked;
+# the rest (ndjson, screenshots, large logs) stays local.
+!e2e-logs/baseline-*/
+e2e-logs/baseline-*/*
+!e2e-logs/baseline-*/*.md
+!e2e-logs/forensic-*/
+e2e-logs/forensic-*/*
+!e2e-logs/forensic-*/*.md
+# Local git worktrees for parallel task workspaces (created by agents).
+.worktrees/
+# 2026-06-09 — /commands framework reference data. Per run the runner
+# writes `.atlas/{constitution,handoff,current-task}.md`,
+# `.atlas/templates/*`, `.atlas/scripts/{bash,powershell}/check-*.{sh,ps1}`
+# — all generated artefacts, not source of truth. Stays ignored.
+.atlas/
+# Claude Code session scratch + native EnterWorktree worktrees.
+# Team-shared permission allowlist lives in .claude/settings.json (tracked).
+# NOTE: use `.claude/*` not `.claude/` — git won't apply a `!` negation
+# inside a fully-ignored directory.
+.claude/*
+!.claude/settings.json
+# Per-run Copilot prompt files (`.github/prompts/atlas-*.prompt.md`) staged
+# by the orchestrator's commands-assembler. Generated per run, never source
+# of truth. The rest of `.github/` (workflows, instructions, copilot
+# config) stays tracked.
+.github/prompts/

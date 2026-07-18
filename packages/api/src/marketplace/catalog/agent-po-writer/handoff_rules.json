@@ -1,0 +1,12 @@
+[
+  {
+    "target_agent_id": "agent-po-reviewer",
+    "kind": "on-pass",
+    "status": "ready"
+  },
+  {
+    "target_agent_id": "owner",
+    "kind": "on-fail",
+    "status": "waiting_for_info"
+  }
+]

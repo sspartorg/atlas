@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <link rel="icon" type="image/x-icon" href="/atlas.ico" />
+    <link rel="icon" type="image/png" sizes="any" href="/atlas.png" />
+    <title>Atlas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body, #root { height: 100%; margin: 0; padding: 0; }
+      /* Boot fallbacks for both modes. The inline FOUC script below
+         sets data-theme on documentElement BEFORE any other script runs,
+         so the right background paints immediately. theme-vars.css will
+         override this once it loads (mid-boot) with the full palette. */
+      :root { --atlas-pageBg-boot: #FFFFFF; }
+      :root[data-theme="dark"] { --atlas-pageBg-boot: #101218; }
+      body { background: var(--atlas-pageBg-boot); }
+    </style>
+    <script>
+      // FOUC prevention. Runs before any module script — reads the
+      // persisted theme from localStorage (or system preference) and
+      // applies data-theme + colorScheme on documentElement so the
+      // browser paints the right colours in the very first paint frame.
+      // Kept tiny and dependency-free; mirrors useThemeMode's logic.
+      (function () {
+        try {
+          var stored = localStorage.getItem('atlas.themeMode');
+          var mode = (stored === 'light' || stored === 'dark') ? stored : null;
+          if (!mode) {
+            mode = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+              ? 'dark'
+              : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', mode);
+          document.documentElement.style.colorScheme = mode;
+        } catch (e) {
+          // localStorage unavailable / matchMedia throws — leave default.
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

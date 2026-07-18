@@ -1,0 +1,12 @@
+[
+  {
+    "target_agent_id": "owner",
+    "kind": "on-pass",
+    "status": "in_review"
+  },
+  {
+    "target_agent_id": "owner",
+    "kind": "on-fail",
+    "status": "waiting_for_info"
+  }
+]

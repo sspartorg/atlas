@@ -1,0 +1,171 @@
+name: Lighthouse
+
+# W5 — nightly + manual Lighthouse-CI sweep against a prod build of the
+# web bundle. Enforces category floors:
+#   perf ≥ 90, a11y ≥ 95, best-practices ≥ 95, SEO ≥ 90.
+#
+# Matrix: 3 viewports (desktop 1920x1080, mobile 390x844, ipad 834x1194)
+# × 5 hot routes: /, /projects, /queue, /issues, /analytics.
+#
+# The `perf-prod` job in perf.yml already handles the p95 <200ms
+# runtime perf floors via `check-perf-floors.mjs`. This complements it
+# with the category-level audit that Lighthouse specialises in
+# (long-task blocking, accessibility contrast, HTTPS best-practices,
+# meta tags).
+#
+# Not part of the PR gate — noisy on shared runners. Trigger via:
+#   gh workflow run lighthouse.yml -r <branch>
+# or by adding the `run-lighthouse` label to a PR.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * *"   # 08:00 UTC daily (one hour after perf.yml)
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: lighthouse-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lighthouse:
+    name: Lighthouse ${{ matrix.viewport }} - ${{ matrix.route }}
+    if: >
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'run-lighthouse')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        viewport: [desktop, mobile, ipad]
+        route: ["/", "/projects", "/queue", "/issues", "/analytics"]
+    env:
+      DATABASE_URL: postgres://atlas:atlas@localhost:5500/atlas_e2e
+      ATLAS_LOG_LEVEL: error
+      ATLAS_MCP_TOKEN: ""
+      ATLAS_E2E_PROD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start Postgres
+        run: |
+          docker compose up -d postgres
+          docker compose ps
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Wait for Postgres ready
+        run: |
+          for i in $(seq 1 60); do
+            if docker compose exec -T postgres pg_isready -U atlas -d atlas >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs postgres
+          exit 1
+
+      - name: Build prod bundle
+        run: pnpm -r build
+
+      - name: Install Chrome for Lighthouse
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Install lhci
+        run: pnpm add -w -D @lhci/cli@0.15.x
+
+      - name: Start API + Web (prod preview)
+        run: |
+          # Same env-vars the e2e:perf:prod pipeline uses. Migrations
+          # + seed run inside the prod boot; the web preview is vite
+          # preview against dist/.
+          pnpm -F @atlas/api db:migrate
+          nohup pnpm -F @atlas/api start > api.log 2>&1 &
+          nohup pnpm -F @atlas/web preview -- --host --port 4000 > web.log 2>&1 &
+          for i in $(seq 1 40); do
+            curl -sf http://127.0.0.1:4000/ > /dev/null && curl -sf http://127.0.0.1:4001/api/health > /dev/null && exit 0
+            sleep 3
+          done
+          echo "--- api.log ---" && cat api.log
+          echo "--- web.log ---" && cat web.log
+          exit 1
+
+      - name: Run Lighthouse (${{ matrix.viewport }})
+        run: |
+          # Viewport / device selection is passed via lhci config. Emit
+          # a temporary config that targets exactly one URL per job.
+          FORM_FACTOR=$( [ "${{ matrix.viewport }}" = "mobile" ] && echo "mobile" || echo "desktop" )
+          WIDTH=$(
+            case "${{ matrix.viewport }}" in
+              desktop) echo 1920 ;;
+              mobile)  echo 390 ;;
+              ipad)    echo 834 ;;
+            esac
+          )
+          HEIGHT=$(
+            case "${{ matrix.viewport }}" in
+              desktop) echo 1080 ;;
+              mobile)  echo 844 ;;
+              ipad)    echo 1194 ;;
+            esac
+          )
+          cat > lighthouserc.cjs <<EOF
+          module.exports = {
+            ci: {
+              collect: {
+                url: ['http://127.0.0.1:4000${{ matrix.route }}'],
+                numberOfRuns: 3,
+                settings: {
+                  preset: '${FORM_FACTOR}',
+                  screenEmulation: {
+                    mobile: '${FORM_FACTOR}' === 'mobile',
+                    width: ${WIDTH},
+                    height: ${HEIGHT},
+                    deviceScaleFactor: 2,
+                    disabled: false,
+                  },
+                  onlyCategories: ['performance', 'accessibility', 'best-practices', 'seo'],
+                },
+              },
+              assert: {
+                assertions: {
+                  'categories:performance':      ['error', { minScore: 0.90 }],
+                  'categories:accessibility':    ['error', { minScore: 0.95 }],
+                  'categories:best-practices':   ['error', { minScore: 0.95 }],
+                  'categories:seo':              ['error', { minScore: 0.90 }],
+                },
+              },
+              upload: { target: 'temporary-public-storage' },
+            },
+          };
+          EOF
+          npx lhci autorun --config=./lighthouserc.cjs
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-${{ matrix.viewport }}-${{ github.run_id }}
+          path: |
+            .lighthouseci
+            api.log
+            web.log
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Stop Postgres
+        if: always()
+        run: docker compose down -v

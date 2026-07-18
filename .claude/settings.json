@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__atlas",
+      "mcp__atlas__*",
+      "mcp__playwright",
+      "mcp__playwright__*"
+    ]
+  }
+}

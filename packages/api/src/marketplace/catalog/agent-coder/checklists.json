@@ -1,0 +1,27 @@
+[
+  {
+    "label": "pnpm typecheck clean across affected packages",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "At least one new unit test added; integration test added if surface dictates",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "pnpm test clean across affected packages",
+    "sort_order": 2,
+    "required": true
+  },
+  {
+    "label": "Commit message follows Conventional Commits",
+    "sort_order": 3,
+    "required": true
+  },
+  {
+    "label": "No console.log / debugger / TODO residue in the diff",
+    "sort_order": 4,
+    "required": true
+  }
+]

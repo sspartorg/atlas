@@ -1,0 +1,75 @@
+services:
+  postgres:
+    # Dev container. Driven by .env (POSTGRES_DB / POSTGRES_USER / POSTGRES_PASSWORD).
+    # pgvector/pgvector:pg16 = Postgres 16 + pgvector extension (Theme 08 / 2026-05-24).
+    # Backward-compatible with the postgres:16-alpine data volume; existing rows survive.
+    image: pgvector/pgvector:pg16
+    container_name: atlas-postgres
+    restart: unless-stopped
+    # 2026-06-11 — pg_stat_statements preload added for the forensic audit
+    # harness (Plan 1 of /goal forensic E2E). Migration 007 then runs
+    # CREATE EXTENSION inside each application DB. The flag must live in
+    # shared_preload_libraries because the extension hooks into the
+    # query lifecycle at startup — not at CREATE EXTENSION time.
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_preload_libraries=pg_stat_statements"
+      - "-c"
+      - "pg_stat_statements.track=all"
+      - "-c"
+      - "pg_stat_statements.max=5000"
+    ports:
+      - "5500:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-atlas}
+      POSTGRES_USER: ${POSTGRES_USER:-atlas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atlas}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - atlas-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-atlas} -d ${POSTGRES_DB:-atlas}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  postgres-prod:
+    # Prod container — runs alongside the dev container so `pnpm prod` has its
+    # own isolated Postgres on host port 5510. Driven by .env.prod's
+    # POSTGRES_*_PROD vars (defaults if unset: db=atlas_prod, user=atlas,
+    # password=atlas). Volume is separate from dev so `pnpm db:down:purge`
+    # against the dev container cannot wipe prod data.
+    image: pgvector/pgvector:pg16
+    container_name: atlas-postgres-prod
+    restart: unless-stopped
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_preload_libraries=pg_stat_statements"
+      - "-c"
+      - "pg_stat_statements.track=all"
+      - "-c"
+      - "pg_stat_statements.max=5000"
+    ports:
+      - "5510:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB_PROD:-atlas_prod}
+      POSTGRES_USER: ${POSTGRES_USER_PROD:-atlas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_PROD:-atlas}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - atlas-pg-prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER_PROD:-atlas} -d ${POSTGRES_DB_PROD:-atlas_prod}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+volumes:
+  atlas-pg:
+    name: atlas-pg
+  atlas-pg-prod:
+    name: atlas-pg-prod

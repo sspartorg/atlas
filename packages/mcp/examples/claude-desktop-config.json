@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "atlas": {
+      "command": "node",
+      "args": [
+        "--import",
+        "file://<absolute-path-to-repo>/packages/mcp/node_modules/tsx/dist/loader.mjs",
+        "<absolute-path-to-repo>/packages/mcp/src/index.ts"
+      ],
+      "env": {
+        "ATLAS_API_BASE": "http://127.0.0.1:4001"
+      }
+    }
+  }
+}

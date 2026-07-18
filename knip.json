@@ -1,0 +1,26 @@
+{
+    "$schema": "https://unpkg.com/knip@latest/schema.json",
+    "workspaces": {
+        "packages/api": {
+            "entry": [
+                "src/scripts/*.ts",
+                "src/db/migrations/*.ts"
+            ],
+            "ignore": [
+                "src/db/types.ts"
+            ]
+        },
+        "packages/mcp": {
+            "entry": ["scripts/*.mjs"]
+        }
+    },
+    "ignore": [
+        "**/coverage/**"
+    ],
+    "ignoreDependencies": [
+        "@secretlint/secretlint-rule-preset-recommend"
+    ],
+    "rules": {
+        "duplicates": "off"
+    }
+}

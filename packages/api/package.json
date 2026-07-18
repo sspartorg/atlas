@@ -1,0 +1,53 @@
+{
+  "name": "@atlas/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/server.ts",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "start": "tsx src/main.ts",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "db:up": "tsx src/scripts/db-up.ts",
+    "db:down": "tsx src/scripts/db-down.ts",
+    "db:down:purge": "tsx src/scripts/db-down.ts --purge",
+    "db:wait": "tsx src/scripts/wait-for-pg.ts",
+    "db:migrate": "tsx src/db/run-migrations.ts latest",
+    "db:rollback": "tsx src/db/run-migrations.ts rollback",
+    "db:status": "tsx src/db/run-migrations.ts status",
+    "db:seed": "tsx src/scripts/seed-cli.ts",
+    "db:reset": "pnpm db:down:purge && pnpm db:up && pnpm db:wait && pnpm db:migrate",
+    "doctor": "tsx src/scripts/check-prereqs.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/multipart": "^10.0.0",
+    "@fastify/swagger": "^9.0.0",
+    "@fastify/swagger-ui": "^6.0.0",
+    "@fastify/websocket": "^11.2.0",
+    "@atlas/mcp": "workspace:*",
+    "@atlas/shared": "workspace:*",
+    "croner": "^10.0.1",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.9.0",
+    "jszip": "^3.10.1",
+    "knex": "^3.3.0",
+    "kysely": "^0.29.2",
+    "node-pty": "^1.1.0",
+    "pg": "^8.22.0",
+    "web-push": "^3.6.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "@types/web-push": "^3.6.4",
+    "@vitest/coverage-v8": "^4.1.9",
+    "tsx": "^4.22.4",
+    "vitest": "^4.1.9"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "@atlas/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "atlas-mcp": "./dist/index.js"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./registrations": "./src/registrations.ts",
+    "./http-handler": "./src/http-handler.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@atlas/shared": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "@vitest/coverage-v8": "^4.1.9",
+    "tsx": "^4.22.4",
+    "vitest": "^4.1.9"
+  }
+}

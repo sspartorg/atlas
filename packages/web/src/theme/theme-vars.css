@@ -1,0 +1,261 @@
+/*
+ * Atlas CSS Variables — light + dark (Mercury theme).
+ *
+ * The default block (`:root, :root[data-theme="light"]`) is the
+ * fallback when `data-theme` is absent. The dark block overrides via
+ * the `[data-theme="dark"]` attribute selector.
+ *
+ * THIS FILE IS THE SINGLE SOURCE OF TRUTH for every CSS variable. The
+ * FOUC-prevention script in `index.html` sets `data-theme` before
+ * React mounts so the browser paints immediately with the right block.
+ * `applyThemeVars(mode)` in `theme-vars.ts` only flips `data-theme`
+ * at runtime — it does NOT write inline styles. Editing values here
+ * propagates via Vite HMR without a reload.
+ */
+
+:root,
+:root[data-theme='light'] {
+    color-scheme: light;
+
+    /* Brand-hue slots collapse to Mercury accent (= text) */
+    --atlas-green: #4f46e5;
+    --atlas-greenDark: #4338ca;
+    --atlas-emerald: #4f46e5;
+    --atlas-brandBlue: #4f46e5;
+    --atlas-cerulean: #4f46e5;
+    --atlas-eggplant: #4f46e5;
+    --atlas-purple: #4f46e5;
+    --atlas-fuchsia: #4f46e5;
+    --atlas-orange: #a86a1f;
+    --atlas-gold: #a86a1f;
+
+    /* Neutrals */
+    --atlas-slate: #0a0a0a;
+    --atlas-navy: #f4f4f4;
+    --atlas-cloud: #f0f0f0;
+    --atlas-white: #ffffff;
+    --atlas-pageBg: #f8f8fc;
+    --atlas-surfaceRaised: #ffffff;
+
+    /* Alpha ladder — Mercury text (10,10,10) channel */
+    --atlas-slate80: rgba(10, 10, 10, 0.8);
+    --atlas-slate70: rgba(10, 10, 10, 0.7);
+    --atlas-slate60: rgba(10, 10, 10, 0.6);
+    --atlas-slate40: rgba(10, 10, 10, 0.6);
+    --atlas-slate30: rgba(10, 10, 10, 0.3);
+    --atlas-slate12: rgba(10, 10, 10, 0.12);
+    --atlas-slate10: rgba(10, 10, 10, 0.1);
+    --atlas-slate08: rgba(10, 10, 10, 0.08);
+    --atlas-slate06: rgba(10, 10, 10, 0.06);
+
+    /* Semantic. `--atlas-success` carries the live/healthy green used by
+       LiveDot ripples, "Running" badges, and the empty-state success
+       circle. The old #2d7a4a forest read as dark green in light theme;
+       #46A56A is a mid-bright green that holds the alive feel without
+       overpowering near-white surfaces. Dark theme keeps #4ade80 — it's
+       already light enough on the near-black canvas. */
+    --atlas-success: #46a56a;
+    --atlas-warning: #a86a1f;
+    --atlas-error: #b33a30;
+    --atlas-info: #4f46e5;
+
+    /* Backward-compat aliases */
+    --atlas-cyanAccent: #4f46e5;
+    --atlas-amber: #a86a1f;
+    --atlas-rose: #4f46e5;
+    --atlas-violet: #4f46e5;
+    --atlas-teal: #4f46e5;
+    --atlas-steel: rgba(10, 10, 10, 0.6);
+    --atlas-mist: rgba(10, 10, 10, 0.4);
+    --atlas-navyLight: #f0f0f0;
+    --atlas-brandBlueDark: #4338ca;
+    --atlas-brandBlueLight: #6366f1;
+    --atlas-brown: #a86a1f;
+    --atlas-red: #b33a30;
+    --atlas-onAccent: #ffffff;
+    --atlas-heroGradientStart: #4f46e5;
+    --atlas-heroGradientEnd: #3730a3;
+
+    /* Mercury sidenav scale */
+    --atlas-sideBg: #f4f4f4;
+    --atlas-sideBorder: #e0e0e0;
+    --atlas-sideText: #4a4a4a;
+    --atlas-sideTextStrong: #0a0a0a;
+    --atlas-sideMuted: #888888;
+    --atlas-sideActiveBg: #edeefb;
+    --atlas-sideInfoBg: #f0f0f0;
+    --atlas-sideInfoBorder: #e0e0e0;
+
+    /* Mercury accent / status soft + fg */
+    --atlas-accentSoft: #eceefb;
+    --atlas-accentFg: #4338ca;
+    --atlas-successSoft: #e1ece5;
+    --atlas-successFg: #1f5734;
+    --atlas-warnSoft: #f0e4cc;
+    --atlas-warnFg: #6f4513;
+    --atlas-dangerSoft: #f0d5d1;
+    --atlas-dangerFg: #7a2a22;
+
+    /* Terminal surface — always-dark log viewer (same values in both
+       themes, like the status-pill block below). */
+    --atlas-terminalBg: #0a0a0a;
+    --atlas-terminalFgOk: #a3f7bf;
+    --atlas-terminalFgErr: #ffb3b3;
+
+    /* Elevation — light: subtle drops only */
+    --atlas-elevation-low: 0 1px 3px rgba(0, 0, 14, 0.06), 0 1px 2px rgba(0, 0, 14, 0.04);
+    --atlas-elevation-mid: 0 4px 12px rgba(0, 0, 14, 0.08);
+    --atlas-elevation-high: 0 8px 24px rgba(0, 0, 14, 0.1);
+    --atlas-elevation-overlay: 0 16px 40px rgba(0, 0, 14, 0.14);
+
+    /* Status pills — refined pastel palette, one hue per status. All sit
+       at ~90% lightness with low–medium chroma so the six chips feel like
+       one family. Backgrounds + foregrounds are deliberately identical
+       across light and dark themes: a pale pastel with deep tonal text
+       reads as a calm chip on white surfaces and as a bright "tag"
+       against the dark canvas — see the matching block under
+       [data-theme="dark"] below. */
+    --atlas-status-draft-bg: #eef1f4;
+    --atlas-status-draft-fg: #727a87;
+    --atlas-status-draft-dot: #94a0ae;
+    --atlas-status-ready-bg: #e0edf8;
+    --atlas-status-ready-fg: #4d87b0;
+    --atlas-status-ready-dot: #5fa3d0;
+    --atlas-status-in_progress-bg: #e5e8f4;
+    --atlas-status-in_progress-fg: #5e66b5;
+    --atlas-status-in_progress-dot: #7b83d4;
+    --atlas-status-waiting_for_info-bg: #fbe5c9;
+    --atlas-status-waiting_for_info-fg: #a06a30;
+    --atlas-status-waiting_for_info-dot: #d4914a;
+    --atlas-status-in_review-bg: #f1e5ef;
+    --atlas-status-in_review-fg: #92558d;
+    --atlas-status-in_review-dot: #b57bb0;
+    --atlas-status-done-bg: #ddece2;
+    --atlas-status-done-fg: #4a7c5c;
+    --atlas-status-done-dot: #6ea67e;
+}
+
+:root[data-theme='dark'] {
+    color-scheme: dark;
+
+    /* Brand-hue slots collapse to Mercury accent (= text, which is light) */
+    --atlas-green: #818cf8;
+    --atlas-greenDark: #a5b4fc;
+    --atlas-emerald: #818cf8;
+    --atlas-brandBlue: #818cf8;
+    --atlas-cerulean: #818cf8;
+    --atlas-eggplant: #818cf8;
+    --atlas-purple: #818cf8;
+    --atlas-fuchsia: #818cf8;
+    --atlas-orange: #fbbf24;
+    --atlas-gold: #fbbf24;
+
+    /* Neutrals */
+    --atlas-slate: #fafafa;
+    --atlas-navy: #050505;
+    --atlas-cloud: #1f1f1f;
+    --atlas-white: #161616;
+    --atlas-pageBg: #0a0a0f;
+    --atlas-surfaceRaised: #1f1f1f;
+
+    /* Alpha ladder — base channel (250,250,250) */
+    --atlas-slate80: rgba(250, 250, 250, 0.8);
+    --atlas-slate70: rgba(250, 250, 250, 0.7);
+    --atlas-slate60: rgba(250, 250, 250, 0.6);
+    --atlas-slate40: rgba(250, 250, 250, 0.6);
+    --atlas-slate30: rgba(250, 250, 250, 0.3);
+    --atlas-slate12: rgba(250, 250, 250, 0.12);
+    --atlas-slate10: rgba(250, 250, 250, 0.1);
+    --atlas-slate08: rgba(250, 250, 250, 0.08);
+    --atlas-slate06: rgba(250, 250, 250, 0.06);
+
+    /* Semantic */
+    --atlas-success: #4ade80;
+    --atlas-warning: #fbbf24;
+    --atlas-error: #f87171;
+    --atlas-info: #818cf8;
+
+    /* Backward-compat aliases */
+    --atlas-cyanAccent: #818cf8;
+    --atlas-amber: #fbbf24;
+    --atlas-rose: #818cf8;
+    --atlas-violet: #818cf8;
+    --atlas-teal: #818cf8;
+    --atlas-steel: rgba(250, 250, 250, 0.6);
+    --atlas-mist: rgba(250, 250, 250, 0.4);
+    --atlas-navyLight: #1f1f1f;
+    --atlas-brandBlueDark: #6366f1;
+    --atlas-brandBlueLight: #a5b4fc;
+    --atlas-brown: #fbbf24;
+    --atlas-red: #f87171;
+    --atlas-onAccent: #0a0a0a;
+    --atlas-heroGradientStart: #4f46e5;
+    --atlas-heroGradientEnd: #3730a3;
+
+    /* Mercury sidenav scale */
+    --atlas-sideBg: #050505;
+    --atlas-sideBorder: #1f1f1f;
+    --atlas-sideText: #a8a8a8;
+    --atlas-sideTextStrong: #fafafa;
+    --atlas-sideMuted: #5c5c5c;
+    --atlas-sideActiveBg: #232152;
+    --atlas-sideInfoBg: #161616;
+    --atlas-sideInfoBorder: #2a2a2a;
+
+    /* Mercury accent / status soft + fg */
+    --atlas-accentSoft: #232152;
+    --atlas-accentFg: #a5b4fc;
+    --atlas-successSoft: #14281a;
+    --atlas-successFg: #86efac;
+    --atlas-warnSoft: #2a1f08;
+    --atlas-warnFg: #fcd34d;
+    --atlas-dangerSoft: #2a1414;
+    --atlas-dangerFg: #fca5a5;
+
+    /* Terminal surface — same values as the light block above. */
+    --atlas-terminalBg: #0a0a0a;
+    --atlas-terminalFgOk: #a3f7bf;
+    --atlas-terminalFgErr: #ffb3b3;
+
+    /* Elevation — dark: heavier drop + inset top highlight (rim light) */
+    --atlas-elevation-low: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    --atlas-elevation-mid: 0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    --atlas-elevation-high: 0 10px 24px rgba(0, 0, 0, 0.55), 0 4px 8px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --atlas-elevation-overlay: 0 20px 48px rgba(0, 0, 0, 0.65), 0 8px 16px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
+    /* Status pills — identical values to the light block above so the
+       pastel chip reads as a calm tint on white and as a bright tag
+       against the dark canvas. Single palette, both themes. */
+    --atlas-status-draft-bg: #eef1f4;
+    --atlas-status-draft-fg: #727a87;
+    --atlas-status-draft-dot: #94a0ae;
+    --atlas-status-ready-bg: #e0edf8;
+    --atlas-status-ready-fg: #4d87b0;
+    --atlas-status-ready-dot: #5fa3d0;
+    --atlas-status-in_progress-bg: #e5e8f4;
+    --atlas-status-in_progress-fg: #5e66b5;
+    --atlas-status-in_progress-dot: #7b83d4;
+    --atlas-status-waiting_for_info-bg: #fbe5c9;
+    --atlas-status-waiting_for_info-fg: #a06a30;
+    --atlas-status-waiting_for_info-dot: #d4914a;
+    --atlas-status-in_review-bg: #f1e5ef;
+    --atlas-status-in_review-fg: #92558d;
+    --atlas-status-in_review-dot: #b57bb0;
+    --atlas-status-done-bg: #ddece2;
+    --atlas-status-done-fg: #4a7c5c;
+    --atlas-status-done-dot: #6ea67e;
+}
+
+/*
+ * Body background tracks the page bg variable so the FOUC script's
+ * `data-theme` flip changes it instantly.
+ */
+body {
+    background: var(--atlas-pageBg);
+    color: var(--atlas-slate);
+    transition: background-color 220ms cubic-bezier(0.4, 0, 0.2, 1), color 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}

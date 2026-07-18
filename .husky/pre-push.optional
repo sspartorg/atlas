@@ -1,0 +1,14 @@
+# Theme 12 — opt-in pre-push gate. Symlink this file to `pre-push`
+# when you want the full `pnpm -w run gate` chain (typecheck + knip
+# + per-package coverage + build) to fire before every push.
+#
+# On Windows / POSIX:
+#   cd .husky && cp pre-push.optional pre-push   # or symlink
+#
+# This is INTENTIONALLY not the default — the gate takes ~5-10
+# minutes wall-clock (full coverage run), which is heavier than the
+# typical Atlas single-owner direct-to-main commit cadence wants.
+# The secretlint pre-commit hook stays mandatory regardless (it
+# blocks credentials reaching history, which is non-negotiable).
+
+pnpm -w run gate
