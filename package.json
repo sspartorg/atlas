@@ -2,6 +2,8 @@
   "name": "atlas",
   "version": "1.0.0",
   "private": true,
+  "license": "Apache-2.0",
+  "author": "Sspart Enterprise Private Limited",
   "type": "module",
   "description": "Atlas — AI Agent Orchestration Platform",
   "scripts": {

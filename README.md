@@ -492,4 +492,11 @@ same machine.
 
 ## License
 
-Private — internal use only. Not for external distribution.
+Atlas is open source under the [Apache License 2.0](LICENSE).
+
+Copyright © 2026 Sspart Enterprise Private Limited.
+
+You are free to use, modify, and distribute Atlas — including in commercial and
+closed-source products — as long as you retain the copyright and attribution
+notices from the [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE) files. The `NOTICE`
+file contains the attribution that must accompany any redistribution.
