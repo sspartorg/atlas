@@ -1,5 +1,11 @@
 packages:
   - 'packages/*'
+# When node_modules is out of date, warn before running scripts (pnpm run/exec)
+# instead of auto-reinstalling. Auto-reinstall can hit an interactive
+# "remove node_modules?" prompt and abort in a non-TTY shell (e.g. the husky
+# pre-commit hook), failing the commit with
+# ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY. Run `pnpm install` when you see the warning.
+verifyDepsBeforeRun: warn
 allowBuilds:
   better-sqlite3: true
   esbuild: true
