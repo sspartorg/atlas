@@ -7,21 +7,26 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
-import { Global } from '@emotion/react';
 
 // 2026-06-22 - Terminal v1. xterm.js pane + bidirectional WebSocket.
-// 2026-07-13 - Fixed incomplete ANSI escape sequence handling to prevent
-//              "zombie" characters appearing during live streaming.
-// 2026-07-13 - Added WebGL renderer to fix Windows Chrome scrolling artifacts
-//              where first 2 chars of lines leave "trails" during scroll.
-// 2026-07-13 - Fixed scroll-triggered refresh timing: switched from immediate
-//              refresh to requestAnimationFrame for frame-synced redraws, and
-//              added GPU acceleration CSS to the canvas element itself.
+// 2026-07-31 - Rebuilt the receive path as a raw byte pipe (writeWsFrame).
+//              xterm's write() is a stateful streaming parser: it resumes
+//              split escape sequences AND split UTF-8 codepoints across
+//              calls, so the client must do NO decoding or buffering of its
+//              own. The previous hand-rolled escape-sequence buffer and
+//              per-frame TextDecoder were themselves producing the "zombie"
+//              characters they tried to prevent. Server-side, attach now
+//              replays a serialized screen snapshot instead of a raw byte
+//              backlog, so a replay can never begin mid-sequence either.
 //
 // Wire model:
-//   - Server PTY bytes -> ws.onmessage -> term.write(...)
+//   - Server PTY bytes -> ws.onmessage -> term.write(raw bytes)
+//   - First frame after attach is a serialized screen snapshot from the
+//     server's headless mirror — already well-formed VT, no special-casing.
 //   - User keystrokes  -> term.onData -> ws.send(string)
-//   - Window resize    -> FitAddon.fit() -> ws.send(JSON {cmd:'resize',cols,rows})
+//   - Container resize -> FitAddon.fit() immediately (local viewport must
+//     track the drag); the {cmd:'resize'} envelope send is trailing-
+//     debounced so pane-divider drags don't storm ConPTY with reflows.
 //
 // Connection lifecycle:
 //   - Open WS on mount (after `sessionLive` is true). Show a "connecting"
@@ -32,22 +37,16 @@ import { Global } from '@emotion/react';
 //   - Reconnect-once on transient close (1006) within 1.5s; after that the
 //     user clicks Resume to spawn a fresh PTY.
 //
-// ANSI escape sequence buffering:
-//   - ANSI sequences can be split across WebSocket frames. Writing partial
-//     sequences to xterm.js causes visible "zombie" characters (e.g., the
-//     2-char CSI introducer `\x1b[` appearing as frozen text).
-//   - The onmessage handler now buffers data ending with incomplete sequences
-//     and combines them with the next frame before writing to the terminal.
-//   - Common incomplete patterns: ESC alone (`\x1b`), CSI start (`\x1b[`),
-//     OSC start (`\x1b]`), partial CSI parameters (`\x1b[1;` or `\x1b[38;5;`).
-//
-// WebGL renderer:
-//   - xterm.js v6 removed the DOM renderer option - only canvas is available.
-//   - The WebGL addon uses GPU acceleration and can fix canvas repaint bugs
-//     that cause scrolling artifacts on Windows Chrome/Edge.
-//   - Falls back to canvas if WebGL init fails (old GPUs, browser restrictions).
+// Renderer:
+//   - xterm.js v6 core ships ONLY the DOM renderer; the WebGL addon is the
+//     GPU-accelerated renderer. If WebGL init fails we fall back to the DOM
+//     renderer — correct, just slower on heavy scrollback.
 
 const RECONNECT_DELAY_MS = 1_500;
+// Trailing debounce for the resize envelope. Each server-side pty.resize()
+// makes ConPTY reflow the entire screen, so a divider drag must collapse
+// into one resize, not one per animation frame.
+const RESIZE_SEND_DEBOUNCE_MS = 100;
 
 interface Props {
     /** Atlas session id from the URL. */
@@ -57,45 +56,24 @@ interface Props {
 }
 
 /**
- * Checks if a string ends with an incomplete ANSI escape sequence.
- * Returns true if the data should be buffered to wait for the rest.
- * 
- * Common patterns:
- * - ESC alone: `\x1b`
- * - CSI start: `\x1b[` (2 chars)
- * - OSC start: `\x1b]`
- * - Partial CSI parameter: `\x1b[1;` or `\x1b[38;5;`
+ * The entire client receive path: hand a WS frame to xterm untouched.
+ * Binary frames go in as raw bytes — xterm's own stateful UTF-8 decoder
+ * reassembles codepoints split across frames, and its parser resumes
+ * escape sequences split across writes. Returns the byte count for the
+ * bytes-received counter; unrecognised frame types are ignored (the
+ * server sends only binary frames, `binaryType = 'arraybuffer'`).
  */
-function hasIncompleteEscapeSequence(data: string): boolean {
-    if (!data) return false;
-    
-    // Check last few characters for incomplete sequences
-    const tail = data.slice(-10);
-    
-    // Lone ESC at the end
-    if (tail.endsWith('\x1b')) return true;
-    
-    // ESC[ (CSI) without terminator - look for incomplete CSI
-    const lastEsc = tail.lastIndexOf('\x1b');
-    if (lastEsc !== -1) {
-        const afterEsc = tail.slice(lastEsc);
-        
-        // CSI sequence not yet terminated
-        // CSI terminators are: A-Z, a-z, @, `, ~
-        if (afterEsc.startsWith('\x1b[')) {
-            const hasTerminator = /[A-Za-z@`~]/.test(afterEsc.slice(2));
-            if (!hasTerminator) return true;
-        }
-        
-        // OSC sequence not yet terminated (ends with BEL \x07 or ST \x1b\\)
-        if (afterEsc.startsWith('\x1b]')) {
-            const hasBel = afterEsc.includes('\x07');
-            const hasST = afterEsc.includes('\x1b\\');
-            if (!hasBel && !hasST) return true;
-        }
+export function writeWsFrame(term: Pick<XTerm, 'write'>, data: unknown): number {
+    if (typeof data === 'string') {
+        term.write(data);
+        return data.length;
     }
-    
-    return false;
+    if (data instanceof ArrayBuffer) {
+        const bytes = new Uint8Array(data);
+        term.write(bytes);
+        return bytes.byteLength;
+    }
+    return 0;
 }
 
 export function TerminalXterm({ sessionId, sessionLive }: Props) {
@@ -108,10 +86,6 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
     const [termReady, setTermReady] = useState(false);
     const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const reconnectAttempted = useRef(false);
-    // Buffer for incomplete ANSI escape sequences that span WebSocket frames.
-    // Prevents "zombie" characters appearing when sequences like `\x1b[` arrive
-    // split across multiple messages.
-    const incompleteBuffer = useRef<string>('');
     // Survives the StrictMode mount→cleanup→mount cycle so the second mount
     // skips re-initialising xterm. termRef is nulled in cleanup, so it can't
     // be the guard.
@@ -169,18 +143,10 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                 cursorInactiveStyle: 'none',
                 fontFamily: 'Cascadia Code, Menlo, Consolas, "DejaVu Sans Mono", monospace',
                 fontSize: 13,
-                // 13 * 1.15 ~= 15px -> an integer cell height. A fractional
-                // cell (the old 1.2 -> 15.6px) forces sub-pixel row positioning
-                // that worsens the left/right edge repaint artifacts during
-                // scroll on Chromium. Keeps roughly the same visual spacing.
+                // Visual choice only: slightly tighter than xterm's default
+                // spacing to fit more TUI rows in the pane.
                 lineHeight: 1.15,
                 scrollback: 5_000,
-                // Windows Chrome scroll artifacts fix: The scrollbar's appearance
-                // changes container width mid-scroll, causing xterm to reflow and
-                // leaving character "trails". Setting scrollOnUserInput to false
-                // prevents the scrollbar from auto-appearing on keystrokes, and
-                // we rely on the custom scrollbar CSS to ensure consistent width.
-                scrollOnUserInput: false,
                 theme: {
                     background: '#0a0a0a',
                     foreground: '#d4d4d4',
@@ -208,23 +174,20 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
             term.loadAddon(fit);
             term.open(hostRef.current);
             
-            // Load WebGL renderer addon for better performance and to fix
-            // Windows Chrome scrolling artifacts (first 2 chars leaving trails).
-            // Falls back to canvas if WebGL init fails.
+            // WebGL addon = the GPU renderer (v6 core ships only the DOM
+            // renderer). Disposing on context loss drops us back to the DOM
+            // renderer — correct output, just slower.
             try {
                 const webgl = new WebglAddon();
                 term.loadAddon(webgl);
-                // If WebGL loaded successfully, preserve colors by disabling
-                // character atlas which can cause color bleeding issues.
                 webgl.onContextLoss(() => {
-                    // WebGL context lost - terminal will auto-fallback to canvas
                     void webgl.dispose();
                 });
             } catch {
-                // WebGL not supported (old GPU, browser restrictions) - canvas
-                // renderer will be used. This is non-fatal.
+                // WebGL not supported (old GPU, browser restrictions) — the
+                // DOM renderer takes over. Non-fatal.
             }
-            
+
             try {
                 fit.fit();
             } catch {
@@ -456,57 +419,9 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
             };
 
             ws.onmessage = (ev) => {
-                if (!termRef.current) return;
-                let bytes = 0;
-                let dataStr = '';
-                
-                if (typeof ev.data === 'string') {
-                    dataStr = ev.data;
-                    bytes = dataStr.length;
-                } else if (ev.data instanceof ArrayBuffer) {
-                    const u8 = new Uint8Array(ev.data);
-                    bytes = u8.byteLength;
-                    // Convert to string to check for incomplete sequences
-                    const decoder = new TextDecoder('utf-8', { fatal: false });
-                    dataStr = decoder.decode(u8);
-                } else if (ev.data instanceof Blob) {
-                    void ev.data.arrayBuffer().then((ab) => {
-                        if (!termRef.current) return;
-                        const u8 = new Uint8Array(ab);
-                        const decoder = new TextDecoder('utf-8', { fatal: false });
-                        const str = decoder.decode(u8);
-                        
-                        // Prepend any buffered incomplete sequence
-                        const combined = incompleteBuffer.current + str;
-                        
-                        if (hasIncompleteEscapeSequence(combined)) {
-                            // Hold back the incomplete tail
-                            incompleteBuffer.current = combined;
-                        } else {
-                            // Complete sequence - write it all
-                            termRef.current.write(combined);
-                            incompleteBuffer.current = '';
-                        }
-                        
-                        setBytesReceived((n) => n + u8.byteLength);
-                    });
-                    return;
-                }
-                
-                if (dataStr) {
-                    // Prepend any buffered incomplete sequence from previous frame
-                    const combined = incompleteBuffer.current + dataStr;
-                    
-                    if (hasIncompleteEscapeSequence(combined)) {
-                        // Data ends with incomplete sequence - buffer it
-                        incompleteBuffer.current = combined;
-                    } else {
-                        // Complete sequence - write to terminal and clear buffer
-                        termRef.current.write(combined);
-                        incompleteBuffer.current = '';
-                    }
-                }
-                
+                const term = termRef.current;
+                if (!term) return;
+                const bytes = writeWsFrame(term, ev.data);
                 if (bytes > 0) setBytesReceived((n) => n + bytes);
             };
 
@@ -517,8 +432,6 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
             ws.onclose = (ev) => {
                 setConnected(false);
                 wsRef.current = null;
-                // Clear any incomplete buffer on disconnect
-                incompleteBuffer.current = '';
                 // Transient close (browser tab focus drop, network blip) -> try
                 // once. Otherwise leave it to the user. Read sessionLive from
                 // the ref so a paused-since-close session doesn't trigger a
@@ -547,11 +460,13 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
         };
     }, [sessionId, sessionLive, termReady]);
 
-    // ResizeObserver on the host -> fit + push new cols/rows to the server.
+    // ResizeObserver on the host -> fit immediately (the local viewport must
+    // track a divider drag), debounce the cols/rows push to the server.
     useEffect(() => {
         const host = hostRef.current;
         /* v8 ignore next -- host Box is unconditionally rendered with ref={hostRef} every render, so hostRef.current is always set by the time this effect body runs; defensive null-check only. */
         if (!host) return;
+        let resizeSendTimer: ReturnType<typeof setTimeout> | null = null;
         const ro = new ResizeObserver(() => {
             if (!fitRef.current || !termRef.current) return;
             try {
@@ -559,125 +474,31 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
             } catch {
                 return;
             }
+            // Capture cols/rows now (fit just computed them); the trailing
+            // debounce means only the last geometry of a burst is sent.
             const { cols, rows } = termRef.current;
-            const ws = wsRef.current;
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                try {
-                    ws.send(JSON.stringify({ cmd: 'resize', cols, rows }));
-                } catch {
-                    /* best-effort */
+            if (resizeSendTimer) clearTimeout(resizeSendTimer);
+            resizeSendTimer = setTimeout(() => {
+                resizeSendTimer = null;
+                const ws = wsRef.current;
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    try {
+                        ws.send(JSON.stringify({ cmd: 'resize', cols, rows }));
+                    } catch {
+                        /* best-effort */
+                    }
                 }
-            }
+            }, RESIZE_SEND_DEBOUNCE_MS);
         });
         ro.observe(host);
-        return () => ro.disconnect();
-    }, []);
-
-    // Scroll refresh fix for Windows Chrome artifacts. When scrolling, the
-    // terminal canvas gets misaligned, but forcing a refresh redraws it
-    // correctly (same as what happens on resize). Listen to xterm's scroll
-    // viewport and trigger refresh to eliminate "ghost trails" during scroll.
-    useEffect(() => {
-        const term = termRef.current;
-        if (!term || !termReady) return;
-
-        // Use requestAnimationFrame for smooth, frame-synced refreshes
-        let rafHandle: number | null = null;
-        let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
-
-        const handleScroll = () => {
-            if (!term) return;
-            
-            // Cancel any pending RAF to avoid stacking refresh calls
-            if (rafHandle !== null) {
-                cancelAnimationFrame(rafHandle);
-            }
-
-            // Clear existing debounce timeout
-            if (scrollTimeout) {
-                clearTimeout(scrollTimeout);
-            }
-
-            // Schedule refresh on next animation frame to sync with browser paint
-            rafHandle = requestAnimationFrame(() => {
-                rafHandle = null;
-                try {
-                    // Force full terminal refresh to clear any trailing artifacts
-                    term.refresh(0, term.rows - 1);
-                } catch {
-                    /* best-effort */
-                }
-            });
-
-            // After scrolling stops for 100ms, do a final refresh to ensure clean state
-            scrollTimeout = setTimeout(() => {
-                if (rafHandle !== null) {
-                    cancelAnimationFrame(rafHandle);
-                    rafHandle = null;
-                }
-                try {
-                    term.refresh(0, term.rows - 1);
-                } catch {
-                    /* best-effort */
-                }
-            }, 100);
-        };
-
-        // Attach to xterm's internal scroll event
-        const scrollDisposable = term.onScroll(handleScroll);
-
         return () => {
-            if (rafHandle !== null) {
-                cancelAnimationFrame(rafHandle);
-            }
-            if (scrollTimeout) {
-                clearTimeout(scrollTimeout);
-            }
-            scrollDisposable.dispose();
+            if (resizeSendTimer) clearTimeout(resizeSendTimer);
+            ro.disconnect();
         };
-    }, [termReady]);
+    }, []);
 
     return (
         <>
-            {/* Fix Windows Chrome scrolling artifacts: Prevent xterm's scrollbar
-                from causing layout shifts when it appears/disappears. The viewport
-                is absolutely positioned and the scrollbar is overlaid, but we need
-                to ensure the canvas doesn't reflow. Also apply GPU acceleration to
-                the actual rendering canvas to eliminate character trails. */}
-            <Global
-                styles={{
-                    '.xterm .xterm-viewport': {
-                        // Scrollbar is already `overflow-y: scroll` by default in xterm.css,
-                        // but we ensure it's consistently positioned and doesn't trigger reflow
-                        position: 'absolute',
-                        right: 0,
-                        width: '100%',
-                        boxSizing: 'border-box',
-                    },
-                    '.xterm .xterm-screen': {
-                        // Prevent the canvas from resizing when scrollbar appears
-                        position: 'relative',
-                        boxSizing: 'border-box',
-                    },
-                    '.xterm .xterm-screen canvas': {
-                        // GPU acceleration on the actual rendering canvas to eliminate trails
-                        willChange: 'transform',
-                        transform: 'translateZ(0)',
-                        // Force hardware acceleration with backface culling
-                        backfaceVisibility: 'hidden',
-                        // Subpixel antialiasing can cause rendering artifacts during scroll
-                        WebkitFontSmoothing: 'antialiased',
-                        MozOsxFontSmoothing: 'grayscale',
-                    },
-                    // Custom scrollbar styling to ensure it doesn't cause width changes
-                    '.xterm .xterm-scrollable-element > .scrollbar': {
-                        position: 'absolute',
-                        right: 0,
-                        width: '14px',
-                        pointerEvents: 'auto',
-                    },
-                }}
-            />
             <Box
                 sx={{
                     position: 'relative',
@@ -687,22 +508,17 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                     overflow: 'hidden',
                     background: '#0a0a0a',
                     border: `1px solid ${ATLAS_PALETTE.slate12}`,
-                    // GPU optimization hints to reduce rendering artifacts
-                    willChange: 'transform',
-                    transform: 'translateZ(0)',
                 }}
             >
             <Box
                 ref={hostRef}
                 tabIndex={-1}
                 onClick={() => termRef.current?.focus()}
-                sx={{ 
-                    position: 'absolute', 
-                    inset: 0, 
-                    outline: 'none', 
+                sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    outline: 'none',
                     cursor: 'text',
-                    // Ensure clean rendering on the host layer
-                    overflow: 'hidden',
                 }}
             />
             {!connected && sessionLive && (

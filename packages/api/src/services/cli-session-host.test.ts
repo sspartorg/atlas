@@ -13,8 +13,9 @@
  *   - resumeSession: already_running throw, fresh entry, spawn failure cleanup
  *   - pauseSession: missing id (no-op), live pty killed, gitConfigPath cleanup
  *   - killSessionPty: missing id (no-op), live pty killed, gitConfigPath cleanup
- *   - attachWebSocket: missing session (false), backlog replay, message forward,
- *       resize control, autoPromptPending queue, WS close, WS error
+ *   - attachWebSocket: missing session (false), serialized snapshot replay,
+ *       message forward, resize control + clamp, autoPromptPending queue,
+ *       WS close, WS error
  *   - __peekSessionStateForTest / __setIdleNotifiedAtForTest
  *   - failOrphanedCliSessions: no orphans, live-matches, orphan flip
  *
@@ -23,7 +24,7 @@
  *       ATLAS_COPILOT_BINARY absolute-path overrides skip the cmd.exe wrap
  *   - spawnPty: (err as Error).message ?? String(err) fallback
  *   - resumeSession: spawn failure with NO gitConfigPath (false branch)
- *   - pty.onExit handler: full body (backlog reset, subscriber close/clear,
+ *   - pty.onExit handler: full body (exit notice, subscriber close/clear,
  *       gitConfigPath cleanup both branches, fire-and-forget DB paused flip)
  *   - pauseSession / killSessionPty when entry.pty is already null
  *   - initial-prompt auto-type setTimeout body: pty live vs. already exited
@@ -430,30 +431,97 @@ describe('attachWebSocket', () => {
         pauseSession(id);
     });
 
-    it('sends the backlog to the new subscriber if non-empty', () => {
+    it('replays a serialized screen snapshot to the new subscriber', async () => {
         const id = freshId();
         startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
 
-        // Populate backlog by firing the PTY onData callback.
+        // Populate the screen mirror by firing the PTY onData callback.
         const pty = ptyInstances[ptyInstances.length - 1]!;
         pty.onDataCb?.('hello world');
 
         const ws = makeFakeWs();
         attachWebSocket(id, ws);
 
-        expect(ws.send).toHaveBeenCalled();
+        // Snapshot send rides the mirror's write queue, so it lands async.
+        await vi.waitFor(() => expect(ws.send).toHaveBeenCalled());
+        const frame = (ws.send as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Buffer;
+        expect(frame.toString('utf8')).toContain('hello world');
 
         pauseSession(id);
     });
 
-    it('does not call send when backlog is empty', () => {
+    it('sends no snapshot frame when the mirror has no content yet', async () => {
         const id = freshId();
         startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
 
         const ws = makeFakeWs();
         attachWebSocket(id, ws);
 
-        // No PTY data was emitted, so backlog is empty.
+        // Let the mirror's flush marker fire before asserting.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(ws.send).not.toHaveBeenCalled();
+
+        pauseSession(id);
+    });
+
+    it('snapshot replay never begins mid-escape-sequence or echoes DSR queries', async () => {
+        const id = freshId();
+        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
+
+        const pty = ptyInstances[ptyInstances.length - 1]!;
+        // A DSR cursor query plus a chunk that ends mid-SGR — the raw-backlog
+        // design forwarded both verbatim, producing zombie chars + DSR echo.
+        pty.onDataCb?.('before\x1b[6nhello');
+        pty.onDataCb?.('\x1b[38;5;19');
+
+        const ws = makeFakeWs();
+        attachWebSocket(id, ws);
+
+        await vi.waitFor(() => expect(ws.send).toHaveBeenCalled());
+        const text = ((ws.send as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Buffer).toString('utf8');
+        expect(text).toContain('beforehello');
+        expect(text).not.toContain('\x1b[6n');
+        expect(text).not.toContain('38;5;19');
+
+        pauseSession(id);
+    });
+
+    it('delivers post-attach PTY bytes exactly once (live, not duplicated in the snapshot)', async () => {
+        const id = freshId();
+        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
+
+        const pty = ptyInstances[ptyInstances.length - 1]!;
+        pty.onDataCb?.('alpha');
+
+        const ws = makeFakeWs();
+        attachWebSocket(id, ws);
+        await vi.waitFor(() => expect(ws.send).toHaveBeenCalled());
+
+        pty.onDataCb?.('beta');
+        await vi.waitFor(() =>
+            expect((ws.send as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2));
+
+        const calls = (ws.send as ReturnType<typeof vi.fn>).mock.calls;
+        const snapshot = (calls[0]![0] as Buffer).toString('utf8');
+        const live = (calls[1]![0] as Buffer).toString('utf8');
+        expect(snapshot).toContain('alpha');
+        expect(snapshot).not.toContain('beta');
+        expect(live).toBe('beta');
+
+        pauseSession(id);
+    });
+
+    it('attach after PTY exit adds the subscriber without a snapshot frame and without crashing', async () => {
+        const id = freshId();
+        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
+
+        const pty = ptyInstances[ptyInstances.length - 1]!;
+        pty.onExitCb?.({ exitCode: 0 });
+        await vi.waitFor(() => expect(broadcastSSE).toHaveBeenCalled());
+
+        const ws = makeFakeWs();
+        expect(attachWebSocket(id, ws)).toBe(true);
+        await new Promise((resolve) => setTimeout(resolve, 50));
         expect(ws.send).not.toHaveBeenCalled();
 
         pauseSession(id);
@@ -483,6 +551,53 @@ describe('attachWebSocket', () => {
 
         const pty = ptyInstances[ptyInstances.length - 1]!;
         expect(pty.resize).toHaveBeenCalledWith(100, 40);
+        expect(pty.write).not.toHaveBeenCalled();
+
+        pauseSession(id);
+    });
+
+    it('floors fractional resize dimensions before resizing the PTY', () => {
+        const id = freshId();
+        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
+        const ws = makeFakeWs();
+        attachWebSocket(id, ws);
+
+        ws.emit('message', Buffer.from(JSON.stringify({ cmd: 'resize', cols: 80.7, rows: 24.2 })));
+
+        const pty = ptyInstances[ptyInstances.length - 1]!;
+        expect(pty.resize).toHaveBeenCalledWith(80, 24);
+        expect(pty.write).not.toHaveBeenCalled();
+
+        pauseSession(id);
+    });
+
+    it('clamps oversized resize dimensions to the 500x500 ceiling', () => {
+        const id = freshId();
+        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
+        const ws = makeFakeWs();
+        attachWebSocket(id, ws);
+
+        ws.emit('message', Buffer.from(JSON.stringify({ cmd: 'resize', cols: 1e9, rows: 1e9 })));
+
+        const pty = ptyInstances[ptyInstances.length - 1]!;
+        expect(pty.resize).toHaveBeenCalledWith(500, 500);
+
+        pauseSession(id);
+    });
+
+    it('drops a resize frame with zero/negative dimensions instead of resizing or typing it', () => {
+        // resize(0, n) is a documented ConPTY failure mode; a malformed control
+        // frame must never reach the PTY as either a resize or typed JSON.
+        const id = freshId();
+        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
+        const ws = makeFakeWs();
+        attachWebSocket(id, ws);
+
+        ws.emit('message', Buffer.from(JSON.stringify({ cmd: 'resize', cols: 0, rows: 24 })));
+        ws.emit('message', Buffer.from(JSON.stringify({ cmd: 'resize', cols: 80, rows: -3 })));
+
+        const pty = ptyInstances[ptyInstances.length - 1]!;
+        expect(pty.resize).not.toHaveBeenCalled();
         expect(pty.write).not.toHaveBeenCalled();
 
         pauseSession(id);
@@ -574,7 +689,6 @@ describe('__peekSessionStateForTest', () => {
         expect(state).not.toBeNull();
         expect(state?.lastActivityAt).toBeNull();
         expect(state?.idleNotifiedAt).toBeNull();
-        expect(state?.attachSettleUntil).toBeNull();
         expect(state?.autoPromptPending).toBe(false);
         pauseSession(id);
     });
@@ -628,10 +742,10 @@ describe('buildCliArgs / spawnPty empty cliSessionId branch', () => {
     });
 });
 
-// ── PTY onData / ring buffer overflow ─────────────────────────────────────────
+// ── PTY onData → screen mirror ────────────────────────────────────────────────
 
-describe('PTY onData ring buffer', () => {
-    it('accumulates PTY bytes in the backlog', () => {
+describe('PTY onData screen mirror', () => {
+    it('accumulates PTY bytes across chunks for the attach snapshot', async () => {
         const id = freshId();
         startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
 
@@ -639,31 +753,31 @@ describe('PTY onData ring buffer', () => {
         pty.onDataCb?.('hello ');
         pty.onDataCb?.('world');
 
-        // Backlog should be non-empty; next attach will replay it.
         const ws = makeFakeWs();
         attachWebSocket(id, ws);
-        expect(ws.send).toHaveBeenCalled();
+        await vi.waitFor(() => expect(ws.send).toHaveBeenCalled());
+        const text = ((ws.send as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Buffer).toString('utf8');
+        expect(text).toContain('hello world');
 
         pauseSession(id);
     });
 
-    it('trims the backlog when it exceeds 64 KB', () => {
+    it('replays large output faithfully — no byte-window truncation garbling the head', async () => {
+        // The old 64 KB ring buffer cut at an arbitrary byte offset, so a
+        // replay could start mid-line/mid-sequence. The mirror's scrollback
+        // (5000 rows) comfortably retains a 70 KB burst end-to-end.
         const id = freshId();
         startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
 
         const pty = ptyInstances[ptyInstances.length - 1]!;
-        // Send 70 KB in one chunk — larger than the 64 KB ring buffer.
-        const bigChunk = 'x'.repeat(70 * 1024);
-        pty.onDataCb?.(bigChunk);
+        pty.onDataCb?.(`START-MARKER\r\n${'x'.repeat(70 * 1024)}\r\nEND-MARKER\r\n`);
 
-        // Backlog is capped; attach should still work and replay (trimmed) backlog.
         const ws = makeFakeWs();
         attachWebSocket(id, ws);
-        expect(ws.send).toHaveBeenCalled();
-        // Verify the backlog was trimmed (sent data < original 70 KB).
-        const sentBuffer = (ws.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as Buffer;
-        expect(sentBuffer.byteLength).toBeLessThan(bigChunk.length);
-        expect(sentBuffer.byteLength).toBeLessThanOrEqual(64 * 1024);
+        await vi.waitFor(() => expect(ws.send).toHaveBeenCalled());
+        const text = ((ws.send as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Buffer).toString('utf8');
+        expect(text).toContain('START-MARKER');
+        expect(text).toContain('END-MARKER');
 
         pauseSession(id);
     });
@@ -1015,56 +1129,21 @@ describe('stopIdleCheck (indirectly via pauseSession / killSessionPty)', () => {
 // Cover branches not hit in the main attachWebSocket describe block above.
 
 describe('attachWebSocket extra branches', () => {
-    it('forwards message to PTY but skips markUserActivity during attach settle window', () => {
-        // attachWebSocket arms `attachSettleUntil = Date.now() + 750ms`. Any WS
-        // message that arrives within that window is forwarded to the PTY but
-        // does NOT count as user activity (so idleNotifiedAt stays set).
-        const id = freshId();
-        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
-
-        // Pre-set idleNotifiedAt so we can verify markUserActivity was NOT called
-        // (markUserActivity resets idleNotifiedAt → null; if it was called, null
-        // would appear, confirming the settle-window branch was bypassed).
-        __setIdleNotifiedAtForTest(id, Date.now() - 1000);
-
-        const ws = makeFakeWs();
-        // attachWebSocket sets attachSettleUntil = now + 750ms immediately.
-        attachWebSocket(id, ws);
-
-        // Emit a message right after attach — still within the 750 ms settle window
-        // because no real time passes (fake timers keep the clock frozen).
-        ws.emit('message', Buffer.from('xterm-dsr-reply'));
-
-        const pty = ptyInstances[ptyInstances.length - 1]!;
-        // The message WAS forwarded to the PTY.
-        expect(pty.write).toHaveBeenCalledWith('xterm-dsr-reply');
-        // But idleNotifiedAt was NOT reset (markUserActivity was suppressed).
-        expect(__peekSessionStateForTest(id)?.idleNotifiedAt).not.toBeNull();
-
-        pauseSession(id);
-    });
-
-    it('calls markUserActivity once the attach-settle window has elapsed', async () => {
-        // Counterpart to the settle-window-suppression test above: once real
-        // wall-clock time passes ATTACH_SETTLE_MS (750ms), the `Date.now() <
-        // entry.attachSettleUntil` half of the guard goes false, so a later
-        // keystroke falls through to markUserActivity() and resets
-        // idleNotifiedAt to null. setTimeout is real in this suite (only
-        // setInterval/clearInterval are faked), so an actual sleep is needed.
+    it('counts a keystroke right after attach as user activity (no settle suppression)', () => {
+        // The snapshot replay contains no DSR queries, so there is nothing
+        // xterm.js would auto-answer — every inbound byte IS a keystroke and
+        // must re-arm the idle notification immediately.
         const id = freshId();
         startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
         __setIdleNotifiedAtForTest(id, Date.now() - 1000);
 
         const ws = makeFakeWs();
         attachWebSocket(id, ws);
-
-        await new Promise((resolve) => setTimeout(resolve, 800));
 
         ws.emit('message', Buffer.from('real keystroke'));
 
         const pty = ptyInstances[ptyInstances.length - 1]!;
         expect(pty.write).toHaveBeenCalledWith('real keystroke');
-        // markUserActivity ran -- idleNotifiedAt was reset to null.
         expect(__peekSessionStateForTest(id)?.idleNotifiedAt).toBeNull();
 
         pauseSession(id);
@@ -1089,8 +1168,10 @@ describe('attachWebSocket extra branches', () => {
         pauseSession(id);
     });
 
-    it('falls through to PTY write when JSON message has resize without valid cols/rows', () => {
-        // { cmd: 'resize' } but cols/rows are not numbers → condition fails → falls through.
+    it('drops a resize frame with non-numeric cols/rows instead of typing it into the shell', () => {
+        // { cmd: 'resize' } is unambiguously a control envelope; if its
+        // dimensions are malformed the frame is dropped — never forwarded
+        // as keystrokes (the old fall-through typed literal JSON into the PTY).
         const id = freshId();
         startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
         const ws = makeFakeWs();
@@ -1100,15 +1181,13 @@ describe('attachWebSocket extra branches', () => {
         ws.emit('message', Buffer.from(badResize));
 
         const pty = ptyInstances[ptyInstances.length - 1]!;
-        // resize was NOT called (cols/rows are strings, not numbers).
         expect(pty.resize).not.toHaveBeenCalled();
-        // The raw text was written to the PTY instead.
-        expect(pty.write).toHaveBeenCalledWith(badResize);
+        expect(pty.write).not.toHaveBeenCalled();
 
         pauseSession(id);
     });
 
-    it('continues broadcasting to other subscribers when one throws on send', () => {
+    it('continues broadcasting to other subscribers when one throws on send', async () => {
         // broadcastPtyBytes catches send() exceptions per-subscriber and keeps going.
         const id = freshId();
         startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
@@ -1124,23 +1203,22 @@ describe('attachWebSocket extra branches', () => {
         });
 
         const pty = ptyInstances[ptyInstances.length - 1]!;
-        // PTY emitting data triggers broadcastPtyBytes.
+        // PTY emitting data triggers broadcastPtyBytes from the mirror's
+        // write callback (async).
         pty.onDataCb?.('broadcast-data');
 
         // ws1 threw but ws2 still received the bytes.
-        expect(ws2.send).toHaveBeenCalled();
+        await vi.waitFor(() => expect(ws2.send).toHaveBeenCalled());
 
         pauseSession(id);
     });
 
-    it('does not send backlog when ws.send throws on attach', () => {
-        // attachWebSocket wraps the backlog send in try/catch. If the ws is already
-        // dead (send throws), the attach still succeeds (returns true) and the
-        // subscriber is registered for future bytes.
+    it('survives ws.send throwing during the snapshot replay', async () => {
+        // The snapshot send is wrapped in try/catch: a socket that died
+        // between attach and flush must not crash the host.
         const id = freshId();
         startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
 
-        // Populate the backlog.
         const pty = ptyInstances[ptyInstances.length - 1]!;
         pty.onDataCb?.('old output');
 
@@ -1149,8 +1227,10 @@ describe('attachWebSocket extra branches', () => {
             throw new Error('dead socket');
         });
 
-        // Should not throw even though send fails.
         expect(() => attachWebSocket(id, ws)).not.toThrow();
+        // The throwing send is attempted asynchronously; wait for it and
+        // confirm nothing propagated.
+        await vi.waitFor(() => expect(ws.send).toHaveBeenCalled());
 
         pauseSession(id);
     });
@@ -1190,6 +1270,26 @@ describe('resolveCliBinary / spawnSpecForWindows binary overrides', () => {
         const id = freshId();
         startSession({ sessionId: id, cli: 'copilot', worktreePath: '/tmp', cliSessionId: id, model: 'gpt-4o' });
         expect(isSessionLive(id)).toBe(true);
+        pauseSession(id);
+    });
+});
+
+// ── spawnPty terminal env ────────────────────────────────────────────────────
+// On Windows node-pty silently discards `name: 'xterm-256color'` (it is never
+// passed to WindowsPtyAgent), so unless the env carries TERM/COLORTERM the
+// spawned CLI sees no terminal type at all and may downgrade its color output.
+
+describe('spawnPty terminal env', () => {
+    it('sets TERM and COLORTERM in the PTY environment', async () => {
+        const { spawn } = await import('node-pty');
+        const id = freshId();
+        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
+
+        const spawnCalls = vi.mocked(spawn).mock.calls;
+        const opts = spawnCalls[spawnCalls.length - 1]![2] as { env?: Record<string, string> };
+        expect(opts.env?.['TERM']).toBe('xterm-256color');
+        expect(opts.env?.['COLORTERM']).toBe('truecolor');
+
         pauseSession(id);
     });
 });
@@ -1279,26 +1379,33 @@ describe('pauseSession / killSessionPty when entry.pty is already null', () => {
 });
 
 // ── PTY onExit handler: full branch coverage ─────────────────────────────────
-// Covers the body of attachPtyToEntry's pty.onExit callback: backlog reset,
-// subscriber close-and-clear, stopIdleCheck, gitConfigPath cleanup (both
-// branches), and the fire-and-forget DB status flip + broadcastSSE call.
+// Covers the body of attachPtyToEntry's pty.onExit callback: exit-notice
+// broadcast (FIFO through the screen mirror), subscriber close-and-clear,
+// stopIdleCheck, gitConfigPath cleanup (both branches), and the
+// fire-and-forget DB status flip + broadcastSSE call.
 
 describe('PTY onExit handler', () => {
-    it('closes subscribers, clears backlog, and cleans up gitConfigPath when set', async () => {
+    it('broadcasts the exit notice, then closes subscribers, and cleans up gitConfigPath', async () => {
         const id = freshId();
         startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7', gitConfigPath: '/tmp/onexit.config' });
         const ws = makeFakeWs();
         attachWebSocket(id, ws);
+        // Let the attach snapshot flush so the subscriber is live before exit.
+        await new Promise((resolve) => setTimeout(resolve, 30));
 
         const pty = ptyInstances[ptyInstances.length - 1]!;
         pty.onExitCb?.({ exitCode: 0 });
 
-        // Subscriber closed synchronously inside onExit.
-        expect(ws.close).toHaveBeenCalled();
-        // gitConfigPath cleanup happens synchronously too.
+        // gitConfigPath cleanup happens synchronously in onExit.
         expect(cleanupGitConfig).toHaveBeenCalledWith('/tmp/onexit.config');
 
-        // Fire-and-forget DB update + broadcastSSE happen after a microtask tick.
+        // The exit notice rides the mirror's write queue (preserving order
+        // with any in-flight output), so notice + close land async.
+        await vi.waitFor(() => expect(ws.close).toHaveBeenCalled());
+        const sentTexts = (ws.send as ReturnType<typeof vi.fn>).mock.calls
+            .map((args) => (args[0] as Buffer).toString('utf8'));
+        expect(sentTexts.some((t) => t.includes('[atlas-terminal] PTY exited with code 0'))).toBe(true);
+
         await vi.waitFor(() => expect(broadcastSSE).toHaveBeenCalledWith(
             expect.objectContaining({ type: 'cli_session_status', cliSessionId: id, cliSessionStatus: 'paused' }),
         ));

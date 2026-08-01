@@ -366,6 +366,10 @@ All long-running work runs in spawned subprocesses, never inline in the request 
 
 Auth-failure escalation: `auto-fetch-runner.ts` detects HTTP 401/403 in git output and queues a external notification through the notifications service (respects quiet hours).
 
+### Terminal PTY streaming (WebSocket, not SSE)
+
+Terminal sessions are the one subprocess surface that does NOT stream over SSE. `services/cli-session-host.ts` keeps each `claude`/`copilot` CLI alive in a ConPTY and pipes bytes over WS `/api/cli/sessions/:id/stream` (binary frames both ways). Every PTY byte is also parsed into a per-session `@xterm/headless` mirror (`services/terminal-screen-state.ts`); live broadcast happens in the mirror's write callback, and a browser attach replays `serialize()` of the mirror as its first frame. That ordering (feed callbacks FIFO with the attach flush marker) guarantees an attaching browser sees every byte exactly once — inside the snapshot or live, never both — and the snapshot is always a well-formed VT stream at current geometry with no embedded DSR queries. The browser side (`TerminalXterm.tsx`) is a dumb pipe: raw frame bytes go straight into xterm.js's stateful parser, with no client-side decoding or buffering. SSE still carries the session's metadata events (`cli_session_status`, cost rollups) — bytes and metadata ride separate channels.
+
 ---
 
 ## Onboarding gate

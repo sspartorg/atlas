@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { screen, act, fireEvent, waitFor } from '@testing-library/react';
-import { TerminalXterm } from './TerminalXterm.js';
+import { TerminalXterm, writeWsFrame } from './TerminalXterm.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 
 // Mock @xterm/xterm and addon-fit — they require a real DOM canvas which
@@ -99,6 +99,48 @@ class MockWs {
     close() { this.readyState = 3; }
 }
 
+// ── writeWsFrame — the entire client receive path, as a pure function ────────
+// The client is a dumb pipe: raw bytes go straight into xterm's stateful
+// parser, which resumes split escape sequences AND split UTF-8 codepoints
+// across write() calls. Any client-side decoding or buffering re-introduces
+// the zombie-character bug these tests pin down.
+
+describe('writeWsFrame', () => {
+    it('writes a string frame verbatim and returns its length', () => {
+        const term = { write: vi.fn() };
+        expect(writeWsFrame(term, 'hello')).toBe(5);
+        expect(term.write).toHaveBeenCalledTimes(1);
+        expect(term.write).toHaveBeenCalledWith('hello');
+    });
+
+    it('writes an ArrayBuffer frame as raw bytes with NO decoding', () => {
+        const term = { write: vi.fn() };
+        // 0xE2 is the first byte of a split '€' — a TextDecoder would turn it
+        // into U+FFFD; the raw byte must survive for xterm to reassemble.
+        const frame = new Uint8Array([0xe2]).buffer;
+        expect(writeWsFrame(term, frame)).toBe(1);
+        const written = term.write.mock.calls[0]![0] as Uint8Array;
+        expect(written).toBeInstanceOf(Uint8Array);
+        expect(Array.from(written)).toEqual([0xe2]);
+    });
+
+    it('writes frames ending mid-escape-sequence immediately — no buffering', () => {
+        const term = { write: vi.fn() };
+        writeWsFrame(term, 'foo\x1b[');
+        writeWsFrame(term, '38;5;196mRED');
+        expect(term.write).toHaveBeenCalledTimes(2);
+        expect(term.write).toHaveBeenNthCalledWith(1, 'foo\x1b[');
+        expect(term.write).toHaveBeenNthCalledWith(2, '38;5;196mRED');
+    });
+
+    it('ignores frames of unrecognised types and returns 0', () => {
+        const term = { write: vi.fn() };
+        expect(writeWsFrame(term, { unexpected: true })).toBe(0);
+        expect(writeWsFrame(term, null)).toBe(0);
+        expect(term.write).not.toHaveBeenCalled();
+    });
+});
+
 describe('TerminalXterm — live session', () => {
     it('renders the host container', () => {
         renderWithProviders(<TerminalXterm sessionId="sess-1" sessionLive={true} />);
@@ -172,7 +214,7 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         expect(screen.queryByText(/connecting to pty/i)).not.toBeInTheDocument();
     });
 
-    it('ws.onmessage with string data calls term.write', async () => {
+    it('ws.onmessage with string data writes it verbatim to the terminal', async () => {
         renderWithProviders(<TerminalXterm sessionId="sess-ws-3" sessionLive={true} />);
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
         act(() => {
@@ -181,21 +223,49 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         act(() => {
             lastWs?.onmessage?.(new MessageEvent('message', { data: 'hello output' }));
         });
-        // verify no crash
-        expect(document.body).toBeTruthy();
+        const term = (await import('@xterm/xterm')).Terminal as unknown as {
+            mock: { results: Array<{ value: { write: ReturnType<typeof vi.fn> } }> };
+        };
+        const instance = term.mock.results[term.mock.results.length - 1]!.value;
+        expect(instance.write).toHaveBeenCalledWith('hello output');
     });
 
-    it('ws.onmessage with ArrayBuffer data calls term.write with Uint8Array', async () => {
+    it('ws.onmessage with ArrayBuffer data writes byte-identical Uint8Array, undecoded', async () => {
         renderWithProviders(<TerminalXterm sessionId="sess-ws-4" sessionLive={true} />);
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
         act(() => {
             lastWs?.onopen?.(new Event('open'));
         });
-        const buffer = new ArrayBuffer(4);
+        // 0xE2 = first byte of a split '€'; a decode would corrupt it to U+FFFD.
+        const buffer = new Uint8Array([0xe2]).buffer;
         act(() => {
             lastWs?.onmessage?.(new MessageEvent('message', { data: buffer }));
         });
-        expect(document.body).toBeTruthy();
+        const term = (await import('@xterm/xterm')).Terminal as unknown as {
+            mock: { results: Array<{ value: { write: ReturnType<typeof vi.fn> } }> };
+        };
+        const instance = term.mock.results[term.mock.results.length - 1]!.value;
+        const written = instance.write.mock.calls
+            .map((args: unknown[]) => args[0])
+            .find((a: unknown) => a instanceof Uint8Array) as Uint8Array | undefined;
+        expect(written).toBeInstanceOf(Uint8Array);
+        expect(Array.from(written!)).toEqual([0xe2]);
+    });
+
+    it('ws.onmessage writes a frame ending mid-escape-sequence immediately (no buffering)', async () => {
+        renderWithProviders(<TerminalXterm sessionId="sess-ws-4b" sessionLive={true} />);
+        await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
+        act(() => {
+            lastWs?.onopen?.(new Event('open'));
+        });
+        act(() => {
+            lastWs?.onmessage?.(new MessageEvent('message', { data: 'foo\x1b[' }));
+        });
+        const term = (await import('@xterm/xterm')).Terminal as unknown as {
+            mock: { results: Array<{ value: { write: ReturnType<typeof vi.fn> } }> };
+        };
+        const instance = term.mock.results[term.mock.results.length - 1]!.value;
+        expect(instance.write).toHaveBeenCalledWith('foo\x1b[');
     });
 
     it('ws.onclose with non-1000 code and sessionLive schedules reconnect', async () => {
@@ -267,22 +337,6 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         await waitFor(() =>
             expect(screen.getByText(/session is not active/i)).toBeInTheDocument(),
         );
-    });
-
-    it('ws.onmessage with Blob data calls term.write via arrayBuffer()', async () => {
-        // Exercises the `instanceof Blob` branch (line 236) in ws.onmessage.
-        renderWithProviders(<TerminalXterm sessionId="sess-ws-10" sessionLive={true} />);
-        await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
-        act(() => {
-            lastWs?.onopen?.(new Event('open'));
-        });
-        // Create a Blob and dispatch it as message data.
-        const blob = new Blob([new Uint8Array([65, 66, 67])], { type: 'application/octet-stream' });
-        act(() => {
-            lastWs?.onmessage?.(new MessageEvent('message', { data: blob }));
-        });
-        // The Blob handler calls arrayBuffer() which is async; just verify no crash.
-        await waitFor(() => expect(document.body).toBeTruthy());
     });
 
     it('ws.onclose when sessionLive=false does NOT reconnect (no phantom WS)', async () => {
@@ -465,8 +519,8 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
     });
 
     it('ws.onmessage: data of an unrecognised type is silently ignored (line 241 false branch)', async () => {
-        // Exercises the case where ev.data is neither a string, ArrayBuffer,
-        // nor Blob (falls through the if/else-if chain with no branch taken).
+        // Exercises the case where ev.data is neither a string nor an
+        // ArrayBuffer (writeWsFrame returns 0 and writes nothing).
         renderWithProviders(<TerminalXterm sessionId="sess-ws-24" sessionLive={true} />);
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
         act(() => { lastWs?.onopen?.(new Event('open')); });
@@ -475,39 +529,6 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
                 lastWs?.onmessage?.(new MessageEvent('message', { data: { unexpected: true } }));
             });
         }).not.toThrow();
-    });
-
-    it('ws.onmessage Blob .then(): no-ops when termRef is null after unmount (line 243 true branch)', async () => {
-        // Exercises the inner `if (!termRef.current) return;` guard inside the
-        // Blob branch's arrayBuffer().then() callback — the component unmounts
-        // (nulling termRef) before the async arrayBuffer() resolves.
-        const { unmount } = renderWithProviders(
-            <TerminalXterm sessionId="sess-ws-25" sessionLive={true} />,
-        );
-        await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
-        const ws = lastWs!;
-        act(() => { ws.onopen?.(new Event('open')); });
-        const blob = new Blob([new Uint8Array([1, 2, 3])]);
-        act(() => { ws.onmessage?.(new MessageEvent('message', { data: blob })); });
-        act(() => { unmount(); });
-        await act(async () => { await blob.arrayBuffer(); });
-        expect(document.body).toBeTruthy();
-    });
-
-    it('ws.onmessage Blob branch: arrayBuffer() resolves and writes bytes', async () => {
-        // Exercises the `instanceof Blob` → `arrayBuffer().then(...)` path (lines 236-243)
-        // including the setBytesReceived update inside the .then() callback.
-        renderWithProviders(<TerminalXterm sessionId="sess-ws-17" sessionLive={true} />);
-        await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
-        act(() => { lastWs?.onopen?.(new Event('open')); });
-        // Use a real Blob — jsdom supports Blob.arrayBuffer()
-        const blob = new Blob([new Uint8Array([10, 20, 30])]);
-        // Fire onmessage then await microtasks so the .then() callback runs
-        await act(async () => {
-            lastWs?.onmessage?.(new MessageEvent('message', { data: blob }));
-            await blob.arrayBuffer(); // flush the same microtask queue
-        });
-        expect(document.body).toBeTruthy();
     });
 
     it('cleanup: ws.close() throw is silently caught (line 275)', async () => {
@@ -545,27 +566,24 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         );
     });
 
-    it('shows bytes-received count in not-active overlay after Blob data arrives', async () => {
-        // Exercises the `bytesReceived > 0` branch inside the !sessionLive overlay (line 359).
+    it('shows bytes-received count in not-active overlay after binary data arrives', async () => {
+        // Exercises the `bytesReceived > 0` branch inside the !sessionLive overlay.
         const { rerender } = renderWithProviders(
             <TerminalXterm sessionId="sess-ws-20" sessionLive={true} />,
         );
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
         act(() => { lastWs?.onopen?.(new Event('open')); });
-        // Send a Blob so bytesReceived is incremented via the async path
-        const blob = new Blob([new Uint8Array([1, 2, 3])]);
-        await act(async () => {
-            lastWs?.onmessage?.(new MessageEvent('message', { data: blob }));
+        act(() => {
+            lastWs?.onmessage?.(
+                new MessageEvent('message', { data: new Uint8Array([1, 2, 3]).buffer }),
+            );
         });
         // Flip to not-live so the overlay renders with byte count
         act(() => {
             rerender(<TerminalXterm sessionId="sess-ws-20" sessionLive={false} />);
         });
-        await waitFor(() =>
-            expect(screen.getByText(/session is not active/i)).toBeInTheDocument(),
-        );
-        // bytesReceived may or may not be > 0 depending on async resolution; either way no crash
-        expect(document.body).toBeTruthy();
+        const overlay = await screen.findByText(/session is not active/i);
+        expect(overlay.textContent).toMatch(/3 bytes received/i);
     });
 });
 
@@ -631,21 +649,42 @@ describe('TerminalXterm — ResizeObserver branches', () => {
         }).not.toThrow();
     });
 
-    it('ResizeObserver callback: sends resize when WS is open', async () => {
-        // Exercises the happy path of the ResizeObserver callback (lines 293-301).
+    it('ResizeObserver callback: sends resize (debounced) when WS is open', async () => {
+        vi.useFakeTimers();
         renderWithProviders(<TerminalXterm sessionId="sess-ro-3" sessionLive={true} />);
-        await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
+        await act(async () => { await vi.runAllTimersAsync(); });
         act(() => { lastWs?.onopen?.(new Event('open')); });
         const sentBefore = (lastWs?.sent ?? []).length;
         act(() => { lastRoCallback?.(); });
-        // The resize callback's try{} block must have actually run (not just
-        // completed without throwing) — assert the sent count strictly grew
-        // and the payload is the expected resize JSON.
+        // The resize send is trailing-debounced — nothing goes out until the
+        // debounce window elapses.
+        expect((lastWs?.sent ?? []).length).toBe(sentBefore);
+        await act(async () => { vi.advanceTimersByTime(150); });
         const sentAfter = lastWs?.sent ?? [];
-        expect(sentAfter.length).toBeGreaterThan(sentBefore);
+        expect(sentAfter.length).toBe(sentBefore + 1);
         const lastSent = sentAfter[sentAfter.length - 1];
         expect(typeof lastSent).toBe('string');
         expect(JSON.parse(lastSent as string)).toMatchObject({ cmd: 'resize', cols: 80, rows: 24 });
+        vi.useRealTimers();
+    });
+
+    it('ResizeObserver callback: a burst of fires collapses into ONE resize send', async () => {
+        // Dragging a pane divider in /terminal/layout fires the observer per
+        // animation frame; each server-side resize makes ConPTY reflow the
+        // whole screen. The debounce must collapse a burst into one envelope.
+        vi.useFakeTimers();
+        renderWithProviders(<TerminalXterm sessionId="sess-ro-5" sessionLive={true} />);
+        await act(async () => { await vi.runAllTimersAsync(); });
+        act(() => { lastWs?.onopen?.(new Event('open')); });
+        const sentBefore = (lastWs?.sent ?? []).length;
+        act(() => {
+            lastRoCallback?.();
+            lastRoCallback?.();
+            lastRoCallback?.();
+        });
+        await act(async () => { vi.advanceTimersByTime(150); });
+        expect((lastWs?.sent ?? []).length).toBe(sentBefore + 1);
+        vi.useRealTimers();
     });
 
     it('init cleanup: unmounting before the deferred init timer fires is a no-op (line 157)', () => {
@@ -678,20 +717,25 @@ describe('TerminalXterm — ResizeObserver branches', () => {
     });
 
     it('ResizeObserver callback: skips ws.send when WS is not OPEN', async () => {
-        // Exercises the `ws && ws.readyState === WebSocket.OPEN` guard (line 296).
+        // Exercises the `ws && ws.readyState === WebSocket.OPEN` guard inside
+        // the debounced send.
+        vi.useFakeTimers();
         renderWithProviders(<TerminalXterm sessionId="sess-ro-4" sessionLive={true} />);
-        await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
+        await act(async () => { await vi.runAllTimersAsync(); });
         act(() => { lastWs?.onopen?.(new Event('open')); });
         // Close the WS so readyState != OPEN
         act(() => {
             lastWs?.onclose?.(new CloseEvent('close', { code: 1000 }));
         });
         const sentBefore = (lastWs?.sent ?? []).length;
-        // Fire resize — ws is no longer in wsRef (nulled in onclose), no send
+        // Fire resize — ws is no longer in wsRef (nulled in onclose); even
+        // after the debounce elapses, nothing is sent.
         expect(() => {
             act(() => { lastRoCallback?.(); });
         }).not.toThrow();
+        await act(async () => { vi.advanceTimersByTime(150); });
         expect((lastWs?.sent ?? []).length).toBe(sentBefore);
+        vi.useRealTimers();
     });
 });
 

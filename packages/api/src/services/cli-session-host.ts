@@ -2,8 +2,16 @@
 //
 // PTY-backed CLI session host. Owns one in-memory Map keyed by
 // cli_sessions.id; each entry holds the live IPty (or null while paused),
-// a 64 KB ring buffer of recent PTY output for browser-reconnect replay,
-// and the set of attached WebSocket subscribers.
+// a headless xterm mirror of the live screen (serialized into a clean
+// snapshot for browser attach/reconnect replay), and the set of attached
+// WebSocket subscribers.
+//
+// Why a mirror instead of a byte ring buffer: replaying a byte-window of
+// history can start mid-escape-sequence or mid-UTF-8 codepoint (rendering
+// literal "zombie" characters at the top of the terminal), forwards live
+// DSR cursor queries that the browser's xterm auto-answers back into the
+// PTY stdin, and reflects whatever geometry the PTY had when the bytes
+// were emitted. A serialized snapshot has none of those failure modes.
 //
 // Two CLIs are supported. Both expose `--session-id <uuid>` (start) and
 // `--resume <uuid>` (rejoin), so Pause/Resume + on-PTY-exit `paused` work
@@ -20,7 +28,7 @@
 // Public API:
 //   - startSession({ session, ... })   -> spawn PTY for a fresh session
 //   - resumeSession({ session, ... })  -> spawn PTY with --resume <id> (claude only)
-//   - attachWebSocket(sessionId, ws)   -> replay ring buffer + live forward
+//   - attachWebSocket(sessionId, ws)   -> replay screen snapshot + live forward
 //   - pauseSession(sessionId)          -> kill PTY, drop subs, status=paused
 //   - killSessionPty(sessionId)        -> kill PTY only (used by Stop flow
 //                                         BEFORE git operations run)
@@ -41,8 +49,9 @@ import { notificationsService } from './notifications.js';
 import { sendExternalForNotification } from './external-notifications.js';
 import { gitInvokeEnv } from './git-env.js';
 import { cleanupGitConfig } from './git-credentials.js';
+import { createScreenState } from './terminal-screen-state.js';
+import type { TerminalScreenState } from './terminal-screen-state.js';
 
-const RING_BUFFER_BYTES = 64 * 1024;
 const PTY_DEFAULT_COLS = 120;
 const PTY_DEFAULT_ROWS = 30;
 // How often the idle detector polls each session's lastActivityAt. Cheap
@@ -52,14 +61,13 @@ const IDLE_CHECK_INTERVAL_MS = 5_000;
 // Default threshold if the settings row hasn't been loaded yet (boot race
 // guard). Matches the DB default in migration 015.
 const IDLE_THRESHOLD_DEFAULT_MS = 300_000;
-// On WS attach we replay the ring buffer to the new browser. xterm.js auto-
-// replies to embedded DSR escape sequences (cursor-position queries from
-// the CLI's TUI) by sending bytes back through the WS — which look just
-// like user keystrokes to our message handler. During this short window
-// after attach we still forward those bytes to the PTY but skip the
-// `markUserActivity` re-arm so a refresh / notification-click doesn't
-// reset the idle-notification once-per-stretch flag.
-const ATTACH_SETTLE_MS = 750;
+// Bounds for the in-band `{cmd:'resize'}` control envelope. ConPTY fails
+// hard on zero/negative dimensions and absurd sizes make it allocate huge
+// reflow buffers; frames outside these bounds are dropped — never applied
+// and never typed into the shell.
+const RESIZE_MIN_COLS = 2;
+const RESIZE_MIN_ROWS = 1;
+const RESIZE_MAX_DIM = 500;
 
 // Allowed tools mirror agent-runner.ts plus a deliberate addition: the
 // Atlas MCP server is the whole point of in-app sessions (so the user
@@ -94,9 +102,14 @@ interface SessionEntry {
     /** Which CLI binary this PTY is running. Branches argv shape + onExit behaviour. */
     cli: CliKind;
     pty: IPty | null;
-    /** Linear append-only buffer trimmed to RING_BUFFER_BYTES on overflow. */
-    backlog: Buffer;
+    /** Headless xterm mirror of the live screen, serialized on WS attach.
+     *  Created alongside the PTY; null after the PTY exits. */
+    screen: TerminalScreenState | null;
     subscribers: Set<WebSocketLike>;
+    /** Subscribers whose attach snapshot hasn't been sent yet. Live
+     *  broadcasts skip them — bytes still ahead of their flush marker
+     *  arrive inside the snapshot instead, never twice. */
+    pendingSnapshot: Set<WebSocketLike>;
     cols: number;
     rows: number;
     /** Pending typed bytes that arrived while the auto-prompt timer was still
@@ -116,10 +129,6 @@ interface SessionEntry {
     idleNotifiedAt: number | null;
     /** Polling handle for the idle detector. setInterval(IDLE_CHECK_INTERVAL_MS). */
     idleCheckTimer: NodeJS.Timeout | null;
-    /** Unix ms until which inbound WS bytes still flow to the PTY but DO NOT
-     *  count as user activity. Set on every WS attach to absorb xterm.js's
-     *  DSR auto-replies to the replayed backlog. Null = never armed. */
-    attachSettleUntil: number | null;
     /** Per-session tmp file holding `http.extraheader = AUTHORIZATION: basic
      *  <b64>` for the project credential. Set by the route via buildGitAuth;
      *  exposed to the PTY via `GIT_CONFIG_GLOBAL`. Cleared on pauseSession /
@@ -267,13 +276,6 @@ function buildCliArgs(params: {
     return args;
 }
 
-function trimBacklog(entry: SessionEntry, incoming: Buffer): void {
-    const combined = Buffer.concat([entry.backlog, incoming]);
-    entry.backlog = combined.byteLength > RING_BUFFER_BYTES
-        ? combined.subarray(combined.byteLength - RING_BUFFER_BYTES)
-        : combined;
-}
-
 // Idle detector: fires `terminal.waiting_for_input` notifications when a
 // session has no PTY output AND no user keystrokes for the configured
 // threshold (settings.terminal_idle_notify_seconds, default 300 s). The
@@ -396,6 +398,7 @@ function broadcastPtyBytes(entry: SessionEntry, bytes: Buffer): void {
     // trigger ws.on('close') which mutates entry.subscribers, and iterating
     // the live Set during deletion silently skips entries.
     for (const ws of Array.from(entry.subscribers)) {
+        if (entry.pendingSnapshot.has(ws)) continue;
         try {
             ws.send(bytes);
         } catch {
@@ -437,6 +440,13 @@ function spawnPty(params: {
             // it down first.
             env: {
                 ...gitInvokeEnv(params.gitConfigPath, params.ghToken),
+                // node-pty on Windows silently discards the `name:` option
+                // (it is never passed to WindowsPtyAgent), so without these
+                // the CLI sees no terminal type at all and may downgrade its
+                // color output. After the spread so they win over whatever
+                // the API host process inherited.
+                TERM: 'xterm-256color',
+                COLORTERM: 'truecolor',
                 ATLAS_CLI_SESSION_ID: params.sessionId,
             },
         });
@@ -451,31 +461,46 @@ function spawnPty(params: {
 
 function attachPtyToEntry(entry: SessionEntry, pty: IPty): void {
     entry.pty = pty;
+    // Fresh mirror per PTY lifetime, so a resumed session's replay starts
+    // from the new PTY's first paint — the same clean-slate rule the old
+    // backlog reset enforced.
+    const screen = createScreenState(entry.cols, entry.rows);
+    entry.screen = screen;
     pty.onData((data) => {
         const buf = Buffer.from(data, 'utf8');
-        trimBacklog(entry, buf);
-        broadcastPtyBytes(entry, buf);
-        // PTY emitted bytes -> session isn't idle right now, but we don't
-        // re-arm the notification here. See markPtyActivity for the why.
-        markPtyActivity(entry);
+        // Broadcast from the mirror's write callback, not synchronously:
+        // feed callbacks fire FIFO with the attach flush marker, which is
+        // what guarantees an attaching browser sees each byte exactly once
+        // (inside the snapshot XOR live) — see attachWebSocket.
+        screen.feed(data, () => {
+            broadcastPtyBytes(entry, buf);
+            // PTY emitted bytes -> session isn't idle right now, but we don't
+            // re-arm the notification here. See markPtyActivity for the why.
+            markPtyActivity(entry);
+        });
     });
     pty.onExit(({ exitCode }) => {
-        // Mark the session entry's pty null so attach attempts fail fast.
+        // Mark the session entry's pty null so attach attempts fail fast;
+        // attaches from here on get a bare subscription with no snapshot.
         entry.pty = null;
-        // Tell every attached browser the PTY ended.
-        const notice = Buffer.from(`\r\n[atlas-terminal] PTY exited with code ${exitCode}\r\n`);
-        broadcastPtyBytes(entry, notice);
-        // Clear the ring buffer and drop subscribers so resume starts with a
-        // clean slate. Without this, the next attaching browser would replay
-        // 64 KB of pre-exit output mixed with the new PTY's first bytes.
-        entry.backlog = Buffer.alloc(0);
-        for (const ws of Array.from(entry.subscribers)) {
-            try { ws.close(); } catch { /* best-effort */ }
-        }
-        entry.subscribers.clear();
+        entry.screen = null;
         // Idle detector is per-PTY-lifetime; stop polling now that the
         // PTY is gone. resumeSession spawns a fresh timer.
         stopIdleCheck(entry);
+        // Tell every attached browser the PTY ended. The notice rides the
+        // mirror's write queue so it lands AFTER any still-queued output;
+        // teardown (close + dispose) happens in the same callback so no
+        // later-queued callback can fire on a disposed mirror.
+        const noticeStr = `\r\n[atlas-terminal] PTY exited with code ${exitCode}\r\n`;
+        screen.feed(noticeStr, () => {
+            broadcastPtyBytes(entry, Buffer.from(noticeStr, 'utf8'));
+            for (const ws of Array.from(entry.subscribers)) {
+                try { ws.close(); } catch { /* best-effort */ }
+            }
+            entry.subscribers.clear();
+            entry.pendingSnapshot.clear();
+            screen.dispose();
+        });
         // The PTY held the only handle to GIT_CONFIG_GLOBAL; with the PTY
         // dead the tmp file's only consumer is gone. Drop it now so we
         // don't leak per-session tmp files when the user types `/exit`.
@@ -526,8 +551,9 @@ export function startSession(input: StartSessionInput): void {
         sessionId: input.sessionId,
         cli: input.cli,
         pty: null,
-        backlog: Buffer.alloc(0),
+        screen: null,
         subscribers: new Set(),
+        pendingSnapshot: new Set(),
         cols: input.cols ?? PTY_DEFAULT_COLS,
         rows: input.rows ?? PTY_DEFAULT_ROWS,
         pendingInputQueue: [],
@@ -535,7 +561,6 @@ export function startSession(input: StartSessionInput): void {
         lastActivityAt: null,
         idleNotifiedAt: null,
         idleCheckTimer: null,
-        attachSettleUntil: null,
         gitConfigPath: input.gitConfigPath ?? null,
         ghToken: input.ghToken ?? null,
     };
@@ -596,8 +621,9 @@ export function resumeSession(input: ResumeSessionInput): void {
         sessionId: input.sessionId,
         cli: input.cli,
         pty: null,
-        backlog: Buffer.alloc(0),
+        screen: null,
         subscribers: new Set(),
+        pendingSnapshot: new Set(),
         cols: input.cols ?? PTY_DEFAULT_COLS,
         rows: input.rows ?? PTY_DEFAULT_ROWS,
         pendingInputQueue: [],
@@ -605,7 +631,6 @@ export function resumeSession(input: ResumeSessionInput): void {
         lastActivityAt: null,
         idleNotifiedAt: null,
         idleCheckTimer: null,
-        attachSettleUntil: null,
         gitConfigPath: input.gitConfigPath ?? null,
         ghToken: input.ghToken ?? null,
     };
@@ -614,7 +639,6 @@ export function resumeSession(input: ResumeSessionInput): void {
     // before the exit shouldn't carry into the resumed session.
     entry.lastActivityAt = null;
     entry.idleNotifiedAt = null;
-    entry.attachSettleUntil = null;
     // Carry the latest gitConfigPath through; the route rebuilds this on
     // every resume because the previous tmp file was unlinked on pause /
     // didn't survive an API restart. Same for ghToken — freshly minted.
@@ -656,17 +680,30 @@ export function attachWebSocket(sessionId: string, ws: WebSocketLike): boolean {
     const entry = SESSIONS.get(sessionId);
     if (!entry) return false;
     entry.subscribers.add(ws);
-    // Arm the settle window BEFORE replaying — xterm.js's auto-replies to
-    // DSR queries in the backlog arrive within a few RAFs of term.write(),
-    // and we don't want them to count as user activity (which would clear
-    // idleNotifiedAt and re-fire the idle notification on the next cycle).
-    entry.attachSettleUntil = Date.now() + ATTACH_SETTLE_MS;
-    if (entry.backlog.byteLength > 0) {
-        try {
-            ws.send(entry.backlog);
-        } catch {
-            // Subscriber already dead; close handler will purge.
-        }
+    const screen = entry.screen;
+    if (screen) {
+        // Withhold live broadcasts until the serialized snapshot is sent.
+        // Bytes queued before the flush marker are parsed before it fires,
+        // so they arrive inside the snapshot; bytes queued after it are
+        // broadcast live once the pending flag clears — exactly once
+        // either way, with no settle-window heuristics.
+        entry.pendingSnapshot.add(ws);
+        screen.whenFlushed(() => {
+            // The socket may have closed while the marker was queued.
+            if (!entry.subscribers.has(ws)) {
+                entry.pendingSnapshot.delete(ws);
+                return;
+            }
+            const snapshot = screen.snapshot();
+            if (snapshot.length > 0) {
+                try {
+                    ws.send(Buffer.from(snapshot, 'utf8'));
+                } catch {
+                    // Subscriber already dead; close handler will purge.
+                }
+            }
+            entry.pendingSnapshot.delete(ws);
+        });
     }
     ws.on('message', (data: Buffer) => {
         // Control messages are JSON-encoded UTF-8 starting with `{`; raw
@@ -679,10 +716,26 @@ export function attachWebSocket(sessionId: string, ws: WebSocketLike): boolean {
         if (data.byteLength > 0 && data[0] === 0x7b /* '{' */) {
             try {
                 const ctrl = JSON.parse(chunk) as { cmd?: string; cols?: number; rows?: number };
-                if (ctrl.cmd === 'resize' && typeof ctrl.cols === 'number' && typeof ctrl.rows === 'number') {
-                    entry.cols = ctrl.cols;
-                    entry.rows = ctrl.rows;
-                    entry.pty.resize(ctrl.cols, ctrl.rows);
+                if (ctrl.cmd === 'resize') {
+                    // A resize envelope is unambiguously control traffic:
+                    // apply it clamped or drop it, but never let malformed
+                    // dimensions fall through as keystrokes — the old
+                    // fall-through typed literal JSON into the shell.
+                    // JSON.parse can only produce finite numbers, so the
+                    // typeof check is a complete validity gate.
+                    if (typeof ctrl.cols === 'number' && typeof ctrl.rows === 'number') {
+                        const cols = Math.min(RESIZE_MAX_DIM, Math.floor(ctrl.cols));
+                        const rows = Math.min(RESIZE_MAX_DIM, Math.floor(ctrl.rows));
+                        if (cols >= RESIZE_MIN_COLS && rows >= RESIZE_MIN_ROWS) {
+                            entry.cols = cols;
+                            entry.rows = rows;
+                            entry.pty.resize(cols, rows);
+                            // screen lives exactly as long as the pty (created
+                            // together, nulled together in onExit) and the
+                            // !entry.pty guard above already ran.
+                            entry.screen!.resize(cols, rows);
+                        }
+                    }
                     return;
                 }
             } catch {
@@ -699,23 +752,18 @@ export function attachWebSocket(sessionId: string, ws: WebSocketLike): boolean {
         // User keystroke -> human is back at the terminal. Re-arm both
         // the idle countdown and the notify-once flag. Resize control
         // envelopes (handled above with `return`) deliberately don't
-        // count — they fire from the browser, not the user.
-        //
-        // Suppression: within the attach-settle window (set in
-        // attachWebSocket), xterm.js's auto-replies to DSR queries in the
-        // replayed backlog look identical to typed bytes. Forward them to
-        // the PTY but don't treat them as user activity, or refreshing the
-        // page would re-arm the idle notification within seconds.
-        if (entry.attachSettleUntil !== null && Date.now() < entry.attachSettleUntil) {
-            return;
-        }
+        // count — they fire from the browser, not the user. The snapshot
+        // replay contains no DSR queries for xterm.js to auto-answer, so
+        // every inbound byte here really is typed by the user.
         markUserActivity(entry);
     });
     ws.on('close', () => {
         entry.subscribers.delete(ws);
+        entry.pendingSnapshot.delete(ws);
     });
     ws.on('error', () => {
         entry.subscribers.delete(ws);
+        entry.pendingSnapshot.delete(ws);
     });
     return true;
 }
@@ -743,7 +791,9 @@ export function pauseSession(sessionId: string): void {
         }
     }
     entry.subscribers.clear();
-    entry.backlog = Buffer.alloc(0);
+    entry.pendingSnapshot.clear();
+    entry.screen?.dispose();
+    entry.screen = null;
     if (entry.gitConfigPath) {
         cleanupGitConfig(entry.gitConfigPath);
         entry.gitConfigPath = null;
@@ -774,6 +824,9 @@ export function killSessionPty(sessionId: string): void {
             /* best-effort */
         }
     }
+    entry.pendingSnapshot.clear();
+    entry.screen?.dispose();
+    entry.screen = null;
     if (entry.gitConfigPath) {
         cleanupGitConfig(entry.gitConfigPath);
         entry.gitConfigPath = null;
@@ -799,7 +852,6 @@ export function listLiveSessionIds(): string[] {
 export function __peekSessionStateForTest(sessionId: string): {
     lastActivityAt: number | null;
     idleNotifiedAt: number | null;
-    attachSettleUntil: number | null;
     autoPromptPending: boolean;
 } | null {
     const entry = SESSIONS.get(sessionId);
@@ -807,7 +859,6 @@ export function __peekSessionStateForTest(sessionId: string): {
     return {
         lastActivityAt: entry.lastActivityAt,
         idleNotifiedAt: entry.idleNotifiedAt,
-        attachSettleUntil: entry.attachSettleUntil,
         autoPromptPending: entry.autoPromptPending,
     };
 }

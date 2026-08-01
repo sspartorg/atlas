@@ -363,6 +363,24 @@ Agent updates (`services/agents.ts`) recompute `next_run_at` whenever `status` o
 | PATCH | `/api/projects/:projectId/guardrails/:id/toggle` | Enable/disable |
 | DELETE | `/api/projects/:projectId/guardrails/:id` | Delete |
 
+### `routes/cli-sessions.ts` — Terminal (PTY-backed CLI sessions)
+**Why this group exists**: The Terminal pages run real `claude` / `copilot` CLIs in server-side ConPTY sessions scoped to a project worktree; the browser is only a viewport. REST manages the session lifecycle; one WebSocket per attached pane carries the byte stream.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/cli/sessions` | List sessions (optional `?project_id=`), `last_active_at desc`, cap 200 |
+| GET | `/api/cli/sessions/:id` | Single session row |
+| POST | `/api/cli/sessions` | Create + spawn PTY (stages worktree via `stageCliWorktree`) |
+| POST | `/api/cli/sessions/:id/pause` | Kill PTY, keep row (`paused`) for later `--resume` |
+| POST | `/api/cli/sessions/:id/resume` | Respawn PTY with `--resume <cli_session_id>` |
+| POST | `/api/cli/sessions/:id/preflight-stop` | Dry-run of the stop finalize (dirty files, branch state) |
+| POST | `/api/cli/sessions/:id/stop` | Kill PTY, commit/push/PR finalize, `closed` |
+| GET | `/api/cli/sessions/:id/transcript` | Ingested CLI JSONL transcript (lazy ingest if NULL) |
+| DELETE | `/api/cli/sessions/:id` | Kill PTY + delete row |
+| GET (WS) | `/api/cli/sessions/:id/stream` | Live byte stream, binary frames both directions |
+
+**WS stream contract** (`services/cli-session-host.ts`): on attach the server replays a **serialized screen snapshot** — a clean, well-formed VT stream produced by a per-session `@xterm/headless` mirror (`services/terminal-screen-state.ts`) — then forwards raw PTY bytes live, each byte delivered exactly once (snapshot XOR live). The snapshot contains no DSR queries and reflects current geometry, so reconnect/refresh never renders mid-sequence "zombie" characters. Inbound: raw bytes are typed into the PTY; the JSON control envelope `{cmd:'resize',cols,rows}` resizes PTY + mirror (floored, clamped to 2–500 cols / 1–500 rows; malformed resize frames are dropped, never typed into the shell). Auth: WS upgrades bypass the POST-only write gate, so the route accepts only trusted browser Origins or `?token=<ATLAS_MCP_TOKEN>`.
+
 ### `routes/server.ts` â€” process control
 **Why this group exists**: Several env vars are read once at process boot (DB path, port); applying their new values requires a restart. Rather than instruct the Owner to find the shell and kill the process, the app exposes one button that exits cleanly and expects a supervisor (nodemon in dev, PM2 in deploy) to relaunch â€” the only mechanism by which a non-CLI Owner can apply restart-required env changes.
 
@@ -525,6 +543,8 @@ The intentionally **unexposed** surfaces:
 | `counts.ts` | Aggregate counts for sidenav + dashboard. |
 | `cli-models.ts` | CLI model registry. |
 | `worktree-stage.ts` | Shared `stageCliWorktree(opts)` — single entry point for everything that lands in a CLI worktree before spawn: `.atlas/constitution.md` + scripts, `.atlas/templates/`, `.claude/commands/atlas-*.md` + `.github/prompts/atlas-*.prompt.md` (per-agent slash-command bodies), and `.atlas/current-task.md` (when an item is linked OR a user prompt is provided). Flags carve out the orchestrator-only pieces: `includeHandoff` writes `.atlas/handoff.md`; `activeRunCopilotAgent` writes `~/.copilot/agents/atlas-<runId>.md`. Both `agent-runner.spawnAgentRun` and `POST /api/cli/sessions` (terminal create + resume) call through this helper. `runProjectSetup` and `buildGitConfig` stay at the call site because their cleanup lifetimes differ. |
+| `cli-session-host.ts` | In-memory PTY host for Terminal sessions (one Map entry per `cli_sessions.id`): spawns `claude`/`copilot` under ConPTY (with `TERM`/`COLORTERM` set — node-pty on Windows discards the `name:` option), feeds every output byte into a per-session `terminal-screen-state` mirror, broadcasts to WS subscribers from the mirror's write callback (FIFO with the attach flush marker → exactly-once delivery), replays `snapshot()` on attach, clamps/drops `{cmd:'resize'}` control frames, runs the idle-notification detector, and flips the row to `paused` on PTY exit. |
+| `terminal-screen-state.ts` | Per-session `@xterm/headless` + `@xterm/addon-serialize` mirror behind a tiny interface (`feed`/`whenFlushed`/`snapshot`/`resize`/`dispose`). Exists so WS attach replays a serialized screen instead of a byte-window of history — a byte-window can start mid-escape-sequence/mid-codepoint (rendered as literal "zombie" characters), echoes DSR queries, and carries stale geometry. |
 | `cli-transcript-ingest.ts` | `ingestTranscript(sessionId)` — reads the CLI's on-disk JSONL into `cli_sessions.transcript_jsonl`. Path resolution: `claude` uses `~/.claude/projects/<encodeClaudeProjectDir(worktree_path)>/<claude_session_id>.jsonl` (encoding rule: drop drive colon, replace `\` and `/` with `-`); `copilot` uses `~/.copilot/session-state/<id>/events.jsonl`. ENOENT → log + return current DB value (no throw). Caps at 10 MB. Fired (fire-and-forget) on the Stop path and the errored-spawn path of `routes/cli-sessions.ts`; the `GET /transcript` endpoint also calls it lazily if the column is still NULL. |
 
 ---

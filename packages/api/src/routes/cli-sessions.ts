@@ -905,8 +905,11 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
     });
 
     // WEBSOCKET -- live PTY byte stream. Binary frames in both directions.
-    // The control envelope `{cmd:"resize",cols,rows}` flips the PTY size
-    // without writing the JSON to the shell -- see cli-session-host.
+    // On attach the host replays a serialized screen snapshot (clean VT
+    // stream from the server-side headless mirror), then forwards raw PTY
+    // bytes live. The control envelope `{cmd:"resize",cols,rows}` flips
+    // the PTY size (clamped; malformed frames are dropped) without writing
+    // the JSON to the shell -- see cli-session-host.
     //
     // Auth gate: `websocket:true` bypasses the global write-gate hook
     // (that hook only fires for POST/PUT/PATCH/DELETE — WS upgrades are
@@ -942,7 +945,9 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             const attached = hostAttachWebSocket(id, sock as never);
             if (!attached) {
                 try {
-                    sock.send('session not live; reconnect after Resume\r\n');
+                    // Buffer, not string: the stream is uniformly binary so
+                    // the client never needs a text-frame special case.
+                    sock.send(Buffer.from('session not live; reconnect after Resume\r\n', 'utf8'));
                 /* v8 ignore next */
                 } catch {
                     /* best-effort */

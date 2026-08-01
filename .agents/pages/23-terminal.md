@@ -60,7 +60,7 @@ List every PTY-backed Claude Code or GitHub Copilot CLI session scoped to a proj
 - The Copilot icon (`SmartToyRounded`) is a stand-in — MUI has no Copilot mark in its icon set.
 
 ## Connectivity
-- **Pages**: [Terminal Session](24-terminal-session.md) — single-session deep link target.
+- **Pages**: `/terminal/:id` (`TerminalSession.tsx`) — single-session deep link target; no dedicated page doc yet, see the route row in [routes-map](../routes-map.md). Its live pane is the shared `TerminalXterm` documented in [Terminal Layout](24-terminal-layout.md).
 - **Routes**: `GET /api/cli/sessions`, `POST /api/cli/sessions`.
 - **Entities**: `cli_sessions`, `projects` (for the filter + dialog dropdowns), `agents`-adjacent only insofar as a session's `item_id` may link to a Atlas issue.
 

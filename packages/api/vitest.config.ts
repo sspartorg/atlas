@@ -221,6 +221,8 @@ export default defineConfig({
             // overnight-quality-push — cli-session-host + git-env branch lift
             'src/services/cli-session-host.test.ts',
             'src/services/git-env.test.ts',
+            // terminal zombie-chars fix — headless mirror snapshot replay.
+            'src/services/terminal-screen-state.test.ts',
         ],
         globals: false,
         testTimeout: 15_000,

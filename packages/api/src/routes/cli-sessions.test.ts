@@ -473,16 +473,13 @@ describe('lifecycle: pause / resume / preflight-stop / stop', () => {
     });
 });
 
-// ── attach-settle window (idle-notification bug fix) ───────────────────────
+// ── attach replay is a serialized snapshot ─────────────────────────────────
 //
-// Bug: when a browser refresh / notification click re-attached to a live
-// session, xterm.js auto-replied to DSR escape sequences in the replayed
-// backlog. Those replies flowed back through the WS as raw bytes, the
-// server's WS message handler treated them as user keystrokes, and
-// `markUserActivity` cleared `idleNotifiedAt` — so the once-per-idle-stretch
-// notification re-fired within a minute. Fix: ATTACH_SETTLE_MS=750ms window
-// during which inbound bytes still reach the PTY but DO NOT call
-// `markUserActivity`. After the window, real keystrokes re-arm normally.
+// The attach frame is serialized from the server-side screen mirror, so it
+// contains no DSR queries for xterm.js to auto-answer. The old raw-backlog
+// replay needed a 750 ms "settle window" to keep those auto-replies from
+// re-arming the idle notification; with the snapshot design every inbound
+// byte after attach IS a real keystroke and re-arms immediately.
 
 function makeStubWs(): WebSocketLike & {
     messageHandlers: Array<(d: Buffer) => void>;
@@ -511,58 +508,26 @@ function makeStubWs(): WebSocketLike & {
     } as never;
 }
 
-describe('attach-settle suppresses fake activity from DSR replies', () => {
-    it('does NOT clear idleNotifiedAt for bytes that arrive within ATTACH_SETTLE_MS', async () => {
+describe('attach replay re-arms idle notification on first real keystroke', () => {
+    it('clears idleNotifiedAt for a keystroke that arrives right after attach', async () => {
         const created = await app.inject({
             method: 'POST',
             url: '/api/cli/sessions',
             payload: { project_id: 'p1', branch_name: 'atlas/terminal/settle-a' },
         });
         const session = created.json();
-        // Mark the session as already-notified. A naive WS keystroke would
-        // clear this flag and re-arm the next idle notification.
+        // Mark the session as already-notified; the next keystroke should
+        // re-arm the once-per-idle-stretch flag immediately.
         const armed = __setIdleNotifiedAtForTest(session.id, 1_700_000_000_000);
         expect(armed).toBe(true);
 
         const ws = makeStubWs();
         const ok = attachWebSocket(session.id, ws);
         expect(ok).toBe(true);
-        // attachWebSocket arms the settle window — verify the entry now has one.
-        const stateBefore = __peekSessionStateForTest(session.id);
-        expect(stateBefore?.attachSettleUntil).not.toBeNull();
-        expect((stateBefore?.attachSettleUntil ?? 0) - Date.now()).toBeGreaterThan(500);
 
-        // Simulate xterm.js's DSR reply landing on the WS within the window.
-        // The handler should write to the PTY but skip markUserActivity.
-        ws.messageHandlers[0]!(Buffer.from('\x1b[1;1R')); // mock DSR reply shape
-        const stateAfter = __peekSessionStateForTest(session.id);
-        expect(stateAfter?.idleNotifiedAt).toBe(1_700_000_000_000);
-    });
-
-    it('DOES re-arm idleNotifiedAt for bytes that arrive AFTER ATTACH_SETTLE_MS', async () => {
-        vi.useFakeTimers({ shouldAdvanceTime: true });
-        try {
-            const created = await app.inject({
-                method: 'POST',
-                url: '/api/cli/sessions',
-                payload: { project_id: 'p1', branch_name: 'atlas/terminal/settle-b' },
-            });
-            const session = created.json();
-            __setIdleNotifiedAtForTest(session.id, 1_700_000_000_000);
-
-            const ws = makeStubWs();
-            attachWebSocket(session.id, ws);
-
-            // Advance well past the 750ms settle window.
-            vi.advanceTimersByTime(1_500);
-
-            // A keystroke after the settle window should clear idleNotifiedAt.
-            ws.messageHandlers[0]!(Buffer.from('a'));
-            const state = __peekSessionStateForTest(session.id);
-            expect(state?.idleNotifiedAt).toBeNull();
-        } finally {
-            vi.useRealTimers();
-        }
+        ws.messageHandlers[0]!(Buffer.from('a'));
+        const state = __peekSessionStateForTest(session.id);
+        expect(state?.idleNotifiedAt).toBeNull();
     });
 });
 
@@ -2142,7 +2107,7 @@ describe('CS9 — WebSocket stream not-attached path', () => {
         expect(attached).toBe(false);
         if (!attached) {
             try {
-                ws.send('session not live; reconnect after Resume\r\n');
+                ws.send(Buffer.from('session not live; reconnect after Resume\r\n', 'utf8'));
             } catch {
                 /* best-effort */
             }
