@@ -209,16 +209,27 @@ describe('shouldSendForEvent', () => {
 });
 
 describe('sendExternalNotification — dispatch', () => {
+    // `transport.send` takes (message, settings). The settings arg is not
+    // incidental: it hands the ALREADY-DECRYPTED row down so the transport
+    // doesn't re-fetch, which is what closes the race between this lookup and
+    // the transport's own. Assert it arrives, or a regression that drops it
+    // would pass here and only surface as a double-fetch in production.
     it('routes to Telegram when provider is telegram (default)', async () => {
         await sendExternalNotification('msg');
-        expect(mocks.telegramSend).toHaveBeenCalledWith('msg');
+        expect(mocks.telegramSend).toHaveBeenCalledWith(
+            'msg',
+            expect.objectContaining({ external_notification_provider: 'telegram' }),
+        );
         expect(mocks.teamsSend).not.toHaveBeenCalled();
     });
 
     it('routes to Teams when provider is teams', async () => {
         await settingsService.updateExternalNotificationProvider('teams');
         await sendExternalNotification('msg');
-        expect(mocks.teamsSend).toHaveBeenCalledWith('msg');
+        expect(mocks.teamsSend).toHaveBeenCalledWith(
+            'msg',
+            expect.objectContaining({ external_notification_provider: 'teams' }),
+        );
         expect(mocks.telegramSend).not.toHaveBeenCalled();
     });
 

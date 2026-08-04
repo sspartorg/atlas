@@ -52,7 +52,7 @@ beforeEach(async () => {
         app = await buildApp({ logger: false });
         await app.ready();
     }
-}, 30_000);
+});
 
 afterAll(async () => {
     if (app) await app.close();

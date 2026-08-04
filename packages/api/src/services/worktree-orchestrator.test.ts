@@ -62,8 +62,17 @@ vi.mock('node:fs', async () => {
 
 // Stub `git-credentials` so push/PR tests don't have to seed the
 // credentials table — the only behaviour we care about per-test is
-// whether the helper returned a path (auth wired) or null (hard-fail
-// path). Each test overrides as needed via `buildGitConfigMock`.
+// whether the helper resolved a config path (auth wired) or not
+// (hard-fail path). Each test overrides as needed via `buildGitConfigMock`.
+//
+// NOTE the shape: `buildGitConfig` resolves to
+// `{ configPath: string | null; transient: boolean }`, NOT a bare path.
+// `transient` distinguishes a GitHub App token-mint outage (retry) from
+// permanent misconfiguration (re-attach the credential) — see the
+// 2026-07-03 note in worktree-orchestrator.ts. Mocking a bare string here
+// makes `const { configPath } = await buildGitConfig(...)` destructure to
+// `undefined`, which silently routes every push test down the
+// no-credential hard-fail branch.
 const buildGitConfigMock = vi.fn();
 const cleanupGitConfigMock = vi.fn();
 vi.mock('./git-credentials.js', () => ({
@@ -102,7 +111,7 @@ beforeEach(async () => {
     // Default to "credential is wired" so push/PR tests don't have to
     // opt-in per case. The null-credential hard-fail test overrides
     // this to return null.
-    buildGitConfigMock.mockResolvedValue('/tmp/fake-git-config');
+    buildGitConfigMock.mockResolvedValue({ configPath: '/tmp/fake-git-config', transient: false });
 });
 
 afterAll(async () => {
@@ -970,7 +979,7 @@ describe('pushWorktree — orchestrator-driven git push', () => {
     // prompted by GCM on every push.
     it('hard-fails without spawning git when no credential is wired', async () => {
         const { pushWorktree } = await import('./worktree-orchestrator.js');
-        buildGitConfigMock.mockResolvedValueOnce(null);
+        buildGitConfigMock.mockResolvedValueOnce({ configPath: null, transient: false });
 
         const result = await pushWorktree('/tmp/wt', 'atlas/dev/ATL-203', null, 'p1');
 
@@ -986,7 +995,7 @@ describe('pushWorktree — orchestrator-driven git push', () => {
 
     it('hard-fails with a credential-id-specific message when the credential lookup misses', async () => {
         const { pushWorktree } = await import('./worktree-orchestrator.js');
-        buildGitConfigMock.mockResolvedValueOnce(null);
+        buildGitConfigMock.mockResolvedValueOnce({ configPath: null, transient: false });
 
         const result = await pushWorktree('/tmp/wt', 'atlas/dev/ATL-204', 'cred-missing', 'p1');
 
@@ -1548,7 +1557,7 @@ describe('cleanupWorktreeAfterPush', () => {
             .where('id', '=', itemId)
             .execute();
 
-        buildGitConfigMock.mockResolvedValue('/tmp/fake-git-config');
+        buildGitConfigMock.mockResolvedValue({ configPath: '/tmp/fake-git-config', transient: false });
         execFileMock.mockImplementation(() => ({ stdout: '', stderr: '' }));
 
         await cleanupWorktreeAfterPush({

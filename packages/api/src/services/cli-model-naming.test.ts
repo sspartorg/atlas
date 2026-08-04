@@ -64,20 +64,27 @@ describe('quoteArgsForShell', () => {
 });
 
 describe('resolveSpawn (Windows shim → node entry)', () => {
-    it('returns a spawn-ready shape; on Windows it resolves the .cmd shim to a node entry, on POSIX it returns the bin as-is', () => {
+    // Three real outcomes, and which one you get depends on the machine, not
+    // on the code under test. The previous version of this test asserted the
+    // shim-resolved branch unconditionally on Windows — i.e. it silently
+    // required the copilot CLI to be INSTALLED, and failed on any dev box
+    // without it. Assert the contract of whichever branch actually ran.
+    it('returns a spawn-ready shape for every resolution outcome', () => {
         const r = resolveSpawn('copilot', ['-p', 'hello']);
-        if (process.platform === 'win32') {
-            // We're on Windows with copilot installed → expect direct-node-spawn.
+
+        if (r.command === process.execPath) {
+            // Shim resolved (Windows, copilot installed) → spawn node directly
+            // on the resolved entry, no shell, original argv preserved after it.
             expect(r.useShell).toBe(false);
-            expect(r.command).toBe(process.execPath);
             expect(r.args[0]).toMatch(/npm-loader\.js$|copilot.*\.js$/i);
-            // The original argv comes through unmodified after the entry path.
             expect(r.args.slice(1)).toEqual(['-p', 'hello']);
         } else {
-            // POSIX → no shim translation, no shell wrap, bin passed through.
-            expect(r.useShell).toBe(false);
+            // No shim → the bin is passed through untouched. Windows still
+            // needs the shell (that is how a bare `copilot` resolves a .cmd
+            // on PATH); POSIX does not.
             expect(r.command).toBe('copilot');
-            expect(r.args).toEqual(['-p', 'hello']);
+            expect(r.useShell).toBe(process.platform === 'win32');
+            expect(r.args).toEqual(quoteArgsForShell(['-p', 'hello']));
         }
     });
 

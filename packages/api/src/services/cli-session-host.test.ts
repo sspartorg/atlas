@@ -159,7 +159,7 @@ beforeAll(() => {
 afterAll(async () => {
     vi.useRealTimers();
     await closeTestDb();
-}, 30_000);
+});
 
 // Note: truncateAll() is NOT called here globally because cli-session-host.ts
 // fires async DB updates (onExit handler does db.updateTable) that can race

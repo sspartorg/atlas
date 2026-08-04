@@ -19,7 +19,7 @@ beforeEach(async () => {
         app = await buildApp({ logger: false });
         await app.ready();
     }
-}, 30_000);
+});
 
 afterAll(async () => {
     if (app) await app.close();
@@ -38,7 +38,13 @@ describe('GET /api/environment-secrets', () => {
         expect(body.vars).toHaveLength(0);
     });
 
-    it('returns 200 with decrypted vars after PUT', async () => {
+    // Batch-9 read model: the LIST endpoint is metadata-only and the
+    // plaintext never crosses it. This test previously asserted the
+    // pre-Batch-9 shape (`value: 'hello'` straight off the list), so making
+    // it pass again would have meant re-exposing every secret on an
+    // unauthenticated-ish read — the exact regression the hardening removed.
+    // Assert the current contract in both halves instead.
+    it('lists secrets as metadata only, never the plaintext', async () => {
         await app.inject({
             method: 'PUT',
             url: '/api/environment-secrets',
@@ -49,12 +55,39 @@ describe('GET /api/environment-secrets', () => {
             url: '/api/environment-secrets',
         });
         expect(res.statusCode).toBe(200);
-        const body = JSON.parse(res.body) as { vars: Array<{ key: string; value: string }> };
+        const body = JSON.parse(res.body) as {
+            vars: Array<{ key: string; has_value: boolean; updated_at: string }>;
+        };
         expect(Array.isArray(body.vars)).toBe(true);
-        // Both PUT and GET use the same db pointing at the same DB — MY_SECRET must appear.
         const entry = body.vars.find((v) => v.key === 'MY_SECRET');
         expect(entry).toBeDefined();
-        expect(entry!.value).toBe('hello');
+        expect(entry!.has_value).toBe(true);
+        expect(entry!.updated_at).toBeTruthy();
+        // The whole point: no plaintext anywhere in the payload.
+        expect(entry).not.toHaveProperty('value');
+        expect(res.body).not.toContain('hello');
+    });
+
+    it('reveals a single secret on the explicit per-key endpoint', async () => {
+        await app.inject({
+            method: 'PUT',
+            url: '/api/environment-secrets',
+            payload: { vars: [{ key: 'MY_SECRET', value: 'hello' }] },
+        });
+        const res = await app.inject({
+            method: 'GET',
+            url: '/api/environment-secrets/MY_SECRET/value',
+        });
+        expect(res.statusCode).toBe(200);
+        expect(JSON.parse(res.body)).toEqual({ key: 'MY_SECRET', value: 'hello' });
+    });
+
+    it('returns 404 revealing a key that does not exist', async () => {
+        const res = await app.inject({
+            method: 'GET',
+            url: '/api/environment-secrets/NOPE/value',
+        });
+        expect(res.statusCode).toBe(404);
     });
 });
 
