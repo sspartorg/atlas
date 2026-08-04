@@ -26,7 +26,7 @@
 Info alert explains `.env` mirroring. Variable rows (`EnvVarRow`) show key + "RESTART" badge (if `restart_required`) + description + value field (masked when `secret`, Reveal/Copy toggles otherwise). **Save Changes** → `useUpdateEnv`. **Restart Server** opens a confirm dialog and hits `POST /api/server/restart`.
 
 ## Tab 3 — Model Registry (`ModelRegistryTab`)
-Two `CliCard` sections (Claude / Copilot). Each model row: `model_name` + optional note + Remove button. Add row commits via `useCreateCliModel` (Enter key in either input triggers Add). Remove opens a confirmation dialog (`ConfirmRemoveModelDialog`); only the confirm button fires `useRemoveCliModel`. Cancel/X close without mutation.
+Three `CliCard` sections (Claude / Copilot / Ollama), rendered from `AGENT_CLIS`. Each model row: `model_name` + optional note + Remove button. Add row commits via `useCreateCliModel` (Enter key in either input triggers Add). Remove opens a confirmation dialog (`ConfirmRemoveModelDialog`); only the confirm button fires `useRemoveCliModel`. Cancel/X close without mutation.
 
 ## Tab 4 — Notifications (`NotificationsTab`)
 **External Notification Channel** — Atlas sends outbound alerts (reminder fires, agent completions, quiet-hours-respecting notifications) via a provider-agnostic abstraction. This tab is the single UI for picking the provider and filling in its credentials. The dispatcher (`packages/api/src/services/external-notifications.ts`) reads `settings.external_notification_provider` at send time and routes to the matching transport under `services/transports/`.

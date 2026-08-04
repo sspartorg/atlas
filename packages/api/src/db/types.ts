@@ -1,4 +1,5 @@
 import type { ColumnType, Generated } from 'kysely';
+import type { AgentCli } from '@atlas/shared';
 
 // Helper aliases
 type TS = ColumnType<string, string | undefined, string>;
@@ -48,7 +49,7 @@ export interface AgentsTable {
     id: string;
     name: Str;
     category: 'software-dev' | 'marketing' | 'content' | 'design';
-    cli: 'claude' | 'copilot';
+    cli: AgentCli;
     model: Str;
     // Task 6 — reasoning-effort knob forwarded to the CLI as `--effort`.
     // ColumnType lets callers omit it on insert (DB default 'medium').
@@ -128,7 +129,7 @@ export interface MarketplaceAgentsTable {
     id: string;
     name: Str;
     category: 'software-dev' | 'marketing' | 'content' | 'design';
-    cli: 'claude' | 'copilot';
+    cli: AgentCli;
     model: Str;
     effort: ColumnType<
         'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max',
@@ -379,7 +380,7 @@ export interface EnvironmentSecretsTable {
 
 export interface CliModelsTable {
     id: string;
-    cli: 'claude' | 'copilot';
+    cli: AgentCli;
     model_name: string;
     note: StrN;
     sort_order: Int;
@@ -739,7 +740,7 @@ export interface CliSessionsTable {
         'active' | 'paused' | 'closed' | 'errored' | undefined,
         'active' | 'paused' | 'closed' | 'errored'
     >;
-    cli: ColumnType<'claude' | 'copilot', 'claude' | 'copilot' | undefined, 'claude' | 'copilot'>;
+    cli: ColumnType<AgentCli, AgentCli | undefined, AgentCli>;
     worktree_path: StrN;
     worktree_branch: StrN;
     claude_session_id: StrN;

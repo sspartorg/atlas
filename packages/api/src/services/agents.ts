@@ -2,6 +2,7 @@ import { db } from '../db/kysely-client.js';
 import { sql, type Transaction } from 'kysely';
 import type { DB } from '../db/types.js';
 import type {
+    AgentCli,
     IAgent,
     IAgentRun,
     IAgentHandoffRule,
@@ -61,11 +62,11 @@ async function assertModelInRegistry(
     model: string | undefined | null,
 ): Promise<void> {
     if (!cli || !model) return;
-    // Kysely's typed `cli` column narrows to `'claude' | 'copilot'`. The
-    // checked input is the application-level CLI value; cast through
-    // `as 'claude'` (one of the literal members) so the type checks even
-    // when an Owner passes a string the FK will then reject downstream.
-    const cliCast = cli as 'claude' | 'copilot';
+    // Kysely's typed `cli` column narrows to `AgentCli`. The checked input is
+    // an unvalidated application-level string; cast so the query type-checks
+    // even when an Owner passes a value the CHECK constraint / FK will then
+    // reject downstream (the lookup simply finds no row and we throw below).
+    const cliCast = cli as AgentCli;
     const row = await db
         .selectFrom('cli_models')
         .select('id')

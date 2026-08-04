@@ -66,13 +66,25 @@ describe('cliModelsService', () => {
     });
 
     it('rejects an unknown cli (check constraint)', async () => {
+        // `ollama` used to be the sentinel here; migration 029 made it real.
+        // Pick a CLI Atlas genuinely doesn't support so this keeps testing the
+        // constraint rather than testing a stale assumption.
         await expect(
             cliModelsService.create({
-                cli: 'ollama' as unknown as 'claude',
+                cli: 'gemini' as unknown as 'claude',
                 model_name: 'foo',
                 note: null,
             }),
         ).rejects.toThrow();
+    });
+
+    it('accepts ollama (migration 029 widened the check constraint)', async () => {
+        const row = await cliModelsService.create({
+            cli: 'ollama',
+            model_name: 'qwen3.5',
+            note: 'Local.',
+        });
+        expect(row.cli).toBe('ollama');
     });
 
     it('rejects duplicate (cli, model_name) per UNIQUE', async () => {

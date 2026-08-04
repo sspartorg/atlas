@@ -204,4 +204,56 @@ test.describe('/terminal', () => {
         await dialog.getByRole('button', { name: 'Claude Code' }).click();
         await expect(dialog.getByRole('button', { name: 'Claude Code', pressed: true })).toBeVisible();
     });
+
+    test('Ollama CLI session creates and routes through the Claude spawn path', async ({ page }) => {
+        // `cli=ollama` is Claude Code pointed at Ollama's Anthropic-compatible
+        // API — same binary, same argv, three extra env vars. That is exactly
+        // why this spec needs no new fixture: resolveCliBinary maps ollama to
+        // the claude binary, so ATLAS_CLAUDE_BINARY (fake-claude.js in the e2e
+        // stack) serves both. The contract asserted here is that the third
+        // toggle round-trips end to end: the route accepts it, persists
+        // `cli: 'ollama'` (rather than collapsing it to 'claude' the way the
+        // old `x === 'copilot' ? … : 'claude'` narrowing did), and spawns.
+        test.setTimeout(90_000);
+
+        await goto(page, '/terminal');
+        await page.getByRole('button', { name: /Start Session/i }).first().click();
+
+        const dialog = page.getByRole('dialog');
+        await expect(dialog).toBeVisible();
+
+        await dialog.getByRole('button', { name: 'Ollama' }).click();
+        await dialog.getByLabel('Project').click();
+        await page.getByRole('option', { name: 'E2E Terminal' }).click();
+
+        const branch = `atlas/terminal/ollama-e2e-${Date.now().toString(36)}`;
+        await dialog.getByLabel(/^Branch name/i).fill(branch);
+
+        const createResponse = page.waitForResponse(
+            (r) => r.url().endsWith('/api/cli/sessions') && r.request().method() === 'POST',
+            { timeout: 60_000 },
+        );
+        await dialog.getByRole('button', { name: /^Start session$/ }).click();
+        const res = await createResponse;
+        expect(res.status(), `POST /api/cli/sessions ollama expected 201 (was ${res.status()})`).toBe(201);
+        const body = await res.json();
+        expect(body.cli).toBe('ollama');
+        expect(body.status).toBe('active');
+
+        await expect(page).toHaveURL(new RegExp(`/terminal/${body.id}$`), { timeout: 10_000 });
+    });
+
+    test('Ollama toggle is offered alongside Claude and Copilot', async ({ page }) => {
+        await goto(page, '/terminal');
+        await page.getByRole('button', { name: /Start Session/i }).first().click();
+
+        const dialog = page.getByRole('dialog');
+        await expect(dialog.getByRole('button', { name: 'Claude Code', pressed: true })).toBeVisible();
+        await expect(dialog.getByRole('button', { name: 'Ollama' })).toBeVisible();
+
+        await dialog.getByRole('button', { name: 'Ollama' }).click();
+        await expect(dialog.getByRole('button', { name: 'Ollama', pressed: true })).toBeVisible();
+        await expect(dialog.getByRole('button', { name: 'Claude Code', pressed: false })).toBeVisible();
+        await expect(dialog.getByRole('button', { name: 'GitHub Copilot', pressed: false })).toBeVisible();
+    });
 });

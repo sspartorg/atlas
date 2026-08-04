@@ -126,7 +126,7 @@ For full MUI/data-fetching/status-display patterns, see `packages/web/AGENTS.md`
 - Agent seed data lives in `packages/api/src/db/seed.ts` — never hardcode agent info in components
 - 10 seeded agents with categories: `software-dev` | `marketing` | `content` | `design`
 - Each agent has an `accent_color` from the Atlas palette — use it for agent chips and avatars
-- CLI values: `claude` | `copilot` — these map to real CLI tools wired in Phase 5
+- CLI values: `claude` | `copilot` | `ollama` — these map to real CLI tools wired in Phase 5. `ollama` is not a separate binary: it runs Claude Code against Ollama's Anthropic-compatible API. Branch on `CLI_DIALECT` from `@atlas/shared`, never on the raw `cli` value
 
 ---
 

@@ -5,6 +5,8 @@ import { db } from '../db/kysely-client.js';
 import { broadcastSSE } from '../routes/events.js';
 import { commentsService } from './comments.js';
 import { resolveSpawn } from './cli-model-naming.js';
+import { ollamaEnv } from './ollama-env.js';
+import { isClaudeDialect } from '@atlas/shared';
 import type {
     IAgent,
     IAgentMemory,
@@ -203,9 +205,21 @@ function spawnClaudeForMemory(agent: IAgent, prompt: string, cwd: string): Promi
         // `--tools` was dropped from Claude Code CLI on 2026-05-27 (see
         // routes/tool-catalog.ts:7). Memory regeneration just wants a single
         // text reply, so plain `--print --output-format text` is enough.
+        //
+        // Memory regeneration always spawns `claude`, whatever the agent's own
+        // CLI is — a Copilot agent's memory is still written by Claude, hence
+        // the `sonnet` fallback. Ollama agents are the exception: their CLI IS
+        // this binary, so they keep their own model AND need the env overlay.
+        // Without it we'd send an Ollama model id to Anthropic and 404.
+        // Note the fallback differs per CLI: 'sonnet' is meaningless to an
+        // Ollama server, so a null-model Ollama agent falls back to its own
+        // default instead of a Claude model name.
+        const model = isClaudeDialect(agent.cli)
+            ? agent.model || (agent.cli === 'ollama' ? 'qwen3.5' : 'sonnet')
+            : 'sonnet';
         const args = [
             '--print',
-            '--model', agent.cli === 'claude' ? (agent.model || 'sonnet') : 'sonnet',
+            '--model', model,
             '--output-format', 'text',
         ];
 
@@ -214,6 +228,7 @@ function spawnClaudeForMemory(agent: IAgent, prompt: string, cwd: string): Promi
             const resolved = resolveSpawn('claude', args);
             child = nodeSpawn(resolved.command, resolved.args, {
                 cwd,
+                env: { ...process.env, ...ollamaEnv(agent.cli, model) },
                 shell: resolved.useShell,
                 windowsHide: true,
                 stdio: ['pipe', 'pipe', 'pipe'],

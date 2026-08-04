@@ -13,8 +13,9 @@ import Autocomplete from '@mui/material/Autocomplete';
 import AddRounded from '@mui/icons-material/AddRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import TerminalRounded from '@mui/icons-material/TerminalRounded';
-import type { ICliSession, IEpic, IStory, IBug } from '@atlas/shared';
-import { DEFAULT_CLI_MODEL, DEFAULT_COPILOT_MODEL } from '@atlas/shared';
+import type { AgentCli, ICliSession, IEpic, IStory, IBug } from '@atlas/shared';
+import { DEFAULT_MODEL_BY_CLI } from '@atlas/shared';
+import { CLI_OPTIONS } from '../utils/cliPresentation.js';
 import { useCreateCliSession } from '../hooks/useCliSessions.js';
 import { useProjects } from '../hooks/useProjects.js';
 import { useCliModels } from '../hooks/useCliModels.js';
@@ -60,8 +61,8 @@ export function StartSessionDialog({
     const [title, setTitle] = useState('');
     const [branchName, setBranchName] = useState('');
     const [initialPrompt, setInitialPrompt] = useState('');
-    const [cli, setCli] = useState<'claude' | 'copilot'>('claude');
-    const [model, setModel] = useState(DEFAULT_CLI_MODEL);
+    const [cli, setCli] = useState<AgentCli>('claude');
+    const [model, setModel] = useState(DEFAULT_MODEL_BY_CLI.claude);
 
     // useState only consults its initializer on first mount, so a caller that
     // mounts this dialog before `defaultProjectId` is known (data still
@@ -84,15 +85,15 @@ export function StartSessionDialog({
         () => cliModels.filter((m) => m.cli === cli),
         [cliModels, cli],
     );
-    const defaultModelForCli = cli === 'copilot' ? DEFAULT_COPILOT_MODEL : DEFAULT_CLI_MODEL;
+    const defaultModelForCli = DEFAULT_MODEL_BY_CLI[cli];
 
-    function handleCliChange(_: unknown, next: 'claude' | 'copilot' | null) {
+    function handleCliChange(_: unknown, next: AgentCli | null) {
         if (!next || next === cli) return;
         setCli(next);
-        // The previously selected model is almost certainly from the other CLI's
+        // The previously selected model is almost certainly from another CLI's
         // registry, so reset to that CLI's default. The model select renders
         // out of `modelsForCli` anyway, so a stale value would just blank out.
-        setModel(next === 'copilot' ? DEFAULT_COPILOT_MODEL : DEFAULT_CLI_MODEL);
+        setModel(DEFAULT_MODEL_BY_CLI[next]);
     }
 
     function reset() {
@@ -102,7 +103,7 @@ export function StartSessionDialog({
         setBranchName('');
         setInitialPrompt('');
         setCli('claude');
-        setModel(DEFAULT_CLI_MODEL);
+        setModel(DEFAULT_MODEL_BY_CLI.claude);
     }
 
     function handleClose() {
@@ -220,12 +221,15 @@ export function StartSessionDialog({
                         size="small"
                         fullWidth
                     >
-                        <ToggleButton value="claude" sx={{ textTransform: 'none' }}>
-                            Claude Code
-                        </ToggleButton>
-                        <ToggleButton value="copilot" sx={{ textTransform: 'none' }}>
-                            GitHub Copilot
-                        </ToggleButton>
+                        {CLI_OPTIONS.map((opt) => (
+                            <ToggleButton
+                                key={opt.value}
+                                value={opt.value}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                {opt.label}
+                            </ToggleButton>
+                        ))}
                     </ToggleButtonGroup>
                 </Box>
 

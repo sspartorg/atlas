@@ -6,7 +6,9 @@ import { Toast } from './Toast.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { server } from '../test-setup.js';
 import { makeProject } from '../test-utils/factories.js';
-import { DEFAULT_CLI_MODEL } from '@atlas/shared';
+import { DEFAULT_MODEL_BY_CLI } from '@atlas/shared';
+
+const DEFAULT_CLI_MODEL = DEFAULT_MODEL_BY_CLI.claude;
 
 const BASE = 'http://localhost:3000/api';
 const ISO = '2026-01-01T00:00:00.000Z';

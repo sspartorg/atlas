@@ -1,4 +1,12 @@
-export type AgentCli = 'claude' | 'copilot';
+// `ollama` is Claude Code pointed at Ollama's Anthropic-compatible API — same
+// binary, same flags, different base URL. See `CLI_DIALECT` in ../cli/index.ts
+// before branching on this type anywhere.
+export type AgentCli = 'claude' | 'copilot' | 'ollama';
+
+// Which binary + argv dialect a CLI value speaks. Ollama runs the Claude Code
+// binary, so it is `claude`. Branch on this — via `CLI_DIALECT` — anywhere the
+// question is "how do I talk to this CLI", never on `AgentCli` directly.
+export type CliDialect = 'claude' | 'copilot';
 // Task 6 — reasoning-effort knob shared by both CLIs (verified live —
 // `claude --effort` and `copilot --reasoning-effort` accept the same six
 // values).
@@ -1454,8 +1462,8 @@ export interface ICliSession {
     project_id: string;
     title: string;
     status: CliSessionStatus;
-    /** Which CLI this session is running. `claude` supports `--resume`; `copilot` does not. */
-    cli: 'claude' | 'copilot';
+    /** Which CLI this session is running. The claude dialect (`claude`, `ollama`) supports `--resume`; `copilot` does not. */
+    cli: AgentCli;
     worktree_path: string | null;
     worktree_branch: string | null;
     /** Only set for `claude` sessions — minted via `--session-id` for `--resume`. Null for copilot. */
@@ -1499,7 +1507,7 @@ export interface CliSessionCreateInput {
     /** Optional Atlas item id to anchor this session to. Must belong to the same project. */
     item_id?: string;
     /** Which CLI to spawn. Defaults to `claude` server-side. */
-    cli?: 'claude' | 'copilot';
+    cli?: AgentCli;
 }
 
 /** One entry from `git status --porcelain -z` in the session worktree. */
@@ -1523,8 +1531,12 @@ export interface ICliSessionTranscriptResponse {
     jsonl_content: string | null;
     /** ISO timestamp of the last on-disk read, or null if never ingested. */
     ingested_at: string | null;
-    /** Which CLI produced this transcript; the viewer dispatches on this. */
-    source: 'claude' | 'copilot';
+    /**
+     * Which on-disk transcript FORMAT this is — the CLI dialect, not the cli
+     * value. Ollama sessions run the Claude binary, so they report `claude`.
+     * The viewer dispatches on this.
+     */
+    source: CliDialect;
 }
 
 export interface CliSessionStopInput {

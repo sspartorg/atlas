@@ -22,7 +22,7 @@ import {
 // `prompt_md`. The runner treats both kinds the same (one CLI per run);
 // what makes a reviewer "review" is its prompt + the on-pass / on-fail
 // handoff wiring below.
-import type { SdlcRole } from '@atlas/shared';
+import type { AgentCli, SdlcRole } from '@atlas/shared';
 
 // Theme 09 — defensive boot check that the regulations matrix has
 // at least one source per project_type × region we ship. Catches
@@ -61,7 +61,7 @@ interface AgentSeed {
     id: string;
     name: string;
     category: 'software-dev' | 'marketing' | 'content' | 'design';
-    cli: 'claude' | 'copilot';
+    cli: AgentCli;
     model: string;
     framework: string;
     prompt_md: string;

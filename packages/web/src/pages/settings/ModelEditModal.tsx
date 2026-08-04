@@ -11,6 +11,15 @@ import { ATLAS_PALETTE } from '../../theme/tokens.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
+// Example of each CLI's naming convention — Claude uses hyphens, Copilot dots,
+// Ollama `name:tag`. The placeholder is the only hint the Owner gets about the
+// shape the CLI expects, so keep one per CLI.
+const MODEL_NAME_PLACEHOLDER: Record<AgentCli, string> = {
+    claude: 'claude-opus-4-8…',
+    copilot: 'gpt-5.5…',
+    ollama: 'qwen3.5 or gpt-oss:120b-cloud…',
+};
+
 interface Props {
     open: boolean;
     onClose: () => void;
@@ -117,7 +126,7 @@ export function ModelEditModal({ open, onClose, cli, cliLabel, model }: Props) {
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             disabled={isEdit}
-                            placeholder={cli === 'claude' ? 'claude-opus-4-8…' : 'gpt-5.5…'}
+                            placeholder={MODEL_NAME_PLACEHOLDER[cli]}
                             inputProps={{ style: { fontFamily: MONO } }}
                             helperText={
                                 isEdit

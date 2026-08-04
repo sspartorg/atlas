@@ -206,6 +206,23 @@ describe('parseCostFromOutput (dispatcher)', () => {
         expect(cost?.credits).toBeNull();
     });
 
+    it('parses Ollama output as Claude but zeroes the cost', () => {
+        // Ollama runs the Claude binary, so the output IS Claude stream-json
+        // and the token counts are real and worth keeping. The `total_cost_usd`
+        // the CLI wrote, though, is Anthropic's price table applied to a
+        // request Anthropic never served — a phantom charge. Ollama is free.
+        const cost = parseCostFromOutput(CLAUDE_FIXTURE, 'ollama');
+        expect(cost?.total_cost_usd).toBe(0);
+        expect(cost?.input_tokens).toBe(42);
+        expect(cost?.output_tokens).toBe(100);
+    });
+
+    it('returns null for an Ollama run that produced no parseable result event', () => {
+        // Zeroing must not manufacture a cost row out of nothing — a crashed
+        // run still has to read as "no data", not "a free run happened".
+        expect(parseCostFromOutput('not json at all', 'ollama')).toBeNull();
+    });
+
     it('routes Copilot output through the Copilot parser', () => {
         const cost = parseCostFromOutput(COPILOT_FIXTURE, 'copilot');
         // Workstream #6 — credits stay null when stderr summary is absent;

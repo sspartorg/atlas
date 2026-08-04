@@ -16,9 +16,22 @@ describe('normalizeModelForCli', () => {
         expect(normalizeModelForCli('gpt-5.2', 'copilot')).toBe('gpt-5.2');
     });
 
+    it('passes Ollama models through unchanged, `name:tag` form included', () => {
+        expect(normalizeModelForCli('qwen3.5', 'ollama')).toBe('qwen3.5');
+        expect(normalizeModelForCli('kimi-k2.7-code:cloud', 'ollama')).toBe('kimi-k2.7-code:cloud');
+    });
+
     it('falls back to a sensible default when the model is missing', () => {
         expect(normalizeModelForCli(null, 'claude')).toBe('sonnet');
         expect(normalizeModelForCli(undefined, 'copilot')).toBe('gpt-5');
+        expect(normalizeModelForCli(null, 'ollama')).toBe('qwen3.5');
+    });
+
+    it('does not promote a null-model claude row to the Opus default', () => {
+        // The fallback map is deliberately separate from DEFAULT_MODEL_BY_CLI.
+        // Sharing them would silently upgrade legacy null-model rows from
+        // Sonnet to Opus — a real cost change smuggled in behind a refactor.
+        expect(normalizeModelForCli(null, 'claude')).not.toBe('claude-opus-4-7');
     });
 });
 

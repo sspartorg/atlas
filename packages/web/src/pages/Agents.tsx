@@ -16,6 +16,7 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import type { IAgent, IAgentRun, AgentCategory, AgentCli } from '@atlas/shared';
 import { BRAND_SECONDARY_ACCENTS } from '@atlas/shared';
+import { CLI_OPTIONS } from '../utils/cliPresentation.js';
 import { AgentCard, ModelSelect } from '../components/index.js';
 import { AccentColorPicker } from './settings/AccentColorPicker.js';
 import { useAgents, useUpdateAgent } from '../hooks/useAgents.js';
@@ -545,8 +546,11 @@ export function Agents() {
                                     }))
                                 }
                             >
-                                <MenuItem value="claude">Claude</MenuItem>
-                                <MenuItem value="copilot">Copilot</MenuItem>
+                                {CLI_OPTIONS.map((opt) => (
+                                    <MenuItem key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </MenuItem>
+                                ))}
                             </Select>
                         </FormControl>
                         <ModelSelect

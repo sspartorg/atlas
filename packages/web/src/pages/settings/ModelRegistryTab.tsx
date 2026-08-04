@@ -10,7 +10,7 @@ import CloseRounded from '@mui/icons-material/CloseRounded';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import AddRounded from '@mui/icons-material/AddRounded';
-import type { ICliModel, AgentCli } from '@atlas/shared';
+import { AGENT_CLIS, type ICliModel, type AgentCli } from '@atlas/shared';
 import { useCliModels, useRemoveCliModel } from '../../hooks/useCliModels.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
@@ -34,12 +34,22 @@ const CLI_META: Record<AgentCli, { title: string; sub: string; dotColor: string;
             dotColor: ATLAS_PALETTE.slate,
             chip: 'cli · copilot',
         },
+        ollama: {
+            title: 'Ollama',
+            sub: 'Claude Code pointed at your local Ollama server — free, no account. Models must be pulled with `ollama pull` first.',
+            dotColor: ATLAS_PALETTE.amber,
+            chip: 'cli · ollama',
+        },
     };
 
 export function ModelRegistryTab() {
     const { data: models = [], isLoading } = useCliModels();
-    const claudeModels = useMemo(() => models.filter((m) => m.cli === 'claude'), [models]);
-    const copilotModels = useMemo(() => models.filter((m) => m.cli === 'copilot'), [models]);
+    const modelsByCli = useMemo(() => {
+        const grouped = Object.fromEntries(AGENT_CLIS.map((cli) => [cli, [] as ICliModel[]])) as
+            Record<AgentCli, ICliModel[]>;
+        for (const m of models) grouped[m.cli]?.push(m);
+        return grouped;
+    }, [models]);
 
     if (isLoading) {
         return (
@@ -66,8 +76,9 @@ export function ModelRegistryTab() {
                 what you&apos;ve added here.
             </Alert>
 
-            <CliCard cli="claude" models={claudeModels} />
-            <CliCard cli="copilot" models={copilotModels} />
+            {AGENT_CLIS.map((cli) => (
+                <CliCard key={cli} cli={cli} models={modelsByCli[cli]} />
+            ))}
         </Box>
     );
 }

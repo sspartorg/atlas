@@ -67,12 +67,15 @@ import {
 } from './agent-runner-completion-comment.js';
 import { commentsService } from './comments.js';
 import { normalizeModelForCli, resolveSpawn } from './cli-model-naming.js';
+import { ollamaEnv } from './ollama-env.js';
 import { gitInvokeEnv } from './git-env.js';
 import { buildGitAuth, cleanupGitConfig } from './git-credentials.js';
 import { agentIdToSlug } from './commands-assembler.js';
 import { assemblePreamble } from './preamble-assembler.js';
 import {
     getStatusLabel,
+    CLI_DIALECT,
+    type AgentCli,
     type ApiErrorKind,
     type IAgent,
     type IRunOutcome,
@@ -295,11 +298,21 @@ export function parseCopilotCostFromOutput(output: string): CostFields | null {
 // Dispatcher — picks the right parser based on the CLI that produced
 // the output. Falls back to `null` for unknown CLIs (treated like a
 // simulated run).
+//
+// Ollama runs are free. They emit Claude stream-json, so the token counts are
+// real and worth keeping, but `total_cost_usd` in that payload is whatever the
+// CLI computed from Anthropic's price table against a model it never billed —
+// meaningless here. Zero it out so Analytics shows Ollama at $0 rather than a
+// phantom charge.
 export function parseCostFromOutput(
     output: string,
-    cli: 'claude' | 'copilot',
+    cli: AgentCli,
 ): CostFields | null {
-    return cli === 'claude'
+    if (cli === 'ollama') {
+        const parsed = parseClaudeCostFromOutput(output);
+        return parsed ? { ...parsed, total_cost_usd: 0 } : parsed;
+    }
+    return CLI_DIALECT[cli] === 'claude'
         ? parseClaudeCostFromOutput(output)
         : parseCopilotCostFromOutput(output);
 }
@@ -537,7 +550,7 @@ export async function completeRun(
     // shape (Claude stream-json vs Copilot json). Missing agent (deleted
     // mid-run) falls back to Claude — preserves the legacy behaviour.
     const agent = await getAgent(agentId);
-    const cli: 'claude' | 'copilot' = agent?.cli === 'copilot' ? 'copilot' : 'claude';
+    const cli: AgentCli = agent?.cli ?? 'claude';
     const cost = parseCostFromOutput(output, cli);
     // Workstream #6 — if the Owner clicked Stop while this run was
     // mid-flight, the row has already been flipped to `cancelled` by
@@ -897,7 +910,7 @@ async function errorRun(
     const marker = classification ? `${formatErrorMarker(classification)} ` : '';
     const errOutput = `[ERROR] ${marker}${errorMsg}`;
     const errAgent = await getAgent(agentId);
-    const errCli: 'claude' | 'copilot' = errAgent?.cli === 'copilot' ? 'copilot' : 'claude';
+    const errCli: AgentCli = errAgent?.cli ?? 'claude';
     const errCost = parseCostFromOutput(errorMsg, errCli);
     // Workstream #6 — preserve `cancelled` status the same way
     // `completeRun` does. The Owner clicked Stop; the natural crash
@@ -1273,7 +1286,10 @@ function spawnCli(opts: SpawnCliOptions): void {
         artefactTmpRoot,
         copilotUserAgentPath,
     } = opts;
-    const bin = agent.cli === 'claude' ? 'claude' : 'copilot';
+    // Ollama runs the Claude Code binary — it differs only in the env overlay
+    // applied to `childEnv` below. Branch on the dialect, never on `agent.cli`.
+    const dialect = CLI_DIALECT[agent.cli];
+    const bin = dialect === 'claude' ? 'claude' : 'copilot';
 
     // Claude Code CLI: --print = non-interactive, prompt on stdin. The spawned
     // CLI inherits Owner's full user-level MCP config (Atlas + Playwright +
@@ -1347,7 +1363,13 @@ function spawnCli(opts: SpawnCliOptions): void {
     const slashCommand = `/atlas-${slug}`;
     const copilotTrigger = `Execute the atlas-${slug} agent — read .atlas/constitution.md, .atlas/handoff.md, .atlas/current-task.md, and the relevant template, then complete the work.`;
 
-    const args = agent.cli === 'claude'
+    // `--effort` is omitted on the Ollama dialect. Ollama's docs scope thinking
+    // controls to "compatible models" only, and most local models have no
+    // thinking mode at all — a rejected flag fails the whole run, which is a
+    // far worse trade than losing the knob. Claude proper keeps it.
+    const effortArgs = agent.cli === 'ollama' ? [] : ['--effort', effort];
+
+    const args = dialect === 'claude'
         ? [
               // Claude Code CLI — non-interactive single-shot. The slash
               // command sits at the end as the positional `[prompt]`
@@ -1392,7 +1414,7 @@ function spawnCli(opts: SpawnCliOptions): void {
               '--print',
               '--verbose',
               '--model', model,
-              '--effort', effort,
+              ...effortArgs,
               '--output-format', 'stream-json',
               '--allowedTools', 'mcp__atlas,mcp__playwright,mcp__claude_ai_Atlassian,Bash,Read,Write,Edit,Glob,Grep',
               '--disallowedTools', 'Task,WebFetch,WebSearch',
@@ -1441,7 +1463,7 @@ function spawnCli(opts: SpawnCliOptions): void {
               '-p', copilotTrigger,
               '--agent', `atlas-${runId}`,
               '--model', model,
-              '--effort', effort,
+              ...effortArgs,
               '--allow-all-tools',
               '--autopilot',
               '--max-autopilot-continues', '30',
@@ -1464,6 +1486,11 @@ function spawnCli(opts: SpawnCliOptions): void {
     // class of leak we just closed.
     const childEnv: NodeJS.ProcessEnv = {
         ...gitInvokeEnv(gitConfigPath ?? null, ghToken ?? null),
+        // MUST come after the gitInvokeEnv spread (which spreads process.env),
+        // or an ANTHROPIC_API_KEY in the Owner's shell wins and this
+        // nominally-free local run bills Anthropic instead. No-op unless
+        // agent.cli === 'ollama'.
+        ...ollamaEnv(agent.cli, model),
     };
 
     let child: ReturnType<typeof nodeSpawn>;
@@ -1901,7 +1928,7 @@ function spawnCli(opts: SpawnCliOptions): void {
         // consume it. Copilot's prompt continues to ride `-p` argv
         // (the `-p <text>` flag is single-value, not variadic) plus
         // `--agent` for the body lookup; nothing to write on stdin.
-        if (agent.cli === 'claude') {
+        if (dialect === 'claude') {
             child.stdin?.write(slashCommand);
         }
         child.stdin?.end();

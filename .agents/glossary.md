@@ -5,9 +5,10 @@ Domain terms used throughout Atlas. One line each. When in doubt, this file wins
 | Term | Meaning |
 |---|---|
 | **Owner** | The single human running the app. Implicit â€” there is no users table. Defaults to the name typed in onboarding. Agents escalate to Owner only. |
-| **Agent** | An AI agent profile: a CLI choice (`claude` / `copilot`), a model, a prompt (`prompt_md`), and configured handoff rules + allowed tools. 10 are seeded across 4 categories. |
+| **Agent** | An AI agent profile: a CLI choice (`claude` / `copilot` / `ollama`), a model, a prompt (`prompt_md`), and configured handoff rules + allowed tools. 10 are seeded across 4 categories. |
 | **Agent category** | One of `software-dev | marketing | content | design`. Drives card grouping on the Agents page. |
-| **CLI** | The actual command-line tool an agent invokes â€” `claude` (Anthropic) or `copilot` (GitHub). Mapped in `agent-runner.ts`. |
+| **CLI** | The command-line tool an agent invokes â€” `claude` (Anthropic), `copilot` (GitHub), or `ollama`. Mapped in `agent-runner.ts`. `ollama` is not a separate binary: it runs Claude Code against Ollama's Anthropic-compatible API on `ATLAS_OLLAMA_BASE_URL` (default `http://localhost:11434`), so it shares Claude's argv, transcripts, and resume behaviour and costs $0. See **CLI dialect**. |
+| **CLI dialect** | Which binary + argv shape a `cli` value actually speaks â€” `claude` or `copilot`. `CLI_DIALECT` in `@atlas/shared` maps `ollama â†’ claude`. Always branch on the dialect, never on the raw `cli` value, or Ollama silently falls into the Copilot path. |
 | **Model** | A model identifier registered under a CLI (e.g., `claude-opus-4-7`, `gpt-5.5-coder`). Maintained in Settings â†’ Model Registry. Only registered models appear in agent pickers. |
 | **Framework** | A label on each agent indicating its operating style (e.g., "Anthropic PO Framework"). Influences prompt assembly. Does not change behavior on its own. |
 | **Epic** | Top-level work unit, scoped to a Project. The assigned agent (PO Writer by default; any agent the Owner picks on the New Epic page) breaks it into Stories. Agent narrative lands in the comments thread (one auto-comment per agent persona at run end). |

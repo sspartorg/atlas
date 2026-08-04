@@ -1,10 +1,16 @@
 import Box from '@mui/material/Box';
 import { FilterPill, DropdownChip, SearchPillTextField } from './filterPrimitives.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
-import type { CliSessionStatus, IProject } from '@atlas/shared';
+import type { AgentCli, CliSessionStatus, IProject } from '@atlas/shared';
+import { CLI_OPTIONS } from '../utils/cliPresentation.js';
 
 export type StatusFilterKey = 'all' | CliSessionStatus;
-export type CliFilterKey = 'all' | 'claude' | 'copilot';
+export type CliFilterKey = 'all' | AgentCli;
+
+const CLI_FILTER_OPTIONS: ReadonlyArray<{ value: CliFilterKey; label: string }> = [
+    { value: 'all', label: 'Any' },
+    ...CLI_OPTIONS,
+];
 
 interface StatusChip {
     key: StatusFilterKey;
@@ -123,11 +129,7 @@ export function TerminalFilters({
                 <DropdownChip<CliFilterKey>
                     label="CLI"
                     value={cli}
-                    options={[
-                        { value: 'all', label: 'Any' },
-                        { value: 'claude', label: 'Claude Code' },
-                        { value: 'copilot', label: 'GitHub Copilot' },
-                    ]}
+                    options={[...CLI_FILTER_OPTIONS]}
                     onChange={onCliChange}
                 />
                 <DropdownChip<string | 'all'>

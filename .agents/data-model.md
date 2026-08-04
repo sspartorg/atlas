@@ -39,7 +39,7 @@ AI agent profiles. Seeded with 10 defaults (4 categories).
 Fields: `id, name, category, cli, model, framework, prompt_md, prompt_version, status, accent_color, sort_order, description, schedule_hours, concurrent_runs, glyph, last_run_at, next_run_at, created_at, updated_at`
 
 - `category` âˆˆ `software-dev | marketing | content | design`
-- `cli` âˆˆ `claude | copilot`
+- `cli` âˆˆ `claude | copilot | ollama` (migration 029 widened the CHECK)
 - `status` âˆˆ `active | inactive` (pause/resume toggle)
 - `prompt_version` increments on each prompt edit; history kept client-side in localStorage (see `pages/16-agent-detail.md`)
 - `accent_color` is a hex string used for chips/avatars
@@ -298,11 +298,11 @@ Fields: `id, agent_id, issue_type, issue_id, project_id, status, started_at, end
 - `review_reason` â€” optional free-text reason the reviewer attached to `review_outcome`. Surfaced in the activity log on `fail` / `needs_info`; piped into the next performer's prompt on `fail`.
 
 ### ICliSession (Terminal v1+v2)
-**Why this entity exists**: The Terminal page hosts long-lived, interactive CLI sessions (Claude Code or GitHub Copilot CLI) inside Atlas so the Owner can drive a scoped worktree from the same UI as the rest of the app. Sessions are first-class rows — not ephemeral process handles — because we need cross-restart resume (`claude --resume <sid>` / `copilot --resume <sid>`), idle-notification deep links, per-(project, branch) uniqueness, and an audit trail of which branch went where. The PTY itself lives in-memory in `services/cli-session-host.ts`; the row carries everything else.
+**Why this entity exists**: The Terminal page hosts long-lived, interactive CLI sessions (Claude Code, GitHub Copilot CLI, or Claude Code-on-Ollama) inside Atlas so the Owner can drive a scoped worktree from the same UI as the rest of the app. Sessions are first-class rows — not ephemeral process handles — because we need cross-restart resume (`claude --resume <sid>` / `copilot --resume <sid>`), idle-notification deep links, per-(project, branch) uniqueness, and an audit trail of which branch went where. The PTY itself lives in-memory in `services/cli-session-host.ts`; the row carries everything else.
 
 Fields: `id, project_id, title, status, cli, worktree_path, worktree_branch, claude_session_id, model, initial_prompt, created_at, updated_at, last_active_at, closed_at, finalize_pr_url, item_id, transcript_jsonl, transcript_ingested_at`
 
-- `cli` ∈ `claude | copilot`. Migration 017 added the column; existing rows default to `claude`. Both CLIs accept `--session-id <uuid>` on start and `--resume <uuid>` on rejoin, so Pause/Resume work identically for either.
+- `cli` ∈ `claude | copilot | ollama`. Migration 017 added the column; 029 widened it for `ollama`. Existing rows default to `claude`. All three accept `--session-id <uuid>` on start and `--resume <uuid>` on rejoin, so Pause/Resume work identically — trivially so for `ollama`, which spawns the same `claude` binary.
 - `status` ∈ `active | paused | closed | errored`. Lifecycle: active → paused (manual Pause OR PTY exit) → active (Resume) → closed (Stop pushes + tears down worktree). `errored` is terminal-on-spawn-failure.
 - `claude_session_id` — Atlas-minted UUID we pass via `--session-id`. Column name predates copilot support; semantically it's "the session id the CLI knows this run by" for either CLI.
 - `worktree_branch` participates in a unique partial index `cli_sessions_one_active_per_project_branch` covering `(project_id, worktree_branch) WHERE status IN ('active','paused')` — same invariant as `agent_runs_one_live_per_item` so worktree-authoring paths can't collide.

@@ -38,7 +38,7 @@ Re-open a *closed* or *errored* terminal session's transcript by reading the JSO
 - **DB-cached transcripts** — Claude and Copilot each rotate their on-disk state independently. Once a session is finished, we slurp the file into `cli_sessions.transcript_jsonl` so subsequent views work even after the user wipes `~/.claude`.
 
 ## Transcript viewer component (`JsonlTranscriptViewer.tsx`)
-- Generic JSONL viewer with three dispatch branches: `claude` (interactive on-disk JSONL), `copilot` (events.jsonl), and `agent-stream-json` (matches the `AgentRunDetail` viewer's existing shape).
+- Generic JSONL viewer with three dispatch branches: `claude` (interactive on-disk JSONL), `copilot` (events.jsonl), and `agent-stream-json` (matches the `AgentRunDetail` viewer's existing shape). Dispatch is on the CLI **dialect**, not the `cli` value — Ollama sessions write Claude's own JSONL, so they take the `claude` branch.
 - One row per JSONL line. Each row carries a role chip (You / Assistant / Tool / System / Meta), a typed event header in monospace, and a per-source preview. Clicking expands the raw JSON.
 - Caps at 5 000 events to keep the DOM tractable; any further lines are summarised at the bottom.
 

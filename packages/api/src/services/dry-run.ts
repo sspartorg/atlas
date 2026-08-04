@@ -1,8 +1,9 @@
 import { randomUUID } from 'crypto';
 import { spawn as nodeSpawn } from 'child_process';
-import type { IAgent } from '@atlas/shared';
+import { CLI_DIALECT, type IAgent } from '@atlas/shared';
 import { broadcastSSE } from '../routes/events.js';
 import { normalizeModelForCli, resolveSpawn } from './cli-model-naming.js';
+import { ollamaEnv } from './ollama-env.js';
 
 const DRY_RUN_TIMEOUT_MS = 30_000;
 
@@ -50,7 +51,9 @@ function formatVerdict(exitCode: number, latencyMs: number): string {
 }
 
 function spawnDryRunCli(agent: IAgent, dryRunId: string, prompt: string): void {
-    const bin = agent.cli === 'claude' ? 'claude' : 'copilot';
+    // Ollama runs the Claude binary; only the env overlay differs (see below).
+    const dialect = CLI_DIALECT[agent.cli];
+    const bin = dialect === 'claude' ? 'claude' : 'copilot';
     const probeCwd = process.cwd();
 
     // Flag shapes verified against the actual CLIs installed locally
@@ -71,7 +74,7 @@ function spawnDryRunCli(agent: IAgent, dryRunId: string, prompt: string): void {
     // binary (see `gh copilot --help`), so the direct invocation is
     // simpler and consistent with what `copilot --help` shows the user.
     const model = normalizeModelForCli(agent.model, agent.cli);
-    const args = agent.cli === 'claude'
+    const args = dialect === 'claude'
         ? [
               '--print',
               '--model', model,
@@ -90,6 +93,12 @@ function spawnDryRunCli(agent: IAgent, dryRunId: string, prompt: string): void {
     try {
         const resolved = resolveSpawn(bin, args);
         child = nodeSpawn(resolved.command, resolved.args, {
+            // This probe previously inherited process.env implicitly. It now
+            // passes env explicitly so the Ollama overlay can land AFTER the
+            // inherited vars — otherwise a stray ANTHROPIC_API_KEY would send
+            // the "test connection" ping to Anthropic and report a false OK
+            // for an Ollama agent whose server isn't even running.
+            env: { ...process.env, ...ollamaEnv(agent.cli, model) },
             shell: resolved.useShell,
             windowsHide: true,
             stdio: ['pipe', 'pipe', 'pipe'],
@@ -162,7 +171,7 @@ function spawnDryRunCli(agent: IAgent, dryRunId: string, prompt: string): void {
     // Copilot already has the prompt in `-p <text>`; closing stdin
     // immediately tells it there's no further input to wait for.
     try {
-        if (agent.cli === 'claude') {
+        if (dialect === 'claude') {
             child.stdin.write(prompt);
         }
         child.stdin.end();

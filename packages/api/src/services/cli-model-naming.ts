@@ -9,6 +9,8 @@
 // (`quoteArgsForShell`, `resolveSpawn`) and the null/undefined fallback
 // inside `normalizeModelForCli`, both unrelated to model identification.
 
+import type { AgentCli } from '@atlas/shared';
+
 /**
  * Resolve an agent's model string for the target CLI.
  *
@@ -17,11 +19,21 @@
  * field is null/undefined (legacy rows from before the FK existed,
  * which the FK should now make impossible — kept defensively).
  */
+// Deliberately NOT `DEFAULT_MODEL_BY_CLI` — that map holds the *preferred*
+// model for a fresh session (Opus for claude). This is the last-resort
+// fallback for a legacy row with a null model, where the cheap-and-safe
+// choice is right and silently promoting the run to Opus is not.
+const FALLBACK_MODEL_BY_CLI: Record<AgentCli, string> = {
+    claude: 'sonnet',
+    copilot: 'gpt-5',
+    ollama: 'qwen3.5',
+};
+
 export function normalizeModelForCli(
     model: string | undefined | null,
-    cli: 'claude' | 'copilot'
+    cli: AgentCli
 ): string {
-    if (!model) return cli === 'claude' ? 'sonnet' : 'gpt-5';
+    if (!model) return FALLBACK_MODEL_BY_CLI[cli];
     return model;
 }
 

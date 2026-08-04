@@ -3,7 +3,15 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
-import type { IAgent, SSEEvent } from '@atlas/shared';
+import type { AgentCli, IAgent, SSEEvent } from '@atlas/shared';
+
+// Mirrors `FALLBACK_MODEL_BY_CLI` in the API's cli-model-naming.ts — what the
+// server substitutes when an agent row carries no model.
+const FALLBACK_PREVIEW_MODEL: Record<AgentCli, string> = {
+    claude: 'sonnet',
+    copilot: 'gpt-5',
+    ollama: 'qwen3.5',
+};
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { api } from '../../api/api.js';
@@ -94,12 +102,17 @@ export function TestRunTabContent({ agent, view: _view }: Props) {
         // Model name is normalized server-side (hyphen → dot for copilot's
         // claude-* IDs) — preview here with the same mapping so the
         // displayed line matches the spawned argv.
-        const rawModel = agent.model || (agent.cli === 'claude' ? 'sonnet' : 'gpt-5');
+        // Ollama runs the same `claude` binary; only the env prefix differs, so
+        // the preview shows that prefix rather than a different command.
+        const isClaudeDialect = agent.cli !== 'copilot';
+        const rawModel = agent.model || FALLBACK_PREVIEW_MODEL[agent.cli];
         const modelLabel = agent.cli === 'copilot'
             ? rawModel.replace(/^(claude-(?:sonnet|haiku|opus))-(\d+)-(\d+)$/, '$1-$2.$3')
             : rawModel;
-        const commandPreview = agent.cli === 'claude'
-            ? `$ claude --print --model ${modelLabel} --output-format text (ping via stdin)`
+        const ollamaPrefix =
+            agent.cli === 'ollama' ? 'ANTHROPIC_BASE_URL=<ollama> ANTHROPIC_AUTH_TOKEN=ollama ' : '';
+        const commandPreview = isClaudeDialect
+            ? `$ ${ollamaPrefix}claude --print --model ${modelLabel} --output-format text (ping via stdin)`
             : `$ copilot -p "<ping>" --model ${modelLabel} --allow-all-tools --no-color`;
         appendLine(commandPreview, 'cmd');
 

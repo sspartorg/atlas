@@ -13,6 +13,7 @@ import {
     extractCopilotSubagentInvocations,
     type CopilotSubagentInvocation,
 } from './copilot-events-usage.js';
+import { CLI_DIALECT, type AgentCli, type CliDialect } from '@atlas/shared';
 
 // Terminal v2 — copy a closed CLI session's on-disk JSONL transcript into
 // the DB so the history page can render it later, even if the CLI later
@@ -40,7 +41,10 @@ import {
 
 const MAX_TRANSCRIPT_BYTES = 10 * 1024 * 1024;
 
-export type CliKind = 'claude' | 'copilot';
+// The on-disk transcript FORMAT, i.e. the CLI dialect — not the `cli` column.
+// Ollama sessions run the Claude binary, so they write Claude's JSONL into
+// `~/.claude/projects` and are ingested as `claude` here.
+export type CliKind = CliDialect;
 
 export interface TranscriptResult {
     jsonl_content: string | null;
@@ -138,7 +142,8 @@ export async function ingestTranscript(
 
     if (!row) return null;
 
-    const cli = (row.cli === 'copilot' ? 'copilot' : 'claude') as CliKind;
+    const rawCli: AgentCli = (row.cli as AgentCli | undefined) ?? 'claude';
+    const cli: CliKind = CLI_DIALECT[rawCli] ?? 'claude';
     const resolvedWorktreePath =
         overrides?.worktreePath !== undefined
             ? overrides.worktreePath
@@ -217,11 +222,18 @@ export async function ingestTranscript(
     // because a real row can lack a model.
     /* v8 ignore next */
     const fallbackModel = (row as { model?: string | null }).model ?? '';
-    const usage = !content
+    const parsedUsage = !content
         ? null
         : cli === 'claude'
         ? parseClaudePtyUsage(content, fallbackModel)
         : parseCopilotEventsUsage(content);
+    // Ollama sessions are free. The token counts are real (Claude's JSONL
+    // carries them regardless of backend), but `parseClaudePtyUsage` prices
+    // them against Anthropic's table — and for an Ollama model id
+    // `lookupClaudePrices` returns null, which reads as "cost unknown" rather
+    // than "cost nothing". Pin it to 0 so the session reports Free.
+    const usage =
+        parsedUsage && rawCli === 'ollama' ? { ...parsedUsage, total_cost_usd: 0 } : parsedUsage;
 
     await db
         .updateTable('cli_sessions')

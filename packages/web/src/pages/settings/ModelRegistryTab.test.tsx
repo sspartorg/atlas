@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { server } from '../../test-setup.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { ModelRegistryTab } from './ModelRegistryTab.js';
+import { AGENT_CLIS } from '@atlas/shared';
 
 const SEED_MODELS = [
     {
@@ -185,7 +186,9 @@ describe('ModelRegistryTab', () => {
         expect(document.querySelector('.MuiCircularProgress-root')).toBeInTheDocument();
     });
 
-    it('renders both Claude CLI and GitHub Copilot CLI section headings', async () => {
+    it('renders a section heading for every CLI in the registry', async () => {
+        // Cards render from AGENT_CLIS, so this asserts the whole set rather
+        // than a hardcoded two — a fourth CLI should show up here for free.
         server.use(
             http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json([])),
         );
@@ -193,7 +196,9 @@ describe('ModelRegistryTab', () => {
         await waitFor(() => {
             expect(screen.getByText('Claude CLI')).toBeInTheDocument();
             expect(screen.getByText('GitHub Copilot CLI')).toBeInTheDocument();
+            expect(screen.getByText('Ollama')).toBeInTheDocument();
         });
+        expect(AGENT_CLIS).toHaveLength(3);
     });
 
     it('renders model note when model has a note field', async () => {

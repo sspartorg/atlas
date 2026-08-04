@@ -101,6 +101,7 @@ Every spawn point in the process model is a cross-platform binary:
 - `rm -rf` is implemented via `fs.rm({ recursive, force })` in `delete-runner.ts`.
 - `explorer.exe` / `open` / `xdg-open` â€” branched per `process.platform` in the `POST /api/projects/:id/reveal` handler.
 - `claude` / `gh` (the agent CLIs) â€” Atlas assumes the user has the right one on `PATH`; the `cli` column on each agent picks which.
+- `cli = 'ollama'` is **not** a third binary. Ollama serves an Anthropic-compatible API, so Atlas spawns the same `claude` binary and repoints it with `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY` from `services/ollama-env.ts` (base URL configurable via `ATLAS_OLLAMA_BASE_URL`, default `http://localhost:11434`). Consequences worth knowing: Ollama runs share Claude's argv, stream-json parsing, `--session-id`/`--resume`, and `~/.claude/projects` transcripts; they record `total_cost_usd = 0`; and the env overlay must always be spread **after** `gitInvokeEnv` so a host `ANTHROPIC_API_KEY` can't divert a free local run to Anthropic. Branch on `CLI_DIALECT` from `@atlas/shared`, never on the raw `cli` value.
 
 Auto-fetch runs in Node on every OS â€” `auto-fetch-runner.ts` calls the typed `performAutoFetch()` in `services/auto-fetch.ts`, which shells out to `git` via `execFile`. The previous PowerShell holdout (`auto-fetch.ps1`) was retired in C01.
 
@@ -358,7 +359,7 @@ All long-running work runs in spawned subprocesses, never inline in the request 
 
 | Runner | Spawns | Inputs | Outputs |
 |---|---|---|---|
-| `agent-runner.ts` | `claude` or `copilot` CLI | prompt built from agent `prompt_md` + issue context | stdout â†’ `agent_output` SSE; on exit, status transition |
+| `agent-runner.ts` | `claude` or `copilot` CLI (`cli = ollama` spawns `claude` with the Ollama env overlay) | prompt built from agent `prompt_md` + issue context | stdout â†’ `agent_output` SSE; on exit, status transition |
 | `clone-runner.ts` | `git clone` | repo URL, credential (decrypted in-memory), target path | output â†’ `clone_output` SSE; on success, project `clone_status` â†’ cloned |
 | `reclone-runner.ts` | `rm -rf` + `git clone` | project_id | sequence of SSE events |
 | `delete-runner.ts` | `rm -rf` (workspace folder) | project_id | SSE events |

@@ -4,7 +4,7 @@
 repositories. It runs entirely on your machine — **no cloud, no auth, no telemetry**. You point Atlas at
 a git repo, describe work as epics → stories → tasks, and a chain of specialized AI agents
 (spec‑writers, coders, reviewers, QA) picks it up, runs real CLI agents (**Claude Code** / **GitHub
-Copilot**), and reports progress back into a Jira‑style board — all supervised by you, the Owner.
+Copilot** / **Ollama**), and reports progress back into a Jira‑style board — all supervised by you, the Owner.
 
 This guide walks through the whole app, screen by screen.
 
@@ -79,8 +79,9 @@ Once cloned, the project becomes the home for its epics, stories, tasks, and age
 
 ## 4. Agents
 
-Agents are the workers. Each is a specialized role backed by a real CLI (Claude Code or GitHub Copilot)
-that runs on a schedule or on demand.
+Agents are the workers. Each is a specialized role backed by a real CLI (Claude Code, GitHub Copilot, or
+Ollama) that runs on a schedule or on demand. Ollama runs Claude Code against your own local models —
+same behaviour, no cost.
 
 ![Agents roster](images/doc-04-agents.png)
 
@@ -173,8 +174,9 @@ Workspace** action.
 
 ![Settings — Owner Profile](images/doc-06-settings.png)
 
-**Model Registry** — the catalog of models available per CLI (Claude Code and GitHub Copilot). Pick which
-model each agent uses.
+**Model Registry** — the catalog of models available per CLI (Claude Code, GitHub Copilot, and Ollama).
+Pick which model each agent uses. The Ollama card starts with a few suggestions; edit it so it matches
+what `ollama pull` has actually fetched on this machine.
 
 ![Settings — Model Registry](images/doc-08-model-registry.png)
 
