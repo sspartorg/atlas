@@ -1,6 +1,6 @@
 # Testing
 
-This repo ships a CI-gated test suite with **tiered coverage targets per package**. Targets are enforced inside each package's `vitest.config.ts` so CI fails on threshold miss without bespoke YAML.
+This repo ships a test suite with **tiered coverage targets per package**. Targets are enforced inside each package's `vitest.config.ts`, so `test:coverage` fails on a threshold miss without bespoke YAML — but note that **nothing runs it in CI**; see [CI](#ci).
 
 ## Tiered coverage targets
 
@@ -8,10 +8,10 @@ This repo ships a CI-gated test suite with **tiered coverage targets per package
 | --- | --- | --- | --- | --- |
 | `@atlas/shared` | **100%** | 100% / 100% / 100% / 100% | 100 / 100 / 100 / 100 | Contract surface. Pure functions, no DB, no UI. Other packages depend on its types/constants/schemas/status-machine. No excuse for gaps. |
 | `@atlas/mcp` | **95%** | 95 / 95 / 95 / 95 | (last full-suite run cleared the gate) | Each MCP tool registers two functions (metadata + async handler); the tests exercise registration + every handler. `api-client.ts` is excluded with rationale (wrapper layer exercised indirectly via the tools tests). |
-| `@atlas/api` | **95%** | **lines 95 · stmts 95 · branches 88 · functions 97** | 96.37 / 96.37 / 89.09 / 98.09 | Hits a real PostgreSQL via `atlas_test_v2`. Lifted 2026-07-01 from 94/94/87/97 → 95/95/88/97 after the v2 coverage push landed +297 route integration tests + +7 re-authored agents.test.ts tests. Branches at 88 reflects defensive null-coalesce + platform-branch code (`crypto.ts`, `env-file.ts`, `issue-full.ts`) that's covered with `/* v8 ignore */` where unreachable. The master plan target of 95 on branches is a future-session lift once those defensive paths are pared down. |
-| `@atlas/web` | **95%** | **lines 97 · stmts 97 · branches 94 · functions 95** | 98.88 / 98.88 / 94.98 / 95.27 | Honest measured floor as of the v2 push. The W1 chunks landed comprehensive unit coverage across modals, terminal surface, agent tabs, and the shell. Branches set at 94 to absorb v8 instrumentation jitter — the de-facto floor is 94.98+ but the same test set produces ±0.2pp variance on a ~10000-branch denominator. |
+| `@atlas/api` | **98%** | **lines 98 · stmts 98 · functions 98 · branches 96** | ⚠️ 95.51 / 95.16 / 95.5 / 90.67 — **below floor** | Hits a real PostgreSQL via `atlas_test_v2`. Branches sits lowest because of defensive null-coalesce + platform-branch code (`crypto.ts`, `env-file.ts`, `issue-full.ts`), covered with `/* v8 ignore */` where genuinely unreachable. **As of 2026-08-04 this gate FAILS locally**: 19 tests across 5 files (`reminders`, `cli-model-naming`, `external-notifications`, `worktree-orchestrator`, `environment-secrets`) fail on time-, machine- and DB-state-dependent assertions. Nothing runs this in CI (see [CI](#ci)), so the drift went unnoticed. |
+| `@atlas/web` | **95%** | **lines 97 · stmts 96 · branches 94 · functions 94** | 97.2 / 96.14 / 94.13 / 94.79 | Honest measured floor. Branches set at 94 to absorb v8 instrumentation jitter — the same test set produces ±0.2pp variance on a ~10000-branch denominator, so the headroom here is real but thin. |
 
-Thresholds live in each package's `vitest.config.ts` under `test.coverage.thresholds`. All four package gates are **active**.
+Thresholds live in each package's `vitest.config.ts` under `test.coverage.thresholds`, and are enforced whenever you run `test:coverage` **locally**. Nothing runs them automatically — see [CI](#ci).
 
 ## Coverage gate (Theme 12)
 
@@ -107,9 +107,16 @@ Some api files are intentionally excluded from `coverage.include`:
 
 ## CI
 
-`.github/workflows/test.yml` runs `pnpm -F <pkg> test:coverage` per gated package. The workflow uses `pnpm/action-setup@v4` and `actions/setup-node@v4` with the pnpm cache. All four packages â€” shared, mcp, api, web â€” are gated today.
+**Tests do not run in CI, by design.** There is no Actions plan to spend on them, so the only workflows are:
 
-`pnpm lint:knip` also runs in CI as a non-blocking report (`continue-on-error: true`). The Task-4 baseline of 66 unused exports is documented; promote to a failing step once that's investigated.
+| Workflow | What it runs |
+|---|---|
+| `.github/workflows/build.yml` | `pnpm install --frozen-lockfile` → `pnpm -r build` → `pnpm -F @atlas/web bundle:check` |
+| `.github/workflows/lighthouse.yml` | Lighthouse audit |
+
+So `pnpm -r test:coverage`, `pnpm lint:knip`, and `pnpm -r typecheck` are **local-only gates**. The practical consequence: coverage and test regressions are invisible until someone runs them by hand, which is exactly how the api package drifted below its own floor (see the table above). Run `pnpm -w run gate` before pushing anything non-trivial — it is the only thing standing in for CI.
+
+The one gate that IS enforced remotely is the **web bundle budget** (`bundle:check` in `build.yml`), which fails the Build workflow on every push and PR.
 
 ## What's deferred
 
