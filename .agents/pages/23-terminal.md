@@ -39,6 +39,13 @@ List every PTY-backed Claude Code or GitHub Copilot CLI session scoped to a proj
 
 ## Modals / drawers
 - `StartSessionDialog` (`packages/web/src/components/StartSessionDialog.tsx`) — CLI toggle, project select, model select, item picker, title/branch/initial-prompt inputs. Calls `POST /api/cli/sessions` and emits `onCreated(session)` so the caller decides what to do next (this page navigates to the new session's deep link; the multi-pane workspace would set the new id into a pane slot).
+- `StopSessionModal` (`packages/web/src/components/StopSessionModal.tsx`) — "Stop session — review & finalize", reached from any session's Stop control. A full-height two-pane review, and the gate before Atlas commits + pushes + (optionally) opens a PR.
+  - **Two scope tabs**: *Uncommitted* (worktree vs HEAD, incl. untracked — these carry the staging checkboxes) and *Committed on branch* (merge-base..HEAD, read-only). Together they are what the PR will contain.
+  - **Left panel** `DiffFileList`: status letter, dir-dimmed path, `+N −M`, `← old/path` on renames, `bin` for binaries. **Right pane** `DiffFilePane`: split (default) or unified, per-file lazy patch fetch, hunk separators that expand context `3 → 25`, and gates on binary / too-large / >5 000-line diffs.
+  - Rendering lives in `components/diff/` behind `lazyNamed` + `Suspense` — a static import would put ~10 KB gz into the initial chunk, which has ~0.1 KB of slack.
+  - **"Open a pull request for this branch"** checkbox. Disabled when there is nothing to push (mirrors the server gate). The confirm button relabels "Stop & open PR" / "Stop session". The **push always happens** — the worktree is deleted on close — so unchecking only skips PR creation.
+  - Preferences (`openPr`, `viewMode`, `wrap`) persist to `localStorage` under `atlas.stop-session-prefs.v1`.
+  - A failed diff request shows an inline alert and does **not** block stopping.
 
 ## Hooks used
 - `useCliSessions()` — `GET /api/cli/sessions`, returns `ICliSession[]` sorted by `last_active_at desc` (cap 200).
@@ -49,6 +56,7 @@ List every PTY-backed Claude Code or GitHub Copilot CLI session scoped to a proj
 ## API endpoints touched
 - `GET /api/cli/sessions`
 - (Indirectly via the dialog) `POST /api/cli/sessions`
+- (Indirectly via `StopSessionModal`) `POST /api/cli/sessions/:id/preflight-stop`, `GET /api/cli/sessions/:id/diff`, `GET /api/cli/sessions/:id/diff/file`, `POST /api/cli/sessions/:id/stop`
 
 ## Permissions / guards
 - Post-onboarding only.

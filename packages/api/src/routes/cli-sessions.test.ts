@@ -160,6 +160,30 @@ type ExecCb = (
     result: { stdout: string; stderr: string },
 ) => void;
 
+// The diff service shells out to real git. This file mocks `node:child_process`
+// wholesale, so real git is unreachable here — mock the SERVICE and let
+// worktree-diff.test.ts exercise the git plumbing against real fixture repos.
+const { getSummaryMock, getFilePatchMock } = vi.hoisted(() => ({
+    getSummaryMock: vi.fn(),
+    getFilePatchMock: vi.fn(),
+}));
+vi.mock('../services/worktree-diff.js', async (orig) => {
+    const real = (await orig()) as Record<string, unknown>;
+    return {
+        ...real,
+        getWorktreeDiffSummary: getSummaryMock,
+        getWorktreeFilePatch: getFilePatchMock,
+    };
+});
+
+const DEFAULT_PORCELAIN = ' M src/a.ts\0?? src/b.ts\0';
+// Mutable so a test can swap in a different `git status --porcelain -z`
+// payload (e.g. the rename layout) without rebuilding the whole mock.
+// Reset to DEFAULT_PORCELAIN in the shared beforeEach.
+const { porcelainFixture } = vi.hoisted(() => ({
+    porcelainFixture: { value: ' M src/a.ts\0?? src/b.ts\0' },
+}));
+
 vi.mock('node:child_process', async () => {
     const real = await vi.importActual<typeof NodeChildProcess>(
         'node:child_process',
@@ -175,10 +199,12 @@ vi.mock('node:child_process', async () => {
                     _opts: unknown,
                     cb: ExecCb,
                 ) => {
-                    // `git -C <path> status --porcelain -z` -> two NUL-terminated entries.
+                    // `git -C <path> status --porcelain -z` -> NUL-terminated
+                    // entries. Overridable per-test via `porcelainFixture` so
+                    // the rename layout can be exercised.
                     if (cmd === 'git' && args.includes('status') && args.includes('--porcelain')) {
                         cb(null, {
-                            stdout: ' M src/a.ts\0?? src/b.ts\0',
+                            stdout: porcelainFixture.value,
                             stderr: '',
                         });
                         return {} as unknown as ReturnType<typeof real.execFile>;
@@ -243,9 +269,54 @@ import {
 import {
     ensureWorktree as mockEnsureWorktree,
     cleanupWorktreeAfterPush as mockCleanupWorktreeAfterPush,
+    pushWorktree as mockPushWorktree,
+    openPullRequest as mockOpenPullRequest,
     WorktreeProvisioningError,
 } from '../services/worktree-orchestrator.js';
+import { WorktreeDiffError } from '../services/worktree-diff.js';
 import { spawn as ptySpawn } from 'node-pty';
+import { execFile } from 'node:child_process';
+
+const DEFAULT_DIFF_SUMMARY = {
+    uncommitted: {
+        files: [
+            {
+                path: 'src/a.ts',
+                old_path: null,
+                status: 'modified',
+                code: ' M',
+                additions: 3,
+                deletions: 1,
+                binary: false,
+                too_large: false,
+            },
+        ],
+        total_files: 1,
+        truncated: false,
+        additions: 3,
+        deletions: 1,
+    },
+    committed: {
+        files: [],
+        total_files: 0,
+        truncated: false,
+        additions: 0,
+        deletions: 0,
+    },
+    current_branch: 'atlas/terminal/fake',
+    base_ref: 'origin/main',
+    base_sha: 'a'.repeat(40),
+    commits_ahead_of_base: 2,
+};
+
+const DEFAULT_FILE_PATCH = {
+    path: 'src/a.ts',
+    scope: 'uncommitted',
+    patch: 'diff --git a/src/a.ts b/src/a.ts\n@@ -1 +1 @@\n-old\n+new\n',
+    binary: false,
+    truncated: false,
+    byte_size: 58,
+};
 
 let app: FastifyInstance;
 
@@ -274,6 +345,19 @@ beforeEach(async () => {
         .mockReset()
         .mockResolvedValue({ currentTaskPath: null, constitutionMarkdown: '' });
     ingestTranscriptMock.mockReset().mockResolvedValue(null);
+    porcelainFixture.value = DEFAULT_PORCELAIN;
+    getSummaryMock.mockReset().mockResolvedValue(DEFAULT_DIFF_SUMMARY);
+    getFilePatchMock.mockReset().mockResolvedValue(DEFAULT_FILE_PATCH);
+    // The PR-bypass tests override these per-case, so restore the module
+    // defaults each time or an override bleeds into the next test.
+    vi.mocked(mockPushWorktree)
+        .mockReset()
+        .mockResolvedValue({ pushed: true, alreadyUpToDate: false });
+    vi.mocked(mockOpenPullRequest).mockReset().mockResolvedValue({
+        opened: true,
+        url: 'https://github.com/sspartorg/atlas/pull/42',
+        alreadyExists: false,
+    });
     await insertProject('p1', 'ATL');
     // Projects inserted by the helper don't have a git_path by default;
     // the create route gates on this -> set one to a benign value.
@@ -425,6 +509,61 @@ describe('lifecycle: pause / resume / preflight-stop / stop', () => {
         ]);
     });
 
+    // Regression: `git status --porcelain -z` spends a SECOND NUL field on the
+    // origin path of a rename/copy, with no `XY ` prefix (and in -z the order
+    // is `to` then `from`, reversed from the human format). The old loop
+    // treated every field as a record, so a rename produced a phantom entry
+    // whose `code` was the first two characters of the old path — and that
+    // phantom rendered as a checkbox in the Stop modal.
+    it('preflight-stop parses renames without emitting a phantom entry', async () => {
+        porcelainFixture.value = 'R  src/new.ts\0src/old.ts\0 M src/c.ts\0';
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${session.id}/preflight-stop`,
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().unstaged).toEqual([
+            { code: 'R ', path: 'src/new.ts' },
+            { code: ' M', path: 'src/c.ts' },
+        ]);
+    });
+
+    // The Stop modal's file list comes from the diff service, which uses
+    // `--untracked-files=all`. Preflight owns the STAGEABLE set, so if it used
+    // git's default `normal` mode an untracked directory would arrive as one
+    // `dir/` entry and ticking `dir/one.ts` in the list would stage nothing.
+    it('preflight-stop asks git for untracked files individually', async () => {
+        const session = await createSession();
+        await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${session.id}/preflight-stop`,
+        });
+        const statusCall = vi
+            .mocked(execFile)
+            .mock.calls.find(
+                (c) => c[0] === 'git' && (c[1] as string[]).includes('--porcelain'),
+            );
+        expect(statusCall?.[1]).toContain('--untracked-files=all');
+    });
+
+    it('preflight-stop parses a copy and a worktree-column rename', async () => {
+        // `C ` = staged copy; ` R` = rename recorded in the worktree column.
+        // Both spend the extra origin-path field.
+        porcelainFixture.value = 'C  src/copy.ts\0src/src.ts\0 R src/moved.ts\0src/was.ts\0?? d.ts\0';
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${session.id}/preflight-stop`,
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().unstaged).toEqual([
+            { code: 'C ', path: 'src/copy.ts' },
+            { code: ' R', path: 'src/moved.ts' },
+            { code: '??', path: 'd.ts' },
+        ]);
+    });
+
     it('stop rejects empty commit_message when files_to_stage is non-empty', async () => {
         const session = await createSession();
         const res = await app.inject({
@@ -470,6 +609,269 @@ describe('lifecycle: pause / resume / preflight-stop / stop', () => {
         expect(body.session.finalize_pr_url).toBe(
             'https://github.com/sspartorg/atlas/pull/42',
         );
+    });
+
+    // ── diff endpoints ─────────────────────────────────────────────────────
+
+    it('GET /diff returns the service payload with exactly the contract keys', async () => {
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'GET',
+            url: `/api/cli/sessions/${session.id}/diff`,
+        });
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        // Guards HARD RULE #4 — responses carry no fields outside the shared type.
+        expect(Object.keys(body).sort()).toEqual([
+            'base_ref',
+            'base_sha',
+            'commits_ahead_of_base',
+            'committed',
+            'current_branch',
+            'uncommitted',
+        ]);
+        expect(body.uncommitted.files[0].path).toBe('src/a.ts');
+        expect(getSummaryMock).toHaveBeenCalledWith({
+            worktreePath: '/tmp/fake-worktree',
+            defaultBranch: expect.anything(),
+        });
+    });
+
+    it('GET /diff is 404 for an unknown session', async () => {
+        const res = await app.inject({ method: 'GET', url: '/api/cli/sessions/nope/diff' });
+        expect(res.statusCode).toBe(404);
+        expect(res.json().kind).toBe('not_found');
+    });
+
+    it('GET /diff is 409 when the service reports the worktree is gone', async () => {
+        const session = await createSession();
+        getSummaryMock.mockRejectedValue(
+            new WorktreeDiffError('worktree at /tmp/x is missing', 'worktree_missing'),
+        );
+        const res = await app.inject({
+            method: 'GET',
+            url: `/api/cli/sessions/${session.id}/diff`,
+        });
+        expect(res.statusCode).toBe(409);
+        expect(res.json().details.code).toBe('worktree_missing');
+    });
+
+    // GET bypasses the POST-only write gate by design — these are pure reads
+    // scoped to one session's worktree and allowlisted per path. Asserted so a
+    // future reflexive `preHandler: requireMcpToken` gets caught here.
+    it('GET /diff needs no write-gate token', async () => {
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'GET',
+            url: `/api/cli/sessions/${session.id}/diff`,
+            headers: {},
+        });
+        expect(res.statusCode).toBe(200);
+    });
+
+    it('GET /diff/file returns the patch and coerces context', async () => {
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'GET',
+            url: `/api/cli/sessions/${session.id}/diff/file?scope=uncommitted&path=src%2Fa.ts&context=10`,
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().patch).toContain('diff --git');
+        expect(getFilePatchMock).toHaveBeenCalledWith(
+            expect.objectContaining({ scope: 'uncommitted', path: 'src/a.ts', context: 10 }),
+        );
+    });
+
+    it('GET /diff/file defaults context to 3', async () => {
+        const session = await createSession();
+        await app.inject({
+            method: 'GET',
+            url: `/api/cli/sessions/${session.id}/diff/file?scope=committed&path=src%2Fa.ts`,
+        });
+        expect(getFilePatchMock).toHaveBeenCalledWith(
+            expect.objectContaining({ scope: 'committed', context: 3 }),
+        );
+    });
+
+    it('GET /diff/file is 404 when the path is not changed in that scope', async () => {
+        const session = await createSession();
+        getFilePatchMock.mockResolvedValue(null);
+        const res = await app.inject({
+            method: 'GET',
+            url: `/api/cli/sessions/${session.id}/diff/file?scope=uncommitted&path=.env`,
+        });
+        expect(res.statusCode).toBe(404);
+        expect(res.json().kind).toBe('not_found');
+    });
+
+    it('GET /diff/file is 400 when the service rejects the path', async () => {
+        const session = await createSession();
+        getFilePatchMock.mockRejectedValue(
+            new WorktreeDiffError('path may not traverse upward', 'invalid_path'),
+        );
+        const res = await app.inject({
+            method: 'GET',
+            url: `/api/cli/sessions/${session.id}/diff/file?scope=uncommitted&path=..%2F..%2Fsecret`,
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().kind).toBe('validation_error');
+    });
+
+    it.each([
+        ['missing path', 'scope=uncommitted'],
+        ['missing scope', 'path=src%2Fa.ts'],
+        ['bad scope', 'scope=bogus&path=src%2Fa.ts'],
+        ['context above max', 'scope=uncommitted&path=src%2Fa.ts&context=99'],
+        ['non-numeric context', 'scope=uncommitted&path=src%2Fa.ts&context=abc'],
+        ['empty path', 'scope=uncommitted&path='],
+    ])('GET /diff/file is 400 for %s', async (_label, qs) => {
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'GET',
+            url: `/api/cli/sessions/${session.id}/diff/file?${qs}`,
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().kind).toBe('validation_error');
+    });
+
+    // ── open_pull_request bypass ───────────────────────────────────────────
+    //
+    // The Owner often commits + pushes + raises their own PR from inside the
+    // PTY; the automatic one is then noise. `open_pull_request: false` opts
+    // out of the PR ONLY — the push still runs, because the worktree is torn
+    // down immediately after close and unpushed work would be lost.
+
+    it('stop with open_pull_request:false pushes but opens no PR', async () => {
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${session.id}/stop`,
+            payload: { files_to_stage: [], open_pull_request: false },
+        });
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        expect(vi.mocked(mockOpenPullRequest)).not.toHaveBeenCalled();
+        // The push is NOT skipped — that would destroy the work.
+        expect(vi.mocked(mockPushWorktree)).toHaveBeenCalledTimes(1);
+        expect(body.pushed).toBe(true);
+        expect(body.finalize_pr_url).toBeNull();
+        expect(body.session.finalize_pr_url).toBeNull();
+        expect(body.session.status).toBe('closed');
+        // Teardown still runs so we don't leak worktree dirs.
+        expect(vi.mocked(mockCleanupWorktreeAfterPush)).toHaveBeenCalled();
+    });
+
+    it('stop persists finalize_pr_url as NULL when the PR is skipped', async () => {
+        const session = await createSession();
+        await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${session.id}/stop`,
+            payload: { files_to_stage: [], open_pull_request: false },
+        });
+        const row = await testDb
+            .selectFrom('cli_sessions')
+            .select(['finalize_pr_url', 'status'])
+            .where('id', '=', session.id)
+            .executeTakeFirst();
+        expect(row?.finalize_pr_url).toBeNull();
+        expect(row?.status).toBe('closed');
+    });
+
+    it('stop with open_pull_request:false records no item_external_links row', async () => {
+        await insertItem({ id: 'ATL-90', type: 'epic', project_id: 'p1', title: 'Linked' });
+        const created = await app.inject({
+            method: 'POST',
+            url: '/api/cli/sessions',
+            payload: { project_id: 'p1', item_id: 'ATL-90', branch_name: 'atlas/terminal/nopr' },
+        });
+        const session = created.json();
+        await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${session.id}/stop`,
+            payload: { files_to_stage: [], open_pull_request: false },
+        });
+        const links = await testDb
+            .selectFrom('item_external_links')
+            .selectAll()
+            .where('item_id', '=', 'ATL-90')
+            .execute();
+        expect(links).toHaveLength(0);
+    });
+
+    it('stop omitting open_pull_request still opens a PR (back-compat default)', async () => {
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${session.id}/stop`,
+            payload: { files_to_stage: [] },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(vi.mocked(mockOpenPullRequest)).toHaveBeenCalledTimes(1);
+        expect(res.json().finalize_pr_url).toBe('https://github.com/sspartorg/atlas/pull/42');
+    });
+
+    it('stop rejects a non-boolean open_pull_request', async () => {
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${session.id}/stop`,
+            payload: { files_to_stage: [], open_pull_request: 'yes' },
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().kind).toBe('validation_error');
+    });
+
+    // Regression: the gate used to be a bare `if (pushed)`, and pushWorktree
+    // reports `pushed: false` when git says "Everything up-to-date". So a
+    // session whose commits were already pushed from the PTY silently got no
+    // PR, despite the comment claiming otherwise.
+    it('stop opens a PR when the branch was already pushed (alreadyUpToDate)', async () => {
+        vi.mocked(mockPushWorktree).mockResolvedValue({ pushed: false, alreadyUpToDate: true });
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${session.id}/stop`,
+            payload: { files_to_stage: [] },
+        });
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        expect(vi.mocked(mockOpenPullRequest)).toHaveBeenCalledTimes(1);
+        expect(body.finalize_pr_url).toBe('https://github.com/sspartorg/atlas/pull/42');
+        // `pushed` still reports what git actually did.
+        expect(body.pushed).toBe(false);
+    });
+
+    it('stop opens no PR when alreadyUpToDate but the bypass is set', async () => {
+        vi.mocked(mockPushWorktree).mockResolvedValue({ pushed: false, alreadyUpToDate: true });
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${session.id}/stop`,
+            payload: { files_to_stage: [], open_pull_request: false },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(vi.mocked(mockOpenPullRequest)).not.toHaveBeenCalled();
+        expect(res.json().finalize_pr_url).toBeNull();
+    });
+
+    it('stop opens no PR when the push genuinely failed', async () => {
+        vi.mocked(mockPushWorktree).mockResolvedValue({
+            pushed: false,
+            alreadyUpToDate: false,
+            error: 'remote rejected',
+        });
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${session.id}/stop`,
+            payload: { files_to_stage: [] },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(vi.mocked(mockOpenPullRequest)).not.toHaveBeenCalled();
+        const body = res.json();
+        expect(body.finalize_pr_url).toBeNull();
+        // A failed push must still close the session and tear the worktree down.
+        expect(body.session.status).toBe('closed');
     });
 });
 

@@ -65,6 +65,9 @@ import type {
     CliSessionPreflightStopResponse,
     CliSessionStopInput,
     CliSessionStopResponse,
+    CliSessionDiffScopeName,
+    CliSessionDiffSummaryResponse,
+    CliSessionFilePatchResponse,
     ICliSessionTranscriptResponse,
 } from '@atlas/shared';
 import type {
@@ -1071,6 +1074,22 @@ export const api = {
                 post<CliSessionPreflightStopResponse>(`/cli/sessions/${id}/preflight-stop`, {}),
             stop: (id: string, input: CliSessionStopInput) =>
                 post<CliSessionStopResponse>(`/cli/sessions/${id}/stop`, input),
+            // Diff review for the Stop modal. GET (not POST like
+            // preflightStop) because both are pure reads, so React Query can
+            // cache them — per-file patches especially, since a worktree
+            // snapshot is immutable for the modal's lifetime.
+            diff: (id: string) =>
+                get<CliSessionDiffSummaryResponse>(`/cli/sessions/${id}/diff`),
+            diffFile: (
+                id: string,
+                q: { scope: CliSessionDiffScopeName; path: string; context?: number },
+            ) => {
+                const params = new URLSearchParams({ scope: q.scope, path: q.path });
+                if (q.context !== undefined) params.set('context', String(q.context));
+                return get<CliSessionFilePatchResponse>(
+                    `/cli/sessions/${id}/diff/file?${params.toString()}`,
+                );
+            },
             transcript: (id: string) =>
                 get<ICliSessionTranscriptResponse>(`/cli/sessions/${id}/transcript`),
             delete: (id: string) => del(`/cli/sessions/${id}`),

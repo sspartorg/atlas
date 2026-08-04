@@ -22,8 +22,36 @@ test.describe('StopSessionModal', () => {
         await stopBtn.click();
         const dialog = page.getByRole('dialog');
         await expect(dialog).toBeVisible();
-        // The dialog should have a "Stop session" submit button
-        await expect(dialog.getByRole('button', { name: /Stop session/i })).toBeVisible();
+        // The confirm button relabels with the PR checkbox, so match either.
+        await expect(
+            dialog.getByRole('button', { name: /^Stop (session|& open PR)$/i }),
+        ).toBeVisible();
+        // Both review scopes are always present.
+        await expect(dialog.getByRole('tab', { name: /Uncommitted/i })).toBeVisible();
+        await expect(dialog.getByRole('tab', { name: /Committed on branch/i })).toBeVisible();
+    });
+
+    test('stop modal exposes the PR opt-out', async ({ page }) => {
+        await goto(page, '/terminal');
+        await expect(page.getByRole('heading', { name: /Terminal/i }).first()).toBeVisible();
+
+        const stopBtn = page.getByRole('button', { name: /^Stop$/ }).first();
+        const hasStop = await stopBtn.isVisible().catch(() => false);
+        test.skip(!hasStop, 'no active session — deferring PR opt-out check');
+
+        await stopBtn.click();
+        const dialog = page.getByRole('dialog');
+        await expect(dialog).toBeVisible();
+        const prBox = dialog.getByRole('checkbox', { name: /open a pull request/i });
+        await expect(prBox).toBeVisible();
+        // Unchecking must relabel the confirm button — that's the whole signal
+        // that no PR will be raised.
+        if (await prBox.isEnabled()) {
+            await prBox.uncheck();
+            await expect(dialog.getByRole('button', { name: /^Stop session$/i })).toBeVisible();
+        }
+        await page.keyboard.press('Escape');
+        await expect(dialog).not.toBeVisible();
     });
 
     test('stop modal shows commit message field or summary section', async ({ page }) => {

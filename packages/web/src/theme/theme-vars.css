@@ -102,6 +102,26 @@
     --atlas-terminalFgOk: #a3f7bf;
     --atlas-terminalFgErr: #ffb3b3;
 
+    /* Diff viewer — two tiers per side. The row tier is a full-bleed
+       background that must keep `slate` body text at ~7:1; the word tier is
+       the intra-line highlight and has to read as visibly STRONGER than the
+       row it sits on. successSoft/dangerSoft can't serve here: they're chip
+       fills tuned against successFg/dangerFg, not against body text. */
+    --atlas-diffAddBg: #e6f4ea;
+    --atlas-diffDelBg: #fce8e6;
+    --atlas-diffAddWord: #abe5bc;
+    --atlas-diffDelWord: #f5b6b0;
+    --atlas-diffGutterBg: #f6f6f8;
+    --atlas-diffGutterFg: #8a8a93;
+    --atlas-diffFillerBg: #f2f2f4;
+    --atlas-diffHunkBg: #eef0fa;
+    --atlas-diffHunkFg: #5b5fa8;
+    --atlas-diffTokKeyword: #7c3aed;
+    --atlas-diffTokString: #0f766e;
+    --atlas-diffTokComment: #6b7280;
+    --atlas-diffTokNumber: #b45309;
+    --atlas-diffTokPunct: #6b7280;
+
     /* Elevation — light: subtle drops only */
     --atlas-elevation-low: 0 1px 3px rgba(0, 0, 14, 0.06), 0 1px 2px rgba(0, 0, 14, 0.04);
     --atlas-elevation-mid: 0 4px 12px rgba(0, 0, 14, 0.08);
@@ -216,6 +236,23 @@
     --atlas-terminalBg: #0a0a0a;
     --atlas-terminalFgOk: #a3f7bf;
     --atlas-terminalFgErr: #ffb3b3;
+
+    /* Diff viewer — dark counterparts. Same two-tier rule as the light
+       block: the word tier must out-read the row tier it sits on. */
+    --atlas-diffAddBg: #12251a;
+    --atlas-diffDelBg: #2a1618;
+    --atlas-diffAddWord: #1e5233;
+    --atlas-diffDelWord: #6b2822;
+    --atlas-diffGutterBg: #141414;
+    --atlas-diffGutterFg: #6e6e76;
+    --atlas-diffFillerBg: #111111;
+    --atlas-diffHunkBg: #191b33;
+    --atlas-diffHunkFg: #9ba1e8;
+    --atlas-diffTokKeyword: #c4b5fd;
+    --atlas-diffTokString: #5eead4;
+    --atlas-diffTokComment: #8b93a1;
+    --atlas-diffTokNumber: #fbbf24;
+    --atlas-diffTokPunct: #9ca3af;
 
     /* Elevation — dark: heavier drop + inset top highlight (rim light) */
     --atlas-elevation-low: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3),

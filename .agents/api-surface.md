@@ -373,8 +373,10 @@ Agent updates (`services/agents.ts`) recompute `next_run_at` whenever `status` o
 | POST | `/api/cli/sessions` | Create + spawn PTY (stages worktree via `stageCliWorktree`) |
 | POST | `/api/cli/sessions/:id/pause` | Kill PTY, keep row (`paused`) for later `--resume` |
 | POST | `/api/cli/sessions/:id/resume` | Respawn PTY with `--resume <cli_session_id>` |
-| POST | `/api/cli/sessions/:id/preflight-stop` | Dry-run of the stop finalize (dirty files, branch state) |
-| POST | `/api/cli/sessions/:id/stop` | Kill PTY, commit/push/PR finalize, `closed` |
+| POST | `/api/cli/sessions/:id/preflight-stop` | Dry-run of the stop finalize (dirty files, branch state). Owns the *stageable* path set — `files_to_stage` is built from it |
+| GET | `/api/cli/sessions/:id/diff` | Per-file change summary for BOTH review scopes (`uncommitted` = worktree vs HEAD incl. untracked; `committed` = merge-base(base, HEAD)..HEAD) + `base_ref`/`base_sha`/`commits_ahead_of_base`. 409 `details.code='worktree_missing'` when the dir is gone (closed rows keep a stale `worktree_path`) |
+| GET | `/api/cli/sessions/:id/diff/file` | One file's unified patch. `?scope=uncommitted\|committed&path=<rel>&context=0..25` (default 3). 404 when `path` isn't in that scope's changed set — that membership check, not the zod schema, is what stops this being an arbitrary-file reader |
+| POST | `/api/cli/sessions/:id/stop` | Kill PTY, commit/push/PR finalize, `closed`. Body takes `open_pull_request` (default `true`); `false` still pushes — the worktree is deleted right after close — and only skips `gh pr create` + the `item_external_links` row |
 | GET | `/api/cli/sessions/:id/transcript` | Ingested CLI JSONL transcript (lazy ingest if NULL) |
 | DELETE | `/api/cli/sessions/:id` | Kill PTY + delete row |
 | GET (WS) | `/api/cli/sessions/:id/stream` | Live byte stream, binary frames both directions |
@@ -514,7 +516,7 @@ The intentionally **unexposed** surfaces:
 - **Guardrails** (general + project) â€” removed from MCP 2026-05-28. Owner-only via REST + web UI; agents receive guardrails through the constitution baked into every spawned prompt by `buildConstitutionMarkdown()`, not by querying MCP. The 9 retired tools were `listGuardrails`, `createGuardrail`, `updateGuardrail`, `deleteGuardrail`, `listProjectGuardrails`, `createProjectGuardrail`, `updateProjectGuardrail`, `toggleProjectGuardrail`, `deleteProjectGuardrail`.
 - **Schedules** (project auto-fetch cron) â€” removed from MCP 2026-05-28. One-time Owner setup; agents have no business reshaping or firing their own cron. The 4 retired tools were `listSchedules`, `upsertProjectSchedule`, `deleteProjectSchedule`, `triggerProjectAutoFetch`.
 
-## Services (36 files in `packages/api/src/services/`)
+## Services (91 files in `packages/api/src/services/`, plus 3 in `transports/`)
 
 | File | Purpose |
 |---|---|
@@ -542,6 +544,7 @@ The intentionally **unexposed** surfaces:
 | `git-status.ts`, `git-verify.ts` | Git inspection helpers. |
 | `counts.ts` | Aggregate counts for sidenav + dashboard. |
 | `cli-models.ts` | CLI model registry. |
+| `worktree-diff.ts` | Backs the Stop-modal review. `getWorktreeDiffSummary` / `getWorktreeFilePatch` / `WorktreeDiffError`, plus exported `-z` parsers. Uses `git diff HEAD` (single ref) for the uncommitted scope so git merges staged+unstaged itself, and a fallback chain (`origin/<default>` -> `refs/remotes/origin/HEAD` -> `origin/main|master` -> local `<default>|main|master` -> none) for the committed base; unresolvable means an empty scope, never a throw. Untracked files go through `git diff --no-index -- /dev/null <path>`, which **exits 1 on success** — the wrapper reads `err.stdout`. Every diff carries `--no-ext-diff --no-textconv --no-color`: the first two are security controls, since the worktree is agent-controlled and `diff.external` / a `.gitattributes` textconv driver would otherwise execute under the API process. Reads stdout as a Buffer and splits on NUL at byte level (a chunk-straddling codepoint would otherwise become U+FFFD and corrupt paths). Caps: 500 files/scope, 512 KB or 20k lines per patch, 8 MB maxBuffer, 30 s. |
 | `worktree-stage.ts` | Shared `stageCliWorktree(opts)` — single entry point for everything that lands in a CLI worktree before spawn: `.atlas/constitution.md` + scripts, `.atlas/templates/`, `.claude/commands/atlas-*.md` + `.github/prompts/atlas-*.prompt.md` (per-agent slash-command bodies), and `.atlas/current-task.md` (when an item is linked OR a user prompt is provided). Flags carve out the orchestrator-only pieces: `includeHandoff` writes `.atlas/handoff.md`; `activeRunCopilotAgent` writes `~/.copilot/agents/atlas-<runId>.md`. Both `agent-runner.spawnAgentRun` and `POST /api/cli/sessions` (terminal create + resume) call through this helper. `runProjectSetup` and `buildGitConfig` stay at the call site because their cleanup lifetimes differ. |
 | `cli-session-host.ts` | In-memory PTY host for Terminal sessions (one Map entry per `cli_sessions.id`): spawns `claude`/`copilot` under ConPTY (with `TERM`/`COLORTERM` set — node-pty on Windows discards the `name:` option), feeds every output byte into a per-session `terminal-screen-state` mirror, broadcasts to WS subscribers from the mirror's write callback (FIFO with the attach flush marker → exactly-once delivery), replays `snapshot()` on attach, clamps/drops `{cmd:'resize'}` control frames, runs the idle-notification detector, and flips the row to `paused` on PTY exit. |
 | `terminal-screen-state.ts` | Per-session `@xterm/headless` + `@xterm/addon-serialize` mirror behind a tiny interface (`feed`/`whenFlushed`/`snapshot`/`resize`/`dispose`). Exists so WS attach replays a serialized screen instead of a byte-window of history — a byte-window can start mid-escape-sequence/mid-codepoint (rendered as literal "zombie" characters), echoes DSR queries, and carries stale geometry. |

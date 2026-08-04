@@ -118,10 +118,17 @@ test.describe('/terminal', () => {
         await page.getByRole('button', { name: /^Stop$/ }).click();
         const stopDialog = page.getByRole('dialog');
         await expect(stopDialog).toBeVisible();
-        await expect(
-            stopDialog.getByRole('button', { name: /^Stop session$/ }),
-        ).toBeEnabled({ timeout: 30_000 });
-        await stopDialog.getByRole('button', { name: /^Stop session$/ }).click();
+        // Opt out of the PR. The fixture remote is a bare repo with no GitHub
+        // behind it, so `gh pr create` has nothing to talk to — unchecking
+        // keeps this assertion about commit + push + teardown, and exercises
+        // the bypass at the same time. It also pins the button label, which
+        // otherwise reads "Stop & open PR" whenever something is staged.
+        const prBox = stopDialog.getByRole('checkbox', { name: /open a pull request/i });
+        await expect(prBox).toBeVisible({ timeout: 30_000 });
+        if (await prBox.isEnabled()) await prBox.uncheck();
+        const confirm = stopDialog.getByRole('button', { name: /^Stop session$/ });
+        await expect(confirm).toBeEnabled({ timeout: 30_000 });
+        await confirm.click();
 
         // When the stop API returns, the session row flips to `closed` and the
         // frontend receives the SSE event. TerminalSession.tsx then calls

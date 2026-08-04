@@ -17,6 +17,7 @@ import {
     type CliSessionPreflightStopResponse,
     type CliSessionStopResponse,
     type CliSessionUnstagedFile,
+    type CliSessionDiffScopeName,
     CliSessionCreateSchema,
     DEFAULT_CLI_MODEL,
     DEFAULT_COPILOT_MODEL,
@@ -72,6 +73,11 @@ async function safeBuildGitAuth(
 }
 import { gitInvokeEnv } from '../services/git-env.js';
 import {
+    getWorktreeDiffSummary,
+    getWorktreeFilePatch,
+    WorktreeDiffError,
+} from '../services/worktree-diff.js';
+import {
     externalLinks,
     parseGithubPrUrl,
     fetchGithubPrTitle,
@@ -87,6 +93,21 @@ const exec = promisify(execFile);
 const StopBodySchema = z.object({
     files_to_stage: z.array(z.string().min(1)).default([]),
     commit_message: z.string().max(2_000).optional(),
+    // Defaults true so every pre-existing caller (web client, MCP, tests)
+    // keeps the auto-PR behaviour without sending the field. Affirmative
+    // rather than `skip_pr` so the default reads as `true` at the call site.
+    open_pull_request: z.boolean().default(true),
+});
+
+// Query params arrive as strings, hence `coerce` on the numeric one. `path`
+// is validated structurally inside the service (normalizeRelPath) and then
+// checked for membership in the scope's changed-file set — that membership
+// check, not this schema, is what stops the endpoint being an arbitrary-file
+// reader of the worktree.
+const DiffFileQuerySchema = z.object({
+    path: z.string().min(1).max(1024),
+    scope: z.enum(['uncommitted', 'committed']),
+    context: z.coerce.number().int().min(0).max(25).default(3),
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -163,20 +184,37 @@ function emitStatus(session: ICliSession): void {
     });
 }
 
-// `git status --porcelain -z` returns NUL-separated entries; each entry is
-// 2-char code + space + path. We split on NUL and drop empties.
+// `git status --porcelain -z` returns NUL-separated fields. A normal entry is
+// one field: 2-char code + space + path. A RENAME or COPY (`R`/`C` in either
+// column) spends a SECOND field on the origin path, with no `XY ` prefix —
+// and in `-z` mode the order is `to` then `from`, reversed from the human
+// format. So this has to be a pointer walk, not a plain `for..of` over the
+// split: treating that bare origin path as its own record yields a phantom
+// entry whose `code` is the first two characters of the old path, and the
+// phantom then shows up as a checkbox in the Stop modal.
 async function porcelainUnstaged(worktreePath: string): Promise<CliSessionUnstagedFile[]> {
     try {
-        const res = await exec('git', ['-C', worktreePath, 'status', '--porcelain', '-z'], {
-            timeout: 30_000,
-            maxBuffer: 4 * 1024 * 1024,
-        });
-        const out = res.stdout || '';
+        // `--untracked-files=all` (not git's default `normal`, which collapses
+        // an untracked directory to a single `dir/` entry). Two reasons:
+        // the Stop modal's file list comes from `worktree-diff`, which also
+        // uses `all`, and a mismatch would let you tick a file the staging set
+        // doesn't contain; and per-file staging out of a brand-new directory
+        // is what you want anyway. `git add -- <file>` works either way.
+        const res = await exec(
+            'git',
+            ['-C', worktreePath, 'status', '--porcelain', '-z', '--untracked-files=all'],
+            { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 },
+        );
+        const fields = (res.stdout || '').split('\0');
         const entries: CliSessionUnstagedFile[] = [];
-        for (const raw of out.split('\0')) {
+        for (let i = 0; i < fields.length; i++) {
+            const raw = fields[i] ?? '';
             if (raw.length < 4) continue;
             const code = raw.slice(0, 2);
             const path = raw.slice(3);
+            // Consume (and discard) the origin-path field that follows a
+            // rename/copy. `path` above is already the destination.
+            if (code[0] === 'R' || code[0] === 'C' || code[1] === 'R' || code[1] === 'C') i++;
             entries.push({ code, path });
         }
         return entries;
@@ -618,6 +656,73 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         return body;
     });
 
+    // DIFF SUMMARY -- per-file change list for both review scopes.
+    //
+    // GET (unlike preflight-stop's POST) because it is a pure read: it needs
+    // no write-gate token, and TanStack Query caches it naturally. Kept
+    // separate from preflight-stop so a session touching hundreds of files
+    // doesn't bloat the modal's first paint, and so the patch bodies below
+    // can be fetched lazily one file at a time.
+    app.get('/api/cli/sessions/:id/diff', async (req: FastifyRequest, reply: FastifyReply) => {
+        const id = (req.params as { id: string }).id;
+        const session = await loadSession(id);
+        if (!session) return reply.status(404).send({ error: 'session not found', kind: 'not_found' });
+        if (!session.worktree_path) {
+            return reply.status(409).send({ error: 'session has no worktree_path', kind: 'conflict' });
+        }
+        const project = await projectsService.get(session.project_id);
+        try {
+            return await getWorktreeDiffSummary({
+                worktreePath: session.worktree_path,
+                defaultBranch: project?.default_branch ?? null,
+            });
+        } catch (err) {
+            if (err instanceof WorktreeDiffError) {
+                return reply
+                    .status(409)
+                    .send({ error: err.message, kind: 'conflict', details: { code: err.code } });
+            }
+            throw err;
+        }
+    });
+
+    // DIFF FILE -- one file's unified patch, on demand.
+    app.get('/api/cli/sessions/:id/diff/file', async (req: FastifyRequest, reply: FastifyReply) => {
+        const id = (req.params as { id: string }).id;
+        const session = await loadSession(id);
+        if (!session) return reply.status(404).send({ error: 'session not found', kind: 'not_found' });
+        if (!session.worktree_path) {
+            return reply.status(409).send({ error: 'session has no worktree_path', kind: 'conflict' });
+        }
+        const q = DiffFileQuerySchema.parse(req.query);
+        const project = await projectsService.get(session.project_id);
+        try {
+            const patch = await getWorktreeFilePatch({
+                worktreePath: session.worktree_path,
+                defaultBranch: project?.default_branch ?? null,
+                scope: q.scope as CliSessionDiffScopeName,
+                path: q.path,
+                context: q.context,
+            });
+            if (!patch) {
+                return reply
+                    .status(404)
+                    .send({ error: 'path not changed in this scope', kind: 'not_found' });
+            }
+            return patch;
+        } catch (err) {
+            if (err instanceof WorktreeDiffError) {
+                const invalid = err.code === 'invalid_path';
+                return reply.status(invalid ? 400 : 409).send({
+                    error: err.message,
+                    kind: invalid ? 'validation_error' : 'conflict',
+                    details: { code: err.code },
+                });
+            }
+            throw err;
+        }
+    });
+
     // STOP -- the smart finalize. Optional commit + push + worktree teardown.
     app.post('/api/cli/sessions/:id/stop', async (req: FastifyRequest, reply: FastifyReply) => {
         const id = (req.params as { id: string }).id;
@@ -712,13 +817,29 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             // pushResult.error is non-fatal here -- worktree teardown still runs
             // so we don't leak dirs.
 
-            // 2026-06-22 — Auto-raise the PR when there's something to ship
-            // (pushed = true OR a previous push already landed work that
-            // hasn't been opened yet). Idempotent: openPullRequest handles
-            // the "PR already exists" case by returning its URL. We treat
-            // any PR-side failure as non-fatal -- the branch is on origin
-            // either way and the user can open one manually.
-            if (pushed) {
+            // 2026-06-22 — Auto-raise the PR when there's something to ship.
+            // Idempotent: openPullRequest handles the "PR already exists"
+            // case by returning its URL. We treat any PR-side failure as
+            // non-fatal -- the branch is on origin either way and the user
+            // can open one manually.
+            //
+            // 2026-08-04 — two changes here:
+            //
+            // 1. `open_pull_request: false` opts out entirely. The Owner
+            //    often commits + pushes + opens their own PR from inside the
+            //    PTY, and an unwanted second PR on top of that is noise. The
+            //    push above still runs regardless: `cleanupWorktreeAfterPush`
+            //    below deletes the worktree, so not pushing would lose work.
+            //
+            // 2. `alreadyUpToDate` now counts as "something to ship". The
+            //    original comment claimed this gate fired on "pushed OR a
+            //    previous push already landed work", but the condition was a
+            //    bare `if (pushed)` — and pushWorktreeInner returns
+            //    `pushed: false` when git says "Everything up-to-date"
+            //    (worktree-orchestrator.ts). So a session whose commits were
+            //    pushed from the PTY silently got no PR. The gate now matches
+            //    what the comment always said it did.
+            if (body.open_pull_request && (pushResult.pushed || pushResult.alreadyUpToDate)) {
                 const prResult = await openPullRequest({
                     worktreePath,
                     branch,

@@ -223,6 +223,8 @@ export default defineConfig({
             'src/services/git-env.test.ts',
             // terminal zombie-chars fix — headless mirror snapshot replay.
             'src/services/terminal-screen-state.test.ts',
+            // Terminal finalize diff — real git fixtures, no child_process mock.
+            'src/services/worktree-diff.test.ts',
         ],
         globals: false,
         testTimeout: 15_000,

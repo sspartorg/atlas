@@ -8,6 +8,9 @@ import type {
     CliSessionStopInput,
     CliSessionStopResponse,
     CliSessionStatus,
+    CliSessionDiffScopeName,
+    CliSessionDiffSummaryResponse,
+    CliSessionFilePatchResponse,
 } from '@atlas/shared';
 
 // 2026-06-22 - Terminal v1. React Query hooks for the cli_sessions REST
@@ -81,6 +84,44 @@ export function useStopCliSession() {
             void qc.invalidateQueries({ queryKey: ['cli-sessions'] });
             qc.setQueryData(['cli-session', result.session.id], result.session);
         },
+    });
+}
+
+// 2026-08-04 — Terminal finalize diff. Two queries, because a session can
+// touch hundreds of files: the summary is small and always needed, the
+// per-file patches are large and fetched only for the file being viewed.
+
+export function useCliSessionDiff(id: string, enabled: boolean) {
+    return useQuery<CliSessionDiffSummaryResponse>({
+        queryKey: ['cli-session-diff', id],
+        queryFn: () => api.cli.sessions.diff(id),
+        enabled: enabled && Boolean(id),
+        // The worktree can change under us between opens (the PTY is still
+        // live during preflight), so don't serve a stale snapshot on reopen.
+        staleTime: 0,
+        gcTime: 5 * 60_000,
+        retry: false,
+    });
+}
+
+export function useCliSessionFilePatch(
+    id: string,
+    scope: CliSessionDiffScopeName,
+    path: string | null,
+    context: number,
+    enabled: boolean,
+) {
+    return useQuery<CliSessionFilePatchResponse>({
+        queryKey: ['cli-session-diff-patch', id, scope, path, context],
+        queryFn: () =>
+            api.cli.sessions.diffFile(id, { scope, path: path as string, context }),
+        enabled: enabled && Boolean(id) && Boolean(path),
+        // Immutable for the modal's lifetime — the PTY was killed before the
+        // modal opened in the stop path, and the summary query above owns
+        // freshness. Refetching a 500 KB patch on every focus is pure waste.
+        staleTime: Infinity,
+        gcTime: 5 * 60_000,
+        retry: false,
     });
 }
 

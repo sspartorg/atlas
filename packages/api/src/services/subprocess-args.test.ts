@@ -29,6 +29,9 @@ const RUNNER_FILES = [
     'git-verify.ts',
     'worktree-orchestrator.ts',
     'cli-session-host.ts',
+    // Shells out to git with a path that arrives from a query param, so the
+    // array-argv / no-shell invariants matter here more than anywhere.
+    'worktree-diff.ts',
 ];
 
 function loadSource(relPath: string): string {

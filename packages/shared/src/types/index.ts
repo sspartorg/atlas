@@ -1532,6 +1532,15 @@ export interface CliSessionStopInput {
     files_to_stage: string[];
     /** Required only if `files_to_stage` is non-empty. */
     commit_message?: string;
+    /**
+     * Open a pull request after a successful push. Defaults to `true`
+     * server-side, so callers that predate this field keep the original
+     * auto-PR behaviour. `false` still pushes the branch — the worktree is
+     * torn down immediately after close, so skipping the push would destroy
+     * the work. It only suppresses PR creation (and, with it, the
+     * `item_external_links` row that records the PR URL).
+     */
+    open_pull_request?: boolean;
 }
 
 export interface CliSessionStopResponse {
@@ -1539,6 +1548,76 @@ export interface CliSessionStopResponse {
     pushed: boolean;
     committed: boolean;
     finalize_pr_url: string | null;
+}
+
+// 2026-08-04 — Terminal finalize diff. The Stop modal reviews two scopes,
+// which together are exactly what the PR will contain:
+//   `uncommitted` — working tree vs HEAD; these are the stageable files.
+//   `committed`   — HEAD vs the merge-base with the project's default branch;
+//                   work already committed inside the session, read-only.
+export type CliSessionDiffScopeName = 'uncommitted' | 'committed';
+
+/** One changed file in one scope. */
+export interface CliSessionDiffFile {
+    /** Repo-relative, forward slashes. The POST-image (new) path for renames. */
+    path: string;
+    /** Pre-image path when `status` is `renamed` or `copied`; else null. */
+    old_path: string | null;
+    status:
+        | 'added'
+        | 'modified'
+        | 'deleted'
+        | 'renamed'
+        | 'copied'
+        | 'type_changed'
+        | 'untracked';
+    /**
+     * Two-char `git status --porcelain` code (` M`, `??`, `MM`, `A `). Only
+     * the uncommitted scope has index/worktree columns, so this is null for
+     * the committed scope.
+     */
+    code: string | null;
+    /** Lines added. 0 when `binary`. */
+    additions: number;
+    /** Lines removed. 0 when `binary`. */
+    deletions: number;
+    binary: boolean;
+    /** Over the per-file size cap — the patch endpoint returns `patch: null`. */
+    too_large: boolean;
+}
+
+export interface CliSessionDiffScope {
+    files: CliSessionDiffFile[];
+    /** Files git reported BEFORE the server-side cap; may exceed `files.length`. */
+    total_files: number;
+    truncated: boolean;
+    /** Sums across the UNCAPPED set, so the header stat stays honest. */
+    additions: number;
+    deletions: number;
+}
+
+/** GET /api/cli/sessions/:id/diff */
+export interface CliSessionDiffSummaryResponse {
+    uncommitted: CliSessionDiffScope;
+    committed: CliSessionDiffScope;
+    current_branch: string;
+    /** Ref the merge-base came from (`origin/main`, `main`, …). Null if none resolved. */
+    base_ref: string | null;
+    /** 40-hex merge-base commit. Null when `base_ref` is null. */
+    base_sha: string | null;
+    commits_ahead_of_base: number;
+}
+
+/** GET /api/cli/sessions/:id/diff/file */
+export interface CliSessionFilePatchResponse {
+    path: string;
+    scope: CliSessionDiffScopeName;
+    /** Raw unified diff. Null when `binary` or `truncated`. */
+    patch: string | null;
+    binary: boolean;
+    truncated: boolean;
+    /** Byte size of the patch git produced, even when `patch` is null. */
+    byte_size: number;
 }
 
 // W4 — Typed API error envelope. Every non-2xx response from @atlas/api

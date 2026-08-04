@@ -200,6 +200,18 @@ describe('PaneChrome — kebab menu', () => {
             http.post(`${BASE}/cli/sessions/sess-1/preflight-stop`, () =>
                 HttpResponse.json({ unstaged: [], current_branch: 'main', ahead_of_remote: 0 }),
             ),
+            // The modal now loads a diff summary alongside preflight, and MSW
+            // runs with onUnhandledRequest: 'error'.
+            http.get(`${BASE}/cli/sessions/sess-1/diff`, () =>
+                HttpResponse.json({
+                    uncommitted: { files: [], total_files: 0, truncated: false, additions: 0, deletions: 0 },
+                    committed: { files: [], total_files: 0, truncated: false, additions: 0, deletions: 0 },
+                    current_branch: 'main',
+                    base_ref: 'origin/main',
+                    base_sha: 'a'.repeat(40),
+                    commits_ahead_of_base: 0,
+                }),
+            ),
         );
         renderChrome(makeSession({ status: 'active' }));
         const kebabBtn = screen.getAllByRole('button')[0]!;
@@ -207,7 +219,7 @@ describe('PaneChrome — kebab menu', () => {
         await screen.findByText('Stop');
         fireEvent.click(screen.getByText('Stop'));
         // StopSessionModal title appears
-        await screen.findByText(/stop session — finalize worktree/i);
+        await screen.findByText(/stop session — review/i);
     });
 
     it('Open in single view navigates (click does not throw)', async () => {

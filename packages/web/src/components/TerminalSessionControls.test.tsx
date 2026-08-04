@@ -11,6 +11,25 @@ import type { ICliSession } from '@atlas/shared';
 const BASE = 'http://localhost:3000/api';
 const ISO = '2026-01-01T00:00:00.000Z';
 
+// 2026-08-04 — the Stop modal now fetches a diff summary alongside preflight,
+// and MSW runs with `onUnhandledRequest: 'error'`. Registered once for the
+// whole file; per-test `server.use` handlers still take precedence.
+const EMPTY_SCOPE = { files: [], total_files: 0, truncated: false, additions: 0, deletions: 0 };
+beforeEach(() => {
+    server.use(
+        http.get(`${BASE}/cli/sessions/sess-1/diff`, () =>
+            HttpResponse.json({
+                uncommitted: EMPTY_SCOPE,
+                committed: EMPTY_SCOPE,
+                current_branch: 'main',
+                base_ref: 'origin/main',
+                base_sha: 'a'.repeat(40),
+                commits_ahead_of_base: 0,
+            }),
+        ),
+    );
+});
+
 function makeSession(overrides: Record<string, unknown> = {}): ICliSession {
     return {
         id: 'sess-1',
@@ -117,7 +136,7 @@ describe('TerminalSessionControls — non-compact, active session', () => {
         );
         renderControls(makeSession());
         fireEvent.click(screen.getByRole('button', { name: /stop/i }));
-        await screen.findByText(/stop session — finalize worktree/i);
+        await screen.findByText(/stop session — review/i);
     });
 
     it('calls onStopRequest instead of opening modal when prop provided', () => {
@@ -286,7 +305,7 @@ describe('TerminalSessionControls — onClose / onClosed callbacks in StopSessio
         renderControls(makeSession());
         // Open the stop modal
         fireEvent.click(screen.getByRole('button', { name: /stop/i }));
-        await screen.findByText(/stop session — finalize worktree/i);
+        await screen.findByText(/stop session — review/i);
         // Press Escape to trigger onClose (() => setInternalStopOpen(false))
         fireEvent.keyDown(document.activeElement ?? document.body, {
             key: 'Escape',
@@ -294,7 +313,7 @@ describe('TerminalSessionControls — onClose / onClosed callbacks in StopSessio
         });
         await waitFor(() =>
             expect(
-                screen.queryByText(/stop session — finalize worktree/i),
+                screen.queryByText(/stop session — review/i),
             ).not.toBeInTheDocument(),
         );
     });
@@ -312,7 +331,7 @@ describe('TerminalSessionControls — onClose / onClosed callbacks in StopSessio
         );
         renderControls(makeSession());
         fireEvent.click(screen.getByRole('button', { name: /stop/i }));
-        await screen.findByText(/stop session — finalize worktree/i);
+        await screen.findByText(/stop session — review/i);
         const confirmBtn = await screen.findByRole('button', { name: /Stop session/i });
         fireEvent.click(confirmBtn);
         // Wait for the POST /stop to be called, which triggers onClosed → toast

@@ -104,6 +104,25 @@ export const ATLAS_LIGHT = {
     terminalBg: '#0A0A0A',
     terminalFgOk: '#A3F7BF',
     terminalFgErr: '#FFB3B3',
+    // Diff viewer (Stop-session review). Two tiers per side: the row tier is
+    // a full-bleed background that must keep `slate` body text readable; the
+    // word tier is the intra-line highlight and must out-read the row it sits
+    // on. successSoft/dangerSoft are chip fills tuned against successFg /
+    // dangerFg, so they can't serve either role here.
+    diffAddBg: '#E6F4EA',
+    diffDelBg: '#FCE8E6',
+    diffAddWord: '#ABE5BC',
+    diffDelWord: '#F5B6B0',
+    diffGutterBg: '#F6F6F8',
+    diffGutterFg: '#8A8A93',
+    diffFillerBg: '#F2F2F4',
+    diffHunkBg: '#EEF0FA',
+    diffHunkFg: '#5B5FA8',
+    diffTokKeyword: '#7C3AED',
+    diffTokString: '#0F766E',
+    diffTokComment: '#6B7280',
+    diffTokNumber: '#B45309',
+    diffTokPunct: '#6B7280',
 } as const;
 
 export const ATLAS_DARK = {
@@ -171,6 +190,21 @@ export const ATLAS_DARK = {
     terminalBg: '#0A0A0A',
     terminalFgOk: '#A3F7BF',
     terminalFgErr: '#FFB3B3',
+    // Diff viewer — dark counterparts. Same two-tier rule as ATLAS_LIGHT.
+    diffAddBg: '#12251A',
+    diffDelBg: '#2A1618',
+    diffAddWord: '#1E5233',
+    diffDelWord: '#6B2822',
+    diffGutterBg: '#141414',
+    diffGutterFg: '#6E6E76',
+    diffFillerBg: '#111111',
+    diffHunkBg: '#191B33',
+    diffHunkFg: '#9BA1E8',
+    diffTokKeyword: '#C4B5FD',
+    diffTokString: '#5EEAD4',
+    diffTokComment: '#8B93A1',
+    diffTokNumber: '#FBBF24',
+    diffTokPunct: '#9CA3AF',
 } as const;
 
 // =====================================================================
@@ -241,6 +275,20 @@ export const ATLAS_PALETTE = {
     terminalBg: 'var(--atlas-terminalBg)',
     terminalFgOk: 'var(--atlas-terminalFgOk)',
     terminalFgErr: 'var(--atlas-terminalFgErr)',
+    diffAddBg: 'var(--atlas-diffAddBg)',
+    diffDelBg: 'var(--atlas-diffDelBg)',
+    diffAddWord: 'var(--atlas-diffAddWord)',
+    diffDelWord: 'var(--atlas-diffDelWord)',
+    diffGutterBg: 'var(--atlas-diffGutterBg)',
+    diffGutterFg: 'var(--atlas-diffGutterFg)',
+    diffFillerBg: 'var(--atlas-diffFillerBg)',
+    diffHunkBg: 'var(--atlas-diffHunkBg)',
+    diffHunkFg: 'var(--atlas-diffHunkFg)',
+    diffTokKeyword: 'var(--atlas-diffTokKeyword)',
+    diffTokString: 'var(--atlas-diffTokString)',
+    diffTokComment: 'var(--atlas-diffTokComment)',
+    diffTokNumber: 'var(--atlas-diffTokNumber)',
+    diffTokPunct: 'var(--atlas-diffTokPunct)',
 } as const;
 
 export const ELEVATION = {

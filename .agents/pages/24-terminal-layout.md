@@ -45,7 +45,7 @@ A TradingView-style multi-pane workspace for running 1–4 live Claude / Copilot
 
 ## Modals / drawers
 - Reuses `StartSessionDialog` (`packages/web/src/components/StartSessionDialog.tsx`) inline. The dialog's `onCreated` callback attaches the new session to the originating pane.
-- Reuses `StopSessionModal` indirectly through `TerminalSessionControls compact`.
+- Reuses `StopSessionModal` indirectly through `TerminalSessionControls compact`. The modal portals to `document.body`, so pane geometry never affects it — only viewport width does. Its `onClosed` hands back `{pushed, committed, prUrl}` and `PaneChrome`'s toast branches on that ("Session stopped + PR opened" / "+ branch pushed" / plain).
 
 ## Hooks used
 - `useCliSessions()` — list of all sessions (the "Attach to existing" submenu filters this to `active|paused`).

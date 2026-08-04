@@ -10,7 +10,16 @@ import StopRounded from '@mui/icons-material/StopRounded';
 import type { ICliSession } from '@atlas/shared';
 import { usePauseCliSession, useResumeCliSession } from '../hooks/useCliSessions.js';
 import { useToast } from '../hooks/useToast.js';
-import { StopSessionModal } from './StopSessionModal.js';
+import { StopSessionModal, type StopSessionResult } from './StopSessionModal.js';
+
+// The old copy said "Session stopped + branch pushed" unconditionally, which
+// was already wrong when nothing got pushed — and is now also wrong when the
+// Owner opts out of the PR. Report what actually happened.
+function stopToast(r: StopSessionResult): { message: string; detail?: string } {
+    if (r.prUrl) return { message: 'Session stopped + PR opened', detail: r.prUrl };
+    if (r.pushed) return { message: 'Session stopped + branch pushed' };
+    return { message: 'Session stopped' };
+}
 
 interface TerminalSessionControlsProps {
     session: ICliSession;
@@ -45,9 +54,9 @@ export function useTerminalStopModal(
             open={open}
             sessionId={session.id}
             onClose={() => setOpen(false)}
-            onClosed={() => {
+            onClosed={(result) => {
                 setOpen(false);
-                toast.show({ message: 'Session stopped + branch pushed' });
+                toast.show(stopToast(result));
                 onStopped?.();
             }}
         />
@@ -107,9 +116,9 @@ export function TerminalSessionControls({
             open={internalStopOpen}
             sessionId={session.id}
             onClose={() => setInternalStopOpen(false)}
-            onClosed={() => {
+            onClosed={(result) => {
                 setInternalStopOpen(false);
-                toast.show({ message: 'Session stopped + branch pushed' });
+                toast.show(stopToast(result));
                 onStopped?.();
             }}
         />
