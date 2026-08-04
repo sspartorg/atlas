@@ -62,17 +62,6 @@ vi.mock('@xterm/addon-fit', () => ({
     }),
 }));
 
-vi.mock('@xterm/addon-webgl', () => ({
-    WebglAddon: vi.fn().mockImplementation(function () {
-        return {
-            onContextLoss: vi.fn().mockImplementation(() => {
-                return { dispose: vi.fn() };
-            }),
-            dispose: vi.fn(),
-        };
-    }),
-}));
-
 vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
 
 // ── WebSocket mock ───────────────────────────────────────────────────────────

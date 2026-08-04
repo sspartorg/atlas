@@ -42,9 +42,24 @@ export default defineConfig(({ mode }) => ({
       : []),
   ],
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
+    // Array form (not the object map) because the lottie entry below needs an
+    // ANCHORED match. A string key does prefix replacement, so a plain
+    // 'lottie-web' key would also rewrite the replacement itself into
+    // `lottie-web/build/player/lottie_light/build/player/lottie_light`.
+    alias: [
+      { find: '@', replacement: path.resolve(__dirname, './src') },
+      // 2026-08-04 — bundle budget. `lottie-react` does a bare
+      // `import lottie from 'lottie-web'`, which resolves to lottie-web's
+      // `main`: the FULL player (78.0 KB gz in our bundle) carrying the
+      // expressions engine plus the canvas, SVG, and HTML renderers. Every
+      // mascot animation in `public/lottie/` is plain shape layers — no
+      // expressions, no image assets, SVG renderer only — so `lottie_light`
+      // (45.5 KB gz) is byte-for-byte equivalent output at ~30 KB gz less.
+      // Expressions are the ONLY thing the light build drops; if a future
+      // animation needs them it will silently not animate, so re-check this
+      // when adding a Lottie file authored with expressions.
+      { find: /^lottie-web$/, replacement: 'lottie-web/build/player/lottie_light' },
+    ],
   },
   server: {
     port: WEB_PORT,

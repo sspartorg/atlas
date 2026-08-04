@@ -4,7 +4,6 @@ import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 
@@ -38,9 +37,15 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 //     user clicks Resume to spawn a fresh PTY.
 //
 // Renderer:
-//   - xterm.js v6 core ships ONLY the DOM renderer; the WebGL addon is the
-//     GPU-accelerated renderer. If WebGL init fails we fall back to the DOM
-//     renderer — correct, just slower on heavy scrollback.
+//   - xterm.js v6 core's DOM renderer, deliberately. `@xterm/addon-webgl` was
+//     dropped 2026-08-04: it cost 65.6 KB gz — the single largest lever
+//     available — and the web bundle budget gate (830 KB gz total, enforced by
+//     .github/workflows/build.yml) was already 23.9 KB over on main. The addon
+//     was never load-bearing: it was wrapped in a try/catch for GPUs without
+//     WebGL, and disposed on context loss, both of which already fell back to
+//     exactly this renderer. Output is identical; only heavy-scrollback repaint
+//     is slower. Revisit only if a profile shows the DOM renderer is the
+//     bottleneck AND the budget has headroom.
 
 const RECONNECT_DELAY_MS = 1_500;
 // Trailing debounce for the resize envelope. Each server-side pty.resize()
@@ -173,20 +178,6 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
             const fit = new FitAddon();
             term.loadAddon(fit);
             term.open(hostRef.current);
-            
-            // WebGL addon = the GPU renderer (v6 core ships only the DOM
-            // renderer). Disposing on context loss drops us back to the DOM
-            // renderer — correct output, just slower.
-            try {
-                const webgl = new WebglAddon();
-                term.loadAddon(webgl);
-                webgl.onContextLoss(() => {
-                    void webgl.dispose();
-                });
-            } catch {
-                // WebGL not supported (old GPU, browser restrictions) — the
-                // DOM renderer takes over. Non-fatal.
-            }
 
             try {
                 fit.fit();
