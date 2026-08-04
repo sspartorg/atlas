@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { sql } from 'kysely';
 import { db } from '../db/kysely-client.js';
 import { ApiError } from '../utils/errors.js';
+import { asAgentCli } from '@atlas/shared';
 import {
     costRollupForRoot,
     costRowsForRoot,
@@ -531,7 +532,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                 session_count: Number(terminalSummaryRow?.session_count ?? 0),
             },
             terminalByCli: terminalByCliRows.map((r) => ({
-                cli: (r.cli === 'copilot' ? 'copilot' : 'claude') as 'claude' | 'copilot',
+                cli: asAgentCli(r.cli),
                 /* v8 ignore next */
                 total_cost_usd: Number(r.total_cost_usd ?? 0),
                 /* v8 ignore next */
@@ -562,7 +563,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                         project_name: (r['project_name'] as string | null) ?? 'Unknown',
                         /* v8 ignore next */
                         title: (r['title'] as string | null) ?? '',
-                        cli: (r['cli'] === 'copilot' ? 'copilot' : 'claude') as 'claude' | 'copilot',
+                        cli: asAgentCli(r['cli']),
                         /* v8 ignore next */
                         total_cost_usd: Number(r['total_cost_usd'] ?? 0),
                         input_tokens: Number(r['input_tokens'] ?? 0),
@@ -827,7 +828,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                 session_count: Number(terminalSummaryRow?.session_count ?? 0),
             },
             terminalByCli: terminalByCliRows.map((r) => ({
-                cli: (r.cli === 'copilot' ? 'copilot' : 'claude') as 'claude' | 'copilot',
+                cli: asAgentCli(r.cli),
                 /* v8 ignore next */
                 total_cost_usd: Number(r.total_cost_usd ?? 0),
                 /* v8 ignore next */
@@ -851,7 +852,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                         project_name: (r['project_name'] as string | null) ?? 'Unknown',
                         /* v8 ignore next */
                         title: (r['title'] as string | null) ?? '',
-                        cli: (r['cli'] === 'copilot' ? 'copilot' : 'claude') as 'claude' | 'copilot',
+                        cli: asAgentCli(r['cli']),
                         /* v8 ignore next */
                         total_cost_usd: Number(r['total_cost_usd'] ?? 0),
                         /* v8 ignore next */

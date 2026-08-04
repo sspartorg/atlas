@@ -8,8 +8,7 @@ import ListItemText from '@mui/material/ListItemText';
 import Divider from '@mui/material/Divider';
 import Typography from '@mui/material/Typography';
 import MoreVertRounded from '@mui/icons-material/MoreVertRounded';
-import TerminalRounded from '@mui/icons-material/TerminalRounded';
-import SmartToyRounded from '@mui/icons-material/SmartToyRounded';
+import { cliIcon } from '../utils/cliIcons.js';
 import LinkOffRounded from '@mui/icons-material/LinkOffRounded';
 import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
 import type { ICliSession, CliSessionStatus } from '@atlas/shared';
@@ -43,7 +42,7 @@ export function PaneChrome({ session, onDetach, onStopped }: PaneChromeProps) {
     // mid-preflight and Stop-from-kebab would silently fail.
     const { stopRequest, stopModalElement } = useTerminalStopModal(session, onStopped);
 
-    const CliIcon = session.cli === 'copilot' ? SmartToyRounded : TerminalRounded;
+    const CliIcon = cliIcon(session.cli);
 
     return (
         <Box

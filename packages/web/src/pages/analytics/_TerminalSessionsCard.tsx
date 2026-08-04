@@ -8,6 +8,7 @@ import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { formatCostUsd, formatTokenCount } from '../../utils/formatCost.js';
 import { Card, ChartTitle, Eyebrow, CHART_COLORS, MONO } from './_chrome.js';
 import type { AnalyticsSessionSubagent } from '../../api/types.js';
+import { CLI_SHORT_LABEL, type AgentCli } from '@atlas/shared';
 
 // "Manual terminal sessions" surface — the dedicated section that puts a
 // face on the orange accent we use elsewhere on /analytics for terminal
@@ -33,7 +34,7 @@ interface TerminalSummary {
 }
 
 interface ByCliRow {
-    cli: 'claude' | 'copilot';
+    cli: AgentCli;
     total_cost_usd: number;
     session_count: number;
     input_tokens: number;
@@ -44,7 +45,7 @@ interface TopSession {
     session_id: string;
     project_name: string;
     title: string;
-    cli: 'claude' | 'copilot';
+    cli: AgentCli;
     total_cost_usd: number;
     input_tokens: number;
     output_tokens: number;
@@ -60,17 +61,21 @@ interface Props {
     monthLabel: string;
 }
 
-const CLI_LABEL: Record<'claude' | 'copilot', string> = {
-    claude: 'Claude',
-    copilot: 'Copilot',
-};
+// Label + accent now come from the shared CLI presentation registry, keyed on
+// `AgentCli`. They used to be local maps keyed on an inline
+// `'claude' | 'copilot'` union — which meant a third CLI rendered an
+// `undefined` label in an `undefined`-coloured segment, with no type error and
+// no failing test to catch it.
+const CLI_LABEL: Record<AgentCli, string> = CLI_SHORT_LABEL;
 
-// Per-CLI accent. Claude is the agentic palette's blue (same family as
-// agent runs); Copilot gets the brand green so the two CLIs stay
-// visually distinct inside the orange-themed card.
-const CLI_ACCENT: Record<'claude' | 'copilot', string> = {
+// Per-CLI accent, scoped to this card because the bar split is the only place
+// that needs one. Claude is the agentic palette's blue (same family as agent
+// runs), Copilot the brand green, Ollama amber — three values that stay
+// readable against the card's orange chrome.
+const CLI_ACCENT: Record<AgentCli, string> = {
     claude: '#6366F1',
     copilot: '#22C55E',
+    ollama: ATLAS_PALETTE.amber,
 };
 
 function relativeShort(iso: string): string {
@@ -493,7 +498,7 @@ function SubagentPanel({
     cli,
     subagents,
 }: {
-    cli: 'claude' | 'copilot';
+    cli: AgentCli;
     subagents: AnalyticsSessionSubagent[];
 }) {
     return (

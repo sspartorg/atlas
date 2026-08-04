@@ -11,7 +11,7 @@ import CardContent from '@mui/material/CardContent';
 import CircularProgress from '@mui/material/CircularProgress';
 import AddRounded from '@mui/icons-material/AddRounded';
 import TerminalRounded from '@mui/icons-material/TerminalRounded';
-import SmartToyRounded from '@mui/icons-material/SmartToyRounded';
+import { cliIcon } from '../utils/cliIcons.js';
 import DashboardCustomizeRounded from '@mui/icons-material/DashboardCustomizeRounded';
 import Tooltip from '@mui/material/Tooltip';
 import IconButton from '@mui/material/IconButton';
@@ -303,7 +303,7 @@ interface SessionCardProps {
 }
 
 function SessionCard({ session, projectName, onOpen }: SessionCardProps) {
-    const CliIcon = session.cli === 'copilot' ? SmartToyRounded : TerminalRounded;
+    const CliIcon = cliIcon(session.cli);
     return (
         <Card
             sx={{

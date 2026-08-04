@@ -68,6 +68,7 @@ Optional (only matters once you start spawning real agent runs):
 
 - **Claude Code CLI** (`claude`) — for live agent runs with `ATLAS_AI_ENABLED=true`
 - **GitHub CLI** (`gh`) — only needed if you use GitHub PAT credentials and want the CLI's helpers
+- **Ollama** (`ollama`) — for the free, local `ollama` CLI option (see below)
 
 ---
 
@@ -82,8 +83,44 @@ pnpm doctor
 
 `pnpm doctor` verifies that node ≥ 20, pnpm ≥ 9, docker, and git are on
 your `PATH`, and reports the versions it found. Optional checks for
-`claude` and `gh` will show `[skip]` if they aren't installed. Use this if
-you're not sure your machine has everything before running `pnpm dev`.
+`claude`, `copilot`, `ollama`, and `gh` will show `[skip]` if they aren't
+installed. Use this if you're not sure your machine has everything before
+running `pnpm dev`.
+
+---
+
+## Ollama (free, local models)
+
+Atlas exposes three CLI choices per agent and per terminal session: `claude`,
+`copilot`, and `ollama`. The third one runs your agents on local (or Ollama
+Cloud) models at **no cost**.
+
+`ollama` is not a separate tool. Ollama serves an
+[Anthropic-compatible API](https://docs.ollama.com/integrations/claude-code),
+so Atlas spawns the **same `claude` binary** and repoints it at your Ollama
+server. Everything else is unchanged: same flags, same streamed transcript,
+same Pause/Resume, same worktree flow. Only the model list and the price differ.
+
+Setup:
+
+1. Install [Ollama](https://ollama.com/download) and make sure `ollama` is on
+   your `PATH`. Keep the Claude Code CLI installed too — Ollama drives it.
+2. Pull a model. For anything beyond trivial edits, give local models a 64k+
+   context window; small contexts are the usual cause of an agent "forgetting"
+   the task mid-run.
+   ```bash
+   ollama pull qwen3.5
+   ```
+3. If your Ollama server isn't on the default `http://localhost:11434`, set
+   `ATLAS_OLLAMA_BASE_URL` in `.env` (or edit it under **Settings → Env**).
+4. In Atlas, go to **Settings → Model Registry → Ollama** and make sure the
+   models you actually pulled are listed. Three are seeded as a starting point;
+   add or remove rows so the list matches `ollama list`.
+5. Pick **Ollama** as the CLI when creating an agent, or in the Terminal's
+   Start Session dialog.
+
+Ollama runs record `$0` and are labelled Free in Analytics, so the per-CLI
+breakdown shows exactly what you saved.
 
 ---
 

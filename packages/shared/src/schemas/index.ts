@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { AGENT_KIND_SLUGS } from '../types/index.js';
+import { AGENT_CLIS } from '../cli/index.js';
 import { normalizeStatusInput } from '../status-machine/index.js';
 
-export const AgentCliSchema = z.enum(['claude', 'copilot']);
+export const AgentCliSchema = z.enum(AGENT_CLIS);
 export const AgentStatusSchema = z.enum(['active', 'inactive']);
 export const AgentCategorySchema = z.enum(['software-dev', 'marketing', 'content', 'design']);
 // Task 6 — reasoning-effort knob. Both `claude` and `copilot` CLIs accept
@@ -1013,13 +1014,6 @@ export const CliSessionCreateSchema = z
         initial_prompt: z.string().max(8_000).optional(),
         model: z.string().min(1).max(80).optional(),
         item_id: z.string().min(1).max(200).optional(),
-        cli: z.enum(['claude', 'copilot']).default('claude'),
+        cli: AgentCliSchema.default('claude'),
     })
     .strict();
-
-// Default model used when the create payload omits `model`. The web
-// dialog and the server's create-handler both fall back to the per-CLI
-// default below when the user hasn't picked anything. Update here when
-// rotating either CLI's default model.
-export const DEFAULT_CLI_MODEL = 'claude-opus-4-7';
-export const DEFAULT_COPILOT_MODEL = 'claude-sonnet-4.6';

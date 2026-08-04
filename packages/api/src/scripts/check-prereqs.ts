@@ -36,7 +36,13 @@ const checks: Check[] = [
     { name: 'pnpm', cmd: 'pnpm', args: ['--version'], min: [9, 0, 0] },
     { name: 'docker', cmd: 'docker', args: ['--version'] },
     { name: 'git', cmd: 'git', args: ['--version'] },
+    // Agent CLIs — all optional; Atlas only needs the one(s) your agents are
+    // configured to use. `ollama` backs the third `cli` option: it does not
+    // replace `claude` (Ollama drives the same binary), so a working Ollama
+    // setup needs BOTH rows below to pass.
     { name: 'claude', cmd: 'claude', args: ['--version'], optional: true },
+    { name: 'copilot', cmd: 'copilot', args: ['--version'], optional: true },
+    { name: 'ollama', cmd: 'ollama', args: ['--version'], optional: true },
     { name: 'gh', cmd: 'gh', args: ['--version'], optional: true },
 ];
 

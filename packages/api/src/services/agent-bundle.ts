@@ -16,6 +16,7 @@ import type {
     IMarketplaceAgentHandoff,
     SdlcRole,
 } from '@atlas/shared';
+import { AGENT_CLIS } from '@atlas/shared';
 
 const AGENT_CATEGORY_VALUES: readonly AgentCategory[] = [
     'software-dev',
@@ -23,7 +24,7 @@ const AGENT_CATEGORY_VALUES: readonly AgentCategory[] = [
     'content',
     'design',
 ];
-const AGENT_CLI_VALUES: readonly AgentCli[] = ['claude', 'copilot'];
+const AGENT_CLI_VALUES: readonly AgentCli[] = AGENT_CLIS;
 const AGENT_STATUS_VALUES: readonly AgentStatus[] = ['active', 'inactive'];
 const AGENT_SCHEDULE_PRESET_VALUES: readonly AgentSchedulePreset[] = [
     'every_n_hours',

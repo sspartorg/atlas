@@ -19,8 +19,8 @@ import {
     type CliSessionUnstagedFile,
     type CliSessionDiffScopeName,
     CliSessionCreateSchema,
-    DEFAULT_CLI_MODEL,
-    DEFAULT_COPILOT_MODEL,
+    DEFAULT_MODEL_BY_CLI,
+    asAgentCli,
 } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
 import { getTrustedBrowserOrigins } from '../utils/lan-origins.js';
@@ -126,7 +126,7 @@ function defaultTitle(sessionId: string): string {
 }
 
 function rowToSession(row: Record<string, unknown>): ICliSession {
-    const cli = row['cli'] === 'copilot' ? 'copilot' : 'claude';
+    const cli = asAgentCli(row['cli']);
     const num = (v: unknown): number | null =>
         /* v8 ignore next */
         typeof v === 'number' && Number.isFinite(v)
@@ -320,7 +320,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         const branchName = body.branch_name && body.branch_name.length > 0 ? body.branch_name : defaultBranchName();
         /* v8 ignore next */
         const title = body.title && body.title.length > 0 ? body.title : defaultTitle(sessionId);
-        const defaultModel = cli === 'copilot' ? DEFAULT_COPILOT_MODEL : DEFAULT_CLI_MODEL;
+        const defaultModel = DEFAULT_MODEL_BY_CLI[cli];
         const model = body.model && body.model.length > 0 ? body.model : defaultModel;
         let initialPrompt: string | null = body.initial_prompt ?? null;
 

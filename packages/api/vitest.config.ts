@@ -86,6 +86,7 @@ export default defineConfig({
             'src/services/settings.test.ts',
             'src/services/cli-models.test.ts',
             'src/services/cli-model-naming.test.ts',
+            'src/services/ollama-env.test.ts',
             'src/services/parse-cost.test.ts',
             'src/services/claude-cost-parser.test.ts',
             'src/routes/cli-sessions.test.ts',

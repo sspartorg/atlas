@@ -18,3 +18,6 @@ Add a new ADR whenever a choice is expensive to undo: a database engine, a query
 | 0008 | Federated Horizon SDLC Redesign | 2026-06-03 | Accepted — 17-plan redesign baked in, 552-commit history squashed, remote re-pointed to `atlas` |
 | 0009 | Per-Package Coverage Tiers | 2026-05 | Accepted — shared 100, mcp 95, api 95, web 80 with honest floors per package |
 | 0010 | Prompt MD over Structured Config | 2026-05-27 | Accepted — agent behavior lives in `agents.prompt_md`; structured config reserved for non-LLM consumers |
+| 0011 | iPad Viewport and Three-Viewport Visual Matrix | 2026-07-01 | Accepted — visual snapshots run across three viewports including iPad |
+| 0012 | Prod-Mode Perf Gate at <200ms p95 TTI | 2026-07-01 | Accepted — `ATLAS_E2E_PROD=1` runs perf specs against the production bundle with a strict 200ms ceiling |
+| 0013 | Initial-Chunk Budget 264 KB gz | 2026-08-04 | Accepted — raised 260 → 264 KB after the third CLI (`ollama`) grew the app shell past 0.1 KB of headroom |

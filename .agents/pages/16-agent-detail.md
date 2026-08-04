@@ -37,7 +37,7 @@ Tab switching is plain `useTabParam(tabSlug)`. (The legacy `LinearProgress` mid-
 
 ### Overview (`OverviewTab`)
 - **Edit description** → inline edit; Save calls `PATCH /agents/:id` with `{ description }`; the local toast confirms server persistence.
-- **CLI** dropdown — `claude` / `copilot` (full-width, matches Model)
+- **CLI** dropdown — `claude` / `copilot` / `ollama` (full-width, matches Model)
 - **Model** dropdown — backed by `cli_models`
 - **Schedule hours** — number input (0.5h step); shows "Next pass" delta on the same row (wraps on mobile)
 - **Concurrent runs** +/− (capped at `view.concurrentMax`)

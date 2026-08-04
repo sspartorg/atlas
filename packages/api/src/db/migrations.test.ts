@@ -89,6 +89,49 @@ describe('migrations (Knex, via globalSetup)', () => {
         expect(rows.rows[0]?.check_clause).toContain("'cancelled'");
     });
 
+    it.each(['agents', 'cli_models', 'marketplace_agents', 'cli_sessions'])(
+        '%s.cli CHECK allows `ollama` (migration 029)',
+        async (table) => {
+            // All four constraints have to move together. Miss one and the
+            // failure is asymmetric and confusing: the Owner can pick Ollama in
+            // a picker, but the INSERT 500s on whichever table was left behind.
+            // Match the constraint name exactly. `LIKE '%cli%'` also catches
+            // `cli_sessions_status_check` and friends, because two of these
+            // table names start with "cli".
+            const rows = await sql<{ check_clause: string }>`
+            SELECT pg_get_constraintdef(oid) AS check_clause
+            FROM pg_constraint
+            WHERE conrelid = ${sql.raw(`'public.${table}'`)}::regclass
+              AND contype = 'c'
+              AND conname = ${`${table}_cli_check`}
+        `.execute(testDb);
+            expect(rows.rows).toHaveLength(1);
+            expect(rows.rows[0]?.check_clause).toContain("'ollama'");
+        },
+    );
+
+    it('cli_models accepts the ollama default model row (migration 029)', async () => {
+        // `qwen3.5` is DEFAULT_MODEL_BY_CLI.ollama, and migration 029 seeds it
+        // because the composite FK `agents (cli, model) -> cli_models
+        // (cli, model_name)` would otherwise reject every agent created with
+        // the Ollama default. Upsert rather than asserting the seeded row
+        // survives: sibling test files truncate cli_models, and file order in
+        // the shared single-fork run is not something this spec should depend
+        // on. What's under test is that the widened CHECK accepts the pair.
+        await testDb
+            .insertInto('cli_models')
+            .values({ id: 'seed-ollama-qwen3-5', cli: 'ollama', model_name: 'qwen3.5', note: null, sort_order: 1 })
+            .onConflict((oc) => oc.columns(['cli', 'model_name']).doNothing())
+            .execute();
+        const rows = await testDb
+            .selectFrom('cli_models')
+            .select(['model_name'])
+            .where('cli', '=', 'ollama')
+            .where('model_name', '=', 'qwen3.5')
+            .execute();
+        expect(rows).toHaveLength(1);
+    });
+
     it('idx_notifications_created_at exists (Phase 2 audited addition)', async () => {
         // The notifications service orders by `created_at DESC` without
         // an unfiltered index pre-rebase. Phase 2 of the rebase added

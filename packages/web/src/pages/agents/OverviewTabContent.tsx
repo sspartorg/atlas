@@ -10,7 +10,7 @@ import IconButton from '@mui/material/IconButton';
 import Button from '@mui/material/Button';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
-import type { IAgent } from '@atlas/shared';
+import { AGENT_CLIS, type IAgent } from '@atlas/shared';
 import { useUpdateAgent } from '../../hooks/useAgents.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE, TYPOGRAPHY, MOTION, MOTION_EASING } from '../../theme/tokens.js';
@@ -285,8 +285,11 @@ export function OverviewTabContent({ agent, view }: Props) {
                             },
                         }}
                     >
-                        <MenuItem value="claude">claude</MenuItem>
-                        <MenuItem value="copilot">copilot</MenuItem>
+                        {AGENT_CLIS.map((value) => (
+                            <MenuItem key={value} value={value}>
+                                {value}
+                            </MenuItem>
+                        ))}
                     </Select>
                 </FormRow>
                 <FormRow label="Model">

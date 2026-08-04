@@ -1,3 +1,5 @@
+import type { AgentCli } from '@atlas/shared';
+
 export interface SidenavCounts {
     projects: number;
     epics: number;
@@ -166,7 +168,7 @@ interface AnalyticsMonthlyRow {
 // claude vs copilot split on the dedicated "Manual terminal sessions"
 // card and powers the per-CLI bar inside it.
 interface AnalyticsTerminalByCliRow {
-    cli: 'claude' | 'copilot';
+    cli: AgentCli;
     total_cost_usd: number;
     session_count: number;
     input_tokens: number;
@@ -204,7 +206,7 @@ interface AnalyticsTopTerminalSession {
     project_id: string | null;
     project_name: string;
     title: string;
-    cli: 'claude' | 'copilot';
+    cli: AgentCli;
     total_cost_usd: number;
     input_tokens: number;
     output_tokens: number;

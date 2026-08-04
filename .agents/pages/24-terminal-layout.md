@@ -21,7 +21,7 @@ A TradingView-style multi-pane workspace for running 1–4 live Claude / Copilot
 
 **Pane chrome (`PaneChrome`, 32px tall)**
 - Colored status dot (success/warning/slate/error).
-- CLI icon (TerminalRounded for Claude, SmartToyRounded for Copilot).
+- CLI icon from `utils/cliPresentation.ts` (TerminalRounded for Claude, SmartToyRounded for Copilot, MemoryRounded for Ollama).
 - Truncated session title.
 - Kebab menu (`MoreVertRounded`) — reuses `TerminalSessionControls compact` for Pause/Resume/Stop, plus:
   - "Open in single view" → `/terminal/:id`

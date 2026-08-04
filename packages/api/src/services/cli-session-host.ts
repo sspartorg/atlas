@@ -48,7 +48,9 @@ import { broadcastSSE } from '../routes/events.js';
 import { notificationsService } from './notifications.js';
 import { sendExternalForNotification } from './external-notifications.js';
 import { gitInvokeEnv } from './git-env.js';
+import { ollamaEnv } from './ollama-env.js';
 import { cleanupGitConfig } from './git-credentials.js';
+import { CLI_DIALECT, type AgentCli } from '@atlas/shared';
 import { createScreenState } from './terminal-screen-state.js';
 import type { TerminalScreenState } from './terminal-screen-state.js';
 
@@ -95,7 +97,9 @@ export interface WebSocketLike {
     on(event: 'error', listener: (err: Error) => void): void;
 }
 
-type CliKind = 'claude' | 'copilot';
+// `ollama` rides the claude dialect — same binary, same argv, different base
+// URL via `ollamaEnv`. Only `copilot` diverges (no --resume, --allow-all-tools).
+type CliKind = AgentCli;
 
 interface SessionEntry {
     sessionId: string;
@@ -196,7 +200,12 @@ function resolveCliBinary(cli: CliKind): string {
     // when invoked by node-pty.spawn; we don't have to pin the .cmd
     // suffix here because node-pty's ConPTY layer handles the cmd
     // resolution via cmd.exe.
-    if (cli === 'copilot') return process.env['ATLAS_COPILOT_BINARY'] ?? 'copilot';
+    //
+    // `ollama` deliberately resolves to the SAME binary (and the same
+    // ATLAS_CLAUDE_BINARY override) as `claude` — it *is* Claude Code, just
+    // pointed at a different base URL by `ollamaEnv`. That also means the e2e
+    // fake-claude fixture covers Ollama sessions with no extra plumbing.
+    if (CLI_DIALECT[cli] === 'copilot') return process.env['ATLAS_COPILOT_BINARY'] ?? 'copilot';
     return process.env['ATLAS_CLAUDE_BINARY'] ?? 'claude';
 }
 
@@ -263,7 +272,7 @@ function buildCliArgs(params: {
         args.push('--session-id', params.sessionId);
     }
     args.push('--model', params.model);
-    if (params.cli === 'copilot') {
+    if (CLI_DIALECT[params.cli] === 'copilot') {
         // Copilot uses one big "allow everything" switch instead of named
         // allow/disallow lists. The user is at the terminal so any
         // guardrails belong in repo config, not the spawn flags. Matches
@@ -440,6 +449,11 @@ function spawnPty(params: {
             // it down first.
             env: {
                 ...gitInvokeEnv(params.gitConfigPath, params.ghToken),
+                // Must follow the gitInvokeEnv spread (which spreads
+                // process.env) so an ANTHROPIC_API_KEY in the host env can't
+                // divert a free local session to Anthropic. No-op unless
+                // params.cli === 'ollama'.
+                ...ollamaEnv(params.cli, params.model),
                 // node-pty on Windows silently discards the `name:` option
                 // (it is never passed to WindowsPtyAgent), so without these
                 // the CLI sees no terminal type at all and may downgrade its

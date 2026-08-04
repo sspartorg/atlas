@@ -36,7 +36,13 @@ const DIST_ASSETS = join(__dirname, '..', 'dist', 'assets');
 // 2026-07-01 — MUI split into 4 buckets (mui-core/form/feedback/icons).
 // Total budget tightened 900 → 830 KB (measured 815.6 KB, 14.4 KB slack).
 // Per-chunk budgets added with ~5 KB gz headroom each.
-const BUDGET_INITIAL_GZ = 260 * 1024;
+// 2026-08-04 — initial chunk raised 260 → 264 KB (measured 260.1 KB gz).
+// The third `cli` option (ollama) added ~200 bytes raw to `index`: one more
+// entry per `Record<AgentCli, …>`, one more item in four pickers, and the
+// shared CLI registry. 260 KB had been set with 0.1 KB of headroom, so any
+// app-shell change tripped it. See docs/adr/0013-initial-chunk-budget-264kb-
+// for-third-cli.md for the trimming that was tried first and kept.
+const BUDGET_INITIAL_GZ = 264 * 1024;
 const BUDGET_TOTAL_GZ = 830 * 1024;
 const BUDGET_RECHARTS_GZ = 130 * 1024;
 // Per-MUI-bucket budgets (measured 2026-07-01, +5 KB gz headroom).

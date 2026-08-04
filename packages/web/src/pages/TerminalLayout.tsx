@@ -16,8 +16,7 @@ import AddRounded from '@mui/icons-material/AddRounded';
 import LinkRounded from '@mui/icons-material/LinkRounded';
 import VisibilityOffRounded from '@mui/icons-material/VisibilityOffRounded';
 import VisibilityRounded from '@mui/icons-material/VisibilityRounded';
-import TerminalRounded from '@mui/icons-material/TerminalRounded';
-import SmartToyRounded from '@mui/icons-material/SmartToyRounded';
+import { cliIcon } from '../utils/cliIcons.js';
 import type { ICliSession } from '@atlas/shared';
 import { useCliSessions } from '../hooks/useCliSessions.js';
 import { useToast } from '../hooks/useToast.js';
@@ -608,8 +607,7 @@ function EmptyPane({ sessions, attachedSet, onAttach, onNew }: EmptyPaneProps) {
                     ) : (
                         attachable.map((s) => {
                             const taken = attachedSet.has(s.id);
-                            const CliIcon =
-                                s.cli === 'copilot' ? SmartToyRounded : TerminalRounded;
+                            const CliIcon = cliIcon(s.cli);
                             return (
                                 <MenuItem
                                     key={s.id}
