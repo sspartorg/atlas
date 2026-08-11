@@ -37,30 +37,26 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 //     user clicks Resume to spawn a fresh PTY.
 //
 // Renderer:
-//   - `@xterm/addon-webgl`, loaded lazily below. It IS load-bearing, despite
-//     what its 2026-08-04 removal assumed — see docs/adr/0014. On Windows
-//     Chrome/Edge the core renderer leaves the leading glyphs of a line
-//     painted at their old position while the text scrolls away ("trails"),
-//     compounding the further you scroll, and repaints a deep scrollback
-//     visibly slowly. macOS renders the same code cleanly, so neither symptom
-//     appears in review on a Mac. That blind spot has now cost two removals:
-//     f9a4ed7 took out the software mitigations as redundant to its byte-level
-//     fix (they were not — that bug was malformed bytes, this one is correct
-//     bytes painted stale), and aa9c432 then took out the GPU renderer that
-//     had been masking the result.
-//   - Cost is 33.1 KB gz in its own chunk, not the 65.6 KB recorded in 2026-08-04.
-//     The dynamic import keeps it out of the initial route chunk entirely, so
-//     only someone who opens a Terminal pays for it.
-//   - Before removing it again: reproduce a long scroll on Windows Chrome.
+//   - xterm v6 core, no addon. `@xterm/addon-webgl` was dropped 2026-08-04
+//     for bundle budget, briefly restored on 2026-08-11 on the theory that it
+//     was masking the reported glyph "trails" on Windows, and removed again
+//     when it demonstrably did not fix them. Same for the compositor hints
+//     (willChange/translateZ), scrollOnUserInput:false, and a scroll-triggered
+//     refresh(): all restored on that theory, none of them changed the
+//     symptom.
+//   - The trails are not a rendering defect. A reproduction harness showed
+//     the corruption depends only on the terminal being NARROWER than the
+//     width the PTY was told, and reproduces on macOS at that geometry with
+//     any renderer. See the geometry-drift watchdog below for the mechanism
+//     and the actual fix.
+//   - So: do not reach for a renderer change if trails resurface. Check
+//     whether term.cols matches what the PTY last received.
 
 const RECONNECT_DELAY_MS = 1_500;
 // Trailing debounce for the resize envelope. Each server-side pty.resize()
 // makes ConPTY reflow the entire screen, so a divider drag must collapse
 // into one resize, not one per animation frame.
 const RESIZE_SEND_DEBOUNCE_MS = 100;
-// Trailing repaint after a scroll burst stops. Long enough to sit past the
-// browser's final paint, short enough that residue is never visible.
-const SCROLL_SETTLE_MS = 100;
 // How often the drift watchdog compares the terminal's live geometry against
 // the last size actually sent to the PTY. Only a mismatch sends anything, so
 // the steady-state cost is one integer compare per second.
@@ -169,11 +165,6 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                 // spacing to fit more TUI rows in the pane.
                 lineHeight: 1.15,
                 scrollback: 5_000,
-                // Keeps the scrollbar from auto-appearing on keystrokes; its
-                // appearance changes the container width mid-scroll, which
-                // reflows xterm and leaves smeared glyphs on Windows. Paired
-                // with the pinned scrollbar width in the sx block below.
-                scrollOnUserInput: false,
                 theme: {
                     background: '#0a0a0a',
                     foreground: '#d4d4d4',
@@ -200,44 +191,6 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
             const fit = new FitAddon();
             term.loadAddon(fit);
             term.open(hostRef.current);
-
-            // GPU renderer, loaded lazily so it never enters the initial
-            // chunk — only someone who opens a Terminal pays for it. Must
-            // come after open(): the addon needs the canvas in the DOM.
-            //
-            // Not optional on Windows. Without it, Chrome/Edge leave the
-            // leading glyphs of a line painted at their old position while
-            // the text scrolls away ("trails"), and the residue compounds
-            // the further you scroll; repaint of a deep scrollback is also
-            // visibly slow. macOS shows neither, which is how 2026-08-04's
-            // bundle trim removed this and looked clean in review.
-            void import('@xterm/addon-webgl')
-                .then(({ WebglAddon }) => {
-                    if (cancelled || termRef.current !== term) return;
-                    const webgl = new WebglAddon();
-                    // Context loss (GPU reset, tab backgrounded too long)
-                    // must drop the addon so xterm falls back to its core
-                    // renderer instead of painting nothing.
-                    webgl.onContextLoss(() => {
-                        webgl.dispose();
-                    });
-                    term.loadAddon(webgl);
-                    // Log on success too. A silent success and a silent
-                    // failure look identical from the outside, which is
-                    // exactly the ambiguity that made the Windows trails
-                    // bug hard to attribute to a renderer at all.
-                    console.info('[atlas:terminal] WebGL renderer active');
-                })
-                .catch((err: unknown) => {
-                    // No WebGL (old GPU, blocklisted driver, headless):
-                    // xterm's core renderer stays and the terminal works.
-                    // Not fatal, but never silent — falling back changes
-                    // scroll rendering behaviour on Windows.
-                    console.warn(
-                        '[atlas:terminal] WebGL renderer unavailable, using core renderer:',
-                        err,
-                    );
-                });
 
             try {
                 fit.fit();
@@ -631,50 +584,6 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
         return () => clearInterval(timer);
     }, [termReady]);
 
-    // Repaint the viewport after each scroll — the third piece of the
-    // 2026-07-13 Windows mitigation set, restored alongside the compositor
-    // hints and the pinned scrollbar width.
-    //
-    // This was removed in f9a4ed7 as redundant, and I argued against
-    // restoring it on the grounds that a full repaint per scroll frame
-    // would worsen the slow scrolling reported on Windows. That reasoning
-    // assumed the core renderer. With the WebGL addon loaded, refresh() is
-    // a GPU blit rather than a CPU redraw, so the cost objection does not
-    // apply — and if WebGL ever falls back, correct-but-slower beats fast
-    // and visibly broken.
-    //
-    // rAF coalesces a scroll burst into one repaint per frame; the trailing
-    // timer catches the resting position, because the last onScroll can
-    // fire before the browser's final paint.
-    useEffect(() => {
-        const term = termRef.current;
-        if (!term || !termReady) return;
-        let raf: number | null = null;
-        let settle: ReturnType<typeof setTimeout> | null = null;
-        const repaint = () => {
-            try {
-                term.refresh(0, term.rows - 1);
-            } catch {
-                /* disposed mid-frame; nothing to repaint */
-            }
-        };
-        const onScroll = () => {
-            if (raf !== null) cancelAnimationFrame(raf);
-            if (settle) clearTimeout(settle);
-            raf = requestAnimationFrame(() => {
-                raf = null;
-                repaint();
-            });
-            settle = setTimeout(repaint, SCROLL_SETTLE_MS);
-        };
-        const disposable = term.onScroll(onScroll);
-        return () => {
-            if (raf !== null) cancelAnimationFrame(raf);
-            if (settle) clearTimeout(settle);
-            disposable.dispose();
-        };
-    }, [termReady]);
-
     return (
         <>
             <Box
@@ -686,26 +595,6 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                     overflow: 'hidden',
                     background: '#0a0a0a',
                     border: `1px solid ${ATLAS_PALETTE.slate12}`,
-                    // Windows Chrome/Edge leave glyph trails when scrolling
-                    // (see the Renderer note at the top of this file). Promote
-                    // the render surface to its own compositor layer so a
-                    // scroll invalidates the whole layer instead of leaving
-                    // the previous paint of a partially-damaged region behind.
-                    // Restored with the rest of the 2026-07-13 mitigation set
-                    // after removing it did not survive contact with Windows.
-                    '& .xterm .xterm-screen canvas, & .xterm .xterm-screen': {
-                        willChange: 'transform',
-                        transform: 'translateZ(0)',
-                        backfaceVisibility: 'hidden',
-                    },
-                    // A scrollbar that appears mid-scroll changes the container
-                    // width, which reflows xterm and smears the row it was
-                    // drawing. Pin the width so appearance never resizes it.
-                    '& .xterm .xterm-scrollable-element > .scrollbar': {
-                        position: 'absolute',
-                        right: 0,
-                        width: '14px',
-                    },
                 }}
             >
             <Box

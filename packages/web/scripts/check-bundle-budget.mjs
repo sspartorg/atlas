@@ -42,13 +42,8 @@ const DIST_ASSETS = join(__dirname, '..', 'dist', 'assets');
 // shared CLI registry. 260 KB had been set with 0.1 KB of headroom, so any
 // app-shell change tripped it. See docs/adr/0013-initial-chunk-budget-264kb-
 // for-third-cli.md for the trimming that was tried first and kept.
-// 2026-08-11 — total raised 830 → 845 KB (measured 835.6 KB gz) to restore
-// `@xterm/addon-webgl`, whose 2026-08-04 removal reopened Windows Chrome/Edge
-// scroll trails and slow scrollback repaint. The addon is a dynamic import, so
-// it forms its own chunk and the initial budget below is untouched. See
-// docs/adr/0014-total-bundle-845kb-for-webgl-renderer.md.
 const BUDGET_INITIAL_GZ = 264 * 1024;
-const BUDGET_TOTAL_GZ = 845 * 1024;
+const BUDGET_TOTAL_GZ = 830 * 1024;
 const BUDGET_RECHARTS_GZ = 130 * 1024;
 // Per-MUI-bucket budgets (measured 2026-07-01, +5 KB gz headroom).
 const BUDGET_MUI_CORE_GZ = 90 * 1024;   // measured 85.3 KB gz

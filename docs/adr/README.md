@@ -21,4 +21,3 @@ Add a new ADR whenever a choice is expensive to undo: a database engine, a query
 | 0011 | iPad Viewport and Three-Viewport Visual Matrix | 2026-07-01 | Accepted — visual snapshots run across three viewports including iPad |
 | 0012 | Prod-Mode Perf Gate at <200ms p95 TTI | 2026-07-01 | Accepted — `ATLAS_E2E_PROD=1` runs perf specs against the production bundle with a strict 200ms ceiling |
 | 0013 | Initial-Chunk Budget 264 KB gz | 2026-08-04 | Accepted — raised 260 → 264 KB after the third CLI (`ollama`) grew the app shell past 0.1 KB of headroom |
-| 0014 | Total-App Budget 845 KB gz for the WebGL Terminal Renderer | 2026-08-11 | Accepted — raised 830 → 845 KB to restore `@xterm/addon-webgl` (lazy, 33 KB gz) after its removal reopened Windows scroll-trail and slow-repaint defects |
