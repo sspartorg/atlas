@@ -43,6 +43,8 @@
 //     the same xterm pane.
 
 import { spawn as ptySpawn, type IPty } from 'node-pty';
+import { appendFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { db } from '../db/kysely-client.js';
 import { broadcastSSE } from '../routes/events.js';
 import { notificationsService } from './notifications.js';
@@ -402,6 +404,33 @@ function stopIdleCheck(entry: SessionEntry): void {
     }
 }
 
+// Opt-in raw PTY capture. Set ATLAS_PTY_DUMP to a directory and every byte
+// the PTY emits is appended verbatim to `pty-<sessionId>.bin` there.
+//
+// This exists because the terminal's byte stream is platform-specific —
+// ConPTY on Windows produces materially different output from a Unix PTY for
+// the same CLI — and rendering defects that only reproduce on one platform
+// cannot be diagnosed from the other. A captured stream replays into a
+// headless xterm anywhere, which turns "works on my machine" into an actual
+// reproduction. Off unless the env var is set; no cost on the hot path
+// beyond one null check per chunk.
+const PTY_DUMP_DIR = process.env['ATLAS_PTY_DUMP'] ?? null;
+let ptyDumpDirReady = false;
+
+function dumpPtyBytes(sessionId: string, bytes: Buffer): void {
+    if (!PTY_DUMP_DIR) return;
+    try {
+        if (!ptyDumpDirReady) {
+            mkdirSync(PTY_DUMP_DIR, { recursive: true });
+            ptyDumpDirReady = true;
+        }
+        appendFileSync(join(PTY_DUMP_DIR, `pty-${sessionId}.bin`), bytes);
+    } catch {
+        // Diagnostics must never take a session down. A bad path, a full
+        // disk, or a permissions error silently disables the capture.
+    }
+}
+
 function broadcastPtyBytes(entry: SessionEntry, bytes: Buffer): void {
     // Snapshot the subscribers before iterating — ws.send() can synchronously
     // trigger ws.on('close') which mutates entry.subscribers, and iterating
@@ -482,6 +511,9 @@ function attachPtyToEntry(entry: SessionEntry, pty: IPty): void {
     entry.screen = screen;
     pty.onData((data) => {
         const buf = Buffer.from(data, 'utf8');
+        // Capture before anything interprets the bytes, so a dump is exactly
+        // what the PTY produced — not what we made of it.
+        dumpPtyBytes(entry.sessionId, buf);
         // Broadcast from the mirror's write callback, not synchronously:
         // feed callbacks fire FIFO with the attach flush marker, which is
         // what guarantees an attaching browser sees each byte exactly once
