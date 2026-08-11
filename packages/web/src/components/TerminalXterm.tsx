@@ -19,9 +19,13 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 //              backlog, so a replay can never begin mid-sequence either.
 //
 // Wire model:
-//   - Server PTY bytes -> ws.onmessage -> term.write(raw bytes)
-//   - First frame after attach is a serialized screen snapshot from the
-//     server's headless mirror — already well-formed VT, no special-casing.
+//   - Server PTY bytes -> ws.onmessage -> term.write(raw bytes). Terminal
+//     data is ALWAYS binary; text frames are control envelopes. The first
+//     frame of every attach is the `ptyInfo` envelope, which flips xterm's
+//     ConPTY compatibility mode (`windowsPty`) on when the PTY host is
+//     Windows — see writeWsFrame for why that mode is load-bearing.
+//   - Next frame is a serialized screen snapshot from the server's
+//     headless mirror — already well-formed VT, no special-casing.
 //   - User keystrokes  -> term.onData -> ws.send(string)
 //   - Container resize -> FitAddon.fit() immediately (local viewport must
 //     track the drag); the {cmd:'resize'} envelope send is trailing-
@@ -70,17 +74,33 @@ interface Props {
 }
 
 /**
- * The entire client receive path: hand a WS frame to xterm untouched.
- * Binary frames go in as raw bytes — xterm's own stateful UTF-8 decoder
- * reassembles codepoints split across frames, and its parser resumes
- * escape sequences split across writes. Returns the byte count for the
- * bytes-received counter; unrecognised frame types are ignored (the
- * server sends only binary frames, `binaryType = 'arraybuffer'`).
+ * The entire client receive path. Binary frames are PTY bytes handed to
+ * xterm untouched — its own stateful UTF-8 decoder reassembles codepoints
+ * split across frames, and its parser resumes escape sequences split
+ * across writes. Text frames are control envelopes from the server, never
+ * terminal data; the only one today is `ptyInfo`, which carries the PTY
+ * host's Windows backend so xterm's ConPTY compatibility mode
+ * (`windowsPty`) can be switched on. ConPTY repaints the screen from its
+ * own buffer after a resize and assumes the terminal neither reflowed nor
+ * pulled rows back out of scrollback; without `windowsPty` every repaint
+ * after the attach-time resize lands row-shifted and strands stale cells —
+ * the Windows "zombie characters". Returns the PTY byte count for the
+ * bytes-received counter (0 for control frames).
  */
-export function writeWsFrame(term: Pick<XTerm, 'write'>, data: unknown): number {
+export function writeWsFrame(term: Pick<XTerm, 'write' | 'options'>, data: unknown): number {
     if (typeof data === 'string') {
-        term.write(data);
-        return data.length;
+        try {
+            const ctrl = JSON.parse(data) as {
+                cmd?: string;
+                windowsPty?: { backend?: 'conpty' | 'winpty'; buildNumber?: number };
+            };
+            if (ctrl.cmd === 'ptyInfo' && ctrl.windowsPty?.backend) {
+                term.options.windowsPty = ctrl.windowsPty;
+            }
+        } catch {
+            // Unrecognised text frame — drop. PTY data is always binary.
+        }
+        return 0;
     }
     if (data instanceof ArrayBuffer) {
         const bytes = new Uint8Array(data);

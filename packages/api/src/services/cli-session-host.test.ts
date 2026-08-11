@@ -113,6 +113,7 @@ import {
     pauseSession,
     killSessionPty,
     attachWebSocket,
+    windowsPtyInfoFor,
     isSessionLive,
     listLiveSessionIds,
     failOrphanedCliSessions,
@@ -145,6 +146,14 @@ function makeFakeWs() {
             (listeners[event] ?? []).forEach((cb) => cb(...args));
         },
     };
+}
+
+/** Only the BINARY (Buffer) frames a fake WS received — i.e. terminal data.
+ *  Skips the ptyInfo hello, which rides a text frame on every attach. */
+function sentBuffers(ws: ReturnType<typeof makeFakeWs>): Buffer[] {
+    return ws.send.mock.calls
+        .map((c) => c[0] as unknown)
+        .filter((f): f is Buffer => Buffer.isBuffer(f));
 }
 
 // ── Setup / teardown ──────────────────────────────────────────────────────────
@@ -443,9 +452,52 @@ describe('killSessionPty', () => {
     });
 });
 
+// ── windowsPtyInfoFor ─────────────────────────────────────────────────────────
+
+describe('windowsPtyInfoFor', () => {
+    it('returns undefined on non-Windows platforms', () => {
+        expect(windowsPtyInfoFor('darwin', '24.5.0')).toBeUndefined();
+        expect(windowsPtyInfoFor('linux', '6.8.0-45-generic')).toBeUndefined();
+    });
+
+    it('mirrors node-pty: conpty on build >= 18309, winpty below', () => {
+        expect(windowsPtyInfoFor('win32', '10.0.22631')).toEqual({ backend: 'conpty', buildNumber: 22631 });
+        expect(windowsPtyInfoFor('win32', '10.0.19045')).toEqual({ backend: 'conpty', buildNumber: 19045 });
+        expect(windowsPtyInfoFor('win32', '10.0.17763')).toEqual({ backend: 'winpty', buildNumber: 17763 });
+    });
+
+    it('falls back to winpty when the release string does not parse (node-pty treats it as build 0)', () => {
+        expect(windowsPtyInfoFor('win32', 'weird')).toEqual({ backend: 'winpty' });
+    });
+});
+
 // ── attachWebSocket ───────────────────────────────────────────────────────────
 
 describe('attachWebSocket', () => {
+    it('sends a ptyInfo control envelope as the first frame, as a text frame', async () => {
+        const id = freshId();
+        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
+
+        const pty = ptyInstances[ptyInstances.length - 1]!;
+        pty.onDataCb?.('hello world');
+
+        const ws = makeFakeWs();
+        attachWebSocket(id, ws);
+
+        // The hello must be a STRING (WS text frame) so the client can tell
+        // control apart from PTY bytes, and it must precede the snapshot so
+        // windowsPty is applied before any content is written.
+        await vi.waitFor(() =>
+            expect((ws.send as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2));
+        const calls = (ws.send as ReturnType<typeof vi.fn>).mock.calls;
+        expect(typeof calls[0]![0]).toBe('string');
+        const hello = JSON.parse(calls[0]![0] as string) as { cmd?: string };
+        expect(hello.cmd).toBe('ptyInfo');
+        expect(Buffer.isBuffer(calls[1]![0])).toBe(true);
+
+        pauseSession(id);
+    });
+
     it('returns false when the session is not in the map', () => {
         const ws = makeFakeWs();
         expect(attachWebSocket('not-registered', ws)).toBe(false);
@@ -471,9 +523,8 @@ describe('attachWebSocket', () => {
         attachWebSocket(id, ws);
 
         // Snapshot send rides the mirror's write queue, so it lands async.
-        await vi.waitFor(() => expect(ws.send).toHaveBeenCalled());
-        const frame = (ws.send as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Buffer;
-        expect(frame.toString('utf8')).toContain('hello world');
+        await vi.waitFor(() => expect(sentBuffers(ws).length).toBe(1));
+        expect(sentBuffers(ws)[0]!.toString('utf8')).toContain('hello world');
 
         pauseSession(id);
     });
@@ -485,9 +536,10 @@ describe('attachWebSocket', () => {
         const ws = makeFakeWs();
         attachWebSocket(id, ws);
 
-        // Let the mirror's flush marker fire before asserting.
+        // Let the mirror's flush marker fire before asserting. The ptyInfo
+        // hello (a text frame) is still sent; no BINARY frame may follow.
         await new Promise((resolve) => setTimeout(resolve, 50));
-        expect(ws.send).not.toHaveBeenCalled();
+        expect(sentBuffers(ws).length).toBe(0);
 
         pauseSession(id);
     });
@@ -505,8 +557,8 @@ describe('attachWebSocket', () => {
         const ws = makeFakeWs();
         attachWebSocket(id, ws);
 
-        await vi.waitFor(() => expect(ws.send).toHaveBeenCalled());
-        const text = ((ws.send as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Buffer).toString('utf8');
+        await vi.waitFor(() => expect(sentBuffers(ws).length).toBe(1));
+        const text = sentBuffers(ws)[0]!.toString('utf8');
         expect(text).toContain('beforehello');
         expect(text).not.toContain('\x1b[6n');
         expect(text).not.toContain('38;5;19');
@@ -523,15 +575,13 @@ describe('attachWebSocket', () => {
 
         const ws = makeFakeWs();
         attachWebSocket(id, ws);
-        await vi.waitFor(() => expect(ws.send).toHaveBeenCalled());
+        await vi.waitFor(() => expect(sentBuffers(ws).length).toBe(1));
 
         pty.onDataCb?.('beta');
-        await vi.waitFor(() =>
-            expect((ws.send as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2));
+        await vi.waitFor(() => expect(sentBuffers(ws).length).toBe(2));
 
-        const calls = (ws.send as ReturnType<typeof vi.fn>).mock.calls;
-        const snapshot = (calls[0]![0] as Buffer).toString('utf8');
-        const live = (calls[1]![0] as Buffer).toString('utf8');
+        const snapshot = sentBuffers(ws)[0]!.toString('utf8');
+        const live = sentBuffers(ws)[1]!.toString('utf8');
         expect(snapshot).toContain('alpha');
         expect(snapshot).not.toContain('beta');
         expect(live).toBe('beta');
@@ -550,7 +600,7 @@ describe('attachWebSocket', () => {
         const ws = makeFakeWs();
         expect(attachWebSocket(id, ws)).toBe(true);
         await new Promise((resolve) => setTimeout(resolve, 50));
-        expect(ws.send).not.toHaveBeenCalled();
+        expect(sentBuffers(ws).length).toBe(0);
 
         pauseSession(id);
     });
@@ -783,8 +833,8 @@ describe('PTY onData screen mirror', () => {
 
         const ws = makeFakeWs();
         attachWebSocket(id, ws);
-        await vi.waitFor(() => expect(ws.send).toHaveBeenCalled());
-        const text = ((ws.send as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Buffer).toString('utf8');
+        await vi.waitFor(() => expect(sentBuffers(ws).length).toBe(1));
+        const text = sentBuffers(ws)[0]!.toString('utf8');
         expect(text).toContain('hello world');
 
         pauseSession(id);
@@ -802,8 +852,8 @@ describe('PTY onData screen mirror', () => {
 
         const ws = makeFakeWs();
         attachWebSocket(id, ws);
-        await vi.waitFor(() => expect(ws.send).toHaveBeenCalled());
-        const text = ((ws.send as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Buffer).toString('utf8');
+        await vi.waitFor(() => expect(sentBuffers(ws).length).toBe(1));
+        const text = sentBuffers(ws)[0]!.toString('utf8');
         expect(text).toContain('START-MARKER');
         expect(text).toContain('END-MARKER');
 

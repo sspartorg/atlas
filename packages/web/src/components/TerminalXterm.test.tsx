@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { screen, act, fireEvent, waitFor } from '@testing-library/react';
+import type { ITerminalOptions } from '@xterm/xterm';
 import { TerminalXterm, writeWsFrame } from './TerminalXterm.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 
@@ -52,6 +53,7 @@ vi.mock('@xterm/xterm', () => ({
             cols: 80,
             rows: 24,
             write: vi.fn(),
+            options: {},
         };
     }),
 }));
@@ -89,21 +91,49 @@ class MockWs {
 }
 
 // ── writeWsFrame — the entire client receive path, as a pure function ────────
-// The client is a dumb pipe: raw bytes go straight into xterm's stateful
-// parser, which resumes split escape sequences AND split UTF-8 codepoints
-// across write() calls. Any client-side decoding or buffering re-introduces
-// the zombie-character bug these tests pin down.
+// The client is a dumb pipe for BINARY frames: raw bytes go straight into
+// xterm's stateful parser, which resumes split escape sequences AND split
+// UTF-8 codepoints across write() calls. Any client-side decoding or
+// buffering re-introduces the zombie-character bug these tests pin down.
+// TEXT frames are control envelopes from the server (ptyInfo), never PTY
+// data — they configure the terminal and are never written into it.
+
+function makeFrameTerm() {
+    return {
+        write: vi.fn(),
+        options: {} as ITerminalOptions,
+    };
+}
 
 describe('writeWsFrame', () => {
-    it('writes a string frame verbatim and returns its length', () => {
-        const term = { write: vi.fn() };
-        expect(writeWsFrame(term, 'hello')).toBe(5);
-        expect(term.write).toHaveBeenCalledTimes(1);
-        expect(term.write).toHaveBeenCalledWith('hello');
+    it('applies a ptyInfo control frame: sets windowsPty, writes nothing, returns 0', () => {
+        const term = makeFrameTerm();
+        const hello = JSON.stringify({
+            cmd: 'ptyInfo',
+            windowsPty: { backend: 'conpty', buildNumber: 22631 },
+        });
+        expect(writeWsFrame(term, hello)).toBe(0);
+        expect(term.options.windowsPty).toEqual({ backend: 'conpty', buildNumber: 22631 });
+        expect(term.write).not.toHaveBeenCalled();
+    });
+
+    it('leaves windowsPty unset for a ptyInfo frame from a non-Windows host', () => {
+        const term = makeFrameTerm();
+        expect(writeWsFrame(term, JSON.stringify({ cmd: 'ptyInfo' }))).toBe(0);
+        expect(term.options.windowsPty).toBeUndefined();
+        expect(term.write).not.toHaveBeenCalled();
+    });
+
+    it('drops text frames that are not ptyInfo envelopes without writing them', () => {
+        const term = makeFrameTerm();
+        expect(writeWsFrame(term, 'not json')).toBe(0);
+        expect(writeWsFrame(term, JSON.stringify({ cmd: 'other' }))).toBe(0);
+        expect(term.write).not.toHaveBeenCalled();
+        expect(term.options.windowsPty).toBeUndefined();
     });
 
     it('writes an ArrayBuffer frame as raw bytes with NO decoding', () => {
-        const term = { write: vi.fn() };
+        const term = makeFrameTerm();
         // 0xE2 is the first byte of a split '€' — a TextDecoder would turn it
         // into U+FFFD; the raw byte must survive for xterm to reassemble.
         const frame = new Uint8Array([0xe2]).buffer;
@@ -114,16 +144,20 @@ describe('writeWsFrame', () => {
     });
 
     it('writes frames ending mid-escape-sequence immediately — no buffering', () => {
-        const term = { write: vi.fn() };
-        writeWsFrame(term, 'foo\x1b[');
-        writeWsFrame(term, '38;5;196mRED');
+        const term = makeFrameTerm();
+        // Uint8Array.from, not TextEncoder: jsdom's TextEncoder yields a
+        // different-realm buffer that fails `instanceof ArrayBuffer`.
+        writeWsFrame(term, Uint8Array.from('foo\x1b[', (c) => c.charCodeAt(0)).buffer);
+        writeWsFrame(term, Uint8Array.from('38;5;196mRED', (c) => c.charCodeAt(0)).buffer);
         expect(term.write).toHaveBeenCalledTimes(2);
-        expect(term.write).toHaveBeenNthCalledWith(1, 'foo\x1b[');
-        expect(term.write).toHaveBeenNthCalledWith(2, '38;5;196mRED');
+        const first = term.write.mock.calls[0]![0] as Uint8Array;
+        const second = term.write.mock.calls[1]![0] as Uint8Array;
+        expect(new TextDecoder().decode(first)).toBe('foo\x1b[');
+        expect(new TextDecoder().decode(second)).toBe('38;5;196mRED');
     });
 
     it('ignores frames of unrecognised types and returns 0', () => {
-        const term = { write: vi.fn() };
+        const term = makeFrameTerm();
         expect(writeWsFrame(term, { unexpected: true })).toBe(0);
         expect(writeWsFrame(term, null)).toBe(0);
         expect(term.write).not.toHaveBeenCalled();
@@ -203,20 +237,32 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         expect(screen.queryByText(/connecting to pty/i)).not.toBeInTheDocument();
     });
 
-    it('ws.onmessage with string data writes it verbatim to the terminal', async () => {
+    it('ws.onmessage with a ptyInfo text frame sets windowsPty and writes nothing', async () => {
         renderWithProviders(<TerminalXterm sessionId="sess-ws-3" sessionLive={true} />);
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
         act(() => {
             lastWs?.onopen?.(new Event('open'));
         });
+        const hello = JSON.stringify({
+            cmd: 'ptyInfo',
+            windowsPty: { backend: 'conpty', buildNumber: 22631 },
+        });
         act(() => {
-            lastWs?.onmessage?.(new MessageEvent('message', { data: 'hello output' }));
+            lastWs?.onmessage?.(new MessageEvent('message', { data: hello }));
         });
         const term = (await import('@xterm/xterm')).Terminal as unknown as {
-            mock: { results: Array<{ value: { write: ReturnType<typeof vi.fn> } }> };
+            mock: {
+                results: Array<{
+                    value: {
+                        write: ReturnType<typeof vi.fn>;
+                        options: { windowsPty?: unknown };
+                    };
+                }>;
+            };
         };
         const instance = term.mock.results[term.mock.results.length - 1]!.value;
-        expect(instance.write).toHaveBeenCalledWith('hello output');
+        expect(instance.options.windowsPty).toEqual({ backend: 'conpty', buildNumber: 22631 });
+        expect(instance.write).not.toHaveBeenCalledWith(hello);
     });
 
     it('ws.onmessage with ArrayBuffer data writes byte-identical Uint8Array, undecoded', async () => {
@@ -248,13 +294,21 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
             lastWs?.onopen?.(new Event('open'));
         });
         act(() => {
-            lastWs?.onmessage?.(new MessageEvent('message', { data: 'foo\x1b[' }));
+            lastWs?.onmessage?.(
+                new MessageEvent('message', {
+                    data: Uint8Array.from('foo\x1b[', (c) => c.charCodeAt(0)).buffer,
+                }),
+            );
         });
         const term = (await import('@xterm/xterm')).Terminal as unknown as {
             mock: { results: Array<{ value: { write: ReturnType<typeof vi.fn> } }> };
         };
         const instance = term.mock.results[term.mock.results.length - 1]!.value;
-        expect(instance.write).toHaveBeenCalledWith('foo\x1b[');
+        const written = instance.write.mock.calls
+            .map((args: unknown[]) => args[0])
+            .find((a: unknown) => a instanceof Uint8Array) as Uint8Array | undefined;
+        expect(written).toBeDefined();
+        expect(new TextDecoder().decode(written)).toBe('foo\x1b[');
     });
 
     it('ws.onclose with non-1000 code and sessionLive schedules reconnect', async () => {
@@ -316,7 +370,11 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
         act(() => {
             lastWs?.onopen?.(new Event('open'));
-            lastWs?.onmessage?.(new MessageEvent('message', { data: 'some bytes' }));
+            lastWs?.onmessage?.(
+                new MessageEvent('message', {
+                    data: Uint8Array.from('some bytes', (c) => c.charCodeAt(0)).buffer,
+                }),
+            );
         });
         // Now flip to not live — the overlay should show bytes received
         rerender(

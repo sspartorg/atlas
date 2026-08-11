@@ -44,6 +44,7 @@
 
 import { spawn as ptySpawn, type IPty } from 'node-pty';
 import { appendFileSync, mkdirSync } from 'node:fs';
+import { release } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from '../db/kysely-client.js';
@@ -55,10 +56,42 @@ import { ollamaEnv } from './ollama-env.js';
 import { cleanupGitConfig } from './git-credentials.js';
 import { CLI_DIALECT, type AgentCli } from '@atlas/shared';
 import { createScreenState } from './terminal-screen-state.js';
-import type { TerminalScreenState } from './terminal-screen-state.js';
+import type { TerminalScreenState, WindowsPtyHostInfo } from './terminal-screen-state.js';
 
 const PTY_DEFAULT_COLS = 120;
 const PTY_DEFAULT_ROWS = 30;
+
+/**
+ * Which Windows PTY backend node-pty will use, from the same gate node-pty
+ * applies internally (windowsPtyAgent: ConPTY iff build >= 18309; an
+ * unparseable release is treated as build 0 → winpty). Undefined off
+ * Windows. Every xterm that renders this PTY's bytes — the server-side
+ * mirror AND the browser pane — must be told, because ConPTY repaints the
+ * screen from its own buffer after a resize and assumes the terminal
+ * neither reflowed nor pulled rows back out of scrollback. An xterm left
+ * in its default (Unix) resize behavior drifts out of row alignment with
+ * ConPTY's model, and every later diff repaint lands offset — leaving the
+ * stale "zombie" cells that pile up in scrollback.
+ */
+export function windowsPtyInfoFor(
+    platform: NodeJS.Platform,
+    osRelease: string,
+): WindowsPtyHostInfo | undefined {
+    if (platform !== 'win32') return undefined;
+    const build = Number.parseInt(osRelease.split('.')[2] ?? '', 10);
+    if (!Number.isInteger(build)) return { backend: 'winpty' };
+    return { backend: build >= 18309 ? 'conpty' : 'winpty', buildNumber: build };
+}
+
+const PTY_HOST_WINDOWS = windowsPtyInfoFor(process.platform, release());
+// First frame of every attach, sent as a WS TEXT frame so the client can
+// tell control from PTY bytes (terminal data is always binary). Sent on
+// every platform so the protocol has one shape; the client only acts on
+// the windowsPty field.
+const PTY_INFO_FRAME = JSON.stringify({
+    cmd: 'ptyInfo',
+    ...(PTY_HOST_WINDOWS ? { windowsPty: PTY_HOST_WINDOWS } : {}),
+});
 // How often the idle detector polls each session's lastActivityAt. Cheap
 // (one timestamp compare per session per tick); 5 s keeps detection latency
 // within one tick of the configured threshold.
@@ -517,7 +550,7 @@ function attachPtyToEntry(entry: SessionEntry, pty: IPty): void {
     // Fresh mirror per PTY lifetime, so a resumed session's replay starts
     // from the new PTY's first paint — the same clean-slate rule the old
     // backlog reset enforced.
-    const screen = createScreenState(entry.cols, entry.rows);
+    const screen = createScreenState(entry.cols, entry.rows, PTY_HOST_WINDOWS);
     entry.screen = screen;
     pty.onData((data) => {
         const buf = Buffer.from(data, 'utf8');
@@ -740,6 +773,13 @@ export function attachWebSocket(
     const entry = SESSIONS.get(sessionId);
     if (!entry) return false;
     entry.subscribers.add(ws);
+    // Hello frame FIRST, so the client applies windowsPty before the
+    // snapshot (or any live byte) is parsed at the wrong resize semantics.
+    try {
+        ws.send(PTY_INFO_FRAME);
+    } catch {
+        // Subscriber already dead; close handler will purge.
+    }
     // Adopt the attaching client's geometry BEFORE the snapshot is
     // serialized. The PTY spawns at PTY_DEFAULT_COLS/ROWS because no browser
     // exists yet at session-create time, so without this the first client

@@ -1025,8 +1025,11 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(204).send();
     });
 
-    // WEBSOCKET -- live PTY byte stream. Binary frames in both directions.
-    // On attach the host replays a serialized screen snapshot (clean VT
+    // WEBSOCKET -- live PTY byte stream. Terminal data is binary in both
+    // directions; TEXT frames are control envelopes. On attach the host
+    // sends a `{cmd:"ptyInfo"}` text frame (carrying the Windows PTY
+    // backend so the browser xterm can enable ConPTY-compatible resize
+    // semantics), then replays a serialized screen snapshot (clean VT
     // stream from the server-side headless mirror), then forwards raw PTY
     // bytes live. The control envelope `{cmd:"resize",cols,rows}` flips
     // the PTY size (clamped; malformed frames are dropped) without writing
@@ -1078,8 +1081,8 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             });
             if (!attached) {
                 try {
-                    // Buffer, not string: the stream is uniformly binary so
-                    // the client never needs a text-frame special case.
+                    // Buffer, not string: text frames are control envelopes,
+                    // so a human-readable notice must ride a binary frame.
                     sock.send(Buffer.from('session not live; reconnect after Resume\r\n', 'utf8'));
                 /* v8 ignore next */
                 } catch {

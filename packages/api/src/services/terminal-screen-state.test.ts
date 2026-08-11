@@ -143,6 +143,26 @@ describe('createScreenState', () => {
         state.dispose();
     });
 
+    it('keeps scrollback out of the viewport on row growth when windowsPty is set', async () => {
+        // ConPTY answers a row-growth resize by appending blank rows at the
+        // bottom and repainting from its own buffer — lines that entered its
+        // scrollback stay there. Without windowsPty, xterm instead pulls
+        // lines back OUT of scrollback to fill the new rows, so the mirror's
+        // row alignment diverges from ConPTY's model and every later diff
+        // repaint lands offset — the Windows "zombie characters".
+        const state = createScreenState(20, 3, { backend: 'conpty', buildNumber: 19045 });
+        await feedAsync(state, 'one\r\ntwo\r\nthree\r\nfour\r\nfive');
+        state.resize(20, 5);
+        await flushAsync(state);
+
+        const lines = await renderSnapshot(state.snapshot(), 20, 5);
+        expect(lines.slice(0, 5)).toEqual(['one', 'two', 'three', 'four', 'five']);
+        // The two rows gained stay blank (ConPTY's view of the world) instead
+        // of being filled by "one"/"two" pulled back from scrollback.
+        expect(lines.slice(5)).toEqual(['', '']);
+        state.dispose();
+    });
+
     it('is inert after dispose: no callbacks, empty snapshot, no throw', async () => {
         const state = createScreenState(80, 24);
         await feedAsync(state, 'hello');

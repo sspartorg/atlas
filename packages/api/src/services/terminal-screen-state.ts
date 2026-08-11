@@ -36,6 +36,18 @@ const { Terminal } = require('@xterm/headless') as {
 // snapshot never contains more history than the client can retain.
 const MIRROR_SCROLLBACK_ROWS = 5_000;
 
+/** Passed through to xterm's `windowsPty` option when the PTY host is
+ *  Windows. ConPTY answers resizes by repainting the screen from its own
+ *  buffer, assuming the receiving terminal did NOT reflow or pull rows
+ *  back out of scrollback — windowsPty makes xterm honor that contract.
+ *  Without it the mirror's rows drift out of alignment with ConPTY's
+ *  model and every subsequent diff repaint lands offset, stranding stale
+ *  cells (the Windows "zombie characters"). */
+export interface WindowsPtyHostInfo {
+    backend: 'conpty' | 'winpty';
+    buildNumber?: number;
+}
+
 export interface TerminalScreenState {
     /** Parse PTY output; `onParsed` fires after xterm consumed the chunk. */
     feed(data: string, onParsed: () => void): void;
@@ -49,7 +61,11 @@ export interface TerminalScreenState {
     dispose(): void;
 }
 
-export function createScreenState(cols: number, rows: number): TerminalScreenState {
+export function createScreenState(
+    cols: number,
+    rows: number,
+    windowsPty?: WindowsPtyHostInfo,
+): TerminalScreenState {
     const term = new Terminal({
         cols,
         rows,
@@ -59,6 +75,8 @@ export function createScreenState(cols: number, rows: number): TerminalScreenSta
         convertEol: true,
         // SerializeAddon registers proposed-API consumers on activate.
         allowProposedApi: true,
+        // Spread-conditional so the key is absent (not undefined) off-Windows.
+        ...(windowsPty ? { windowsPty } : {}),
     });
     const serialize = new SerializeAddon();
     // SerializeAddon's typings target the browser build's Terminal, but
