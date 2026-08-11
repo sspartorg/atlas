@@ -61,6 +61,10 @@ const RESIZE_SEND_DEBOUNCE_MS = 100;
 // Trailing repaint after a scroll burst stops. Long enough to sit past the
 // browser's final paint, short enough that residue is never visible.
 const SCROLL_SETTLE_MS = 100;
+// How often the drift watchdog compares the terminal's live geometry against
+// the last size actually sent to the PTY. Only a mismatch sends anything, so
+// the steady-state cost is one integer compare per second.
+const GEOMETRY_SYNC_INTERVAL_MS = 1_000;
 
 interface Props {
     /** Atlas session id from the URL. */
@@ -98,6 +102,10 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
     const [connected, setConnected] = useState(false);
     const [bytesReceived, setBytesReceived] = useState(0);
     const [termReady, setTermReady] = useState(false);
+    // Last geometry actually delivered to the PTY. The drift watchdog below
+    // compares against this rather than against the previous fit(), so a send
+    // dropped on a closed socket is retried instead of lost.
+    const lastSentGeom = useRef<{ cols: number; rows: number } | null>(null);
     const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const reconnectAttempted = useRef(false);
     // Survives the StrictMode mount→cleanup→mount cycle so the second mount
@@ -254,6 +262,7 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                     if (ws && ws.readyState === WebSocket.OPEN) {
                         try {
                             ws.send(JSON.stringify({ cmd: 'resize', cols: term.cols, rows: term.rows }));
+                            lastSentGeom.current = { cols: term.cols, rows: term.rows };
                         } catch {
                             /* best-effort */
                         }
@@ -470,6 +479,7 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                     const { cols, rows } = termRef.current;
                     try {
                         ws.send(JSON.stringify({ cmd: 'resize', cols, rows }));
+                        lastSentGeom.current = { cols, rows };
                     } catch {
                         /* best-effort */
                     }
@@ -563,6 +573,7 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     try {
                         ws.send(JSON.stringify({ cmd: 'resize', cols, rows }));
+                        lastSentGeom.current = { cols, rows };
                     } catch {
                         /* best-effort */
                     }
@@ -575,6 +586,50 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
             ro.disconnect();
         };
     }, []);
+
+    // Geometry drift watchdog.
+    //
+    // Every path that changes the local terminal's size is supposed to tell
+    // the PTY, but "supposed to" is doing a lot of work: fit() runs from four
+    // call sites, one of them behind `document.fonts.ready`, and any of them
+    // can land while the socket is closed — in which case the send is dropped
+    // and nothing ever reconciles it. Zoom changes, font fallback swaps, and
+    // scrollbar-induced width changes can all move cols without the
+    // ResizeObserver on the host element firing at all.
+    //
+    // Drift matters because the failure is asymmetric, which a reproduction
+    // harness confirmed: a PTY NARROWER than the view is harmless (the TUI
+    // over-clears), while a PTY WIDER than the view corrupts the screen
+    // permanently. Ink-style TUIs redraw by computing how many lines their
+    // output wrapped to at the width they believe they have, then moving the
+    // cursor up that many lines and clearing downward. Believe you are wider
+    // than you are, and the text actually wrapped to more lines than you
+    // counted: you move up too few, clear from there, and the top of the
+    // previous frame is never erased. Those uncleared tops are the leftover
+    // glyphs, and every later redraw repeats the mistake, so residue piles up
+    // in the scrollback and shows up while scrolling.
+    //
+    // So rather than chase each way drift can happen, reconcile continuously:
+    // compare the terminal's live geometry against the last value actually
+    // sent, and resend when they differ. Only on an actual change — resending
+    // an identical size makes ConPTY repaint the whole screen for nothing.
+    useEffect(() => {
+        if (!termReady) return;
+        const timer = setInterval(() => {
+            const term = termRef.current;
+            const ws = wsRef.current;
+            if (!term || !ws || ws.readyState !== WebSocket.OPEN) return;
+            const last = lastSentGeom.current;
+            if (last && last.cols === term.cols && last.rows === term.rows) return;
+            try {
+                ws.send(JSON.stringify({ cmd: 'resize', cols: term.cols, rows: term.rows }));
+                lastSentGeom.current = { cols: term.cols, rows: term.rows };
+            } catch {
+                /* best-effort; the next tick retries */
+            }
+        }, GEOMETRY_SYNC_INTERVAL_MS);
+        return () => clearInterval(timer);
+    }, [termReady]);
 
     // Repaint the viewport after each scroll — the third piece of the
     // 2026-07-13 Windows mitigation set, restored alongside the compositor
