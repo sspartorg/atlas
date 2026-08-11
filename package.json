@@ -49,7 +49,8 @@
     "db:seed": "pnpm -F @atlas/api db:seed",
     "db:reset": "pnpm -F @atlas/api db:reset",
     "doctor": "pnpm -F @atlas/api doctor",
-    "prepare": "husky"
+    "prepare": "husky",
+    "postinstall": "node scripts/fix-pty-helper.mjs"
   },
   "engines": {
     "node": ">=20.0.0",
