@@ -58,6 +58,9 @@ const RECONNECT_DELAY_MS = 1_500;
 // makes ConPTY reflow the entire screen, so a divider drag must collapse
 // into one resize, not one per animation frame.
 const RESIZE_SEND_DEBOUNCE_MS = 100;
+// Trailing repaint after a scroll burst stops. Long enough to sit past the
+// browser's final paint, short enough that residue is never visible.
+const SCROLL_SETTLE_MS = 100;
 
 interface Props {
     /** Atlas session id from the URL. */
@@ -158,6 +161,11 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                 // spacing to fit more TUI rows in the pane.
                 lineHeight: 1.15,
                 scrollback: 5_000,
+                // Keeps the scrollbar from auto-appearing on keystrokes; its
+                // appearance changes the container width mid-scroll, which
+                // reflows xterm and leaves smeared glyphs on Windows. Paired
+                // with the pinned scrollbar width in the sx block below.
+                scrollOnUserInput: false,
                 theme: {
                     background: '#0a0a0a',
                     foreground: '#d4d4d4',
@@ -532,6 +540,50 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
         };
     }, []);
 
+    // Repaint the viewport after each scroll — the third piece of the
+    // 2026-07-13 Windows mitigation set, restored alongside the compositor
+    // hints and the pinned scrollbar width.
+    //
+    // This was removed in f9a4ed7 as redundant, and I argued against
+    // restoring it on the grounds that a full repaint per scroll frame
+    // would worsen the slow scrolling reported on Windows. That reasoning
+    // assumed the core renderer. With the WebGL addon loaded, refresh() is
+    // a GPU blit rather than a CPU redraw, so the cost objection does not
+    // apply — and if WebGL ever falls back, correct-but-slower beats fast
+    // and visibly broken.
+    //
+    // rAF coalesces a scroll burst into one repaint per frame; the trailing
+    // timer catches the resting position, because the last onScroll can
+    // fire before the browser's final paint.
+    useEffect(() => {
+        const term = termRef.current;
+        if (!term || !termReady) return;
+        let raf: number | null = null;
+        let settle: ReturnType<typeof setTimeout> | null = null;
+        const repaint = () => {
+            try {
+                term.refresh(0, term.rows - 1);
+            } catch {
+                /* disposed mid-frame; nothing to repaint */
+            }
+        };
+        const onScroll = () => {
+            if (raf !== null) cancelAnimationFrame(raf);
+            if (settle) clearTimeout(settle);
+            raf = requestAnimationFrame(() => {
+                raf = null;
+                repaint();
+            });
+            settle = setTimeout(repaint, SCROLL_SETTLE_MS);
+        };
+        const disposable = term.onScroll(onScroll);
+        return () => {
+            if (raf !== null) cancelAnimationFrame(raf);
+            if (settle) clearTimeout(settle);
+            disposable.dispose();
+        };
+    }, [termReady]);
+
     return (
         <>
             <Box
@@ -543,6 +595,26 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                     overflow: 'hidden',
                     background: '#0a0a0a',
                     border: `1px solid ${ATLAS_PALETTE.slate12}`,
+                    // Windows Chrome/Edge leave glyph trails when scrolling
+                    // (see the Renderer note at the top of this file). Promote
+                    // the render surface to its own compositor layer so a
+                    // scroll invalidates the whole layer instead of leaving
+                    // the previous paint of a partially-damaged region behind.
+                    // Restored with the rest of the 2026-07-13 mitigation set
+                    // after removing it did not survive contact with Windows.
+                    '& .xterm .xterm-screen canvas, & .xterm .xterm-screen': {
+                        willChange: 'transform',
+                        transform: 'translateZ(0)',
+                        backfaceVisibility: 'hidden',
+                    },
+                    // A scrollbar that appears mid-scroll changes the container
+                    // width, which reflows xterm and smears the row it was
+                    // drawing. Pin the width so appearance never resizes it.
+                    '& .xterm .xterm-scrollable-element > .scrollbar': {
+                        position: 'absolute',
+                        right: 0,
+                        width: '14px',
+                    },
                 }}
             >
             <Box
