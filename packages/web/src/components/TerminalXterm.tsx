@@ -503,26 +503,47 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
         };
     }, [sessionId, sessionLive, termReady]);
 
-    // ResizeObserver on the host -> fit immediately (the local viewport must
-    // track a divider drag), debounce the cols/rows push to the server.
+    // ResizeObserver on the host -> reflow locally AND push the new geometry
+    // to the PTY together, both trailing-debounced.
+    //
+    // These used to be split: fit() ran immediately so the local viewport
+    // tracked a divider drag, while the {cmd:'resize'} push was debounced so
+    // drags didn't storm ConPTY with reflows. That left the browser's
+    // terminal at the NEW width while the PTY kept emitting output laid out
+    // for the OLD one — for the entire duration of a drag. Text lands at the
+    // wrong wrap points, and cells the app erased at the old width are never
+    // erased at the new one, so the residue survives into scrollback. That is
+    // the Windows "trails" defect: leftover glyphs in columns 0-1 that pile
+    // up the more you scroll.
+    //
+    // ConPTY makes it acute rather than theoretical, because it answers a
+    // resize by repainting its whole screen from its own buffer — dumping
+    // layout-sensitive output straight into the mismatch window. A Unix PTY
+    // just raises SIGWINCH and lets the app redraw on its own schedule, which
+    // is why macOS looked clean through four attempted fixes.
+    //
+    // Reflowing 100ms after a drag settles is a cosmetic cost. Rendering the
+    // stream at a width it was never laid out for is a correctness bug.
     useEffect(() => {
         const host = hostRef.current;
         /* v8 ignore next -- host Box is unconditionally rendered with ref={hostRef} every render, so hostRef.current is always set by the time this effect body runs; defensive null-check only. */
         if (!host) return;
         let resizeSendTimer: ReturnType<typeof setTimeout> | null = null;
         const ro = new ResizeObserver(() => {
-            if (!fitRef.current || !termRef.current) return;
-            try {
-                fitRef.current.fit();
-            } catch {
-                return;
-            }
-            // Capture cols/rows now (fit just computed them); the trailing
-            // debounce means only the last geometry of a burst is sent.
-            const { cols, rows } = termRef.current;
+            // Reflow the local terminal and tell the PTY in the same tick,
+            // both trailing-debounced, so the two can never disagree about
+            // width for longer than one network hop.
             if (resizeSendTimer) clearTimeout(resizeSendTimer);
             resizeSendTimer = setTimeout(() => {
                 resizeSendTimer = null;
+                if (!fitRef.current || !termRef.current) return;
+                try {
+                    fitRef.current.fit();
+                } catch {
+                    return;
+                }
+                // Read cols/rows after fit — it just computed them.
+                const { cols, rows } = termRef.current;
                 const ws = wsRef.current;
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     try {
