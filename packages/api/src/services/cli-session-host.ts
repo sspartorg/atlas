@@ -44,7 +44,8 @@
 
 import { spawn as ptySpawn, type IPty } from 'node-pty';
 import { appendFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { db } from '../db/kysely-client.js';
 import { broadcastSSE } from '../routes/events.js';
 import { notificationsService } from './notifications.js';
@@ -404,21 +405,30 @@ function stopIdleCheck(entry: SessionEntry): void {
     }
 }
 
-// Opt-in raw PTY capture. Set ATLAS_PTY_DUMP to a directory and every byte
-// the PTY emits is appended verbatim to `pty-<sessionId>.bin` there.
+// Opt-in raw PTY capture. Set ATLAS_PTY_DUMP=true and every byte the PTY
+// emits is appended verbatim to `<repo>/.atlas-dump/pty-<sessionId>.bin`.
 //
 // This exists because the terminal's byte stream is platform-specific —
 // ConPTY on Windows produces materially different output from a Unix PTY for
 // the same CLI — and rendering defects that only reproduce on one platform
 // cannot be diagnosed from the other. A captured stream replays into a
 // headless xterm anywhere, which turns "works on my machine" into an actual
-// reproduction. Off unless the env var is set; no cost on the hot path
-// beyond one null check per chunk.
-const PTY_DUMP_DIR = process.env['ATLAS_PTY_DUMP'] ?? null;
+// reproduction. Off unless the flag is set; no cost on the hot path beyond
+// one boolean check per chunk.
+//
+// The location is fixed rather than configurable: a debug switch you have to
+// think about is one you get wrong while already chasing a bug. `.atlas-dump/`
+// is gitignored, so a capture can never be committed by accident.
+const PTY_DUMP_ENABLED = /^(true|1)$/i.test(process.env['ATLAS_PTY_DUMP'] ?? '');
+// packages/api/src/services/  -> repo root is ../../../..
+// packages/api/dist/services/ -> same depth. Resolved from this module's own
+// location, not process.cwd(), so it lands in the repo no matter where the
+// API was launched from (matches load-env.ts).
+const PTY_DUMP_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '.atlas-dump');
 let ptyDumpDirReady = false;
 
 function dumpPtyBytes(sessionId: string, bytes: Buffer): void {
-    if (!PTY_DUMP_DIR) return;
+    if (!PTY_DUMP_ENABLED) return;
     try {
         if (!ptyDumpDirReady) {
             mkdirSync(PTY_DUMP_DIR, { recursive: true });
@@ -426,8 +436,8 @@ function dumpPtyBytes(sessionId: string, bytes: Buffer): void {
         }
         appendFileSync(join(PTY_DUMP_DIR, `pty-${sessionId}.bin`), bytes);
     } catch {
-        // Diagnostics must never take a session down. A bad path, a full
-        // disk, or a permissions error silently disables the capture.
+        // Diagnostics must never take a session down. A full disk or a
+        // permissions error silently disables the capture.
     }
 }
 

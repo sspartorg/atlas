@@ -68,3 +68,7 @@ e2e-logs/forensic-*/*
 # of truth. The rest of `.github/` (workflows, instructions, copilot
 # config) stays tracked.
 .github/prompts/
+
+# Raw PTY captures from ATLAS_PTY_DUMP=true. Debug artifacts containing
+# whatever the CLI printed — never committed.
+.atlas-dump/
