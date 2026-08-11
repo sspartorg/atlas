@@ -438,7 +438,22 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                 return;
             }
             const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const url = `${proto}//${window.location.host}/api/cli/sessions/${encodeURIComponent(sessionId)}/stream`;
+            // Measure before connecting and carry the geometry in the attach
+            // URL. The server serializes the snapshot during attach, so a
+            // resize sent after open arrives too late — the replay would be
+            // laid out for the PTY's spawn size (120x30) and rendered at this
+            // terminal's actual width, stranding uncleared cells in
+            // scrollback. The post-open send below still covers later changes.
+            try {
+                fitRef.current?.fit();
+            } catch {
+                /* container not measured yet; server falls back to spawn size */
+            }
+            const attachGeometry =
+                termRef.current
+                    ? `?cols=${termRef.current.cols}&rows=${termRef.current.rows}`
+                    : '';
+            const url = `${proto}//${window.location.host}/api/cli/sessions/${encodeURIComponent(sessionId)}/stream${attachGeometry}`;
             const ws = new WebSocket(url);
             ws.binaryType = 'arraybuffer';
             wsRef.current = ws;

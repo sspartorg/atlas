@@ -732,10 +732,46 @@ export function resumeSession(input: ResumeSessionInput): void {
     startIdleCheck(entry);
 }
 
-export function attachWebSocket(sessionId: string, ws: WebSocketLike): boolean {
+export function attachWebSocket(
+    sessionId: string,
+    ws: WebSocketLike,
+    geometry?: { cols?: number | undefined; rows?: number | undefined },
+): boolean {
     const entry = SESSIONS.get(sessionId);
     if (!entry) return false;
     entry.subscribers.add(ws);
+    // Adopt the attaching client's geometry BEFORE the snapshot is
+    // serialized. The PTY spawns at PTY_DEFAULT_COLS/ROWS because no browser
+    // exists yet at session-create time, so without this the first client
+    // receives a replay laid out for 120x30 and renders it at its own width —
+    // wrong wrap points, and erases that never clear the cells they were
+    // computed for. The residue lands in scrollback permanently, which is why
+    // it surfaced as glyph "trails" on scrolling with no resize involved.
+    //
+    // Bounds are the same ones the {cmd:'resize'} envelope enforces: ConPTY
+    // fails hard on zero/negative dimensions and allocates enormous reflow
+    // buffers for absurd ones.
+    const { cols, rows } = geometry ?? {};
+    if (
+        typeof cols === 'number' &&
+        typeof rows === 'number' &&
+        cols >= RESIZE_MIN_COLS &&
+        rows >= RESIZE_MIN_ROWS &&
+        cols <= RESIZE_MAX_DIM &&
+        rows <= RESIZE_MAX_DIM &&
+        (cols !== entry.cols || rows !== entry.rows)
+    ) {
+        entry.cols = cols;
+        entry.rows = rows;
+        try {
+            entry.pty?.resize(cols, rows);
+            entry.screen?.resize(cols, rows);
+        } catch {
+            // A PTY that died between the guard and here takes the session
+            // down through onExit; attach still proceeds and the client gets
+            // the not-live notice.
+        }
+    }
     const screen = entry.screen;
     if (screen) {
         // Withhold live broadcasts until the serialized snapshot is sent.

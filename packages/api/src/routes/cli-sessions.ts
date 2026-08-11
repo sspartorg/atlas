@@ -1063,7 +1063,19 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
                 }
             }
             const id = (req.params as { id: string }).id;
-            const attached = hostAttachWebSocket(id, sock as never);
+            // Geometry rides the attach URL rather than arriving as a message
+            // after open, because the snapshot is serialized during attach —
+            // a resize sent afterwards is already too late, and the client
+            // would render a replay laid out for the PTY's spawn size
+            // (120x30) at whatever width it actually has. Malformed or absent
+            // values simply skip the resize; the query is untrusted input.
+            const rawQuery = req.query as { cols?: string; rows?: string } | undefined;
+            const attachCols = Number.parseInt(rawQuery?.cols ?? '', 10);
+            const attachRows = Number.parseInt(rawQuery?.rows ?? '', 10);
+            const attached = hostAttachWebSocket(id, sock as never, {
+                cols: Number.isInteger(attachCols) ? attachCols : undefined,
+                rows: Number.isInteger(attachRows) ? attachRows : undefined,
+            });
             if (!attached) {
                 try {
                     // Buffer, not string: the stream is uniformly binary so

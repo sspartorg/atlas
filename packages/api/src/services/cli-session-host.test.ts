@@ -386,6 +386,34 @@ describe('pauseSession', () => {
         pauseSession(id);
         expect(cleanupGitConfig).toHaveBeenCalledWith('/tmp/pause.config');
     });
+
+    it('adopts the attaching client geometry before serializing the snapshot', () => {
+        const id = freshId();
+        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
+        const pty = ptyInstances[ptyInstances.length - 1]!;
+        // The PTY spawned at PTY_DEFAULT_COLS/ROWS because no browser existed
+        // at create time. Attaching with real geometry must resize first, or
+        // the client replays a 120x30 layout at its own width and strands
+        // uncleared cells in scrollback (the Windows glyph-trails defect).
+        attachWebSocket(id, makeFakeWs(), { cols: 250, rows: 45 });
+        expect(pty.resize).toHaveBeenCalledWith(250, 45);
+    });
+
+    it('ignores attach geometry that is absent, malformed, or out of bounds', () => {
+        for (const geometry of [
+            undefined,
+            { cols: 250, rows: undefined },
+            { cols: 0, rows: 45 },
+            { cols: 250, rows: 0 },
+            { cols: 100_000, rows: 45 },
+        ]) {
+            const id = freshId();
+            startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
+            const pty = ptyInstances[ptyInstances.length - 1]!;
+            attachWebSocket(id, makeFakeWs(), geometry);
+            expect(pty.resize).not.toHaveBeenCalled();
+        }
+    });
 });
 
 // ── killSessionPty ────────────────────────────────────────────────────────────
