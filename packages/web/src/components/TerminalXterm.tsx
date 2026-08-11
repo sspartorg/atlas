@@ -206,10 +206,21 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                         webgl.dispose();
                     });
                     term.loadAddon(webgl);
+                    // Log on success too. A silent success and a silent
+                    // failure look identical from the outside, which is
+                    // exactly the ambiguity that made the Windows trails
+                    // bug hard to attribute to a renderer at all.
+                    console.info('[atlas:terminal] WebGL renderer active');
                 })
-                .catch(() => {
-                    /* no WebGL (old GPU, blocklisted driver, headless):
-                       xterm's core renderer stays, exactly as before. */
+                .catch((err: unknown) => {
+                    // No WebGL (old GPU, blocklisted driver, headless):
+                    // xterm's core renderer stays and the terminal works.
+                    // Not fatal, but never silent — falling back changes
+                    // scroll rendering behaviour on Windows.
+                    console.warn(
+                        '[atlas:terminal] WebGL renderer unavailable, using core renderer:',
+                        err,
+                    );
                 });
 
             try {
