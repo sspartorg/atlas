@@ -37,15 +37,21 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 //     user clicks Resume to spawn a fresh PTY.
 //
 // Renderer:
-//   - xterm.js v6 core's DOM renderer, deliberately. `@xterm/addon-webgl` was
-//     dropped 2026-08-04: it cost 65.6 KB gz — the single largest lever
-//     available — and the web bundle budget gate (830 KB gz total, enforced by
-//     .github/workflows/build.yml) was already 23.9 KB over on main. The addon
-//     was never load-bearing: it was wrapped in a try/catch for GPUs without
-//     WebGL, and disposed on context loss, both of which already fell back to
-//     exactly this renderer. Output is identical; only heavy-scrollback repaint
-//     is slower. Revisit only if a profile shows the DOM renderer is the
-//     bottleneck AND the budget has headroom.
+//   - `@xterm/addon-webgl`, loaded lazily below. It IS load-bearing, despite
+//     what its 2026-08-04 removal assumed — see docs/adr/0014. On Windows
+//     Chrome/Edge the core renderer leaves the leading glyphs of a line
+//     painted at their old position while the text scrolls away ("trails"),
+//     compounding the further you scroll, and repaints a deep scrollback
+//     visibly slowly. macOS renders the same code cleanly, so neither symptom
+//     appears in review on a Mac. That blind spot has now cost two removals:
+//     f9a4ed7 took out the software mitigations as redundant to its byte-level
+//     fix (they were not — that bug was malformed bytes, this one is correct
+//     bytes painted stale), and aa9c432 then took out the GPU renderer that
+//     had been masking the result.
+//   - Cost is 33.1 KB gz in its own chunk, not the 65.6 KB recorded in 2026-08-04.
+//     The dynamic import keeps it out of the initial route chunk entirely, so
+//     only someone who opens a Terminal pays for it.
+//   - Before removing it again: reproduce a long scroll on Windows Chrome.
 
 const RECONNECT_DELAY_MS = 1_500;
 // Trailing debounce for the resize envelope. Each server-side pty.resize()
@@ -178,6 +184,33 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
             const fit = new FitAddon();
             term.loadAddon(fit);
             term.open(hostRef.current);
+
+            // GPU renderer, loaded lazily so it never enters the initial
+            // chunk — only someone who opens a Terminal pays for it. Must
+            // come after open(): the addon needs the canvas in the DOM.
+            //
+            // Not optional on Windows. Without it, Chrome/Edge leave the
+            // leading glyphs of a line painted at their old position while
+            // the text scrolls away ("trails"), and the residue compounds
+            // the further you scroll; repaint of a deep scrollback is also
+            // visibly slow. macOS shows neither, which is how 2026-08-04's
+            // bundle trim removed this and looked clean in review.
+            void import('@xterm/addon-webgl')
+                .then(({ WebglAddon }) => {
+                    if (cancelled || termRef.current !== term) return;
+                    const webgl = new WebglAddon();
+                    // Context loss (GPU reset, tab backgrounded too long)
+                    // must drop the addon so xterm falls back to its core
+                    // renderer instead of painting nothing.
+                    webgl.onContextLoss(() => {
+                        webgl.dispose();
+                    });
+                    term.loadAddon(webgl);
+                })
+                .catch(() => {
+                    /* no WebGL (old GPU, blocklisted driver, headless):
+                       xterm's core renderer stays, exactly as before. */
+                });
 
             try {
                 fit.fit();

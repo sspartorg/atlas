@@ -19,14 +19,15 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@atlas/shared": "workspace:*",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "7.3.11",
     "@mui/material": "7.3.11",
-    "@atlas/shared": "workspace:*",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-virtual": "^3.14.4",
     "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",
     "croner": "^10.0.1",
     "lottie-react": "^2.4.1",
