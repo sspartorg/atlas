@@ -62,6 +62,7 @@ import type {
     UpdateScratchPadInput,
     ICliSession,
     CliSessionCreateInput,
+    CliSessionStandaloneCreateInput,
     CliSessionPreflightStopResponse,
     CliSessionStopInput,
     CliSessionStopResponse,
@@ -603,6 +604,11 @@ export const api = {
                       token: string;
                       scope?: string;
                       expires_at?: string | null;
+                      // Commit author for sessions on this credential — a PAT
+                      // has no bot identity, so unlike the github_app branch
+                      // these are not a Co-Authored-By trailer.
+                      human_name?: string | null;
+                      human_email?: string | null;
                   }
                 | {
                       label: string;
@@ -1059,13 +1065,21 @@ export const api = {
     // hook + the TerminalXterm component for the xterm.js wiring.
     cli: {
         sessions: {
-            list: (opts?: { project_id?: string }) => {
-                const qs = opts?.project_id ? `?project_id=${encodeURIComponent(opts.project_id)}` : '';
-                return get<ICliSession[]>(`/cli/sessions${qs}`);
+            list: (opts?: { project_id?: string; standalone?: boolean }) => {
+                const params = new URLSearchParams();
+                if (opts?.project_id) params.set('project_id', opts.project_id);
+                if (opts?.standalone !== undefined) params.set('standalone', String(opts.standalone));
+                const qs = params.toString();
+                return get<ICliSession[]>(`/cli/sessions${qs ? `?${qs}` : ''}`);
             },
             get: (id: string) => get<ICliSession>(`/cli/sessions/${id}`),
             create: (input: CliSessionCreateInput) =>
                 post<ICliSession>('/cli/sessions', input),
+            // Standalone terminals — a PTY on a folder the Owner picked, with
+            // no project and no worktree. Separate endpoint (not a flag on
+            // `create`) because the server-side payloads are disjoint.
+            createStandalone: (input: CliSessionStandaloneCreateInput) =>
+                post<ICliSession>('/cli/sessions/standalone', input),
             pause: (id: string) =>
                 post<ICliSession>(`/cli/sessions/${id}/pause`, {}),
             resume: (id: string) =>

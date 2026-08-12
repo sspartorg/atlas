@@ -371,11 +371,9 @@ async function notifyTerminalWaiting(sessionId: string): Promise<void> {
             kind: 'needs_you',
             event_type: 'terminal.waiting_for_input',
             message,
-            // cli_sessions.project_id is a NOT NULL FK (migration 012); the ??
-            // null fallback only exists to satisfy the notifications table's
-            // nullable project_id column type and can never actually trigger
-            // from a real row.
-            /* v8 ignore next */
+            // Null on a standalone session (migration 030 dropped NOT NULL) —
+            // the notification is still worth firing, it just isn't filed
+            // under a project. The `link_url` below is what the Owner acts on.
             project_id: row.project_id ?? null,
             issue_id: row.item_id ?? null,
             // Direct deep-link so a push click + an in-app row click both

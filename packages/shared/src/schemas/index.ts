@@ -624,7 +624,36 @@ export const TransitionStatusSchema = z.object({
 export const CredentialHostSchema = z.enum(['github']);
 export const CredentialKindSchema = z.enum(['pat', 'github_app']);
 
+// human_* fields flow into shell (prepare-commit-msg hook), git-config, and
+// markdown (PR body via `Requested-By: @<login>` prefix) contexts, so we
+// reject control characters + newlines at the schema layer instead of relying
+// on downstream escaping. Injection is not the only concern — a newline in
+// human_name also breaks the `grep -qxF` idempotency check inside the
+// commit-msg hook, so every amend stacks a duplicate trailer.
+// human_gh_login is further constrained to GitHub's actual username grammar
+// (alphanumeric + hyphen, non-hyphen ends, ≤39 chars) so the `--assignee`
+// argv and the PR body prefix agree on what's valid.
+//
+// 2026-07-03 audit round 1 follow-up: extended to reject Unicode line
+// separators U+2028 / U+2029 and the C1 control range U+0080-U+009F.
+// Some trailer / activity-log parsers split on U+2028; a name like
+// "Bob\u2028Attacker <evil@x>" would otherwise pass the ASCII-only
+// filter and land as a two-line trailer visible to GitHub / gh.
+//
+// Declared above the credential schemas because both branches reference it
+// at module-evaluation time.
+const NO_CONTROL_CHARS = /^[^\x00-\x1f\x7f-\x9f\u2028\u2029]+$/;
+const GITHUB_LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+
 // PAT branch — a long-lived Personal Access Token the user pasted in.
+//
+// human_name / human_email are optional and mean something DIFFERENT here
+// than on the github_app branch below: a PAT has no bot identity of its own,
+// so these become the commit AUTHOR (`[user]` in the per-session git config),
+// not a Co-Authored-By trailer. Both must be set for the block to be written;
+// leaving them blank keeps the pre-existing behaviour where commits fall
+// through to the host machine's `~/.gitconfig` identity. No human_gh_login —
+// it only feeds `gh pr create --assignee`, which no PAT flow reaches.
 export const CreatePatCredentialSchema = z.object({
     label: z.string().min(1).max(80),
     host: CredentialHostSchema.default('github'),
@@ -633,6 +662,14 @@ export const CreatePatCredentialSchema = z.object({
     token: z.string().min(8),
     scope: z.string().default(''),
     expires_at: z.string().nullable().default(null),
+    human_name: z
+        .string()
+        .min(1)
+        .max(120)
+        .regex(NO_CONTROL_CHARS, 'human_name may not contain newlines or control characters')
+        .nullable()
+        .optional(),
+    human_email: z.string().email().max(200).nullable().optional(),
 });
 
 // github_app branch — points at a folder on the server containing an
@@ -644,23 +681,6 @@ export const CreatePatCredentialSchema = z.object({
 // co-author commits + assign PRs to a human developer alongside the bot.
 // Leaving them blank keeps bot-only attribution (behaviour before
 // migration 025 landed).
-// human_* fields flow into shell (prepare-commit-msg hook) and markdown
-// (PR body via `Requested-By: @<login>` prefix) contexts, so we reject
-// control characters + newlines at the schema layer instead of relying
-// on downstream escaping. Injection is not the only concern — a
-// newline in human_name also breaks the `grep -qxF` idempotency check
-// inside the commit-msg hook, so every amend stacks a duplicate trailer.
-// human_gh_login is further constrained to GitHub's actual username
-// grammar (alphanumeric + hyphen, non-hyphen ends, ≤39 chars) so the
-// `--assignee` argv and the PR body prefix agree on what's valid.
-//
-// 2026-07-03 audit round 1 follow-up: extended to reject Unicode line
-// separators U+2028 / U+2029 and the C1 control range U+0080-U+009F.
-// Some trailer / activity-log parsers split on U+2028; a name like
-// "Bob\u2028Attacker <evil@x>" would otherwise pass the ASCII-only
-// filter and land as a two-line trailer visible to GitHub / gh.
-const NO_CONTROL_CHARS = /^[^\x00-\x1f\x7f-\x9f\u2028\u2029]+$/;
-const GITHUB_LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
 
 export const CreateGithubAppCredentialSchema = z.object({
     label: z.string().min(1).max(80),
@@ -1014,6 +1034,26 @@ export const CliSessionCreateSchema = z
         initial_prompt: z.string().max(8_000).optional(),
         model: z.string().min(1).max(80).optional(),
         item_id: z.string().min(1).max(200).optional(),
+        cli: AgentCliSchema.default('claude'),
+    })
+    .strict();
+
+// Standalone terminal create payload. Kept as its own schema rather than
+// widening the one above: the required fields are disjoint (folder vs
+// project), and `.strict()` on both is what stops a standalone payload from
+// silently taking the worktree-provisioning path (or vice versa).
+//
+// `folder_path` is only length-checked here — the real gate is server-side
+// (absolute-path check + `fs.stat` for "exists and is a directory"), because
+// only the API host can answer that and it is the trust boundary for a route
+// that spawns a process at a caller-supplied path.
+export const CliSessionStandaloneCreateSchema = z
+    .object({
+        folder_path: z.string().min(1).max(4_096),
+        credential_id: z.string().min(1).max(200).optional(),
+        title: z.string().min(1).max(200).optional(),
+        initial_prompt: z.string().max(8_000).optional(),
+        model: z.string().min(1).max(80).optional(),
         cli: AgentCliSchema.default('claude'),
     })
     .strict();

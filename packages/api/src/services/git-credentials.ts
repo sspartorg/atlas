@@ -135,6 +135,21 @@ export async function buildGitAuth(
             console.warn(
                 `[git-credentials] github_app credential ${enriched.id} has no app_slug/app_id — commit authorship will FALL BACK to the developer's .git/config identity. Re-add the credential once the App's slug backfill succeeds.`,
             );
+        } else if (enriched.kind === 'pat' && enriched.human_name && enriched.human_email) {
+            // A PAT has no bot identity of its own, so `human_*` means the
+            // AUTHOR here, not a co-author (contrast the github_app branch
+            // above, where the bot authors and the human is a trailer).
+            // Without this block a PAT-authenticated session pushes under the
+            // credential's token but commits under whatever identity happens
+            // to be in the host machine's ~/.gitconfig — the exact mismatch
+            // this branch exists to close.
+            //
+            // Both-or-nothing: a name with no email (or vice versa) leaves the
+            // block out entirely rather than fabricating half an identity, so
+            // every credential predating this stays byte-identical to before.
+            lines.push('[user]');
+            lines.push(`\tname = ${enriched.human_name}`);
+            lines.push(`\temail = ${enriched.human_email}`);
         }
 
         // Install the co-author hook when the credential has both human
@@ -163,6 +178,10 @@ export async function buildGitAuth(
             configPath,
             configDir,
             token,
+            // Deliberately still github_app-only. Callers use these to append
+            // an explicit `Co-Authored-By` trailer; on a PAT the same person
+            // is already the commit author via the `[user]` block above, and
+            // co-authoring yourself is noise.
             humanGhLogin: enriched.kind === 'github_app' ? enriched.human_gh_login : null,
             humanName: enriched.kind === 'github_app' ? enriched.human_name : null,
             humanEmail: enriched.kind === 'github_app' ? enriched.human_email : null,

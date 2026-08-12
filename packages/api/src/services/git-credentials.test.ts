@@ -99,6 +99,59 @@ describe('buildGitAuth', () => {
         expect(existsSync(join(auth!.configDir, 'prepare-commit-msg'))).toBe(false);
     });
 
+    it('adds [user] name / email for a PAT credential carrying both human fields', async () => {
+        // On a PAT the human IS the author (no bot identity exists), so this
+        // is a `[user]` block — not the Co-Authored-By hook the github_app
+        // branch installs. Without it, `git commit` inside a session silently
+        // falls back to the host machine's ~/.gitconfig identity.
+        svc.get.mockResolvedValueOnce({
+            id: 'p2',
+            kind: 'pat',
+            username: 'x-access-token',
+            app_id: null,
+            app_slug: null,
+            human_name: 'Ada Lovelace',
+            human_email: 'ada@example.com',
+            human_gh_login: null,
+        });
+        svc.getToken.mockResolvedValueOnce('ghp_fake_token_1234');
+        const auth = await buildGitAuth('p2');
+        cleanupDirs.push(auth!.configDir);
+        const content = readFile(auth!.configPath);
+        expect(content).toContain('[user]');
+        expect(content).toContain('name = Ada Lovelace');
+        expect(content).toContain('email = ada@example.com');
+        // No co-author hook — self-co-authorship would be noise.
+        expect(content).not.toContain('[core]');
+        expect(existsSync(join(auth!.configDir, 'prepare-commit-msg'))).toBe(false);
+        // The trailer fields stay github_app-only for the same reason.
+        expect(auth!.humanName).toBeNull();
+        expect(auth!.humanEmail).toBeNull();
+    });
+
+    it.each([
+        ['name only', 'Ada Lovelace', null],
+        ['email only', null, 'ada@example.com'],
+    ])(
+        'omits [user] for a PAT credential with %s (never half an identity)',
+        async (_label, humanName, humanEmail) => {
+            svc.get.mockResolvedValueOnce({
+                id: 'p3',
+                kind: 'pat',
+                username: 'x-access-token',
+                app_id: null,
+                app_slug: null,
+                human_name: humanName,
+                human_email: humanEmail,
+                human_gh_login: null,
+            });
+            svc.getToken.mockResolvedValueOnce('ghp_fake_token_1234');
+            const auth = await buildGitAuth('p3');
+            cleanupDirs.push(auth!.configDir);
+            expect(readFile(auth!.configPath)).not.toContain('[user]');
+        },
+    );
+
     it('adds [user] name / email for a github_app credential with slug+app_id', async () => {
         svc.get.mockResolvedValue({
             id: 'g1',

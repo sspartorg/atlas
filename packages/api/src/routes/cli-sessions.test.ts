@@ -276,6 +276,29 @@ import {
 import { WorktreeDiffError } from '../services/worktree-diff.js';
 import { spawn as ptySpawn } from 'node-pty';
 import { execFile } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, join } from 'node:path';
+
+// Minimal credentials row. Inserted directly rather than through
+// `credentialsService.create` so the test never touches the encryption key
+// file or the GitHub App mint path — the standalone route only ever does an
+// existence check on this id.
+async function insertCredential(id: string): Promise<void> {
+    await testDb
+        .insertInto('credentials')
+        .values({
+            id,
+            label: `cred ${id}`,
+            host: 'github',
+            kind: 'pat',
+            username: 'x-access-token',
+            token_encrypted: 'not-a-real-ciphertext',
+            token_fingerprint: 'ghp_••••••••••••••••xxxx',
+            scope: '',
+        } as never)
+        .execute();
+}
 
 const DEFAULT_DIFF_SUMMARY = {
     uncommitted: {
@@ -2520,5 +2543,248 @@ describe('CS9 — WebSocket stream not-attached path', () => {
             }
         }
         expect(ws.closed).toBe(true);
+    });
+});
+
+// ── Standalone sessions ───────────────────────────────────────────────────
+//
+// A standalone session is a PTY on a folder the Owner picked: no project, no
+// worktree, no `.atlas/` staging, and no commit/push/PR on the way out. The
+// tests that matter most here are the NEGATIVE ones — `ensureWorktree`,
+// `stageCliWorktree`, `runProjectSetup` and above all
+// `cleanupWorktreeAfterPush` must never fire, because that last one deletes
+// the directory it is handed and here that directory is a real repository.
+
+describe('POST /api/cli/sessions/standalone', () => {
+    let folder: string;
+
+    beforeEach(() => {
+        // A real dir on disk — the route stats the path for real (only
+        // `node:child_process` is mocked in this file, not `node:fs`).
+        folder = mkdtempSync(join(tmpdir(), 'atlas-standalone-test-'));
+        // The file-level beforeEach resets pushWorktree/openPullRequest but
+        // not these two, so call counts accumulate across the whole file.
+        // Every assertion below is a `not.toHaveBeenCalled()`, which those
+        // stale counts would fail regardless of what this route did.
+        vi.mocked(mockEnsureWorktree).mockClear();
+        vi.mocked(mockCleanupWorktreeAfterPush).mockClear();
+    });
+
+    afterEach(() => {
+        rmSync(folder, { recursive: true, force: true });
+    });
+
+    async function createStandalone(
+        payload: Record<string, unknown> = {},
+    ): Promise<ReturnType<FastifyInstance['inject']>> {
+        return app.inject({
+            method: 'POST',
+            url: '/api/cli/sessions/standalone',
+            payload: { folder_path: folder, ...payload },
+        });
+    }
+
+    it('creates a project-less row, spawns the PTY in the folder, stages nothing', async () => {
+        const res = await createStandalone({ initial_prompt: 'hello' });
+        expect(res.statusCode).toBe(201);
+        const body = res.json() as {
+            id: string;
+            project_id: string | null;
+            worktree_path: string;
+            worktree_branch: string | null;
+            credential_id: string | null;
+        };
+        expect(body.project_id).toBeNull();
+        expect(body.worktree_branch).toBeNull();
+        expect(body.worktree_path).toBe(folder);
+
+        // The PTY's cwd is the folder, not a worktree.
+        expect(vi.mocked(ptySpawn)).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.any(Array),
+            expect.objectContaining({ cwd: folder }),
+        );
+
+        // None of the project-path machinery ran.
+        expect(vi.mocked(mockEnsureWorktree)).not.toHaveBeenCalled();
+        expect(stageCliWorktreeMock).not.toHaveBeenCalled();
+        expect(runProjectSetupMock).not.toHaveBeenCalled();
+    });
+
+    it('defaults the title to the folder basename', async () => {
+        const res = await createStandalone();
+        expect(res.statusCode).toBe(201);
+        expect((res.json() as { title: string }).title).toBe(basename(folder));
+    });
+
+    it('rejects a relative folder_path', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/cli/sessions/standalone',
+            payload: { folder_path: 'some/relative/dir' },
+        });
+        expect(res.statusCode).toBe(400);
+        expect((res.json() as { error: string }).error).toMatch(/absolute/);
+    });
+
+    it('rejects a folder that does not exist', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/cli/sessions/standalone',
+            payload: { folder_path: join(folder, 'nope', 'missing') },
+        });
+        expect(res.statusCode).toBe(400);
+        expect((res.json() as { error: string }).error).toMatch(/not found/);
+    });
+
+    it('rejects a path that is a file, not a directory', async () => {
+        const file = join(folder, 'a-file.txt');
+        writeFileSync(file, 'x');
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/cli/sessions/standalone',
+            payload: { folder_path: file },
+        });
+        expect(res.statusCode).toBe(400);
+        expect((res.json() as { error: string }).error).toMatch(/not a directory/);
+    });
+
+    it('404s on an unknown credential_id instead of spawning an unauthenticated PTY', async () => {
+        const res = await createStandalone({ credential_id: 'cred-does-not-exist' });
+        expect(res.statusCode).toBe(404);
+        expect(mockPtys).toHaveLength(0);
+    });
+
+    it('builds git auth from the picked credential and passes it to the PTY', async () => {
+        await insertCredential('cred-1');
+        buildGitAuthMock.mockResolvedValue({
+            configPath: '/tmp/fake-git-config',
+            configDir: '/tmp/fake-git-dir',
+            token: 'ghp_faketoken',
+            humanGhLogin: null,
+            humanName: null,
+            humanEmail: null,
+        });
+        const res = await createStandalone({ credential_id: 'cred-1' });
+        expect(res.statusCode).toBe(201);
+        expect((res.json() as { credential_id: string }).credential_id).toBe('cred-1');
+        expect(buildGitAuthMock).toHaveBeenCalledWith('cred-1');
+        const pty = mockPtys.at(-1);
+        expect(pty?.env['GIT_CONFIG_GLOBAL']).toBe('/tmp/fake-git-config');
+        expect(pty?.env['GH_TOKEN']).toBe('ghp_faketoken');
+    });
+
+    it('stop closes the session without touching git or the folder', async () => {
+        const created = await createStandalone();
+        const id = (created.json() as { id: string }).id;
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${id}/stop`,
+            payload: { files_to_stage: [], open_pull_request: false },
+        });
+        expect(res.statusCode).toBe(200);
+        const body = res.json() as {
+            session: { status: string };
+            pushed: boolean;
+            committed: boolean;
+            finalize_pr_url: string | null;
+        };
+        expect(body.session.status).toBe('closed');
+        expect(body.pushed).toBe(false);
+        expect(body.committed).toBe(false);
+        expect(body.finalize_pr_url).toBeNull();
+
+        // The whole point: the Owner's directory is never handed to teardown.
+        expect(vi.mocked(mockCleanupWorktreeAfterPush)).not.toHaveBeenCalled();
+        expect(vi.mocked(mockPushWorktree)).not.toHaveBeenCalled();
+        expect(vi.mocked(mockOpenPullRequest)).not.toHaveBeenCalled();
+        // Spend still gets captured.
+        expect(ingestTranscriptMock).toHaveBeenCalledWith(id, { worktreePath: folder });
+    });
+
+    it('resume re-spawns without re-staging, using the session credential', async () => {
+        await insertCredential('cred-1');
+        const created = await createStandalone({ credential_id: 'cred-1' });
+        const id = (created.json() as { id: string }).id;
+        await app.inject({ method: 'POST', url: `/api/cli/sessions/${id}/pause` });
+        stageCliWorktreeMock.mockClear();
+        buildGitAuthMock.mockClear();
+
+        const res = await app.inject({ method: 'POST', url: `/api/cli/sessions/${id}/resume` });
+        expect(res.statusCode).toBe(200);
+        expect(stageCliWorktreeMock).not.toHaveBeenCalled();
+        expect(buildGitAuthMock).toHaveBeenCalledWith('cred-1');
+    });
+
+    it('review endpoints 409 with standalone_session rather than diffing the Owner tree', async () => {
+        const created = await createStandalone();
+        const id = (created.json() as { id: string }).id;
+
+        for (const call of [
+            { method: 'POST' as const, url: `/api/cli/sessions/${id}/preflight-stop` },
+            { method: 'GET' as const, url: `/api/cli/sessions/${id}/diff` },
+            {
+                method: 'GET' as const,
+                url: `/api/cli/sessions/${id}/diff/file?path=src/a.ts&scope=uncommitted`,
+            },
+        ]) {
+            const res = await app.inject(call);
+            expect(res.statusCode).toBe(409);
+            expect((res.json() as { details: { code: string } }).details.code).toBe(
+                'standalone_session',
+            );
+        }
+    });
+
+    it('marks the row errored on spawn failure without touching the folder', async () => {
+        (ptySpawn as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+            throw new Error('spawn ENOENT: not found');
+        });
+        const res = await createStandalone();
+        expect(res.statusCode).toBe(500);
+        expect(['cli_not_installed', 'internal_error']).toContain(res.json().kind);
+
+        const row = await testDb
+            .selectFrom('cli_sessions')
+            .select(['status', 'worktree_path'])
+            .where('worktree_path', '=', folder)
+            .executeTakeFirst();
+        expect(row?.status).toBe('errored');
+        // The project path rolls back its worktree here. There is nothing to
+        // roll back on a folder Atlas didn't create — and rolling it back
+        // would delete the Owner's directory.
+        expect(vi.mocked(mockCleanupWorktreeAfterPush)).not.toHaveBeenCalled();
+        // Best-effort transcript capture still runs so a crash-on-start
+        // session isn't silently free.
+        expect(ingestTranscriptMock).toHaveBeenCalledWith(
+            expect.any(String),
+            { worktreePath: folder },
+        );
+    });
+
+    it('lists standalone and project sessions separately', async () => {
+        await createStandalone();
+        await app.inject({
+            method: 'POST',
+            url: '/api/cli/sessions',
+            payload: { project_id: 'p1' },
+        });
+
+        const standaloneOnly = await app.inject({
+            method: 'GET',
+            url: '/api/cli/sessions?standalone=true',
+        });
+        const rows = standaloneOnly.json() as Array<{ project_id: string | null }>;
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.project_id).toBeNull();
+
+        const projectOnly = await app.inject({
+            method: 'GET',
+            url: '/api/cli/sessions?standalone=false',
+        });
+        const projectRows = projectOnly.json() as Array<{ project_id: string | null }>;
+        expect(projectRows).toHaveLength(1);
+        expect(projectRows[0]?.project_id).toBe('p1');
     });
 });

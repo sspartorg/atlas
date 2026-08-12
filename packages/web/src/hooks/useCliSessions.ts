@@ -4,6 +4,7 @@ import type {
     ICliSession,
     ICliSessionTranscriptResponse,
     CliSessionCreateInput,
+    CliSessionStandaloneCreateInput,
     CliSessionPreflightStopResponse,
     CliSessionStopInput,
     CliSessionStopResponse,
@@ -17,11 +18,29 @@ import type {
 // surface. SSE wiring in `useSSE` invalidates these queries on the
 // `cli_session_status` / `cli_session_closed` event types.
 
-export function useCliSessions(opts?: { projectId?: string }) {
+/**
+ * `standalone` splits the two terminal surfaces: `true` is the folder-scoped
+ * sessions on /terminal/standalone, `false` the project ones on /terminal,
+ * omitted means both (the multi-pane workspace attaches to either).
+ *
+ * The split happens server-side rather than here because the list endpoint
+ * caps at 200 rows — a busy project could otherwise push every standalone
+ * session off the end of its own page's list.
+ *
+ * Every variant shares the `['cli-sessions']` key prefix so the existing SSE
+ * invalidation (and every mutation's `invalidateQueries`) refreshes them all.
+ */
+export function useCliSessions(opts?: { projectId?: string; standalone?: boolean }) {
     const projectId = opts?.projectId;
+    const standalone = opts?.standalone;
+    const filter = {
+        ...(projectId ? { project_id: projectId } : {}),
+        ...(standalone !== undefined ? { standalone } : {}),
+    };
+    const hasFilter = Object.keys(filter).length > 0;
     return useQuery<ICliSession[]>({
-        queryKey: projectId ? ['cli-sessions', { projectId }] : ['cli-sessions'],
-        queryFn: () => api.cli.sessions.list(projectId ? { project_id: projectId } : undefined),
+        queryKey: hasFilter ? ['cli-sessions', filter] : ['cli-sessions'],
+        queryFn: () => api.cli.sessions.list(hasFilter ? filter : undefined),
         staleTime: 15_000,
     });
 }
@@ -41,6 +60,17 @@ export function useCreateCliSession() {
     const qc = useQueryClient();
     return useMutation<ICliSession, Error, CliSessionCreateInput>({
         mutationFn: (input) => api.cli.sessions.create(input),
+        onSuccess: (created) => {
+            void qc.invalidateQueries({ queryKey: ['cli-sessions'] });
+            qc.setQueryData(['cli-session', created.id], created);
+        },
+    });
+}
+
+export function useCreateStandaloneCliSession() {
+    const qc = useQueryClient();
+    return useMutation<ICliSession, Error, CliSessionStandaloneCreateInput>({
+        mutationFn: (input) => api.cli.sessions.createStandalone(input),
         onSuccess: (created) => {
             void qc.invalidateQueries({ queryKey: ['cli-sessions'] });
             qc.setQueryData(['cli-session', created.id], created);

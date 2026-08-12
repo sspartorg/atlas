@@ -321,7 +321,46 @@ describe('credentialsService — github_app kind', () => {
         expect(updated.expires_at).toBeNull();
     });
 
-    it('update() rejects human_* fields on a PAT credential', async () => {
+    it('update() accepts human_name/human_email on a PAT credential', async () => {
+        // These become the commit AUTHOR for a PAT (buildGitAuth writes them
+        // into the session's `[user]` block), so unlike github_app they are
+        // not a co-authorship decoration and must be settable.
+        const pat = await credentialsService.create({
+            label: 'PAT',
+            host: 'github',
+            kind: 'pat',
+            username: 'x-access-token',
+            token: 'ghp_xxxxxxxxxxxxxxxxxxxx',
+            scope: '',
+            expires_at: null,
+        });
+        const updated = await credentialsService.update(pat.id, {
+            human_name: 'Bob',
+            human_email: 'bob@example.com',
+        });
+        expect(updated.human_name).toBe('Bob');
+        expect(updated.human_email).toBe('bob@example.com');
+    });
+
+    it('create() persists human_name/human_email on a PAT credential', async () => {
+        const pat = await credentialsService.create({
+            label: 'PAT',
+            host: 'github',
+            kind: 'pat',
+            username: 'x-access-token',
+            token: 'ghp_xxxxxxxxxxxxxxxxxxxx',
+            scope: '',
+            expires_at: null,
+            human_name: 'Bob',
+            human_email: 'bob@example.com',
+        });
+        expect(pat.human_name).toBe('Bob');
+        expect(pat.human_email).toBe('bob@example.com');
+    });
+
+    it('update() still rejects human_gh_login on a PAT credential', async () => {
+        // gh_login only feeds `gh pr create --assignee`, which no PAT flow
+        // reaches — accepting it would imply an assignment that never happens.
         const pat = await credentialsService.create({
             label: 'PAT',
             host: 'github',
@@ -332,8 +371,8 @@ describe('credentialsService — github_app kind', () => {
             expires_at: null,
         });
         await expect(
-            credentialsService.update(pat.id, { human_name: 'Bob' }),
-        ).rejects.toThrow(/human_name/);
+            credentialsService.update(pat.id, { human_gh_login: 'bob' }),
+        ).rejects.toThrow(/human_gh_login/);
     });
 
     it('update() rejects token on a github_app credential', async () => {

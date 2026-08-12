@@ -73,6 +73,7 @@ This folder is the **single source of truth for application behavior** — what 
 - [`pages/23-terminal.md`](pages/23-terminal.md) — `/terminal`
 - [`pages/24-terminal-layout.md`](pages/24-terminal-layout.md) — `/terminal/layout`
 - [`pages/25-terminal-history.md`](pages/25-terminal-history.md) — `/terminal/:id/history`
+- [`pages/26-terminal-standalone.md`](pages/26-terminal-standalone.md) — `/terminal/standalone`
 
 ---
 

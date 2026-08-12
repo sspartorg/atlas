@@ -3,7 +3,9 @@
 **Route:** `/terminal` • **Component:** `packages/web/src/pages/Terminal.tsx` • **Slug:** `terminal`
 
 ## Purpose
-List every PTY-backed Claude Code, GitHub Copilot, or Ollama CLI session scoped to a project worktree. Filter the list by status, CLI, project, or free-text search; click a card to open the single-session view; create a new session from the Start Session dialog.
+List every PTY-backed Claude Code, GitHub Copilot, or Ollama CLI session scoped to a **project worktree**. Filter the list by status, CLI, project, or free-text search; click a card to open the single-session view; create a new session from the Start Session dialog.
+
+**Project sessions only.** The page fetches `useCliSessions({ standalone: false })`; folder-scoped sessions live on [Terminal — Standalone](26-terminal-standalone.md), which is an independent channel with its own create dialog and opposite Stop semantics (leave-untouched, not finalize-and-tear-down). Every filter here — project, branch, item — is empty for a standalone session, which is why the two are separate surfaces rather than one filtered list.
 
 ## States
 - **Loading**: `useCliSessions().isLoading` → centered `CircularProgress` (`Terminal.tsx`).
@@ -54,7 +56,7 @@ List every PTY-backed Claude Code, GitHub Copilot, or Ollama CLI session scoped 
 - `useToast`, `useNavigate`.
 
 ## API endpoints touched
-- `GET /api/cli/sessions`
+- `GET /api/cli/sessions?standalone=false`
 - (Indirectly via the dialog) `POST /api/cli/sessions`
 - (Indirectly via `StopSessionModal`) `POST /api/cli/sessions/:id/preflight-stop`, `GET /api/cli/sessions/:id/diff`, `GET /api/cli/sessions/:id/diff/file`, `POST /api/cli/sessions/:id/stop`
 
@@ -68,7 +70,7 @@ List every PTY-backed Claude Code, GitHub Copilot, or Ollama CLI session scoped 
 - The Copilot (`SmartToyRounded`) and Ollama (`MemoryRounded`) icons are stand-ins — MUI ships no mark for either. All three live in `utils/cliPresentation.ts`.
 
 ## Connectivity
-- **Pages**: `/terminal/:id` (`TerminalSession.tsx`) — single-session deep link target; no dedicated page doc yet, see the route row in [routes-map](../routes-map.md). Its live pane is the shared `TerminalXterm` documented in [Terminal Layout](24-terminal-layout.md).
+- **Pages**: `/terminal/:id` (`TerminalSession.tsx`) — single-session deep link target; no dedicated page doc yet, see the route row in [routes-map](../routes-map.md). Its live pane is the shared `TerminalXterm` documented in [Terminal Layout](24-terminal-layout.md). [Terminal — Standalone](26-terminal-standalone.md) is the sibling surface for folder-scoped sessions.
 - **Routes**: `GET /api/cli/sessions`, `POST /api/cli/sessions`.
 - **Entities**: `cli_sessions`, `projects` (for the filter + dialog dropdowns), `agents`-adjacent only insofar as a session's `item_id` may link to a Atlas issue.
 

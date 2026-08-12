@@ -27,6 +27,7 @@ function makeSession(overrides: Partial<ICliSession> = {}): ICliSession {
         cli: 'claude',
         worktree_path: null,
         worktree_branch: null,
+        credential_id: null,
         claude_session_id: null,
         model: 'claude-sonnet-4-5',
         initial_prompt: null,

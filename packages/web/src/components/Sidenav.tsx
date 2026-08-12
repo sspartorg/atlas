@@ -46,6 +46,12 @@ const NAV_GROUPS: NavGroup[] = [
             { key: 'issues', icon: 'layers', label: 'Issues', path: '/issues', countKey: 'issues' },
             { key: 'queue', icon: 'schedule', label: 'Queue', path: '/queue', countKey: 'queue' },
             { key: 'terminal', icon: 'terminal', label: 'Terminal', path: '/terminal' },
+            {
+                key: 'terminal-standalone',
+                icon: 'folder_open',
+                label: 'Standalone',
+                path: '/terminal/standalone',
+            },
             { key: 'search', icon: 'search', label: 'Search', path: '/search' },
             { key: 'analytics', icon: 'analytics', label: 'Analytics', path: '/analytics' },
         ],

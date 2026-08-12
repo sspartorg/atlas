@@ -144,6 +144,10 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                       token: token.trim(),
                       scope: scope.trim(),
                       expires_at: null,
+                      // On a PAT these are the commit AUTHOR, not a
+                      // co-author — a PAT has no bot identity of its own.
+                      human_name: humanName.trim() || null,
+                      human_email: humanEmail.trim() || null,
                   }),
         onSuccess: (cred) => {
             setSavedCred(cred);
@@ -162,6 +166,11 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                 scope: scope.trim(),
             };
             if (token.trim() && mode.credential.kind === 'pat') patch['token'] = token.trim();
+            // Identity applies to both kinds — co-author on github_app, commit
+            // author on pat. `human_gh_login` stays App-only below because it
+            // only feeds `gh pr create --assignee`.
+            patch['human_name'] = humanName.trim() || null;
+            patch['human_email'] = humanEmail.trim() || null;
             if (mode.credential.kind === 'github_app') {
                 // Always send `app_installation_owner` on github_app edit
                 // — omitting when blank silently swallowed the Owner's
@@ -174,8 +183,6 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                 // Send the human_* fields as-is (blank string clears the
                 // row's value; server-side we normalize '' → null via
                 // `.trim() || null`).
-                patch['human_name'] = humanName.trim() || null;
-                patch['human_email'] = humanEmail.trim() || null;
                 patch['human_gh_login'] = humanGhLogin.trim() || null;
             }
             return api.credentials.update(mode.credential.id, patch);
@@ -603,6 +610,47 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                                     helperText="Used for --assignee and Requested-By: @<login> in the PR body."
                                     sx={{ mb: 3 }}
                                 />
+                            </>
+                        )}
+
+                        {chosenKind === 'pat' && (
+                            <>
+                                <Typography sx={{ ...SECTION_LABEL_SX, mt: 2, mb: 1 }}>
+                                    Commit identity (optional)
+                                </Typography>
+                                <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, mb: 2 }}>
+                                    Set both to author commits made under this credential as you.
+                                    Leave blank and commits fall back to this machine&apos;s git
+                                    config.
+                                </Typography>
+                                <Box
+                                    sx={{
+                                        display: 'grid',
+                                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                        gap: { xs: 3, md: 2 },
+                                        mb: 3,
+                                    }}
+                                >
+                                    <TextField
+                                        fullWidth
+                                        size="small"
+                                        label="Your name"
+                                        value={humanName}
+                                        onChange={(e) => setHumanName(e.target.value)}
+                                        placeholder="sspart"
+                                        helperText="Becomes git user.name."
+                                    />
+                                    <TextField
+                                        fullWidth
+                                        size="small"
+                                        label="Your email"
+                                        type="email"
+                                        value={humanEmail}
+                                        onChange={(e) => setHumanEmail(e.target.value)}
+                                        placeholder="sspart.org@gmail.com"
+                                        helperText="Becomes git user.email."
+                                    />
+                                </Box>
                             </>
                         )}
 

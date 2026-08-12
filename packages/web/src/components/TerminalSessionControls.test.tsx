@@ -360,3 +360,60 @@ describe('TerminalSessionControls — onClose / onClosed callbacks in StopSessio
         expect(result.current.stopModalElement).toBeTruthy();
     });
 });
+
+// ── Standalone sessions ───────────────────────────────────────────────────
+//
+// `StopSessionModal` is a review-and-finalize gate — it diffs the worktree and
+// ends in commit + push + PR. A standalone session does none of that, so Stop
+// has to route to a plain confirm instead. Getting this wrong would show the
+// Owner a diff of their own repo behind buttons that do nothing.
+
+describe('TerminalSessionControls — standalone session', () => {
+    const standalone = () =>
+        makeSession({
+            project_id: null,
+            worktree_branch: null,
+            worktree_path: '/Users/owner/code/atlas',
+            credential_id: null,
+        });
+
+    it('Stop opens a plain confirm, not the worktree review modal', async () => {
+        renderControls(standalone());
+        fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+
+        expect(await screen.findByText('Close terminal?')).toBeInTheDocument();
+        // The review modal's heading must not appear.
+        expect(screen.queryByText(/review & finalize/i)).not.toBeInTheDocument();
+    });
+
+    it('names the folder and promises it is left alone', async () => {
+        renderControls(standalone());
+        fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+
+        expect(
+            await screen.findByText(/\/Users\/owner\/code\/atlas is left exactly as it is/),
+        ).toBeInTheDocument();
+    });
+
+    it('confirming stops with no staging and no PR', async () => {
+        let stopBody: Record<string, unknown> | null = null;
+        server.use(
+            http.post(`${BASE}/cli/sessions/sess-1/stop`, async ({ request }) => {
+                stopBody = (await request.json()) as Record<string, unknown>;
+                return HttpResponse.json({
+                    session: makeSession({ status: 'closed', project_id: null }),
+                    pushed: false,
+                    committed: false,
+                    finalize_pr_url: null,
+                });
+            }),
+        );
+        const onStopped = vi.fn();
+        renderControls(standalone(), { onStopped });
+        fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Close terminal' }));
+
+        await waitFor(() => expect(onStopped).toHaveBeenCalled());
+        expect(stopBody).toEqual({ files_to_stage: [], open_pull_request: false });
+    });
+});

@@ -180,7 +180,8 @@ interface AnalyticsTerminalByCliRow {
 // terminal segments.
 interface AnalyticsTerminalByProjectRow {
     project_id: string | null;
-    project_name: string;
+    // Null for standalone sessions — they have no project to left-join to.
+    project_name: string | null;
     total_cost_usd: number;
     session_count: number;
 }
@@ -204,7 +205,8 @@ export interface AnalyticsSessionSubagent {
 interface AnalyticsTopTerminalSession {
     session_id: string;
     project_id: string | null;
-    project_name: string;
+    // Null for standalone sessions — they have no project to left-join to.
+    project_name: string | null;
     title: string;
     cli: AgentCli;
     total_cost_usd: number;

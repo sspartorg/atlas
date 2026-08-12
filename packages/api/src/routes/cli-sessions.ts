@@ -11,6 +11,8 @@ import type { WebSocket } from '@fastify/websocket';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { stat as fsStat } from 'node:fs/promises';
+import { basename, isAbsolute, resolve as resolvePath } from 'node:path';
 import { z } from 'zod';
 import {
     type ICliSession,
@@ -19,12 +21,14 @@ import {
     type CliSessionUnstagedFile,
     type CliSessionDiffScopeName,
     CliSessionCreateSchema,
+    CliSessionStandaloneCreateSchema,
     DEFAULT_MODEL_BY_CLI,
     asAgentCli,
 } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
 import { getTrustedBrowserOrigins } from '../utils/lan-origins.js';
-import { tokensMatch } from '../plugins/mcp-auth.js';
+import { requireMcpToken, tokensMatch } from '../plugins/mcp-auth.js';
+import { credentialsService } from '../services/credentials.js';
 import { projectsService } from '../services/projects.js';
 import {
     ensureWorktree,
@@ -125,6 +129,35 @@ function defaultTitle(sessionId: string): string {
     return `Session ${sessionId.slice(0, 8)}`;
 }
 
+/**
+ * A STANDALONE session is one the Owner opened directly on a folder of their
+ * choosing: no project, no Atlas-provisioned worktree, no `.atlas/` staging.
+ *
+ * This is the single discriminator for that whole mode, and it gates the
+ * destructive half of the lifecycle. `cleanupWorktreeAfterPush` deletes the
+ * directory it is pointed at — correct for a worktree Atlas created, and data
+ * loss for a folder the Owner picked. Nothing on the finalize path may run
+ * without checking this first.
+ */
+function isStandalone(session: Pick<ICliSession, 'project_id'>): boolean {
+    return session.project_id === null;
+}
+
+/**
+ * The review endpoints (preflight-stop, diff, diff/file) exist to feed the
+ * Stop modal, which is the gate before Atlas commits + pushes + opens a PR.
+ * A standalone session does none of that, so there is nothing to review and
+ * the callers are told so explicitly rather than being handed a diff of the
+ * Owner's own working tree that no button acts on.
+ */
+function replyStandaloneConflict(reply: FastifyReply): FastifyReply {
+    return reply.status(409).send({
+        error: 'standalone sessions have no worktree to review',
+        kind: 'conflict',
+        details: { code: 'standalone_session' },
+    });
+}
+
 function rowToSession(row: Record<string, unknown>): ICliSession {
     const cli = asAgentCli(row['cli']);
     const num = (v: unknown): number | null =>
@@ -139,12 +172,15 @@ function rowToSession(row: Record<string, unknown>): ICliSession {
                 : null;
     return {
         id: String(row['id']),
-        project_id: String(row['project_id']),
+        // Null on standalone sessions (migration 030) — do NOT String() it,
+        // that would turn null into the literal "null".
+        project_id: (row['project_id'] as string | null) ?? null,
         title: String(row['title']),
         status: row['status'] as ICliSession['status'],
         cli,
         worktree_path: (row['worktree_path'] as string | null) ?? null,
         worktree_branch: (row['worktree_branch'] as string | null) ?? null,
+        credential_id: (row['credential_id'] as string | null) ?? null,
         /* v8 ignore next */
         claude_session_id: (row['claude_session_id'] as string | null) ?? null,
         model: String(row['model']),
@@ -252,11 +288,19 @@ async function commitsAhead(worktreePath: string, branch: string): Promise<numbe
 // ── Route registration ─────────────────────────────────────────────────────
 
 export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
-    // LIST -- optional ?project_id filter.
+    // LIST -- optional ?project_id and ?standalone filters.
+    //
+    // `standalone` is a server-side filter rather than a client-side one
+    // because the 200-row cap is applied here: with both kinds sharing the
+    // table, a busy project could push every standalone session off the end
+    // of the /terminal/standalone page's list.
     app.get('/api/cli/sessions', async (req: FastifyRequest) => {
-        const projectId = (req.query as { project_id?: string } | undefined)?.project_id;
+        const query = req.query as { project_id?: string; standalone?: string } | undefined;
+        const projectId = query?.project_id;
         let q = db.selectFrom('cli_sessions').selectAll();
         if (projectId) q = q.where('project_id', '=', projectId);
+        if (query?.standalone === 'true') q = q.where('project_id', 'is', null);
+        if (query?.standalone === 'false') q = q.where('project_id', 'is not', null);
         const rows = await q.orderBy('last_active_at', 'desc').limit(200).execute();
         return rows.map((r) => rowToSession(r as never));
     });
@@ -534,6 +578,158 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(201).send(created);
     });
 
+    // CREATE STANDALONE -- a PTY on a folder the Owner picked. No project, no
+    // worktree, no `.atlas/` staging, no setup script, and no commit/push/PR
+    // on the way out. The row shares the `cli_sessions` table (and therefore
+    // the PTY host, the WS stream, transcript ingest and cost accounting)
+    // purely by storing the folder in `worktree_path` — the column means "the
+    // session's cwd", and a null `worktree_branch` is what says Atlas does
+    // not own that directory.
+    //
+    // Deliberately a separate route from the one above rather than a flag on
+    // it: the payloads have disjoint required fields, and the project path is
+    // the one with a destructive finalize step, so it should be impossible to
+    // reach by accident from here.
+    //
+    // Gated by `requireMcpToken` for the same reason `/api/fs/*` is: it takes
+    // an arbitrary server-side path from the caller and spawns a process
+    // there, so it must not be reachable from any local HTTP client. The gate
+    // auto-passes for same-origin browser requests, so the web UI is
+    // unaffected.
+    app.post(
+        '/api/cli/sessions/standalone',
+        { preHandler: requireMcpToken },
+        async (req: FastifyRequest, reply: FastifyReply) => {
+            const body = CliSessionStandaloneCreateSchema.parse(req.body);
+
+            // Trust boundary. `resolve()` alone is not enough — it would
+            // happily turn a relative path into one rooted at the API
+            // process's cwd, which is not what the caller asked for. Require
+            // absolute first, then normalise (collapsing any `..`).
+            const rawPath = body.folder_path.trim();
+            if (!isAbsolute(rawPath)) {
+                return reply.status(400).send({
+                    error: 'folder_path must be an absolute path',
+                    kind: 'validation_error',
+                });
+            }
+            const folderPath = resolvePath(rawPath);
+            try {
+                const st = await fsStat(folderPath);
+                if (!st.isDirectory()) {
+                    return reply.status(400).send({
+                        error: `folder_path is not a directory: ${folderPath}`,
+                        kind: 'validation_error',
+                    });
+                }
+            } catch {
+                return reply.status(400).send({
+                    error: `folder not found: ${folderPath}`,
+                    kind: 'validation_error',
+                });
+            }
+
+            // Fail fast on a stale credential id rather than silently
+            // spawning a PTY with no auth — the user would only find out at
+            // their first push.
+            const credentialId = body.credential_id ?? null;
+            if (credentialId && !(await credentialsService.get(credentialId))) {
+                return reply.status(404).send({
+                    error: `credential not found: ${credentialId}`,
+                    kind: 'not_found',
+                });
+            }
+
+            const sessionId = randomUUID();
+            const cliSessionId = randomUUID();
+            const cli = body.cli;
+            const model = body.model && body.model.length > 0 ? body.model : DEFAULT_MODEL_BY_CLI[cli];
+            // `basename` is empty for a filesystem root, hence the fallback.
+            const title =
+                body.title && body.title.length > 0
+                    ? body.title
+                    : basename(folderPath) || defaultTitle(sessionId);
+            const initialPrompt = body.initial_prompt ?? null;
+
+            // Same tmp-git-config lifecycle as the project path: the host
+            // owns cleanup on pause / kill / unexpected exit. A github_app
+            // credential can throw on a transient mint failure; degrade to
+            // no auth so the session still starts.
+            const gitAuth = await safeBuildGitAuth(credentialId);
+
+            try {
+                await db
+                    .insertInto('cli_sessions')
+                    .values({
+                        id: sessionId,
+                        project_id: null,
+                        title,
+                        status: 'active',
+                        cli,
+                        worktree_path: folderPath,
+                        worktree_branch: null,
+                        credential_id: credentialId,
+                        claude_session_id: cliSessionId,
+                        model,
+                        initial_prompt: initialPrompt,
+                        item_id: null,
+                    })
+                    .execute();
+            } catch (err) {
+                // Nothing else would unlink the tmp dir — the host session
+                // was never started. Mirrors the project path.
+                cleanupGitConfig(gitAuth?.configDir ?? null);
+                throw err;
+            }
+
+            try {
+                hostStartSession({
+                    sessionId,
+                    cli,
+                    worktreePath: folderPath,
+                    cliSessionId,
+                    model,
+                    initialPrompt: initialPrompt ?? undefined,
+                    gitConfigPath: gitAuth?.configPath ?? null,
+                    ghToken: gitAuth?.token ?? null,
+                });
+            } catch (err) {
+                /* v8 ignore next */
+                const reason = err instanceof CliSessionSpawnError ? err.kind : 'pty_failed';
+                await db
+                    .updateTable('cli_sessions')
+                    .set({ status: 'errored', updated_at: new Date().toISOString() })
+                    .where('id', '=', sessionId)
+                    .execute();
+                try {
+                    await ingestTranscript(sessionId, { worktreePath: folderPath });
+                } catch (ingestErr) {
+                    req.log.warn(
+                        { err: ingestErr, sessionId },
+                        'transcript ingest failed on errored standalone spawn',
+                    );
+                }
+                // No worktree rollback here, unlike the project path: the
+                // directory belongs to the Owner and Atlas created nothing
+                // inside it.
+                return reply.status(500).send({
+                    error: `PTY spawn failed: ${(err as Error).message}`,
+                    kind: reason === 'binary_missing' ? 'cli_not_installed' : 'internal_error',
+                });
+            }
+
+            const created = await loadSession(sessionId);
+            /* v8 ignore next 5 */
+            if (!created) {
+                return reply
+                    .status(500)
+                    .send({ error: 'session inserted but lookup failed', kind: 'internal_error' });
+            }
+            emitStatus(created);
+            return reply.status(201).send(created);
+        },
+    );
+
     // PAUSE
     app.post('/api/cli/sessions/:id/pause', async (req: FastifyRequest, reply: FastifyReply) => {
         const id = (req.params as { id: string }).id;
@@ -571,42 +767,56 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         // helper is idempotent (overwrites every file). We intentionally
         // do NOT re-run `runProjectSetup` on resume — it executes shell
         // code and is one-shot per worktree.
+        //
+        // Skipped entirely for standalone sessions: nothing was staged into
+        // that folder at create time, and re-staging on resume would write
+        // `.atlas/` into the Owner's repo behind their back.
         type ItemTypeStr = 'epic' | 'story' | 'sub_task' | 'bug' | 'sub_bug';
-        let resumeItemType: ItemTypeStr | null = null;
-        if (session.item_id) {
-            const itemRow = await db
-                .selectFrom('items')
-                .select(['type'])
-                .where('id', '=', session.item_id)
-                .executeTakeFirst();
-            /* v8 ignore next */
-            resumeItemType = (itemRow?.type as ItemTypeStr | undefined) ?? null;
-        }
-        try {
-            await stageCliWorktree({
-                worktreePath: session.worktree_path,
-                projectId: session.project_id,
-                ...(session.item_id && resumeItemType
-                    ? { item: { type: resumeItemType, id: session.item_id } }
-                    : {}),
-                ...(session.initial_prompt && session.initial_prompt.trim().length > 0
-                    ? { userPrompt: session.initial_prompt }
-                    : {}),
-            });
-        } catch (err) {
-            return reply.status(500).send({
-                error: `worktree re-staging failed: ${(err as Error).message}`,
-                kind: 'internal_error',
-            });
+        const standalone = isStandalone(session);
+        if (!standalone) {
+            let resumeItemType: ItemTypeStr | null = null;
+            if (session.item_id) {
+                const itemRow = await db
+                    .selectFrom('items')
+                    .select(['type'])
+                    .where('id', '=', session.item_id)
+                    .executeTakeFirst();
+                /* v8 ignore next */
+                resumeItemType = (itemRow?.type as ItemTypeStr | undefined) ?? null;
+            }
+            try {
+                await stageCliWorktree({
+                    worktreePath: session.worktree_path,
+                    // reason: `isStandalone` above already proved this is
+                    // non-null; TS can't narrow through the helper call.
+                    projectId: session.project_id as string,
+                    ...(session.item_id && resumeItemType
+                        ? { item: { type: resumeItemType, id: session.item_id } }
+                        : {}),
+                    ...(session.initial_prompt && session.initial_prompt.trim().length > 0
+                        ? { userPrompt: session.initial_prompt }
+                        : {}),
+                });
+            } catch (err) {
+                return reply.status(500).send({
+                    error: `worktree re-staging failed: ${(err as Error).message}`,
+                    kind: 'internal_error',
+                });
+            }
         }
         // Build a fresh tmp git config — the previous one was unlinked
         // when the session paused (and wouldn't have survived an API
         // restart anyway). Host owns cleanup on the next pause / kill.
         // See the equivalent block in the start path for why ghToken is
         // threaded alongside gitConfigPath.
-        const project = await projectsService.get(session.project_id);
-        /* v8 ignore next */
-        const gitAuthResume = project ? await safeBuildGitAuth(project.credential_id) : null;
+        //
+        // A standalone session carries its own credential on the row; a
+        // project session resolves the project's. `session.credential_id`
+        // wins either way so the Owner's explicit pick is never silently
+        // replaced by a project default.
+        const project = session.project_id ? await projectsService.get(session.project_id) : null;
+        const resumeCredentialId = session.credential_id ?? project?.credential_id ?? null;
+        const gitAuthResume = await safeBuildGitAuth(resumeCredentialId);
         const gitConfigPath = gitAuthResume?.configPath ?? null;
         const ghToken = gitAuthResume?.token ?? null;
         try {
@@ -643,6 +853,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         if (!session.worktree_path) {
             return reply.status(409).send({ error: 'session has no worktree_path', kind: 'conflict' });
         }
+        if (isStandalone(session)) return replyStandaloneConflict(reply);
         const [unstaged, branch] = await Promise.all([
             porcelainUnstaged(session.worktree_path),
             currentBranch(session.worktree_path),
@@ -670,7 +881,8 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         if (!session.worktree_path) {
             return reply.status(409).send({ error: 'session has no worktree_path', kind: 'conflict' });
         }
-        const project = await projectsService.get(session.project_id);
+        if (isStandalone(session)) return replyStandaloneConflict(reply);
+        const project = await projectsService.get(session.project_id as string);
         try {
             return await getWorktreeDiffSummary({
                 worktreePath: session.worktree_path,
@@ -694,8 +906,9 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         if (!session.worktree_path) {
             return reply.status(409).send({ error: 'session has no worktree_path', kind: 'conflict' });
         }
+        if (isStandalone(session)) return replyStandaloneConflict(reply);
         const q = DiffFileQuerySchema.parse(req.query);
-        const project = await projectsService.get(session.project_id);
+        const project = await projectsService.get(session.project_id as string);
         try {
             const patch = await getWorktreeFilePatch({
                 worktreePath: session.worktree_path,
@@ -732,6 +945,54 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         if (session.status === 'closed') {
             return reply.status(409).send({ error: 'session already closed', kind: 'conflict' });
         }
+
+        // STANDALONE: kill the PTY, capture the spend, mark closed. Nothing
+        // else. The directory belongs to the Owner — Atlas neither created it
+        // nor wrote anything into it, so there is no branch to push, no PR to
+        // open, and above all nothing to tear down. Reaching
+        // `cleanupWorktreeAfterPush` here would delete a real repository.
+        //
+        // This must stay ABOVE the worktree_branch guard below. That guard
+        // would already reject a standalone row (null branch), but with a
+        // 409 that leaves the session stuck `active` with a live PTY and no
+        // way to close it from the UI.
+        if (isStandalone(session)) {
+            hostKillSessionPty(id);
+            const closedAt = new Date().toISOString();
+            await db
+                .updateTable('cli_sessions')
+                .set({ status: 'closed', closed_at: closedAt, updated_at: closedAt })
+                .where('id', '=', id)
+                .execute();
+            const closed = await loadSession(id);
+            if (closed) {
+                emitStatus(closed);
+                broadcastSSE({
+                    type: 'cli_session_closed',
+                    cliSessionId: closed.id,
+                    cliSessionFinalizePrUrl: null,
+                });
+            }
+            // Awaited for the same reason as the project path: the history
+            // page is opened straight after Stop and reads this column.
+            try {
+                await ingestTranscript(id, { worktreePath: session.worktree_path });
+            } catch (err) {
+                req.log.warn(
+                    { err, sessionId: id },
+                    'transcript ingest failed on standalone session close',
+                );
+            }
+            const standaloneResp: CliSessionStopResponse = {
+                /* v8 ignore next */
+                session: (await loadSession(id)) ?? session,
+                pushed: false,
+                committed: false,
+                finalize_pr_url: null,
+            };
+            return standaloneResp;
+        }
+
         if (!session.worktree_path || !session.worktree_branch) {
             return reply
                 .status(409)
@@ -758,8 +1019,12 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         // of picking up the developer's `~/.gitconfig`. Without this, PRs
         // opened by the bot still end up with commits authored by the
         // developer, which regresses the whole point of the App identity.
-        const project = await projectsService.get(session.project_id);
-        const finalizeAuth = project ? await safeBuildGitAuth(project.credential_id) : null;
+        // reason: the standalone short-circuit above returned for every row
+        // with a null project_id, so this cast is sound from here down.
+        const project = await projectsService.get(session.project_id as string);
+        const finalizeAuth = project
+            ? await safeBuildGitAuth(session.credential_id ?? project.credential_id)
+            : null;
         const finalizeEnv = gitInvokeEnv(
             finalizeAuth?.configPath ?? null,
             finalizeAuth?.token ?? null,
@@ -937,7 +1202,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         // the client — the user can always manually delete a stranded dir.
         void cleanupWorktreeAfterPush({
             itemId: null,
-            projectId: session.project_id,
+            projectId: session.project_id as string,
             /* v8 ignore next */
             projectGitPath: project?.git_path ?? '',
             worktreePath,

@@ -14,7 +14,10 @@ interface ProjectRow {
 
 interface TerminalProjectRow {
     project_id: string | null;
-    project_name: string;
+    // Null for standalone sessions — they have no project to left-join to,
+    // and are surfaced here as their own "Standalone" bar so their spend
+    // isn't silently missing from the cost breakdown.
+    project_name: string | null;
     total_cost_usd: number;
     session_count: number;
 }
@@ -52,7 +55,8 @@ function mergeByProject(
         });
     }
     for (const t of terminalByProject) {
-        const key = t.project_id ?? `__name:${t.project_name}`;
+        const name = t.project_name ?? 'Standalone';
+        const key = t.project_id ?? `__name:${name}`;
         const existing = m.get(key);
         if (existing) {
             existing.terminal_cost = t.total_cost_usd;
@@ -61,7 +65,7 @@ function mergeByProject(
         } else {
             m.set(key, {
                 project_id: t.project_id,
-                project_name: t.project_name,
+                project_name: name,
                 agent_cost: 0,
                 terminal_cost: t.total_cost_usd,
                 run_count: 0,

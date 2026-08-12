@@ -38,8 +38,10 @@ Manage encrypted git credentials. Today only Personal Access Tokens (PAT) are fu
 ## Modals / drawers
 **`CredentialModal`** — 3-view flow
 - **Kind view** (add only): PAT (default) / SSH key (disabled) / App password (disabled)
-- **Form view**: Host (locked to github), Label, Token, Repo scope; **Verify & save** (or **Save changes** in edit mode)
+- **Form view**: Host (locked to github), Label, Token, **Commit identity** (PAT only — Your name / Your email), Repo scope; **Verify & save** (or **Save changes** in edit mode)
 - **Saved view**: success + details box + **Add another** / **Done**
+
+**Commit identity (PAT)** — writes `human_name` / `human_email`. Set both and `buildGitAuth` emits a `[user]` block in the session's temp git config, so `git commit` inside any terminal on this credential is authored as you. Leave either blank and commits fall back to the host machine's `~/.gitconfig` — which was the only behaviour before standalone terminals shipped, and is the reason a session could push under one identity while committing under another. Note the field means something different on a github_app credential, where the same two columns produce a `Co-Authored-By` trailer behind the bot author.
 
 **Delete dialog** — "Delete credential?", red Delete button.
 
@@ -64,7 +66,7 @@ Manage encrypted git credentials. Today only Personal Access Tokens (PAT) are fu
 - Host is locked to GitHub today even though the schema permits other hosts.
 
 ## Connectivity
-- **Pages**: [Projects](02-projects.md) — NewProjectModal picks a credential from this list; [Settings → Profile](19-settings.md) — credentials status card deep-links here.
+- **Pages**: [Projects](02-projects.md) — NewProjectModal picks a credential from this list; [Settings → Profile](19-settings.md) — credentials status card deep-links here; [Terminal — Standalone](26-terminal-standalone.md) — its create dialog picks a credential per session, and the commit identity above is what makes that pick affect authorship and not just the push token.
 - **Routes**: `POST /api/credentials` validates token against host before persisting, then encrypts at rest; `PATCH` accepts a blank token as a no-op so label/scope edits don't require re-entering the secret.
 - **Entities**: `credential` — encrypted token, host, scope, fingerprint; referenced by `project.credential_id`.
 

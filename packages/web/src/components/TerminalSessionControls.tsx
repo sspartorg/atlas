@@ -8,9 +8,14 @@ import PauseRounded from '@mui/icons-material/PauseRounded';
 import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
 import StopRounded from '@mui/icons-material/StopRounded';
 import type { ICliSession } from '@atlas/shared';
-import { usePauseCliSession, useResumeCliSession } from '../hooks/useCliSessions.js';
+import {
+    usePauseCliSession,
+    useResumeCliSession,
+    useStopCliSession,
+} from '../hooks/useCliSessions.js';
 import { useToast } from '../hooks/useToast.js';
 import { StopSessionModal, type StopSessionResult } from './StopSessionModal.js';
+import { ConfirmActionModal } from './ConfirmActionModal.js';
 
 // The old copy said "Session stopped + branch pushed" unconditionally, which
 // was already wrong when nothing got pushed — and is now also wrong when the
@@ -19,6 +24,62 @@ function stopToast(r: StopSessionResult): { message: string; detail?: string } {
     if (r.prUrl) return { message: 'Session stopped + PR opened', detail: r.prUrl };
     if (r.pushed) return { message: 'Session stopped + branch pushed' };
     return { message: 'Session stopped' };
+}
+
+interface StopControlProps {
+    open: boolean;
+    session: ICliSession;
+    onClose: () => void;
+    onClosed: (result: StopSessionResult) => void;
+}
+
+/**
+ * Picks the right Stop affordance for the session's kind.
+ *
+ * `StopSessionModal` is a review-and-finalize gate: it diffs the worktree,
+ * offers per-file staging, and ends in commit + push + PR. None of that
+ * exists for a standalone session — the server closes it with no git work at
+ * all — so showing that modal would offer buttons that do nothing and diff a
+ * folder Atlas has no claim on. A plain confirm is the honest surface.
+ */
+function StopControlModal({ open, session, onClose, onClosed }: StopControlProps) {
+    const stop = useStopCliSession();
+    const toast = useToast();
+
+    if (session.project_id !== null) {
+        return (
+            <StopSessionModal
+                open={open}
+                sessionId={session.id}
+                onClose={onClose}
+                onClosed={onClosed}
+            />
+        );
+    }
+
+    return (
+        <ConfirmActionModal
+            open={open}
+            title="Close terminal?"
+            body={`The CLI process ends and the session moves to closed.\n\n${
+                session.worktree_path ?? 'The folder'
+            } is left exactly as it is — nothing is committed, pushed, or deleted.`}
+            confirmLabel="Close terminal"
+            tone="destructive"
+            busy={stop.isPending}
+            onCancel={onClose}
+            onConfirm={() =>
+                stop.mutate(
+                    { id: session.id, input: { files_to_stage: [], open_pull_request: false } },
+                    {
+                        onSuccess: () => onClosed({ pushed: false, committed: false, prUrl: null }),
+                        onError: (err: Error) =>
+                            toast.show({ message: 'Could not close', detail: err.message }),
+                    },
+                )
+            }
+        />
+    );
 }
 
 interface TerminalSessionControlsProps {
@@ -50,9 +111,9 @@ export function useTerminalStopModal(
     const [open, setOpen] = useState(false);
     const toast = useToast();
     const stopModalElement = (
-        <StopSessionModal
+        <StopControlModal
             open={open}
-            sessionId={session.id}
+            session={session}
             onClose={() => setOpen(false)}
             onClosed={(result) => {
                 setOpen(false);
@@ -112,9 +173,9 @@ export function TerminalSessionControls({
     const canStop = session.status === 'active' || session.status === 'paused';
 
     const internalModal = ownsModal ? (
-        <StopSessionModal
+        <StopControlModal
             open={internalStopOpen}
-            sessionId={session.id}
+            session={session}
             onClose={() => setInternalStopOpen(false)}
             onClosed={(result) => {
                 setInternalStopOpen(false);

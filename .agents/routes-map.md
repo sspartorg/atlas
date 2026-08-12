@@ -39,6 +39,7 @@ One row per web route. Cross-link to `pages/*.md` for detail. Sources: `packages
 | `/reminders` | `Reminders` | `useReminders`, `useCreateReminder`, `useCancelReminder`, `useToast` | `GET /reminders`, `POST /reminders`, `DELETE /reminders/:id` | `NewReminderModal`, cancel-confirm `Dialog` | â€” |
 | `/scratch-pad` | `ScratchPad` | `useScratchPadList`, `useCreateScratchPad`, `useUpdateScratchPad`, `useDeleteScratchPad`, `useToast` | `GET /scratch-pad`, `POST /scratch-pad`, `PATCH /scratch-pad/:id`, `DELETE /scratch-pad/:id` | `ScratchPadEditor` (markdown editor modal) | â€” |
 | `/terminal` | `Terminal` | `useCliSessions`, `useProjects`, `useCreateCliSession` (via dialog), `useToast` | `GET /cli/sessions`, `POST /cli/sessions` | `StartSessionDialog` | Multi-pane workspace entry (`/terminal/layout`); transcript history link on closed/errored cards (`/terminal/:id/history`) |
+| `/terminal/standalone` | `TerminalStandalone` | `useCliSessions({standalone:true})`, `useCredentials`, `useCreateStandaloneCliSession` (via dialog), `useToast` | `GET /cli/sessions?standalone=true`, `POST /cli/sessions/standalone`, `GET /fs/{list,stat,join,home}` (via `FolderPicker`) | `StartStandaloneSessionDialog`, `ConfirmActionModal` (Stop, via `TerminalSessionControls`) | Declared BEFORE `/terminal/:id` in `App.tsx` or the param route swallows "standalone" as an id |
 | `/terminal/layout` | `TerminalLayout` | `useCliSessions`, `useSearchParams`, `useToast`, `useNavigate` | `GET /cli/sessions`, `POST /cli/sessions` (via dialog), WS `/api/cli/sessions/:id/stream` (per pane) | `StartSessionDialog`, `StopSessionModal` (via `TerminalSessionControls`) | â€” |
 | `/terminal/:id` | `TerminalSession` | `useCliSession(id)`, `usePauseCliSession`, `useResumeCliSession`, `useCliSessionDiff`, `useCliSessionFilePatch`, `useNavigate` (Pause/Resume/Stop now via `TerminalSessionControls`) | `GET /cli/sessions/:id`, `POST /cli/sessions/:id/{pause,resume,preflight-stop,stop}`, `GET /cli/sessions/:id/diff`, `GET /cli/sessions/:id/diff/file`, WS `/api/cli/sessions/:id/stream` | `StopSessionModal` (via `TerminalSessionControls`; diff panel lazy-loaded) | â€” |
 | `/terminal/:id/history` | `TerminalHistory` | `useCliSession(id)`, `useCliSessionTranscript(id, status)` | `GET /cli/sessions/:id`, `GET /cli/sessions/:id/transcript` | â€” | â€” |
@@ -70,6 +71,8 @@ WORKSPACE
   Epics (N)           /epics
   Issues (N)          /issues
   Queue (N)           /queue
+  Terminal            /terminal
+  Standalone          /terminal/standalone
   Search              /search
   Analytics           /analytics
 
@@ -93,7 +96,7 @@ Below the MUI `md` breakpoint (`<900px`, via `useIsMobile()` in `packages/web/sr
 
 - The inline Sidenav is replaced with a temporary `Drawer` (left-anchored, 240px wide). The drawer opens via a hamburger `IconButton` in the mobile `AppBar` and closes on backdrop tap or when a nav link is clicked (via `onNavigate` prop on `Sidenav`).
 - The desktop `Topbar` is replaced by `MobileAppBar` (`packages/web/src/components/shell/MobileAppBar.tsx`), which renders: `â‰¡` hamburger Â· page title (set per-page via `useSetPageTitle()` from `PageTitleContext`) Â· optional trailing icon slot. 56pt tall, respects `env(safe-area-inset-top)`.
-- A persistent `BottomNav` (`packages/web/src/components/shell/BottomNav.tsx`) renders 5 destinations: **Home** (`/`), **Epics** (`/epics`), **Issues** (`/issues`), **Queue** (`/queue`), **More**. The More tab opens a bottom `Drawer` (`MoreSheet`) listing every secondary sidenav destination so phone users can reach the same routes the desktop sidenav offers: Scratch Pad, Projects, Search, Analytics, Agents, Marketplace, MCP Tools, Notifications, Reminders, Guard-rails, Settings.
+- A persistent `BottomNav` (`packages/web/src/components/shell/BottomNav.tsx`) renders 5 destinations: **Home** (`/`), **Epics** (`/epics`), **Issues** (`/issues`), **Queue** (`/queue`), **More**. The More tab opens a bottom `Drawer` (`MoreSheet`) listing every secondary sidenav destination so phone users can reach the same routes the desktop sidenav offers: Scratch Pad, Projects, Search, Analytics, Terminal, Standalone, Agents, Marketplace, MCP Tools, Notifications, Reminders, Guard-rails, Settings.
 - The Shortcuts pill hides below `md` (no keyboard on touch devices).
 - List pages (Projects, Epics, Issues, Agents, Credentials) hide their top-right "+ New X" button on mobile and mount a `PageFab` instead, positioned above the bottom nav (`bottom: calc(80px + env(safe-area-inset-bottom))`).
 - Tables (`WorkItemTable`, `EpicTable`) and the inline Issues table render as 2-line MUI list rows (`MobileWorkItemList` / `MobileEpicList`) below `md`.

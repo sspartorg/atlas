@@ -34,6 +34,12 @@ const ITEMS: MoreItem[] = [
     { key: 'search', label: 'Search', icon: 'search', path: '/search' },
     { key: 'analytics', label: 'Analytics', icon: 'analytics', path: '/analytics' },
     { key: 'terminal', label: 'Terminal', icon: 'terminal', path: '/terminal' },
+    {
+        key: 'terminal-standalone',
+        label: 'Standalone',
+        icon: 'folder_open',
+        path: '/terminal/standalone',
+    },
     // Agents — smart_toy mirrors the Sidenav Agents icon.
     { key: 'agents', label: 'Agents', icon: 'smart_toy', path: '/agents' },
     { key: 'marketplace', label: 'Marketplace', icon: 'storefront', path: '/agents/marketplace' },

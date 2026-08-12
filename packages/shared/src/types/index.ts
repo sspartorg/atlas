@@ -1459,13 +1459,32 @@ export type CliSessionStatus = 'active' | 'paused' | 'closed' | 'errored';
 
 export interface ICliSession {
     id: string;
-    project_id: string;
+    /**
+     * Null on a STANDALONE session — one the Owner opened directly on a folder
+     * of their choosing with no Atlas project, no worktree, and no `.atlas/`
+     * staging. `project_id === null` is the discriminator for that whole mode.
+     */
+    project_id: string | null;
     title: string;
     status: CliSessionStatus;
     /** Which CLI this session is running. The claude dialect (`claude`, `ollama`) supports `--resume`; `copilot` does not. */
     cli: AgentCli;
+    /**
+     * The session's cwd. For a project session that is the Atlas-provisioned
+     * worktree; for a standalone session it is the folder the Owner picked.
+     * `worktree_branch !== null` is what means "Atlas created and owns this
+     * directory" — the finalize path keys its teardown off that, never off
+     * this field, because deleting a standalone session's folder would
+     * destroy the Owner's real repo.
+     */
     worktree_path: string | null;
     worktree_branch: string | null;
+    /**
+     * Git credential this session's PTY authenticates with. Standalone
+     * sessions carry the Owner's pick here; project sessions leave it null and
+     * resolve `project.credential_id` at spawn/resume time instead.
+     */
+    credential_id: string | null;
     /** Only set for `claude` sessions — minted via `--session-id` for `--resume`. Null for copilot. */
     claude_session_id: string | null;
     model: string;
@@ -1506,6 +1525,29 @@ export interface CliSessionCreateInput {
     model?: string;
     /** Optional Atlas item id to anchor this session to. Must belong to the same project. */
     item_id?: string;
+    /** Which CLI to spawn. Defaults to `claude` server-side. */
+    cli?: AgentCli;
+}
+
+/**
+ * Standalone terminal — a PTY opened directly on a folder the Owner picked,
+ * under a credential they picked. Deliberately a separate shape from
+ * `CliSessionCreateInput`: the two have disjoint required fields (folder vs
+ * project) and nothing the project path does — worktree provisioning,
+ * `.atlas/` staging, the setup script, the commit/push/PR finalize — happens
+ * here.
+ */
+export interface CliSessionStandaloneCreateInput {
+    /** Absolute path to an existing directory on the API host. */
+    folder_path: string;
+    /** Git credential to authenticate the PTY's git/gh calls. Omit for none. */
+    credential_id?: string;
+    /** Defaults to the folder's basename server-side if omitted. */
+    title?: string;
+    /** Optional first prompt sent to the PTY after a settle delay. */
+    initial_prompt?: string;
+    /** Defaults to the per-CLI default model server-side if omitted. */
+    model?: string;
     /** Which CLI to spawn. Defaults to `claude` server-side. */
     cli?: AgentCli;
 }

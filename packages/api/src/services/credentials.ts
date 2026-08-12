@@ -33,6 +33,13 @@ export type CredentialCreateInput =
           token: string;
           scope: string;
           expires_at: string | null;
+          // Migration 026 columns, reused for PATs. Unlike the github_app
+          // branch below (where they produce a Co-Authored-By trailer), on a
+          // PAT they ARE the commit author — `buildGitAuth` writes them into
+          // the session's `[user]` block. No `human_gh_login`: it only feeds
+          // `gh pr create --assignee`, which no PAT flow reaches.
+          human_name?: string | null | undefined;
+          human_email?: string | null | undefined;
       }
     | {
           label: string;
@@ -307,7 +314,13 @@ export const credentialsService = {
                     token_fingerprint,
                     scope: input.scope,
                     expires_at: input.expires_at,
-                })
+                    // On a PAT these are the commit AUTHOR, not a co-author —
+                    // see the `pat` branch in `git-credentials.buildGitAuth`.
+                    // `human_gh_login` stays github_app-only: it only feeds
+                    // `gh pr create --assignee`, which no PAT flow reaches.
+                    human_name: nullIfBlank(input.human_name),
+                    human_email: nullIfBlank(input.human_email),
+                } as never)
                 .execute();
             // reason: the row was just inserted with this id; get() will
             // return it unless the DB dropped between statements.
@@ -381,14 +394,17 @@ export const credentialsService = {
         if (!existing) throw new Error(`Credential ${id} not found`);
 
         // Kind-vs-field validation. Callers must not smuggle fields that
-        // don't apply to the row's kind: PAT rows have no human-attribution
-        // block, and github_app rows have no user-settable token (the mint
-        // service owns it). Silently dropping these was a footgun — the
-        // caller assumed the write landed and got 200 OK back.
+        // don't apply to the row's kind: github_app rows have no user-settable
+        // token (the mint service owns it), and a PAT row has no App
+        // installation. Silently dropping these was a footgun — the caller
+        // assumed the write landed and got 200 OK back.
+        //
+        // `human_name` / `human_email` ARE valid on a PAT: they become the
+        // commit author's `[user]` block. `human_gh_login` is not — it only
+        // feeds `gh pr create --assignee`, which no PAT flow reaches, so
+        // accepting it would imply an assignment that never happens.
         if (existing.kind === 'pat') {
             const badFields: string[] = [];
-            if (patch.human_name !== undefined) badFields.push('human_name');
-            if (patch.human_email !== undefined) badFields.push('human_email');
             if (patch.human_gh_login !== undefined) badFields.push('human_gh_login');
             if (patch.app_installation_owner !== undefined)
                 badFields.push('app_installation_owner');
@@ -453,16 +469,16 @@ export const credentialsService = {
             next['token_fingerprint'] = null;
             next['expires_at'] = null;
         }
-        if (existing.kind === 'github_app') {
-            if (patch.human_name !== undefined) {
-                next['human_name'] = nullIfBlank(patch.human_name);
-            }
-            if (patch.human_email !== undefined) {
-                next['human_email'] = nullIfBlank(patch.human_email);
-            }
-            if (patch.human_gh_login !== undefined) {
-                next['human_gh_login'] = nullIfBlank(patch.human_gh_login);
-            }
+        // name/email apply to both kinds (co-author on github_app, author on
+        // pat); gh_login is github_app-only and already rejected above.
+        if (patch.human_name !== undefined) {
+            next['human_name'] = nullIfBlank(patch.human_name);
+        }
+        if (patch.human_email !== undefined) {
+            next['human_email'] = nullIfBlank(patch.human_email);
+        }
+        if (existing.kind === 'github_app' && patch.human_gh_login !== undefined) {
+            next['human_gh_login'] = nullIfBlank(patch.human_gh_login);
         }
         if (patch.token !== undefined && existing.kind === 'pat') {
             next['token_encrypted'] = encrypt(patch.token);

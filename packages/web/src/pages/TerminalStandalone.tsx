@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
@@ -9,25 +9,25 @@ import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
 import CardContent from '@mui/material/CardContent';
 import CircularProgress from '@mui/material/CircularProgress';
-import AddRounded from '@mui/icons-material/AddRounded';
-import TerminalRounded from '@mui/icons-material/TerminalRounded';
-import { cliIcon } from '../utils/cliIcons.js';
-import DashboardCustomizeRounded from '@mui/icons-material/DashboardCustomizeRounded';
 import Tooltip from '@mui/material/Tooltip';
-import IconButton from '@mui/material/IconButton';
+import AddRounded from '@mui/icons-material/AddRounded';
+import FolderOpenRounded from '@mui/icons-material/FolderOpenRounded';
+import KeyRounded from '@mui/icons-material/KeyRounded';
 import type { ICliSession, CliSessionStatus } from '@atlas/shared';
+import { cliIcon } from '../utils/cliIcons.js';
 import { useCliSessions } from '../hooks/useCliSessions.js';
-import { useProjects } from '../hooks/useProjects.js';
+import { useCredentials } from '../hooks/useCredentials.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 import { useToast } from '../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
-import { StartSessionDialog } from '../components/StartSessionDialog.js';
-import {
-    TerminalFilters,
-    type StatusFilterKey,
-    type CliFilterKey,
-} from '../components/TerminalFilters.js';
+import { StartStandaloneSessionDialog } from '../components/StartStandaloneSessionDialog.js';
 import { sessionDetailUrl } from '../utils/cliSessionRouting.js';
+import { formatCostUsd } from '../utils/formatCost.js';
+
+// Standalone terminals — PTYs the Owner opened directly on a folder, with no
+// project, no worktree and no Atlas scaffolding. Deliberately its own page
+// rather than a filter on /terminal: none of that page's axes (project,
+// branch, item) exist here, and the two are independent channels.
 
 const MONO_FONT = '"JetBrains Mono", monospace';
 
@@ -38,99 +38,45 @@ const STATUS_COLOUR: Record<CliSessionStatus, 'success' | 'warning' | 'default' 
     errored: 'error',
 };
 
-const FILTERS_STORAGE_KEY = 'atlas.terminal-filters.v1';
-
-interface PersistedFilters {
-    status: StatusFilterKey;
-    cli: CliFilterKey;
-    projectId: string | 'all';
-    search: string;
-}
-
-const DEFAULT_FILTERS: PersistedFilters = {
-    status: 'all',
-    cli: 'all',
-    projectId: 'all',
-    search: '',
-};
-
-function loadFilters(): PersistedFilters {
-    try {
-        const raw = window.localStorage.getItem(FILTERS_STORAGE_KEY);
-        if (!raw) return DEFAULT_FILTERS;
-        const parsed = JSON.parse(raw) as Partial<PersistedFilters>;
-        return { ...DEFAULT_FILTERS, ...parsed };
-    } catch {
-        return DEFAULT_FILTERS;
-    }
-}
-
 function relativeAgo(iso: string): string {
     const diff = Date.now() - new Date(iso).getTime();
     if (!Number.isFinite(diff) || diff < 0) return '';
-    const sec = Math.floor(diff / 1_000);
-    if (sec < 60) return `${sec}s ago`;
-    const min = Math.floor(sec / 60);
-    if (min < 60) return `${min}m ago`;
-    const hr = Math.floor(min / 60);
-    if (hr < 24) return `${hr}h ago`;
-    const d = Math.floor(hr / 24);
-    return `${d}d ago`;
+    const mins = Math.floor(diff / 60_000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export function Terminal() {
-    useSetPageTitle('Terminal');
+export function TerminalStandalone() {
+    useSetPageTitle('Standalone terminals');
     const navigate = useNavigate();
     const toast = useToast();
-    // Project terminals only. Standalone sessions live on their own page —
-    // they have no project, no branch and no worktree, so every filter and
-    // every column on this one would be empty for them.
-    const { data: sessions = [], isLoading } = useCliSessions({ standalone: false });
-    const { data: projects = [] } = useProjects();
+    const { data: sessions = [], isLoading } = useCliSessions({ standalone: true });
+    const { data: credentials = [] } = useCredentials();
     const [dialogOpen, setDialogOpen] = useState(false);
 
-    const [filters, setFilters] = useState<PersistedFilters>(() => loadFilters());
-    useEffect(() => {
-        try {
-            window.localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
-        } catch {
-            // localStorage may throw in private mode — non-fatal.
-        }
-    }, [filters]);
-
-    const projectNameById = useMemo(() => {
+    const credentialLabelById = useMemo(() => {
         const m = new Map<string, string>();
-        projects.forEach((p) => m.set(p.id, p.name));
+        credentials.forEach((c) => m.set(c.id, c.label));
         return m;
-    }, [projects]);
+    }, [credentials]);
 
-    const filtered = useMemo(() => {
-        const needle = filters.search.trim().toLowerCase();
-        return sessions.filter((s) => {
-            if (filters.status !== 'all' && s.status !== filters.status) return false;
-            if (filters.cli !== 'all' && s.cli !== filters.cli) return false;
-            if (filters.projectId !== 'all' && s.project_id !== filters.projectId) return false;
-            if (needle) {
-                const haystack = [s.title, s.worktree_branch ?? '', s.id, s.item_id ?? '']
-                    .join(' ')
-                    .toLowerCase();
-                if (!haystack.includes(needle)) return false;
-            }
-            return true;
-        });
-    }, [sessions, filters]);
-
-    const counts = useMemo<Record<StatusFilterKey, number>>(() => {
-        const c = { all: sessions.length, active: 0, paused: 0, closed: 0, errored: 0 };
+    const counts = useMemo(() => {
+        let active = 0;
+        let paused = 0;
+        let spend = 0;
         sessions.forEach((s) => {
-            c[s.status] += 1;
+            if (s.status === 'active') active += 1;
+            if (s.status === 'paused') paused += 1;
+            spend += s.total_cost_usd ?? 0;
         });
-        return c;
+        return { active, paused, spend };
     }, [sessions]);
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            {/* Header — Projects-style h1 + monospace subtitle. */}
             <Box
                 sx={{
                     display: 'flex',
@@ -154,8 +100,8 @@ export function Terminal() {
                             color: ATLAS_PALETTE.slate,
                         }}
                     >
-                        <TerminalRounded sx={{ fontSize: 36, color: ATLAS_PALETTE.green }} />
-                        Terminal
+                        <FolderOpenRounded sx={{ fontSize: 36, color: ATLAS_PALETTE.green }} />
+                        Standalone
                     </Typography>
                     <Typography
                         sx={{
@@ -166,54 +112,24 @@ export function Terminal() {
                         }}
                     >
                         {sessions.length} sessions · {counts.active} active · {counts.paused} paused
+                        · {formatCostUsd(counts.spend)} spent
                     </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Tooltip title="Open multi-pane workspace">
-                        <IconButton
-                            onClick={() => navigate('/terminal/layout')}
-                            sx={{
-                                border: `1px solid ${ATLAS_PALETTE.slate12}`,
-                                borderRadius: '8px',
-                                p: 1,
-                            }}
-                        >
-                            <DashboardCustomizeRounded sx={{ fontSize: 20 }} />
-                        </IconButton>
-                    </Tooltip>
-                    <Button
-                        variant="contained"
-                        startIcon={<AddRounded />}
-                        onClick={() => setDialogOpen(true)}
-                        sx={{
-                            textTransform: 'none',
-                            fontWeight: 600,
-                            background: ATLAS_PALETTE.green,
-                            '&:hover': { background: ATLAS_PALETTE.greenDark },
-                        }}
-                    >
-                        Start Session
-                    </Button>
-                </Box>
+                <Button
+                    variant="contained"
+                    startIcon={<AddRounded />}
+                    onClick={() => setDialogOpen(true)}
+                    sx={{
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        background: ATLAS_PALETTE.green,
+                        '&:hover': { background: ATLAS_PALETTE.greenDark },
+                    }}
+                >
+                    Open folder
+                </Button>
             </Box>
 
-            {/* Filter row */}
-            <Box sx={{ mt: 5 }}>
-                <TerminalFilters
-                    status={filters.status}
-                    cli={filters.cli}
-                    projectId={filters.projectId}
-                    search={filters.search}
-                    counts={counts}
-                    projects={projects}
-                    onStatusChange={(status) => setFilters((f) => ({ ...f, status }))}
-                    onCliChange={(cli) => setFilters((f) => ({ ...f, cli }))}
-                    onProjectChange={(projectId) => setFilters((f) => ({ ...f, projectId }))}
-                    onSearchChange={(search) => setFilters((f) => ({ ...f, search }))}
-                />
-            </Box>
-
-            {/* Card grid */}
             <Box sx={{ mt: 6 }}>
                 {isLoading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -221,16 +137,6 @@ export function Terminal() {
                     </Box>
                 ) : sessions.length === 0 ? (
                     <EmptyState onStart={() => setDialogOpen(true)} />
-                ) : filtered.length === 0 ? (
-                    <Box
-                        sx={{
-                            py: 16,
-                            textAlign: 'center',
-                            color: ATLAS_PALETTE.slate40,
-                        }}
-                    >
-                        No sessions match these filters.
-                    </Box>
                 ) : (
                     <Box
                         sx={{
@@ -243,14 +149,14 @@ export function Terminal() {
                             gap: 6,
                         }}
                     >
-                        {filtered.map((s) => (
-                            <SessionCard
+                        {sessions.map((s) => (
+                            <StandaloneSessionCard
                                 key={s.id}
                                 session={s}
-                                projectName={
-                                    s.project_id
-                                        ? projectNameById.get(s.project_id) ?? s.project_id
-                                        : 'Standalone'
+                                credentialLabel={
+                                    s.credential_id
+                                        ? credentialLabelById.get(s.credential_id) ?? s.credential_id
+                                        : null
                                 }
                                 onOpen={() => navigate(sessionDetailUrl(s))}
                             />
@@ -259,12 +165,12 @@ export function Terminal() {
                 )}
             </Box>
 
-            <StartSessionDialog
+            <StartStandaloneSessionDialog
                 open={dialogOpen}
                 onClose={() => setDialogOpen(false)}
                 onCreated={(created) => {
                     setDialogOpen(false);
-                    toast.show({ message: `Session "${created.title}" started` });
+                    toast.show({ message: `Terminal "${created.title}" opened` });
                     navigate(`/terminal/${created.id}`);
                 }}
             />
@@ -282,10 +188,11 @@ function EmptyState({ onStart }: { onStart: () => void }) {
                 border: `1px dashed ${ATLAS_PALETTE.slate12}`,
             }}
         >
-            <TerminalRounded sx={{ fontSize: 56, color: ATLAS_PALETTE.green, mb: 2 }} />
-            <Typography variant="h6">No sessions yet</Typography>
+            <FolderOpenRounded sx={{ fontSize: 56, color: ATLAS_PALETTE.green, mb: 2 }} />
+            <Typography variant="h6">No standalone terminals yet</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 3 }}>
-                Start one to spin up a Claude Code or GitHub Copilot REPL in a fresh worktree.
+                Open one to run a CLI in any folder on this machine, under the git credentials you
+                choose.
             </Typography>
             <Button
                 variant="contained"
@@ -297,20 +204,25 @@ function EmptyState({ onStart }: { onStart: () => void }) {
                     '&:hover': { background: ATLAS_PALETTE.greenDark },
                 }}
             >
-                Start Session
+                Open folder
             </Button>
         </Card>
     );
 }
 
-interface SessionCardProps {
+interface StandaloneSessionCardProps {
     session: ICliSession;
-    projectName: string;
+    credentialLabel: string | null;
     onOpen: () => void;
 }
 
-function SessionCard({ session, projectName, onOpen }: SessionCardProps) {
+function StandaloneSessionCard({
+    session,
+    credentialLabel,
+    onOpen,
+}: StandaloneSessionCardProps) {
     const CliIcon = cliIcon(session.cli);
+    const folder = session.worktree_path ?? '';
     return (
         <Card
             sx={{
@@ -329,7 +241,6 @@ function SessionCard({ session, projectName, onOpen }: SessionCardProps) {
                         gap: 1.5,
                     }}
                 >
-                    {/* Row 1 — CLI icon + title */}
                     <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
                         <Box
                             sx={{
@@ -351,7 +262,6 @@ function SessionCard({ session, projectName, onOpen }: SessionCardProps) {
                         </Typography>
                     </Stack>
 
-                    {/* Row 2 — status + cli + item chips */}
                     <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
                         <Chip
                             size="small"
@@ -365,33 +275,43 @@ function SessionCard({ session, projectName, onOpen }: SessionCardProps) {
                             variant="outlined"
                             sx={{ textTransform: 'capitalize' }}
                         />
-                        {session.item_id ? (
-                            <Chip
-                                size="small"
-                                variant="outlined"
-                                label={session.item_id}
-                                sx={{ fontFamily: MONO_FONT }}
-                            />
-                        ) : null}
+                        <Chip
+                            size="small"
+                            variant="outlined"
+                            icon={<KeyRounded sx={{ fontSize: 14 }} />}
+                            label={credentialLabel ?? 'machine git config'}
+                        />
                     </Stack>
 
-                    {/* Row 3 — project + branch */}
                     <Box sx={{ mt: 'auto', minWidth: 0 }}>
-                        <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            noWrap
-                            sx={{ fontFamily: MONO_FONT, fontSize: 12 }}
-                        >
-                            {projectName}
-                        </Typography>
+                        {/* The folder is the identity of a standalone session, and
+                            the meaningful end of a long path is the tail — so the
+                            ellipsis goes on the left, not MUI's default right. */}
+                        <Tooltip title={folder}>
+                            <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                noWrap
+                                sx={{
+                                    fontFamily: MONO_FONT,
+                                    fontSize: 12,
+                                    direction: 'rtl',
+                                    textAlign: 'left',
+                                }}
+                            >
+                                {folder}
+                            </Typography>
+                        </Tooltip>
                         <Typography
                             variant="body2"
                             color="text.secondary"
                             noWrap
                             sx={{ fontSize: 12, mt: 0.5 }}
                         >
-                            {session.worktree_branch ?? 'no branch'} · {session.model}
+                            {session.model}
+                            {session.total_cost_usd != null
+                                ? ` · ${formatCostUsd(session.total_cost_usd)}`
+                                : ''}
                         </Typography>
                         <Typography
                             variant="body2"

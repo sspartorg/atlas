@@ -48,6 +48,10 @@ const Terminal = lazyNamed(() => import('./pages/Terminal.js'), 'Terminal');
 const TerminalSession = lazyNamed(() => import('./pages/TerminalSession.js'), 'TerminalSession');
 const TerminalLayout = lazyNamed(() => import('./pages/TerminalLayout.js'), 'TerminalLayout');
 const TerminalHistory = lazyNamed(() => import('./pages/TerminalHistory.js'), 'TerminalHistory');
+const TerminalStandalone = lazyNamed(
+    () => import('./pages/TerminalStandalone.js'),
+    'TerminalStandalone',
+);
 const Agents = lazyNamed(() => import('./pages/Agents.js'), 'Agents');
 const AgentDetail = lazyNamed(() => import('./pages/AgentDetail.js'), 'AgentDetail');
 const Marketplace = lazyNamed(() => import('./pages/Marketplace.js'), 'Marketplace');
@@ -363,6 +367,16 @@ export function App() {
                                 element={
                                     <Wrap name="Terminal">
                                         <Terminal />
+                                    </Wrap>
+                                }
+                            />
+                            {/* Must precede `/terminal/:id` — otherwise the
+                                param route swallows "standalone" as an id. */}
+                            <Route
+                                path="/terminal/standalone"
+                                element={
+                                    <Wrap name="Standalone Terminals">
+                                        <TerminalStandalone />
                                     </Wrap>
                                 }
                             />

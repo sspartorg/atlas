@@ -733,7 +733,11 @@ export interface DB {
 // `services/cli-session-host.ts`.
 export interface CliSessionsTable {
     id: string;
-    project_id: string;
+    // Nullable since migration 030: null marks a STANDALONE session — a PTY
+    // opened directly on a folder the Owner picked, with no project, no
+    // worktree, and no `.atlas/` staging. Every standalone branch in
+    // `routes/cli-sessions.ts` keys off this being null.
+    project_id: StrN;
     title: Str;
     status: ColumnType<
         'active' | 'paused' | 'closed' | 'errored',
@@ -752,6 +756,10 @@ export interface CliSessionsTable {
     closed_at: TSn;
     finalize_pr_url: StrN;
     item_id: StrN;
+    // Migration 030. Set only on standalone sessions — the credential the
+    // Owner picked when opening the folder. Project sessions leave it null
+    // and resolve `projects.credential_id` at spawn/resume instead.
+    credential_id: StrN;
     transcript_jsonl: StrN;
     transcript_ingested_at: TSn;
     // Token + cost columns (re-added in migration 019 after migration 014

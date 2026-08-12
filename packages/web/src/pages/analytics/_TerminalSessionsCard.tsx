@@ -43,7 +43,8 @@ interface ByCliRow {
 
 interface TopSession {
     session_id: string;
-    project_name: string;
+    // Null for standalone sessions — they have no project to left-join to.
+    project_name: string | null;
     title: string;
     cli: AgentCli;
     total_cost_usd: number;
@@ -354,7 +355,7 @@ export function TerminalSessionsCard({ summary, byCli, topSessions, monthLabel }
                                                     mt: 0.25,
                                                 }}
                                             >
-                                                {s.project_name} · {relativeShort(s.closed_at)} · {formatTokenCount(s.input_tokens + s.output_tokens + s.cache_read_tokens)} tok
+                                                {s.project_name ?? 'Standalone'} · {relativeShort(s.closed_at)} · {formatTokenCount(s.input_tokens + s.output_tokens + s.cache_read_tokens)} tok
                                                 {hasSubagents && ` · ${s.subagents.length} subagent${s.subagents.length === 1 ? '' : 's'}`}
                                             </Typography>
                                         </Box>
