@@ -1,10 +1,17 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { screen, act, fireEvent, waitFor } from '@testing-library/react';
 import type { ITerminalOptions } from '@xterm/xterm';
-import { TerminalXterm, writeWsFrame } from './TerminalXterm.js';
+import { TERMINAL_COLS, TERMINAL_ROWS } from '@atlas/shared';
+import {
+    TerminalXterm,
+    writeWsFrame,
+    fitFontToWidth,
+    FONT_SIZE_MIN,
+    FONT_SIZE_MAX,
+} from './TerminalXterm.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 
-// Mock @xterm/xterm and addon-fit — they require a real DOM canvas which
+// Mock @xterm/xterm — it requires a real DOM canvas which
 // jsdom doesn't provide. The component's coverage comes from its overlay
 // branches and lifecycle hooks, which don't need the actual xterm canvas.
 // Capture the onData callback so tests can invoke it directly to exercise
@@ -55,12 +62,6 @@ vi.mock('@xterm/xterm', () => ({
             write: vi.fn(),
             options: {},
         };
-    }),
-}));
-
-vi.mock('@xterm/addon-fit', () => ({
-    FitAddon: vi.fn().mockImplementation(function () {
-        return { fit: vi.fn() };
     }),
 }));
 
@@ -223,17 +224,25 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         expect(lastWs?.url).toContain('/api/cli/sessions/sess-ws-1/stream');
     });
 
-    it('ws.onopen fires: clears reconnectAttempted + sends resize JSON', async () => {
+    it('constructs the terminal at the pinned shared grid and never sends geometry', async () => {
         renderWithProviders(<TerminalXterm sessionId="sess-ws-2" sessionLive={true} />);
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
         act(() => {
             lastWs?.onopen?.(new Event('open'));
         });
-        // After onopen, the WS should have sent a resize command
+        // Grid is pinned to the shared constants — the same size the PTY
+        // spawned at and the server mirror parses at.
+        const term = (await import('@xterm/xterm')).Terminal as unknown as {
+            mock: { calls: Array<[{ cols?: number; rows?: number }]> };
+        };
+        const ctorOpts = term.mock.calls[term.mock.calls.length - 1]![0];
+        expect(ctorOpts).toMatchObject({ cols: TERMINAL_COLS, rows: TERMINAL_ROWS });
+        // No attach-URL geometry and no {cmd:'resize'} envelope, ever — a
+        // resized PTY is the root cause of the ConPTY zombie-character bug.
+        expect(lastWs?.url).not.toContain('cols=');
         const sentStrings = (lastWs?.sent ?? []).filter((s) => typeof s === 'string') as string[];
-        const _resizeMsg = sentStrings.find((s) => s.includes('resize'));
-        // resize send may be wrapped in try/catch so it may or may not send (fitAddon may not have cols)
-        // Just verify no throw and connected overlay goes away
+        expect(sentStrings.some((s) => s.includes('resize'))).toBe(false);
+        // Connected overlay goes away after onopen.
         expect(screen.queryByText(/connecting to pty/i)).not.toBeInTheDocument();
     });
 
@@ -469,35 +478,6 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         expect(lastWs?.url).toMatch(/^wss:\/\//);
     });
 
-    it('ws.onopen: fit.fit() throw is silently caught and resize still sent', async () => {
-        // Exercises the try/catch around fitRef.current.fit() in ws.onopen (line 213-215).
-        const { FitAddon } = await import('@xterm/addon-fit');
-        (FitAddon as ReturnType<typeof vi.fn>).mockImplementationOnce(function () {
-            return {
-                fit: vi.fn().mockImplementationOnce(() => { throw new Error('fit failed'); }),
-            };
-        });
-        renderWithProviders(<TerminalXterm sessionId="sess-ws-14" sessionLive={true} />);
-        await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
-        // Should not throw
-        expect(() => {
-            act(() => { lastWs?.onopen?.(new Event('open')); });
-        }).not.toThrow();
-    });
-
-    it('ws.onopen: ws.send throw is silently caught', async () => {
-        // Exercises the try/catch around ws.send(resize) in ws.onopen (line 218-221).
-        renderWithProviders(<TerminalXterm sessionId="sess-ws-15" sessionLive={true} />);
-        await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
-        // Override send to throw after onopen fires
-        if (lastWs) {
-            lastWs.send = () => { throw new Error('send failed'); };
-        }
-        expect(() => {
-            act(() => { lastWs?.onopen?.(new Event('open')); });
-        }).not.toThrow();
-    });
-
     it('ws.onmessage: early return when termRef is null (line 227)', async () => {
         // Exercises the `if (!termRef.current) return;` guard in onmessage.
         // We use sessionLive=false so the terminal is never connected; any WS that
@@ -531,22 +511,6 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         act(() => { unmount(); });
         expect(() => {
             act(() => { ws.onmessage?.(new MessageEvent('message', { data: 'after unmount' })); });
-        }).not.toThrow();
-    });
-
-    it('ws.onopen: no-ops the resize block when fitRef/termRef are unset (line 216 false branch)', async () => {
-        // The onopen handler guards its fit+resize block on
-        // `fitRef.current && termRef.current`. Firing onopen after unmount
-        // (fitRef/termRef nulled by the init effect's cleanup) exercises the
-        // false side without touching setConnected, which is safe post-unmount.
-        const { unmount } = renderWithProviders(
-            <TerminalXterm sessionId="sess-ws-22" sessionLive={true} />,
-        );
-        await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
-        const ws = lastWs!;
-        act(() => { unmount(); });
-        expect(() => {
-            act(() => { ws.onopen?.(new Event('open')); });
         }).not.toThrow();
     });
 
@@ -665,62 +629,24 @@ describe('TerminalXterm — ResizeObserver branches', () => {
         lastRoCallback = null;
     });
 
-    it('ResizeObserver callback: no-ops when fitRef or termRef is null (line 288)', async () => {
-        // The callback guard `if (!fitRef.current || !termRef.current) return` fires
-        // when the observer triggers before xterm has initialised.
-        renderWithProviders(<TerminalXterm sessionId="sess-ro-1" sessionLive={true} />);
-        // Fire immediately — xterm hasn't initialised yet (deferred via setTimeout(0))
-        expect(() => {
-            act(() => { lastRoCallback?.(); });
-        }).not.toThrow();
-    });
-
-    it('ResizeObserver callback: fit().fit() throw causes early return without ws.send', async () => {
-        // Exercises the `catch { return; }` in the ResizeObserver (lines 290-292).
-        // Uses mockImplementationOnce (not the persistent mockImplementation) so
-        // FitAddon reverts to its normal, non-throwing behaviour for later tests
-        // in this file — a previous version of this test used the persistent
-        // form and silently broke branch coverage for the try{} path below it.
-        const { FitAddon } = await import('@xterm/addon-fit');
-        (FitAddon as ReturnType<typeof vi.fn>).mockImplementationOnce(function () {
-            return {
-                fit: vi.fn().mockImplementation(() => { throw new Error('fit failed in ro'); }),
-            };
-        });
-        renderWithProviders(<TerminalXterm sessionId="sess-ro-2" sessionLive={true} />);
-        await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
-        act(() => { lastWs?.onopen?.(new Event('open')); });
-        // Fire the resize callback — fit throws, so ws.send should NOT be called
-        expect(() => {
-            act(() => { lastRoCallback?.(); });
-        }).not.toThrow();
-    });
-
-    it('ResizeObserver callback: sends resize (debounced) when WS is open', async () => {
+    it('ResizeObserver callback: no-ops when termRef is null', async () => {
+        // The debounced callback guards on `termRef.current` — the observer
+        // can fire before xterm has initialised (deferred via setTimeout(0)).
         vi.useFakeTimers();
-        renderWithProviders(<TerminalXterm sessionId="sess-ro-3" sessionLive={true} />);
-        await act(async () => { await vi.runAllTimersAsync(); });
-        act(() => { lastWs?.onopen?.(new Event('open')); });
-        const sentBefore = (lastWs?.sent ?? []).length;
-        act(() => { lastRoCallback?.(); });
-        // The resize send is trailing-debounced — nothing goes out until the
-        // debounce window elapses.
-        expect((lastWs?.sent ?? []).length).toBe(sentBefore);
-        await act(async () => { vi.advanceTimersByTime(150); });
-        const sentAfter = lastWs?.sent ?? [];
-        expect(sentAfter.length).toBe(sentBefore + 1);
-        const lastSent = sentAfter[sentAfter.length - 1];
-        expect(typeof lastSent).toBe('string');
-        expect(JSON.parse(lastSent as string)).toMatchObject({ cmd: 'resize', cols: 80, rows: 24 });
+        renderWithProviders(<TerminalXterm sessionId="sess-ro-1" sessionLive={true} />);
+        // Fire immediately — xterm hasn't initialised yet
+        expect(() => {
+            act(() => { lastRoCallback?.(); });
+        }).not.toThrow();
         vi.useRealTimers();
     });
 
-    it('ResizeObserver callback: a burst of fires collapses into ONE resize send', async () => {
-        // Dragging a pane divider in /terminal/layout fires the observer per
-        // animation frame; each server-side resize makes ConPTY reflow the
-        // whole screen. The debounce must collapse a burst into one envelope.
+    it('ResizeObserver callback: NEVER sends anything over the WebSocket', async () => {
+        // A pane resize refits the FONT only; the grid — and therefore the
+        // PTY — never changes. Any envelope here would reintroduce the
+        // ConPTY resize corruption.
         vi.useFakeTimers();
-        renderWithProviders(<TerminalXterm sessionId="sess-ro-5" sessionLive={true} />);
+        renderWithProviders(<TerminalXterm sessionId="sess-ro-3" sessionLive={true} />);
         await act(async () => { await vi.runAllTimersAsync(); });
         act(() => { lastWs?.onopen?.(new Event('open')); });
         const sentBefore = (lastWs?.sent ?? []).length;
@@ -729,8 +655,8 @@ describe('TerminalXterm — ResizeObserver branches', () => {
             lastRoCallback?.();
             lastRoCallback?.();
         });
-        await act(async () => { vi.advanceTimersByTime(150); });
-        expect((lastWs?.sent ?? []).length).toBe(sentBefore + 1);
+        await act(async () => { vi.advanceTimersByTime(500); });
+        expect((lastWs?.sent ?? []).length).toBe(sentBefore);
         vi.useRealTimers();
     });
 
@@ -747,42 +673,74 @@ describe('TerminalXterm — ResizeObserver branches', () => {
         }).not.toThrow();
     });
 
-    it('init: initial fit.fit() throw is silently caught (lines 132-136)', async () => {
-        // Exercises the try/catch around the initial fit.fit() call made
-        // right after term.open(), distinct from the onopen-time fit call.
-        const { FitAddon } = await import('@xterm/addon-fit');
-        (FitAddon as ReturnType<typeof vi.fn>).mockImplementationOnce(function () {
-            return {
-                fit: vi.fn().mockImplementationOnce(() => { throw new Error('initial fit failed'); }),
-            };
-        });
-        expect(() => {
-            renderWithProviders(<TerminalXterm sessionId="sess-init-fit-throw" sessionLive={true} />);
-        }).not.toThrow();
-        // Let the deferred init timer run to completion.
-        await waitFor(() => expect(screen.getByText(/connecting to pty/i)).toBeInTheDocument());
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// fitFontToWidth — the pinned grid's only adaptation mechanism. Pane resizes
+// change the FONT size (integer px, clamped) so TERMINAL_COLS columns fit the
+// host width; the grid itself never changes.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('fitFontToWidth', () => {
+    function makeFitTerm(fontSize: number, screenWidthFor: (size: number) => number) {
+        const options: ITerminalOptions = { fontSize };
+        const screenEl = {
+            isConnected: true,
+            get clientWidth() {
+                return screenWidthFor(options.fontSize!);
+            },
+        };
+        return {
+            options,
+            element: {
+                querySelector: (sel: string) => (sel === '.xterm-screen' ? screenEl : null),
+            } as unknown as HTMLElement,
+        };
+    }
+
+    function makeHost(width: number): HTMLElement {
+        return { clientWidth: width } as HTMLElement;
+    }
+
+    it('scales the font down proportionally and clamps at FONT_SIZE_MIN', () => {
+        // Rendered grid is twice the pane width — proportional target is 6.5,
+        // floored to 6, clamped up to the readable floor.
+        const term = makeFitTerm(13, () => 1200);
+        fitFontToWidth(term, makeHost(600));
+        expect(term.options.fontSize).toBe(FONT_SIZE_MIN);
     });
 
-    it('ResizeObserver callback: skips ws.send when WS is not OPEN', async () => {
-        // Exercises the `ws && ws.readyState === WebSocket.OPEN` guard inside
-        // the debounced send.
-        vi.useFakeTimers();
-        renderWithProviders(<TerminalXterm sessionId="sess-ro-4" sessionLive={true} />);
-        await act(async () => { await vi.runAllTimersAsync(); });
-        act(() => { lastWs?.onopen?.(new Event('open')); });
-        // Close the WS so readyState != OPEN
-        act(() => {
-            lastWs?.onclose?.(new CloseEvent('close', { code: 1000 }));
-        });
-        const sentBefore = (lastWs?.sent ?? []).length;
-        // Fire resize — ws is no longer in wsRef (nulled in onclose); even
-        // after the debounce elapses, nothing is sent.
-        expect(() => {
-            act(() => { lastRoCallback?.(); });
-        }).not.toThrow();
-        await act(async () => { vi.advanceTimersByTime(150); });
-        expect((lastWs?.sent ?? []).length).toBe(sentBefore);
-        vi.useRealTimers();
+    it('scales the font up proportionally and clamps at FONT_SIZE_MAX', () => {
+        const term = makeFitTerm(13, () => 1000);
+        fitFontToWidth(term, makeHost(4000));
+        expect(term.options.fontSize).toBe(FONT_SIZE_MAX);
+    });
+
+    it('leaves the font unchanged when the grid already fits exactly', () => {
+        const term = makeFitTerm(13, () => 780);
+        fitFontToWidth(term, makeHost(780));
+        expect(term.options.fontSize).toBe(13);
+    });
+
+    it('no-ops when the host or grid has no measurable width (jsdom, detached)', () => {
+        const term = makeFitTerm(13, () => 0);
+        fitFontToWidth(term, makeHost(0));
+        expect(term.options.fontSize).toBe(13);
+        // element without a screen child (pre-open) is also a no-op
+        const bare = { options: { fontSize: 13 } as ITerminalOptions, element: undefined };
+        expect(() => fitFontToWidth(bare, makeHost(500))).not.toThrow();
+    });
+
+    it('steps the font down after the rAF settle pass when integer cell rounding overflows', async () => {
+        // Non-linear metrics: at size >= 12 the grid renders 800px wide, below
+        // that 700px. Host is 780px: the proportional guess lands on 12
+        // (still overflowing); the deferred settle pass must walk it to 11.
+        const term = makeFitTerm(13, (size) => (size >= 12 ? 800 : 700));
+        fitFontToWidth(term, makeHost(780));
+        expect(term.options.fontSize).toBe(12);
+        await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+        expect(term.options.fontSize).toBe(11);
     });
 });
 

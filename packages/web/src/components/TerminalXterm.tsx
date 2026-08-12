@@ -3,8 +3,8 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
 import { Terminal as XTerm } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import { TERMINAL_COLS, TERMINAL_ROWS } from '@atlas/shared';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 
 // 2026-06-22 - Terminal v1. xterm.js pane + bidirectional WebSocket.
@@ -27,9 +27,17 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 //   - Next frame is a serialized screen snapshot from the server's
 //     headless mirror — already well-formed VT, no special-casing.
 //   - User keystrokes  -> term.onData -> ws.send(string)
-//   - Container resize -> FitAddon.fit() immediately (local viewport must
-//     track the drag); the {cmd:'resize'} envelope send is trailing-
-//     debounced so pane-divider drags don't storm ConPTY with reflows.
+//   - Container resize -> the GRID never changes. The terminal is pinned
+//     to TERMINAL_COLS x TERMINAL_ROWS (shared constant, matching the PTY
+//     and the server mirror); a pane resize rescales the FONT to fit the
+//     width (fitFontToWidth below). No {cmd:'resize'} is ever sent.
+//     History: the grid used to follow the pane via FitAddon + resize
+//     envelopes + a drift watchdog. Every variant of that left windows
+//     where the PTY's believed width and this terminal's width differed,
+//     and any such window strands unerased cells from Ink-style TUI
+//     repaints (ConPTY makes it acute by repainting its whole buffer on
+//     every resize). With one PTY and N viewers dynamic geometry can never
+//     be mismatch-free, so it is pinned. Do not reintroduce a resize path.
 //
 // Connection lifecycle:
 //   - Open WS on mount (after `sessionLive` is true). Show a "connecting"
@@ -49,22 +57,23 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 //     refresh(): all restored on that theory, none of them changed the
 //     symptom.
 //   - The trails are not a rendering defect. A reproduction harness showed
-//     the corruption depends only on the terminal being NARROWER than the
-//     width the PTY was told, and reproduces on macOS at that geometry with
-//     any renderer. See the geometry-drift watchdog below for the mechanism
-//     and the actual fix.
+//     the corruption depends only on the terminal's width differing from
+//     the width the PTY was told, and reproduces on macOS at that geometry
+//     with any renderer. The fix is the pinned grid described above.
 //   - So: do not reach for a renderer change if trails resurface. Check
-//     whether term.cols matches what the PTY last received.
+//     that term.cols is still TERMINAL_COLS and that nothing resizes the
+//     PTY server-side.
 
 const RECONNECT_DELAY_MS = 1_500;
-// Trailing debounce for the resize envelope. Each server-side pty.resize()
-// makes ConPTY reflow the entire screen, so a divider drag must collapse
-// into one resize, not one per animation frame.
-const RESIZE_SEND_DEBOUNCE_MS = 100;
-// How often the drift watchdog compares the terminal's live geometry against
-// the last size actually sent to the PTY. Only a mismatch sends anything, so
-// the steady-state cost is one integer compare per second.
-const GEOMETRY_SYNC_INTERVAL_MS = 1_000;
+// Trailing debounce for the font refit on pane resize. Purely cosmetic —
+// the grid never changes — so tracking a divider drag frame-by-frame buys
+// nothing and re-measuring glyph metrics per animation frame is wasted work.
+const FONT_FIT_DEBOUNCE_MS = 100;
+// fitFontToWidth bounds. Below 8px a 120-col grid is unreadable anyway and
+// the loop needs a floor; above 24px a huge pane just gets whitespace.
+export const FONT_SIZE_MIN = 8;
+export const FONT_SIZE_MAX = 24;
+const FONT_SIZE_DEFAULT = 13;
 
 interface Props {
     /** Atlas session id from the URL. */
@@ -80,12 +89,11 @@ interface Props {
  * across writes. Text frames are control envelopes from the server, never
  * terminal data; the only one today is `ptyInfo`, which carries the PTY
  * host's Windows backend so xterm's ConPTY compatibility mode
- * (`windowsPty`) can be switched on. ConPTY repaints the screen from its
- * own buffer after a resize and assumes the terminal neither reflowed nor
- * pulled rows back out of scrollback; without `windowsPty` every repaint
- * after the attach-time resize lands row-shifted and strands stale cells —
- * the Windows "zombie characters". Returns the PTY byte count for the
- * bytes-received counter (0 for control frames).
+ * (`windowsPty`) can be switched on. With the grid pinned (no resizes,
+ * ever) the mode's resize semantics should never trigger, but it also
+ * covers ConPTY's other repaint assumptions (e.g. wrapped-line marking),
+ * so it stays applied whenever the host is Windows. Returns the PTY byte
+ * count for the bytes-received counter (0 for control frames).
  */
 export function writeWsFrame(term: Pick<XTerm, 'write' | 'options'>, data: unknown): number {
     if (typeof data === 'string') {
@@ -110,18 +118,52 @@ export function writeWsFrame(term: Pick<XTerm, 'write' | 'options'>, data: unkno
     return 0;
 }
 
+/**
+ * Scale the terminal's FONT so the fixed TERMINAL_COLS-wide grid fits the
+ * host's width. This replaces FitAddon: the grid is pinned to match the
+ * PTY, so panes adapt by font size (the tmux/asciinema model), never by
+ * cols/rows. Strategy: proportional guess from the currently rendered
+ * width (integer font sizes only, clamped to [FONT_SIZE_MIN,
+ * FONT_SIZE_MAX]), then a rAF-deferred check that steps down 1px at a
+ * time if integer cell rounding still overflows — deferred because xterm
+ * re-measures glyph metrics asynchronously after an options change.
+ * No-ops when either measurement is 0 (detached host, jsdom).
+ */
+export function fitFontToWidth(
+    term: Pick<XTerm, 'options' | 'element'>,
+    host: HTMLElement,
+): void {
+    const screen = term.element?.querySelector<HTMLElement>('.xterm-screen');
+    if (!screen) return;
+    const avail = host.clientWidth;
+    const rendered = screen.clientWidth;
+    if (avail <= 0 || rendered <= 0) return;
+    const current = term.options.fontSize ?? FONT_SIZE_DEFAULT;
+    const next = Math.max(
+        FONT_SIZE_MIN,
+        Math.min(FONT_SIZE_MAX, Math.floor((current * avail) / rendered)),
+    );
+    if (next !== current) term.options.fontSize = next;
+    const settle = () => {
+        // The deferred pass can land after unmount; a detached screen means
+        // the terminal was disposed and its options must not be touched.
+        if (!screen.isConnected) return;
+        const size = term.options.fontSize ?? next;
+        if (size > FONT_SIZE_MIN && screen.clientWidth > host.clientWidth) {
+            term.options.fontSize = size - 1;
+            requestAnimationFrame(settle);
+        }
+    };
+    requestAnimationFrame(settle);
+}
+
 export function TerminalXterm({ sessionId, sessionLive }: Props) {
     const hostRef = useRef<HTMLDivElement | null>(null);
     const termRef = useRef<XTerm | null>(null);
-    const fitRef = useRef<FitAddon | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     const [connected, setConnected] = useState(false);
     const [bytesReceived, setBytesReceived] = useState(0);
     const [termReady, setTermReady] = useState(false);
-    // Last geometry actually delivered to the PTY. The drift watchdog below
-    // compares against this rather than against the previous fit(), so a send
-    // dropped on a closed socket is retried instead of lost.
-    const lastSentGeom = useRef<{ cols: number; rows: number } | null>(null);
     const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const reconnectAttempted = useRef(false);
     // Survives the StrictMode mount→cleanup→mount cycle so the second mount
@@ -162,7 +204,6 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
         }
         let cancelled = false;
         let createdTerm: XTerm | null = null;
-        let createdFit: FitAddon | null = null;
         let createdSub: { dispose: () => void } | null = null;
 
         const initTimer = setTimeout(() => {
@@ -170,6 +211,10 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
             if (cancelled || !hostRef.current) return;
             xtermInitRan.current = true;
             const term = new XTerm({
+                // The pinned grid — matches the PTY spawn size and the
+                // server mirror exactly, for the whole session lifetime.
+                cols: TERMINAL_COLS,
+                rows: TERMINAL_ROWS,
                 convertEol: true,
                 // Cursor styling - thin bar that blinks at the cursor position.
                 // Claude's TUI parks the cursor in its input box when idle, so
@@ -180,7 +225,7 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                 cursorBlink: true,
                 cursorInactiveStyle: 'none',
                 fontFamily: 'Cascadia Code, Menlo, Consolas, "DejaVu Sans Mono", monospace',
-                fontSize: 13,
+                fontSize: FONT_SIZE_DEFAULT,
                 // Visual choice only: slightly tighter than xterm's default
                 // spacing to fit more TUI rows in the pane.
                 lineHeight: 1.15,
@@ -208,38 +253,18 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                     brightWhite: '#ffffff',
                 },
             });
-            const fit = new FitAddon();
-            term.loadAddon(fit);
             term.open(hostRef.current);
 
-            try {
-                fit.fit();
-            } catch {
-                /* container may not be measured yet; ResizeObserver catches up */
-            }
+            fitFontToWidth(term, hostRef.current);
             termRef.current = term;
-            fitRef.current = fit;
             createdTerm = term;
-            createdFit = fit;
-            // Re-fit after fonts are fully ready so cols/rows align with final
-            // glyph metrics (avoids edge clipping or stale gutter glyphs).
+            // Re-fit the font after webfonts land — glyph metrics change
+            // when Cascadia Code swaps in for the fallback monospace, which
+            // changes the rendered grid width the fit is computed from.
             if (typeof document !== 'undefined' && 'fonts' in document) {
                 void document.fonts.ready.then(() => {
-                    if (termRef.current !== term || fitRef.current !== fit) return;
-                    try {
-                        fit.fit();
-                    } catch {
-                        return;
-                    }
-                    const ws = wsRef.current;
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        try {
-                            ws.send(JSON.stringify({ cmd: 'resize', cols: term.cols, rows: term.rows }));
-                            lastSentGeom.current = { cols: term.cols, rows: term.rows };
-                        } catch {
-                            /* best-effort */
-                        }
-                    }
+                    if (termRef.current !== term || !hostRef.current) return;
+                    fitFontToWidth(term, hostRef.current);
                 });
             }
             createdSub = term.onData((data) => {
@@ -375,11 +400,8 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                 /* best-effort */
             }
             termRef.current = null;
-            fitRef.current = null;
             xtermInitRan.current = false;
             setTermReady(false);
-            // Local refs used inside this cleanup; not used further.
-            void createdFit;
         };
         // sessionId / sessionLive intentionally not in deps -- the terminal
         // surface is one-and-done per mount.
@@ -420,22 +442,10 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                 return;
             }
             const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            // Measure before connecting and carry the geometry in the attach
-            // URL. The server serializes the snapshot during attach, so a
-            // resize sent after open arrives too late — the replay would be
-            // laid out for the PTY's spawn size (120x30) and rendered at this
-            // terminal's actual width, stranding uncleared cells in
-            // scrollback. The post-open send below still covers later changes.
-            try {
-                fitRef.current?.fit();
-            } catch {
-                /* container not measured yet; server falls back to spawn size */
-            }
-            const attachGeometry =
-                termRef.current
-                    ? `?cols=${termRef.current.cols}&rows=${termRef.current.rows}`
-                    : '';
-            const url = `${proto}//${window.location.host}/api/cli/sessions/${encodeURIComponent(sessionId)}/stream${attachGeometry}`;
+            // No geometry in the attach URL: client, PTY, and server mirror
+            // are all pinned to TERMINAL_COLS x TERMINAL_ROWS, so the
+            // snapshot is always laid out exactly as this terminal renders it.
+            const url = `${proto}//${window.location.host}/api/cli/sessions/${encodeURIComponent(sessionId)}/stream`;
             const ws = new WebSocket(url);
             ws.binaryType = 'arraybuffer';
             wsRef.current = ws;
@@ -443,20 +453,6 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
             ws.onopen = () => {
                 setConnected(true);
                 reconnectAttempted.current = false;
-                if (fitRef.current && termRef.current) {
-                    try {
-                        fitRef.current.fit();
-                    } catch {
-                        /* best-effort */
-                    }
-                    const { cols, rows } = termRef.current;
-                    try {
-                        ws.send(JSON.stringify({ cmd: 'resize', cols, rows }));
-                        lastSentGeom.current = { cols, rows };
-                    } catch {
-                        /* best-effort */
-                    }
-                }
             };
 
             ws.onmessage = (ev) => {
@@ -501,107 +497,31 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
         };
     }, [sessionId, sessionLive, termReady]);
 
-    // ResizeObserver on the host -> reflow locally AND push the new geometry
-    // to the PTY together, both trailing-debounced.
-    //
-    // These used to be split: fit() ran immediately so the local viewport
-    // tracked a divider drag, while the {cmd:'resize'} push was debounced so
-    // drags didn't storm ConPTY with reflows. That left the browser's
-    // terminal at the NEW width while the PTY kept emitting output laid out
-    // for the OLD one — for the entire duration of a drag. Text lands at the
-    // wrong wrap points, and cells the app erased at the old width are never
-    // erased at the new one, so the residue survives into scrollback. That is
-    // the Windows "trails" defect: leftover glyphs in columns 0-1 that pile
-    // up the more you scroll.
-    //
-    // ConPTY makes it acute rather than theoretical, because it answers a
-    // resize by repainting its whole screen from its own buffer — dumping
-    // layout-sensitive output straight into the mismatch window. A Unix PTY
-    // just raises SIGWINCH and lets the app redraw on its own schedule, which
-    // is why macOS looked clean through four attempted fixes.
-    //
-    // Reflowing 100ms after a drag settles is a cosmetic cost. Rendering the
-    // stream at a width it was never laid out for is a correctness bug.
+    // ResizeObserver on the host -> refit the FONT (trailing-debounced).
+    // The grid never changes, so this is purely local and cosmetic; nothing
+    // is sent to the server. Zoom changes and webfont swaps that alter cell
+    // metrics without resizing the host are caught by the fonts.ready refit
+    // above and by the observer firing on the next real layout change —
+    // and even a missed refit is only a too-small/clipped FONT, never
+    // corrupted terminal content.
     useEffect(() => {
+        if (!termReady) return;
         const host = hostRef.current;
         /* v8 ignore next -- host Box is unconditionally rendered with ref={hostRef} every render, so hostRef.current is always set by the time this effect body runs; defensive null-check only. */
         if (!host) return;
-        let resizeSendTimer: ReturnType<typeof setTimeout> | null = null;
+        let fontFitTimer: ReturnType<typeof setTimeout> | null = null;
         const ro = new ResizeObserver(() => {
-            // Reflow the local terminal and tell the PTY in the same tick,
-            // both trailing-debounced, so the two can never disagree about
-            // width for longer than one network hop.
-            if (resizeSendTimer) clearTimeout(resizeSendTimer);
-            resizeSendTimer = setTimeout(() => {
-                resizeSendTimer = null;
-                if (!fitRef.current || !termRef.current) return;
-                try {
-                    fitRef.current.fit();
-                } catch {
-                    return;
-                }
-                // Read cols/rows after fit — it just computed them.
-                const { cols, rows } = termRef.current;
-                const ws = wsRef.current;
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    try {
-                        ws.send(JSON.stringify({ cmd: 'resize', cols, rows }));
-                        lastSentGeom.current = { cols, rows };
-                    } catch {
-                        /* best-effort */
-                    }
-                }
-            }, RESIZE_SEND_DEBOUNCE_MS);
+            if (fontFitTimer) clearTimeout(fontFitTimer);
+            fontFitTimer = setTimeout(() => {
+                fontFitTimer = null;
+                if (termRef.current) fitFontToWidth(termRef.current, host);
+            }, FONT_FIT_DEBOUNCE_MS);
         });
         ro.observe(host);
         return () => {
-            if (resizeSendTimer) clearTimeout(resizeSendTimer);
+            if (fontFitTimer) clearTimeout(fontFitTimer);
             ro.disconnect();
         };
-    }, []);
-
-    // Geometry drift watchdog.
-    //
-    // Every path that changes the local terminal's size is supposed to tell
-    // the PTY, but "supposed to" is doing a lot of work: fit() runs from four
-    // call sites, one of them behind `document.fonts.ready`, and any of them
-    // can land while the socket is closed — in which case the send is dropped
-    // and nothing ever reconciles it. Zoom changes, font fallback swaps, and
-    // scrollbar-induced width changes can all move cols without the
-    // ResizeObserver on the host element firing at all.
-    //
-    // Drift matters because the failure is asymmetric, which a reproduction
-    // harness confirmed: a PTY NARROWER than the view is harmless (the TUI
-    // over-clears), while a PTY WIDER than the view corrupts the screen
-    // permanently. Ink-style TUIs redraw by computing how many lines their
-    // output wrapped to at the width they believe they have, then moving the
-    // cursor up that many lines and clearing downward. Believe you are wider
-    // than you are, and the text actually wrapped to more lines than you
-    // counted: you move up too few, clear from there, and the top of the
-    // previous frame is never erased. Those uncleared tops are the leftover
-    // glyphs, and every later redraw repeats the mistake, so residue piles up
-    // in the scrollback and shows up while scrolling.
-    //
-    // So rather than chase each way drift can happen, reconcile continuously:
-    // compare the terminal's live geometry against the last value actually
-    // sent, and resend when they differ. Only on an actual change — resending
-    // an identical size makes ConPTY repaint the whole screen for nothing.
-    useEffect(() => {
-        if (!termReady) return;
-        const timer = setInterval(() => {
-            const term = termRef.current;
-            const ws = wsRef.current;
-            if (!term || !ws || ws.readyState !== WebSocket.OPEN) return;
-            const last = lastSentGeom.current;
-            if (last && last.cols === term.cols && last.rows === term.rows) return;
-            try {
-                ws.send(JSON.stringify({ cmd: 'resize', cols: term.cols, rows: term.rows }));
-                lastSentGeom.current = { cols: term.cols, rows: term.rows };
-            } catch {
-                /* best-effort; the next tick retries */
-            }
-        }, GEOMETRY_SYNC_INTERVAL_MS);
-        return () => clearInterval(timer);
     }, [termReady]);
 
     return (

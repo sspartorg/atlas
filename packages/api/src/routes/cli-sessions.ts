@@ -1028,12 +1028,13 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
     // WEBSOCKET -- live PTY byte stream. Terminal data is binary in both
     // directions; TEXT frames are control envelopes. On attach the host
     // sends a `{cmd:"ptyInfo"}` text frame (carrying the Windows PTY
-    // backend so the browser xterm can enable ConPTY-compatible resize
+    // backend so the browser xterm can enable ConPTY-compatible
     // semantics), then replays a serialized screen snapshot (clean VT
     // stream from the server-side headless mirror), then forwards raw PTY
-    // bytes live. The control envelope `{cmd:"resize",cols,rows}` flips
-    // the PTY size (clamped; malformed frames are dropped) without writing
-    // the JSON to the shell -- see cli-session-host.
+    // bytes live. Geometry is PINNED to the shared TERMINAL_COLS/ROWS on
+    // both ends — there is no resize path. A `{cmd:"resize"}` envelope
+    // from a stale client is consumed and dropped (never typed into the
+    // shell) -- see cli-session-host.
     //
     // Auth gate: `websocket:true` bypasses the global write-gate hook
     // (that hook only fires for POST/PUT/PATCH/DELETE — WS upgrades are
@@ -1066,19 +1067,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
                 }
             }
             const id = (req.params as { id: string }).id;
-            // Geometry rides the attach URL rather than arriving as a message
-            // after open, because the snapshot is serialized during attach —
-            // a resize sent afterwards is already too late, and the client
-            // would render a replay laid out for the PTY's spawn size
-            // (120x30) at whatever width it actually has. Malformed or absent
-            // values simply skip the resize; the query is untrusted input.
-            const rawQuery = req.query as { cols?: string; rows?: string } | undefined;
-            const attachCols = Number.parseInt(rawQuery?.cols ?? '', 10);
-            const attachRows = Number.parseInt(rawQuery?.rows ?? '', 10);
-            const attached = hostAttachWebSocket(id, sock as never, {
-                cols: Number.isInteger(attachCols) ? attachCols : undefined,
-                rows: Number.isInteger(attachRows) ? attachRows : undefined,
-            });
+            const attached = hostAttachWebSocket(id, sock as never);
             if (!attached) {
                 try {
                     // Buffer, not string: text frames are control envelopes,

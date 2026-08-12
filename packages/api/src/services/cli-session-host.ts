@@ -54,12 +54,18 @@ import { sendExternalForNotification } from './external-notifications.js';
 import { gitInvokeEnv } from './git-env.js';
 import { ollamaEnv } from './ollama-env.js';
 import { cleanupGitConfig } from './git-credentials.js';
-import { CLI_DIALECT, type AgentCli } from '@atlas/shared';
+import { CLI_DIALECT, TERMINAL_COLS, TERMINAL_ROWS, type AgentCli } from '@atlas/shared';
 import { createScreenState } from './terminal-screen-state.js';
 import type { TerminalScreenState, WindowsPtyHostInfo } from './terminal-screen-state.js';
 
-const PTY_DEFAULT_COLS = 120;
-const PTY_DEFAULT_ROWS = 30;
+// Terminal geometry is PINNED to TERMINAL_COLS x TERMINAL_ROWS (shared
+// constant) for the whole PTY lifetime. There is deliberately NO resize
+// path anywhere in this file: every pty.resize() made ConPTY repaint its
+// whole buffer with reflow semantics that never exactly matched xterm's,
+// and any transient width mismatch between the PTY and a viewer strands
+// unerased cells ("zombie characters"). With one PTY and N viewers, a
+// dynamic geometry can never be mismatch-free — so it is static. Browser
+// panes scale their FONT to fit, never the grid (TerminalXterm.tsx).
 
 /**
  * Which Windows PTY backend node-pty will use, from the same gate node-pty
@@ -99,14 +105,6 @@ const IDLE_CHECK_INTERVAL_MS = 5_000;
 // Default threshold if the settings row hasn't been loaded yet (boot race
 // guard). Matches the DB default in migration 015.
 const IDLE_THRESHOLD_DEFAULT_MS = 300_000;
-// Bounds for the in-band `{cmd:'resize'}` control envelope. ConPTY fails
-// hard on zero/negative dimensions and absurd sizes make it allocate huge
-// reflow buffers; frames outside these bounds are dropped — never applied
-// and never typed into the shell.
-const RESIZE_MIN_COLS = 2;
-const RESIZE_MIN_ROWS = 1;
-const RESIZE_MAX_DIM = 500;
-
 // Allowed tools mirror agent-runner.ts plus a deliberate addition: the
 // Atlas MCP server is the whole point of in-app sessions (so the user
 // can talk Claude through dispatching agents). Task / WebFetch / WebSearch
@@ -150,8 +148,6 @@ interface SessionEntry {
      *  broadcasts skip them — bytes still ahead of their flush marker
      *  arrive inside the snapshot instead, never twice. */
     pendingSnapshot: Set<WebSocketLike>;
-    cols: number;
-    rows: number;
     /** Pending typed bytes that arrived while the auto-prompt timer was still
      *  in flight. Flushed verbatim to the PTY after the auto-prompt's CR. */
     pendingInputQueue: string[];
@@ -191,8 +187,6 @@ export interface StartSessionInput {
     model: string;
     /** Optional first prompt -- written to the PTY after a settle delay. */
     initialPrompt?: string | undefined;
-    cols?: number | undefined;
-    rows?: number | undefined;
     /** Optional tmp file path produced by `buildGitAuth(project.credential_id)`.
      *  Merged into the PTY spawn env as `GIT_CONFIG_GLOBAL` so `git push` from
      *  inside the session inherits the project's credential. Null when the
@@ -211,8 +205,6 @@ export interface ResumeSessionInput {
     /** UUID originally minted on start, passed back via `--resume`. */
     cliSessionId: string;
     model: string;
-    cols?: number | undefined;
-    rows?: number | undefined;
     /** Same purpose as on StartSessionInput. Computed fresh on every resume
      *  because the previous tmp file was unlinked on pause / API restart. */
     gitConfigPath?: string | null | undefined;
@@ -495,8 +487,6 @@ function spawnPty(params: {
     cliSessionId: string;
     model: string;
     resume: boolean;
-    cols: number;
-    rows: number;
     gitConfigPath: string | null;
     ghToken: string | null;
 }): IPty {
@@ -511,8 +501,8 @@ function spawnPty(params: {
     try {
         return ptySpawn(binary, args, {
             name: 'xterm-256color',
-            cols: params.cols,
-            rows: params.rows,
+            cols: TERMINAL_COLS,
+            rows: TERMINAL_ROWS,
             cwd: params.worktreePath,
             // gitInvokeEnv merges in `GIT_CONFIG_GLOBAL` + `GH_TOKEN` (when set)
             // plus the GCM-silencing env vars that keep Windows credential
@@ -550,7 +540,7 @@ function attachPtyToEntry(entry: SessionEntry, pty: IPty): void {
     // Fresh mirror per PTY lifetime, so a resumed session's replay starts
     // from the new PTY's first paint — the same clean-slate rule the old
     // backlog reset enforced.
-    const screen = createScreenState(entry.cols, entry.rows, PTY_HOST_WINDOWS);
+    const screen = createScreenState(TERMINAL_COLS, TERMINAL_ROWS, PTY_HOST_WINDOWS);
     entry.screen = screen;
     pty.onData((data) => {
         const buf = Buffer.from(data, 'utf8');
@@ -643,8 +633,6 @@ export function startSession(input: StartSessionInput): void {
         screen: null,
         subscribers: new Set(),
         pendingSnapshot: new Set(),
-        cols: input.cols ?? PTY_DEFAULT_COLS,
-        rows: input.rows ?? PTY_DEFAULT_ROWS,
         pendingInputQueue: [],
         autoPromptPending: hasInitialPrompt,
         lastActivityAt: null,
@@ -663,8 +651,6 @@ export function startSession(input: StartSessionInput): void {
             cliSessionId: input.cliSessionId,
             model: input.model,
             resume: false,
-            cols: entry.cols,
-            rows: entry.rows,
             gitConfigPath: entry.gitConfigPath,
             ghToken: entry.ghToken,
         });
@@ -713,8 +699,6 @@ export function resumeSession(input: ResumeSessionInput): void {
         screen: null,
         subscribers: new Set(),
         pendingSnapshot: new Set(),
-        cols: input.cols ?? PTY_DEFAULT_COLS,
-        rows: input.rows ?? PTY_DEFAULT_ROWS,
         pendingInputQueue: [],
         autoPromptPending: false,
         lastActivityAt: null,
@@ -743,8 +727,6 @@ export function resumeSession(input: ResumeSessionInput): void {
             cliSessionId: input.cliSessionId,
             model: input.model,
             resume: true,
-            cols: entry.cols,
-            rows: entry.rows,
             gitConfigPath: entry.gitConfigPath,
             ghToken: entry.ghToken,
         });
@@ -765,11 +747,7 @@ export function resumeSession(input: ResumeSessionInput): void {
     startIdleCheck(entry);
 }
 
-export function attachWebSocket(
-    sessionId: string,
-    ws: WebSocketLike,
-    geometry?: { cols?: number | undefined; rows?: number | undefined },
-): boolean {
+export function attachWebSocket(sessionId: string, ws: WebSocketLike): boolean {
     const entry = SESSIONS.get(sessionId);
     if (!entry) return false;
     entry.subscribers.add(ws);
@@ -780,38 +758,9 @@ export function attachWebSocket(
     } catch {
         // Subscriber already dead; close handler will purge.
     }
-    // Adopt the attaching client's geometry BEFORE the snapshot is
-    // serialized. The PTY spawns at PTY_DEFAULT_COLS/ROWS because no browser
-    // exists yet at session-create time, so without this the first client
-    // receives a replay laid out for 120x30 and renders it at its own width —
-    // wrong wrap points, and erases that never clear the cells they were
-    // computed for. The residue lands in scrollback permanently, which is why
-    // it surfaced as glyph "trails" on scrolling with no resize involved.
-    //
-    // Bounds are the same ones the {cmd:'resize'} envelope enforces: ConPTY
-    // fails hard on zero/negative dimensions and allocates enormous reflow
-    // buffers for absurd ones.
-    const { cols, rows } = geometry ?? {};
-    if (
-        typeof cols === 'number' &&
-        typeof rows === 'number' &&
-        cols >= RESIZE_MIN_COLS &&
-        rows >= RESIZE_MIN_ROWS &&
-        cols <= RESIZE_MAX_DIM &&
-        rows <= RESIZE_MAX_DIM &&
-        (cols !== entry.cols || rows !== entry.rows)
-    ) {
-        entry.cols = cols;
-        entry.rows = rows;
-        try {
-            entry.pty?.resize(cols, rows);
-            entry.screen?.resize(cols, rows);
-        } catch {
-            // A PTY that died between the guard and here takes the session
-            // down through onExit; attach still proceeds and the client gets
-            // the not-live notice.
-        }
-    }
+    // No geometry adoption: PTY, mirror, and every client are pinned to
+    // TERMINAL_COLS x TERMINAL_ROWS, so the snapshot is always laid out
+    // exactly as the client will render it.
     const screen = entry.screen;
     if (screen) {
         // Withhold live broadcasts until the serialized snapshot is sent.
@@ -847,27 +796,13 @@ export function attachWebSocket(
         const chunk = data.toString('utf8');
         if (data.byteLength > 0 && data[0] === 0x7b /* '{' */) {
             try {
-                const ctrl = JSON.parse(chunk) as { cmd?: string; cols?: number; rows?: number };
+                const ctrl = JSON.parse(chunk) as { cmd?: string };
                 if (ctrl.cmd === 'resize') {
-                    // A resize envelope is unambiguously control traffic:
-                    // apply it clamped or drop it, but never let malformed
-                    // dimensions fall through as keystrokes — the old
-                    // fall-through typed literal JSON into the shell.
-                    // JSON.parse can only produce finite numbers, so the
-                    // typeof check is a complete validity gate.
-                    if (typeof ctrl.cols === 'number' && typeof ctrl.rows === 'number') {
-                        const cols = Math.min(RESIZE_MAX_DIM, Math.floor(ctrl.cols));
-                        const rows = Math.min(RESIZE_MAX_DIM, Math.floor(ctrl.rows));
-                        if (cols >= RESIZE_MIN_COLS && rows >= RESIZE_MIN_ROWS) {
-                            entry.cols = cols;
-                            entry.rows = rows;
-                            entry.pty.resize(cols, rows);
-                            // screen lives exactly as long as the pty (created
-                            // together, nulled together in onExit) and the
-                            // !entry.pty guard above already ran.
-                            entry.screen!.resize(cols, rows);
-                        }
-                    }
+                    // Consumed and DROPPED. Geometry is pinned (see the
+                    // header note) — the PTY is never resized. The envelope
+                    // is still recognized so a stale client's frame can
+                    // never fall through as keystrokes and type literal
+                    // JSON into the shell.
                     return;
                 }
             } catch {

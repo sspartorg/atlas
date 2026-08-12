@@ -130,36 +130,12 @@ describe('createScreenState', () => {
         state.dispose();
     });
 
-    it('reflects a resize in subsequent snapshots', async () => {
+    it('exposes no resize — mirror geometry is pinned for its lifetime', () => {
+        // Geometry is pinned to TERMINAL_COLS x TERMINAL_ROWS across PTY,
+        // mirror, and every browser pane; a resizable mirror would be a foot-
+        // gun inviting the ConPTY reflow-divergence bug back in.
         const state = createScreenState(120, 30);
-        await feedAsync(state, 'AB\r\nCD\r\n');
-        state.resize(40, 10);
-        await flushAsync(state);
-
-        const lines = await renderSnapshot(state.snapshot(), 40, 10);
-        const text = lines.join('\n');
-        expect(text).toContain('AB');
-        expect(text).toContain('CD');
-        state.dispose();
-    });
-
-    it('keeps scrollback out of the viewport on row growth when windowsPty is set', async () => {
-        // ConPTY answers a row-growth resize by appending blank rows at the
-        // bottom and repainting from its own buffer — lines that entered its
-        // scrollback stay there. Without windowsPty, xterm instead pulls
-        // lines back OUT of scrollback to fill the new rows, so the mirror's
-        // row alignment diverges from ConPTY's model and every later diff
-        // repaint lands offset — the Windows "zombie characters".
-        const state = createScreenState(20, 3, { backend: 'conpty', buildNumber: 19045 });
-        await feedAsync(state, 'one\r\ntwo\r\nthree\r\nfour\r\nfive');
-        state.resize(20, 5);
-        await flushAsync(state);
-
-        const lines = await renderSnapshot(state.snapshot(), 20, 5);
-        expect(lines.slice(0, 5)).toEqual(['one', 'two', 'three', 'four', 'five']);
-        // The two rows gained stay blank (ConPTY's view of the world) instead
-        // of being filled by "one"/"two" pulled back from scrollback.
-        expect(lines.slice(5)).toEqual(['', '']);
+        expect('resize' in state).toBe(false);
         state.dispose();
     });
 
@@ -173,7 +149,6 @@ describe('createScreenState', () => {
         // silent no-ops, not crashes.
         expect(() => state.feed('late', () => { fired = true; })).not.toThrow();
         expect(() => state.whenFlushed(() => { fired = true; })).not.toThrow();
-        expect(() => state.resize(10, 10)).not.toThrow();
         expect(() => state.dispose()).not.toThrow();
         expect(state.snapshot()).toBe('');
         await new Promise((resolve) => setTimeout(resolve, 20));

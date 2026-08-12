@@ -55,7 +55,6 @@ export interface TerminalScreenState {
     whenFlushed(cb: () => void): void;
     /** Serialized VT stream reconstructing screen + scrollback + colors. */
     snapshot(): string;
-    resize(cols: number, rows: number): void;
     /** After dispose every method is a silent no-op — attach flushes can
      *  race pause/exit teardown and must not crash or fire late. */
     dispose(): void;
@@ -104,10 +103,6 @@ export function createScreenState(
         snapshot(): string {
             if (disposed) return '';
             return serialize.serialize({ scrollback: MIRROR_SCROLLBACK_ROWS });
-        },
-        resize(nextCols: number, nextRows: number): void {
-            if (disposed) return;
-            term.resize(nextCols, nextRows);
         },
         dispose(): void {
             if (disposed) return;

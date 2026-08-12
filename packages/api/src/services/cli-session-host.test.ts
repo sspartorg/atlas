@@ -9,13 +9,13 @@
  *   - CliSessionSpawnError class construction
  *   - isSessionLive: no entry, entry with pty, entry without pty
  *   - listLiveSessionIds: empty + populated
- *   - startSession: already_running throw, spawn failure cleanup, copilot, cols/rows
+ *   - startSession: already_running throw, spawn failure cleanup, copilot, pinned grid
  *   - resumeSession: already_running throw, fresh entry, spawn failure cleanup
  *   - pauseSession: missing id (no-op), live pty killed, gitConfigPath cleanup
  *   - killSessionPty: missing id (no-op), live pty killed, gitConfigPath cleanup
  *   - attachWebSocket: missing session (false), serialized snapshot replay,
- *       message forward, resize control + clamp, autoPromptPending queue,
- *       WS close, WS error
+ *       message forward, resize control consumed-and-dropped,
+ *       autoPromptPending queue, WS close, WS error
  *   - __peekSessionStateForTest / __setIdleNotifiedAtForTest
  *   - failOrphanedCliSessions: no orphans, live-matches, orphan flip
  *
@@ -123,6 +123,7 @@ import {
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
 import { insertProject } from '../../tests/_items.js';
 import { cleanupGitConfig } from './git-credentials.js';
+import { spawn as ptySpawn } from 'node-pty';
 import { notificationsService } from './notifications.js';
 import { sendExternalForNotification } from './external-notifications.js';
 import { broadcastSSE } from '../routes/events.js';
@@ -292,10 +293,14 @@ describe('startSession', () => {
         pauseSession(id);
     });
 
-    it('accepts custom cols and rows', () => {
+    it('spawns the PTY at the pinned shared grid size', () => {
         const id = freshId();
-        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7', cols: 80, rows: 24 });
-        expect(isSessionLive(id)).toBe(true);
+        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
+        expect(vi.mocked(ptySpawn)).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.anything(),
+            expect.objectContaining({ cols: 120, rows: 30 }),
+        );
         pauseSession(id);
     });
 
@@ -396,32 +401,16 @@ describe('pauseSession', () => {
         expect(cleanupGitConfig).toHaveBeenCalledWith('/tmp/pause.config');
     });
 
-    it('adopts the attaching client geometry before serializing the snapshot', () => {
+    it('never resizes the PTY on attach — geometry is pinned to the spawn size', () => {
+        // The PTY, the server mirror, and every browser pane are pinned to
+        // TERMINAL_COLS x TERMINAL_ROWS, so an attach snapshot is always laid
+        // out exactly as the client renders it and pty.resize() has zero call
+        // sites (the fix for the ConPTY reflow-divergence "zombie characters").
         const id = freshId();
         startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
         const pty = ptyInstances[ptyInstances.length - 1]!;
-        // The PTY spawned at PTY_DEFAULT_COLS/ROWS because no browser existed
-        // at create time. Attaching with real geometry must resize first, or
-        // the client replays a 120x30 layout at its own width and strands
-        // uncleared cells in scrollback (the Windows glyph-trails defect).
-        attachWebSocket(id, makeFakeWs(), { cols: 250, rows: 45 });
-        expect(pty.resize).toHaveBeenCalledWith(250, 45);
-    });
-
-    it('ignores attach geometry that is absent, malformed, or out of bounds', () => {
-        for (const geometry of [
-            undefined,
-            { cols: 250, rows: undefined },
-            { cols: 0, rows: 45 },
-            { cols: 250, rows: 0 },
-            { cols: 100_000, rows: 45 },
-        ]) {
-            const id = freshId();
-            startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
-            const pty = ptyInstances[ptyInstances.length - 1]!;
-            attachWebSocket(id, makeFakeWs(), geometry);
-            expect(pty.resize).not.toHaveBeenCalled();
-        }
+        attachWebSocket(id, makeFakeWs());
+        expect(pty.resize).not.toHaveBeenCalled();
     });
 });
 
@@ -619,60 +608,19 @@ describe('attachWebSocket', () => {
         pauseSession(id);
     });
 
-    it('handles a resize control message without writing to PTY', () => {
+    it('consumes and DROPS resize control messages — the PTY is never resized and never typed into', () => {
+        // Geometry is pinned to TERMINAL_COLS x TERMINAL_ROWS for the whole
+        // PTY lifetime (the fix for the ConPTY reflow-divergence "zombie
+        // characters"). A stale client's resize envelope must be recognized
+        // as control traffic — never applied, never falling through to the
+        // shell as typed JSON.
         const id = freshId();
         startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
         const ws = makeFakeWs();
         attachWebSocket(id, ws);
 
         ws.emit('message', Buffer.from(JSON.stringify({ cmd: 'resize', cols: 100, rows: 40 })));
-
-        const pty = ptyInstances[ptyInstances.length - 1]!;
-        expect(pty.resize).toHaveBeenCalledWith(100, 40);
-        expect(pty.write).not.toHaveBeenCalled();
-
-        pauseSession(id);
-    });
-
-    it('floors fractional resize dimensions before resizing the PTY', () => {
-        const id = freshId();
-        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
-        const ws = makeFakeWs();
-        attachWebSocket(id, ws);
-
-        ws.emit('message', Buffer.from(JSON.stringify({ cmd: 'resize', cols: 80.7, rows: 24.2 })));
-
-        const pty = ptyInstances[ptyInstances.length - 1]!;
-        expect(pty.resize).toHaveBeenCalledWith(80, 24);
-        expect(pty.write).not.toHaveBeenCalled();
-
-        pauseSession(id);
-    });
-
-    it('clamps oversized resize dimensions to the 500x500 ceiling', () => {
-        const id = freshId();
-        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
-        const ws = makeFakeWs();
-        attachWebSocket(id, ws);
-
-        ws.emit('message', Buffer.from(JSON.stringify({ cmd: 'resize', cols: 1e9, rows: 1e9 })));
-
-        const pty = ptyInstances[ptyInstances.length - 1]!;
-        expect(pty.resize).toHaveBeenCalledWith(500, 500);
-
-        pauseSession(id);
-    });
-
-    it('drops a resize frame with zero/negative dimensions instead of resizing or typing it', () => {
-        // resize(0, n) is a documented ConPTY failure mode; a malformed control
-        // frame must never reach the PTY as either a resize or typed JSON.
-        const id = freshId();
-        startSession({ sessionId: id, cli: 'claude', worktreePath: '/tmp', cliSessionId: id, model: 'claude-opus-4-7' });
-        const ws = makeFakeWs();
-        attachWebSocket(id, ws);
-
-        ws.emit('message', Buffer.from(JSON.stringify({ cmd: 'resize', cols: 0, rows: 24 })));
-        ws.emit('message', Buffer.from(JSON.stringify({ cmd: 'resize', cols: 80, rows: -3 })));
+        ws.emit('message', Buffer.from(JSON.stringify({ cmd: 'resize', cols: 0, rows: -3 })));
 
         const pty = ptyInstances[ptyInstances.length - 1]!;
         expect(pty.resize).not.toHaveBeenCalled();

@@ -196,6 +196,19 @@ export const PUSH_DELIVERY_STATUSES: PushDeliveryStatus[] = [
     'failed',
 ];
 
+// ---- Terminal -----------------------------------------------------------
+
+// The one terminal grid size, everywhere, forever. The PTY spawns at this
+// size, the server-side headless mirror parses at this size, and every
+// browser pane renders exactly this grid (scaling FONT SIZE to fit, never
+// the grid). Pinning the geometry is the fix for the ConPTY "zombie
+// character" corruption: any moment where the PTY's believed width and a
+// viewer's rendered width differ strands unerased cells, and with one PTY
+// and N viewers a dynamic geometry can never be mismatch-free. Do not add
+// a resize path — see packages/api/src/services/cli-session-host.ts.
+export const TERMINAL_COLS = 120;
+export const TERMINAL_ROWS = 30;
+
 // Agent accent colors from the Atlas design system
 export const AGENT_ACCENT_COLORS = {
     PO_WRITER: '#007AC9',
