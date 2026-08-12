@@ -130,31 +130,6 @@ For full MUI/data-fetching/status-display patterns, see `packages/web/AGENTS.md`
 
 ---
 
-## Visual baselines & regression gate
-
-Playwright visual snapshots live under `e2e/visual/__snapshots__/`. Every push to `main` and every PR runs `.github/workflows/visual-snapshots.yml`, which asserts the current renders match the committed baselines. A red pixel diff blocks the PR and uploads a diff artifact for 30 days.
-
-`e2e/visual/snapshots.spec.ts` is gated on `CI=true` and only compares against Linux Chromium baselines — a local Windows or macOS run would produce PNGs the CI comparison never accepts. Do not run `--update-snapshots` from your dev machine.
-
-### Updating baselines
-
-Any intentional visual change (palette, layout, adding a component to a covered route, adding a route to the covered set) must regenerate baselines:
-
-1. Push your visual change on a feature branch and open the PR.
-2. Attach the `seed-visual` label to that PR.
-3. `.github/workflows/visual-baseline.yml` runs — re-executes `playwright test e2e/visual/ --update-snapshots` on Linux CI and commits new PNGs to your PR branch under `github-actions[bot]`.
-4. `visual-snapshots.yml` sees the seed label and skips this run (avoiding a race against pre-seed baselines). Once the seed push lands, subsequent CI passes run the gate against the new PNGs.
-5. Review the diff in the seed's commit — that IS the visual change under review.
-
-Do **not** manually edit or delete files under `e2e/visual/__snapshots__/`. Always regenerate via the workflow. Do **not** `.gitignore` that directory — the ~50 MB of PNGs is intentional and load-bearing.
-
-To re-seed the whole `main` branch (e.g. after a theme overhaul):
-```
-gh workflow run visual-baseline.yml -r main
-```
-
----
-
 ## What NOT to Do
 - Do not create new packages without asking
 - Do not install packages with `--save-dev` in the wrong package
