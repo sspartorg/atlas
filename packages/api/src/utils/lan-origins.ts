@@ -34,7 +34,14 @@ function detectLanIps(): string[] {
 
 export function getLanOrigins(): string[] {
     if (!isLanAccessEnabled()) return [];
-    return detectLanIps().map((ip) => `http://${ip}:${WEB_PORT}`);
+    const origins = detectLanIps().map((ip) => `http://${ip}:${WEB_PORT}`);
+    // The machine's mDNS name (http://<hostname>.local:<port>) — same trust
+    // level as its LAN IPs. Browsers lowercase the host in the Origin header,
+    // and macOS os.hostname() may already carry the .local suffix, so
+    // normalize both before appending.
+    const host = os.hostname().toLowerCase().replace(/\.local$/, '');
+    if (host) origins.push(`http://${host}.local:${WEB_PORT}`);
+    return origins;
 }
 
 export function getAllowedOrigins(): string[] {

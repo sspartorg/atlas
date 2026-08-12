@@ -16,6 +16,9 @@ vi.mock('node:os', async (importOriginal) => {
     return {
         ...actual,
         networkInterfaces: vi.fn(() => FIXTURE_INTERFACES),
+        // Uppercase + pre-suffixed, so the normalization (lowercase, strip
+        // trailing .local before re-appending) is what's under test.
+        hostname: vi.fn(() => 'My-Machine.LOCAL'),
     };
 });
 
@@ -49,6 +52,9 @@ describe('lan-origins', () => {
         const origins = getLanOrigins();
         expect(origins).toContain('http://192.168.1.50:4000');
         expect(origins).toContain('http://10.0.0.5:4000');
+        // the machine's mDNS name rides along, normalized to lowercase with
+        // exactly one .local suffix
+        expect(origins).toContain('http://my-machine.local:4000');
         // loopback, IPv6, and link-local 169.254.x are filtered out
         expect(origins).not.toContain('http://127.0.0.1:4000');
         expect(origins.some((o) => o.includes('fe80'))).toBe(false);

@@ -63,6 +63,10 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     port: WEB_PORT,
+    // Accept LAN mDNS hostnames (e.g. http://mymac.local:4000) so the dev
+    // server can be reached from other machines on the network — Vite's
+    // default host check only allows localhost. Leading dot = any *.local.
+    allowedHosts: ['.local'],
     proxy: {
       '/api': {
         target: API_TARGET,
@@ -79,6 +83,7 @@ export default defineConfig(({ mode }) => ({
   // without the browser tripping CORS preflight.
   preview: {
     port: WEB_PORT,
+    allowedHosts: ['.local'],
     proxy: {
       '/api': {
         target: API_TARGET,
