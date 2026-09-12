@@ -108,7 +108,7 @@ export function EpicDetail() {
     const ownerAccent = settings?.accent_color ?? ATLAS_PALETTE.slate;
     const seqLabel = epic.id;
 
-    // Lock the assignee picker whenever an item is in progress so a agent
+    // Lock the assignee picker whenever an item is in progress so an agent
     // mid-task isn't yanked out from under itself. Toggle the item back to a
     // non-running status first if you need to reassign.
     const reassignLocked = epic.status === 'in_progress';
