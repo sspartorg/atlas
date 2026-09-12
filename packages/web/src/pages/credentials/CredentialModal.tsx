@@ -26,6 +26,7 @@ import GitHubIcon from '@mui/icons-material/GitHub';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, AtlasApiError } from '../../api/api.js';
+import { useRevealCredentialToken } from '../../hooks/useCredentials.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import type { ICredential } from '@atlas/shared';
 import { FormHeading } from '../../components/FormHeading.js';
@@ -54,34 +55,33 @@ export function CredentialModal({ open, mode, onClose }: Props) {
     // On edit we open directly into the form. On add we let the user pick
     // between PAT and GitHub App first.
     const initialKind: 'pat' | 'ssh' | 'app' =
-        mode.kind === 'edit'
-            ? mode.credential.kind === 'github_app'
-                ? 'app'
-                : 'pat'
-            : 'pat';
+        mode.kind === 'edit' ? (mode.credential.kind === 'github_app' ? 'app' : 'pat') : 'pat';
     const [view, setView] = useState<View>(mode.kind === 'edit' ? 'form' : 'kind');
     const [chosenKind, setChosenKind] = useState<'pat' | 'ssh' | 'app'>(initialKind);
     const [label, setLabel] = useState(mode.kind === 'edit' ? mode.credential.label : '');
     const [token, setToken] = useState('');
+    // Plaintext fetched on demand from GET /credentials/:id/token. Transient:
+    // never cached, dropped as soon as the Owner types a replacement or hides.
+    const [revealedToken, setRevealedToken] = useState<string | null>(null);
     const [scope, setScope] = useState(mode.kind === 'edit' ? mode.credential.scope : '');
     const [showToken, setShowToken] = useState(false);
     // GitHub App branch fields — only used when chosenKind === 'app'.
     const [botInfoPath, setBotInfoPath] = useState('');
     const [installOwner, setInstallOwner] = useState(
-        mode.kind === 'edit' ? (mode.credential.app_installation_owner ?? '') : '',
+        mode.kind === 'edit' ? (mode.credential.app_installation_owner ?? '') : ''
     );
     // Human-attribution fields (migration 025). Optional — leaving them
     // blank keeps bot-only attribution. When all three are set, commits
     // get a `Co-Authored-By: <name> <email>` trailer and PRs get
     // `--assignee <login>` + `Requested-By:` prefix in the body.
     const [humanName, setHumanName] = useState(
-        mode.kind === 'edit' ? (mode.credential.human_name ?? '') : '',
+        mode.kind === 'edit' ? (mode.credential.human_name ?? '') : ''
     );
     const [humanEmail, setHumanEmail] = useState(
-        mode.kind === 'edit' ? (mode.credential.human_email ?? '') : '',
+        mode.kind === 'edit' ? (mode.credential.human_email ?? '') : ''
     );
     const [humanGhLogin, setHumanGhLogin] = useState(
-        mode.kind === 'edit' ? (mode.credential.human_gh_login ?? '') : '',
+        mode.kind === 'edit' ? (mode.credential.human_gh_login ?? '') : ''
     );
     // W4 — `error` holds either a string (client-side validation messages)
     // or a AtlasApiError thrown from `request<T>`. ApiErrorAlert switches
@@ -98,6 +98,7 @@ export function CredentialModal({ open, mode, onClose }: Props) {
             setLabel(mode.credential.label);
             setScope(mode.credential.scope);
             setToken('');
+            setRevealedToken(null);
             setSavedCred(null);
             setInstallOwner(mode.credential.app_installation_owner ?? '');
             setBotInfoPath('');
@@ -110,6 +111,7 @@ export function CredentialModal({ open, mode, onClose }: Props) {
             setLabel('');
             setScope('');
             setToken('');
+            setRevealedToken(null);
             setSavedCred(null);
             setBotInfoPath('');
             setInstallOwner('');
@@ -121,6 +123,32 @@ export function CredentialModal({ open, mode, onClose }: Props) {
         setError(null);
         setShowToken(false);
     }, [open, mode]);
+
+    const revealToken = useRevealCredentialToken();
+
+    // Edit mode never hydrates `token` (blank = keep existing), and every
+    // read route strips the ciphertext, so flipping the input's type used to
+    // reveal an empty box. Fetch the plaintext on demand instead — same
+    // read model as Settings -> Shared secrets.
+    async function handleToggleReveal(): Promise<void> {
+        if (showToken || revealedToken !== null) {
+            setShowToken(false);
+            setRevealedToken(null);
+            return;
+        }
+        // Owner typed something, or this is an add-mode form: plain show/hide.
+        if (mode.kind !== 'edit' || token !== '' || mode.credential.kind !== 'pat') {
+            setShowToken(true);
+            return;
+        }
+        try {
+            const res = await revealToken.mutateAsync(mode.credential.id);
+            setRevealedToken(res.value);
+            setShowToken(true);
+        } catch (err) {
+            setError(err);
+        }
+    }
 
     const create = useMutation({
         mutationFn: () =>
@@ -154,8 +182,7 @@ export function CredentialModal({ open, mode, onClose }: Props) {
             setView('saved');
             void qc.invalidateQueries({ queryKey: ['credentials'] });
         },
-        onError: (err) =>
-            setError(err instanceof AtlasApiError ? err : (err as Error).message),
+        onError: (err) => setError(err instanceof AtlasApiError ? err : (err as Error).message),
     });
 
     const updateCred = useMutation({
@@ -192,8 +219,7 @@ export function CredentialModal({ open, mode, onClose }: Props) {
             setView('saved');
             void qc.invalidateQueries({ queryKey: ['credentials'] });
         },
-        onError: (err) =>
-            setError(err instanceof AtlasApiError ? err : (err as Error).message),
+        onError: (err) => setError(err instanceof AtlasApiError ? err : (err as Error).message),
     });
 
     function handleSave() {
@@ -233,6 +259,7 @@ export function CredentialModal({ open, mode, onClose }: Props) {
         setView('kind');
         setLabel('');
         setToken('');
+        setRevealedToken(null);
         setScope('');
         setBotInfoPath('');
         setInstallOwner('');
@@ -509,8 +536,11 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                                 required={mode.kind !== 'edit'}
                                 label="Token"
                                 type={showToken ? 'text' : 'password'}
-                                value={token}
-                                onChange={(e) => setToken(e.target.value)}
+                                value={revealedToken ?? token}
+                                onChange={(e) => {
+                                    setToken(e.target.value);
+                                    setRevealedToken(null);
+                                }}
                                 placeholder={mode.kind === 'edit' ? '••••••••••••••••' : 'ghp_…'}
                                 helperText={
                                     mode.kind === 'edit'
@@ -520,14 +550,26 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                                 sx={{ mb: 3 }}
                                 slotProps={{
                                     input: {
+                                        // Read-only while showing a freshly-revealed
+                                        // stored token, so a stray keystroke can't
+                                        // turn a reveal into a silent rotation.
+                                        readOnly: revealedToken !== null,
                                         endAdornment: (
                                             <InputAdornment position="end">
                                                 <IconButton
                                                     size="small"
-                                                    onClick={() => setShowToken((v) => !v)}
+                                                    disabled={revealToken.isPending}
+                                                    aria-label={
+                                                        showToken ? 'Hide token' : 'Reveal token'
+                                                    }
+                                                    onClick={() => {
+                                                        void handleToggleReveal();
+                                                    }}
                                                 >
                                                     {showToken ? (
-                                                        <VisibilityOffOutlined sx={{ fontSize: 16 }} />
+                                                        <VisibilityOffOutlined
+                                                            sx={{ fontSize: 16 }}
+                                                        />
                                                     ) : (
                                                         <VisibilityOutlined sx={{ fontSize: 16 }} />
                                                     )}
@@ -568,7 +610,9 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                                 <Typography sx={{ ...SECTION_LABEL_SX, mt: 2, mb: 1 }}>
                                     Human attribution (optional)
                                 </Typography>
-                                <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, mb: 2 }}>
+                                <Typography
+                                    sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, mb: 2 }}
+                                >
                                     When set, commits get a Co-Authored-By trailer and PRs are
                                     assigned to you. Bot stays as the primary author.
                                 </Typography>
@@ -618,7 +662,9 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                                 <Typography sx={{ ...SECTION_LABEL_SX, mt: 2, mb: 1 }}>
                                     Commit identity (optional)
                                 </Typography>
-                                <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, mb: 2 }}>
+                                <Typography
+                                    sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, mb: 2 }}
+                                >
                                     Set both to author commits made under this credential as you.
                                     Leave blank and commits fall back to this machine&apos;s git
                                     config.
@@ -832,7 +878,10 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                                       ['Host', 'github.com'],
                                       ['Kind', 'GitHub App'],
                                       ['App id', String(savedCred.app_id ?? '—')],
-                                      ['Installation owner', savedCred.app_installation_owner ?? '—'],
+                                      [
+                                          'Installation owner',
+                                          savedCred.app_installation_owner ?? '—',
+                                      ],
                                       [
                                           'Token expires',
                                           savedCred.expires_at
@@ -859,12 +908,13 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                                             i < arr.length - 1
                                                 ? `1px solid ${ATLAS_PALETTE.slate06}`
                                                 : 'none',
-                                        bgcolor: i % 2 === 0 ? ATLAS_PALETTE.white : ATLAS_PALETTE.slate08,
+                                        bgcolor:
+                                            i % 2 === 0
+                                                ? ATLAS_PALETTE.white
+                                                : ATLAS_PALETTE.slate08,
                                     }}
                                 >
-                                    <Typography
-                                        sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}
-                                    >
+                                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
                                         {k}
                                     </Typography>
                                     <Typography

@@ -53,7 +53,8 @@ All three **Edit guard-rails** affordances (header badge, actions menu, right-ra
 
 ## Modals / drawers
 - `DeleteProjectModal` — `open={deleteOpen}` controlled at page level (lines 276-281).
-- `ProjectEnvSecretsModal` — `open={secretsOpen}`. Lets the owner edit `<git_path>/.env` for the project (key/value rows, masked values, reveal-all, Import .env, Export, Add variable, dirty-counter, Save secrets). Backed by `GET/PUT /api/projects/:id/env`.
+- `ProjectEnvSecretsModal` — `open={secretsOpen}`. Lets the owner edit `<git_path>/.env` for the project (key/value rows, masked values, per-row Reveal, Reveal all, Copy, Import .env, Export, Add variable, dirty-counter, Save secrets). Backed by `GET/PUT /api/projects/:id/env` plus `GET /api/projects/:id/env/:key/value` for reveal.
+  - **Reveal is a fetch, not a toggle.** The list endpoint is metadata-only (`{key, updated_at, has_value}` — no plaintext), so a stored row hydrates with an empty value. Until 2026-09-12 the eye icon, **Reveal all** and **Copy** all operated on that empty string: the eye flipped the input `type` and revealed a blank box, and Copy put `''` on the clipboard. Each now calls the per-key reveal endpoint (Reveal all fans out one call per stored row — the endpoint is per-key by design so every reveal is audited) and stashes the plaintext in transient row state. Rows show read-only while revealed; typing drops the revealed value and means "replace this secret".
 
 ## Hooks used
 - Page: `useProject(id)`, `useEpics(id)`, `useStories({projectId})`, `useBugs({projectId})`, `useAgents`, `useSettings`, `useSearchParams`, `useToast`
@@ -64,7 +65,7 @@ All three **Edit guard-rails** affordances (header badge, actions menu, right-ra
 - `GET /api/counts/project/:id` — 6-number KPI envelope for the Overview tab (open_epics, epics_ready, stories_in_flight, stories_waiting_info, open_bugs, bugs_ready)
 - `GET /api/run?project_id=…&limit=200` — backs the History tab. Server-side join on `items.project_id` so the page doesn't have to enumerate every child item; a single query returns runs across all levels of the project tree.
 - `DELETE /api/projects/:id` (via `DeleteProjectModal`)
-- `GET /api/projects/:id/env`, `PUT /api/projects/:id/env` (via `ProjectEnvSecretsModal`)
+- `GET /api/projects/:id/env`, `PUT /api/projects/:id/env`, `GET /api/projects/:id/env/:key/value` (via `ProjectEnvSecretsModal`)
 
 ## Permissions / guards
 - Post-onboarding only.

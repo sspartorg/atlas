@@ -15,9 +15,18 @@ import Typography from '@mui/material/Typography';
 //      itself back to masked and calls onExpire() so the parent can
 //      clear its transient state
 //
-// The countdown, copy affordance, and mask-again gesture live here so
-// every consumer (SharedSecretsTab, ProjectEnvSecretsModal,
-// NotificationsTab) gets the same UX by default.
+// NOT CURRENTLY MOUNTED ANYWHERE (verified 2026-09-12). This comment used
+// to claim SharedSecretsTab / ProjectEnvSecretsModal / NotificationsTab were
+// consumers; none of them ever imported it. Those three (plus CredentialModal)
+// implement reveal as an eye IconButton inside the value TextField, which is a
+// different shape from this component's code-block + countdown. The dead
+// component plus the false claim cost real time during the 2026-09-12 secrets
+// audit: it reads as "the shared root exists, just wire it up", when adopting
+// it is a visual redesign of four surfaces, not a wiring change.
+//
+// Keep it only if that redesign is actually wanted (the auto-mask countdown is
+// a genuine security improvement over the plain eye toggle); otherwise delete
+// it and its test file.
 
 export interface SecretRevealButtonProps {
     /** true when a value is stored (so a Reveal button makes sense). */

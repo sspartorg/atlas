@@ -202,12 +202,17 @@ describe('DELETE /api/credentials/:id', () => {
 
 // Post-audit regression tests: the API layer must strip encrypt-at-rest
 // ciphertext (token_encrypted, token_fingerprint) before serialising a
-// credential over the wire. The service-level rowToCredential emits them
+// credential over the wire. The service-level rowToCredential emits it
 // for internal decrypt paths; every route handler wraps in
 // `stripSecretsForApi` before `reply.send`. Any regression that echoes
 // ciphertext into a 200 response defeats the whole encrypt-at-rest boundary.
+//
+// 2026-09-12: `token_fingerprint` is deliberately NOT stripped. It is the
+// masked display string (prefix + dots + last 4) the Credentials table's
+// Fingerprint column, the saved-view detail and "Copy fingerprint" all
+// render. Nulling it made every one of those blank.
 describe('secret stripping on API responses', () => {
-    it('GET /api/credentials strips token_encrypted + token_fingerprint', async () => {
+    it('GET /api/credentials strips token_encrypted but keeps token_fingerprint', async () => {
         await app.inject({
             method: 'POST',
             url: '/api/credentials',
@@ -219,10 +224,10 @@ describe('secret stripping on API responses', () => {
             token_fingerprint: unknown;
         }>;
         expect(body[0]?.token_encrypted).toBeNull();
-        expect(body[0]?.token_fingerprint).toBeNull();
+        expect(body[0]?.token_fingerprint).toBe('ghp_••••••••••••••••cdef');
     });
 
-    it('GET /api/credentials/:id strips token_encrypted + token_fingerprint', async () => {
+    it('GET /api/credentials/:id strips token_encrypted but keeps token_fingerprint', async () => {
         const created = await app.inject({
             method: 'POST',
             url: '/api/credentials',
@@ -235,7 +240,7 @@ describe('secret stripping on API responses', () => {
             token_fingerprint: unknown;
         };
         expect(body.token_encrypted).toBeNull();
-        expect(body.token_fingerprint).toBeNull();
+        expect(body.token_fingerprint).toBe('ghp_••••••••••••••••cdef');
     });
 
     it('POST /api/credentials strips ciphertext from its 201 response', async () => {
@@ -250,7 +255,7 @@ describe('secret stripping on API responses', () => {
             token_fingerprint: unknown;
         };
         expect(body.token_encrypted).toBeNull();
-        expect(body.token_fingerprint).toBeNull();
+        expect(body.token_fingerprint).toBe('ghp_••••••••••••••••cdef');
     });
 
     it('PATCH /api/credentials/:id strips ciphertext on the 200 response even when rotating a token', async () => {
@@ -271,6 +276,33 @@ describe('secret stripping on API responses', () => {
             token_fingerprint: unknown;
         };
         expect(body.token_encrypted).toBeNull();
-        expect(body.token_fingerprint).toBeNull();
+        // Rotation re-fingerprints: last 4 of 'ghp_rotated_token_xxxxxxx'.
+        expect(body.token_fingerprint).toBe('ghp_••••••••••••••••xxxx');
+    });
+});
+
+// Regression — 2026-09-12. The Credentials modal's eye icon toggled the
+// input `type` over a field that was never hydrated: every read route strips
+// the ciphertext and no reveal endpoint existed, so "show" showed nothing.
+describe('GET /api/credentials/:id/token', () => {
+    it('returns the decrypted PAT', async () => {
+        const created = await app.inject({
+            method: 'POST',
+            url: '/api/credentials',
+            payload: VALID_CREDENTIAL,
+        });
+        const { id } = JSON.parse(created.body) as { id: string };
+
+        const res = await app.inject({ method: 'GET', url: `/api/credentials/${id}/token` });
+        expect(res.statusCode).toBe(200);
+        expect(JSON.parse(res.body)).toEqual({ id, value: VALID_CREDENTIAL.token });
+    });
+
+    it('returns 404 for an unknown id', async () => {
+        const res = await app.inject({
+            method: 'GET',
+            url: '/api/credentials/00000000-0000-0000-0000-000000000000/token',
+        });
+        expect(res.statusCode).toBe(404);
     });
 });

@@ -92,8 +92,7 @@ function rowToCredential(row: Record<string, unknown>): ICredential {
         scope: (row['scope'] as string) ?? '',
         last_used_at: (row['last_used_at'] as string | null) ?? null,
         expires_at: (row['expires_at'] as string | null) ?? null,
-        app_id:
-            row['app_id'] == null ? null : Number(row['app_id']),
+        app_id: row['app_id'] == null ? null : Number(row['app_id']),
         has_app_private_key: Boolean(row['app_private_key_encrypted']),
         app_installation_owner: (row['app_installation_owner'] as string | null) ?? null,
         app_installation_id:
@@ -107,14 +106,22 @@ function rowToCredential(row: Record<string, unknown>): ICredential {
     };
 }
 
-// Drop encrypt-at-rest ciphertext + fingerprint before shipping a
-// credential over HTTP. The API GET routes are read-open (any loopback
-// caller); returning the encrypted-token blob would defeat the whole
-// encrypt-at-rest boundary — anyone with a memory dump + the workspace
-// key could recover every stored token. Applied by every route handler
-// in `packages/api/src/routes/credentials.ts` before `reply.send`.
+// Drop the encrypt-at-rest ciphertext before shipping a credential over
+// HTTP. The API GET routes are read-open (any loopback caller); returning
+// the encrypted-token blob would defeat the whole encrypt-at-rest boundary
+// — anyone with a memory dump + the workspace key could recover every
+// stored token. Applied by every route handler in
+// `packages/api/src/routes/credentials.ts` before `reply.send`.
+//
+// `token_fingerprint` is NOT stripped. It is a display string built by
+// `fingerprint()` — a host prefix, 16 mask dots and the token's last 4
+// characters — whose entire purpose is telling two credentials on the same
+// host apart without showing the token. Nulling it here left the
+// Credentials table's Fingerprint column, the saved-view detail row and the
+// row menu's "Copy fingerprint" action permanently blank, which is the
+// opposite of what the column exists for.
 export function stripSecretsForApi(cred: ICredential): ICredential {
-    return { ...cred, token_encrypted: null, token_fingerprint: null };
+    return { ...cred, token_encrypted: null };
 }
 
 // Blank strings from the UI collapse to null so downstream truthiness
@@ -135,7 +142,11 @@ function nullIfBlank(v: string | null | undefined): string | null {
  * Throws with a caller-friendly message on any structural issue so the
  * REST layer can surface a clean 400.
  */
-function readBotInfoFolder(botInfoPath: string): { app_id: number; pem: string; app_slug: string | null } {
+function readBotInfoFolder(botInfoPath: string): {
+    app_id: number;
+    pem: string;
+    app_slug: string | null;
+} {
     // Resolve to an absolute, canonical path. `realpathSync` follows any
     // symlinks (or Windows junctions) so a `bot_info_path` that points
     // at a link into a system directory ends up compared against its
@@ -157,7 +168,7 @@ function readBotInfoFolder(botInfoPath: string): { app_id: number; pem: string; 
     // before they hit the glob loop.
     if (parsePath(absPath).base === '') {
         throw new CredentialValidationError(
-            `bot info path is a filesystem root, refusing to scan: ${absPath}`,
+            `bot info path is a filesystem root, refusing to scan: ${absPath}`
         );
     }
     let stat;
@@ -179,13 +190,13 @@ function readBotInfoFolder(botInfoPath: string): { app_id: number; pem: string; 
         configStat = statSync(configPath);
     } catch {
         throw new CredentialValidationError(
-            `could not read app-config.json in ${absPath}: not found`,
+            `could not read app-config.json in ${absPath}: not found`
         );
     }
     const CONFIG_MAX_BYTES = 32 * 1024;
     if (configStat.size > CONFIG_MAX_BYTES) {
         throw new CredentialValidationError(
-            `app-config.json in ${absPath} is unexpectedly large (${configStat.size} bytes > ${CONFIG_MAX_BYTES}); refusing to load`,
+            `app-config.json in ${absPath} is unexpectedly large (${configStat.size} bytes > ${CONFIG_MAX_BYTES}); refusing to load`
         );
     }
     let config: Record<string, unknown>;
@@ -193,7 +204,7 @@ function readBotInfoFolder(botInfoPath: string): { app_id: number; pem: string; 
         config = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
     } catch (e) {
         throw new CredentialValidationError(
-            `could not read app-config.json in ${absPath}: ${e instanceof Error ? e.message : String(e)}`,
+            `could not read app-config.json in ${absPath}: ${e instanceof Error ? e.message : String(e)}`
         );
     }
     if (
@@ -203,7 +214,7 @@ function readBotInfoFolder(botInfoPath: string): { app_id: number; pem: string; 
         (config['id'] as number) <= 0
     ) {
         throw new CredentialValidationError(
-            `app-config.json in ${absPath} is missing a positive integer "id" field`,
+            `app-config.json in ${absPath} is missing a positive integer "id" field`
         );
     }
     const appId = config['id'];
@@ -221,13 +232,13 @@ function readBotInfoFolder(botInfoPath: string): { app_id: number; pem: string; 
     }
     if (pemFiles.length > 1) {
         throw new CredentialValidationError(
-            `multiple *.pem files in ${absPath} (${pemFiles.join(', ')}); expected exactly one`,
+            `multiple *.pem files in ${absPath} (${pemFiles.join(', ')}); expected exactly one`
         );
     }
     const pem = readFileSync(join(absPath, pemFiles[0]!), 'utf-8');
     if (!pem.includes('BEGIN') || !pem.includes('PRIVATE KEY')) {
         throw new CredentialValidationError(
-            `${pemFiles[0]} in ${absPath} does not look like a PEM private key`,
+            `${pemFiles[0]} in ${absPath} does not look like a PEM private key`
         );
     }
     return { app_id: appId, pem, app_slug: appSlug };
@@ -285,7 +296,9 @@ export const credentialsService = {
                     .where('id', '=', id)
                     .executeTakeFirst();
                 if (!fresh?.token_encrypted) {
-                    throw new Error(`Credential ${id} was refreshed but token_encrypted is still empty`);
+                    throw new Error(
+                        `Credential ${id} was refreshed but token_encrypted is still empty`
+                    );
                 }
                 return decrypt(fresh.token_encrypted);
             }
@@ -376,12 +389,12 @@ export const credentialsService = {
             if (isPermanent) {
                 await db.deleteFrom('credentials').where('id', '=', id).execute();
                 throw new CredentialValidationError(
-                    `GitHub App token mint failed (${safeMsg}). Verify the bot info folder points at the correct App and the App is installed on '${input.app_installation_owner}'.`,
+                    `GitHub App token mint failed (${safeMsg}). Verify the bot info folder points at the correct App and the App is installed on '${input.app_installation_owner}'.`
                 );
             }
             // eslint-disable-next-line no-console
             console.warn(
-                `[credentials] initial mint for ${id} failed transiently (will retry lazily): ${safeMsg}`,
+                `[credentials] initial mint for ${id} failed transiently (will retry lazily): ${safeMsg}`
             );
         }
         // reason: the insert above just committed a row with this id;
@@ -410,7 +423,7 @@ export const credentialsService = {
                 badFields.push('app_installation_owner');
             if (badFields.length > 0) {
                 throw new CredentialValidationError(
-                    `Fields not valid for PAT credentials: ${badFields.join(', ')}`,
+                    `Fields not valid for PAT credentials: ${badFields.join(', ')}`
                 );
             }
         }
@@ -440,7 +453,7 @@ export const credentialsService = {
             }
             if (badFields.length > 0) {
                 throw new CredentialValidationError(
-                    `Fields not valid for github_app credentials: ${badFields.join(', ')}`,
+                    `Fields not valid for github_app credentials: ${badFields.join(', ')}`
                 );
             }
         }
@@ -452,8 +465,7 @@ export const credentialsService = {
             label: patch.label ?? existing.label,
             username: patch.username ?? existing.username,
             scope: 'scope' in patch && patch.scope !== undefined ? patch.scope : existing.scope,
-            expires_at:
-                'expires_at' in patch ? patch.expires_at ?? null : existing.expires_at,
+            expires_at: 'expires_at' in patch ? (patch.expires_at ?? null) : existing.expires_at,
         };
         if (existing.kind === 'github_app' && patch.app_installation_owner !== undefined) {
             next['app_installation_owner'] = patch.app_installation_owner;
@@ -484,7 +496,11 @@ export const credentialsService = {
             next['token_encrypted'] = encrypt(patch.token);
             next['token_fingerprint'] = fingerprint(patch.token);
         }
-        await db.updateTable('credentials').set(next as never).where('id', '=', id).execute();
+        await db
+            .updateTable('credentials')
+            .set(next as never)
+            .where('id', '=', id)
+            .execute();
         // reason: update() only reached after the initial `this.get(id)`
         // succeeded; the row still exists after the update.
         return (await this.get(id))!;
