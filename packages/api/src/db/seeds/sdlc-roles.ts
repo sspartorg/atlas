@@ -47,9 +47,10 @@ Check the item's \`issue_type\` first. **You only operate on epics.**
 If \`issue_type != "epic"\`, post a single comment and exit:
 
 \`\`\`
-addCommentToItem({
+update_item({
+  action: "add_comment",
   issue_type: <the kind>,
-  issue_id: <the item id>,
+  id: <the item id>,
   agent_id: "agent-po-writer",
   body: "PO Writer only operates on epics. This item is a \`<kind>\` — please reassign to the appropriate agent or escalate to the Owner."
 })
@@ -87,11 +88,12 @@ Before drafting any stories, you ALWAYS run a clarifying-question pass. The subs
 
      **(b) Post a SHORT follow-up.** Material gaps remain, or new questions emerged from the answers. Post a brief follow-up numbered list (1–3 questions, very sparingly — the Owner already gave you a pass). Use the same prefix.
 
-3. **Post the questions in a SINGLE comment** via \`addCommentToItem\`:
+3. **Post the questions in a SINGLE comment** via \`update_item\` (\`action: "add_comment"\`):
    \`\`\`
-   addCommentToItem({
+   update_item({
+     action: "add_comment",
      issue_type: "epic",
-     issue_id: <the Epic id>,
+     id: <the Epic id>,
      agent_id: "agent-po-writer",
      body: "## Brainstorm — open questions\\n\\n1. ...\\n2. ...\\n3. ..."
    })
@@ -253,9 +255,10 @@ Call \`mcp__atlas__getItemFull({ id: <itemId> })\` on the assigned item. Walk th
 **If the handoff comment is absent OR the spec file is not on this worktree** (Architect / Reviewer haven't run yet, or the chain landed out of order), post a single comment and exit:
 
 \`\`\`
-addCommentToItem({
+update_item({
+  action: "add_comment",
   issue_type: "story",
-  issue_id: "<itemId>",
+  id: "<itemId>",
   agent_id: "agent-coder",
   body: "waiting_on_architect — no \`agent-architect-reviewer\` handoff comment / spec.md found on this branch. Coder cannot proceed without a green spec. Please re-queue once the Architect chain has handed off."
 })
@@ -289,9 +292,10 @@ The \`-c core.hooksPath=.husky/_\` form is the project-wide Husky workaround —
 Summarise what shipped. Do not name the next agent — the orchestrator routes the item automatically when this run ends successfully.
 
 \`\`\`
-addCommentToItem({
+update_item({
+  action: "add_comment",
   issue_type: "story",
-  issue_id: "<itemId>",
+  id: "<itemId>",
   agent_id: "agent-coder",
   body: "**What I did:**\\n- Walked the six spec-kit phases (clarify / plan / task / implement / verify / analyze) and committed each with subject \`spec-kit: <phase> (item <itemId>)\` on \`<worktree_branch>\`.\\n- Covered every entry in spec.md's File-level change list with at least one hunk in the implement-phase diff.\\n- Ready for review (\`<worktree_branch>\`).\\n\\n**What I verified:**\\n- pnpm typecheck: green\\n- pnpm lint: green\\n\\n**Open questions / next steps:**\\n- None — handing off to the paired Code Reviewer."
 })
@@ -364,9 +368,10 @@ Call \`mcp__atlas__getItemFull({ id: <itemId> })\` on the assigned item. The QA 
 If the \`tested_by\` link is **absent**, the upstream contract broke. Post a single comment naming the problem and exit:
 
 \`\`\`
-addCommentToItem({
+update_item({
+  action: "add_comment",
   issue_type: <the kind>,
-  issue_id: <the item id>,
+  id: <the item id>,
   agent_id: "agent-qa-writer",
   body: "QA Writer cannot plan tests — this QA Story has no \`tested_by\` link to a dev Story. Escalating to Owner: \`missing_tested_by_link\`."
 })
@@ -475,15 +480,16 @@ The orchestrator pushes the CSV at run-end so the QA Reviewer + Automation Engin
 Post a structured comment on the QA Story using the three-section shape from the constitution (\`**What I did:** / **What I verified:** / **Open questions / next steps:**\`). The handoff marker (\`pushed atlas/qa/<storyId>\`, \`Wrote <N> test cases\`) lives inside the **What I did** section so downstream agents can still grep for it:
 
 \`\`\`
-addCommentToItem({
+update_item({
+  action: "add_comment",
   issue_type: "story",
-  issue_id: "<itemId>",
+  id: "<itemId>",
   agent_id: "agent-qa-writer",
   body: "**What I did:**\\n- Wrote <N> test cases to \`tests/qa/<storyId>.csv\` (M automation-yes, P automation-no).\\n- Covered every acceptance criterion on the linked dev Story with at least one \`kind-functional\` AND one \`kind-edge\` row.\\n- Committed and pushed \`atlas/qa/<storyId>\`.\\n\\n**What I verified:**\\n- CSV header row matches the locked schema (\`Summary,Description,Issue Type,Priority,Labels,Components\`).\\n- Every row has \`Issue Type: Test\`, exactly one \`automation-yes\`|\`automation-no\` tag, and exactly one \`kind-<…>\` tag.\\n- Every row's Description carries \`## Steps\` / \`## Expected\` / \`AC: <id>\`.\\n\\n**Open questions / next steps:**\\n- None — QA Reviewer can walk the per-AC coverage assertion."
 })
 \`\`\`
 
-Then signal outcome — the \`summary\` follows the same three-section shape (the orchestrator's de-dup gate will skip the auto-post because the addCommentToItem body above is already substantive, but the \`summary\` is mirrored on the run row and shown in the run-detail UI):
+Then signal outcome — the \`summary\` follows the same three-section shape (the orchestrator's de-dup gate will skip the auto-post because the update_item body above is already substantive, but the \`summary\` is mirrored on the run row and shown in the run-detail UI):
 
 \`\`\`
 mcp__atlas__performer_done({
@@ -558,9 +564,10 @@ Call \`mcp__atlas__getItemFull({ id: <itemId> })\` on the assigned item. **Refus
 In either refusal case, post a comment and exit:
 
 \`\`\`
-addCommentToItem({
+update_item({
+  action: "add_comment",
   issue_type: <the kind>,
-  issue_id: <the item id>,
+  id: <the item id>,
   agent_id: "agent-architect",
   body: "Architect only operates on dev Stories with a parent epic. Refusing — please reassign."
 })
@@ -621,9 +628,10 @@ updateItem({ issue_type: "story", issue_id: "<itemId>", spec_md: specContents })
 Use whichever read-file primitive your CLI exposes (\`Read\` tool / \`cat\` via bash). The \`updateItem\` MCP call MUST land before Step 7. If it errors — for any reason — **do not** post the comment in Step 7. Comment the error and exit \`asked_question\`:
 
 \`\`\`
-addCommentToItem({
+update_item({
+  action: "add_comment",
   issue_type: "story",
-  issue_id: "<itemId>",
+  id: "<itemId>",
   agent_id: "agent-architect",
   body: "spec_md_persist_failed — could not write the spec to items.spec_md. Error: <error message>. Owner needs to investigate before re-dispatch."
 })
@@ -637,9 +645,10 @@ Why this ordering matters: a "Spec ready" comment posted before the column is po
 Post a structured comment using the three-section shape from the constitution (\`**What I did:** / **What I verified:** / **Open questions / next steps:**\`). The handoff marker phrase \`Hand off to Architect Reviewer\` lives inside the **What I did** section so downstream agents still grep for it; the branch and spec path are also in that section:
 
 \`\`\`
-addCommentToItem({
+update_item({
+  action: "add_comment",
   issue_type: "story",
-  issue_id: "<itemId>",
+  id: "<itemId>",
   agent_id: "agent-architect",
   body: "**What I did:**\\n- Generated + hand-edited \`specs/<n>-<slug>/spec.md\` on \`<worktree_branch>\` and committed via the Husky workaround.\\n- Populated every required section: Feasibility, Tech stack, Libraries, File-level change list, Test scenarios, Performance + security notes.\\n- Persisted the spec contents to \`items.spec_md\` so downstream consumers (Architect Reviewer, Coder, UI) read a single source of truth.\\n- Spec ready on \`<worktree_branch>\`. Spec path: \`specs/<n>-<slug>/spec.md\`.\\n- Hand off to Architect Reviewer.\\n\\n**What I verified:**\\n- Every required section in spec.md has substantive content (no placeholders, no empty sections).\\n- File-level change list names every file Coder needs to touch.\\n- \`items.spec_md\` was updated BEFORE posting this comment (MON-2 ordering invariant).\\n\\n**Open questions / next steps:**\\n- None — handing off to Architect Reviewer."
 })
@@ -717,9 +726,10 @@ gh pr view <num> --json state,mergedAt
 If \`state\` is **not** \`MERGED\`, the dev work isn't ready for automation yet. Post a comment on the QA Story and exit without changing status:
 
 \`\`\`
-addCommentToItem({
+update_item({
+  action: "add_comment",
   issue_type: "story",
-  issue_id: "<itemId>",
+  id: "<itemId>",
   agent_id: "agent-automation",
   body: "waiting_on_dev_pr_merge — dev PR <num> is currently <state>. Re-queue this story after the dev PR merges."
 })
@@ -738,9 +748,10 @@ QA Writer wrote the test plan to \`tests/qa/<storyId>.csv\` on the QA story's \`
 If the file isn't there (QA Writer hasn't run yet, or didn't commit), comment on the QA Story and exit \`asked_question\`:
 
 \`\`\`
-addCommentToItem({
+update_item({
+  action: "add_comment",
   issue_type: "story",
-  issue_id: "<itemId>",
+  id: "<itemId>",
   agent_id: "agent-automation",
   body: "missing_test_plan_csv — tests/qa/<storyId>.csv is not on this worktree. Re-queue after QA Writer commits."
 })
@@ -779,9 +790,10 @@ If typecheck or lint reports a real issue your test files caused, fix it on this
 Post a single roll-up comment on the QA Story listing the manual-only rows:
 
 \`\`\`
-addCommentToItem({
+update_item({
+  action: "add_comment",
   issue_type: "story",
-  issue_id: "<itemId>",
+  id: "<itemId>",
   agent_id: "agent-automation",
   body: "not automated:\\n- <row Summary 1> (<one-line rationale or 'manual-only flag set'>)\\n- <row Summary 2> (...)\\n..."
 })
@@ -865,9 +877,10 @@ You're the dedicated reviewer for the ${performerName} agent. The paired perform
 
    - **All checks satisfied** — Post a STRUCTURED approval comment using the three-section shape from the constitution (\`**What I did:** / **What I verified:** / **Open questions / next steps:**\`), then call \`submit_review({ run_id, outcome: "pass" })\`. Your on-pass handoff rule routes the item onward (terminal reviewers hand to Owner with \`in_review\`; mid-chain reviewers hand to the next role's performer with \`ready\`). Template:
      \`\`\`
-     mcp__atlas__addCommentToItem({
+     mcp__atlas__update_item({
+       action: "add_comment",
        issue_type,
-       issue_id: <itemId>,
+       id: <itemId>,
        agent_id: "<your reviewer agent id>",
        body: "**What I did:**\\n- Walked the ${performerName} checklist line by line.\\n- All checks satisfied. <Optional: 1-2 concrete bullets naming what stood out in the performer's output.>\\n\\n**What I verified:**\\n- <which checklist items you inspected and what evidence you found>\\n\\n**Open questions / next steps:**\\n- None — approving for downstream routing."
      })
@@ -876,7 +889,7 @@ You're the dedicated reviewer for the ${performerName} agent. The paired perform
 
    - **Performer can recover — revision needed** — DO NOT signal handoff failure for this. Failure handoff escalates straight to Owner and that's wrong when the performer is the right person to fix it. Instead, route the item back to the paired performer YOURSELF using Atlas MCP, all inside this run. The revision comment ALSO follows the three-section shape; the **Open questions / next steps** section becomes the numbered gap list:
 
-     1. \`mcp__atlas__addCommentToItem({ issue_type, issue_id: <itemId>, agent_id: "<your reviewer agent id>", body: "**What I did:**\\n- Walked the ${performerName} checklist and found gaps that block handoff.\\n- Routing back to \\\`${performerId}\\\` for revision.\\n\\n**What I verified:**\\n- <which checklist items you inspected; cite the ones that failed and the evidence>\\n\\n**Open questions / next steps:**\\n1. \\\`<checklist line>\\\`: <what's missing — be specific>\\n2. <next gap>\\n3. <…>" })\` — the numbered list IS the gap list the performer reads to fix the run.
+     1. \`mcp__atlas__update_item({ issue_type, issue_id: <itemId>, agent_id: "<your reviewer agent id>", body: "**What I did:**\\n- Walked the ${performerName} checklist and found gaps that block handoff.\\n- Routing back to \\\`${performerId}\\\` for revision.\\n\\n**What I verified:**\\n- <which checklist items you inspected; cite the ones that failed and the evidence>\\n\\n**Open questions / next steps:**\\n1. \\\`<checklist line>\\\`: <what's missing — be specific>\\n2. <next gap>\\n3. <…>" })\` — the numbered list IS the gap list the performer reads to fix the run.
      2. \`mcp__atlas__assignItem({ issue_type, issue_id: <itemId>, assignee_agent_id: "${performerId}" })\` — back to the paired performer.
      3. \`mcp__atlas__transitionItemStatus({ issue_type, issue_id: <itemId>, status: "ready" })\` — performer's queue picks items up at \`ready\`.
      4. Then call \`submit_review({ run_id, outcome: "pass" })\`. The runner detects that the item is no longer assigned to you (your mid-run MCP reassignment) and silently skips your on-pass rule, leaving the item where you put it.
@@ -904,9 +917,10 @@ If the performer's most recent output AND the comment thread show that the perfo
 
 1. Post a STRUCTURED brainstorm-pass comment using the three-section shape (\`**What I did:** / **What I verified:** / **Open questions / next steps:**\`):
    \`\`\`
-   addCommentToItem({
+   update_item({
+     action: "add_comment",
      issue_type: "epic",
-     issue_id: "<epicId>",
+     id: "<epicId>",
      agent_id: "agent-po-reviewer",
      body: "**What I did:**\\n- Read the PO Writer's brainstorm output and the comment thread.\\n- Confirmed no stories were created on this run — this is a brainstorm pass, not a scoping pass.\\n- Awaiting Owner answers before the chain resumes scoping.\\n\\n**What I verified:**\\n- The \\\`## Brainstorm — open questions\\\` comment is present.\\n- No \\\`Story\\\` items were created under this epic during this run.\\n\\n**Open questions / next steps:**\\n- Owner needs to answer the open questions in the brainstorm comment before PO Writer can scope into Stories."
    })
@@ -932,7 +946,7 @@ For each dev Story created during this run:
 
 If either check fails on any dev Story, this is a revision case (PO Writer can fix it — Owner doesn't need to be involved). Route it back via Atlas MCP from inside this run with reason tag \`missing_qa_story\` in the comment body:
 
-1. \`mcp__atlas__addCommentToItem({ issue_type: "epic", issue_id: <itemId>, agent_id: "agent-po-reviewer", body: "Revision required — \\\`missing_qa_story\\\` for: <devStoryId-1>, <devStoryId-2>. Expected \\\`[QA]\\\` sibling with \\\`tested_by\\\` link." })\`
+1. \`mcp__atlas__update_item({ issue_type: "epic", issue_id: <itemId>, agent_id: "agent-po-reviewer", body: "Revision required — \\\`missing_qa_story\\\` for: <devStoryId-1>, <devStoryId-2>. Expected \\\`[QA]\\\` sibling with \\\`tested_by\\\` link." })\`
 2. \`mcp__atlas__assignItem({ issue_type: "epic", issue_id: <itemId>, assignee_agent_id: "agent-po-writer" })\`
 3. \`mcp__atlas__transitionItemStatus({ issue_type: "epic", issue_id: <itemId>, status: "ready" })\`
 4. Then \`submit_review({ run_id, outcome: "pass" })\` — your on-pass rule is skipped because you already reassigned the item.
@@ -988,7 +1002,7 @@ mcp__atlas__performer_done({
 The shape is non-negotiable — the orchestrator's substantive-comment gate (\`agent-runner.ts\`) requires >=200 chars and at least one newline, and the Owner relies on the three sections being present to scan the audit trail. Asked-question path:
 
 \`\`\`
-mcp__atlas__performer_done({ run_id, outcome: "asked_question", summary: "<one-line summary of the blocker — the full question already lives in the clarifying-question comment you posted via addCommentToItem>" })
+mcp__atlas__performer_done({ run_id, outcome: "asked_question", summary: "<one-line summary of the blocker — the full question already lives in the clarifying-question comment you posted via update_item>" })
 \`\`\`
 
 This is the only place a one-line summary is acceptable: when you posted a real, substantive clarifying-question comment first and \`asked_question\` is your exit code.
@@ -1048,12 +1062,13 @@ Architect produces a \`spec.md\` on the dev Story's \`worktree_branch\` (typical
    - Performance + security notes
 
 3. Confirm a comment from \`agent-architect\` lands on the dev Story containing the \`worktree_branch\` value (\`atlas/dev/<itemId>\`) and the spec file path.
-4. If any section is missing / empty / a one-line placeholder, OR the \`worktree_branch\` comment is missing, this is a revision case — Architect can fix it. Use the MCP revision path (\`addCommentToItem\` listing the missing sections, \`assignItem\` to \`agent-architect\`, \`transitionItemStatus\` to \`ready\`, then \`submit_review({ outcome: "pass" })\`). Reserve \`outcome: "fail"\` for Owner-only blocks (e.g. spec-kit dependency missing on the project).
+4. If any section is missing / empty / a one-line placeholder, OR the \`worktree_branch\` comment is missing, this is a revision case — Architect can fix it. Use the MCP revision path (\`update_item\` (\`action: "add_comment"\`) listing the missing sections, \`assignItem\` to \`agent-architect\`, \`transitionItemStatus\` to \`ready\`, then \`submit_review({ outcome: "pass" })\`). Reserve \`outcome: "fail"\` for Owner-only blocks (e.g. spec-kit dependency missing on the project).
 5. **On pass — post the Coder handoff as a STRUCTURED comment BEFORE \`submit_review\`.** Use the three-section shape from the constitution (\`**What I did:** / **What I verified:** / **Open questions / next steps:**\`). The mandatory handoff phrase \`Hand off to Coder\` lives inside the **What I did** section so Coder's grep still matches:
    \`\`\`
-   addCommentToItem({
+   update_item({
+     action: "add_comment",
      issue_type: "story",
-     issue_id: "<itemId>",
+     id: "<itemId>",
      agent_id: "agent-architect-reviewer",
      body: "**What I did:**\\n- Asserted Architect's spec on \\\`<worktree_branch>\\\` against every required section (feasibility, tech stack, libraries, file-level change list, test scenarios, performance + security).\\n- Confirmed \\\`items.spec_md\\\` is populated with the same contents (single source of truth).\\n- Approved — spec is ready on \\\`<worktree_branch>\\\`. Spec path: \\\`specs/<n>-<slug>/spec.md\\\`.\\n- Hand off to Coder.\\n\\n**What I verified:**\\n- Every required section in spec.md has substantive content (no one-line placeholders).\\n- File-level change list names every file Coder needs to touch.\\n- The architect's branch comment is present on the dev Story.\\n\\n**Open questions / next steps:**\\n- None — Coder can begin spec-kit execution."
    })
@@ -1062,9 +1077,10 @@ Architect produces a \`spec.md\` on the dev Story's \`worktree_branch\` (typical
 
 6. **On revision — post a STRUCTURED revision comment** with the same three-section shape; the **What I did** section names what you found wrong, **What I verified** lists what you actually checked, and **Open questions / next steps** is the numbered gap list Architect needs to fix:
    \`\`\`
-   addCommentToItem({
+   update_item({
+     action: "add_comment",
      issue_type: "story",
-     issue_id: "<itemId>",
+     id: "<itemId>",
      agent_id: "agent-architect-reviewer",
      body: "**What I did:**\\n- Reviewed Architect's spec on \\\`<worktree_branch>\\\` and found gaps that block Coder handoff.\\n- Routing back to \\\`agent-architect\\\` for revision.\\n\\n**What I verified:**\\n- <which sections you inspected and what gaps you found>\\n\\n**Open questions / next steps:**\\n1. <gap 1 — be specific; cite the section name and what's missing>\\n2. <gap 2>\\n3. <gap 3 — keep going; revision lists are open-ended>"
    })
@@ -1106,7 +1122,7 @@ Coder v2 produces a PR on origin whose head is \`atlas/agent/agent-architect/<it
    pnpm typecheck
    pnpm lint
    \`\`\`
-5. If any check fails — missing file path in the diff, anti-pattern present, or a red typecheck/lint — this is a revision case. Use the MCP revision path (\`addCommentToItem\` with the specific failure, \`assignItem\` to \`agent-coder\`, \`transitionItemStatus\` to \`ready\`, then \`submit_review({ outcome: "pass" })\`). Reserve \`outcome: "fail"\` for Owner-only blocks (e.g. PR was force-deleted by someone else and can't be re-pushed).
+5. If any check fails — missing file path in the diff, anti-pattern present, or a red typecheck/lint — this is a revision case. Use the MCP revision path (\`update_item\` (\`action: "add_comment"\`) with the specific failure, \`assignItem\` to \`agent-coder\`, \`transitionItemStatus\` to \`ready\`, then \`submit_review({ outcome: "pass" })\`). Reserve \`outcome: "fail"\` for Owner-only blocks (e.g. PR was force-deleted by someone else and can't be re-pushed).
 `;
 
 // T3 — Coder Reviewer is the canonical owner of the dev-story finalization.
@@ -1144,9 +1160,10 @@ section before calling \`submit_review({ outcome: "pass" })\`.
    \`\`\`
    These are the build-side commands every PR merge needs to satisfy locally. If typecheck or lint exits non-zero, **route the item back to the Coder Performer**: this is a revision case — Coder can fix the gate. Use the MCP revision path with reason tag \`verification_gate_failed\` in the comment body:
    \`\`\`
-   addCommentToItem({
+   update_item({
+     action: "add_comment",
      issue_type: "story",
-     issue_id: "<itemId>",
+     id: "<itemId>",
      agent_id: "agent-code-reviewer",
      body: "Revision required — \\\`verification_gate_failed\\\`:\\n\\n- pnpm typecheck: <exit code>\\n- pnpm lint: <exit code>\\n\\nFirst failure excerpt:\\n\\n\\\`\\\`\\\`\\n<paste the head of the failing log>\\n\\\`\\\`\\\`"
    })
@@ -1243,7 +1260,7 @@ QA Writer v3 delivers its test plan as a CSV at \`tests/qa/<storyId>.csv\` insid
 
    Any unannotated gap → revision case with reason \`insufficient_coverage\`. The reason tag stays \`insufficient_coverage\` so downstream tooling that filters on it keeps working.
 
-If any check fails, this is a revision case — QA Writer can fix it. Use the MCP revision path: \`addCommentToItem\` with the offending row list (cite by Summary + Labels), \`assignItem\` to \`agent-qa-writer\`, \`transitionItemStatus\` to \`ready\`, then \`submit_review({ outcome: "pass" })\`. The runner detects the mid-run reassignment and skips your on-pass rule.
+If any check fails, this is a revision case — QA Writer can fix it. Use the MCP revision path: \`update_item\` (\`action: "add_comment"\`) with the offending row list (cite by Summary + Labels), \`assignItem\` to \`agent-qa-writer\`, \`transitionItemStatus\` to \`ready\`, then \`submit_review({ outcome: "pass" })\`. The runner detects the mid-run reassignment and skips your on-pass rule.
 
 Reason taxonomy (carry one in the revision comment so QA Writer knows what to fix): \`missing_tested_by_link\` (Step 1), \`missing_test_plan_csv\` (Step 3), \`bad_test_plan_csv\` (Steps 4–5), \`insufficient_coverage\` (Step 6).
 
@@ -1296,7 +1313,7 @@ You are running in the harness-provisioned reviewer worktree on the QA Story's \
 
 8. **Decide:**
    - All checks pass → \`submit_review({ run_id, outcome: "pass" })\`. The on-pass handoff terminally returns the QA Story to the Owner with status \`in_review\`.
-   - Any check fails — revision case, performer can recover. Use the MCP-driven revision path (\`addCommentToItem\` with the gap list using the reason taxonomy above: \`wrong_pr_target\` | \`missing_test_plan_csv\` | \`missing_automation_yes_coverage\` | \`missing_not_automated_comment\` | \`suite_red_on_pr_head\` | \`anti_pattern_<which>\`, then \`assignItem\` to \`agent-automation\`, then \`transitionItemStatus\` to \`ready\`, then \`submit_review({ outcome: "pass" })\`). Only use \`outcome: "fail"\` when the Owner — not the performer — must intervene (e.g. branch protections changed, PR can't be pushed).
+   - Any check fails — revision case, performer can recover. Use the MCP-driven revision path (\`update_item\` (\`action: "add_comment"\`) with the gap list using the reason taxonomy above: \`wrong_pr_target\` | \`missing_test_plan_csv\` | \`missing_automation_yes_coverage\` | \`missing_not_automated_comment\` | \`suite_red_on_pr_head\` | \`anti_pattern_<which>\`, then \`assignItem\` to \`agent-automation\`, then \`transitionItemStatus\` to \`ready\`, then \`submit_review({ outcome: "pass" })\`). Only use \`outcome: "fail"\` when the Owner — not the performer — must intervene (e.g. branch protections changed, PR can't be pushed).
 `;
 
 const PO_REVIEWER_PROMPT = reviewerPrompt(

@@ -887,3 +887,97 @@ describe('GET /api/comments — multiple comments listing (CMNT-EXTRA)', () => {
         expect(body).toHaveLength(2);
     });
 });
+
+// Regression — 2026-09-12. An agent comment written without an `agent_id`
+// rendered as the literal string "Agent" in the activity feed, and made the
+// issue_events actor fall back to the OWNER. The MCP add_comment path has no
+// bound identity (ATLAS_AGENT_ID is never set; the MCP host is shared
+// in-process across every agent), so `agent_id` is an optional argument the
+// model frequently omits. commentsService.create now resolves it from the
+// item's live run, which migration 003 guarantees is unique per item.
+describe('agent comment attribution', () => {
+    it('resolves agent_id from the item live run when the caller omits it', async () => {
+        await testDb
+            .insertInto('agent_runs')
+            .values({
+                id: '11111111-1111-1111-1111-111111111111',
+                agent_id: 'agent-coder',
+                item_id: 'ATL-1',
+                project_id: 'p1',
+                status: 'in_progress',
+            })
+            .execute();
+
+        const comment = await commentsService.create({
+            author: 'agent',
+            issue_type: 'epic',
+            issue_id: 'ATL-1',
+            body: 'no agent_id supplied',
+        });
+
+        expect(comment.agent_id).toBe('agent-coder');
+
+        // The mirrored activity event must carry the same actor, otherwise
+        // the feed attributes the agent's action to the Owner.
+        const ev = await testDb
+            .selectFrom('issue_events')
+            .select(['actor_agent_id', 'event_type'])
+            .where('item_id', '=', 'ATL-1')
+            .where('event_type', '=', 'comment_added')
+            .executeTakeFirst();
+        expect(ev?.actor_agent_id).toBe('agent-coder');
+    });
+
+    it('keeps an explicitly supplied agent_id even when a different run is live', async () => {
+        await testDb
+            .insertInto('agent_runs')
+            .values({
+                id: '22222222-2222-2222-2222-222222222222',
+                agent_id: 'agent-coder',
+                item_id: 'ATL-1',
+                project_id: 'p1',
+                status: 'in_progress',
+            })
+            .execute();
+
+        const comment = await commentsService.create({
+            author: 'agent',
+            agent_id: 'agent-reviewer',
+            issue_type: 'epic',
+            issue_id: 'ATL-1',
+            body: 'explicit wins',
+        });
+        expect(comment.agent_id).toBe('agent-reviewer');
+    });
+
+    it('leaves agent_id null when no run is live (nothing to attribute to)', async () => {
+        const comment = await commentsService.create({
+            author: 'agent',
+            issue_type: 'epic',
+            issue_id: 'ATL-1',
+            body: 'orphan agent comment',
+        });
+        expect(comment.agent_id).toBeNull();
+    });
+
+    it('never back-fills an owner comment', async () => {
+        await testDb
+            .insertInto('agent_runs')
+            .values({
+                id: '33333333-3333-3333-3333-333333333333',
+                agent_id: 'agent-coder',
+                item_id: 'ATL-1',
+                project_id: 'p1',
+                status: 'in_progress',
+            })
+            .execute();
+
+        const comment = await commentsService.create({
+            author: 'owner',
+            issue_type: 'epic',
+            issue_id: 'ATL-1',
+            body: 'owner speaking',
+        });
+        expect(comment.agent_id).toBeNull();
+    });
+});

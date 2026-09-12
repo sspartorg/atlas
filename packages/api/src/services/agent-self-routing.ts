@@ -10,7 +10,7 @@
 // event rows via `eventsLog.record` — so no new instrumentation is
 // needed inside the MCP layer.
 //
-// `addCommentToItem` writes `comment_added`, not `assigned` /
+// `update_item({action:'add_comment'})` writes `comment_added`, not `assigned` /
 // `status_changed`, so a comment-only run still falls through to the
 // orchestrator's existing safety net (which would park it with the
 // Owner under `waiting_for_info`). Comments alone don't count as
