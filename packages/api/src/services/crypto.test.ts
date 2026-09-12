@@ -52,6 +52,17 @@ describe('crypto', () => {
             process.env['USERPROFILE'] = tmpHome;
             try {
                 vi.resetModules();
+                // These two cases assert the win32 branch of `keyPath()`, which
+                // reads `platform()` from node:os. Nothing stubbed it, so on a
+                // POSIX runner the code took the HOME branch and the assertion
+                // failed — the tests only ever passed on Windows (see the
+                // now-stale "Windows CI" note in crypto.ts). Stub the platform
+                // for the reloaded module so they assert what they claim on
+                // any host.
+                vi.doMock('node:os', async () => {
+                    const actual = await vi.importActual<typeof os>('node:os');
+                    return { ...actual, default: { ...actual, platform: () => 'win32' }, platform: () => 'win32' };
+                });
                 const mod = await import('./crypto.js');
                 const cipher = mod.encrypt('payload');
                 expect(mod.decrypt(cipher)).toBe('payload');
@@ -61,6 +72,8 @@ describe('crypto', () => {
                     ),
                 ).toBe(true);
             } finally {
+                vi.doUnmock('node:os');
+                vi.resetModules();
                 if (origAtlasDir !== undefined) process.env['ATLAS_DATA_DIR'] = origAtlasDir;
                 if (origAppdata !== undefined) process.env['APPDATA'] = origAppdata;
                 else delete process.env['APPDATA'];
@@ -84,6 +97,12 @@ describe('crypto', () => {
             process.chdir(tmpCwd);
             try {
                 vi.resetModules();
+                // Same reason as the USERPROFILE case above — stub the platform
+                // so the win32 branch is exercised on a POSIX runner.
+                vi.doMock('node:os', async () => {
+                    const actual = await vi.importActual<typeof os>('node:os');
+                    return { ...actual, default: { ...actual, platform: () => 'win32' }, platform: () => 'win32' };
+                });
                 const mod = await import('./crypto.js');
                 const cipher = mod.encrypt('payload');
                 expect(mod.decrypt(cipher)).toBe('payload');
@@ -93,6 +112,8 @@ describe('crypto', () => {
                     ),
                 ).toBe(true);
             } finally {
+                vi.doUnmock('node:os');
+                vi.resetModules();
                 process.chdir(origCwd);
                 if (origAtlasDir !== undefined) process.env['ATLAS_DATA_DIR'] = origAtlasDir;
                 if (origAppdata !== undefined) process.env['APPDATA'] = origAppdata;
