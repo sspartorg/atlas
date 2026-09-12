@@ -26,6 +26,10 @@ type StatStatus = 'idle' | 'checking' | 'exists' | 'missing' | 'not_a_directory'
 interface Props {
     value: string;
     onChange: (path: string) => void;
+    /** Accessible name for the path input. Callers render their own visual
+     *  label (a `Row label=` sibling, a <Typography> above), which is NOT
+     *  associated with the input — without this it has no accessible name. */
+    ariaLabel?: string;
     placeholder?: string;
     error?: boolean;
     autoFocus?: boolean;
@@ -42,6 +46,7 @@ export function FolderPicker(props: Props) {
     const {
         value,
         onChange,
+        ariaLabel,
         placeholder,
         error = false,
         autoFocus = false,
@@ -233,6 +238,11 @@ export function FolderPicker(props: Props) {
                         ) : null,
                         sx: { fontFamily: MONO, fontSize: 14 },
                     },
+                    // Merged here on purpose: a second `slotProps` prop would
+                    // replace this object wholesale rather than merge.
+                    ...(ariaLabel !== undefined
+                        ? { htmlInput: { 'aria-label': ariaLabel } }
+                        : {}),
                 }}
             />
             <Button

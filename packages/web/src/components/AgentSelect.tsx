@@ -28,8 +28,13 @@ interface Props {
     ownerName?: string | undefined;
     placeholder?: string | undefined;
     /** MUI floating label rendered by the inner TextField. Omit when the
-     *  caller renders its own external Typography label above the field. */
+     *  caller renders its own external Typography label above the field —
+     *  but then pass `ariaLabel`, or the input ends up with no accessible
+     *  name at all (an external <Typography> is not associated with it). */
     label?: string | undefined;
+    /** Accessible name for the inner input. Use when `label` is omitted
+     *  because the caller draws its own visual label. */
+    ariaLabel?: string | undefined;
     /** Forwarded to Autocomplete so callers can control size in dense forms. */
     size?: 'small' | 'medium';
 }
@@ -45,6 +50,7 @@ export function AgentSelect({
     ownerName,
     placeholder,
     label,
+    ariaLabel,
     size = 'medium',
 }: Props) {
     const options = useMemo<AgentSelectOption[]>(() => {
@@ -91,6 +97,10 @@ export function AgentSelect({
                     {...params}
                     label={label}
                     placeholder={placeholder ?? 'Pick an assignee…'}
+                    inputProps={{
+                        ...params.inputProps,
+                        ...(ariaLabel ? { 'aria-label': ariaLabel } : {}),
+                    }}
                     InputProps={{
                         ...params.InputProps,
                         startAdornment: selected ? (

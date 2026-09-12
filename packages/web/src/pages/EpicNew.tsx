@@ -46,9 +46,10 @@ export interface EpicNewBannerCopyInput {
  * we don't promise downstream behaviour the picked agent may not do.
  */
 export function epicNewBannerCopy(input: EpicNewBannerCopyInput): string {
-    const picked = input.assigneeId !== 'OWNER'
-        ? input.activeAgents.find((a) => a.id === input.assigneeId)
-        : null;
+    const picked =
+        input.assigneeId !== 'OWNER'
+            ? input.activeAgents.find((a) => a.id === input.assigneeId)
+            : null;
     if (picked) {
         return (
             `Write a rough goal — even one line is fine. ${picked.name} will pick this up ` +
@@ -245,6 +246,12 @@ export function EpicNew() {
                     <TextField
                         fullWidth
                         required
+                        // The visual label is a standalone <Typography>, so it
+                        // is not associated with the input — every control on
+                        // this form had NO accessible name. Screen readers
+                        // announced ten unlabelled fields, and
+                        // `getByLabel(/^Title/)` found nothing.
+                        slotProps={{ htmlInput: { 'aria-label': 'Title' } }}
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         onBlur={() => touch('title')}
@@ -252,7 +259,12 @@ export function EpicNew() {
                         helperText={showError('title')}
                         placeholder="e.g. Refund automation"
                         autoFocus
-                        sx={{ '& .MuiOutlinedInput-root': { fontSize: 14, background: ATLAS_PALETTE.white } }}
+                        sx={{
+                            '& .MuiOutlinedInput-root': {
+                                fontSize: 14,
+                                background: ATLAS_PALETTE.white,
+                            },
+                        }}
                     />
                 </Box>
 
@@ -280,17 +292,30 @@ export function EpicNew() {
                         multiline
                         minRows={4}
                         maxRows={10}
+                        slotProps={{ htmlInput: { 'aria-label': 'Description' } }}
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         onBlur={() => touch('description')}
                         error={Boolean(showError('description'))}
                         helperText={showError('description')}
                         placeholder="Refunds today are manual: support reviews each request, posts a Stripe refund, and emails the customer…"
-                        sx={{ '& .MuiOutlinedInput-root': { fontSize: 13, background: ATLAS_PALETTE.white } }}
+                        sx={{
+                            '& .MuiOutlinedInput-root': {
+                                fontSize: 13,
+                                background: ATLAS_PALETTE.white,
+                            },
+                        }}
                     />
                 </Box>
 
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 4, mb: 4 }}>
+                <Box
+                    sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                        gap: 4,
+                        mb: 4,
+                    }}
+                >
                     <Box>
                         <Typography
                             sx={{
@@ -311,6 +336,7 @@ export function EpicNew() {
                                 Project
                             </InputLabel>
                             <Select
+                                inputProps={{ 'aria-label': 'Project' }}
                                 value={projectId}
                                 onChange={(e) => {
                                     setProjectId(e.target.value);
@@ -321,9 +347,7 @@ export function EpicNew() {
                                 sx={{ background: ATLAS_PALETTE.white, fontSize: 13 }}
                             >
                                 <MenuItem value="" disabled>
-                                    <Typography
-                                        sx={{ fontSize: 13, color: ATLAS_PALETTE.slate40 }}
-                                    >
+                                    <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate40 }}>
                                         Choose a project…
                                     </Typography>
                                 </MenuItem>
@@ -358,6 +382,7 @@ export function EpicNew() {
                                 Priority
                             </InputLabel>
                             <Select
+                                inputProps={{ 'aria-label': 'Priority' }}
                                 value={priority}
                                 onChange={(e) => setPriority(e.target.value as IssuePriority)}
                                 sx={{ background: ATLAS_PALETTE.white, fontSize: 13 }}
@@ -372,7 +397,14 @@ export function EpicNew() {
                     </Box>
                 </Box>
 
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 4, mb: 4 }}>
+                <Box
+                    sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                        gap: 4,
+                        mb: 4,
+                    }}
+                >
                     <Box>
                         <Typography
                             sx={{
@@ -392,6 +424,7 @@ export function EpicNew() {
                         </Typography>
                         <FormControl fullWidth>
                             <Select
+                                inputProps={{ 'aria-label': 'Reporter' }}
                                 value={reporterId}
                                 onChange={(e) => setReporterId(e.target.value)}
                                 sx={{ background: ATLAS_PALETTE.white, fontSize: 13 }}
@@ -428,6 +461,7 @@ export function EpicNew() {
                             agents={activeAgents}
                             value={assigneeId}
                             onChange={(v) => setAssigneeId(v || 'OWNER')}
+                            ariaLabel="Assignee"
                             ownerName={ownerName}
                             placeholder="Search by name or designation…"
                         />
@@ -440,7 +474,10 @@ export function EpicNew() {
                             variant="outlined"
                             onClick={() => void submit('draft')}
                             disabled={createEpic.isPending}
-                            sx={{ textTransform: 'none', fontFamily: '"Inter", system-ui, sans-serif' }}
+                            sx={{
+                                textTransform: 'none',
+                                fontFamily: '"Inter", system-ui, sans-serif',
+                            }}
                         >
                             Save as draft
                         </Button>
@@ -468,7 +505,10 @@ export function EpicNew() {
                                     send
                                 </Box>
                             }
-                            sx={{ textTransform: 'none', fontFamily: '"Inter", system-ui, sans-serif' }}
+                            sx={{
+                                textTransform: 'none',
+                                fontFamily: '"Inter", system-ui, sans-serif',
+                            }}
                         >
                             Submit
                         </Button>
