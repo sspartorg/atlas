@@ -354,6 +354,25 @@ while `pnpm e2e` is running (`tsx watch` restarts the API mid-run and a
 non-parsing save kills it, turning one mistake into a dozen phantom failures),
 and keep the CLI fixtures executable.
 
+## Final state (2026-09-12)
+
+| Suite | Result |
+|---|---|
+| `pnpm -r typecheck` | 4/4 clean |
+| `pnpm -F @atlas/api test` | **2890 / 2890** |
+| `pnpm -F @atlas/web test` | **4693 / 4693** |
+| `pnpm -F @atlas/shared test` | 242 / 242 |
+| `pnpm -F @atlas/mcp test` | 170 / 170 |
+| `pnpm lint` | 0 errors (warnings only, all pre-existing `no-explicit-any` in tests) |
+| `pnpm e2e` | **215 passed · 0 failed · 325 skipped** (5.7m), exit 0 |
+
+The 325 skips are intentional: the `@mobile` / `@ipad`-tagged specs that the
+chromium project filters out with `grepInvert`, plus the visual-snapshot
+battery, which has no baselines on this platform by design (`e2e/visual/README.md`).
+The API served the whole run with **0 restarts and 0 unhandled rejections** —
+worth checking on any future run, because both were non-zero before the fixes
+in this branch.
+
 ## Carried forward — needs an Owner decision
 
 **C1 — `comments.author_name` denormalization.** `comments_agent_id_fkey … ON
