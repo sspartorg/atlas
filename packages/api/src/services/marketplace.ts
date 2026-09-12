@@ -9,7 +9,7 @@
 // each agent's prompt.
 
 import { db } from '../db/kysely-client.js';
-import { agentsService } from './agents.js';
+import { agentsService, assertModelInRegistry } from './agents.js';
 import { packAgentBundle, type AgentBundle } from './agent-bundle.js';
 import type {
     AgentCategory,
@@ -38,7 +38,7 @@ import type {
 export class MarketplaceSlugTakenError extends Error {
     constructor(
         public readonly conflictingId: string,
-        public readonly suggestedId: string,
+        public readonly suggestedId: string
     ) {
         super(`local agent slug '${conflictingId}' is already in use; pick a different slug`);
         this.name = 'MarketplaceSlugTakenError';
@@ -204,7 +204,7 @@ export const marketplaceService = {
                     eb(eb.fn('lower', ['description']), 'like', needle),
                     eb(eb.fn('lower', ['summary']), 'like', needle),
                     eb(eb.fn('lower', ['designation']), 'like', needle),
-                ]),
+                ])
             );
         }
         const limit = Math.max(1, Math.min(input.limit ?? 50, 100));
@@ -262,9 +262,7 @@ export const marketplaceService = {
                 installed_agent_id: local?.installed_agent_id ?? null,
                 installed_version,
                 upgrade_available:
-                    isInstalled &&
-                    installed_version != null &&
-                    installed_version < catalogVersion,
+                    isInstalled && installed_version != null && installed_version < catalogVersion,
             };
         });
     },
@@ -347,7 +345,7 @@ export const marketplaceService = {
 
     async install(
         catalogId: string,
-        options: { agent_id?: string | undefined } = {},
+        options: { agent_id?: string | undefined } = {}
     ): Promise<IAgent> {
         const full = await this.getFull(catalogId);
         if (!full) throw new MarketplaceNotFoundError(catalogId);
@@ -361,6 +359,12 @@ export const marketplaceService = {
         if (existing) {
             throw new MarketplaceSlugTakenError(targetId, suggestAlternateSlug(catalogId));
         }
+        // `agents` carries a composite FK on (cli, model) -> cli_models;
+        // `marketplace_agents` does not. A catalog entry can therefore name a
+        // model the Owner has since pruned from the registry, and without this
+        // check the insert below dies on agents_cli_model_fk as a raw 500.
+        // agentsService.create / update already guard the same way.
+        await assertModelInRegistry(m.cli, m.model);
 
         return await db.transaction().execute(async (trx) => {
             await trx
@@ -432,7 +436,7 @@ export const marketplaceService = {
                             target_agent_id: h.target_agent_id,
                             kind: h.kind,
                             status: h.status,
-                        })),
+                        }))
                     )
                     .execute();
             }
@@ -445,7 +449,7 @@ export const marketplaceService = {
                             label: c.label,
                             sort_order: c.sort_order,
                             required: c.required,
-                        })),
+                        }))
                     )
                     .execute();
             }
@@ -516,10 +520,7 @@ export const marketplaceService = {
         };
     },
 
-    async acceptUpgrade(
-        localAgentId: string,
-        fields: MarketplaceUpgradeField[],
-    ): Promise<IAgent> {
+    async acceptUpgrade(localAgentId: string, fields: MarketplaceUpgradeField[]): Promise<IAgent> {
         const agent = await agentsService.get(localAgentId);
         if (!agent) throw new MarketplaceNotFoundError(localAgentId);
         if (!agent.marketplace_source_id) {
@@ -577,7 +578,7 @@ export const marketplaceService = {
                                 target_agent_id: h.target_agent_id,
                                 kind: h.kind,
                                 status: h.status,
-                            })),
+                            }))
                         )
                         .execute();
                 }
@@ -596,7 +597,7 @@ export const marketplaceService = {
                                 label: c.label,
                                 sort_order: c.sort_order,
                                 required: c.required,
-                            })),
+                            }))
                         )
                         .execute();
                 }
@@ -643,7 +644,7 @@ export const marketplaceService = {
     // upgrade tracking, they should Add from the marketplace instead.
     async importBundle(
         bundle: AgentBundle,
-        options: { agent_id?: string | undefined } = {},
+        options: { agent_id?: string | undefined } = {}
     ): Promise<IAgent> {
         const m = bundle.manifest;
         const id = (options.agent_id && options.agent_id.trim()) || m.id;
@@ -651,6 +652,7 @@ export const marketplaceService = {
         if (existing) {
             throw new MarketplaceSlugTakenError(id, suggestAlternateSlug(m.id));
         }
+        await assertModelInRegistry(m.cli, m.model);
         return await db.transaction().execute(async (trx) => {
             await trx
                 .insertInto('agents')
@@ -718,7 +720,7 @@ export const marketplaceService = {
                             target_agent_id: h.target_agent_id,
                             kind: h.kind,
                             status: h.status,
-                        })),
+                        }))
                     )
                     .execute();
             }
@@ -731,7 +733,7 @@ export const marketplaceService = {
                             label: c.label,
                             sort_order: c.sort_order,
                             required: c.required,
-                        })),
+                        }))
                     )
                     .execute();
             }

@@ -109,7 +109,14 @@ function CliCard({ cli, models }: { cli: AgentCli; models: ICliModel[] }) {
                 toast.show({ message: 'Model removed', detail: model.model_name });
                 setPendingDelete(null);
             },
-            onError: () => {
+            onError: (err) => {
+                // A 409 here is the guard refusing to strand agents or
+                // marketplace entries on a model that no longer exists.
+                // Silently closing the dialog made it look like a success.
+                toast.show({
+                    message: "Couldn't remove the model",
+                    detail: err instanceof Error ? err.message : String(err),
+                });
                 setPendingDelete(null);
             },
         });
@@ -303,9 +310,9 @@ function ConfirmRemoveModelDialog({
                             sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 0.5 }}
                         >
                             <strong>{model?.model_name ?? ''}</strong> will be removed from{' '}
-                            {cliLabel}. Agents already configured to use it will keep the
-                            reference, but you won&apos;t be able to pick it from the model dropdown
-                            until you add it again.
+                            {cliLabel}. Only models nothing depends on can be removed — if any
+                            agent or marketplace entry still names this model, the removal is
+                            refused and the reason names what to fix first.
                         </Typography>
                     </Box>
                     <IconButton

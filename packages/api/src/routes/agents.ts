@@ -4,6 +4,7 @@ import { db } from '../db/kysely-client.js';
 import {
     agentsService,
     ModelNotInRegistryError,
+    RoleNotInCatalogError,
     CronExpressionInvalidError,
 } from '../services/agents.js';
 import { agentMemoryService } from '../services/agent-memory.js';
@@ -57,6 +58,7 @@ export async function agentsRoutes(app: FastifyInstance) {
         } catch (err) {
             if (
                 err instanceof ModelNotInRegistryError ||
+                err instanceof RoleNotInCatalogError ||
                 err instanceof CronExpressionInvalidError
             ) {
                 return reply.status(400).send({ error: err.message, code: err.code });
@@ -75,6 +77,7 @@ export async function agentsRoutes(app: FastifyInstance) {
         } catch (err) {
             if (
                 err instanceof ModelNotInRegistryError ||
+                err instanceof RoleNotInCatalogError ||
                 err instanceof CronExpressionInvalidError
             ) {
                 return reply.status(400).send({ error: err.message, code: err.code });
@@ -391,6 +394,11 @@ export async function agentsRoutes(app: FastifyInstance) {
                         suggested_id: err.suggestedId,
                     },
                 });
+            }
+            // The bundle names a model absent from cli_models. Without this
+            // the composite FK on agents(cli, model) surfaces as a raw 500.
+            if (err instanceof ModelNotInRegistryError) {
+                return reply.status(400).send({ error: err.message, code: err.code });
             }
             /* v8 ignore next */
             throw err;

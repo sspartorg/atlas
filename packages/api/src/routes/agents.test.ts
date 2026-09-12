@@ -29,12 +29,37 @@ let app: FastifyInstance;
 // truncates it explicitly for its CRUD scenarios, and the persistent test
 // DB carries that empty state across to this file. Restore the baseline
 // rows here so the route validator has something to compare against.
-const BASELINE_CLI_MODELS: ReadonlyArray<{ id: string; cli: 'claude' | 'copilot'; model_name: string; sort_order: number }> = [
+const BASELINE_CLI_MODELS: ReadonlyArray<{
+    id: string;
+    cli: 'claude' | 'copilot';
+    model_name: string;
+    sort_order: number;
+}> = [
     { id: 'test-cli-claude-opus-4-7', cli: 'claude', model_name: 'claude-opus-4-7', sort_order: 1 },
-    { id: 'test-cli-claude-sonnet-4-6', cli: 'claude', model_name: 'claude-sonnet-4-6', sort_order: 4 },
-    { id: 'test-cli-copilot-sonnet-4-6', cli: 'copilot', model_name: 'claude-sonnet-4.6', sort_order: 1 },
-    { id: 'test-cli-copilot-haiku-4-5', cli: 'copilot', model_name: 'claude-haiku-4.5', sort_order: 3 },
-    { id: 'test-cli-copilot-gpt-5-3-codex', cli: 'copilot', model_name: 'gpt-5.3-codex', sort_order: 7 },
+    {
+        id: 'test-cli-claude-sonnet-4-6',
+        cli: 'claude',
+        model_name: 'claude-sonnet-4-6',
+        sort_order: 4,
+    },
+    {
+        id: 'test-cli-copilot-sonnet-4-6',
+        cli: 'copilot',
+        model_name: 'claude-sonnet-4.6',
+        sort_order: 1,
+    },
+    {
+        id: 'test-cli-copilot-haiku-4-5',
+        cli: 'copilot',
+        model_name: 'claude-haiku-4.5',
+        sort_order: 3,
+    },
+    {
+        id: 'test-cli-copilot-gpt-5-3-codex',
+        cli: 'copilot',
+        model_name: 'gpt-5.3-codex',
+        sort_order: 7,
+    },
 ];
 
 async function ensureCliModelsBaseline(): Promise<void> {
@@ -101,7 +126,7 @@ describe('POST /api/agents — model registry validation', () => {
 });
 
 describe('PATCH /api/agents/:id — model registry validation', () => {
-    it('returns 400 when patching the agent\'s model to a value not in cli_models', async () => {
+    it("returns 400 when patching the agent's model to a value not in cli_models", async () => {
         await insertAgent({ id: 'agent-coder', cli: 'claude', model: 'claude-opus-4-7' });
         const res = await app.inject({
             method: 'PATCH',
@@ -699,7 +724,7 @@ describe('POST /api/agents/:id/compile-prompt — with issue fields', () => {
         // Override the mock once to throw
         const { compilePromptFor } = await import('../services/compile-prompt.js');
         (compilePromptFor as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-            new Error('Issue story/MISS-1 not found'),
+            new Error('Issue story/MISS-1 not found')
         );
         await insertAgent({ id: 'agent-item-req2', requires_item: true });
         const res = await app.inject({
@@ -708,7 +733,9 @@ describe('POST /api/agents/:id/compile-prompt — with issue fields', () => {
             payload: { issue_type: 'story', issue_id: 'MISS-1' },
         });
         expect(res.statusCode).toBe(404);
-        expect(JSON.parse(res.body) as { error: string }).toMatchObject({ error: 'Issue story/MISS-1 not found' });
+        expect(JSON.parse(res.body) as { error: string }).toMatchObject({
+            error: 'Issue story/MISS-1 not found',
+        });
     });
 });
 
@@ -845,7 +872,9 @@ describe('POST /api/agents/import — multipart/form-data (lines 331-339)', () =
         const boundary = '----FormBoundaryABC123';
         const invalidZipBytes = Buffer.from('not a zip file contents');
         const multipartBody = Buffer.concat([
-            Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="agent.zip"\r\nContent-Type: application/zip\r\n\r\n`),
+            Buffer.from(
+                `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="agent.zip"\r\nContent-Type: application/zip\r\n\r\n`
+            ),
             invalidZipBytes,
             Buffer.from(`\r\n--${boundary}--`),
         ]);
@@ -914,7 +943,13 @@ describe('POST /api/agents/import — valid zip bundle', () => {
         // Ensure the cli_models row for this agent exists (FK guard).
         await testDb
             .insertInto('cli_models')
-            .values({ id: 'test-imp-claude-opus', cli: 'claude', model_name: 'claude-opus-4-7', note: null, sort_order: 0 })
+            .values({
+                id: 'test-imp-claude-opus',
+                cli: 'claude',
+                model_name: 'claude-opus-4-7',
+                note: null,
+                sort_order: 0,
+            })
             .onConflict((oc) => oc.columns(['cli', 'model_name']).doNothing())
             .execute();
         const res = await app.inject({
@@ -938,7 +973,13 @@ describe('POST /api/agents/import — valid zip bundle', () => {
         });
         await testDb
             .insertInto('cli_models')
-            .values({ id: 'test-imp-claude-opus2', cli: 'claude', model_name: 'claude-opus-4-7', note: null, sort_order: 0 })
+            .values({
+                id: 'test-imp-claude-opus2',
+                cli: 'claude',
+                model_name: 'claude-opus-4-7',
+                note: null,
+                sort_order: 0,
+            })
             .onConflict((oc) => oc.columns(['cli', 'model_name']).doNothing())
             .execute();
         // First import succeeds.
@@ -961,7 +1002,6 @@ describe('POST /api/agents/import — valid zip bundle', () => {
         expect(body.details.code).toBe('SLUG_TAKEN');
     });
 });
-
 
 // ── POST /api/agents/:id/dry-run — non-null extra_prompt (line 232 branch) ─
 
@@ -1017,11 +1057,11 @@ describe('POST /api/agents/import — multipart with agent_id field (AGENTS-MULT
         const multipartBody = Buffer.concat([
             Buffer.from(
                 `--${boundary}\r\n` +
-                `Content-Disposition: form-data; name="agent_id"\r\n\r\n` +
-                `my-custom-agent-id\r\n` +
-                `--${boundary}\r\n` +
-                `Content-Disposition: form-data; name="file"; filename="agent.zip"\r\n` +
-                `Content-Type: application/zip\r\n\r\n`,
+                    `Content-Disposition: form-data; name="agent_id"\r\n\r\n` +
+                    `my-custom-agent-id\r\n` +
+                    `--${boundary}\r\n` +
+                    `Content-Disposition: form-data; name="file"; filename="agent.zip"\r\n` +
+                    `Content-Type: application/zip\r\n\r\n`
             ),
             invalidZipBytes,
             Buffer.from(`\r\n--${boundary}--`),
@@ -1208,5 +1248,67 @@ describe('agents marketplace endpoints — defensive re-throw (spy-based)', () =
         });
         expect(res.statusCode).toBe(500);
         spy.mockRestore();
+    });
+});
+
+// Regression — 2026-09-12. `agents.role_id` is an FK into `roles`, but the Zod
+// schemas validate against the `SdlcRole` union in @atlas/shared, which
+// declares 10 slugs while the shipped catalog seeds 5 (po, architect,
+// engineer, qa, automation). Assigning one of the other five produced a raw
+// `agents_role_id_fkey` 500 — same shape as the marketplace (cli, model) hole.
+describe('role_id not in the roles catalog', () => {
+    const agentPayload = (id: string, extra: Record<string, unknown> = {}) => ({
+        id,
+        name: 'Role Guard',
+        category: 'software-dev',
+        cli: 'claude',
+        model: 'claude-sonnet-4-6',
+        framework: 'tdd',
+        prompt_md: '',
+        prompt_version: 1,
+        handoff_prompt_md: '',
+        status: 'active',
+        accent_color: '#000000',
+        sort_order: 99,
+        description: '',
+        ...extra,
+    });
+
+    it('PATCH returns 400 ROLE_NOT_IN_CATALOG instead of an FK 500', async () => {
+        const created = await app.inject({
+            method: 'POST',
+            url: '/api/agents',
+            payload: agentPayload('agent-role-guard'),
+        });
+        expect(created.statusCode).toBe(201);
+
+        const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/agents/agent-role-guard',
+            payload: { role_id: 'tester' },
+        });
+        expect(res.statusCode).toBe(400);
+        const body = JSON.parse(res.body);
+        expect(body.code).toBe('ROLE_NOT_IN_CATALOG');
+        expect(body.error).toContain('tester');
+    });
+
+    it('POST returns 400 for an uncatalogued role', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/agents',
+            payload: agentPayload('agent-role-guard-2', { role_id: 'designer' }),
+        });
+        expect(res.statusCode).toBe(400);
+        expect(JSON.parse(res.body).code).toBe('ROLE_NOT_IN_CATALOG');
+    });
+
+    it('accepts null role_id — autonomous agents sit outside the SDLC chain', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/agents',
+            payload: agentPayload('agent-role-guard-3', { role_id: null }),
+        });
+        expect(res.statusCode).toBe(201);
     });
 });

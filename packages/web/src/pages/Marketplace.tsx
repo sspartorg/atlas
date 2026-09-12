@@ -58,7 +58,7 @@ export function Marketplace() {
     // Catalog ids the Owner can still add — the only ones that get a checkbox.
     const installableIds = useMemo(
         () => (marketplace.data ?? []).filter((a) => !a.is_installed).map((a) => a.id),
-        [marketplace.data],
+        [marketplace.data]
     );
 
     const toggleSelected = (id: string) =>
@@ -76,28 +76,45 @@ export function Marketplace() {
         if (ids.length === 0) return;
         setBusy(true);
         const outcome = await runBulkInstall(ids, (id, opts) =>
-            api.marketplace.install(id, opts ?? {}),
+            api.marketplace.install(id, opts ?? {})
         );
         await queryClient.invalidateQueries({ queryKey: ['agents'] });
         await queryClient.invalidateQueries({ queryKey: ['marketplace'] });
+        // Name the failures and why. A bare count ("2 couldn't be added") is
+        // what kept a pruned-model-registry FK violation invisible.
+        const failDetail = outcome.failed.map((f) => `${f.id}: ${f.reason}`).join('\n');
         if (outcome.succeeded.length > 0) {
             const n = outcome.succeeded.length;
             const failNote =
-                outcome.failed.length > 0 ? ` · ${outcome.failed.length} couldn't be added` : '';
-            toast.show({ message: `Added ${n} agent${n === 1 ? '' : 's'}${failNote}` });
+                outcome.failed.length > 0
+                    ? ` · couldn't add ${outcome.failed.map((f) => f.id).join(', ')}`
+                    : '';
+            toast.show({
+                message: `Added ${n} agent${n === 1 ? '' : 's'}${failNote}`,
+                ...(failDetail ? { detail: failDetail } : {}),
+            });
+            if (outcome.failed.length > 0) {
+                // Keep the failures selected so Retry is one click, and stay on
+                // the page where the Owner can read why.
+                setSelected(new Set(outcome.failed.map((f) => f.id)));
+                setBusy(false);
+                return;
+            }
             // Land on the Agents page with everything freshly installed.
             navigate('/agents');
             return;
         }
         // Nothing installed — keep the failed ids selected so the Owner can retry.
-        setSelected(new Set(outcome.failed));
+        setSelected(new Set(outcome.failed.map((f) => f.id)));
         setBusy(false);
-        toast.show({ message: "Couldn't add the selected agents. Please try again." });
+        toast.show({
+            message: "Couldn't add the selected agents",
+            ...(failDetail ? { detail: failDetail } : {}),
+        });
     };
 
     const totalCount = marketplace.data?.length ?? 0;
-    const upgradeCount =
-        marketplace.data?.filter((a) => a.upgrade_available).length ?? 0;
+    const upgradeCount = marketplace.data?.filter((a) => a.upgrade_available).length ?? 0;
     const subtitle =
         totalCount === 0
             ? 'No catalog agents'
@@ -178,7 +195,12 @@ export function Marketplace() {
                     }}
                 >
                     {Array.from({ length: 6 }).map((_, i) => (
-                        <Skeleton key={i} variant="rectangular" height={180} sx={{ borderRadius: 2 }} />
+                        <Skeleton
+                            key={i}
+                            variant="rectangular"
+                            height={180}
+                            sx={{ borderRadius: 2 }}
+                        />
                     ))}
                 </Box>
             ) : marketplace.isError ? (

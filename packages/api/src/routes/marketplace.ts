@@ -5,6 +5,7 @@ import {
     MarketplaceSlugTakenError,
     MarketplaceNotFoundError,
 } from '../services/marketplace.js';
+import { ModelNotInRegistryError } from '../services/agents.js';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
 import { broadcastSSE } from './events.js';
 import type { AgentCategory, AgentKindSlug } from '@atlas/shared';
@@ -89,9 +90,16 @@ export async function marketplaceRoutes(app: FastifyInstance) {
                 if (err instanceof MarketplaceNotFoundError) {
                     return reply.status(404).send({ error: err.message });
                 }
+                // The catalog entry names a model the Owner has pruned from
+                // the registry. Without this branch the composite FK on
+                // agents(cli, model) surfaces as an opaque 500 and the
+                // bulk-install bar can only report a count.
+                if (err instanceof ModelNotInRegistryError) {
+                    return reply.status(400).send({ error: err.message, code: err.code });
+                }
                 throw err;
             }
-        },
+        }
     );
 
     app.get('/api/marketplace/agents/:catalog_id/diff/:agent_id', async (req, reply) => {

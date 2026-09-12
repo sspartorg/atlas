@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { CreateCliModelSchema, UpdateCliModelSchema } from '@atlas/shared';
-import { cliModelsService } from '../services/cli-models.js';
+import { cliModelsService, ModelInUseError } from '../services/cli-models.js';
 
 export async function cliModelsRoutes(app: FastifyInstance) {
     app.get('/api/cli-models', async (_req, reply) => {
@@ -32,7 +32,23 @@ export async function cliModelsRoutes(app: FastifyInstance) {
 
     app.delete('/api/cli-models/:id', async (req, reply) => {
         const { id } = req.params as { id: string };
-        await cliModelsService.remove(id);
+        try {
+            await cliModelsService.remove(id);
+        } catch (err) {
+            if (err instanceof ModelInUseError) {
+                return reply.status(409).send({
+                    error: err.message,
+                    kind: 'conflict',
+                    details: {
+                        code: err.code,
+                        agents: err.agents,
+                        marketplace_agents: err.catalogEntries,
+                    },
+                });
+            }
+            /* v8 ignore next */
+            throw err;
+        }
         return reply.status(204).send();
     });
 }

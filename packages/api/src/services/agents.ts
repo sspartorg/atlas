@@ -35,6 +35,20 @@ export class ModelNotInRegistryError extends Error {
 // and update before any DB write so the API surface returns a 400 with a
 // useful message instead of a silently-null next_run_at (which would
 // otherwise leave the agent dormant).
+// `agents.role_id` is an FK into `roles`, but the Zod schemas validate
+// against the `SdlcRole` UNION in @atlas/shared, which declares 10 slugs
+// while the shipped baseline seeds only 5 (po, architect, engineer, qa,
+// automation). Assigning one of the other five produced a raw
+// `agents_role_id_fkey` 500. Same shape as ModelNotInRegistryError: the FK
+// gives correctness, this gives an actionable 400.
+export class RoleNotInCatalogError extends Error {
+    public readonly code = 'ROLE_NOT_IN_CATALOG';
+    constructor(message: string) {
+        super(message);
+        this.name = 'RoleNotInCatalogError';
+    }
+}
+
 export class CronExpressionInvalidError extends Error {
     public readonly code = 'CRON_EXPRESSION_INVALID';
     constructor(message: string) {
@@ -57,7 +71,27 @@ export function assertCronExprValid(value: string | null | undefined): void {
     }
 }
 
-async function assertModelInRegistry(
+async function assertRoleInCatalog(roleId: string | null | undefined): Promise<void> {
+    // null is valid — autonomous agents sit outside the SDLC chain.
+    if (!roleId) return;
+    const row = await db
+        .selectFrom('roles')
+        .select('id')
+        .where('id', '=', roleId)
+        .executeTakeFirst();
+    if (row) return;
+    const available = await db
+        .selectFrom('roles')
+        .select('id')
+        .orderBy('sort_order', 'asc')
+        .execute();
+    const names = available.map((r) => String(r['id'])).join(', ') || '(empty)';
+    throw new RoleNotInCatalogError(
+        `role '${roleId}' is not in the roles catalog — pick from: ${names}`,
+    );
+}
+
+export async function assertModelInRegistry(
     cli: string | undefined | null,
     model: string | undefined | null,
 ): Promise<void> {
@@ -321,6 +355,7 @@ export const agentsService = {
         // 400 with a useful "pick from: …" message instead of a raw
         // PG constraint error.
         await assertModelInRegistry(data.cli, data.model);
+        await assertRoleInCatalog(data.role_id);
         assertCronExprValid(data.cron_expr);
         const id = data.id ?? randomUUID();
         const scalars = pickAgentScalars(data);
@@ -423,6 +458,7 @@ export const agentsService = {
             const model = data.model ?? existing?.model ?? null;
             await assertModelInRegistry(cli, model);
         }
+        if (data.role_id !== undefined) await assertRoleInCatalog(data.role_id);
         if (data.cron_expr !== undefined) assertCronExprValid(data.cron_expr);
         const scalars = pickAgentScalars(data);
         const promptMdChanged = 'prompt_md' in data && data.prompt_md !== undefined;
