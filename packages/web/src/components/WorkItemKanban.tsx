@@ -13,6 +13,7 @@ import { KindIcon } from './KindIcon.js';
 import { LiveDot } from './LiveDot.js';
 import { AgentChip } from './AgentChip.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
+import { useToast } from '../hooks/useToast.js';
 import { ATLAS_PALETTE, STATUS_PALETTE } from '../theme/tokens.js';
 
 export interface KanbanItem {
@@ -182,18 +183,23 @@ function Card({
                 {assignee ? (
                     <AgentChip agent={assignee} size="sm" />
                 ) : (
-                    <AgentChip
-                        agent={{ name: ownerName, accent_color: ownerAccent }}
-                        size="sm"
-                    />
+                    <AgentChip agent={{ name: ownerName, accent_color: ownerAccent }} size="sm" />
                 )}
             </Box>
         </Box>
     );
 }
 
-export function WorkItemKanban({ items, agents, ownerName, ownerAccent, onTransition, onOpen }: Props) {
+export function WorkItemKanban({
+    items,
+    agents,
+    ownerName,
+    ownerAccent,
+    onTransition,
+    onOpen,
+}: Props) {
     const isMobile = useIsMobile();
+    const toast = useToast();
     const agentsById = useMemo(() => new Map(agents.map((w) => [w.id, w])), [agents]);
     const [draggingId, setDraggingId] = useState<string | null>(null);
     const [dragOver, setDragOver] = useState<IssueStatus | null>(null);
@@ -232,8 +238,23 @@ export function WorkItemKanban({ items, agents, ownerName, ownerAccent, onTransi
             item.kind === 'sub_task'
                 ? getValidNextStatuses('sub_task', item.status)
                 : getValidNextStatuses(item.kind, item.status);
-        const override = !validNext.includes(status);
-        onTransition(item, status, override);
+        if (!validNext.includes(status)) {
+            // A drag onto an illegal column used to be sent through as
+            // `override: true` — silently bypassing the status machine with no
+            // signal at all, so a mis-drop permanently skipped statuses. The
+            // hard rule is that invalid transitions are not offered; a column
+            // can't be hidden, so refuse the drop and point at the one
+            // deliberate override path (the status picker on the detail page).
+            const legal = validNext.map((s) => STATUS_LABELS[s]).join(', ');
+            toast.show({
+                message: `Can't move ${item.shortId} to ${STATUS_LABELS[status]}`,
+                detail: legal
+                    ? `From ${STATUS_LABELS[item.status]} you can go to: ${legal}. To force any other status, use the status picker on the item's page.`
+                    : `${STATUS_LABELS[item.status]} is terminal. To force another status, use the status picker on the item's page.`,
+            });
+            return;
+        }
+        onTransition(item, status, false);
     }
 
     return (

@@ -26,11 +26,13 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 import type { IssueStatus } from '@atlas/shared';
 import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
+import { useToast } from '../hooks/useToast.js';
 
 export function Epics() {
     useSetPageTitle('Epics');
     const navigate = useNavigate();
     const isMobile = useIsMobile();
+    const toast = useToast();
     const qc = useQueryClient();
     const [params, setParams] = useSearchParams();
     const [viewMode, setViewMode] = useState<ViewMode>(() => loadViewMode('epics'));
@@ -59,7 +61,6 @@ export function Epics() {
 
     const ownerName = settings?.owner_name ?? 'Owner';
     const ownerAccent = settings?.accent_color ?? ATLAS_PALETTE.slate;
-
 
     const filtered = useMemo(() => {
         return scopedEpics.filter((e) => {
@@ -256,14 +257,16 @@ export function Epics() {
                 </Box>
             ) : viewMode === 'kanban' && !isMobile ? (
                 <WorkItemKanban
-                    items={filtered.map((e) => ({
-                        id: e.id,
-                        kind: 'epic',
-                        shortId: e.id,
-                        title: e.title,
-                        status: e.status,
-                        assignee_agent_id: e.assignee_agent_id,
-                    })) satisfies KanbanItem[]}
+                    items={
+                        filtered.map((e) => ({
+                            id: e.id,
+                            kind: 'epic',
+                            shortId: e.id,
+                            title: e.title,
+                            status: e.status,
+                            assignee_agent_id: e.assignee_agent_id,
+                        })) satisfies KanbanItem[]
+                    }
                     agents={agents}
                     ownerName={ownerName}
                     ownerAccent={ownerAccent}
@@ -274,8 +277,17 @@ export function Epics() {
                                 status: nextStatus,
                                 override,
                             });
-                        } catch {
-                            // ignored — invalid moves are filtered upstream
+                        } catch (err) {
+                            // Was an empty catch claiming "invalid moves are
+                            // filtered upstream" — they weren't, and this also
+                            // swallowed genuine refusals. Closing an epic with
+                            // open children returns 422 with the blocking
+                            // children named; that message never reached the
+                            // Owner, so the card just snapped back in silence.
+                            toast.show({
+                                message: `Couldn't move ${item.shortId}`,
+                                detail: err instanceof Error ? err.message : String(err),
+                            });
                         }
                         await qc.invalidateQueries({ queryKey: ['epics'] });
                     }}
