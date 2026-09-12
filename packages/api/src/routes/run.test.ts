@@ -39,20 +39,23 @@ vi.mock('../services/agent-runner.js', () => {
     }
     return {
         LiveRunOnItemError,
-        spawnAgentRun: vi.fn().mockImplementation(async (opts: {
-            agentId: string;
-            issueType?: string;
-            issueId?: string;
-            projectId?: string;
-        }) => {
-            if (opts.issueId) {
-                const { assertDepsAllDoneForDispatch } = await import(
-                    '../services/dependency-guard.js'
-                );
-                await assertDepsAllDoneForDispatch(opts.issueId, opts.agentId);
-            }
-            return `fake-run-${Math.random().toString(36).slice(2)}`;
-        }),
+        spawnAgentRun: vi
+            .fn()
+            .mockImplementation(
+                async (opts: {
+                    agentId: string;
+                    issueType?: string;
+                    issueId?: string;
+                    projectId?: string;
+                }) => {
+                    if (opts.issueId) {
+                        const { assertDepsAllDoneForDispatch } =
+                            await import('../services/dependency-guard.js');
+                        await assertDepsAllDoneForDispatch(opts.issueId, opts.agentId);
+                    }
+                    return `fake-run-${Math.random().toString(36).slice(2)}`;
+                }
+            ),
         // W3 — GET /api/run/:id reads this registry to serve live in-memory
         // output between 10s DB flushes. Tests don't exercise the live path
         // (no real subprocess), so an empty Map is sufficient.
@@ -156,7 +159,7 @@ describe('POST /api/run — depends_on hard-gate (B04)', () => {
         const body = res.json();
         expect(body.error).toBe('dependencies_not_ready');
         expect(body.blockers[0]).toEqual(
-            expect.objectContaining({ id: 'ATL-1', status: 'in_review' }),
+            expect.objectContaining({ id: 'ATL-1', status: 'in_review' })
         );
     });
 
@@ -459,7 +462,7 @@ describe('POST /api/run/:id/stop — kill switch (W6)', () => {
                 type: 'run_completed',
                 runId: 'run-q',
                 status: 'cancelled',
-            }),
+            })
         );
     });
 
@@ -481,16 +484,14 @@ describe('POST /api/run/:id/stop — kill switch (W6)', () => {
         const { broadcastSSE } = await import('../routes/events.js');
         const { cancelRun } = await import('../services/agent-runner.js');
         (broadcastSSE as unknown as ReturnType<typeof vi.fn>).mockClear();
-        (cancelRun as unknown as ReturnType<typeof vi.fn>).mockImplementationOnce(
-            async () => {
-                await testDb
-                    .updateTable('agent_runs')
-                    .set({ status: 'completed', completed_at: new Date().toISOString() })
-                    .where('id', '=', 'run-race')
-                    .execute();
-                return { cancelled: false, pidKilled: null };
-            },
-        );
+        (cancelRun as unknown as ReturnType<typeof vi.fn>).mockImplementationOnce(async () => {
+            await testDb
+                .updateTable('agent_runs')
+                .set({ status: 'completed', completed_at: new Date().toISOString() })
+                .where('id', '=', 'run-race')
+                .execute();
+            return { cancelled: false, pidKilled: null };
+        });
 
         const res = await app.inject({ method: 'POST', url: '/api/run/run-race/stop' });
         expect(res.statusCode).toBe(200);
@@ -502,7 +503,7 @@ describe('POST /api/run/:id/stop — kill switch (W6)', () => {
                 type: 'run_completed',
                 runId: 'run-race',
                 status: 'completed',
-            }),
+            })
         );
 
         const row = await testDb
@@ -706,7 +707,6 @@ describe('POST /api/run — DB 23505 race guard (lines 156-165)', () => {
     });
 });
 
-
 // GET /api/run/:id with ?since parameter (lines 259-263).
 // The `since` param tells the server to return only bytes after offset N.
 describe('GET /api/run/:id — ?since slicing', () => {
@@ -796,7 +796,7 @@ describe('POST /api/run/:id/stop — cancelRun throwing is handled gracefully', 
         await seedRun({ id: 'run-stop-throw', item_id: 'ATL-2', status: 'queued' });
         const { cancelRun } = await import('../services/agent-runner.js');
         (cancelRun as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-            new Error('subprocess registry error'),
+            new Error('subprocess registry error')
         );
         const res = await app.inject({ method: 'POST', url: '/api/run/run-stop-throw/stop' });
         expect(res.statusCode).toBe(200);
@@ -845,7 +845,7 @@ describe('POST /api/run — background spawn failure marks row as error', () => 
         // in the reason ternary — neither DependenciesNotReadyError nor
         // LiveRunOnItemError, so falls through to err.message).
         (spawnAgentRun as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-            new Error('simulated spawn failure'),
+            new Error('simulated spawn failure')
         );
 
         // Use a freedom-mode agent so we bypass findLiveRunOnItem and
@@ -879,7 +879,7 @@ describe('POST /api/run — background spawn failure marks row as error', () => 
     it('marks run as error when spawnAgentRun rejects with LiveRunOnItemError (covers LiveRunOnItemError branch)', async () => {
         const { spawnAgentRun, LiveRunOnItemError } = await import('../services/agent-runner.js');
         (spawnAgentRun as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-            new LiveRunOnItemError('ATL-LIVE'),
+            new LiveRunOnItemError('ATL-LIVE')
         );
 
         await insertAgent({ id: 'agent-live-err', status: 'active', requires_item: false });
@@ -907,7 +907,9 @@ describe('POST /api/run — background spawn failure marks row as error', () => 
         const { spawnAgentRun } = await import('../services/agent-runner.js');
         const { DependenciesNotReadyError } = await import('../services/dependency-guard.js');
         (spawnAgentRun as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-            new DependenciesNotReadyError([{ id: 'ATL-BG-DEP', title: 'Blocker', status: 'in_progress' }]),
+            new DependenciesNotReadyError([
+                { id: 'ATL-BG-DEP', title: 'Blocker', status: 'in_progress' },
+            ])
         );
 
         await insertAgent({ id: 'agent-dep-bg', status: 'active', requires_item: false });
@@ -953,7 +955,7 @@ describe('POST /api/run — broadcastSSE carries item fields when hasItem=true',
                 type: 'run_queued',
                 issueType: 'story',
                 issueId: 'ATL-2',
-            }),
+            })
         );
     });
 
@@ -1091,5 +1093,60 @@ describe('DELETE /api/run/:id — registry cleanup after delete', () => {
 
         // Registry entry should have been removed by the handler.
         expect((runOutputRegistry as Map<string, string>).has('run-reg-del')).toBe(false);
+    });
+});
+
+// Regression — 2026-09-12. `GET /api/run` accepted `agent_id` and
+// `issue_type` in its query shape but applied neither: `?agent_id=anything`
+// returned every run in the workspace, including for an agent with none.
+// `routes-map.md` documented the agent filter and `api.ts::run.list` sends
+// `issue_type`, so both looked supported. Nothing user-facing broke (the Agent
+// Detail Runs tab uses the dedicated `GET /api/agents/:id/runs`), but a filter
+// that silently doesn't filter is a trap for the next caller.
+describe('GET /api/run — filters actually filter', () => {
+    beforeEach(async () => {
+        await insertAgent({ id: 'agent-other', status: 'active' });
+        await testDb
+            .insertInto('agent_runs')
+            .values([
+                {
+                    id: 'aaaaaaaa-0000-0000-0000-000000000001',
+                    agent_id: 'agent-coder',
+                    item_id: 'ATL-2',
+                    project_id: 'p1',
+                    status: 'completed',
+                },
+                {
+                    id: 'aaaaaaaa-0000-0000-0000-000000000002',
+                    agent_id: 'agent-coder',
+                    item_id: 'ATL-100',
+                    project_id: 'p1',
+                    status: 'completed',
+                },
+            ])
+            .execute();
+    });
+
+    it('narrows by agent_id, and returns nothing for an agent with no runs', async () => {
+        const mine = await app.inject({ method: 'GET', url: '/api/run?agent_id=agent-coder' });
+        expect(mine.statusCode).toBe(200);
+        const mineRows = JSON.parse(mine.body) as Array<{ agent_id: string }>;
+        expect(mineRows).toHaveLength(2);
+        expect(mineRows.every((r) => r.agent_id === 'agent-coder')).toBe(true);
+
+        const none = await app.inject({ method: 'GET', url: '/api/run?agent_id=agent-other' });
+        expect(JSON.parse(none.body)).toHaveLength(0);
+    });
+
+    it('narrows by issue_type', async () => {
+        const stories = await app.inject({ method: 'GET', url: '/api/run?issue_type=story' });
+        const epics = await app.inject({ method: 'GET', url: '/api/run?issue_type=epic' });
+        expect(JSON.parse(stories.body)).toHaveLength(1);
+        expect(JSON.parse(epics.body)).toHaveLength(1);
+    });
+
+    it('unfiltered still returns everything', async () => {
+        const all = await app.inject({ method: 'GET', url: '/api/run?limit=500' });
+        expect(JSON.parse(all.body).length).toBeGreaterThanOrEqual(2);
     });
 });
