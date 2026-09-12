@@ -54,7 +54,7 @@ These fire from `AppShell` / `Sidenav` / `Topbar` / `ReportBugLink` regardless o
 |---|---|---|
 | `GET /api/settings` | `useSettings()` â€” Topbar / Sidenav / RouteGuard / every page | `staleTime: Infinity`, `refetchOnMount: false`, `refetchOnWindowFocus: true` |
 | `GET /api/settings/env` | `useEnv()` via `ReportBugLink` (sidenav footer) | `staleTime: Infinity`, `refetchOnMount: false` (post-2026-06-09 B2 fix) |
-| `GET /api/counts` | `useSidenavCounts()` â€” Sidenav badges | `staleTime: Infinity`, `refetchOnMount: false`, SSE-invalidated |
+| `GET /api/counts` | `useSidenavCounts()` â€” Sidenav badges Counts ALL agents since 2026-09-12 (was `status='active'`, which disagreed with both `/agents` and `/queue`). | `staleTime: Infinity`, `refetchOnMount: false`, SSE-invalidated |
 | `GET /api/run?limit=500` | `useActiveRuns()` via `HeaderMascot` (Topbar) | `staleTime: 30_000`, `refetchOnMount: false` (post-2026-06-09 B2 fix), SSE-invalidated |
 
 ---

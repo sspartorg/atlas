@@ -64,7 +64,7 @@ Apply to every route. Route sections below list only what is route-specific.
 | X1 | No stored secret in a list/get response. Plaintext only via a `requireMcpToken` reveal endpoint that logs `{tag:'secret_reveal'}`. | `environment-secrets`, `projects/:id/env`, `credentials/:id/token`, `settings/external-notification/reveal-*` |
 | X2 | Every writer into `agents` calls `assertModelInRegistry` first. | `agents(cli, model)` has a composite FK to `cli_models` with ON DELETE RESTRICT; skipping it yields an opaque 500 |
 | X3 | Agent-authored rows carry `agent_id` / `actor_agent_id`. A null renders as "Agent", or worse, as the Owner. | `commentsService.create` resolves from the item's live run |
-| X4 | Badge counts agree with the page they link to, or the difference is labelled. | `counts.ts` filters agents to `status='active'` while `/agents` lists all — see F1 below |
+| X4 | Badge counts agree with the page they link to, or the difference is labelled. | Was violated by the Agents badge (active-only vs a page listing all) — fixed 2026-09-12; the rule is what caught it |
 | X5 | Status logic only from `@atlas/shared/status-machine`. | duplicated transition tables drift silently |
 
 ---
@@ -240,9 +240,10 @@ edit that touches these files):
 
 Carried here rather than fixed, because each is a product-semantics call.
 
-**F1 — sidenav Agents badge disagrees with the Agents page.**
-`services/counts.ts:100-104` filters `status='active'`, so the badge reads 10
-while `/agents` lists 16. Every other badge (projects, epics, issues,
-notifications) counts all rows, and the label says only "Agents". Either count
-all agents (consistent with its siblings, and with what clicking through shows)
-or label the badge as active-only. Reads as "6 agents are missing" today.
+**F1 — RESOLVED 2026-09-12.** The sidenav Agents badge filtered
+`status='active'`, so it read 10 while `/agents` listed 16 and `/queue`'s header
+counted 16 — three surfaces, two answers, and it read as "6 agents are missing".
+Now counts every agent, consistent with its five siblings (projects, epics,
+issues, queue, notifications), all of which count every row. The dashboard's
+`activeAgents` KPI is unchanged: it is explicitly labelled "active", so the
+filter there is honest.

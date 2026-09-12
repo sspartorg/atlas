@@ -307,8 +307,9 @@ export function Projects() {
                                     mt: 2,
                                 }}
                             >
-                                {totalProjects} projects · {totalEpics} epics · {totalStories}{' '}
-                                stories
+                                {totalProjects} {totalProjects === 1 ? 'project' : 'projects'} ·{' '}
+                                {totalEpics} {totalEpics === 1 ? 'epic' : 'epics'} ·{' '}
+                                {totalStories} {totalStories === 1 ? 'story' : 'stories'}
                             </Typography>
                         </Box>
                         <Box
