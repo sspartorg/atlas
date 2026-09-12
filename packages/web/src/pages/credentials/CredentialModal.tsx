@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Dialog from '@mui/material/Dialog';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -57,6 +57,13 @@ export function CredentialModal({ open, mode, onClose }: Props) {
     const initialKind: 'pat' | 'ssh' | 'app' =
         mode.kind === 'edit' ? (mode.credential.kind === 'github_app' ? 'app' : 'pat') : 'pat';
     const [view, setView] = useState<View>(mode.kind === 'edit' ? 'form' : 'kind');
+    // Switching view (kind -> form -> saved) unmounts whatever was focused —
+    // the Next button, say. Focus then falls back to document.body, OUTSIDE
+    // the dialog, which silently breaks two things: Escape no longer closes
+    // (MUI listens on the dialog, not the document) and the focus trap is
+    // gone, so Tab walks the page behind the modal. Pull focus back onto the
+    // dialog surface whenever the view changes.
+    const paperRef = useRef<HTMLDivElement | null>(null);
     const [chosenKind, setChosenKind] = useState<'pat' | 'ssh' | 'app'>(initialKind);
     const [label, setLabel] = useState(mode.kind === 'edit' ? mode.credential.label : '');
     const [token, setToken] = useState('');
@@ -123,6 +130,15 @@ export function CredentialModal({ open, mode, onClose }: Props) {
         setError(null);
         setShowToken(false);
     }, [open, mode]);
+
+    useEffect(() => {
+        if (!open) return;
+        const paper = paperRef.current;
+        if (!paper) return;
+        // Only reclaim focus if it actually escaped the dialog — never steal
+        // it from a field the Owner is typing in.
+        if (!paper.contains(document.activeElement)) paper.focus();
+    }, [open, view]);
 
     const revealToken = useRevealCredentialToken();
 
@@ -280,6 +296,8 @@ export function CredentialModal({ open, mode, onClose }: Props) {
             maxWidth="sm"
             fullWidth
             PaperProps={{
+                ref: paperRef,
+                tabIndex: -1,
                 sx: {
                     borderRadius: '14px',
                     bgcolor: ATLAS_PALETTE.white,

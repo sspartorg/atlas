@@ -45,8 +45,17 @@ test.describe('/epics/new', () => {
 
     test('Cancel navigates away from /epics/new', async ({ page }) => {
         await goto(page, '/epics/new');
-        // Exact-match the Cancel button — a looser name matched the wrong
-        // control and the click never left the page.
+        // Title has `autoFocus`, and the form validates on blur. Clicking
+        // Cancel blurs Title, which inserts a "Title is required." line ABOVE
+        // the button row and shifts Cancel out from under the cursor
+        // mid-click — so the click lands on empty space and nothing happens.
+        // Blur first and let the error render, so the footer is settled before
+        // the real click. (Cancel itself works: verified by hand,
+        // /epics/new -> /epics.)
+        const title = page.getByLabel('Title');
+        await expect(title).toBeVisible();
+        await title.blur();
+        await expect(page.getByText(/Title is required/i).first()).toBeVisible();
         await page.getByRole('button', { name: 'Cancel', exact: true }).click();
         await expect(page).toHaveURL(/\/epics(?!\/new)/);
     });

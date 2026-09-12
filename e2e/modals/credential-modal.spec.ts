@@ -41,13 +41,13 @@ test.describe('CredentialModal', () => {
         const hasNext = await nextBtn.isVisible().catch(() => false);
         if (hasNext) {
             await nextBtn.click();
-            // After clicking Next, PAT form fields should appear
-            const tokenField = dialog.getByLabel(/Token|PAT/i).first();
-            const hostField = dialog.getByLabel(/Host|URL/i).first();
-            const hasToken = await tokenField.isVisible().catch(() => false);
-            const hasHost = await hostField.isVisible().catch(() => false);
-            if (hasToken) await expect(tokenField).toBeVisible();
-            if (hasHost) await expect(hostField).toBeVisible();
+            // Wait for the form view for real. The old `isVisible().catch()`
+            // probes returned false while the view was still transitioning,
+            // the assertions were skipped, and Escape was then pressed MID
+            // transition — which the Dialog doesn't act on, leaving it open
+            // and failing the close assertion below. Verified by hand that
+            // Escape does close this modal from the form view.
+            await expect(dialog.getByRole('textbox', { name: /Token/i })).toBeVisible();
         }
         // Close without saving
         await page.keyboard.press('Escape');
