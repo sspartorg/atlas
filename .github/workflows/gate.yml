@@ -1,0 +1,130 @@
+name: Gate
+
+# 2026-09-12 — before this, CI ran only `pnpm -r build` + the bundle budget.
+# Typecheck, lint, unit tests and e2e never ran automatically, which is how
+# three attribution bugs, a dashboard counter frozen at 20, two silently
+# ignored API query filters and 14 red e2e specs all survived unnoticed.
+#
+# COST: `.agents/testing.md` records an explicit Owner decision — "tests do
+# not run in CI, by design. There is no Actions plan to spend on them." This
+# workflow is deliberately shaped around that constraint rather than through
+# it:
+#
+#   * `fast` (typecheck · lint · shared/web/mcp tests) runs on every push and
+#     PR. No service containers, no browser download — the cheap job that
+#     catches the largest share of regressions.
+#   * `api` (needs Postgres) and `e2e` (needs Postgres + Chromium) run ONLY
+#     on demand (`workflow_dispatch`) or nightly. They are the expensive
+#     minutes, and nothing in this repo's cadence needs them per-commit.
+#
+# To make e2e a per-PR gate, add `pull_request:` to the `on:` block and drop
+# the `if:` from the api / e2e jobs. That is a spend decision, not a
+# technical one.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # 03:17 UTC nightly — offset off the hour to dodge the scheduler spike.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast:
+    name: typecheck · lint · shared+web tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r typecheck
+      - run: pnpm -r lint
+      - run: pnpm -F @atlas/shared test
+      - run: pnpm -F @atlas/web test
+      - run: pnpm -F @atlas/mcp test
+
+  api:
+    name: api tests (postgres)
+    # Expensive (service container). Nightly + on demand only — see COST above.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: atlas_test
+          POSTGRES_USER: atlas
+          POSTGRES_PASSWORD: atlas
+        ports:
+          - 5500:5432
+        options: >-
+          --health-cmd "pg_isready -U atlas -d atlas_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgres://atlas:atlas@localhost:5500/atlas_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # `test`, not `test:coverage`, on purpose. The api coverage thresholds
+      # (98/98/98/96) sit above the measured numbers — `.agents/testing.md`
+      # records the gap — so gating on them would make this job red on day
+      # one, and a permanently-red gate is a gate everyone learns to ignore.
+      # Get the suite running first; raise the coverage gate as its own change.
+      - run: pnpm -F @atlas/api test
+
+  e2e:
+    name: e2e (chromium + mobile + ipad)
+    # Most expensive job: Postgres + a Chromium download + 3 viewport
+    # projects (~9 min). Nightly + on demand only — see COST above.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # NOT a `services:` container. `e2e/global-setup.ts` recreates the
+      # atlas_e2e DB via `docker exec atlas-postgres psql ...`, so the
+      # container has to exist under that exact name — which is what
+      # docker-compose (and therefore `pnpm db:up`) creates. A `services:`
+      # postgres is reachable on the port but has no such container name, so
+      # global-setup would fail before the first spec ran. Using db:up also
+      # means CI brings the stack up exactly the way a developer does.
+      - run: pnpm db:up
+      - run: pnpm db:wait
+      - run: pnpm exec playwright install --with-deps chromium
+      # The visual-snapshot specs are skipped by design (Linux-only baselines
+      # are not committed — see e2e/visual/README.md), so this is the
+      # behavioural suite across all three viewport projects.
+      - run: pnpm e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

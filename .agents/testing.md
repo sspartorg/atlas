@@ -8,7 +8,7 @@ This repo ships a test suite with **tiered coverage targets per package**. Targe
 | --- | --- | --- | --- | --- |
 | `@atlas/shared` | **100%** | 100% / 100% / 100% / 100% | 100 / 100 / 100 / 100 | Contract surface. Pure functions, no DB, no UI. Other packages depend on its types/constants/schemas/status-machine. No excuse for gaps. |
 | `@atlas/mcp` | **95%** | 95 / 95 / 95 / 95 | (last full-suite run cleared the gate) | Each MCP tool registers two functions (metadata + async handler); the tests exercise registration + every handler. `api-client.ts` is excluded with rationale (wrapper layer exercised indirectly via the tools tests). |
-| `@atlas/api` | **98%** | **lines 98 · stmts 98 · functions 98 · branches 96** | ⚠️ 95.51 / 95.16 / 95.5 / 90.67 — **below floor** | Hits a real PostgreSQL via `atlas_test_v2`. Branches sits lowest because of defensive null-coalesce + platform-branch code (`crypto.ts`, `env-file.ts`, `issue-full.ts`), covered with `/* v8 ignore */` where genuinely unreachable. **As of 2026-08-04 this gate FAILS locally**: 19 tests across 5 files (`reminders`, `cli-model-naming`, `external-notifications`, `worktree-orchestrator`, `environment-secrets`) fail on time-, machine- and DB-state-dependent assertions. Nothing runs this in CI (see [CI](#ci)), so the drift went unnoticed. |
+| `@atlas/api` | **98%** | **lines 98 · stmts 98 · functions 98 · branches 96** | ⚠️ 95.51 / 95.16 / 95.5 / 90.67 — **below floor** | Hits a real PostgreSQL via `atlas_test_v2`. Branches sits lowest because of defensive null-coalesce + platform-branch code (`crypto.ts`, `env-file.ts`, `issue-full.ts`), covered with `/* v8 ignore */` where genuinely unreachable. **2026-09-12 re-measure on macOS: 2874/2877 pass; 3 fail.** All three are Windows-only platform branches that cannot pass on a POSIX runner — `crypto.test.ts` ×2 (`keyPath()` APPDATA / USERPROFILE fallbacks under a faked `win32`) and `git-verify.test.ts` ×1 (`deriveProjectName` on a `C:\\...\\` path). The older "19 tests across 5 files" note was stale. One further failure was fixed rather than recorded: the suite was **order-dependent** because `routes/cli-models.test.ts` and `services/cli-models.test.ts` each `TRUNCATE cli_models` and never restore it, so every file that ran afterwards inherited a registry hole — and `agents` carries a composite FK on `(cli, model)`, so any later test installing a catalog agent whose model had been wiped blew up. `truncateAll()` now re-seeds `cli_models` (reference data, not test data); the two files that want it empty truncate after calling it, so they are unaffected. Nothing runs any of this in CI (see [CI](#ci)), which is how both the staleness and the ordering bug went unnoticed. |
 | `@atlas/web` | **95%** | **lines 97 · stmts 96 · branches 94 · functions 94** | 97.2 / 96.14 / 94.13 / 94.79 | Honest measured floor. Branches set at 94 to absorb v8 instrumentation jitter — the same test set produces ±0.2pp variance on a ~10000-branch denominator, so the headroom here is real but thin. |
 
 Thresholds live in each package's `vitest.config.ts` under `test.coverage.thresholds`, and are enforced whenever you run `test:coverage` **locally**. Nothing runs them automatically — see [CI](#ci).
@@ -107,14 +107,36 @@ Some api files are intentionally excluded from `coverage.include`:
 
 ## CI
 
-**Tests do not run in CI, by design.** There is no Actions plan to spend on them, so the only workflows are:
+**Partially, since 2026-09-12.** The Actions-spend constraint still holds — the
+expensive suites are not per-commit gates — but "nothing runs automatically" was
+costing more than it saved: three attribution bugs, a dashboard counter frozen at
+20, two API query filters that silently ignored their arguments, and 14 red e2e
+specs all survived unnoticed because every check was opt-in and manual.
 
-| Workflow | What it runs |
-|---|---|
-| `.github/workflows/build.yml` | `pnpm install --frozen-lockfile` → `pnpm -r build` → `pnpm -F @atlas/web bundle:check` |
-| `.github/workflows/lighthouse.yml` | Lighthouse audit |
+| Workflow | Trigger | What it runs |
+|---|---|---|
+| `.github/workflows/build.yml` | push (main) · PR | `pnpm -r build` → `pnpm -F @atlas/web bundle:check` |
+| `.github/workflows/gate.yml` → `fast` | push (main) · PR | `pnpm -r typecheck` → `pnpm -r lint` → shared / web / mcp tests. No service container, no browser download — the cheap job. |
+| `.github/workflows/gate.yml` → `api` | **nightly · manual** | `pnpm -F @atlas/api test` against a Postgres service container. |
+| `.github/workflows/gate.yml` → `e2e` | **nightly · manual** | `pnpm db:up` + Chromium + `pnpm e2e` across all three viewport projects (~9 min). |
+| `.github/workflows/lighthouse.yml` | nightly · manual | Lighthouse audit |
 
-So `pnpm -r test:coverage`, `pnpm lint:knip`, and `pnpm -r typecheck` are **local-only gates**. The practical consequence: coverage and test regressions are invisible until someone runs them by hand, which is exactly how the api package drifted below its own floor (see the table above). Run `pnpm -w run gate` before pushing anything non-trivial — it is the only thing standing in for CI.
+Two deliberate choices in `gate.yml`, both documented in its header comment:
+
+- The `api` job runs `test`, **not** `test:coverage`. The api thresholds sit
+  above the measured numbers (see the table above), so gating on them would make
+  the job red from the first run — and a permanently-red gate is one everyone
+  learns to ignore. Raise the coverage gate as its own change.
+- The `e2e` job brings Postgres up with `pnpm db:up`, **not** a `services:`
+  container. `e2e/global-setup.ts` recreates `atlas_e2e` via
+  `docker exec atlas-postgres psql …`, so the container must exist under that
+  exact name; a `services:` Postgres answers on the port but has no such
+  container, and setup would fail before the first spec ran.
+
+To promote e2e to a per-PR gate, add `pull_request:` to `on:` and drop the `if:`
+from the `api` / `e2e` jobs. That is a spend decision, not a technical one.
+
+`pnpm -r test:coverage` and `pnpm lint:knip` remain **local-only gates** (knip currently fails at HEAD on pre-existing unused exports). The practical consequence: coverage and test regressions are invisible until someone runs them by hand, which is exactly how the api package drifted below its own floor (see the table above). Run `pnpm -w run gate` before pushing anything non-trivial — it is the only thing standing in for CI.
 
 The one gate that IS enforced remotely is the **web bundle budget** (`bundle:check` in `build.yml`), which fails the Build workflow on every push and PR.
 
