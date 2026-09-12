@@ -125,9 +125,13 @@ Wave letters match the sweep order (entity graph first, readers after).
 | `/analytics`, `/analytics/project/:projectId`, `/analytics/epic/:epicId` | Totals equal the dashboard's and the entity pages'. Pagination does not drop or duplicate rows. Agent names come from the denormalized `agent_name`. |
 | `/terminal`, `/terminal/standalone`, `/terminal/layout`, `/terminal/:id`, `/terminal/:id/history` | Session create → appears in the list and survives a reload. Pause/resume/stop reach terminal states. WS stream reconnects without losing the transcript. Standalone sessions carry their credential and commit under its identity. Diff panel matches `GET /api/cli-sessions/:id/diff`. |
 
-Routes with no page doc yet: `/agents/marketplace`, `/agents/marketplace/:id`,
-`/agents/mcp-tools`, `/analytics` ×3. Write one from the
-[`conventions.md`](conventions.md) template when its wave is swept.
+All 37 routes now have a page doc. The last six were written 2026-09-12 as
+part of this sweep: [`27-marketplace.md`](pages/27-marketplace.md),
+[`28-marketplace-detail.md`](pages/28-marketplace-detail.md),
+[`29-mcp-tools.md`](pages/29-mcp-tools.md),
+[`30-analytics.md`](pages/30-analytics.md),
+[`31-analytics-project.md`](pages/31-analytics-project.md),
+[`32-analytics-epic.md`](pages/32-analytics-epic.md).
 
 ---
 

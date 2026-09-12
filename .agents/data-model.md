@@ -295,7 +295,9 @@ Fields: `id, agent_id, issue_type, issue_id, project_id, status, started_at, end
 
 `project_id` has no FK so historical rows survive `DELETE FROM projects`. A partial index (`idx_agent_runs_project_id WHERE project_id IS NOT NULL`) keeps lookups cheap when most rows are item-attached.
 
-- `status` âˆˆ `queued | running | completed | failed | cancelled`
+- `status` ∈ `queued | in_progress | completed | error | cancelled | setup_failed` — matches `RunStatus` in `@atlas/shared` and the `agent_runs_status_check` CHECK. (The doc previously named `running` and `failed`, which have never existed, and omitted `in_progress`, `error` and `setup_failed`, which do.)
+- **The live set is `queued` + `in_progress`**, which is what the partial unique index `agent_runs_one_live_per_item` (migration `003`) constrains to one row per `item_id`. `setup_failed` sits deliberately outside it so a retry isn't blocked (see migration `005`'s header).
+- **Promotion is guarded, not unconditional.** `spawnAgentRun` flips `queued → in_progress` from a 200ms `setTimeout`, and by the time that timer fires the row may have left the live set (Owner cancelled, `failOrphanedRuns` swept it, the item was deleted) with a replacement run already holding the slot. So the UPDATE carries `WHERE status = 'queued'` and checks `numUpdatedRows`: zero rows means the run is no longer ours to start, and the runner returns instead of spawning. Without the predicate the stale row re-entered the live set behind the replacement's back and raised 23505 as an unhandled rejection — the run silently never started and the reason lived only in the API log. Regression test: `services/agent-dispatcher.integration.test.ts`, which asserts both shapes against the real index.
 
 **Two-persona columns** (migration `016_two_persona.ts`):
 - `persona` â€” `'performer' | 'reviewer'`. Defaults to `'performer'` so every existing row is valid without backfill. The runner sets `'reviewer'` on the second CLI invocation it spawns for agents with a non-empty `reviewer_prompt_md`.
