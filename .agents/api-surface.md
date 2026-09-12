@@ -419,7 +419,7 @@ All events flow through `/api/events`. The web subscribes via `useSSE()`. SSE is
 | `run_queued` | agent-runner.ts (after `INSERT INTO agent_runs`) | a new run row was created in `queued` state |
 | `run_completed` / `run_error` | agent-runner.ts | terminal run state |
 | **Data mutations (push replaces polling)** | | |
-| `counts_changed` | services/stories, issues, epics on create/transition/assign/delete; notifications on create/markAllRead; agent-runner on run queue | any DB mutation that could affect sidenav badges or dashboard KPIs |
+| `counts_changed` | services/stories, issues, epics, **agents**, **projects** on create/update/transition/assign/delete; notifications on create/markAllRead; agent-runner on run queue; routes/marketplace on install | any DB mutation that could affect sidenav badges or dashboard KPIs |
 | `notification_created` | services/notifications.ts:create() | a new notification row was inserted |
 | `notification_updated` | services/notifications.ts:updateExternalStatus, markAllRead | external notification delivery status changed or read state flipped |
 | **Project ops** | | |
@@ -444,7 +444,7 @@ All events flow through `/api/events`. The web subscribes via `useSSE()`. SSE is
 | `agent_status` | `['agents']`, `['runs']`, `['agents', agentId, 'runs']` |
 | `run_queued` | `['runs']`, `['dashboard']`, `['sidenav-counts']`, `['agents', agentId, 'runs']` |
 | `clone_completed` | `['projects']`, `['sidenav-counts']` |
-| `counts_changed` | `['sidenav-counts']`, `['dashboard']` |
+| `counts_changed` | `['sidenav-counts']`, `['dashboard']`, `['epics']`, `['stories']`, `['bugs']`, `['issues']`, `['agents']`, `['projects']` — every list whose count this event reports |
 | `notification_created` | `['notifications']`, `['sidenav-counts']`, `['dashboard']` |
 | `notification_updated` | `['notifications']`, `['sidenav-counts']` |
 | `memory_regenerated` (Theme 08) | `['agents', agentId, 'memory']`, `['agent-memory-history', agentId]` |

@@ -2,7 +2,13 @@
 // These test the DB operations directly, not via app.inject (that's
 // src/routes/agents.test.ts).
 
-import { describe, expect, it, beforeEach, afterAll } from 'vitest';
+import { describe, expect, it, beforeEach, afterAll, vi } from 'vitest';
+
+// Spy on the SSE bus so the broadcast assertions below can see it. The real
+// module is harmless in tests (it writes to zero connected clients), but then
+// there is nothing to assert against — and "the write happened but no client
+// was told" is exactly the bug this guards.
+vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
 import {
     agentsService,
     ModelNotInRegistryError,
@@ -10,6 +16,7 @@ import {
     assertCronExprValid,
 } from './agents.js';
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
+import { broadcastSSE } from '../routes/events.js';
 import { insertProject, insertItem } from '../../tests/_items.js';
 
 // Minimal valid agent create input, reused across tests.
@@ -536,5 +543,38 @@ describe('agentsService.update — scheduleTouched catch branch', () => {
         // Should not throw, and next_run_at should be null (catch branch fired).
         expect(updated.schedule_preset).toBe('monthly');
         expect(updated.next_run_at).toBeNull();
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SSE — 2026-09-12. Agent writes moved the sidenav `agents` badge and the
+// dashboard `activeAgents` KPI and pushed nothing, so both sat stale until a
+// hard reload. `architecture.md:348` has always required the broadcast; epics,
+// stories and issues complied and agents did not. Marketplace install was
+// patched at its own call site instead, which is why only that one path worked.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('agentsService — SSE broadcast', () => {
+    it('broadcasts counts_changed on create, update and delete', async () => {
+        vi.mocked(broadcastSSE).mockClear();
+
+        const agent = await agentsService.create(BASE_AGENT);
+        expect(broadcastSSE).toHaveBeenCalledWith({ type: 'counts_changed' });
+
+        vi.mocked(broadcastSSE).mockClear();
+        await agentsService.update(agent.id, { status: 'inactive' });
+        expect(broadcastSSE).toHaveBeenCalledWith({ type: 'counts_changed' });
+
+        vi.mocked(broadcastSSE).mockClear();
+        await agentsService.delete(agent.id);
+        expect(broadcastSSE).toHaveBeenCalledWith({ type: 'counts_changed' });
+    });
+
+    it('does not broadcast when create fails — a rolled-back insert must not tell clients to refetch', async () => {
+        vi.mocked(broadcastSSE).mockClear();
+        await expect(
+            agentsService.create({ ...BASE_AGENT, model: 'no-such-model' }),
+        ).rejects.toThrow(ModelNotInRegistryError);
+        expect(broadcastSSE).not.toHaveBeenCalled();
     });
 });

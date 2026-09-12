@@ -18,6 +18,7 @@ import type {
 import { randomUUID } from 'crypto';
 import { Cron } from 'croner';
 import { computeNextAgentSlot, getSchedulingTimezone } from './agent-schedule-registry.js';
+import { broadcastSSE } from '../routes/events.js';
 
 // Workstream #4 — Validation guard that rejects (cli, model) pairs not in
 // `cli_models`. Throws a tagged Error the route layer recognises and
@@ -389,7 +390,7 @@ export const agentsService = {
                       createTz,
                   ).toISOString()
                 : null;
-        return await db.transaction().execute(async (trx) => {
+        const created = await db.transaction().execute(async (trx) => {
             const inserted = await trx
                 .insertInto('agents')
                 .values({
@@ -446,6 +447,12 @@ export const agentsService = {
 
             return inserted as unknown as IAgent;
         });
+        // Every surface that counts or lists agents just went stale: the
+        // sidenav badge, the dashboard `activeAgents` KPI and any open
+        // /agents list. Broadcast after the transaction commits, never inside
+        // it — a rolled-back insert must not tell clients to refetch.
+        broadcastSSE({ type: 'counts_changed' });
+        return created;
     },
 
     async update(id: string, data: IAgentUpdateInput): Promise<IAgent> {
@@ -462,7 +469,7 @@ export const agentsService = {
         if (data.cron_expr !== undefined) assertCronExprValid(data.cron_expr);
         const scalars = pickAgentScalars(data);
         const promptMdChanged = 'prompt_md' in data && data.prompt_md !== undefined;
-        return await db.transaction().execute(async (trx) => {
+        const updated = await db.transaction().execute(async (trx) => {
             let row: IAgent;
             if (promptMdChanged) {
                 // Editing `prompt_md` bumps `prompt_version` and snapshots
@@ -548,6 +555,11 @@ export const agentsService = {
 
             return row;
         });
+        // Same staleness as create: `status` flips active/inactive, which moves
+        // the dashboard `activeAgents` KPI, and a rename changes every list
+        // that shows the name.
+        broadcastSSE({ type: 'counts_changed' });
+        return updated;
     },
 
     async listPromptVersions(agentId: string): Promise<IAgentPromptVersion[]> {
@@ -594,6 +606,7 @@ export const agentsService = {
 
     async delete(id: string): Promise<void> {
         await db.deleteFrom('agents').where('id', '=', id).execute();
+        broadcastSSE({ type: 'counts_changed' });
     },
 
     async getRuns(agentId: string): Promise<IAgentRun[]> {

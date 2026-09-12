@@ -2438,11 +2438,22 @@ export async function spawnAgentRun(
 
     setTimeout(() => {
         void (async () => {
-            await db
+            // Promote only a run that is STILL queued. 200 ms is plenty for the
+            // row to leave the live set — cancelled by the Owner, swept by
+            // `failOrphanedRuns`, or deleted with its item — and by then a
+            // replacement run may hold the item's slot. An unconditional flip
+            // put this row back into the live set behind that replacement's
+            // back and tripped `agent_runs_one_live_per_item`, which surfaced
+            // only as "unhandled promise rejection (kept alive)" in the API
+            // log. Losing the flip means the run isn't ours to start.
+            const promoted = await db
                 .updateTable('agent_runs')
                 .set({ status: 'in_progress' })
                 .where('id', '=', runId)
-                .execute();
+                .where('status', '=', 'queued')
+                .executeTakeFirst();
+            /* v8 ignore next */
+            if (Number(promoted.numUpdatedRows ?? 0) === 0) return;
             broadcastSSE({
                 type: 'agent_status',
                 agentId,
@@ -2579,7 +2590,22 @@ export async function spawnAgentRun(
             } else {
                 simulateRun(runId, agentId, issueType, issueId, fullPrompt);
             }
-        })();
+        })().catch((err: unknown) => {
+            // Nothing between the promotion above and `spawnCli` below had a
+            // catch, so any throw here became an unhandled rejection: the run
+            // sat at `in_progress` until the next boot sweep and the reason
+            // lived only in the API log. `errorRun` finalizes the row, puts
+            // the message on the run-detail page and notifies the Owner.
+            void errorRun(
+                runId,
+                agentId,
+                issueType,
+                issueId,
+                err instanceof Error ? err.message : String(err),
+            ).catch(() => {
+                /* last resort: the original error is already on the log */
+            });
+        });
     }, 200);
 
     return runId;

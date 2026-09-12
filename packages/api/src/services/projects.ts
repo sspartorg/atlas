@@ -3,6 +3,7 @@ import path from 'node:path';
 import { db } from '../db/kysely-client.js';
 import type { IProject } from '@atlas/shared';
 import { randomUUID } from 'crypto';
+import { broadcastSSE } from '../routes/events.js';
 
 /**
  * Reject any workspace / git path that contains a path-traversal component
@@ -214,6 +215,10 @@ export const projectsService = {
                 .values({ project_id: id, last_seq: 0 })
                 .execute();
         });
+        // The sidenav `projects` badge and the dashboard `projectCount` KPI both
+        // just went stale, as does any open /projects list. Nothing pushed on a
+        // plain create, so the badge sat one behind until a hard reload.
+        broadcastSSE({ type: 'counts_changed' });
         return (await this.get(id))!;
     },
 
@@ -233,6 +238,8 @@ export const projectsService = {
         const keys = Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined);
         if (keys.length === 0) return (await this.get(id))!;
         await db.updateTable('projects').set(data as never).where('id', '=', id).execute();
+        // A rename changes the project label on every page that shows it.
+        broadcastSSE({ type: 'counts_changed' });
         return (await this.get(id))!;
     },
 
@@ -243,6 +250,9 @@ export const projectsService = {
         // permanently retire `issue_key_prefix` — the prefix is free for
         // reuse the moment this DELETE commits.
         await db.deleteFrom('projects').where('id', '=', id).execute();
+        // CASCADE took this project's epics, issues and runs with it, so every
+        // sidenav badge moves — not just `projects`.
+        broadcastSSE({ type: 'counts_changed' });
     },
 
     async count(): Promise<number> {
@@ -287,6 +297,10 @@ export const projectsService = {
                 .values({ project_id: id, last_seq: 0 })
                 .execute();
         });
+        // Same as create — the folder-attach route and the clone runner both
+        // land here. The runner also emits `clone_completed`; the route emitted
+        // nothing at all.
+        broadcastSSE({ type: 'counts_changed' });
         return (await this.get(id))!;
     },
 };

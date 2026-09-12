@@ -198,10 +198,15 @@ guard), `/projects/:id/guardrails` → `?tab=guardrails` (no-hyphen alias),
 `/terminal/:id` → `/:id/history` for a closed session, `*` → `/`. The onboarding
 **form** is still untested — that needs an un-onboarded workspace.
 
-Still untested everywhere, on pages otherwise marked done: **SSE live
-propagation** (every count in this sweep was verified by reloading, never by
-watching a push arrive) and a **real agent CLI run** (the whole
-run → handoff → status-advance chain).
+**SSE live propagation — swept 2026-09-12.** Verified by holding an
+`EventSource` open (`curl -sN /api/events`) and watching pushes land, not by
+reloading. The transport works: `: connected` flushes immediately and a
+`counts_changed` frame arrives within ~1s of the write. What did *not* work was
+which writes push at all — see **F2** below.
+
+Still untested: a **real agent CLI run** (the whole run → handoff →
+status-advance chain). `ATLAS_AI_ENABLED` was left off for the sweep so the
+dev workspace kept its data.
 
 Fixed this pass: secrets reveal (4 surfaces), comment attribution + backfill,
 marketplace install FK guard + legible bulk-install failures, dashboard counts
@@ -229,12 +234,15 @@ Verified correct (checked, not bugs — recorded so the next sweep doesn't re-ch
   **`/projects/:id/guard-rails`** redirects to `?tab=guardrails`. Both intended.
 - **Guardrails page** 14 rules / 5 categories / 7 scripts — matches the API.
 
-Cosmetic, unfixed (not worth a code change on their own — fold into the next
-edit that touches these files):
+Cosmetic, fixed in the same pass (`30789c3`): `/terminal/:id/history` rendered
+`Closed at` / `Transcript captured` as raw UTC ISO strings (now `formatAbsolute`,
+like every other surface), and the Projects subtitle read "1 projects · 1 epics".
 
-- `/terminal/:id/history` renders `Closed at` / `Transcript captured` as raw UTC
-  ISO strings, while every other surface shows localized relative time.
-- Projects header reads "1 projects · 1 epics" — no singular/plural handling.
+Cosmetic, still open: eight other count headers have no singular form either —
+`Epics.tsx:148`, `Issues.tsx:315`, `Guardrails.tsx:154`, `Terminal.tsx:168`,
+`TerminalStandalone.tsx:114`, `AnalyticsProject.tsx:363,469,513`. One shared
+`plural()` helper would close all eight; not worth an eight-file diff on its own,
+so fold it into the next edit that touches those files.
 
 ## Open findings
 
@@ -247,3 +255,73 @@ Now counts every agent, consistent with its five siblings (projects, epics,
 issues, queue, notifications), all of which count every row. The dashboard's
 `activeAgents` KPI is unchanged: it is explicitly labelled "active", so the
 filter there is honest.
+
+**F2 — RESOLVED 2026-09-12.** Half the entity writes never pushed on SSE.
+`.agents/architecture.md:348` already required it ("If you add a new mutation in
+the API, you MUST `broadcastSSE()` after the DB write"); `epics`, `stories` and
+`issues` complied, `agents` and `projects` did not. Proven live by holding an
+`EventSource` open: creating an epic pushed `counts_changed`; creating a project
+(badge 1 → 2) and an agent (16 → 17) pushed nothing at all.
+
+The web half was broken symmetrically. `counts_changed` reports the `agents` and
+`projects` badge counts, but its handler invalidated six query keys and neither
+of those two lists. So on the one path that *did* broadcast — marketplace
+install, patched at the call site in `routes/marketplace.ts:74` — an open
+`/agents` page kept showing the pre-install set while the badge beside it moved.
+**That is the reported "agents are missing from the Agents page" symptom on a
+second axis**, independent of the FK 500 that was fixed first.
+
+Fixed in the services, not the routes: `agentsService.create/update/delete` and
+`projectsService.create/createFromClone/update/delete` now broadcast after the
+transaction commits (never inside it — a rolled-back insert must not tell
+clients to refetch), and `useSSE.ts` adds `['agents']` + `['projects']`.
+`projectsService.createFromClone` had two callers and only one of them
+(`clone-runner`) pushed anything.
+
+**F3 — RESOLVED 2026-09-12.** A stranded run, found in `e2e-logs/api.log` rather
+than in the UI: `duplicate key value violates unique constraint
+"agent_runs_one_live_per_item"`, logged as "unhandled promise rejection (kept
+alive)".
+
+`agent-runner.ts` promotes a queued run with a bare
+`setTimeout(() => { void (async () => { … })(); }, 200)`. Two defects in that
+one construct:
+
+- The promotion was unconditional. 200 ms is ample for the row to leave the
+  live set (cancelled by the Owner, swept by `failOrphanedRuns`, deleted with
+  its item), and a replacement run may already hold the item's slot — so the
+  flip re-entered the live set behind the replacement's back and hit the partial
+  unique index from migration `003`. Now `.where('status','=','queued')` with a
+  `numUpdatedRows` check: losing the flip means the run isn't ours to start.
+- Nothing from the promotion down to `spawnCli` had a `catch`, so any throw was
+  an unhandled rejection and the run sat at `in_progress` until the next boot
+  sweep, with the reason only in the API log. Now `.catch()` → `errorRun()`,
+  which finalizes the row, puts the message on the run-detail page and notifies
+  the Owner.
+
+Same class as the pre-spawn failures fixed earlier in this branch
+(`outcome_summary` written but never SELECTed): **an error that exists only in a
+log or a column nobody reads.** That is the recurring theme of this whole sweep.
+
+## Carried forward — needs an Owner decision
+
+**C1 — `comments.author_name` denormalization.** `comments_agent_id_fkey … ON
+DELETE SET NULL` means deleting an agent retroactively erases its name from
+every comment it ever wrote, and `ActivityCard.tsx` falls back to the literal
+`'Agent'`. The write-time attribution fix in this branch stops *new* comments
+losing their `agent_id`, but cannot survive the agent row being deleted. The
+change is scoped and ready — DB column + backfill migration, a stamp in
+`commentsService.create`, `author_name` on `IComment`, and
+`agent?.name ?? comment.author_name ?? 'Agent'` in the card — but it needs
+`author_name` added to `IComment` in `packages/shared/src/types/index.ts`, and
+`packages/shared/` is protected by `AGENTS.md`. **Not started: waiting on an
+explicit "yes, edit shared".** The in-repo precedent for denormalizing a name
+is `counts.ts:270,286` and `routes/analytics.ts:185`.
+
+**C2 — five unseeded `SdlcRole` slugs.** `spec-writer`, `tester`, `devops`,
+`security` and `designer` are in the `SdlcRole` union in `@atlas/shared` but not
+in the `roles` table, so assigning one used to 500 on `agents_role_id_fkey`.
+That is fixed (`RoleNotInCatalogError` → 400 naming the valid slugs), but
+seeding them properly needs curated `default_prompt_md` for each, which is
+product content, not something to invent. Either seed the five with real prompts
+or narrow the union to the five that exist.
