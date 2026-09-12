@@ -307,6 +307,53 @@ Same class as the pre-spawn failures fixed earlier in this branch
 (`outcome_summary` written but never SELECTed): **an error that exists only in a
 log or a column nobody reads.** That is the recurring theme of this whole sweep.
 
+**F4 — RESOLVED 2026-09-12.** The e2e suite's last red spec, and two lessons
+about trusting a green run.
+
+`/terminal` "start → pause → resume → stop lifecycle" had been written off as
+fake-claude PTY timing. It wasn't. `e2e/fixtures/fake-claude.js` and
+`fake-copilot.js` are committed `100644` while carrying a `#!/usr/bin/env node`
+shebang, and `cli-session-host` hands the path straight to `node-pty.spawn()` as
+the binary — so on POSIX the exec fails, the PTY dies on spawn, and the session
+flips to `paused`. **PTY exit → paused is correct product behaviour**
+(`data-model.md`, ICliSession lifecycle): the product was right and the fixture
+was wrong. Both are `100755` in the index now. With that fixed the spec got as
+far as the stop dialog and exposed a second spec defect — the PR checkbox is
+disabled while the stop preflight is in flight, so `if (await
+prBox.isEnabled())` read false, skipped the uncheck, and the confirm button kept
+its "Stop & open PR" label while the assertion waited for "Stop session". Same
+family as the `isVisible().catch()` probes: **a mid-transition probe reporting a
+steady state that isn't there yet.**
+
+Two further things surfaced, neither of which anyone was looking for:
+
+- **`ScriptModal` nested a `Typography variant="h6"` inside `MuiDialogTitle`'s
+  `h2`** — invalid HTML, and React logged *"In HTML, `<h6>` cannot be a child of
+  `<h2>`"* on every render. Found in `e2e-logs/web.log`. `StopSessionModal`
+  already carried the `component="span"` fix and a comment explaining it;
+  `ScriptModal` was the one that missed it. Its own test asserted
+  `getByText('Add script', { selector: 'h6' })` — **a test asserting the
+  defect**, the third in this branch after `StartStandaloneSessionDialog` and
+  `AgentCard`.
+- **The web suite was order-dependent.** `ScratchPadEditor`'s `formatSavedAgo`
+  test advanced 2 hours of fake time in one call against a component with a 1s
+  `setInterval`: 7,200 interval callbacks, each a React re-render, inside one
+  `act()`, finishing at ~14s against a 15s timeout. Ordering decided pass/fail.
+  Now jumps the clock and advances 1s so one tick re-reads it. Its three
+  failures were also one failure wearing three hats — the fake-timer tests
+  restore real timers on their last line, so a failure before that line left
+  them installed and hung every later test in the file; the `afterEach` guard
+  was missing.
+
+**The lesson to carry:** a green suite run is evidence about *that ordering*.
+This is the second order-dependence found in this branch (after the
+`cli_models` truncate in `tests/_pg-db.ts`), and both were invisible until a
+file order changed. Two traps for anyone re-running the suite are now written
+down in [`testing.md`](testing.md) → *E2E*: never edit `packages/{api,web}/src`
+while `pnpm e2e` is running (`tsx watch` restarts the API mid-run and a
+non-parsing save kills it, turning one mistake into a dozen phantom failures),
+and keep the CLI fixtures executable.
+
 ## Carried forward — needs an Owner decision
 
 **C1 — `comments.author_name` denormalization.** `comments_agent_id_fkey … ON
