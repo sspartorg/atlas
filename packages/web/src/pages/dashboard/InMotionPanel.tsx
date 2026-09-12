@@ -145,7 +145,7 @@ export function InMotionPanel({ rows, agents, isLoading }: IInMotionPanelProps) 
                         No active work
                     </Typography>
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate40 }}>
-                        Assign a story to a agent to get things moving.
+                        Assign a story to an agent to get things moving.
                     </Typography>
                 </Box>
             ) : (

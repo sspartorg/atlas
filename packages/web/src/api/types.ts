@@ -72,6 +72,9 @@ interface DashboardKpis {
     storiesInProgress: number;
     doneThisWeek: number;
     projectCount: number;
+    // True totals — `awaiting` / `queue` are capped at 20 for rendering.
+    awaitingTotal?: number;
+    inMotionTotal?: number;
     agentStatsByCategory: AgentStatsByCategory;
     todaysPass: TodaysPass;
     costSummary30d?: CostSummary;
@@ -153,7 +156,7 @@ interface AnalyticsTopRun {
 }
 
 interface AnalyticsMonthlyRow {
-    month: string;  // YYYY-MM
+    month: string; // YYYY-MM
     total_cost_usd: number;
     input_tokens: number;
     output_tokens: number;
