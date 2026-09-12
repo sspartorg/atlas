@@ -3,6 +3,7 @@ import { screen, fireEvent } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { TerminalHistory } from './TerminalHistory.js';
+import { formatAbsolute } from '../utils/time.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { server } from '../test-setup.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
@@ -120,14 +121,21 @@ describe('TerminalHistory — closed session with transcript', () => {
         await screen.findByTestId('transcript-viewer');
     });
 
-    it('renders transcript captured timestamp', async () => {
+    // These asserted the RAW ISO string. This page was the only surface
+    // rendering unformatted UTC while everything else showed localised time,
+    // so it now runs both values through formatAbsolute. Asserting via the
+    // formatter (rather than a hardcoded rendering) keeps the test honest
+    // about intent and independent of the runner's locale/timezone.
+    it('renders transcript captured timestamp, localised', async () => {
         renderHistory('sess-hist');
-        await screen.findByText('2026-01-02T01:00:00.000Z');
+        await screen.findByText(formatAbsolute('2026-01-02T01:00:00.000Z'));
+        expect(screen.queryByText('2026-01-02T01:00:00.000Z')).not.toBeInTheDocument();
     });
 
-    it('renders closed_at timestamp', async () => {
+    it('renders closed_at timestamp, localised', async () => {
         renderHistory('sess-hist');
-        await screen.findByText('2026-01-02T00:00:00.000Z');
+        await screen.findByText(formatAbsolute('2026-01-02T00:00:00.000Z'));
+        expect(screen.queryByText('2026-01-02T00:00:00.000Z')).not.toBeInTheDocument();
     });
 });
 

@@ -62,7 +62,9 @@ describe('StartStandaloneSessionDialog', () => {
         const submit = await screen.findByRole('button', { name: /open terminal/i });
         expect(submit).toBeDisabled();
 
-        await userEvent.type(screen.getByRole('textbox', { name: '' }), '/tmp/x');
+        // Was `getByRole('textbox', { name: '' })` — it matched precisely
+        // because the folder input had NO accessible name. It has one now.
+        await userEvent.type(screen.getByRole('textbox', { name: /folder/i }), '/tmp/x');
         await waitFor(() => expect(submit).toBeEnabled());
     });
 
