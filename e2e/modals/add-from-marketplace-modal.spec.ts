@@ -1,9 +1,15 @@
 import { test, expect } from '@playwright/test';
 import { goto } from '../helpers/nav.js';
 
-// AddFromMarketplaceModal is opened from the Agents list page → "Add" button
-// (or a similar CTA). It shows the marketplace catalog inside a modal so the
-// user can install an agent without leaving the /agents page.
+// AddFromMarketplaceModal is the rename/retry step shown when an install
+// hits a slug clash; it is reached from the marketplace DETAIL page, not from
+// /agents. Per ADR 0007 the marketplace is its own page and the /agents
+// empty-state CTA navigates there.
+//
+// 2026-09-12 — the name regex used to include /Add agent/i, which matched the
+// unrelated "Add Agent" dialog on /agents (name · category · CLI · model ·
+// colour). That defeated the `test.skip` guard below and the specs then failed
+// looking for catalog cards inside a form. Narrowed so the guard fires.
 // We never submit (install) — Cancel or Esc only.
 
 test.describe('AddFromMarketplaceModal', () => {
@@ -13,7 +19,7 @@ test.describe('AddFromMarketplaceModal', () => {
 
         // Look for an "Add" or "Add from marketplace" button (not the card-level "Add" btns)
         const addBtn = page
-            .getByRole('button', { name: /Add from marketplace|Browse marketplace|Add agent/i })
+            .getByRole('button', { name: /Add from marketplace|Browse marketplace/i })
             .first();
         const hasAdd = await addBtn.isVisible().catch(() => false);
         test.skip(!hasAdd, 'no Add from marketplace button on /agents — deferring');
@@ -28,7 +34,7 @@ test.describe('AddFromMarketplaceModal', () => {
         await expect(page.getByRole('heading', { name: /Agents/i }).first()).toBeVisible();
 
         const addBtn = page
-            .getByRole('button', { name: /Add from marketplace|Browse marketplace|Add agent/i })
+            .getByRole('button', { name: /Add from marketplace|Browse marketplace/i })
             .first();
         const hasAdd = await addBtn.isVisible().catch(() => false);
         test.skip(!hasAdd, 'no Add from marketplace button — deferring');
@@ -47,7 +53,7 @@ test.describe('AddFromMarketplaceModal', () => {
         await expect(page.getByRole('heading', { name: /Agents/i }).first()).toBeVisible();
 
         const addBtn = page
-            .getByRole('button', { name: /Add from marketplace|Browse marketplace|Add agent/i })
+            .getByRole('button', { name: /Add from marketplace|Browse marketplace/i })
             .first();
         const hasAdd = await addBtn.isVisible().catch(() => false);
         test.skip(!hasAdd, 'no Add from marketplace button — deferring');

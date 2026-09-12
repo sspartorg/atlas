@@ -15,10 +15,12 @@ test.describe('/agents/mcp-tools', () => {
 
     test('tool catalogue lists known tools from the Items group', async ({ page }) => {
         await goto(page, '/agents/mcp-tools');
-        // searchItems and createEpic are both registered in the ITEMS group
-        // and are always present in the catalog seeded at API boot.
-        await expect(page.getByText('searchItems').first()).toBeVisible();
-        await expect(page.getByText('createEpic').first()).toBeVisible();
+        // The ITEMS group's tools were consolidated to a snake_case CRUD set
+        // (`search_item` / `create_item` / `get_item` / `update_item` /
+        // `delete_item`); the old `searchItems` + `createEpic` names this
+        // asserted no longer exist in the catalog.
+        await expect(page.getByText('search_item').first()).toBeVisible();
+        await expect(page.getByText('create_item').first()).toBeVisible();
     });
 
     test('summary badge shows a non-zero tool count', async ({ page }) => {

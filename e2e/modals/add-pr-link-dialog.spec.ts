@@ -63,8 +63,12 @@ test.describe('AddPrLinkDialog', () => {
         const dialog = page.getByRole('dialog');
         await expect(dialog).toBeVisible();
 
-        // The Save/Add button should be disabled without a URL
-        const saveBtn = dialog.getByRole('button', { name: /Save|Add|Link/i }).first();
+        // The Save/Add button should be disabled without a URL.
+        // Exact-match "Add link": the old /Save|Add|Link/i + .first() could
+        // resolve to a sibling control in the dialog rather than the submit
+        // button. Verified against the running app — the real submit button is
+        // correctly disabled until a URL is entered.
+        const saveBtn = dialog.getByRole('button', { name: 'Add link', exact: true });
         const hasSave = await saveBtn.isVisible().catch(() => false);
         if (hasSave) {
             await expect(saveBtn).toBeDisabled();

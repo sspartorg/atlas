@@ -8,6 +8,10 @@ import { goto } from '../helpers/nav.js';
 // We never submit — Cancel or Esc only.
 
 test.describe('CredentialModal', () => {
+    // 2026-09-12 — the kind picker offers PAT · SSH key (disabled,
+    // coming soon) · GitHub App. There is no "App password" radio: it was
+    // replaced by GitHub App, which is a real shipped kind. These specs
+    // asserted the removed control.
     test('Add credential button opens the modal', async ({ page }) => {
         await goto(page, '/settings/credentials');
         await page.getByRole('button', { name: /add credential/i }).first().click();
@@ -16,14 +20,14 @@ test.describe('CredentialModal', () => {
         await expect(dialog.getByText('Add credential')).toBeVisible();
     });
 
-    test('kind selection view shows PAT, SSH, and App Password radios', async ({ page }) => {
+    test('kind selection view shows PAT, SSH, and GitHub App radios', async ({ page }) => {
         await goto(page, '/settings/credentials');
         await page.getByRole('button', { name: /add credential/i }).first().click();
         const dialog = page.getByRole('dialog');
         await expect(dialog).toBeVisible();
         await expect(dialog.getByRole('radio', { name: /personal access token/i })).toBeVisible();
         await expect(dialog.getByRole('radio', { name: /ssh key/i })).toBeVisible();
-        await expect(dialog.getByRole('radio', { name: /app password/i })).toBeVisible();
+        await expect(dialog.getByRole('radio', { name: /github app/i })).toBeVisible();
     });
 
     test('selecting PAT and clicking Next shows Token and Host fields', async ({ page }) => {
