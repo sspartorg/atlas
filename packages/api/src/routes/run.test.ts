@@ -1150,3 +1150,37 @@ describe('GET /api/run — filters actually filter', () => {
         expect(JSON.parse(all.body).length).toBeGreaterThanOrEqual(2);
     });
 });
+
+// Regression — 2026-09-12. A run that fails BEFORE the CLI is spawned
+// (worktree provisioning, unmet depends_on, live-run conflict) has no
+// output_text at all; POST /api/run records the reason on `outcome_summary`.
+// `asAgentRun` maps that column, but GET /api/run/:id never SELECTed it, so it
+// always came back null and the Run Detail page showed "Error" over an empty
+// output pane. The only copy of the diagnostic was the server log.
+describe('GET /api/run/:id — outcome columns reach the client', () => {
+    it('returns outcome_summary for a run that failed before spawning', async () => {
+        const runId = 'bbbbbbbb-0000-0000-0000-000000000001';
+        const reason = 'Worktree provisioning failed for ATL-2: remote not found';
+        await testDb
+            .insertInto('agent_runs')
+            .values({
+                id: runId,
+                agent_id: 'agent-coder',
+                item_id: 'ATL-2',
+                project_id: 'p1',
+                status: 'error',
+                outcome_summary: reason,
+            })
+            .execute();
+
+        const res = await app.inject({ method: 'GET', url: `/api/run/${runId}` });
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.body) as {
+            output_text: string | null;
+            outcome_summary: string | null;
+        };
+        // The condition the UI banner keys on: errored, no output, but a reason.
+        expect(body.output_text).toBeFalsy();
+        expect(body.outcome_summary).toBe(reason);
+    });
+});

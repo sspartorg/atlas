@@ -5,6 +5,7 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
+import AlertTitle from '@mui/material/AlertTitle';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ApiErrorKind, IAgentRun, IssueType, RunStatus } from '@atlas/shared';
 import { useAgent, useAgentRun } from '../hooks/useAgents.js';
@@ -73,7 +74,11 @@ function extractFinalResult(output: string | null): string {
             const obj = JSON.parse(line) as Record<string, unknown>;
             if (obj['type'] === 'assistant.message') {
                 const data = obj['data'] as Record<string, unknown> | undefined;
-                if (data && typeof data['content'] === 'string' && (data['content'] as string).trim()) {
+                if (
+                    data &&
+                    typeof data['content'] === 'string' &&
+                    (data['content'] as string).trim()
+                ) {
                     return (data['content'] as string).trim();
                 }
             }
@@ -150,9 +155,8 @@ export function AgentRunDetail() {
     // `claude` not on PATH). Synthesizes a AtlasApiError so the existing
     // ApiErrorAlert component can render the per-kind copy.
     const errorMarker = useMemo(
-        () =>
-            run?.status === 'error' ? parseErrorKindMarker(run?.output_text ?? null) : null,
-        [run?.status, run?.output_text],
+        () => (run?.status === 'error' ? parseErrorKindMarker(run?.output_text ?? null) : null),
+        [run?.status, run?.output_text]
     );
     const errorForAlert = useMemo(
         () =>
@@ -162,10 +166,10 @@ export function AgentRunDetail() {
                       run?.output_text?.slice(0, 200) ?? 'Run failed',
                       errorMarker.kind,
                       0,
-                      errorMarker.details,
+                      errorMarker.details
                   )
                 : null,
-        [errorMarker, run?.output_text],
+        [errorMarker, run?.output_text]
     );
 
     // Selection state, view-mode default, scroll-into-view, and parsing
@@ -209,7 +213,7 @@ export function AgentRunDetail() {
                 const tail = fresh.output_text ?? '';
                 if (!tail) return;
                 queryClient.setQueryData<IAgentRun>(['agent-run', runId], (prev) =>
-                    prev ? { ...prev, output_text: (prev.output_text ?? '') + tail } : prev,
+                    prev ? { ...prev, output_text: (prev.output_text ?? '') + tail } : prev
                 );
             })
             .catch(() => {
@@ -229,8 +233,7 @@ export function AgentRunDetail() {
             toast.show({ message: 'Re-run queued' });
             navigate(`/agents/${id}/runs/${newRunId}`);
         },
-        onError: (e) =>
-            toast.show({ message: 'Re-run failed', detail: (e as Error).message }),
+        onError: (e) => toast.show({ message: 'Re-run failed', detail: (e as Error).message }),
     });
 
     // Workstream #6 — Stop-a-run kill switch. Only enabled while the
@@ -257,12 +260,11 @@ export function AgentRunDetail() {
                           status: resp.status,
                           completed_at: prev.completed_at ?? new Date().toISOString(),
                       }
-                    : prev,
+                    : prev
             );
             void queryClient.invalidateQueries({ queryKey: ['agent-run', runId] });
         },
-        onError: (e) =>
-            toast.show({ message: 'Stop failed', detail: (e as Error).message }),
+        onError: (e) => toast.show({ message: 'Stop failed', detail: (e as Error).message }),
     });
 
     const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
@@ -285,9 +287,7 @@ export function AgentRunDetail() {
         void navigator.clipboard
             .writeText(text)
             .then(() => toast.show({ message: 'Log copied' }))
-            .catch((e) =>
-                toast.show({ message: 'Copy failed', detail: (e as Error).message })
-            );
+            .catch((e) => toast.show({ message: 'Copy failed', detail: (e as Error).message }));
     }
 
     function handleDownloadLog() {
@@ -416,7 +416,11 @@ export function AgentRunDetail() {
                                 {statusLabel}
                             </Typography>
                         </Box>
-                        {isSimulatedRun(run /* v8 ignore next -- unreachable: `run` is guaranteed non-null by the `!run` early-return above */ ?? null, aiEnabled) && <SimulatedBadge size="sm" />}
+                        {isSimulatedRun(
+                            run /* v8 ignore next -- unreachable: `run` is guaranteed non-null by the `!run` early-return above */ ??
+                                null,
+                            aiEnabled
+                        ) && <SimulatedBadge size="sm" />}
                         <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
                             {agent.name}
                         </Typography>
@@ -589,12 +593,36 @@ export function AgentRunDetail() {
                 next-action copy before scrolling. */}
             {errorForAlert && (
                 <Box sx={{ mb: 2 }}>
-                    <ApiErrorAlert
-                        error={errorForAlert}
-                        contextLabel="Run failed"
-                    />
+                    <ApiErrorAlert error={errorForAlert} contextLabel="Run failed" />
                 </Box>
             )}
+
+            {/* A run that failed BEFORE the CLI was spawned has no
+                `output_text` at all — worktree provisioning, an unmet
+                depends_on, a live-run conflict. `POST /api/run` records the
+                reason on `outcome_summary`, so without this the page showed
+                "Error" over an empty output pane and the only copy of the
+                diagnostic was the server log. */}
+            {!errorForAlert &&
+                run?.status === 'error' &&
+                !run?.output_text &&
+                run?.outcome_summary && (
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                        <AlertTitle>Run failed before the CLI started</AlertTitle>
+                        <Box
+                            component="pre"
+                            sx={{
+                                m: 0,
+                                fontFamily: '"JetBrains Mono", monospace',
+                                fontSize: 12,
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                            }}
+                        >
+                            {run.outcome_summary}
+                        </Box>
+                    </Alert>
+                )}
 
             {/* Live tail — mounted while the run is still queued or
                 streaming. While queued, useRunOutputTail is already live
@@ -636,9 +664,9 @@ export function AgentRunDetail() {
                             border: `1px solid rgba(168,106,31,.20)`,
                         }}
                     >
-                        The per-project setup script did not complete cleanly. The agent CLI was
-                        not spawned. Edit the project&apos;s Setup tab or check Settings &gt;
-                        Shared Secrets, then re-dispatch.
+                        The per-project setup script did not complete cleanly. The agent CLI was not
+                        spawned. Edit the project&apos;s Setup tab or check Settings &gt; Shared
+                        Secrets, then re-dispatch.
                     </Alert>
                     <Box
                         component="pre"
@@ -697,67 +725,64 @@ export function AgentRunDetail() {
                 finished AND a result event landed; nothing to show for
                 queued/in-progress runs or for non-Claude CLIs that don't
                 emit a structured wrap-up. */}
-            {summary &&
-                (run.status === 'completed' || run.status === 'error') && (
+            {summary && (run.status === 'completed' || run.status === 'error') && (
+                <Box
+                    sx={{
+                        mt: 3,
+                        background: ATLAS_PALETTE.white,
+                        border: `1px solid ${ATLAS_PALETTE.slate10}`,
+                        borderLeft: `3px solid ${
+                            run.status === 'error' ? ATLAS_PALETTE.error : ATLAS_PALETTE.green
+                        }`,
+                        borderRadius: '10px',
+                        p: 3,
+                    }}
+                >
                     <Box
                         sx={{
-                            mt: 3,
-                            background: ATLAS_PALETTE.white,
-                            border: `1px solid ${ATLAS_PALETTE.slate10}`,
-                            borderLeft: `3px solid ${
-                                run.status === 'error'
-                                    ? ATLAS_PALETTE.error
-                                    : ATLAS_PALETTE.green
-                            }`,
-                            borderRadius: '10px',
-                            p: 3,
+                            display: 'flex',
+                            alignItems: 'baseline',
+                            gap: 1.5,
+                            mb: 1.5,
                         }}
                     >
-                        <Box
+                        <Typography
                             sx={{
-                                display: 'flex',
-                                alignItems: 'baseline',
-                                gap: 1.5,
-                                mb: 1.5,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: ATLAS_PALETTE.slate60,
+                                letterSpacing: '0.06em',
+                                textTransform: 'uppercase',
                             }}
                         >
-                            <Typography
-                                sx={{
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                    color: ATLAS_PALETTE.slate60,
-                                    letterSpacing: '0.06em',
-                                    textTransform: 'uppercase',
-                                }}
-                            >
-                                {run.status === 'error' ? 'Error tail' : 'Summary'}
-                            </Typography>
-                            <Typography
-                                sx={{
-                                    fontSize: 11,
-                                    color: ATLAS_PALETTE.slate40,
-                                    fontFamily: TYPOGRAPHY.fontFamilyMono,
-                                }}
-                            >
-                                · from result event
-                            </Typography>
-                        </Box>
-                        <Box
-                            component="pre"
+                            {run.status === 'error' ? 'Error tail' : 'Summary'}
+                        </Typography>
+                        <Typography
                             sx={{
-                                m: 0,
+                                fontSize: 11,
+                                color: ATLAS_PALETTE.slate40,
                                 fontFamily: TYPOGRAPHY.fontFamilyMono,
-                                fontSize: 12.5,
-                                lineHeight: 1.6,
-                                color: ATLAS_PALETTE.slate80,
-                                whiteSpace: 'pre-wrap',
-                                wordBreak: 'break-word',
                             }}
                         >
-                            {summary}
-                        </Box>
+                            · from result event
+                        </Typography>
                     </Box>
-                )}
+                    <Box
+                        component="pre"
+                        sx={{
+                            m: 0,
+                            fontFamily: TYPOGRAPHY.fontFamilyMono,
+                            fontSize: 12.5,
+                            lineHeight: 1.6,
+                            color: ATLAS_PALETTE.slate80,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                        }}
+                    >
+                        {summary}
+                    </Box>
+                </Box>
+            )}
 
             {!isSimulatedRun(run, aiEnabled) && (
                 <AiUsagePanel
@@ -836,7 +861,9 @@ export function AgentRunDetail() {
             <ConfirmActionModal
                 open={stopConfirmOpen}
                 title="Stop this run?"
-                body={"Any work the agent already committed will still be pushed, but the chain won't advance."}
+                body={
+                    "Any work the agent already committed will still be pushed, but the chain won't advance."
+                }
                 confirmLabel="Stop"
                 tone="destructive"
                 busy={stopRun.isPending}

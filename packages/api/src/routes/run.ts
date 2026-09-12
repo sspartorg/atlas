@@ -232,6 +232,18 @@ export async function runRoutes(app: FastifyInstance) {
                 'r.prompt_snapshot as prompt_snapshot',
                 'r.output_text as output_text',
                 'r.setup_output_text as setup_output_text',
+                // 2026-09-12 — these four were mapped by `asAgentRun` but never
+                // SELECTed here, so they always came back null. That made a
+                // pre-spawn failure completely invisible: the route writes the
+                // reason to `outcome_summary` (worktree provisioning, deps not
+                // ready, live-run conflict), the DB row has it, and the API
+                // dropped it — leaving the Run Detail page showing "Error" with
+                // an empty output pane and nothing to explain it.
+                'r.outcome_kind as outcome_kind',
+                'r.outcome_summary as outcome_summary',
+                'r.outcome_reason as outcome_reason',
+                'r.outcome_checklist as outcome_checklist',
+                'r.parent_run_id as parent_run_id',
                 'r.started_at as started_at',
                 'r.completed_at as completed_at',
                 'r.created_at as created_at',
