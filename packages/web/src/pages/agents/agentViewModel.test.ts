@@ -193,6 +193,9 @@ describe('getRuntimeStats', () => {
     it('returns zeros when no runs', () => {
         expect(getRuntimeStats([])).toEqual({
             queueDepth: 0,
+            runningCount: 0,
+            queuedCount: 0,
+            lastRunErrored: false,
             lastRunAt: null,
             totalRunsThisMonth: 0,
             p50DurationSec: null,
@@ -203,6 +206,9 @@ describe('getRuntimeStats', () => {
         });
         expect(getRuntimeStats(undefined)).toEqual({
             queueDepth: 0,
+            runningCount: 0,
+            queuedCount: 0,
+            lastRunErrored: false,
             lastRunAt: null,
             totalRunsThisMonth: 0,
             p50DurationSec: null,
