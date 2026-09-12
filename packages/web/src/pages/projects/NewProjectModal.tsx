@@ -930,6 +930,7 @@ export function NewProjectModal({ open, onClose }: Props) {
                                 </Typography>
                                 <Box sx={{ mb: 3 }}>
                                     <FolderPicker
+                                        ariaLabel="Existing folder"
                                         value={existingFolder}
                                         onChange={handleExistingFolderChange}
                                         placeholder="C:\Users\…\projects\my-repo"
