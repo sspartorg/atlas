@@ -22,6 +22,7 @@ This folder is the **single source of truth for application behavior** — what 
 | "How do I keep these docs in sync when I change code?" | `conventions.md` (and `CLAUDE.md`) |
 | "How does the MCP server expose item data to AI agents?" | `mcp.md` |
 | "What are the coverage targets, where does CI gate, how do I run tests?" | `testing.md` |
+| "What do I actually verify on page X beyond it rendering?" | `functional-checklist.md` |
 | "How do I smoke-test the MCP server?" | `testing-mcp.md` |
 | "Which canonical SDLC roles exist? Which ship enabled?" | `role-catalog.md` |
 | "What's the long-term agent-swarm vision? What's shipped vs absent?" | `swarm-architecture.md` |
@@ -42,6 +43,7 @@ This folder is the **single source of truth for application behavior** — what 
 - [`freedom-agents.md`](freedom-agents.md) — schedule-driven, no-item agents (`requires_item=false`): wiring, prompt contract, runner guards, seed catalog
 - [`role-catalog.md`](role-catalog.md) — A08 SDLC role catalog: the 10 canonical roles, disable-by-default policy, prompt-ownership rules, schema, how to add a role
 - [`swarm-architecture.md`](swarm-architecture.md) — C05 long-term swarm vision: capability matrix (shipped vs absent), current fleet, dispatch model overview, future capability gaps
+- [`functional-checklist.md`](functional-checklist.md) — per-route data-correctness checks (round-trip, attribution, list membership, transition legality, cross-page propagation, error states)
 - [`testing.md`](testing.md) — coverage targets, floor exceptions, CI gates, how to run tests
 - [`testing-mcp.md`](testing-mcp.md) — MCP smoke test + Inspector walkthrough
 
