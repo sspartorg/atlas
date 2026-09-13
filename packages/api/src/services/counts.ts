@@ -41,6 +41,13 @@ export interface DashboardKpis {
     storiesInProgress: number;
     doneThisWeek: number;
     projectCount: number;
+    // True totals for the two dashboard panels. The `awaiting` / `queue`
+    // arrays on the same response are capped at 20 rows for rendering; the
+    // greeting and the KPI tile present a GLOBAL figure, so deriving them
+    // from `array.length` silently pinned both at 20 once the workspace grew
+    // past that. Counted separately here.
+    awaitingTotal: number;
+    inMotionTotal: number;
     agentStatsByCategory: AgentStatsByCategory;
     todaysPass: TodaysPass;
     costSummary30d: ICostSummary;
@@ -97,10 +104,17 @@ export const countsService = {
                 .where('status', '=', 'ready')
                 .where('assignee_agent_id', 'is not', null)
                 .executeTakeFirst(),
+            // 2026-09-12 — counts ALL agents, not just `status='active'`.
+            // The sidenav label is bare "Agents", the badge links to /agents
+            // which lists every agent, and /queue's header counts every agent
+            // too — so an active-only badge read as "6 agents are missing".
+            // Its five siblings (projects, epics, issues, queue,
+            // notifications) all count every row; this is the odd one out.
+            // The active/paused split is still visible per-card and on the
+            // Queue page, where it has a label to explain it.
             db
                 .selectFrom('agents')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
-                .where('status', '=', 'active')
                 .executeTakeFirst(),
             db
                 .selectFrom('notifications')
@@ -132,67 +146,81 @@ export const countsService = {
             storiesInProgress,
             doneThisWeek,
             projectCount,
+            awaitingTotal,
+            inMotionTotal,
             costRow,
             terminalCostRow,
         ] = await Promise.all([
-                db
-                    .selectFrom('agents')
-                    .select(({ fn }) => fn.countAll<string>().as('n'))
-                    .where('status', '=', 'active')
-                    .executeTakeFirst(),
-                db
-                    .selectFrom('items')
-                    .select(({ fn }) => fn.countAll<string>().as('n'))
-                    .where('type', '=', 'epic')
-                    .executeTakeFirst(),
-                db
-                    .selectFrom('items')
-                    .select(({ fn }) => fn.countAll<string>().as('n'))
-                    .where('type', '=', 'story')
-                    .where('status', 'in', ['ready', 'in_progress', 'in_review'])
-                    .executeTakeFirst(),
-                db
-                    .selectFrom('items')
-                    .select(({ fn }) => fn.countAll<string>().as('n'))
-                    .where('type', '=', 'story')
-                    .where('status', '=', 'done')
-                    .where('updated_at', '>=', sevenDaysAgo)
-                    .executeTakeFirst(),
-                db
-                    .selectFrom('projects')
-                    .select(({ fn }) => fn.countAll<string>().as('n'))
-                    .executeTakeFirst(),
-                db
-                    .selectFrom('agent_runs')
-                    .select(({ fn }) => [
-                        fn.sum<string>('total_cost_usd').as('total_cost_usd'),
-                        fn.sum<string>('input_tokens').as('input_tokens'),
-                        fn.sum<string>('output_tokens').as('output_tokens'),
-                        fn.sum<string>('cache_read_tokens').as('cache_read_tokens'),
-                        fn.sum<string>('cache_creation_tokens').as('cache_creation_tokens'),
-                        fn.countAll<string>().as('run_count'),
-                    ])
-                    .where('status', '=', 'completed')
-                    .where('completed_at', '>=', monthStart)
-                    .executeTakeFirst(),
-                // Manual terminal sessions for the same period. Same
-                // status-filter discipline as /api/analytics — only
-                // sessions that closed cleanly contribute.
-                db
-                    .selectFrom('cli_sessions')
-                    .select(({ fn }) => [
-                        fn.sum<string>('total_cost_usd').as('total_cost_usd'),
-                        fn.sum<string>('input_tokens').as('input_tokens'),
-                        fn.sum<string>('output_tokens').as('output_tokens'),
-                        fn.sum<string>('cache_read_tokens').as('cache_read_tokens'),
-                        fn.sum<string>('cache_creation_tokens').as('cache_creation_tokens'),
-                        fn.countAll<string>().as('session_count'),
-                    ])
-                    .where('status', '=', 'closed')
-                    .where('closed_at', 'is not', null)
-                    .where('closed_at', '>=', monthStart)
-                    .executeTakeFirst(),
-            ]);
+            db
+                .selectFrom('agents')
+                .select(({ fn }) => fn.countAll<string>().as('n'))
+                .where('status', '=', 'active')
+                .executeTakeFirst(),
+            db
+                .selectFrom('items')
+                .select(({ fn }) => fn.countAll<string>().as('n'))
+                .where('type', '=', 'epic')
+                .executeTakeFirst(),
+            db
+                .selectFrom('items')
+                .select(({ fn }) => fn.countAll<string>().as('n'))
+                .where('type', '=', 'story')
+                .where('status', 'in', ['ready', 'in_progress', 'in_review'])
+                .executeTakeFirst(),
+            db
+                .selectFrom('items')
+                .select(({ fn }) => fn.countAll<string>().as('n'))
+                .where('type', '=', 'story')
+                .where('status', '=', 'done')
+                .where('updated_at', '>=', sevenDaysAgo)
+                .executeTakeFirst(),
+            db
+                .selectFrom('projects')
+                .select(({ fn }) => fn.countAll<string>().as('n'))
+                .executeTakeFirst(),
+            // Same predicates as getAwaitingItems / getQueueItems below,
+            // minus their display limit.
+            db
+                .selectFrom('items')
+                .select(({ fn }) => fn.countAll<string>().as('n'))
+                .where('status', 'in', ['waiting_for_info', 'in_review'])
+                .executeTakeFirst(),
+            db
+                .selectFrom('items')
+                .select(({ fn }) => fn.countAll<string>().as('n'))
+                .where('status', '=', 'in_progress')
+                .executeTakeFirst(),
+            db
+                .selectFrom('agent_runs')
+                .select(({ fn }) => [
+                    fn.sum<string>('total_cost_usd').as('total_cost_usd'),
+                    fn.sum<string>('input_tokens').as('input_tokens'),
+                    fn.sum<string>('output_tokens').as('output_tokens'),
+                    fn.sum<string>('cache_read_tokens').as('cache_read_tokens'),
+                    fn.sum<string>('cache_creation_tokens').as('cache_creation_tokens'),
+                    fn.countAll<string>().as('run_count'),
+                ])
+                .where('status', '=', 'completed')
+                .where('completed_at', '>=', monthStart)
+                .executeTakeFirst(),
+            // Manual terminal sessions for the same period. Same
+            // status-filter discipline as /api/analytics — only
+            // sessions that closed cleanly contribute.
+            db
+                .selectFrom('cli_sessions')
+                .select(({ fn }) => [
+                    fn.sum<string>('total_cost_usd').as('total_cost_usd'),
+                    fn.sum<string>('input_tokens').as('input_tokens'),
+                    fn.sum<string>('output_tokens').as('output_tokens'),
+                    fn.sum<string>('cache_read_tokens').as('cache_read_tokens'),
+                    fn.sum<string>('cache_creation_tokens').as('cache_creation_tokens'),
+                    fn.countAll<string>().as('session_count'),
+                ])
+                .where('status', '=', 'closed')
+                .where('closed_at', 'is not', null)
+                .where('closed_at', '>=', monthStart)
+                .executeTakeFirst(),
+        ]);
         const [agentStatsByCategory, todaysPass] = await Promise.all([
             this.getAgentCategoryStats(),
             this.getTodaysPass(),
@@ -206,6 +234,8 @@ export const countsService = {
             storiesInProgress: Number(storiesInProgress?.n ?? 0),
             doneThisWeek: Number(doneThisWeek?.n ?? 0),
             projectCount: Number(projectCount?.n ?? 0),
+            awaitingTotal: Number(awaitingTotal?.n ?? 0),
+            inMotionTotal: Number(inMotionTotal?.n ?? 0),
             agentStatsByCategory,
             todaysPass,
             costSummary30d: {
@@ -232,7 +262,11 @@ export const countsService = {
         const rows = await db
             .selectFrom('agent_runs as r')
             .innerJoin('agents as a', 'a.id', 'r.agent_id')
-            .select(({ fn }) => ['a.category as category', 'r.status as status', fn.countAll<string>().as('n')])
+            .select(({ fn }) => [
+                'a.category as category',
+                'r.status as status',
+                fn.countAll<string>().as('n'),
+            ])
             .where('r.status', 'in', ['queued', 'in_progress'])
             .groupBy(['a.category', 'r.status'])
             .execute();
@@ -366,10 +400,7 @@ export const countsService = {
                 .where('r.status', '=', 'completed')
                 .where('r.completed_at', '>=', projMonthStart)
                 .where((eb) =>
-                    eb.or([
-                        eb('r.project_id', '=', projectId),
-                        eb('i.project_id', '=', projectId),
-                    ]),
+                    eb.or([eb('r.project_id', '=', projectId), eb('i.project_id', '=', projectId)])
                 )
                 .executeTakeFirst(),
             // Terminal-session aggregate scoped to the same project +

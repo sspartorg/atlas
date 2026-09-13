@@ -21,7 +21,10 @@ export function DashboardPopulated({ data }: IDashboardPopulatedProps) {
     const ownerFirstName = ownerFullName.trim().split(/\s+/)[0] || 'there';
     const awaiting = data.awaiting ?? [];
     const queue = data.queue ?? [];
-    const awaitingCount = awaiting.length;
+    // `awaiting` is capped at 20 rows by the API for rendering; the greeting
+    // and the KPI tile state a global figure, so they read the true total.
+    // Falls back to the array length for an older API that doesn't send one.
+    const awaitingCount = data.kpis?.awaitingTotal ?? awaiting.length;
     const projectCount = data.kpis?.projectCount ?? 0;
     const stats = data.kpis?.agentStatsByCategory;
     const todaysPass = data.kpis?.todaysPass;
@@ -38,7 +41,7 @@ export function DashboardPopulated({ data }: IDashboardPopulatedProps) {
             />
             <Grid container spacing={6} sx={{ width: '100%', m: 0 }}>
                 <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
-                    <AwaitingYouPanel rows={awaiting} isLoading={false} />
+                    <AwaitingYouPanel rows={awaiting} isLoading={false} total={awaitingCount} />
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
                     <InMotionPanel rows={queue} agents={agents} isLoading={false} />

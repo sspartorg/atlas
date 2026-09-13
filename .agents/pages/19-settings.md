@@ -1,5 +1,9 @@
 # Settings
 
+> **2026-09-12 correction.** The profile write is `PATCH /api/settings/profile`
+> — there is **no** `PATCH /api/settings`. `routes-map.md` listed one; a probe
+> against it 404s. (`routes-map.md` also said 5 tabs; the count below is right.)
+
 **Route:** `/settings` • **Component:** `packages/web/src/pages/Settings.tsx` • **Slug:** `settings`
 
 ## Purpose
@@ -27,6 +31,8 @@ Info alert explains `.env` mirroring. Variable rows (`EnvVarRow`) show key + "RE
 
 ## Tab 3 — Model Registry (`ModelRegistryTab`)
 Three `CliCard` sections (Claude / Copilot / Ollama), rendered from `AGENT_CLIS`. Each model row: `model_name` + optional note + Remove button. Add row commits via `useCreateCliModel` (Enter key in either input triggers Add). Remove opens a confirmation dialog (`ConfirmRemoveModelDialog`); only the confirm button fires `useRemoveCliModel`. Cancel/X close without mutation.
+
+**Removal is guarded (2026-09-12).** `DELETE /api/cli-models/:id` returns `409 MODEL_IN_USE` while any installed agent OR any `marketplace_agents` catalog entry still names the `(cli, model)` pair, and the dialog now surfaces that message in a toast instead of closing silently. `agents` has a composite FK with `ON DELETE RESTRICT`, so the installed case was always blocked - by Postgres, as an opaque error. `marketplace_agents` has no FK, so removing a model that only catalog entries referenced used to succeed and then made every one of those entries permanently uninstallable (the install hit the FK as a raw 500). The dialog copy previously promised the removal was dropdown-only; it now says what actually happens.
 
 ## Tab 4 — Notifications (`NotificationsTab`)
 **External Notification Channel** — Atlas sends outbound alerts (reminder fires, agent completions, quiet-hours-respecting notifications) via a provider-agnostic abstraction. This tab is the single UI for picking the provider and filling in its credentials. The dispatcher (`packages/api/src/services/external-notifications.ts`) reads `settings.external_notification_provider` at send time and routes to the matching transport under `services/transports/`.

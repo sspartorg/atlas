@@ -232,6 +232,12 @@ Threaded comments on any issue.
 
 Fields: `id, issue_type, issue_id, author, body, created_at` â€” `issue_type` âˆˆ `epic | story | sub_task | sub_bug | bug` and `author` âˆˆ `'owner' | 'agent'` (`agent` rows include `agent_id`).
 
+**Agent attribution is resolved at write time, not read time.** There is no denormalized author name: the UI looks `agent_id` up in the agents list (`ActivityCard.tsx`) and falls back to the literal string `"Agent"` when it is null. Three writers reach `commentsService.create` - `POST /api/comments`, `POST /api/issues/:type/:id/reply`, and the MCP `update_item({action:'add_comment'})` - and only the middle one enforces `agent_id` (`ReplyToItemSchema` refines it; `CreateCommentSchema` defaults it to null). The MCP path has no bound identity at all: `resolveAgentId` reads `ATLAS_AGENT_ID`, which nothing sets and nothing usefully can, because `plugins/mcp-host.ts` serves one in-process MCP on a shared loopback port for every agent (`boundAgentId: ''`) - so identity came down to an optional tool argument the model often omitted.
+
+Since 2026-09-12 `create()` resolves a missing `agent_id` from the item's live run (`agent_runs` where `status IN ('queued','in_progress')`), which migration `003_active_run_invariant.ts` constrains to at most one row per item via a partial UNIQUE index. `create()` mirrors the resolved id into the `comment_added` event's `actor_agent_id`, so the same fix stops the activity feed attributing agent actions to the Owner. Rows written before the fix are repaired by migration `031_backfill_agent_comment_attribution.ts`; a comment with no run covering its timestamp stays null and still renders as `"Agent"` - deliberately, since guessing would put a wrong name in an audit trail.
+
+`comments_agent_id_fkey` is `ON DELETE SET NULL`, so deleting an agent still erases its name from every comment it ever wrote. A denormalized `author_name` column is the only durable answer (`counts.ts` / `routes/analytics.ts` already denormalize `a.name as agent_name` for the dashboard); not shipped - it needs a migration + backfill of its own.
+
 ### IIssueEvent (audit log)
 **Why this entity exists**: Status and assignment changes need an audit trail the UI can render alongside comments â€” otherwise the Owner sees "this is in_dev" but can't tell who moved it there or when. Structured fields (event_type, field, from_value, to_value) make events queryable and machine-renderable in a way that free-text comments can't be. Kept distinct from IComment so the activity feed can render status pills differently from quoted text.
 
@@ -289,7 +295,9 @@ Fields: `id, agent_id, issue_type, issue_id, project_id, status, started_at, end
 
 `project_id` has no FK so historical rows survive `DELETE FROM projects`. A partial index (`idx_agent_runs_project_id WHERE project_id IS NOT NULL`) keeps lookups cheap when most rows are item-attached.
 
-- `status` âˆˆ `queued | running | completed | failed | cancelled`
+- `status` ∈ `queued | in_progress | completed | error | cancelled | setup_failed` — matches `RunStatus` in `@atlas/shared` and the `agent_runs_status_check` CHECK. (The doc previously named `running` and `failed`, which have never existed, and omitted `in_progress`, `error` and `setup_failed`, which do.)
+- **The live set is `queued` + `in_progress`**, which is what the partial unique index `agent_runs_one_live_per_item` (migration `003`) constrains to one row per `item_id`. `setup_failed` sits deliberately outside it so a retry isn't blocked (see migration `005`'s header).
+- **Promotion is guarded, not unconditional.** `spawnAgentRun` flips `queued → in_progress` from a 200ms `setTimeout`, and by the time that timer fires the row may have left the live set (Owner cancelled, `failOrphanedRuns` swept it, the item was deleted) with a replacement run already holding the slot. So the UPDATE carries `WHERE status = 'queued'` and checks `numUpdatedRows`: zero rows means the run is no longer ours to start, and the runner returns instead of spawning. Without the predicate the stale row re-entered the live set behind the replacement's back and raised 23505 as an unhandled rejection — the run silently never started and the reason lived only in the API log. Regression test: `services/agent-dispatcher.integration.test.ts`, which asserts both shapes against the real index.
 
 **Two-persona columns** (migration `016_two_persona.ts`):
 - `persona` â€” `'performer' | 'reviewer'`. Defaults to `'performer'` so every existing row is valid without backfill. The runner sets `'reviewer'` on the second CLI invocation it spawns for agents with a non-empty `reviewer_prompt_md`.

@@ -19,7 +19,7 @@ Live Swagger UI at `/api/docs`; OpenAPI 3 JSON at `/api/docs/json`. This markdow
 |---|---|---|
 | GET | `/api/agents` | List all agents |
 | GET | `/api/agents/:id` | Single agent |
-| POST | `/api/agents` | Create agent (Add Agent dialog) |
+| POST | `/api/agents` | Create agent (Add Agent dialog). `400 MODEL_NOT_IN_REGISTRY` when `(cli, model)` is absent from `cli_models`; **2026-09-12** `400 ROLE_NOT_IN_CATALOG` when `role_id` is a `SdlcRole` slug with no `roles` row (`assertRoleInCatalog`) — both FKs previously surfaced as raw 500s. `role_id: null` is always valid: autonomous agents sit outside the SDLC chain. |
 | PATCH | `/api/agents/:id` | Update agent (rename, pause/resume, CLI/model/schedule/concurrency, prompt) |
 | DELETE | `/api/agents/:id` | Delete agent |
 | POST | `/api/agents/:id/duplicate` | Duplicate agent with new ID |
@@ -42,7 +42,7 @@ A08 â€” `POST /api/agents` and `PATCH /api/agents/:id` accept an optional `
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/roles` | List all 10 SDLC roles, ordered by `sort_order`. Powers the Agents page Role filter dropdown. |
+| GET | `/api/roles` | List the seeded SDLC roles, ordered by `sort_order`. **2026-09-12: this returns 5, not 10** — `po`, `architect`, `engineer`, `qa`, `automation`. `SdlcRole` in `@atlas/shared` declares ten slugs; the baseline seeds five. Powers the Agents page Role filter dropdown, which iterates `SDLC_ROLES` for its options, so the five unseeded slugs appear in the dropdown and filter to zero agents. See `role-catalog.md`. |
 | GET | `/api/roles/:id` | Single role row. `id` must be one of the `SdlcRole` slugs; otherwise 400. |
 | PATCH | `/api/roles/:id` | Owner-only (`requireMcpToken`). Body: `{ label?, description?, default_prompt_md?, default_reviewer_prompt_md? }`. Edits affect the catalog only â€” existing agents that previously copied a default into their own `prompt_md` are not retroactively updated. |
 
@@ -172,6 +172,7 @@ In-memory client registry (`Set<(SSEEvent) => void>` in `routes/events.ts:5`). D
 | POST | `/api/run` | Spawn an agent on an issue |
 | GET | `/api/run/:id` | Single run. While the run is in-flight, `output_text` reflects the in-memory accumulator (fresher than the DB row, which only flushes every 10s). Optional `?since=<bytes>` returns only the tail past that byte offset â€” used by the web run-detail page after an SSE reconnect to fill the output gap. Bogus/non-integer values fall through to the full string. |
 | GET | `/api/run?issue_type=â€¦&issue_id=â€¦&project_id=â€¦&limit=â€¦` | List runs. `project_id` joins through `items.project_id` so the Project Detail History tab can pull every run that touched any item in the project (epic / story / bug / sub-task / sub-bug) in one query. Also used by Queue and Agent Detail Runs tab. **List-mode projection (2026-05-30):** `prompt_snapshot` is returned as `NULL` and `output_text` is truncated to head 100 + tail 300 chars (with an `â€¦[elided]â€¦` separator when shortened). The detail endpoint `GET /api/run/:id` still returns the full payload. Cut the Queue / Agents `?limit=500` body from ~1.8 MB to ~6 KB; `GET /api/agents/:id/runs` uses the same projection. Max `limit` is now 500 (was 200). |
+| GET | `/api/run?issue_type=…&issue_id=…&project_id=…&agent_id=…&limit=…` | **2026-09-12 — `agent_id` and `issue_type` now actually filter.** Both were in the accepted query shape and applied to nothing: `?agent_id=x` returned every run in the workspace, including for an agent with zero runs. Nothing user-facing broke (the Agent Detail Runs tab uses the dedicated `GET /api/agents/:id/runs`), but the params read as supported — `api.ts::run.list` sends `issue_type` and `routes-map.md` documented `?agent_id=`. For a single agent's history prefer `GET /api/agents/:id/runs`. |
 | PATCH | `/api/run/:id/review` | Two-persona model â€” reviewer persona writes its outcome (`pass` / `fail` / `needs_info` + optional `reason`) before exit. Validated by `SubmitReviewSchema` in `@atlas/shared`. Returns 400 if the run isn't persona='reviewer'. The runner reads `review_outcome` after the reviewer CLI exits to pick the next routing step. |
 
 ### `routes/settings.ts`
@@ -190,13 +191,14 @@ In-memory client registry (`Set<(SSEEvent) => void>` in `routes/events.ts:5`). D
 | POST | `/api/settings/reset` | **Destructive.** Drop all data and return to onboarding. Wipes: `comments`, `notifications`, `agent_runs`, `items`, `projects`, `retired_prefixes` (after projects so the BEFORE-DELETE trigger that retires prefixes doesn't keep them blocked), `credentials`, `agent_handoff_rules`, `agent_checklists`, `agents` (cascades to `agent_memory` + `agent_prompt_versions`). Preserved: reference seed data (`cli_models`, `tool_catalog`, `guardrail_rules`). Resets the `settings` singleton to defaults. |
 
 ### `routes/credentials.ts`
-**Why this group exists**: Git credentials are secrets that must never round-trip plaintext through a list response, so the GET deliberately omits the token (only fingerprint + metadata leaves the server). Create validates the token against the host before persisting to catch typos at write time rather than at clone time. The PATCH semantic of "blank token = keep existing" lets the Owner rotate labels or scopes without re-typing secrets.
+**Why this group exists**: Git credentials are secrets that must never round-trip plaintext through a list response, so the GET deliberately omits the token (only fingerprint + metadata leaves the server). Create validates the token against the host before persisting to catch typos at write time rather than at clone time. The PATCH semantic of "blank token = keep existing" lets the Owner rotate labels or scopes without re-typing secrets. Reading a stored token back is a separate, gated, audited call — not something a list render can do by accident.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/credentials` | List (no plaintext tokens) |
+| GET | `/api/credentials` | List. `token_encrypted` is nulled by `stripSecretsForApi`; `token_fingerprint` (prefix + mask + last 4) IS returned — it is the Credentials table's disambiguation column, and nulling it left that column, the saved-view detail and "Copy fingerprint" permanently blank. |
+| GET | `/api/credentials/:id/token` | **2026-09-12.** On-demand plaintext for one stored PAT. `preHandler: requireMcpToken`; logs `{tag:'secret_reveal', scope:'credential'}`. `400` for a `github_app` row (its token is an ephemeral minted installation token — revealing it hands out a credential that outlives the click and tells the Owner nothing). Powers the eye icon in `CredentialModal`, which previously toggled the input `type` over a field nothing ever hydrated. Mirrors `GET /api/environment-secrets/:key/value`. |
 | POST | `/api/credentials` | Create (validates token against host, encrypts at rest) |
-| PATCH | `/api/credentials/:id` | Update (token optional â€” blank keeps existing) |
+| PATCH | `/api/credentials/:id` | Update (token optional — blank keeps existing) |
 | DELETE | `/api/credentials/:id` | Delete |
 
 ### `routes/schedules.ts` â€” Project auto-fetch
@@ -275,7 +277,7 @@ Registered Croner jobs live in `services/schedule-registry.ts` (boot on startup,
 |---|---|---|
 | GET | `/api/marketplace/agents?limit=â€¦` | List catalog entries (sort_order) |
 | GET | `/api/marketplace/agents/:id` | Single catalog entry (composite) |
-| POST | `/api/marketplace/agents/:id/install` | Install a marketplace agent into the workspace |
+| POST | `/api/marketplace/agents/:id/install` | Install a marketplace agent into the workspace. `409 {details:{code:'SLUG_TAKEN', suggested_id}}` when the local slug is taken. **2026-09-12:** `400 {code:'MODEL_NOT_IN_REGISTRY'}` when the catalog entry names a `(cli, model)` pair absent from `cli_models` — `install` now calls `assertModelInRegistry` (exported from `services/agents.ts`) before the transaction. `agents` carries a composite FK on `(cli, model)` that `marketplace_agents` does not, so a pruned registry row previously surfaced as an opaque FK `500` and the bulk-install bar could only report "N couldn't be added". `marketplaceService.importBundle` (behind `POST /api/agents/import`) got the same guard — identical hole. |
 | POST | `/api/agents/import` | Upload a zipped agent bundle (multipart). Token-gated. |
 | GET | `/api/agents/:id/export` | Download the active agent as a zip |
 | POST | `/api/agents/:id/detach` | Detach from marketplace source (`marketplace_source_id` â†’ NULL) |
@@ -332,7 +334,7 @@ Agent updates (`services/agents.ts`) recompute `next_run_at` whenever `status` o
 |---|---|---|
 | GET | `/api/cli-models` | List registered models per CLI |
 | POST | `/api/cli-models` | Register new model (Add row in Model Registry tab) |
-| DELETE | `/api/cli-models/:id` | Remove |
+| DELETE | `/api/cli-models/:id` | Remove. **2026-09-12:** refuses with `409 {details:{code:'MODEL_IN_USE', agents, marketplace_agents}}` while any `agents` OR `marketplace_agents` row still names the `(cli, model)` pair. `agents` has a composite FK with ON DELETE RESTRICT so Postgres already blocked the installed-agent case; `marketplace_agents` has no FK, so removing a model only catalog entries referenced used to succeed silently and then make those entries permanently uninstallable. |
 
 ### `routes/tool-catalog.ts`
 **Why this group exists**: Read-only directory of every Atlas MCP tool the server exposes. Owner-facing for discoverability; no enforcement attached (per-agent allowlists were dropped 2026-05-27 â€” spawned CLIs inherit Owner's user-level MCP config wholesale).
@@ -417,7 +419,7 @@ All events flow through `/api/events`. The web subscribes via `useSSE()`. SSE is
 | `run_queued` | agent-runner.ts (after `INSERT INTO agent_runs`) | a new run row was created in `queued` state |
 | `run_completed` / `run_error` | agent-runner.ts | terminal run state |
 | **Data mutations (push replaces polling)** | | |
-| `counts_changed` | services/stories, issues, epics on create/transition/assign/delete; notifications on create/markAllRead; agent-runner on run queue | any DB mutation that could affect sidenav badges or dashboard KPIs |
+| `counts_changed` | services/stories, issues, epics, **agents**, **projects** on create/update/transition/assign/delete; notifications on create/markAllRead; agent-runner on run queue; routes/marketplace on install | any DB mutation that could affect sidenav badges or dashboard KPIs |
 | `notification_created` | services/notifications.ts:create() | a new notification row was inserted |
 | `notification_updated` | services/notifications.ts:updateExternalStatus, markAllRead | external notification delivery status changed or read state flipped |
 | **Project ops** | | |
@@ -442,7 +444,7 @@ All events flow through `/api/events`. The web subscribes via `useSSE()`. SSE is
 | `agent_status` | `['agents']`, `['runs']`, `['agents', agentId, 'runs']` |
 | `run_queued` | `['runs']`, `['dashboard']`, `['sidenav-counts']`, `['agents', agentId, 'runs']` |
 | `clone_completed` | `['projects']`, `['sidenav-counts']` |
-| `counts_changed` | `['sidenav-counts']`, `['dashboard']` |
+| `counts_changed` | `['sidenav-counts']`, `['dashboard']`, `['epics']`, `['stories']`, `['bugs']`, `['issues']`, `['agents']`, `['projects']` — every list whose count this event reports |
 | `notification_created` | `['notifications']`, `['sidenav-counts']`, `['dashboard']` |
 | `notification_updated` | `['notifications']`, `['sidenav-counts']` |
 | `memory_regenerated` (Theme 08) | `['agents', agentId, 'memory']`, `['agent-memory-history', agentId]` |
@@ -575,6 +577,7 @@ The intentionally **unexposed** surfaces:
 | `028_history_pruned_event.ts` | **2026-07-03 audit round 2** (renumbered from 027 in round-3 rebase to avoid collision with upstream `027_cli_session_subagents.ts`). Extends the `issue_events.event_type` CHECK constraint to include `history_pruned`. Emitted by `services/history-prune.ts` inside the same transaction as the bulk DELETE so the destructive `POST /api/issues/:type/:id/history/prune` operation stays traceable (was previously undetectable after commit — the very issue_events rows that would record it were what got wiped). Reversible: `down()` deletes any rows carrying the new type before shrinking the allow-list. |
 | `029_ollama_cli.ts` | **Third CLI option.** Widens the `cli` CHECK constraint on `agents`, `cli_models`, `marketplace_agents` (all from the squashed baseline) and `cli_sessions` (from 017) to allow `ollama`, then seeds three `cli_models` rows for it (`qwen3.5`, `kimi-k2.7-code:cloud`, `gemma4:cloud`). `qwen3.5` is required, not decorative — it is `DEFAULT_MODEL_BY_CLI.ollama`, and the composite FK `agents (cli, model) → cli_models (cli, model_name)` would reject the default without it. Reversible: `down()` moves any `ollama` agents back to `claude` + `claude-opus-4-7` (rewriting both columns together, since the FK is composite), deletes `ollama` sessions and model rows, then shrinks all four CHECKs. |
 | `030_standalone_cli_sessions.ts` | **Standalone terminals.** Drops NOT NULL on `cli_sessions.project_id` (the FK and its ON DELETE CASCADE stay — a nullable FK is still enforced when non-null) and adds `credential_id text REFERENCES credentials(id) ON DELETE SET NULL`. SET NULL, not CASCADE: deleting a credential must not delete the audit trail and cost numbers of every session that used it — the session just loses auth on the next resume, surfacing as an ordinary push failure. No index work needed; `cli_sessions_one_active_per_project_branch` is already scoped `WHERE ... AND worktree_branch IS NOT NULL`, and standalone rows carry a null branch. Reversible with one caveat: `down()` must `DELETE FROM cli_sessions WHERE project_id IS NULL` first, since those rows have no project to fall back to — they are exactly the rows this migration made representable, and the folders they point at are the Owner's own directories, untouched by anything Atlas does. |
+| `031_backfill_agent_comment_attribution.ts` | **Data repair, 2026-09-12.** Backfills `comments.agent_id` and `issue_events.actor_agent_id` on agent-authored rows written with a null author. Attribution rule: repair only when EXACTLY ONE distinct agent had a run open on that item at the row's `created_at` (`started_at <= created_at <= COALESCE(completed_at, now())`); ambiguous and unmatched rows stay null, because a wrong name in an audit trail is worse than a missing one. `down()` is a deliberate no-op — a backfilled value is indistinguishable from one the runner wrote correctly, so rolling back would destroy good attribution. |
 | `001_baseline.sql` | Full schema (all tables, indexes, triggers, enums, functions) + reference-data inserts for `cli_models` (16 rows), `roles` (5 rows), `guardrail_rules` (23 rows), and the `settings` singleton (defaults only â€” no Owner PII). Generated by applying every historical migration to a clean Postgres DB and dumping the result via `pg_dump --schema-only --no-owner --no-acl --exclude-table='_knex_migrations*'`, then appending `pg_dump --data-only --inserts -t cli_models -t roles -t guardrail_rules`. |
 
 **Regenerating the baseline.** When the schema changes via a new numbered migration (002, 003, â€¦), the baseline does NOT need re-dumping â€” knex tracks each migration independently in `_knex_migrations`. The baseline is only regenerated if we ever decide to re-squash; in that case, apply every migration to a clean DB, dump as above, strip the two `\restrict`/`\unrestrict` psql meta-commands, drop the `SELECT pg_catalog.set_config('search_path', '', false)` line (it would strip the public schema mid-migration and break knex's post-migration insert into `_knex_migrations`), and replace `001_baseline.sql`.

@@ -10,6 +10,7 @@ import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { AgentCardMenu, type AgentCardMenuActions } from './AgentCardMenu.js';
 import { LiveDot } from '../../components/LiveDot.js';
+import { resolveAgentStatusLabel } from '../queue/queueViewModel.js';
 import {
     agentSubtitle,
     relativeTime,
@@ -77,7 +78,12 @@ export const AgentHero = memo(function AgentHero({
     }
 
     const isPaused = agent.status === 'inactive';
-    const statusLabel = isPaused ? 'Paused' : stats.queueDepth > 0 ? 'Queued' : 'Running';
+    const statusLabel = resolveAgentStatusLabel(
+        agent.status,
+        stats.runningCount,
+        stats.queuedCount,
+        stats.lastRunErrored
+    );
     // Use the semantic slots (`success`, `warning`) — Mercury collapses
     // `green` and `gold` to brand-accent (black/white) so they can't carry
     // a live/queued signal.

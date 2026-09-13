@@ -13,6 +13,7 @@ import {
 } from '../pages/agents/agentViewModel.js';
 import { formatCostUsd } from '../utils/formatCost.js';
 import { LiveDot } from './LiveDot.js';
+import { resolveAgentStatusLabel } from '../pages/queue/queueViewModel.js';
 
 interface Props {
     agent: IAgent;
@@ -53,7 +54,13 @@ export function AgentCard({
     const stats = useMemo(() => getRuntimeStats(runs), [runs]);
 
     const isPaused = agent.status === 'inactive';
-    const statusLabel = isPaused ? 'Idle' : stats.queueDepth > 0 ? 'Queued' : 'Running';
+    // One definition, shared with the Queue page and the Agent Detail hero.
+    const statusLabel = resolveAgentStatusLabel(
+        agent.status,
+        stats.runningCount,
+        stats.queuedCount,
+        stats.lastRunErrored
+    );
     // Mercury collapses brand-hue slots (`green`, `gold`) to neutral accent —
     // black in light / white in dark — so they can't carry semantic meaning.
     // The live-state indicator needs the functional success/warning slots,

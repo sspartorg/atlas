@@ -17,11 +17,7 @@ import {
 import { db } from '../db/kysely-client.js';
 import { ApiError } from '../utils/errors.js';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
-import {
-    RUNNABLE_ISSUE_TYPES,
-    type ApiErrorBody,
-    type IssueType,
-} from '@atlas/shared';
+import { RUNNABLE_ISSUE_TYPES, type ApiErrorBody, type IssueType } from '@atlas/shared';
 
 // List-mode projection for `output_text`: keep the head (so the
 // `[SIMULATED…]` marker that `isSimulatedRun` looks for survives) plus
@@ -54,7 +50,7 @@ export async function runRoutes(app: FastifyInstance) {
             throw new ApiError(
                 'validation_error',
                 `issue_type must be one of: ${RUNNABLE_ISSUE_TYPES.join(', ')}`,
-                400,
+                400
             );
         }
 
@@ -64,8 +60,7 @@ export async function runRoutes(app: FastifyInstance) {
             .where('id', '=', agent_id)
             .executeTakeFirst();
         if (!agent) throw new ApiError('not_found', 'Agent not found', 404);
-        if (agent.status !== 'active')
-            throw new ApiError('conflict', 'Agent is not active', 400);
+        if (agent.status !== 'active') throw new ApiError('conflict', 'Agent is not active', 400);
 
         // Freedom-mode agents (`requires_item = false`) can be launched with
         // no item — runner spawns with null item params and the prompt
@@ -75,7 +70,7 @@ export async function runRoutes(app: FastifyInstance) {
             throw new ApiError(
                 'validation_error',
                 'issue_type and issue_id are required for item-driven agents',
-                400,
+                400
             );
         }
 
@@ -90,7 +85,7 @@ export async function runRoutes(app: FastifyInstance) {
                 throw new ApiError(
                     'conflict',
                     `Item ${issue_id} already has an active run by ${blocker.agentId} (run ${blocker.runId}). Wait for it to finish before triggering a new run.`,
-                    409,
+                    409
                 );
             }
         }
@@ -159,7 +154,7 @@ export async function runRoutes(app: FastifyInstance) {
                 throw new ApiError(
                     'conflict',
                     `Item ${issue_id} already has an active run (race-blocked at DB invariant).`,
-                    409,
+                    409
                 );
             }
             // Log the raw error server-side (with any DB shape / connection
@@ -210,7 +205,10 @@ export async function runRoutes(app: FastifyInstance) {
                         .execute();
                 } catch (updateErr) {
                     /* v8 ignore next */
-                    req.log.error({ err: updateErr, runId }, 'spawn-failed: could not mark row as error');
+                    req.log.error(
+                        { err: updateErr, runId },
+                        'spawn-failed: could not mark row as error'
+                    );
                 }
             });
         });
@@ -234,6 +232,18 @@ export async function runRoutes(app: FastifyInstance) {
                 'r.prompt_snapshot as prompt_snapshot',
                 'r.output_text as output_text',
                 'r.setup_output_text as setup_output_text',
+                // 2026-09-12 — these four were mapped by `asAgentRun` but never
+                // SELECTed here, so they always came back null. That made a
+                // pre-spawn failure completely invisible: the route writes the
+                // reason to `outcome_summary` (worktree provisioning, deps not
+                // ready, live-run conflict), the DB row has it, and the API
+                // dropped it — leaving the Run Detail page showing "Error" with
+                // an empty output pane and nothing to explain it.
+                'r.outcome_kind as outcome_kind',
+                'r.outcome_summary as outcome_summary',
+                'r.outcome_reason as outcome_reason',
+                'r.outcome_checklist as outcome_checklist',
+                'r.parent_run_id as parent_run_id',
                 'r.started_at as started_at',
                 'r.completed_at as completed_at',
                 'r.created_at as created_at',
@@ -268,9 +278,7 @@ export async function runRoutes(app: FastifyInstance) {
         }
 
         const enriched = { ...row, output_text: sliced };
-        return reply.send(
-            asAgentRun(enriched as never, (row.item_type as IssueType) ?? 'story'),
-        );
+        return reply.send(asAgentRun(enriched as never, (row.item_type as IssueType) ?? 'story'));
     });
 
     // P9 — Delete-a-run + item unstick. When a run is left hung (CLI
@@ -384,9 +392,7 @@ export async function runRoutes(app: FastifyInstance) {
         // gracefully when the runId isn't in the live-children
         // registry (queued-but-not-spawned, or already exited).
         const kill = await cancelRun(id).catch((err) => {
-            console.warn(
-                `[run-stop] cancelRun(${id}) threw: ${(err as Error).message}`,
-            );
+            console.warn(`[run-stop] cancelRun(${id}) threw: ${(err as Error).message}`);
             return { cancelled: false, pidKilled: null };
         });
 
@@ -407,11 +413,7 @@ export async function runRoutes(app: FastifyInstance) {
             .executeTakeFirst();
         /* v8 ignore next */
         const finalStatus = (after?.status ?? 'cancelled') as
-            | 'queued'
-            | 'in_progress'
-            | 'completed'
-            | 'error'
-            | 'cancelled';
+            'queued' | 'in_progress' | 'completed' | 'error' | 'cancelled';
 
         broadcastSSE({
             type: 'run_completed',
@@ -429,10 +431,11 @@ export async function runRoutes(app: FastifyInstance) {
     });
 
     app.get('/api/run', async (req, reply) => {
-        const { issue_id, project_id, limit } = req.query as {
+        const { issue_type, issue_id, project_id, agent_id, limit } = req.query as {
             issue_type?: string;
             issue_id?: string;
             project_id?: string;
+            agent_id?: string;
             limit?: string;
         };
         // The previous ceiling was 200; bumping to 500 to match the Queue /
@@ -467,6 +470,16 @@ export async function runRoutes(app: FastifyInstance) {
                 'r.credits as credits',
             ]);
         if (issue_id) q = q.where('r.item_id', '=', issue_id);
+        // 2026-09-12: `agent_id` and `issue_type` were in the accepted query
+        // shape but never applied — `?agent_id=anything` returned every run in
+        // the workspace, including for agents with none. `routes-map.md`
+        // documented the agent filter and `api.ts::run.list` sends
+        // `issue_type`, so both read as supported. A filter that silently
+        // doesn't filter is worse than no filter. (The Agent Detail Runs tab
+        // uses the dedicated `GET /api/agents/:id/runs`, which always
+        // filtered correctly — so nothing user-facing was wrong.)
+        if (agent_id) q = q.where('r.agent_id', '=', agent_id);
+        if (issue_type) q = q.where('i.type', '=', issue_type as IssueType);
         // Filter by project via the existing items join — picks up runs
         // against any item in the project regardless of level (epic /
         // story / bug / sub-task / sub-bug), so the Project History tab
@@ -475,7 +488,9 @@ export async function runRoutes(app: FastifyInstance) {
         if (project_id) q = q.where('i.project_id', '=', project_id);
         const rows = await q.orderBy('r.created_at', 'desc').limit(n).execute();
         /* v8 ignore next */
-        return reply.send(rows.map((r) => asAgentRun(r as never, (r.item_type as IssueType) ?? 'story')));
+        return reply.send(
+            rows.map((r) => asAgentRun(r as never, (r.item_type as IssueType) ?? 'story'))
+        );
     });
 
     // Task 12 — the `/review` and `/performer-done` routes are gone.

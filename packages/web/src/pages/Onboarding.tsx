@@ -472,6 +472,7 @@ export function Onboarding() {
                                 <Box>
                                     <StaticFieldLabel>Workspace folder</StaticFieldLabel>
                                     <FolderPicker
+                                        ariaLabel="Workspace folder"
                                         value={workspacePath}
                                         onChange={handleWorkspacePathChange}
                                         placeholder={WORKSPACE_PLACEHOLDER}

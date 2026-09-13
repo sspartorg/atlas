@@ -111,6 +111,45 @@ const TRUNCATE_TABLES = [
  * Wipes every test-mutable table in dependency order. Settings is kept
  * (single-row, schema-managed). Call from `beforeEach` to isolate tests.
  */
+// `cli_models` is reference data inserted by `001_baseline.sql`, NOT part of
+// TRUNCATE_TABLES — so nothing restores it once a test wipes it. Two files
+// (`routes/cli-models.test.ts`, `services/cli-models.test.ts`) TRUNCATE it in
+// their own beforeEach to assert on an empty registry, and every file that ran
+// after them inherited the hole. That made the suite order-dependent: `agents`
+// carries a composite FK on `(cli, model)` -> `cli_models`, so any later test
+// installing a catalog agent whose model had been wiped failed with an FK
+// violation (and, since the 2026-09-12 install guard, a ModelNotInRegistryError
+// instead — same cause, clearer message).
+//
+// truncateAll() restores the registry so every file starts from the same
+// reference state. The two files that WANT it empty truncate after calling
+// truncateAll(), so they are unaffected.
+async function reseedCliModels(): Promise<void> {
+    const db = getTestDb();
+    await db
+        .insertInto('cli_models')
+        .values([
+            { id: 'seed-claude-opus-4-7', cli: 'claude', model_name: 'claude-opus-4-7', note: 'Strongest reasoning.', sort_order: 1 },
+            { id: 'seed-claude-opus-4-7-1m', cli: 'claude', model_name: 'claude-opus-4-7[1m]', note: 'Opus 4.7 with 1M context.', sort_order: 2 },
+            { id: 'seed-claude-opus-4-6', cli: 'claude', model_name: 'claude-opus-4-6', note: 'Previous-gen Opus.', sort_order: 3 },
+            { id: 'seed-claude-sonnet-4-6', cli: 'claude', model_name: 'claude-sonnet-4-6', note: 'Default Sonnet.', sort_order: 4 },
+            { id: 'seed-claude-haiku', cli: 'claude', model_name: 'haiku', note: 'Cheapest and fastest.', sort_order: 5 },
+            { id: 'seed-copilot-sonnet-4-6', cli: 'copilot', model_name: 'claude-sonnet-4.6', note: 'Balanced.', sort_order: 1 },
+            { id: 'seed-copilot-sonnet-4-5', cli: 'copilot', model_name: 'claude-sonnet-4.5', note: 'Older Sonnet.', sort_order: 2 },
+            { id: 'seed-copilot-haiku-4-5', cli: 'copilot', model_name: 'claude-haiku-4.5', note: 'Lightweight Claude.', sort_order: 3 },
+            { id: 'seed-copilot-opus-4-6', cli: 'copilot', model_name: 'claude-opus-4.6', note: 'High capability.', sort_order: 4 },
+            { id: 'seed-copilot-opus-4-5', cli: 'copilot', model_name: 'claude-opus-4.5', note: 'Older Opus.', sort_order: 5 },
+            { id: 'seed-copilot-gpt-5-4', cli: 'copilot', model_name: 'gpt-5.4', note: 'Strong general reasoning.', sort_order: 6 },
+            { id: 'seed-copilot-gpt-5-3-codex', cli: 'copilot', model_name: 'gpt-5.3-codex', note: 'Code-tuned.', sort_order: 7 },
+            { id: 'seed-copilot-gpt-5-4-mini', cli: 'copilot', model_name: 'gpt-5.4-mini', note: 'Cheap GPT-5.', sort_order: 8 },
+            { id: 'seed-copilot-gpt-4-1', cli: 'copilot', model_name: 'gpt-4.1', note: 'Older GPT.', sort_order: 9 },
+            { id: 'seed-copilot-opus-4-7', cli: 'copilot', model_name: 'claude-opus-4.7', note: 'Latest-gen Opus.', sort_order: 10 },
+            { id: 'seed-copilot-gpt-5-2', cli: 'copilot', model_name: 'gpt-5.2', note: 'GPT-5 mid-tier.', sort_order: 11 },
+        ])
+        .onConflict((oc) => oc.columns(['cli', 'model_name']).doNothing())
+        .execute();
+}
+
 export async function truncateAll(): Promise<void> {
     const db = getTestDb();
     // One statement, RESTART IDENTITY resets serial counters, CASCADE handles
@@ -132,4 +171,6 @@ export async function truncateAll(): Promise<void> {
             external_notification_last_test_ok=NULL, external_notification_endpoint_label=NULL
         WHERE id=1
     `.execute(db);
+    // Reference data, not test data — see reseedCliModels above.
+    await reseedCliModels();
 }

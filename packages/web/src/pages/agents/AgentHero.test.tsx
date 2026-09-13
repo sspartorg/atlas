@@ -221,7 +221,7 @@ describe('AgentHero', () => {
             <AgentHero
                 agent={makeAgent({ status: 'active' })}
                 view={makeView()}
-                stats={{ ...makeStats(), queueDepth: 2, lastRunAt: new Date().toISOString() }}
+                stats={{ ...makeStats(), queueDepth: 2, queuedCount: 2, lastRunAt: new Date().toISOString() }}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}

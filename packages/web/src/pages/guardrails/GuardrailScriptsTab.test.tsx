@@ -116,9 +116,15 @@ describe('GuardrailScriptsTab', () => {
         await waitFor(() => expect(screen.getByText('No scripts yet')).toBeInTheDocument());
         // Click opens modal in add mode (exercises openAdd arrow function)
         fireEvent.click(screen.getByRole('button', { name: 'Add script' }));
-        await waitFor(() => expect(screen.getByText('Add script', { selector: 'h6' })).toBeInTheDocument());
-        // Modal opened successfully — exercises setEditing(null) + setModalOpen(true)
-        expect(screen.queryAllByRole('dialog').length).toBeGreaterThan(0);
+        // 2026-09-12 — was `getByText('Add script', { selector: 'h6' })`. The
+        // h6 only existed because ScriptModal nested a Typography h6 inside
+        // MuiDialogTitle's h2, which is invalid HTML and made React warn on
+        // every render. The tag was never the point: what this test cares
+        // about is that the modal opened in ADD mode, not edit mode. Assert
+        // that instead, so the fix to the markup doesn't read as a break.
+        const dialog = await screen.findByRole('dialog');
+        expect(dialog).toHaveTextContent('Add script');
+        expect(dialog).not.toHaveTextContent('Edit script');
     });
 
     it('exercises handleDelete via script card edit modal delete action', async () => {

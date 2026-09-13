@@ -16,6 +16,7 @@ import { useSetPageTitle } from '../components/shell/index.js';
 import { RunEventViewer } from '../components/RunEventViewer.js';
 import { AiUsagePanel } from '../components/AiUsagePanel.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
+import { formatAbsolute } from '../utils/time.js';
 
 const STATUS_COLOUR: Record<CliSessionStatus, 'success' | 'warning' | 'default' | 'error'> = {
     active: 'success',
@@ -127,11 +128,11 @@ export function TerminalHistory() {
             >
                 <MetaField label="Branch" value={session.worktree_branch ?? '—'} />
                 <MetaField label="Model" value={session.model} />
-                <MetaField label="Closed at" value={session.closed_at ?? '—'} mono />
+                <MetaField label="Closed at" value={formatAbsolute(session.closed_at)} mono />
                 {transcriptQuery.data?.ingested_at ? (
                     <MetaField
                         label="Transcript captured"
-                        value={transcriptQuery.data.ingested_at}
+                        value={formatAbsolute(transcriptQuery.data.ingested_at)}
                         mono
                     />
                 ) : null}

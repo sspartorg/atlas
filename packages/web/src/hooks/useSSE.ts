@@ -134,6 +134,13 @@ export function useSSE() {
                 // from a detail page only show up on /issues after the 30s
                 // staleTime expires or the tab regains focus.
                 void queryClient.invalidateQueries({ queryKey: ['issues'] });
+                // The same event reports the `agents` and `projects` badge
+                // counts, but neither list query was invalidated — so a
+                // marketplace install (which broadcasts this) left an open
+                // /agents page showing the pre-install set while the badge
+                // next to it moved. That reads as "the agent wasn't added".
+                void queryClient.invalidateQueries({ queryKey: ['agents'] });
+                void queryClient.invalidateQueries({ queryKey: ['projects'] });
             }
             if (event.type === 'notification_created') {
                 void queryClient.invalidateQueries({ queryKey: ['notifications'] });

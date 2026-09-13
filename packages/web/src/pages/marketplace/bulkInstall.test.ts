@@ -23,10 +23,16 @@ describe('runBulkInstall', () => {
             if (id === 'agent-bad') throw new Error('boom');
         };
 
-        const result = await runBulkInstall(['agent-coder', 'agent-bad', 'agent-architect'], install);
+        const result = await runBulkInstall(
+            ['agent-coder', 'agent-bad', 'agent-architect'],
+            install
+        );
 
         expect(result.succeeded).toEqual(['agent-coder', 'agent-architect']);
-        expect(result.failed).toEqual(['agent-bad']);
+        // The reason has to survive — reporting a bare count is what made a
+        // real install failure (a pruned cli_models row tripping
+        // agents_cli_model_fk) undiagnosable from the UI.
+        expect(result.failed).toEqual([{ id: 'agent-bad', status: null, reason: 'boom' }]);
     });
 
     it('retries a SLUG_TAKEN id once under the server-suggested slug', async () => {
@@ -59,7 +65,7 @@ describe('runBulkInstall', () => {
         const result = await runBulkInstall(['agent-coder'], install);
 
         expect(result.succeeded).toEqual([]);
-        expect(result.failed).toEqual(['agent-coder']);
+        expect(result.failed).toEqual([{ id: 'agent-coder', status: null, reason: 'still taken' }]);
     });
 
     it('returns empty outcome for an empty selection', async () => {
@@ -72,5 +78,23 @@ describe('runBulkInstall', () => {
 
         expect(result).toEqual({ succeeded: [], failed: [] });
         expect(called).toBe(false);
+    });
+
+    it('carries the HTTP status and server message off an AtlasApiError-shaped rejection', async () => {
+        const install = async () => {
+            throw Object.assign(new Error("model 'haiku' is not in the cli_models registry"), {
+                status: 400,
+            });
+        };
+
+        const result = await runBulkInstall(['agent-jira-to-epic'], install);
+
+        expect(result.failed).toEqual([
+            {
+                id: 'agent-jira-to-epic',
+                status: 400,
+                reason: "model 'haiku' is not in the cli_models registry",
+            },
+        ]);
     });
 });

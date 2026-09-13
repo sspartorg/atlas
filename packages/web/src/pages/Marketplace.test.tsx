@@ -40,8 +40,11 @@ describe('Marketplace page', () => {
     it('renders agent cards from the catalog', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents`, () =>
-                HttpResponse.json([makeSummary(), makeSummary({ id: 'agent-reviewer', name: 'Reviewer' })]),
-            ),
+                HttpResponse.json([
+                    makeSummary(),
+                    makeSummary({ id: 'agent-reviewer', name: 'Reviewer' }),
+                ])
+            )
         );
         renderWithProviders(<Marketplace />);
         await waitFor(() => {
@@ -60,8 +63,8 @@ describe('Marketplace page', () => {
                         installed_version: 2,
                         upgrade_available: true,
                     }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Marketplace />);
         await waitFor(() => {
@@ -84,7 +87,7 @@ describe('Marketplace page', () => {
                     ]);
                 }
                 return HttpResponse.json([makeSummary()]);
-            }),
+            })
         );
         renderWithProviders(<Marketplace />);
         await waitFor(() => {
@@ -103,12 +106,12 @@ describe('Marketplace page', () => {
                 HttpResponse.json([
                     makeSummary({ id: 'agent-coder', name: 'Coder' }),
                     makeSummary({ id: 'agent-architect', name: 'Architect' }),
-                ]),
+                ])
             ),
             http.post(`${BASE}/marketplace/agents/:id/install`, ({ params }) => {
                 installed.push(params['id'] as string);
                 return HttpResponse.json({ id: params['id'] }, { status: 201 });
-            }),
+            })
         );
 
         renderWithProviders(
@@ -116,7 +119,7 @@ describe('Marketplace page', () => {
                 <Route path="/" element={<Marketplace />} />
                 <Route path="/agents" element={<div>Agents Page</div>} />
             </Routes>,
-            { initialEntries: ['/'] },
+            { initialEntries: ['/'] }
         );
         await waitFor(() => expect(screen.getByText('Coder')).toBeInTheDocument());
 
@@ -145,8 +148,8 @@ describe('Marketplace page', () => {
                         installed_agent_id: 'agent-qa',
                         installed_version: 3,
                     }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Marketplace />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeInTheDocument());
@@ -161,16 +164,14 @@ describe('Marketplace page', () => {
         expect(screen.getByText(/2 selected/i)).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: /clear/i }));
-        await waitFor(() =>
-            expect(screen.queryByText(/selected/i)).not.toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.queryByText(/selected/i)).not.toBeInTheDocument());
     });
 
     it('renders error state when marketplace fetch fails', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents`, () =>
-                HttpResponse.json({ message: 'Internal Server Error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ message: 'Internal Server Error' }, { status: 500 })
+            )
         );
         renderWithProviders(<Marketplace />);
         await waitFor(() => {
@@ -185,7 +186,7 @@ describe('Marketplace page', () => {
                 const cat = url.searchParams.get('category');
                 if (cat === 'content') return HttpResponse.json([]);
                 return HttpResponse.json([makeSummary()]);
-            }),
+            })
         );
         renderWithProviders(<Marketplace />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeInTheDocument());
@@ -206,8 +207,8 @@ describe('Marketplace page', () => {
                         upgrade_available: true,
                     }),
                     makeSummary({ id: 'agent-b', name: 'Agent B', is_installed: false }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Marketplace />);
         await waitFor(() => {
@@ -234,8 +235,8 @@ describe('Marketplace page', () => {
                         installed_version: 1,
                         upgrade_available: true,
                     }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Marketplace />);
         await waitFor(() => {
@@ -247,21 +248,22 @@ describe('Marketplace page', () => {
         let installAttempted = false;
         server.use(
             http.get(`${BASE}/marketplace/agents`, () =>
-                HttpResponse.json([
-                    makeSummary({ id: 'agent-coder', name: 'Coder' }),
-                ]),
+                HttpResponse.json([makeSummary({ id: 'agent-coder', name: 'Coder' })])
             ),
             http.post(`${BASE}/marketplace/agents/:id/install`, () => {
                 installAttempted = true;
-                return HttpResponse.json({ error: 'conflict', kind: 'internal_error' }, { status: 409 });
-            }),
+                return HttpResponse.json(
+                    { error: 'conflict', kind: 'internal_error' },
+                    { status: 409 }
+                );
+            })
         );
         renderWithProviders(
             <Routes>
                 <Route path="/" element={<Marketplace />} />
                 <Route path="/agents" element={<div>Agents Page</div>} />
             </Routes>,
-            { initialEntries: ['/'] },
+            { initialEntries: ['/'] }
         );
         await waitFor(() => expect(screen.getByText('Coder')).toBeInTheDocument());
 
@@ -276,27 +278,32 @@ describe('Marketplace page', () => {
         expect(screen.queryByText('Agents Page')).not.toBeInTheDocument();
     });
 
-    it('addSelected — partial failure: shows failNote in toast and navigates to agents', async () => {
+    // 2026-09-12: on a PARTIAL failure the page deliberately stays put with
+    // the failed ids still selected, instead of navigating away. Navigating
+    // to /agents dropped the Owner somewhere that cannot say which entries
+    // failed or why — the whole reason a real install bug (a pruned
+    // cli_models row tripping agents_cli_model_fk) went undiagnosed.
+    it('addSelected — partial failure: names the failures and stays on the page', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents`, () =>
                 HttpResponse.json([
                     makeSummary({ id: 'agent-good', name: 'Good Agent' }),
                     makeSummary({ id: 'agent-bad', name: 'Bad Agent' }),
-                ]),
+                ])
             ),
             http.post(`${BASE}/marketplace/agents/agent-good/install`, () =>
-                HttpResponse.json({ id: 'agent-good' }, { status: 201 }),
+                HttpResponse.json({ id: 'agent-good' }, { status: 201 })
             ),
             http.post(`${BASE}/marketplace/agents/agent-bad/install`, () =>
-                HttpResponse.json({ message: 'conflict' }, { status: 409 }),
-            ),
+                HttpResponse.json({ message: 'conflict' }, { status: 409 })
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/" element={<Marketplace />} />
                 <Route path="/agents" element={<div>Agents Page</div>} />
             </Routes>,
-            { initialEntries: ['/'] },
+            { initialEntries: ['/'] }
         );
         await waitFor(() => expect(screen.getByText('Good Agent')).toBeInTheDocument());
 
@@ -304,12 +311,42 @@ describe('Marketplace page', () => {
         checkboxes.forEach((cb) => fireEvent.click(cb));
         fireEvent.click(screen.getByRole('button', { name: /add selected/i }));
 
+        // The failed id stays selected (so Retry is one click) and the page
+        // does not navigate away. Toast copy isn't asserted here: the toast
+        // HOST lives in AppShell, which renderWithProviders doesn't mount —
+        // only the provider state. bulkInstall.test.ts covers the reason
+        // plumbing itself.
+        await waitFor(() => expect(screen.getByText('1 selected')).toBeInTheDocument());
+        expect(screen.queryByText('Agents Page')).not.toBeInTheDocument();
+    });
+
+    it('addSelected — full success navigates to the agents page', async () => {
+        server.use(
+            http.get(`${BASE}/marketplace/agents`, () =>
+                HttpResponse.json([makeSummary({ id: 'agent-good', name: 'Good Agent' })])
+            ),
+            http.post(`${BASE}/marketplace/agents/agent-good/install`, () =>
+                HttpResponse.json({ id: 'agent-good' }, { status: 201 })
+            )
+        );
+        renderWithProviders(
+            <Routes>
+                <Route path="/" element={<Marketplace />} />
+                <Route path="/agents" element={<div>Agents Page</div>} />
+            </Routes>,
+            { initialEntries: ['/'] }
+        );
+        await waitFor(() => expect(screen.getByText('Good Agent')).toBeInTheDocument());
+
+        screen.getAllByRole('checkbox').forEach((cb) => fireEvent.click(cb));
+        fireEvent.click(screen.getByRole('button', { name: /add selected/i }));
+
         await waitFor(() => expect(screen.getByText('Agents Page')).toBeInTheDocument());
     });
 
     it('search text field onChange updates the query (setQuery)', async () => {
         server.use(
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([makeSummary()])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([makeSummary()]))
         );
         renderWithProviders(<Marketplace />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeInTheDocument());

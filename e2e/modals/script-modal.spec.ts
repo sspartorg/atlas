@@ -14,7 +14,10 @@ test.describe('ScriptModal', () => {
     async function openScriptsTab(page: Parameters<typeof goto>[0]) {
         await goto(page, '/guardrails');
         // Wait for the page to render (tab row is always present).
-        await expect(page.getByText('Guard-rails')).toBeVisible();
+        // `getByText('Guard-rails')` is a strict-mode violation here — the
+        // string matches the sidenav link, the h1, AND the "Save Guard-rails"
+        // button. Anchor on the heading role instead.
+        await expect(page.getByRole('heading', { name: 'Guard-rails' })).toBeVisible();
         // Switch to the Scripts tab.
         await page.getByRole('tab', { name: /Scripts/i }).click();
         // "Add script" button confirms the tab is active.

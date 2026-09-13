@@ -13,13 +13,16 @@ import { FormHeading } from '../../components/FormHeading.js';
 interface IAwaitingYouPanelProps {
     rows: AwaitingItem[];
     isLoading: boolean;
+    /** True count server-side. `rows` is capped at 20 by the API, so without
+     *  this the panel silently drops the overflow with nothing to say so. */
+    total?: number;
 }
 
 type FilterValue = 'all' | 'epic' | 'story' | 'bug' | 'sub_task' | 'sub_bug';
 
 const MONO_FONT = '"JetBrains Mono", monospace';
 
-export function AwaitingYouPanel({ rows, isLoading }: IAwaitingYouPanelProps) {
+export function AwaitingYouPanel({ rows, isLoading, total }: IAwaitingYouPanelProps) {
     const [filter, setFilter] = useState<FilterValue>('all');
 
     const filtered = useMemo(() => {
@@ -140,6 +143,18 @@ export function AwaitingYouPanel({ rows, isLoading }: IAwaitingYouPanelProps) {
                     {filtered.map((row) => (
                         <AwaitingYouRow key={row.id} row={row} />
                     ))}
+                    {filter === 'all' && typeof total === 'number' && total > rows.length && (
+                        <Typography
+                            sx={{
+                                fontSize: 12,
+                                color: ATLAS_PALETTE.slate40,
+                                pt: 2,
+                                textAlign: 'center',
+                            }}
+                        >
+                            Showing {rows.length} of {total} — open Issues to see the rest.
+                        </Typography>
+                    )}
                 </Box>
             )}
         </Paper>

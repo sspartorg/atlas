@@ -174,16 +174,46 @@ export function formatNextRunDelta(minutes: number): string {
     return `in ${Math.floor(h / 24)}d`;
 }
 
-export type AgentStatusLabel = 'Running' | 'Idle' | 'Paused' | 'Failed';
+export type AgentStatusLabel = 'Running' | 'Queued' | 'Idle' | 'Paused' | 'Failed';
+
+/**
+ * The ONE definition of an agent's live-state label.
+ *
+ * `AgentCard` and `AgentHero` each used to derive this themselves from
+ * `getRuntimeStats().queueDepth`, which counts `queued` AND `in_progress`
+ * together — so they read inverted: every active-but-idle agent showed
+ * "Running" (with a pulsing live dot), and an agent with a genuinely
+ * in-flight run showed "Queued". `AgentCard` also called a paused agent
+ * "Idle", the same word this function uses for active-and-not-running, so
+ * "Idle" meant opposite things on two screens. The Queue page was always
+ * correct because it called this function.
+ *
+ * Precedence: paused beats everything (a paused agent's stale runs are not
+ * news), then a failed last run, then actually-running, then queued.
+ */
+export function resolveAgentStatusLabel(
+    agentStatus: 'active' | 'inactive',
+    runningCount: number,
+    queuedCount: number,
+    errorState: boolean
+): AgentStatusLabel {
+    if (agentStatus === 'inactive') return 'Paused';
+    if (errorState) return 'Failed';
+    if (runningCount > 0) return 'Running';
+    if (queuedCount > 0) return 'Queued';
+    return 'Idle';
+}
 
 export function getAgentStatusLabel(
     summary: AgentQueueSummary,
     errorState: boolean
 ): AgentStatusLabel {
-    if (summary.agent.status === 'inactive') return 'Paused';
-    if (errorState) return 'Failed';
-    if (summary.running.length > 0) return 'Running';
-    return 'Idle';
+    return resolveAgentStatusLabel(
+        summary.agent.status,
+        summary.running.length,
+        summary.queued.length,
+        errorState
+    );
 }
 
 export function lastRunErrored(run: IAgentRun | null): boolean {

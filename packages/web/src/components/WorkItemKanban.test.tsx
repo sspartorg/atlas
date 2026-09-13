@@ -26,7 +26,7 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={vi.fn()}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         expect(container.firstChild).toBeInTheDocument();
     });
@@ -43,7 +43,7 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={vi.fn()}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('First card')).toBeInTheDocument();
         expect(screen.getByText('Second card')).toBeInTheDocument();
@@ -59,7 +59,7 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={vi.fn()}
                 onOpen={onOpen}
-            />,
+            />
         );
         fireEvent.click(screen.getByText('Click me'));
         expect(onOpen).toHaveBeenCalledTimes(1);
@@ -81,7 +81,7 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={vi.fn()}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('Assigned card')).toBeInTheDocument();
     });
@@ -89,15 +89,13 @@ describe('WorkItemKanban', () => {
     it('drag handlers fire on dragstart/dragover/drop without crashing', () => {
         renderWithProviders(
             <WorkItemKanban
-                items={[
-                    makeItem({ id: 'ATL-5', title: 'Drag me', status: 'draft' }),
-                ]}
+                items={[makeItem({ id: 'ATL-5', title: 'Drag me', status: 'draft' })]}
                 agents={[]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
                 onTransition={vi.fn()}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         const card = screen.getByText('Drag me').closest('[draggable]') as HTMLElement;
         expect(card).toBeTruthy();
@@ -151,7 +149,7 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={onTransition}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         const card = screen.getByText('Forward me').closest('[draggable]') as HTMLElement;
         dropOnColumn(card, 'Ready');
@@ -159,11 +157,17 @@ describe('WorkItemKanban', () => {
         expect(onTransition).toHaveBeenCalledWith(
             expect.objectContaining({ id: 'ATL-7' }),
             'ready',
-            false,
+            false
         );
     });
 
-    it('passes override=true for a non-forward transition (in_review → ready)', () => {
+    // Changed 2026-09-12. This asserted that an illegal drop was sent through
+    // as `override: true` — i.e. a mis-drag silently bypassed the status
+    // machine with no signal to the Owner. AGENTS.md requires invalid
+    // transitions not be offered; a Kanban column can't be hidden, so the
+    // drop is refused and the Owner is pointed at the one deliberate override
+    // path (the status picker on the detail page).
+    it('refuses an illegal drop instead of silently overriding (in_review → ready)', () => {
         const onTransition = vi.fn();
         renderWithProviders(
             <WorkItemKanban
@@ -173,16 +177,43 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={onTransition}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         const card = screen.getByText('Override me').closest('[draggable]') as HTMLElement;
         dropOnColumn(card, 'Ready');
-        expect(onTransition).toHaveBeenCalledTimes(1);
-        expect(onTransition).toHaveBeenCalledWith(
-            expect.objectContaining({ id: 'ATL-8' }),
-            'ready',
-            true,
-        );
+        expect(onTransition).not.toHaveBeenCalled();
+    });
+
+    it('still allows every transition the status machine permits', () => {
+        // in_review → done / in_progress / waiting_for_info are all legal, and
+        // must pass override=false (never the override flag).
+        for (const [label, status] of [
+            ['Done', 'done'],
+            ['In Progress', 'in_progress'],
+            ['Waiting for Info', 'waiting_for_info'],
+        ] as const) {
+            const onTransition = vi.fn();
+            const { unmount } = renderWithProviders(
+                <WorkItemKanban
+                    items={[
+                        makeItem({ id: 'ATL-10', title: `Legal ${status}`, status: 'in_review' }),
+                    ]}
+                    agents={[]}
+                    ownerName="Owner"
+                    ownerAccent="#0A0A0A"
+                    onTransition={onTransition}
+                    onOpen={vi.fn()}
+                />
+            );
+            const card = screen.getByText(`Legal ${status}`).closest('[draggable]') as HTMLElement;
+            dropOnColumn(card, label);
+            expect(onTransition).toHaveBeenCalledWith(
+                expect.objectContaining({ id: 'ATL-10' }),
+                status,
+                false
+            );
+            unmount();
+        }
     });
 
     it('does not fire onTransition when dropping on the current column', () => {
@@ -195,7 +226,7 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={onTransition}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         const card = screen.getByText('Same column').closest('[draggable]') as HTMLElement;
         dropOnColumn(card, 'Draft');
@@ -211,7 +242,7 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={vi.fn()}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         const allCols = document.querySelectorAll('[class*="MuiBox-root"]');
         // Just exercise dragLeave on first column-like box.
@@ -226,13 +257,20 @@ describe('WorkItemKanban', () => {
         const onTransition = vi.fn();
         renderWithProviders(
             <WorkItemKanban
-                items={[makeItem({ id: 'ATL-10', title: 'Sub-task card', kind: 'sub_task', status: 'draft' })]}
+                items={[
+                    makeItem({
+                        id: 'ATL-10',
+                        title: 'Sub-task card',
+                        kind: 'sub_task',
+                        status: 'draft',
+                    }),
+                ]}
                 agents={[]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
                 onTransition={onTransition}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         const card = screen.getByText('Sub-task card').closest('[draggable]') as HTMLElement;
         if (card) {
@@ -267,7 +305,7 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={vi.fn()}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         // On mobile with no items, the empty column label should be "No items"
         // (isMobile=true path). If not mobile, it shows "Drop here".
@@ -291,7 +329,7 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={vi.fn()}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         // All column headers rendered without crashing — exercises cfg?.dot for all statuses.
         expect(document.body).toBeTruthy();
@@ -307,7 +345,7 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={onTransition}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         const dataTransferStore: Record<string, string> = { 'text/plain': 'does-not-exist' };
         const dataTransfer = {
@@ -340,7 +378,7 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={vi.fn()}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('Orphan assignee card')).toBeInTheDocument();
         expect(screen.getAllByText('FallbackOwner').length).toBeGreaterThan(0);
@@ -369,7 +407,7 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={vi.fn()}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         const card = screen.getByText('Mobile card').closest('div[draggable]') as HTMLElement;
         expect(card).toBeTruthy();
@@ -386,7 +424,7 @@ describe('WorkItemKanban', () => {
                 ownerAccent="#0A0A0A"
                 onTransition={vi.fn()}
                 onOpen={vi.fn()}
-            />,
+            />
         );
         expect(screen.getAllByText('Drop here').length).toBeGreaterThan(0);
         expect(screen.queryByText('No items')).not.toBeInTheDocument();

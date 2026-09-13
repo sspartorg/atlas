@@ -186,7 +186,7 @@ describe('useSSE', () => {
     });
 
     // ── counts_changed ─────────────────────────────────────────────────────
-    it('counts_changed invalidates sidenav-counts, dashboard, epics, stories, bugs, issues', async () => {
+    it('counts_changed invalidates sidenav-counts, dashboard, epics, stories, bugs, issues, agents, projects', async () => {
         const { result } = renderHook(() => useSSEWithSpy(), { wrapper: makeWrapper() });
         const spy = result.current;
 
@@ -203,6 +203,13 @@ describe('useSSE', () => {
         expect(keys).toContainEqual(['stories']);
         expect(keys).toContainEqual(['bugs']);
         expect(keys).toContainEqual(['issues']);
+        // 2026-09-12 — this event reports the `agents` and `projects` badge
+        // counts too, and neither list was invalidated. A marketplace install
+        // (which broadcasts this) therefore moved the badge while an open
+        // /agents page kept showing the pre-install set, which reads exactly
+        // like "the agent was never added".
+        expect(keys).toContainEqual(['agents']);
+        expect(keys).toContainEqual(['projects']);
     });
 
     // ── notification_created ───────────────────────────────────────────────

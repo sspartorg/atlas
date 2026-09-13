@@ -83,8 +83,11 @@ describe('AgentCard', () => {
     });
 
     it('renders the Paused status for inactive agents', () => {
+        // The test name was always right and the code was wrong: AgentCard
+        // labelled a paused agent 'Idle', the same word the Queue page uses
+        // for active-and-not-running. One vocabulary now (resolveAgentStatusLabel).
         renderWithProviders(<AgentCard agent={makeAgent({ status: 'inactive' })} />);
-        expect(document.body.textContent).toContain('Idle');
+        expect(document.body.textContent).toContain('Paused');
     });
 
     it('renders Queued when runs are queued', () => {
@@ -104,15 +107,38 @@ describe('AgentCard', () => {
         expect(document.body.textContent).toContain('Queued');
     });
 
-    it('renders Running status (LiveDot) for active agent with no queued runs', () => {
-        // active + no queued/in_progress runs → statusLabel === 'Running'
+    it('renders Idle for an active agent with nothing in flight', () => {
+        // Regression: this asserted 'Running' for an agent whose only run had
+        // already COMPLETED — the old label came from `queueDepth === 0`, so
+        // every idle agent advertised "Running" with a pulsing live dot while
+        // the one agent actually running showed "Queued".
         renderWithProviders(
             <AgentCard
                 agent={makeAgent({ status: 'active', name: 'Runner' })}
                 runs={[makeRun({ status: 'completed' })]}
             />,
         );
+        expect(document.body.textContent).toContain('Idle');
+    });
+
+    it('renders Running only when a run is actually in flight', () => {
+        renderWithProviders(
+            <AgentCard
+                agent={makeAgent({ status: 'active', name: 'Runner' })}
+                runs={[makeRun({ status: 'in_progress' })]}
+            />,
+        );
         expect(document.body.textContent).toContain('Running');
+    });
+
+    it('renders Failed when the most recent terminal run errored', () => {
+        renderWithProviders(
+            <AgentCard
+                agent={makeAgent({ status: 'active', name: 'Runner' })}
+                runs={[makeRun({ status: 'error' })]}
+            />,
+        );
+        expect(document.body.textContent).toContain('Failed');
     });
 
     it('renders upgradeAvailable pill', () => {

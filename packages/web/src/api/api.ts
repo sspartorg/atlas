@@ -638,6 +638,10 @@ export const api = {
         ) => patch<ICredential>(`/credentials/${id}`, data),
         delete: (id: string) => del(`/credentials/${id}`),
         refresh: (id: string) => post<ICredential>(`/credentials/${id}/refresh`, {}),
+        // On-demand plaintext for a stored PAT. Never cache the result —
+        // same read model as environment-secrets / project env reveal.
+        revealToken: (id: string) =>
+            get<{ id: string; value: string }>(`/credentials/${id}/token`),
     },
 
     epics: {

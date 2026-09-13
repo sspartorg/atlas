@@ -114,9 +114,10 @@ export function MarketplaceAgentDetail() {
 
     const [addOpen, setAddOpen] = useState(false);
     const [installing, setInstalling] = useState(false);
-    const [slugTaken, setSlugTaken] = useState<
-        { conflictingId: string; suggestedId: string } | null
-    >(null);
+    const [slugTaken, setSlugTaken] = useState<{
+        conflictingId: string;
+        suggestedId: string;
+    } | null>(null);
 
     const handleInstall = async (slug: string) => {
         if (!id) return;
@@ -130,15 +131,22 @@ export function MarketplaceAgentDetail() {
             toast.show({ message: `Installed ${full.data?.agent.name ?? installed.id}` });
             navigate(`/agents/${installed.id}`);
         } catch (err) {
-            const details = (err as { details?: { conflicting_id?: string; suggested_id?: string } })
-                ?.details;
+            const details = (
+                err as { details?: { conflicting_id?: string; suggested_id?: string } }
+            )?.details;
             if (details?.conflicting_id && details?.suggested_id) {
                 setSlugTaken({
                     conflictingId: details.conflicting_id,
                     suggestedId: details.suggested_id,
                 });
             } else {
-                throw err;
+                // Anything else (e.g. the catalog names a model that is no
+                // longer in the registry) used to re-throw inside an async
+                // click handler — an unhandled rejection with no UI at all.
+                toast.show({
+                    message: "Couldn't install this agent",
+                    detail: err instanceof Error ? err.message : String(err),
+                });
             }
         } finally {
             setInstalling(false);
@@ -193,7 +201,10 @@ export function MarketplaceAgentDetail() {
             <Box
                 sx={{
                     display: 'grid',
-                    gridTemplateColumns: { xs: 'auto minmax(0, 1fr)', sm: 'auto minmax(0, 1fr) auto' },
+                    gridTemplateColumns: {
+                        xs: 'auto minmax(0, 1fr)',
+                        sm: 'auto minmax(0, 1fr) auto',
+                    },
                     gridTemplateAreas: {
                         xs: `"icon name" "buttons buttons"`,
                         sm: 'unset',
@@ -306,7 +317,9 @@ export function MarketplaceAgentDetail() {
                 </Box>
             </Box>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' }, gap: 4 }}>
+            <Box
+                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' }, gap: 4 }}
+            >
                 <Box>
                     {agent.summary && (
                         <Box sx={{ mb: 4 }}>
@@ -385,9 +398,7 @@ export function MarketplaceAgentDetail() {
                             <Typography sx={SECTION_LABEL_SX}>Schedule</Typography>
                             <KvRow k="preset" v={agent.schedule_preset} />
                             <KvRow k="cadence" v={formatSchedule(agent)} />
-                            {agent.cron_expr && (
-                                <KvRow k="cron_expr" v={agent.cron_expr} mono />
-                            )}
+                            {agent.cron_expr && <KvRow k="cron_expr" v={agent.cron_expr} mono />}
                         </Box>
                         <Box>
                             <Typography sx={SECTION_LABEL_SX}>Flags</Typography>
@@ -477,7 +488,12 @@ export function MarketplaceAgentDetail() {
                                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
                                         {r.kind}
                                     </Typography>
-                                    <Typography sx={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace' }}>
+                                    <Typography
+                                        sx={{
+                                            fontSize: 12,
+                                            fontFamily: '"JetBrains Mono", monospace',
+                                        }}
+                                    >
                                         → {r.target_agent_id} ({r.status})
                                     </Typography>
                                 </Box>

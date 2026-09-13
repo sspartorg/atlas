@@ -9,6 +9,7 @@ import UpgradeRounded from '@mui/icons-material/UpgradeRounded';
 import { useQueryClient } from '@tanstack/react-query';
 import type { IMarketplaceAgentSummary } from '@atlas/shared';
 import { api } from '../../api/api.js';
+import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { AddFromMarketplaceModal } from './AddFromMarketplaceModal.js';
 
@@ -42,6 +43,7 @@ export function MarketplaceAgentCard({
     onToggleSelect,
 }: Props) {
     const queryClient = useQueryClient();
+    const toast = useToast();
     const [installing, setInstalling] = useState(false);
     const [addOpen, setAddOpen] = useState(false);
     const [slugTaken, setSlugTaken] = useState<SlugTaken | null>(null);
@@ -69,7 +71,13 @@ export function MarketplaceAgentCard({
                     suggestedId: details.suggested_id,
                 });
             } else {
-                throw err;
+                // Anything else (e.g. the catalog names a model that is no
+                // longer in the registry) used to re-throw inside an async
+                // click handler — an unhandled rejection with no UI at all.
+                toast.show({
+                    message: "Couldn't install this agent",
+                    detail: err instanceof Error ? err.message : String(err),
+                });
             }
         } finally {
             setInstalling(false);
@@ -96,7 +104,7 @@ export function MarketplaceAgentCard({
         const target = e.target as HTMLElement | null;
         if (
             target?.closest(
-                '.MuiMenu-root, .MuiPopover-root, .MuiModal-root, .MuiBackdrop-root, .MuiDialog-root',
+                '.MuiMenu-root, .MuiPopover-root, .MuiModal-root, .MuiBackdrop-root, .MuiDialog-root'
             )
         ) {
             return;
@@ -175,7 +183,9 @@ export function MarketplaceAgentCard({
                     {selected && <CheckRounded sx={{ fontSize: 15 }} />}
                 </Box>
             )}
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 3, pr: selectable ? 3.5 : 0 }}>
+            <Box
+                sx={{ display: 'flex', alignItems: 'flex-start', gap: 3, pr: selectable ? 3.5 : 0 }}
+            >
                 <Box
                     sx={{
                         width: 36,

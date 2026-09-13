@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { existsSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 
@@ -114,5 +114,14 @@ export async function lsRemote(authedUrl: string): Promise<boolean> {
 }
 
 export function deriveProjectName(folderPath: string): string {
-    return basename(folderPath.replace(/[\\/]$/, ''));
+    // Separator-agnostic on purpose. `basename` from node:path is POSIX on a
+    // POSIX host, so it does NOT treat `\` as a separator — meaning
+    // `C:\Projects\my-project` came back whole instead of `my-project`.
+    // The trailing-separator strip already showed the intent to accept both
+    // styles; this makes the rest of the function honour it. A Windows path
+    // can reach a POSIX host (a shared settings file, a pasted value), and
+    // the reverse is true on Windows.
+    const trimmed = folderPath.replace(/[\\/]+$/, '');
+    const segments = trimmed.split(/[\\/]/);
+    return segments[segments.length - 1] ?? trimmed;
 }

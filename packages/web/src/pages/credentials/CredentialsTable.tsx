@@ -195,7 +195,7 @@ export function CredentialsTable({ rows, onEdit, onDelete }: Props) {
                                 justifySelf: 'start',
                             }}
                         >
-                            PAT
+                            {c.kind === 'github_app' ? 'GitHub App' : 'PAT'}
                         </Box>
 
                         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>

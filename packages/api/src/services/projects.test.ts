@@ -8,6 +8,7 @@ vi.mock('./events-log.js', () => ({
 
 import { projectsService, PrefixCollisionError, rejectTraversalPath } from './projects.js';
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
+import { broadcastSSE } from '../routes/events.js';
 import { insertProject, insertItem } from '../../tests/_items.js';
 
 beforeEach(async () => {
@@ -366,5 +367,40 @@ describe('projectsService.listPaged', () => {
         expect(big.limit).toBe(100);
         const small = await projectsService.listPaged({ page: 1, limit: 0 });
         expect(small.limit).toBe(20);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SSE — 2026-09-12. Project writes moved the sidenav `projects` badge and the
+// dashboard `projectCount` KPI and pushed nothing. Only the clone path told
+// clients anything (`clone_completed`), so a plain create or a folder-attach
+// left both surfaces one behind until a hard reload.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('projectsService — SSE broadcast', () => {
+    it('broadcasts counts_changed on create, update and delete', async () => {
+        vi.mocked(broadcastSSE).mockClear();
+
+        const project = await projectsService.create({ name: 'SSE', issue_key_prefix: 'SSE' });
+        expect(broadcastSSE).toHaveBeenCalledWith({ type: 'counts_changed' });
+
+        vi.mocked(broadcastSSE).mockClear();
+        await projectsService.update(project.id, { name: 'SSE renamed' });
+        expect(broadcastSSE).toHaveBeenCalledWith({ type: 'counts_changed' });
+
+        vi.mocked(broadcastSSE).mockClear();
+        await projectsService.delete(project.id);
+        expect(broadcastSSE).toHaveBeenCalledWith({ type: 'counts_changed' });
+    });
+
+    it('does not broadcast when create fails on a prefix collision', async () => {
+        const first = await projectsService.create({ name: 'A', issue_key_prefix: 'DUP' });
+        expect(first.issue_key_prefix).toBe('DUP');
+
+        vi.mocked(broadcastSSE).mockClear();
+        await expect(
+            projectsService.create({ name: 'B', issue_key_prefix: 'DUP' }),
+        ).rejects.toThrow(PrefixCollisionError);
+        expect(broadcastSSE).not.toHaveBeenCalled();
     });
 });

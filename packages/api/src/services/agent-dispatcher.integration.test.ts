@@ -250,3 +250,74 @@ describe('agent_runs unique partial index (race-free DB invariant)', () => {
         expect(blocker?.runId).toBe('second-run-2');
     });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 2026-09-12 — the run-promotion guard in `agent-runner.ts`.
+//
+// `spawnAgentRun` flips a run queued → in_progress from a 200ms
+// `setTimeout`. The flip used to be unconditional, which is safe only if the
+// row is still the item's live run when the timer fires. It often isn't: the
+// Owner cancels, `failOrphanedRuns` sweeps it, or the item is deleted — and by
+// then a replacement run can hold the slot. The unconditional flip then put
+// the stale row BACK into the live set and tripped
+// `agent_runs_one_live_per_item`, surfacing only as
+// "unhandled promise rejection (kept alive)" in the API log while the run
+// silently never started.
+//
+// This asserts both halves against the real index: the old shape raises 23505,
+// the guarded shape no-ops. Anyone tempted to drop the `.where('status', '=',
+// 'queued')` as redundant should read this first.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('agent_runs live-run invariant — queued → in_progress promotion', () => {
+    // Run A is superseded: it leaves the live set, B takes the item's slot,
+    // and A's timer fires afterwards.
+    async function supersededRun() {
+        await testDb
+            .insertInto('agent_runs')
+            .values({ id: 'run-a', agent_id: 'agent-coder', item_id: 'ATL-2', status: 'queued' })
+            .execute();
+        await testDb
+            .updateTable('agent_runs')
+            .set({ status: 'error' })
+            .where('id', '=', 'run-a')
+            .execute();
+        await testDb
+            .insertInto('agent_runs')
+            .values({ id: 'run-b', agent_id: 'agent-coder', item_id: 'ATL-2', status: 'queued' })
+            .execute();
+    }
+
+    it('the old unconditional flip violates the one-live-per-item index', async () => {
+        await supersededRun();
+        await expect(
+            testDb
+                .updateTable('agent_runs')
+                .set({ status: 'in_progress' })
+                .where('id', '=', 'run-a')
+                .execute(),
+        ).rejects.toThrow(/agent_runs_one_live_per_item/);
+    });
+
+    it('the guarded flip updates nothing and does not throw', async () => {
+        await supersededRun();
+        const res = await testDb
+            .updateTable('agent_runs')
+            .set({ status: 'in_progress' })
+            .where('id', '=', 'run-a')
+            .where('status', '=', 'queued')
+            .executeTakeFirst();
+        expect(Number(res.numUpdatedRows ?? 0)).toBe(0);
+
+        // run-b keeps the slot; run-a stays out of the live set.
+        const rows = await testDb
+            .selectFrom('agent_runs')
+            .select(['id', 'status'])
+            .orderBy('id', 'asc')
+            .execute();
+        expect(rows).toEqual([
+            { id: 'run-a', status: 'error' },
+            { id: 'run-b', status: 'queued' },
+        ]);
+    });
+});

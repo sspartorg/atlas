@@ -257,3 +257,48 @@ describe('defensive re-throw branches (spy-based)', () => {
         spy.mockRestore();
     });
 });
+
+// Regression — 2026-09-12. `agents` carries a composite FK on (cli, model) ->
+// cli_models; `marketplace_agents` does not. Pruning a model from the registry
+// therefore left catalog entries naming it permanently uninstallable, and the
+// install surfaced the raw FK violation as a 500 with no `code`, which the
+// bulk-install bar could only report as "N couldn't be added".
+describe('install with a model missing from the registry', () => {
+    it('returns 400 MODEL_NOT_IN_REGISTRY instead of an FK 500', async () => {
+        // Delete by (cli, model_name), not by CLI_ID — seedCatalogEntry's
+        // onConflict targets that pair, so when migrations already seeded the
+        // model the CLI_ID row was never inserted.
+        await testDb
+            .deleteFrom('cli_models')
+            .where('cli', '=', 'claude')
+            .where('model_name', '=', MODEL_NAME)
+            .execute();
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/marketplace/agents/${CATALOG_AGENT_ID}/install`,
+            payload: {},
+        });
+
+        expect(res.statusCode).toBe(400);
+        const body = JSON.parse(res.body);
+        expect(body.code).toBe('MODEL_NOT_IN_REGISTRY');
+        expect(body.error).toContain(MODEL_NAME);
+        // Nothing partially written.
+        const rows = await testDb
+            .selectFrom('agents')
+            .select('id')
+            .where('id', '=', CATALOG_AGENT_ID)
+            .execute();
+        expect(rows).toHaveLength(0);
+    });
+
+    it('installs once the model is back in the registry', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/marketplace/agents/${CATALOG_AGENT_ID}/install`,
+            payload: {},
+        });
+        expect(res.statusCode).toBe(201);
+    });
+});

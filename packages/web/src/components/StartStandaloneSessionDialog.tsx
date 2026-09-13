@@ -202,6 +202,7 @@ export function StartStandaloneSessionDialog({
                         Folder
                     </Typography>
                     <FolderPicker
+                        ariaLabel="Folder"
                         value={folderPath}
                         onChange={setFolderPath}
                         placeholder="Pick any folder on this machine"

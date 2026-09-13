@@ -14,15 +14,18 @@ async function lookupItemType(itemId: string): Promise<IssueType | undefined> {
     return row?.type;
 }
 
-function asComment(row: {
-    id: number;
-    author: 'owner' | 'agent';
-    agent_id: string | null;
-    item_id: string;
-    body: string;
-    edited_at: string | null;
-    created_at: string;
-}, issue_type: IssueType): IComment {
+function asComment(
+    row: {
+        id: number;
+        author: 'owner' | 'agent';
+        agent_id: string | null;
+        item_id: string;
+        body: string;
+        edited_at: string | null;
+        created_at: string;
+    },
+    issue_type: IssueType
+): IComment {
     return {
         id: row.id,
         author: row.author,
@@ -65,6 +68,32 @@ export const commentsService = {
         // undefined, which cannot happen. Kept as a defensive default.
         /* v8 ignore next */
         const type = data.issue_type ?? (await lookupItemType(data.issue_id)) ?? 'story';
+        // Agent comments arrive without an identity more often than not. The
+        // MCP `update_item({action:'add_comment'})` path resolves the author
+        // from `ATLAS_AGENT_ID`, which nothing sets — the MCP is hosted
+        // in-process on one shared port for every agent (plugins/mcp-host.ts
+        // hardcodes `boundAgentId: ''`), so the only other source is an
+        // OPTIONAL tool argument the model may omit. A null agent_id renders
+        // as the literal "Agent" in the activity feed, and makes the
+        // issue_events actor fall back to the OWNER — mis-attributing agent
+        // work to the human.
+        //
+        // Resolve it from the item's live run instead. Unambiguous by
+        // construction: migration 003 enforces a partial UNIQUE index of one
+        // queued/in_progress run per item, so there is at most one candidate.
+        // Inlined rather than importing findLiveRunOnItem from
+        // agent-dispatcher — that import cycles back through agent-runner to
+        // this file.
+        let agentId = data.agent_id ?? null;
+        if (data.author === 'agent' && !agentId) {
+            const liveRun = await db
+                .selectFrom('agent_runs')
+                .select('agent_id')
+                .where('item_id', '=', data.issue_id)
+                .where('status', 'in', ['queued', 'in_progress'])
+                .executeTakeFirst();
+            agentId = liveRun?.agent_id ?? null;
+        }
         // Wrap both writes in one transaction so a failure between the
         // INSERT and the activity-feed event doesn't leave an orphan
         // comment — the caller sees a 500 and NO comment/event rows,
@@ -75,7 +104,7 @@ export const commentsService = {
                 .insertInto('comments')
                 .values({
                     author: data.author,
-                    agent_id: data.agent_id ?? null,
+                    agent_id: agentId,
                     item_id: data.issue_id,
                     body: data.body,
                 })
@@ -93,10 +122,10 @@ export const commentsService = {
                     item_id: data.issue_id,
                     item_type: type,
                     event_type: 'comment_added',
-                    actor_agent_id: data.agent_id ?? null,
+                    actor_agent_id: agentId,
                     detail: data.body,
                 },
-                trx,
+                trx
             );
             return row;
         });

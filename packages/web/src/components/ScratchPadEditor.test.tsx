@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { screen, waitFor, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -45,6 +45,14 @@ describe('inferTitle (web)', () => {
 });
 
 describe('ScratchPadEditor — plain Google-Keep surface', () => {
+    // Several tests here install fake timers inside the test body and restore
+    // them on the last line. A failure before that line leaves them installed
+    // and every later test in the file hangs — which is how one real timeout
+    // in `formatSavedAgo buckets` reported as three failures.
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
     it('does NOT render Edit / Split / Preview chips or a MarkdownPreview surface', () => {
         renderWithProviders(
             <ScratchPadEditor open onClose={vi.fn()} tile={makeTile({ body_md: '# heading' })} />,
@@ -325,9 +333,22 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
         vi.useRealTimers();
     });
 
+    // 2026-09-12 — this used to advance fake time in real increments, ending
+    // with `advanceTimersByTimeAsync(2 * 60 * 60 * 1000)`. ScratchPadEditor
+    // runs a 1s `setInterval` to refresh the "Saved ... ago" label, so that
+    // single call fired 7,200 interval callbacks, each a React state update
+    // and re-render, all inside one act(). It finished in ~14s against a 15s
+    // timeout — close enough that file ordering or unrelated machine load
+    // decided pass or fail, which is how it reached this sweep (green in
+    // isolation, red after GuardrailScriptsTab in the same run).
+    //
+    // The label reads `Date.now()`, so moving the CLOCK tests the same
+    // buckets: jump it, then advance 1s so exactly one tick re-reads it.
+    // ~4 renders instead of 7,200.
     it('formatSavedAgo buckets: just now / seconds / minutes / hours', async () => {
         vi.useFakeTimers();
-        vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+        const base = new Date('2026-01-01T00:00:00Z').getTime();
+        vi.setSystemTime(base);
         server.use(
             http.patch(`${BASE}/scratch-pad/:id`, async ({ request }) => {
                 const body = (await request.json()) as { title?: string; body_md?: string };
@@ -358,26 +379,30 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
         });
         expect(screen.getByText('Saved just now')).toBeInTheDocument();
 
-        // Advance to 10s elapsed since save -> "Saved · Ns ago"
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(9_000);
-        });
+        // `savedAt` landed at ~base + 5s (when the autosave PATCH resolved).
+        // Each step below parks the clock 1s short of the elapsed value it
+        // wants, then advances 1s so one interval tick picks it up.
+        const tickTo = async (elapsedMs: number) => {
+            vi.setSystemTime(base + 5_000 + elapsedMs - 1_000);
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(1_000);
+            });
+        };
+
+        // 20s elapsed -> "Saved · Ns ago"
+        await tickTo(20_000);
         expect(screen.getByText(/Saved · \d+s ago/)).toBeInTheDocument();
 
-        // Advance to ~2 minutes elapsed -> "Saved · Nm ago"
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(110_000);
-        });
+        // 5 minutes elapsed -> "Saved · Nm ago"
+        await tickTo(5 * 60 * 1_000);
         expect(screen.getByText(/Saved · \d+m ago/)).toBeInTheDocument();
 
-        // Advance to ~2 hours elapsed -> "Saved · Nh ago"
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000);
-        });
+        // 3 hours elapsed -> "Saved · Nh ago"
+        await tickTo(3 * 60 * 60 * 1_000);
         expect(screen.getByText(/Saved · \d+h ago/)).toBeInTheDocument();
 
         vi.useRealTimers();
-    }, 15_000);
+    });
 
     it('autosave skips the PATCH when content reverts to the saved value before the timer fires', async () => {
         vi.useFakeTimers();

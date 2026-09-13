@@ -22,7 +22,7 @@ test.describe('/settings/credentials', () => {
         await expect(dialog.getByRole('radio', { name: /personal access token/i })).toBeVisible();
         // SSH and App password are disabled placeholders
         await expect(dialog.getByRole('radio', { name: /ssh key/i })).toBeVisible();
-        await expect(dialog.getByRole('radio', { name: /app password/i })).toBeVisible();
+        await expect(dialog.getByRole('radio', { name: /github app/i })).toBeVisible();
         // Close without submitting
         await page.keyboard.press('Escape');
         await expect(dialog).not.toBeVisible();

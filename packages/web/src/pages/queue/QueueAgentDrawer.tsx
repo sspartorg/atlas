@@ -33,6 +33,7 @@ function hexToRgba(hex: string, alpha: number): string {
 
 const STATUS_COLOR: Record<AgentStatusLabel, string> = {
     Running: ATLAS_PALETTE.success,
+    Queued: ATLAS_PALETTE.warning,
     Idle: ATLAS_PALETTE.slate60,
     Paused: ATLAS_PALETTE.warning,
     Failed: ATLAS_PALETTE.orange,

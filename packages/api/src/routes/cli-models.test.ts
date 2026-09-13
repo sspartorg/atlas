@@ -245,3 +245,67 @@ describe('DELETE /api/cli-models/:id', () => {
         expect(res.statusCode).toBe(204);
     });
 });
+
+// Regression — 2026-09-12. `agents` has ON DELETE RESTRICT on (cli, model), so
+// Postgres already blocked removing a model an installed agent used. Catalog
+// rows in `marketplace_agents` have no such FK, so removing a model only they
+// referenced succeeded silently and then made those entries uninstallable.
+describe('DELETE /api/cli-models/:id — in-use guard', () => {
+    it('refuses with 409 when a marketplace catalog entry still names the model', async () => {
+        const created = await app.inject({
+            method: 'POST',
+            url: '/api/cli-models',
+            payload: VALID_MODEL,
+        });
+        const { id } = JSON.parse(created.body) as { id: string };
+
+        await testDb
+            .insertInto('marketplace_agents')
+            .values({
+                id: 'test-catalog-in-use',
+                name: 'In-use catalog entry',
+                category: 'software-dev',
+                cli: VALID_MODEL.cli,
+                model: VALID_MODEL.model_name,
+                framework: '',
+                prompt_md: '',
+                handoff_prompt_md: '',
+                description: '',
+                designation: '',
+                accent_color: '#007AC9',
+                sort_order: 1,
+                glyph: 'code',
+                role_id: null,
+                max_rounds: 5,
+                requires_item: true,
+                requires_worktree: false,
+                push_code: false,
+                raises_pr: false,
+                status: 'active',
+                kind_slug: 'custom',
+                settings_json: {},
+                schedule_hours: 6,
+                schedule_preset: 'every_n_hours',
+                schedule_time_of_day: null,
+                schedule_weekdays: null,
+                schedule_day_of_month: null,
+                version: 1,
+            })
+            .onConflict((oc) => oc.column('id').doNothing())
+            .execute();
+
+        const res = await app.inject({ method: 'DELETE', url: `/api/cli-models/${id}` });
+        expect(res.statusCode).toBe(409);
+        const body = JSON.parse(res.body);
+        expect(body.details.code).toBe('MODEL_IN_USE');
+        expect(body.details.marketplace_agents).toContain('test-catalog-in-use');
+
+        // Still there — the refusal must not have deleted it anyway.
+        const rows = await testDb
+            .selectFrom('cli_models')
+            .select('id')
+            .where('id', '=', id)
+            .execute();
+        expect(rows).toHaveLength(1);
+    });
+});

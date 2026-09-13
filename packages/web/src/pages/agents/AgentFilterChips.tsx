@@ -24,7 +24,13 @@ interface ChipDef {
 }
 
 const CHIPS: ChipDef[] = [
-    { key: 'all', label: 'All', icon: 'apps', activeBg: ATLAS_PALETTE.slate, activeFg: ATLAS_PALETTE.onAccent },
+    {
+        key: 'all',
+        label: 'All',
+        icon: 'apps',
+        activeBg: ATLAS_PALETTE.slate,
+        activeFg: ATLAS_PALETTE.onAccent,
+    },
     {
         key: 'software-dev',
         label: 'Software dev',
@@ -141,6 +147,7 @@ export function AgentFilterChips({
                             Role:
                         </Typography>
                         <Select
+                            inputProps={{ 'aria-label': 'Filter by role' }}
                             value={role}
                             onChange={(e) => onRoleChange(e.target.value as RoleFilterKey)}
                             variant="standard"
@@ -168,23 +175,26 @@ export function AgentFilterChips({
                     </Box>
                 ) : null}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>Sort:</Typography>
+                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
+                        Sort:
+                    </Typography>
                     <Select
-                    value={sort}
-                    onChange={(e) => onSortChange(e.target.value as SortKey)}
-                    variant="standard"
-                    disableUnderline
-                    sx={{
-                        fontSize: 12.5,
-                        fontWeight: 500,
-                        color: ATLAS_PALETTE.slate,
-                        '& .MuiSelect-select': { py: 0.5, pr: 3 },
-                    }}
-                >
-                    <MenuItem value="category-role">Category, then role</MenuItem>
-                    <MenuItem value="role">Role A → Z</MenuItem>
-                    <MenuItem value="last-run">Last run</MenuItem>
-                    <MenuItem value="queue-depth">Queue depth</MenuItem>
+                        inputProps={{ 'aria-label': 'Sort agents' }}
+                        value={sort}
+                        onChange={(e) => onSortChange(e.target.value as SortKey)}
+                        variant="standard"
+                        disableUnderline
+                        sx={{
+                            fontSize: 12.5,
+                            fontWeight: 500,
+                            color: ATLAS_PALETTE.slate,
+                            '& .MuiSelect-select': { py: 0.5, pr: 3 },
+                        }}
+                    >
+                        <MenuItem value="category-role">Category, then role</MenuItem>
+                        <MenuItem value="role">Role A → Z</MenuItem>
+                        <MenuItem value="last-run">Last run</MenuItem>
+                        <MenuItem value="queue-depth">Queue depth</MenuItem>
                     </Select>
                 </Box>
             </Box>

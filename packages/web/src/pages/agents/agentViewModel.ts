@@ -24,11 +24,7 @@ export interface ScheduleDraft {
  */
 export function previewNextSlot(now: Date, draft: ScheduleDraft): Date {
     if (draft.preset === 'cron') {
-        return computeNextSlotForAgent(
-            now,
-            { cron_expr: draft.cronExpr } as IAgent,
-            draft.hours,
-        );
+        return computeNextSlotForAgent(now, { cron_expr: draft.cronExpr } as IAgent, draft.hours);
     }
     return computeNextSlotForAgent(
         now,
@@ -39,7 +35,7 @@ export function previewNextSlot(now: Date, draft: ScheduleDraft): Date {
             schedule_weekdays: draft.weekdays,
             schedule_day_of_month: draft.dayOfMonth,
         } as IAgent,
-        draft.hours,
+        draft.hours
     );
 }
 
@@ -57,7 +53,6 @@ export function isCronExpressionValid(expr: string): boolean {
         return false;
     }
 }
-
 
 export interface AgentView {
     slug: string;
@@ -225,14 +220,10 @@ function formatCadenceForAgent(agent: IAgent, fallbackHours: number): string {
     const preset = agent.schedule_preset ?? 'every_n_hours';
     if (preset === 'every_n_hours') {
         return formatCadence(
-            agent.schedule_hours && agent.schedule_hours > 0
-                ? agent.schedule_hours
-                : fallbackHours,
+            agent.schedule_hours && agent.schedule_hours > 0 ? agent.schedule_hours : fallbackHours
         );
     }
-    const time = agent.schedule_time_of_day
-        ? formatTimeOfDay12h(agent.schedule_time_of_day)
-        : '—';
+    const time = agent.schedule_time_of_day ? formatTimeOfDay12h(agent.schedule_time_of_day) : '—';
     if (preset === 'daily') return `Daily at ${time}`;
     if (preset === 'weekly') {
         const days = agent.schedule_weekdays?.length
@@ -272,9 +263,7 @@ function computeNextSlotForAgent(now: Date, agent: IAgent, fallbackHours: number
 
     if (preset === 'every_n_hours') {
         const hours =
-            agent.schedule_hours && agent.schedule_hours > 0
-                ? agent.schedule_hours
-                : fallbackHours;
+            agent.schedule_hours && agent.schedule_hours > 0 ? agent.schedule_hours : fallbackHours;
         const cadenceMs = hours * 3_600_000;
         const startOfDay = new Date(now);
         startOfDay.setHours(0, 0, 0, 0);
@@ -297,9 +286,10 @@ function computeNextSlotForAgent(now: Date, agent: IAgent, fallbackHours: number
     }
 
     if (preset === 'weekly') {
-        const days = agent.schedule_weekdays && agent.schedule_weekdays.length > 0
-            ? new Set(agent.schedule_weekdays)
-            : new Set<number>([1, 2, 3, 4, 5, 6, 7]);
+        const days =
+            agent.schedule_weekdays && agent.schedule_weekdays.length > 0
+                ? new Set(agent.schedule_weekdays)
+                : new Set<number>([1, 2, 3, 4, 5, 6, 7]);
         for (let offset = 0; offset < 8; offset++) {
             const c = new Date(now);
             c.setDate(c.getDate() + offset);
@@ -392,7 +382,19 @@ export function getAgentView(agent: IAgent, now: Date = new Date()): AgentView {
 export { relativeTime } from '../../utils/time.js';
 
 export interface AgentRuntimeStats {
+    /** queued + in_progress. Kept as-is — the "queue N" caption shows it. */
     queueDepth: number;
+    /** Runs actually in flight. Split out from queueDepth so the status
+     *  label can tell "running" from "waiting to run"; conflating them is
+     *  what made AgentCard / AgentHero report the two states inverted. */
+    runningCount: number;
+    /** Runs waiting to start. */
+    queuedCount: number;
+    /** True when the most recent TERMINAL run ended in `error`. Distinct from
+     *  the `runtimeError` prop on AgentCard, which means "the runs query
+     *  failed to load" — feeding that into the status label made the Agents
+     *  grid disagree with the Queue page for the same agent. */
+    lastRunErrored: boolean;
     lastRunAt: string | null;
     totalRunsThisMonth: number;
     p50DurationSec: number | null;
@@ -404,11 +406,25 @@ export interface AgentRuntimeStats {
 
 export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRuntimeStats {
     if (!runs || runs.length === 0) {
-        return { queueDepth: 0, lastRunAt: null, totalRunsThisMonth: 0, p50DurationSec: null, totalCostThisMonthUsd: null, totalInputTokens: null, totalOutputTokens: null, totalCacheReadTokens: null };
+        return {
+            queueDepth: 0,
+            runningCount: 0,
+            queuedCount: 0,
+            lastRunErrored: false,
+            lastRunAt: null,
+            totalRunsThisMonth: 0,
+            p50DurationSec: null,
+            totalCostThisMonthUsd: null,
+            totalInputTokens: null,
+            totalOutputTokens: null,
+            totalCacheReadTokens: null,
+        };
     }
     const now = new Date();
     const cutoff = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
     let queueDepth = 0;
+    let runningCount = 0;
+    let queuedCount = 0;
     let lastRunAt: string | null = null;
     let lastRunMs = -Infinity;
     const durations: number[] = [];
@@ -421,6 +437,8 @@ export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRu
     let hasTokens = false;
     for (const r of runs) {
         if (r.status === 'queued' || r.status === 'in_progress') queueDepth += 1;
+        if (r.status === 'in_progress') runningCount += 1;
+        if (r.status === 'queued') queuedCount += 1;
         const createdMs = new Date(r.created_at).getTime();
         if (createdMs > lastRunMs) {
             lastRunMs = createdMs;
@@ -432,9 +450,18 @@ export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRu
                 costMonth += r.total_cost_usd;
                 hasCostMonth = true;
             }
-            if (r.input_tokens != null) { inputTokens += r.input_tokens; hasTokens = true; }
-            if (r.output_tokens != null) { outputTokens += r.output_tokens; hasTokens = true; }
-            if (r.cache_read_tokens != null) { cacheReadTokens += r.cache_read_tokens; hasTokens = true; }
+            if (r.input_tokens != null) {
+                inputTokens += r.input_tokens;
+                hasTokens = true;
+            }
+            if (r.output_tokens != null) {
+                outputTokens += r.output_tokens;
+                hasTokens = true;
+            }
+            if (r.cache_read_tokens != null) {
+                cacheReadTokens += r.cache_read_tokens;
+                hasTokens = true;
+            }
         }
         if (r.started_at && r.completed_at) {
             const dur = new Date(r.completed_at).getTime() - new Date(r.started_at).getTime();
@@ -444,8 +471,20 @@ export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRu
     durations.sort((a, b) => a - b);
     const midDur = durations[Math.floor(durations.length / 2)];
     const p50 = midDur != null ? midDur / 1000 : null;
+    // Most recent terminal run decides the Failed state — same rule as
+    // queueViewModel's `lastRunErrored(summary.lastRun)`.
+    const terminal = runs
+        .filter((r) => r.status === 'completed' || r.status === 'error')
+        .sort((a, b) =>
+            (b.completed_at ?? b.created_at).localeCompare(a.completed_at ?? a.created_at)
+        );
+    const lastRunErrored = terminal[0]?.status === 'error';
+
     return {
         queueDepth,
+        runningCount,
+        queuedCount,
+        lastRunErrored,
         lastRunAt,
         totalRunsThisMonth: countMonth,
         p50DurationSec: p50,

@@ -3,7 +3,7 @@
 ## Responsibility
 
 Fastify 5 HTTP server on port 4001 (dev) / 5001 (prod). Owns:
-- SQLite database (better-sqlite3, path: `<workspace data dir>/atlas.db` — Windows: `%APPDATA%/Atlas/`, macOS/Linux: `~/.config/Atlas/`)
+- PostgreSQL 16 database (docker compose service `atlas-postgres`, host port 5500; `atlas-postgres-prod` on 5510). Queries via Kysely, migrations via Knex. See `docs/adr/0001-postgres-migration.md` and `docs/adr/0003-kysely-knex-split.md`.
 - All REST API routes
 - Server-Sent Events (SSE) for agent status streaming
 - Business logic (services/)
@@ -17,9 +17,9 @@ Fastify 5 HTTP server on port 4001 (dev) / 5001 (prod). Owns:
 src/
 ├── server.ts           → Entry point. Register plugins + routes. No business logic.
 ├── db/
-│   ├── client.ts       → Exports `db` singleton (Database instance). Only file that touches SQLite.
-│   ├── migrations/     → Numbered SQL files (001_initial.sql, 002_fts.sql, ...). Append only.
-│   └── seed.ts         → 10 agent seed rows. Run once if agents table is empty.
+│   ├── kysely-client.ts → Exports the `db` singleton (Kysely + pg Pool, max 10). Only file that opens connections.
+│   ├── migrations/     → Numbered Knex migrations (`001_baseline.sql` + `001_baseline.ts`, then `002_*.ts` …). Append only.
+│   └── seed.ts         → Syncs the on-disk marketplace catalog into `marketplace_agents`. NEVER writes to `agents` — install is marketplace-only (`docs/adr/0007`).
 ├── routes/             → One file per resource. Register as Fastify plugins. No DB calls here.
 │   ├── agents.ts      → GET/POST /api/agents, GET/PATCH/DELETE /api/agents/:id
 │   └── ...
@@ -50,11 +50,12 @@ export async function agentsRoutes(app: FastifyInstance) {
 
 ## DB Rules
 
-- `db` singleton is synchronous better-sqlite3 — never use async/await for DB operations
+- `db` is an async Kysely instance over a `pg` Pool — every query is awaited. (It was synchronous better-sqlite3 before the Postgres migration; any code or doc implying sync DB access is stale.)
 - All DB operations go through `services/` — never directly in route handlers
-- Migrations are append-only numbered SQL files — never edit `001_initial.sql` (the consolidated pre-publish baseline). Future schema changes go in NEW numbered files (`002`, `003`, …).
-- Use transactions (`db.transaction(fn)`) for multi-table writes
+- Migrations are append-only numbered Knex files — never edit `001_baseline.sql` / `001_baseline.ts` (the consolidated pre-publish baseline). Future schema changes go in NEW numbered files (`002`, `003`, …).
+- Use transactions (`await db.transaction().execute(async (trx) => …)`) for multi-table writes
 - Column names are snake_case matching `@atlas/shared` interface field names
+- `agents` carries a composite FK `(cli, model) → cli_models(cli, model_name)` with `ON DELETE RESTRICT`. Any new writer into `agents` must call `assertModelInRegistry` first, or a pruned registry row surfaces as an opaque FK 500 (this is exactly how marketplace install broke — see `.agents/api-surface.md`).
 
 ## Validation Rules
 
@@ -96,4 +97,5 @@ If push *fails*, cleanup is skipped so manual recovery is possible. `ensureWorkt
 - No business logic in route handlers (only: validate → call service → return)
 - No CORS changes without checking `@fastify/cors` config in `server.ts`
 - Never edit existing migration files — always add a new numbered one
+- Never return a stored secret from a list/get route. Plaintext leaves the server only through a dedicated, `requireMcpToken`-gated reveal endpoint that logs `{tag:'secret_reveal'}` (`environment-secrets`, `projects/:id/env`, `credentials/:id/token`, `settings/external-notification/reveal-*`)
 - No `console.log` — use Fastify's logger: `app.log.info(...)`, `app.log.error(...)`

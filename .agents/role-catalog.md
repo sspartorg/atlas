@@ -6,20 +6,37 @@ The **SDLC role catalog** is the canonical list of roles an agent can play in At
 - The curated starter prompt for each role (the `default_prompt_md` + `default_reviewer_prompt_md` columns).
 - The default activation policy: which roles ship enabled vs. disabled on a fresh install.
 
-## The 10 roles
+## Ten slugs in the type; five rows in the DB
 
-| `id` | Label | Default status | Notes |
-|---|---|---|---|
-| `po` | Product Owner | active | PO Writer — Brainstorm-before-scope agent. Reviewer persona handles the brainstorm-exit shape. |
-| `spec-writer` | Specification Writer | active | Writes per-Story specs ahead of code. |
-| `engineer` | Engineer | active | Coder. The reviewer persona is the canonical **Engineering-Reviewer** the spec calls out. |
-| `qa` | Quality Assurance | active | QA Writer — owns the regression net. |
-| `architect` | Software Architect | inactive | Architecture docs ahead of implementation. |
-| `tester` | Exploratory Tester | inactive | Manual + persona-driven exploration (distinct from QA's automation). |
-| `automation` | Automation Engineer | inactive | CI/CD, build tooling, release automation. |
-| `devops` | DevOps Engineer | inactive | Infra-as-code, deploys, observability, secrets rotation. |
-| `security` | Security Review Lead | inactive | Cross-cutting security review. Escalates findings to Owner — no paired performer. |
-| `designer` | UX/Visual Designer | inactive | Mockups + component specs. |
+> **2026-09-12 correction.** The `SdlcRole` union and `SDLC_ROLES` in
+> `@atlas/shared` declare all ten slugs below, but the shipped baseline seeds
+> only **five** `roles` rows — `po`, `architect`, `engineer`, `qa`,
+> `automation` (the five performer agents that have curated prompts).
+> `spec-writer`, `tester`, `devops`, `security` and `designer` are type-level
+> only. This doc previously claimed migration 025 seeded all ten; it does not.
+>
+> `agents.role_id` is an FK into `roles`, so assigning one of the five
+> type-only slugs used to fail with a raw `agents_role_id_fkey` 500.
+> `agentsService.create` / `update` now call `assertRoleInCatalog` and return
+> `400 ROLE_NOT_IN_CATALOG` naming the five that exist — same shape as
+> `assertModelInRegistry` for `(cli, model)`. Adding one of the missing five
+> for real means a migration plus a curated `default_prompt_md`; it is not a
+> seed-data oversight to paper over.
+
+## The 10 slugs
+
+| `id` | Label | Seeded? | Default status | Notes |
+|---|---|---|---|---|
+| `po` | Product Owner | yes | active | PO Writer — Brainstorm-before-scope agent. Reviewer persona handles the brainstorm-exit shape. |
+| `spec-writer` | Specification Writer | **no** | active | Writes per-Story specs ahead of code. |
+| `engineer` | Engineer | yes | active | Coder. The reviewer persona is the canonical **Engineering-Reviewer** the spec calls out. |
+| `qa` | Quality Assurance | yes | active | QA Writer — owns the regression net. |
+| `architect` | Software Architect | yes | inactive | Architecture docs ahead of implementation. |
+| `tester` | Exploratory Tester | **no** | inactive | Manual + persona-driven exploration (distinct from QA's automation). |
+| `automation` | Automation Engineer | yes | inactive | CI/CD, build tooling, release automation. |
+| `devops` | DevOps Engineer | **no** | inactive | Infra-as-code, deploys, observability, secrets rotation. |
+| `security` | Security Review Lead | **no** | inactive | Cross-cutting security review. Escalates findings to Owner — no paired performer. |
+| `designer` | UX/Visual Designer | **no** | inactive | Mockups + component specs. |
 
 The slug `id` doubles as the canonical reference everywhere in the codebase — `SdlcRole` in `@atlas/shared`, the `agents.role_id` FK target, the URL param of `PATCH /api/roles/:id`. Adding a role means a migration + a shared-type bump; the runtime never invents roles on its own.
 

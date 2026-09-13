@@ -22,7 +22,11 @@ import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import LockOutlined from '@mui/icons-material/LockOutlined';
 import KeyRounded from '@mui/icons-material/KeyRounded';
 import type { IProject } from '@atlas/shared';
-import { useProjectEnv, useSaveProjectEnv, useRevealProjectEnv } from '../../hooks/useProjectEnv.js';
+import {
+    useProjectEnv,
+    useSaveProjectEnv,
+    useRevealProjectEnv,
+} from '../../hooks/useProjectEnv.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 
@@ -43,6 +47,12 @@ interface Row {
     value: string;
     isNew: boolean;
     revealed: boolean;
+    /**
+     * Plaintext fetched on demand from the reveal endpoint. Transient —
+     * never cached, dropped the moment the Owner types a replacement or
+     * hides the row. `null` means "not revealed".
+     */
+    revealedValue: string | null;
 }
 
 interface Props {
@@ -77,11 +87,7 @@ interface ParseJsonSecretsResult {
 
 function parseJsonSecrets(text: string): ParseJsonSecretsResult {
     const parsed: unknown = JSON.parse(text);
-    if (
-        parsed === null ||
-        typeof parsed !== 'object' ||
-        Array.isArray(parsed)
-    ) {
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
         throw new Error('Expected a JSON object of { KEY: "value" } pairs');
     }
     const secrets: ParsedSecret[] = [];
@@ -140,6 +146,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                 value: v.value ?? '',
                 isNew: false,
                 revealed: false,
+                revealedValue: null,
             }))
         );
     }, [data, open]);
@@ -207,6 +214,68 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
         setRows((rs) => rs.map((r) => (r.rid === rid ? { ...r, ...patch } : r)));
     }
 
+    // The list endpoint is metadata-only, so a stored row arrives with an
+    // empty `value`. Flipping the input's `type` therefore revealed an empty
+    // box — the plaintext has to be fetched. Mirrors SharedSecretsTab.
+    async function revealRow(rid: string, key: string): Promise<string | null> {
+        try {
+            const res = await reveal.mutateAsync(key);
+            updateRow(rid, { revealed: true, revealedValue: res.value });
+            return res.value;
+        } catch (err) {
+            toast.show({
+                message: 'Could not reveal secret',
+                detail: err instanceof Error ? err.message : String(err),
+            });
+            return null;
+        }
+    }
+
+    function clearReveal(rid: string) {
+        updateRow(rid, { revealed: false, revealedValue: null });
+    }
+
+    /** True when this row exists server-side and the Owner hasn't typed over it. */
+    function isStoredAndUntyped(r: Row): boolean {
+        return r.originalKey !== null && r.value === '';
+    }
+
+    async function toggleRevealAll(): Promise<void> {
+        if (revealAll) {
+            setRevealAll(false);
+            setRows((rs) => rs.map((r) => ({ ...r, revealed: false, revealedValue: null })));
+            return;
+        }
+        // One decrypt per stored row — the reveal endpoint is per-key by
+        // design (each reveal is an audited action), so there is no batch
+        // form to call here.
+        const targets = rows.filter(isStoredAndUntyped);
+        const fetched = await Promise.all(
+            targets.map(async (r) => {
+                try {
+                    const res = await reveal.mutateAsync(r.originalKey!);
+                    return { rid: r.rid, value: res.value };
+                } catch {
+                    return { rid: r.rid, value: null };
+                }
+            })
+        );
+        const byRid = new Map(fetched.map((f) => [f.rid, f.value]));
+        setRows((rs) =>
+            rs.map((r) => {
+                const v = byRid.get(r.rid);
+                return v === undefined || v === null
+                    ? { ...r, revealed: true }
+                    : { ...r, revealed: true, revealedValue: v };
+            })
+        );
+        setRevealAll(true);
+        const failed = fetched.filter((f) => f.value === null).length;
+        if (failed > 0) {
+            toast.show({ message: `Could not reveal ${failed} secret${failed === 1 ? '' : 's'}` });
+        }
+    }
+
     function addRow() {
         setRows((rs) => [
             ...rs,
@@ -217,6 +286,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                 value: '',
                 isNew: true,
                 revealed: true,
+                revealedValue: null,
             },
         ]);
     }
@@ -267,7 +337,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                 for (const p of result.secrets) {
                     const existing = byKey.get(p.key);
                     if (existing) {
-                        byKey.set(p.key, { ...existing, value: p.value });
+                        byKey.set(p.key, { ...existing, value: p.value, revealedValue: null });
                     } else {
                         byKey.set(p.key, {
                             rid: makeRid(),
@@ -276,13 +346,13 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                             value: p.value,
                             isNew: true,
                             revealed: false,
+                            revealedValue: null,
                         });
                     }
                 }
                 return [...byKey.values()];
             });
-            const skipped =
-                result.invalidKeys.length + result.invalidValues.length;
+            const skipped = result.invalidKeys.length + result.invalidValues.length;
             const skippedNote =
                 skipped > 0
                     ? ` (skipped ${skipped}: ${
@@ -364,8 +434,11 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                     // value → preserve by revealing the ORIGINAL server
                     // key then re-sending under the CURRENT (possibly
                     // renamed) key.
-                    const res = await reveal.mutateAsync(r.originalKey);
-                    preserved.push({ key: r.key, value: res.value });
+                    // Already revealed on screen → reuse it rather than
+                    // firing a second decrypt (each reveal is audited).
+                    const value =
+                        r.revealedValue ?? (await reveal.mutateAsync(r.originalKey)).value;
+                    preserved.push({ key: r.key, value });
                     preservedRids.add(r.rid);
                 }
             }
@@ -465,9 +538,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                                 {displayId}
                             </Box>
                         </Box>
-                        <Typography
-                            sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 1 }}
-                        >
+                        <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 1 }}>
                             Injected into every agent run inside <strong>{project.name}</strong>.
                             In-flight runs continue under the previous values.
                         </Typography>
@@ -489,15 +560,13 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                                 '& .MuiAlert-message': { fontSize: 12, py: 0.5 },
                             }}
                         >
-                            This project has no folder on disk yet. Clone or connect the repo
-                            before managing secrets.
+                            This project has no folder on disk yet. Clone or connect the repo before
+                            managing secrets.
                         </Alert>
                     ) : (
                         <Alert
                             icon={
-                                <LockOutlined
-                                    sx={{ fontSize: 16, color: ATLAS_PALETTE.success }}
-                                />
+                                <LockOutlined sx={{ fontSize: 16, color: ATLAS_PALETTE.success }} />
                             }
                             sx={{
                                 py: 0.5,
@@ -508,7 +577,10 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                             }}
                         >
                             Encrypted at rest with AES-256-GCM. Merged with Settings &gt; Shared
-                            Secrets before the setup runner substitutes <Box component="span" sx={{ fontFamily: MONO }}>${'{variable.KEY}'}</Box>{' '}
+                            Secrets before the setup runner substitutes{' '}
+                            <Box component="span" sx={{ fontFamily: MONO }}>
+                                ${'{variable.KEY}'}
+                            </Box>{' '}
                             placeholders in this project&apos;s setup script. Never echoed to logs.
                         </Alert>
                     )}
@@ -537,9 +609,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                             bgcolor: ATLAS_PALETTE.white,
                         }}
                     >
-                        <SearchRounded
-                            sx={{ fontSize: 16, color: ATLAS_PALETTE.slate40, mr: 1 }}
-                        />
+                        <SearchRounded sx={{ fontSize: 16, color: ATLAS_PALETTE.slate40, mr: 1 }} />
                         <InputBase
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -594,7 +664,10 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                                 <VisibilityOutlined sx={{ fontSize: 16 }} />
                             )
                         }
-                        onClick={() => setRevealAll((v) => !v)}
+                        disabled={reveal.isPending}
+                        onClick={() => {
+                            void toggleRevealAll();
+                        }}
                         sx={{
                             textTransform: 'none',
                             color: ATLAS_PALETTE.slate,
@@ -681,9 +754,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                                             ? 'rgba(49,171,70,.06)'
                                             : ATLAS_PALETTE.white,
                                         borderTop:
-                                            i === 0
-                                                ? 'none'
-                                                : `1px solid ${ATLAS_PALETTE.slate06}`,
+                                            i === 0 ? 'none' : `1px solid ${ATLAS_PALETTE.slate06}`,
                                         '&:hover': {
                                             bgcolor: r.isNew
                                                 ? 'rgba(49,171,70,.10)'
@@ -738,15 +809,31 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                                     <TextField
                                         size="small"
                                         variant="standard"
-                                        type={revealAll || r.revealed ? 'text' : 'password'}
-                                        value={r.value}
-                                        onChange={(e) =>
-                                            updateRow(r.rid, { value: e.target.value })
+                                        type={
+                                            revealAll || r.revealed || r.revealedValue !== null
+                                                ? 'text'
+                                                : 'password'
                                         }
-                                        placeholder="value"
+                                        value={r.revealedValue ?? r.value}
+                                        onChange={(e) =>
+                                            updateRow(r.rid, {
+                                                value: e.target.value,
+                                                revealedValue: null,
+                                            })
+                                        }
+                                        placeholder={
+                                            isStoredAndUntyped(r)
+                                                ? '••••••••  (click Reveal to show, or type to replace)'
+                                                : 'value'
+                                        }
                                         slotProps={{
                                             input: {
                                                 disableUnderline: true,
+                                                // Read-only while a freshly-revealed
+                                                // stored value is on screen so an
+                                                // accidental keystroke can't turn a
+                                                // reveal into a silent rewrite.
+                                                readOnly: r.revealedValue !== null,
                                                 sx: {
                                                     fontFamily: MONO,
                                                     fontSize: 12.5,
@@ -755,18 +842,40 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                                                 endAdornment: (
                                                     <InputAdornment position="end">
                                                         <Tooltip
-                                                            title={r.revealed ? 'Hide' : 'Reveal'}
+                                                            title={
+                                                                r.revealed ||
+                                                                r.revealedValue !== null
+                                                                    ? 'Hide'
+                                                                    : 'Reveal'
+                                                            }
                                                         >
                                                             <IconButton
                                                                 size="small"
-                                                                onClick={() =>
+                                                                disabled={reveal.isPending}
+                                                                onClick={() => {
+                                                                    if (isStoredAndUntyped(r)) {
+                                                                        if (
+                                                                            r.revealedValue !== null
+                                                                        ) {
+                                                                            clearReveal(r.rid);
+                                                                        } else {
+                                                                            void revealRow(
+                                                                                r.rid,
+                                                                                r.originalKey!
+                                                                            );
+                                                                        }
+                                                                        return;
+                                                                    }
                                                                     updateRow(r.rid, {
                                                                         revealed: !r.revealed,
-                                                                    })
-                                                                }
-                                                                sx={{ color: ATLAS_PALETTE.slate40 }}
+                                                                    });
+                                                                }}
+                                                                sx={{
+                                                                    color: ATLAS_PALETTE.slate40,
+                                                                }}
                                                             >
-                                                                {r.revealed ? (
+                                                                {r.revealed ||
+                                                                r.revealedValue !== null ? (
                                                                     <VisibilityOffOutlined
                                                                         sx={{ fontSize: 15 }}
                                                                     />
@@ -780,10 +889,36 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                                                         <Tooltip title="Copy">
                                                             <IconButton
                                                                 size="small"
-                                                                onClick={() =>
-                                                                    copy(r.value, r.key || 'value')
-                                                                }
-                                                                sx={{ color: ATLAS_PALETTE.slate40 }}
+                                                                onClick={() => {
+                                                                    // Copying used to put the empty
+                                                                    // string on the clipboard for
+                                                                    // every stored row.
+                                                                    const shown =
+                                                                        r.revealedValue ?? r.value;
+                                                                    if (shown !== '') {
+                                                                        copy(
+                                                                            shown,
+                                                                            r.key || 'value'
+                                                                        );
+                                                                        return;
+                                                                    }
+                                                                    if (!isStoredAndUntyped(r))
+                                                                        return;
+                                                                    void revealRow(
+                                                                        r.rid,
+                                                                        r.originalKey!
+                                                                    ).then((v) => {
+                                                                        if (v !== null) {
+                                                                            copy(
+                                                                                v,
+                                                                                r.key || 'value'
+                                                                            );
+                                                                        }
+                                                                    });
+                                                                }}
+                                                                sx={{
+                                                                    color: ATLAS_PALETTE.slate40,
+                                                                }}
                                                             >
                                                                 <ContentCopyRounded
                                                                     sx={{ fontSize: 14 }}
@@ -878,10 +1013,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                     <Box
                         sx={{
                             fontSize: 12,
-                            color:
-                                dirtyCount > 0
-                                    ? ATLAS_PALETTE.warning
-                                    : ATLAS_PALETTE.slate60,
+                            color: dirtyCount > 0 ? ATLAS_PALETTE.warning : ATLAS_PALETTE.slate60,
                             display: 'flex',
                             alignItems: 'center',
                             gap: 1,

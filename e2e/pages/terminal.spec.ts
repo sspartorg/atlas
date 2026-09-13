@@ -123,9 +123,16 @@ test.describe('/terminal', () => {
         // keeps this assertion about commit + push + teardown, and exercises
         // the bypass at the same time. It also pins the button label, which
         // otherwise reads "Stop & open PR" whenever something is staged.
+        //
+        // Wait for ENABLED, not merely visible. The checkbox renders disabled
+        // while the stop preflight is in flight, so the old
+        // `if (await prBox.isEnabled())` probe read false, skipped the uncheck
+        // entirely, and left the confirm button reading "Stop & open PR" —
+        // which is why this assertion timed out looking for "Stop session".
         const prBox = stopDialog.getByRole('checkbox', { name: /open a pull request/i });
-        await expect(prBox).toBeVisible({ timeout: 30_000 });
-        if (await prBox.isEnabled()) await prBox.uncheck();
+        await expect(prBox).toBeEnabled({ timeout: 30_000 });
+        await prBox.uncheck();
+        await expect(prBox).not.toBeChecked();
         const confirm = stopDialog.getByRole('button', { name: /^Stop session$/ });
         await expect(confirm).toBeEnabled({ timeout: 30_000 });
         await confirm.click();

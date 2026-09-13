@@ -45,11 +45,19 @@ export async function startMcpHost(opts: IStartMcpHostOptions): Promise<IMcpHost
         apiBase: opts.apiBase,
         mcpToken: opts.mcpToken,
         requestTimeoutMs: 15_000,
-        // In-process MCP host: there is no bound agent identity here.
-        // Callers of this host are the agent-runner sub-CLIs (via HTTP);
-        // each of THOSE processes carries its own ATLAS_AGENT_ID, but
-        // this host process itself doesn't have one. Leaving blank keeps
-        // the pre-follow-up caller-supplied-agent_id path.
+        // In-process MCP host: there is no bound agent identity here, and
+        // there cannot be one — this single listener serves every agent.
+        //
+        // This comment used to claim each spawned CLI carries its own
+        // ATLAS_AGENT_ID. It does not: nothing in the repo sets that var
+        // (agent-runner's childEnv is gitInvokeEnv + ollamaEnv only), and it
+        // would not help if it did, because the tool handler runs in THIS
+        // process, not in the child. So `resolveAgentId` falls back to an
+        // optional tool argument the model may omit — which is how agent
+        // comments ended up with a null agent_id and rendered as the literal
+        // "Agent". `commentsService.create` now resolves the author from the
+        // item's live run instead of trusting the caller (see
+        // .agents/data-model.md → IComment).
         boundAgentId: '',
     });
 

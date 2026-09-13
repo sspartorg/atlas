@@ -103,6 +103,7 @@ export function SearchResults({
                         sort
                     </Box>
                     <Select
+                        inputProps={{ 'aria-label': 'Sort results' }}
                         value={sort}
                         onChange={(e) => onSortChange(e.target.value as SortKey)}
                         variant="standard"
@@ -313,10 +314,7 @@ export function SearchResults({
                                                     overflow: 'hidden',
                                                 }}
                                             >
-                                                {highlightSubstring(
-                                                    hit.description,
-                                                    highlightText
-                                                )}
+                                                {highlightSubstring(hit.description, highlightText)}
                                             </Typography>
                                         )}
                                     </Box>

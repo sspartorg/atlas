@@ -80,3 +80,17 @@ There are no "Awaiting Decision", "Active", or "Done" sections.
 
 ## Coming soon on this page
 None.
+
+## Status vocabulary (2026-09-12)
+
+`resolveAgentStatusLabel(agentStatus, runningCount, queuedCount, lastRunErrored)` in
+`pages/queue/queueViewModel.ts` is the single definition used by this page, the
+Agents grid (`AgentCard`) and the Agent Detail hero (`AgentHero`). Precedence:
+**Paused** (inactive beats everything — a paused agent's stale runs are not news)
+→ **Failed** (most recent terminal run errored) → **Running** → **Queued** → **Idle**.
+
+Note the two surfaces feed it from different sources by design: this page counts
+*assigned items* by item status (`isRunningStatus` / `isQueuedStatus`), while the
+cards count *`agent_runs` rows*. In the real flow these agree, because
+`spawnAgentRun` advances the item `ready → in_progress` at dispatch. They can
+only diverge if run rows and item state are written independently.

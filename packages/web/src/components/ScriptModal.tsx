@@ -123,7 +123,12 @@ export function ScriptModal({ open, editing, onClose, onSubmit, onDelete }: Scri
     return (
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                {/* `component="span"`: MuiDialogTitle already renders the
+                    heading element (h2), so a nested h6 is invalid HTML and
+                    React warns "In HTML, <h6> cannot be a child of <h2>" on
+                    every render. Same fix as StopSessionModal — we only want
+                    the h6 type scale. */}
+                <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>
                     {isEdit ? 'Edit script' : 'Add script'}
                 </Typography>
                 <IconButton size="small" onClick={onClose} aria-label="Close">

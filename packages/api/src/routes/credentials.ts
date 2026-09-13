@@ -22,6 +22,32 @@ export async function credentialsRoutes(app: FastifyInstance) {
         return reply.send(stripSecretsForApi(c));
     });
 
+    // On-demand reveal for a stored PAT. Every read route strips the
+    // ciphertext (stripSecretsForApi), so the Credentials modal's eye icon
+    // had nothing to show: it toggled the input type over a permanently
+    // empty field. Mirrors the shared-secrets read model —
+    // GET /api/environment-secrets/:key/value — including the MCP-token
+    // gate and the audit log line, because reveal is an auditable action.
+    //
+    // PAT only. A `github_app` row's token is an ephemeral minted
+    // installation token that rotates on its own, so revealing it tells the
+    // Owner nothing they can act on and would hand out a live credential
+    // that outlives the click.
+    app.get('/api/credentials/:id/token', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const cred = await credentialsService.get(id);
+        if (!cred) throw new ApiError('not_found', 'Credential not found', 404);
+        if (cred.kind !== 'pat') {
+            throw new ApiError('validation_error', 'Only pat credentials can be revealed', 400);
+        }
+        const value = await credentialsService.getToken(id);
+        req.log.info(
+            { tag: 'secret_reveal', scope: 'credential', credential_id: id },
+            'secret revealed'
+        );
+        return reply.send({ id, value });
+    });
+
     app.post('/api/credentials', { preHandler: requireMcpToken }, async (req, reply) => {
         const body = CreateCredentialSchema.parse(req.body);
         try {
@@ -94,7 +120,7 @@ export async function credentialsRoutes(app: FastifyInstance) {
                 throw new ApiError(
                     'validation_error',
                     'Only github_app credentials can be refreshed',
-                    400,
+                    400
                 );
             }
             try {
@@ -117,14 +143,14 @@ export async function credentialsRoutes(app: FastifyInstance) {
                     throw new ApiError(
                         'validation_error',
                         `GitHub rejected the App JWT — check the private key and app id (${safeMsg})`,
-                        400,
+                        400
                     );
                 }
                 if (ghStatus === 404) {
                     throw new ApiError(
                         'validation_error',
                         `GitHub could not find the App installation on the configured owner — check app_installation_owner (${safeMsg})`,
-                        400,
+                        400
                     );
                 }
                 throw err;
@@ -134,6 +160,6 @@ export async function credentialsRoutes(app: FastifyInstance) {
             // row still exists — a concurrent DELETE mid-refresh is not a
             // supported race in this personal-install service.
             return reply.send(stripSecretsForApi(fresh!));
-        },
+        }
     );
 }
