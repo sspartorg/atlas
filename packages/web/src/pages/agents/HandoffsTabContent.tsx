@@ -69,7 +69,7 @@ function findRule(rules: IAgentHandoffRule[], kind: AgentHandoffKind): RouteDraf
 export function HandoffsTabContent({ agent }: Props) {
     const queryClient = useQueryClient();
     const toast = useToast();
-    const { data: agents = [] } = useAgents();
+    const { data: agents = [], isSuccess: agentsLoaded } = useAgents();
     const rulesQuery = useHandoffRules(agent.id);
     const checklistsQuery = useAgentChecklists(agent.id);
     const updateAgent = useUpdateAgent();
@@ -418,6 +418,7 @@ export function HandoffsTabContent({ agent }: Props) {
                         title="All checks passed"
                         route={onPass}
                         options={targetAgents}
+                        agentsLoaded={agentsLoaded}
                         onChange={setOnPass}
                         ownerOption={false}
                         error={onPassMissing}
@@ -428,6 +429,7 @@ export function HandoffsTabContent({ agent }: Props) {
                         title="Any check failed"
                         route={onFail}
                         options={targetAgents}
+                        agentsLoaded={agentsLoaded}
                         onChange={setOnFail}
                         ownerOption
                         error={onFailMissing}
@@ -573,6 +575,8 @@ interface RouteCardProps {
     title: string;
     route: RouteDraft;
     options: IAgent[];
+    /** Until the agents list lands every target looks uninstalled. */
+    agentsLoaded: boolean;
     ownerOption: boolean;
     onChange: (next: RouteDraft) => void;
     error?: boolean;
@@ -584,12 +588,23 @@ function RouteCard({
     title,
     route,
     options,
+    agentsLoaded,
     ownerOption,
     onChange,
     error = false,
 }: RouteCardProps) {
     const { data: settings } = useSettings();
     const ownerLabel = `Owner (${settings?.owner_name ?? 'Owner'})`;
+    // A rule can name an agent that isn't installed (e.g. a marketplace
+    // entry's handoff target). Keep it as an explicit option so MUI never
+    // sees an out-of-range value and the Owner sees why the route is dead.
+    const missingTarget =
+        route.targetId !== '' &&
+        route.targetId !== 'owner' &&
+        !options.some((o) => o.id === route.targetId)
+            ? route.targetId
+            : null;
+    const missingLabel = agentsLoaded ? `${missingTarget} (not installed)` : missingTarget;
     return (
         <Box
             sx={{
@@ -636,8 +651,8 @@ function RouteCard({
                             );
                         }
                         if (value === 'owner') return ownerLabel;
-                        const match = options.find((o) => o.id === value);
-                        return match ? match.name : value;
+                        if (value === missingTarget) return missingLabel;
+                        return options.find((o) => o.id === value)?.name ?? value;
                     }}
                     sx={{
                         background: ATLAS_PALETTE.white,
@@ -650,7 +665,18 @@ function RouteCard({
                             {w.name}
                         </MenuItem>
                     ))}
+                    {missingTarget ? (
+                        <MenuItem value={missingTarget} disabled>
+                            {missingLabel}
+                        </MenuItem>
+                    ) : null}
                 </Select>
+                {missingTarget && agentsLoaded && (
+                    <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.warning, mt: 0.5 }}>
+                        Install {missingTarget} or pick another agent — this route can't hand off
+                        until you do.
+                    </Typography>
+                )}
                 {error && (
                     <Typography
                         sx={{

@@ -105,4 +105,35 @@ describe('AgentSelect', () => {
             expect(onChange).not.toHaveBeenCalled(); // guard: didn't fire spuriously
         }
     });
+
+    it('suggestedRole groups matching-role agents first under "Suggested"', () => {
+        const agents = [
+            makeAgent({ id: 'eng', name: 'Engineer', role_id: 'engineer' }),
+            makeAgent({ id: 'po', name: 'Product Owner', role_id: 'po' }),
+        ];
+        renderWithProviders(
+            <AgentSelect
+                agents={agents}
+                value="OWNER"
+                ownerName="Sunny"
+                suggestedRole="po"
+                onChange={() => {}}
+            />,
+        );
+        fireEvent.mouseDown(screen.getByRole('combobox'));
+        const listbox = screen.getByRole('listbox');
+        const text = listbox.textContent ?? '';
+        expect(text.indexOf('Suggested')).toBeGreaterThanOrEqual(0);
+        expect(text.indexOf('Product Owner')).toBeLessThan(text.indexOf('Sunny'));
+        expect(text.indexOf('Sunny')).toBeLessThan(text.indexOf('Engineer'));
+    });
+
+    it('no "Suggested" group when no agent has the suggested role', () => {
+        const agents = [makeAgent({ id: 'eng', name: 'Engineer', role_id: 'engineer' })];
+        renderWithProviders(
+            <AgentSelect agents={agents} value="" suggestedRole="po" onChange={() => {}} />,
+        );
+        fireEvent.mouseDown(screen.getByRole('combobox'));
+        expect(screen.queryByText('Suggested')).not.toBeInTheDocument();
+    });
 });

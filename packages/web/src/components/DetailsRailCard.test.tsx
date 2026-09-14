@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
+import type { IItemExternalLink } from '@atlas/shared';
+import { http, HttpResponse } from 'msw';
+import { server } from '../test-setup.js';
+import { makeAgent } from '../test-utils/factories.js';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { DetailsRailCard } from './DetailsRailCard.js';
@@ -237,5 +241,110 @@ describe('DetailsRailCard', () => {
         if (copyButtons[0]) {
             await user.click(copyButtons[0]);
         }
+    });
+
+    it('epic assignee picker suggests PO-role agents first', async () => {
+        server.use(
+            http.get('http://localhost:3000/api/agents', () =>
+                HttpResponse.json([
+                    makeAgent({ id: 'eng', name: 'EngBot', status: 'active', role_id: 'engineer' }),
+                    makeAgent({ id: 'po', name: 'PoBot', status: 'active', role_id: 'po' }),
+                ]),
+            ),
+            http.get('http://localhost:3000/api/settings', () =>
+                HttpResponse.json({ id: 1, owner_name: 'Bob', onboarding_complete: 1 }),
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithProviders(
+            <DetailsRailCard
+                issueType="epic"
+                status="draft"
+                onStatusPick={vi.fn()}
+                assigneeAgentId={null}
+                onAssign={vi.fn()}
+                assignee={null}
+                project={null}
+                ownerName="Bob"
+                ownerAccent="#0A0A0A"
+                createdAt="2026-05-15T00:00:00.000Z"
+                updatedAt="2026-05-16T00:00:00.000Z"
+            />,
+        );
+        await user.click(screen.getByText('Assignee'));
+        expect(await screen.findByText('Suggested')).toBeInTheDocument();
+    });
+
+    describe('Done with unmerged pull requests', () => {
+        const BASE = 'http://localhost:3000/api';
+        const pr = (over: Partial<IItemExternalLink>): IItemExternalLink => ({
+            id: 1,
+            item_id: 'S1',
+            link_kind: 'pull_request',
+            url: 'https://github.com/foo/bar/pull/42',
+            title: 'feat: thing',
+            external_ref: '42',
+            created_at: '2026-06-30T00:00:00.000Z',
+            created_by_run_id: null,
+            pr_state: 'open',
+            ...over,
+        });
+
+        function renderRail(onStatusPick: (s: string, o: boolean) => void, links: IItemExternalLink[]) {
+            return renderWithProviders(
+                <DetailsRailCard
+                    issueType="story"
+                    issueId="S1"
+                    externalLinks={links}
+                    status="in_review"
+                    onStatusPick={onStatusPick}
+                    assigneeAgentId={null}
+                    onAssign={vi.fn()}
+                    assignee={null}
+                    project={null}
+                    ownerName="Bob"
+                    ownerAccent="#0A0A0A"
+                    createdAt="2026-05-15T00:00:00.000Z"
+                    updatedAt="2026-05-16T00:00:00.000Z"
+                />,
+            );
+        }
+
+        it('refreshes first, then asks before marking done while a PR is still unmerged', async () => {
+            const user = userEvent.setup();
+            let refreshed = 0;
+            server.use(
+                http.post(`${BASE}/issues/story/S1/external-links/refresh`, () => {
+                    refreshed += 1;
+                    return HttpResponse.json([pr({ pr_state: 'open' })]);
+                }),
+            );
+            const onStatusPick = vi.fn();
+            renderRail(onStatusPick, [pr({ pr_state: 'open' })]);
+            await user.click(screen.getByText('Status'));
+            await user.click(await screen.findByRole('menuitem', { name: 'Done' }));
+            const dialog = await screen.findByRole('dialog');
+            expect(refreshed).toBe(1);
+            expect(within(dialog).getByText('Mark done anyway?')).toBeInTheDocument();
+            expect(within(dialog).getByText(/#42 feat: thing \(open\)/)).toBeInTheDocument();
+            expect(onStatusPick).not.toHaveBeenCalled();
+            await user.click(within(dialog).getByRole('button', { name: 'Mark done' }));
+            expect(onStatusPick).toHaveBeenCalledWith('done', false);
+        });
+
+        it('transitions straight away when the refresh finds every PR merged', async () => {
+            const user = userEvent.setup();
+            server.use(
+                http.post(`${BASE}/issues/story/S1/external-links/refresh`, () =>
+                    HttpResponse.json([pr({ pr_state: 'merged' })]),
+                ),
+            );
+            const onStatusPick = vi.fn();
+            renderRail(onStatusPick, [pr({ pr_state: null })]);
+            await user.click(screen.getByText('Status'));
+            await user.click(await screen.findByRole('menuitem', { name: 'Done' }));
+            await waitFor(() => expect(onStatusPick).toHaveBeenCalledWith('done', false));
+            expect(screen.queryByText('Mark done anyway?')).not.toBeInTheDocument();
+        });
     });
 });

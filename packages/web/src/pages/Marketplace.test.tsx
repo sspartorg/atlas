@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import { Routes, Route } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
@@ -29,6 +29,48 @@ function makeSummary(overrides: Partial<IMarketplaceAgentSummary> = {}): IMarket
 }
 
 describe('Marketplace page', () => {
+    beforeEach(() => {
+        server.use(
+            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/marketplace/agents/:id`, () =>
+                HttpResponse.json({ agent: {}, handoff_rules: [], checklists: [] }),
+            ),
+        );
+    });
+
+    it('bulk bar names an uninstalled handoff target of the selection and adds it on click', async () => {
+        server.use(
+            http.get(`${BASE}/marketplace/agents`, () =>
+                HttpResponse.json([
+                    makeSummary({ id: 'agent-coder', name: 'Coder' }),
+                    makeSummary({ id: 'agent-code-reviewer', name: 'Code Reviewer' }),
+                ])
+            ),
+            http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
+                HttpResponse.json({
+                    agent: {},
+                    handoff_rules: [
+                        { target_agent_id: 'agent-code-reviewer', kind: 'on-pass', status: 'ready' },
+                    ],
+                    checklists: [],
+                })
+            ),
+        );
+        renderWithProviders(<Marketplace />);
+        await waitFor(() => expect(screen.getByText('Coder')).toBeInTheDocument());
+        fireEvent.click(screen.getAllByRole('checkbox')[0]!);
+        expect(
+            await screen.findByText("Coder hands off to Code Reviewer, which isn't installed.")
+        ).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /Add Code Reviewer too/i }));
+        expect(screen.getByText(/2 selected/i)).toBeInTheDocument();
+        await waitFor(() =>
+            expect(
+                screen.queryByText("Coder hands off to Code Reviewer, which isn't installed.")
+            ).not.toBeInTheDocument()
+        );
+    });
+
     it('renders the heading and empty count when no agents', async () => {
         server.use(http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([])));
         renderWithProviders(<Marketplace />);

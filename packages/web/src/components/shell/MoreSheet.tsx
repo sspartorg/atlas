@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { ATLAS_PALETTE, TOUCH } from '../../theme/tokens.js';
 import { useSidenavCounts } from '../../hooks/useSidenavCounts.js';
 import { prefetchRoute } from '../../utils/prefetchRoute.js';
+import { useConfirmLeave } from '../../hooks/useDraftGuard.js';
 
 interface Props {
     open: boolean;
@@ -59,11 +60,12 @@ const ITEMS: MoreItem[] = [
 
 export function MoreSheet({ open, onClose }: Props) {
     const navigate = useNavigate();
+    const confirmLeave = useConfirmLeave();
     const counts = useSidenavCounts();
 
     const go = (path: string) => {
         onClose();
-        navigate(path);
+        confirmLeave(() => navigate(path));
     };
 
     return (

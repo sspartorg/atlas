@@ -186,6 +186,8 @@ export function StoryDetail() {
                     <>
                         <DetailsRailCard
                             issueType="story"
+                            issueId={story.id}
+                            externalLinks={full?.external_links}
                             status={story.status}
                             onStatusPick={(next, override) =>
                                 void transition.mutateAsync({
@@ -326,6 +328,9 @@ export function StoryDetail() {
                     issueId={story.id}
                     activity={full?.activity}
                     agents={agents}
+                    status={story.status}
+                    assigneeAgentId={story.assignee_agent_id}
+                    runs={itemRuns}
                 />
             </IssueDetailShell>
 

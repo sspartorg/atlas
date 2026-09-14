@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Dialog from '@mui/material/Dialog';
 import Box from '@mui/material/Box';
@@ -26,6 +26,7 @@ import CloudDownloadRounded from '@mui/icons-material/CloudDownloadRounded';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCredentials } from '../../hooks/useCredentials.js';
 import { useSettings } from '../../hooks/useSettings.js';
+import { useAgents } from '../../hooks/useAgents.js';
 import { useCloneJob } from '../../hooks/useCloneJob.js';
 import { api } from '../../api/api.js';
 import type { ConnectError } from '../../api/api.js';
@@ -171,8 +172,8 @@ export function NewProjectModal({ open, onClose }: Props) {
     const qc = useQueryClient();
     const { data: credentials = [] } = useCredentials();
     const { data: settings } = useSettings();
-
     const [view, setView] = useState<View>('form');
+    const { data: agents } = useAgents({ enabled: view === 'success' });
     const [createMode, setCreateMode] = useState<CreateMode>('clone');
     const [repoUrl, setRepoUrl] = useState('');
     const [credentialId, setCredentialId] = useState<string>('');
@@ -314,9 +315,11 @@ export function NewProjectModal({ open, onClose }: Props) {
 
     const workspacePath = settings?.workspace_path ?? '';
     const computedDest = useMemo(() => {
-        if (!workspacePath || !projectName.trim()) return '';
+        if (!workspacePath) return '';
         const sep = workspacePath.includes('\\') ? '\\' : '/';
-        return `${workspacePath.replace(/[\\/]$/, '')}${sep}${projectName.trim()}`;
+        // Until the name resolves from the URL, show the workspace root with a
+        // neutral tail rather than claiming the workspace path is unset.
+        return `${workspacePath.replace(/[\\/]$/, '')}${sep}${projectName.trim() || '…'}`;
     }, [workspacePath, projectName]);
 
     const repoIsValid = REPO_RE.test(repoUrl.trim());
@@ -910,7 +913,8 @@ export function NewProjectModal({ open, onClose }: Props) {
                                             flex: 1,
                                         }}
                                     >
-                                        {computedDest || 'Set a workspace path in Settings first'}
+                                        {computedDest ||
+                                            (settings ? 'Set a workspace path in Settings first' : '…')}
                                     </Typography>
                                 </Box>
 
@@ -1332,7 +1336,8 @@ export function NewProjectModal({ open, onClose }: Props) {
                                 overflow: 'hidden',
                             }}
                         >
-                            {[
+                            {(
+                                [
                                 ['Project ID', job.project.id.slice(0, 8)],
                                 ['Default branch', job.project.default_branch],
                                 [
@@ -1341,8 +1346,28 @@ export function NewProjectModal({ open, onClose }: Props) {
                                         ? `${headInfo.short_sha} · ${headInfo.subject ?? '—'}${headInfo.relative_time ? ` (${headInfo.relative_time})` : ''}`
                                         : '—',
                                 ],
-                                ['Agents attached', '—'],
-                            ].map(([k, v], i) => (
+                                [
+                                    'Agents',
+                                    // Agents are global — every installed agent can work this project.
+                                    agents === undefined ? (
+                                        '—'
+                                    ) : agents.length > 0 ? (
+                                        `${agents.length} installed · shared by all projects`
+                                    ) : (
+                                        <Button
+                                            size="small"
+                                            onClick={() => {
+                                                onClose();
+                                                navigate('/agents/marketplace');
+                                            }}
+                                            sx={{ textTransform: 'none', p: 0, minWidth: 0 }}
+                                        >
+                                            None installed · Browse Marketplace →
+                                        </Button>
+                                    ),
+                                ],
+                            ] as Array<[string, ReactNode]>
+                            ).map(([k, v], i) => (
                                 <Box
                                     key={k}
                                     sx={{

@@ -10,6 +10,7 @@ import CheckRounded from '@mui/icons-material/CheckRounded';
 import type {
     IProject,
     IAgent,
+    IItemExternalLink,
     IssueStatus,
     IssueType,
     IssuePriority,
@@ -23,6 +24,8 @@ import { PriorityPickerPopover } from './PriorityPickerPopover.js';
 import { ResetRoundsPopover } from './ResetRoundsPopover.js';
 import { InfoPanel, InfoRow } from './InfoPanel.js';
 import { LabelsRailRow } from './LabelsRailRow.js';
+import { ConfirmActionModal } from './ConfirmActionModal.js';
+import { useRefreshIssueExternalLinks } from '../hooks/useIssueExternalLinks.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { formatDate, relativeTime } from '../utils/time.js';
 import { formatCostUsd } from '../utils/formatCost.js';
@@ -37,6 +40,9 @@ export interface ParentLink {
 
 interface Props {
     issueType: IssueType;
+    /** With `externalLinks`, enables the unmerged-PR check before Done. */
+    issueId?: string | undefined;
+    externalLinks?: IItemExternalLink[] | undefined;
     status: IssueStatus;
     onStatusPick: (status: IssueStatus, override: boolean) => void;
     statusLocked?: boolean | undefined;
@@ -138,8 +144,13 @@ function CopyValueButton({ value }: { value: string }) {
     );
 }
 
+const unmergedPrs = (links: IItemExternalLink[]) =>
+    links.filter((l) => l.link_kind === 'pull_request' && l.pr_state !== 'merged');
+
 export function DetailsRailCard({
     issueType,
+    issueId,
+    externalLinks,
     status,
     onStatusPick,
     statusLocked,
@@ -174,6 +185,29 @@ export function DetailsRailCard({
     const [statusAnchor, setStatusAnchor] = useState<HTMLElement | null>(null);
     const [priorityAnchor, setPriorityAnchor] = useState<HTMLElement | null>(null);
     const [roundsAnchor, setRoundsAnchor] = useState<HTMLElement | null>(null);
+    const refreshPrs = useRefreshIssueExternalLinks(issueType, issueId ?? '');
+    const [doneGuard, setDoneGuard] = useState<{
+        override: boolean;
+        prs: IItemExternalLink[];
+    } | null>(null);
+
+    // pr_state is only as fresh as the API's last GitHub lookup, so re-check
+    // before asking — a PR merged a minute ago shouldn't trigger the dialog.
+    async function pickStatus(next: IssueStatus, override: boolean) {
+        if (next !== 'done' || !issueId || unmergedPrs(externalLinks ?? []).length === 0) {
+            onStatusPick(next, override);
+            return;
+        }
+        let latest = externalLinks ?? [];
+        try {
+            latest = await refreshPrs.mutateAsync();
+        } catch {
+            // Lookup failed: fall back to what we had; the dialog still guards.
+        }
+        const prs = unmergedPrs(latest);
+        if (prs.length === 0) onStatusPick(next, override);
+        else setDoneGuard({ override, prs });
+    }
     // The Rounds row is only clickable when (a) the parent wired an
     // `onResetRounds` handler AND (b) we have meaningful values to render.
     // Off otherwise — keeps Owner-less / no-assignee surfaces read-only.
@@ -454,6 +488,7 @@ export function DetailsRailCard({
                     open
                     onClose={() => setAssigneeAnchor(null)}
                     assigneeAgentId={assigneeAgentId}
+                    suggestedRole={issueType === 'epic' ? 'po' : undefined}
                     onAssign={(agentId) => {
                         onAssign(agentId);
                         setAssigneeAnchor(null);
@@ -469,7 +504,7 @@ export function DetailsRailCard({
                     issueType={issueType}
                     current={status}
                     onPick={(next, override) => {
-                        onStatusPick(next, override);
+                        void pickStatus(next, override);
                         setStatusAnchor(null);
                     }}
                 />
@@ -506,6 +541,24 @@ export function DetailsRailCard({
                         }}
                     />
                 )}
+            <ConfirmActionModal
+                open={doneGuard !== null}
+                title="Mark done anyway?"
+                body={[
+                    "These pull requests aren't merged yet:",
+                    ...(doneGuard?.prs ?? []).map(
+                        (l) =>
+                            `${l.external_ref ? `#${l.external_ref}` : 'PR'} ${l.title ?? l.url} (${l.pr_state ?? 'state unknown'})`,
+                    ),
+                ].join('\n')}
+                confirmLabel="Mark done"
+                tone="warning"
+                onCancel={() => setDoneGuard(null)}
+                onConfirm={() => {
+                    if (doneGuard) onStatusPick('done', doneGuard.override);
+                    setDoneGuard(null);
+                }}
+            />
         </InfoPanel>
     );
 }

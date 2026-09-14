@@ -15,6 +15,7 @@ import { BulkInstallBar } from './marketplace/BulkInstallBar.js';
 import { runBulkInstall } from './marketplace/bulkInstall.js';
 import type { AgentCategory, IMarketplaceAgentSummary } from '@atlas/shared';
 import { useToast } from '../hooks/useToast.js';
+import { useMissingHandoffTargets } from '../hooks/useMarketplacePairing.js';
 
 const CATEGORIES: Array<{ key: AgentCategory | 'all'; label: string }> = [
     { key: 'all', label: 'All' },
@@ -68,6 +69,8 @@ export function Marketplace() {
             else next.add(id);
             return next;
         });
+    const selectedIds = useMemo(() => [...selected], [selected]);
+    const missingTargets = useMissingHandoffTargets(selectedIds);
     const clearSelected = () => setSelected(new Set());
     const selectAllInstallable = () => setSelected(new Set(installableIds));
 
@@ -263,6 +266,8 @@ export function Marketplace() {
                 onClear={clearSelected}
                 onSelectAll={selectAllInstallable}
                 onAdd={addSelected}
+                missingTargets={missingTargets}
+                onSelectTarget={(id) => setSelected((prev) => new Set(prev).add(id))}
             />
         </Box>
     );

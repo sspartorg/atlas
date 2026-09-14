@@ -47,6 +47,18 @@ describe('SetupTab', () => {
         expect(screen.getByDisplayValue(/Write-Host hi/)).toBeInTheDocument();
     });
 
+    it('copy says the script runs before the agent CLI (agent-runner setup_failed path), not "lands in a follow-up"', async () => {
+        server.use(
+            http.get(`${BASE}/projects/${PROJECT_ID}`, () =>
+                HttpResponse.json(makeProject({ id: PROJECT_ID })),
+            ),
+        );
+        renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
+        await screen.findByText(/Setup scripts/i);
+        expect(screen.queryByText(/lands in a follow-up/i)).not.toBeInTheDocument();
+        expect(screen.getByText(/before the agent CLI starts/i)).toBeInTheDocument();
+    });
+
     it('disables Save until a field is edited, enables it after edit', async () => {
         server.use(
             http.get(`${BASE}/projects/${PROJECT_ID}`, () =>

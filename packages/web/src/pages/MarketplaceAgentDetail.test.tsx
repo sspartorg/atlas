@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router-dom';
 import { server } from '../test-setup.js';
@@ -74,6 +74,80 @@ function renderAt(path: string) {
 }
 
 describe('MarketplaceAgentDetail page', () => {
+    beforeEach(() => {
+        server.use(
+            http.get(`${BASE}/cli/availability`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+        );
+    });
+
+    it('warns on the page and in the install modal when the agent CLI binary is missing', async () => {
+        server.use(
+            http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
+                HttpResponse.json({ ...fullPayload, agent: { ...baseAgent, cli: 'copilot' } }),
+            ),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/cli/availability`, () =>
+                HttpResponse.json([
+                    { cli: 'claude', binary: 'claude', available: true, version: '1.0.0' },
+                    { cli: 'copilot', binary: 'copilot', available: false, version: null },
+                    { cli: 'ollama', binary: 'claude', available: true, version: '1.0.0' },
+                ]),
+            ),
+        );
+        renderAt('/marketplace/agent-coder');
+        expect(
+            await screen.findByText(
+                'copilot is not installed on this machine — runs will fail until it is, or switch the agent to claude after installing.',
+            ),
+        ).toBeInTheDocument();
+        fireEvent.click(await screen.findByRole('button', { name: /Add to my agents/i }));
+        const dialog = await screen.findByRole('dialog');
+        expect(
+            await within(dialog).findByText(/copilot is not installed on this machine/),
+        ).toBeInTheDocument();
+    });
+
+    it('offers to install an uninstalled handoff target too, and installs both', async () => {
+        const installed: string[] = [];
+        server.use(
+            http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
+                HttpResponse.json({
+                    ...fullPayload,
+                    handoff_rules: [
+                        { target_agent_id: 'agent-code-reviewer', kind: 'on-pass', status: 'ready' },
+                        { target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
+                    ],
+                }),
+            ),
+            http.get(`${BASE}/marketplace/agents`, () =>
+                HttpResponse.json([
+                    summaryRow,
+                    { ...summaryRow, id: 'agent-code-reviewer', name: 'Code Reviewer' },
+                ]),
+            ),
+            http.post(`${BASE}/marketplace/agents/:id/install`, ({ params }) => {
+                installed.push(String(params['id']));
+                return HttpResponse.json({ id: String(params['id']), name: 'x', status: 'active' });
+            }),
+        );
+        renderAt('/marketplace/agent-coder');
+        fireEvent.click(await screen.findByRole('button', { name: /Add to my agents/i }));
+        const dialog = await screen.findByRole('dialog');
+        expect(
+            await within(dialog).findByText(
+                "This agent hands off to Code Reviewer, which isn't installed.",
+            ),
+        ).toBeInTheDocument();
+        fireEvent.click(within(dialog).getByRole('checkbox', { name: /Install Code Reviewer too/i }));
+        await act(async () => {
+            fireEvent.click(within(dialog).getByRole('button', { name: /Add to my agents/i }));
+        });
+        await waitFor(() =>
+            expect([...installed].sort()).toEqual(['agent-code-reviewer', 'agent-coder']),
+        );
+    });
+
     it('mounts without crashing while data resolves', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () =>

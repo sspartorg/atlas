@@ -9,6 +9,7 @@ import { makeAgent } from '../../test-utils/factories.js';
 import { AgentHero } from './AgentHero.js';
 import { getAgentView, getRuntimeStats } from './agentViewModel.js';
 import type { AgentCardMenuActions } from './AgentCardMenu.js';
+import { ATLAS_PALETTE } from '../../theme/tokens.js';
 
 function makeStats() {
     return getRuntimeStats([]);
@@ -240,6 +241,41 @@ describe('AgentHero', () => {
         expect(await screen.findByText('Queued')).toBeInTheDocument();
     });
 
+    it('renders Queued when item queue depth > 0 and nothing is running', async () => {
+        server.use(...defaultHandlers);
+        renderWithProviders(
+            <AgentHero
+                agent={makeAgent({ status: 'active' })}
+                view={makeView()}
+                stats={makeStats()}
+                queueDepth={1}
+                onRunNow={vi.fn()}
+                onPauseToggle={vi.fn()}
+                menuActions={noopMenuActions}
+            />,
+        );
+        expect(await screen.findByText('Queued')).toBeInTheDocument();
+        expect(screen.queryByText('Idle')).not.toBeInTheDocument();
+    });
+
+    it('colours the Failed state with the error slot so the dot is not green', async () => {
+        server.use(...defaultHandlers);
+        renderWithProviders(
+            <AgentHero
+                agent={makeAgent({ status: 'active' })}
+                view={makeView()}
+                stats={{ ...makeStats(), lastRunErrored: true }}
+                queueDepth={0}
+                onRunNow={vi.fn()}
+                onPauseToggle={vi.fn()}
+                menuActions={noopMenuActions}
+            />,
+        );
+        const label = await screen.findByText('Failed');
+        expect(label).toHaveStyle({ color: ATLAS_PALETTE.error });
+        expect(label.previousElementSibling).toHaveStyle({ background: ATLAS_PALETTE.error });
+    });
+
     it('renders lastRunAt relative time when lastRunAt is set (truthy branch)', async () => {
         server.use(...defaultHandlers);
         const pastDate = new Date(Date.now() - 3_600_000).toISOString();
@@ -402,4 +438,33 @@ describe('AgentHero', () => {
         // After early return, component is back to non-editing mode
         await waitFor(() => expect(document.body).toBeTruthy());
     }, 15000);
+
+    it('warns in the hero when the agent CLI binary is not installed', async () => {
+        server.use(
+            http.get('http://localhost:3000/api/cli/availability', () =>
+                HttpResponse.json([
+                    { cli: 'claude', binary: 'claude', available: true, version: '1.0.0' },
+                    { cli: 'copilot', binary: 'copilot', available: false, version: null },
+                    { cli: 'ollama', binary: 'claude', available: true, version: '1.0.0' },
+                ]),
+            ),
+            ...defaultHandlers,
+        );
+        renderWithProviders(
+            <AgentHero
+                agent={makeAgent({ cli: 'copilot' })}
+                view={makeView()}
+                stats={makeStats()}
+                queueDepth={0}
+                onRunNow={vi.fn()}
+                onPauseToggle={vi.fn()}
+                menuActions={noopMenuActions}
+            />,
+        );
+        expect(
+            await screen.findByText(
+                'copilot is not installed on this machine — runs will fail until it is, or switch the agent to claude.',
+            ),
+        ).toBeInTheDocument();
+    });
 });

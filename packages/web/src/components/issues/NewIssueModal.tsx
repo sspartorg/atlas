@@ -22,6 +22,7 @@ import { useEpics } from '../../hooks/useEpics.js';
 import { useStories } from '../../hooks/useStories.js';
 import { useAgents } from '../../hooks/useAgents.js';
 import { useSettings } from '../../hooks/useSettings.js';
+import { useDraftGuard } from '../../hooks/useDraftGuard.js';
 import { api } from '../../api/api.js';
 import type { IAgent, BugFrequency, BugFailureScope, IssueType } from '@atlas/shared';
 import { AgentSelect } from '../AgentSelect.js';
@@ -204,6 +205,17 @@ export function NewIssueModal({
         initialParentStoryId,
         initialValues,
     ]);
+
+    // Pickers are cheap to redo; only typed prose counts as a draft worth guarding.
+    useDraftGuard(
+        open &&
+            (title !== (initialValues?.title ?? '') ||
+                description !== (initialValues?.description ?? '') ||
+                acceptanceCriteria !== (initialValues?.acceptance_criteria ?? '') ||
+                stepsToReproduce !== (initialValues?.steps_to_reproduce ?? '') ||
+                expected !== (initialValues?.expected ?? '') ||
+                actual !== (initialValues?.actual ?? '')),
+    );
 
     const wantsEpicParent = kind === 'story' || kind === 'bug';
     const wantsBugFields = kind === 'bug' || kind === 'sub_bug';

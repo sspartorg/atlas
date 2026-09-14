@@ -204,4 +204,35 @@ describe('AssigneePickerPopover', () => {
         const items = screen.getAllByRole('menuitem');
         expect(items.some((el) => el.textContent?.includes('InactiveBot'))).toBe(false);
     });
+
+    it('suggestedRole="po" lists PO-role agents first under a "Suggested" header', async () => {
+        server.use(
+            http.get(`${BASE}/agents`, () =>
+                HttpResponse.json([
+                    makeAgent({ id: 'eng', name: 'EngBot', status: 'active', role_id: 'engineer' }),
+                    makeAgent({ id: 'po', name: 'PoBot', status: 'active', role_id: 'po' }),
+                ]),
+            ),
+            http.get(`${BASE}/settings`, () =>
+                HttpResponse.json({ id: 1, owner_name: 'Sunny', onboarding_complete: 1 }),
+            ),
+        );
+        renderWithProviders(
+            <AssigneePickerPopover
+                anchorEl={makeAnchor()}
+                open
+                onClose={vi.fn()}
+                assigneeAgentId={null}
+                onAssign={vi.fn()}
+                suggestedRole="po"
+            />,
+        );
+        expect(await screen.findByText('Suggested')).toBeInTheDocument();
+        await waitFor(() => {
+            const names = screen.getAllByRole('menuitem').map((el) => el.textContent ?? '');
+            expect(names[0]).toContain('PoBot');
+            expect(names[1]).toContain('Sunny');
+            expect(names[2]).toContain('EngBot');
+        });
+    });
 });

@@ -43,6 +43,7 @@ import type {
     SchedulePreset,
     ScheduleConflictPolicy,
     ICliModel,
+    ICliAvailability,
     IEnvVar,
     IToolCatalogGroup,
     AgentCli,
@@ -806,6 +807,10 @@ export const api = {
                 title: input.title ?? null,
             }),
         delete: (linkId: number) => del(`/issues/external-links/${linkId}`),
+        // Re-checks every PR link's GitHub state synchronously and returns
+        // the updated list (the plain list only refreshes stale rows lazily).
+        refresh: (issueType: IssueType, issueId: string) =>
+            post<IItemExternalLink[]>(`/issues/${issueType}/${issueId}/external-links/refresh`, {}),
     },
 
     notifications: {
@@ -1068,6 +1073,9 @@ export const api = {
     // block only covers REST control. See useCliSessionStream for the WS
     // hook + the TerminalXterm component for the xterm.js wiring.
     cli: {
+        // Whether each agent CLI's binary is runnable on the API host — backs
+        // the "not installed" warnings on agent + marketplace surfaces.
+        availability: () => get<ICliAvailability[]>('/cli/availability'),
         sessions: {
             list: (opts?: { project_id?: string; standalone?: boolean }) => {
                 const params = new URLSearchParams();

@@ -3,6 +3,7 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
+import type { IMissingHandoffTarget } from '../../hooks/useMarketplacePairing.js';
 
 interface Props {
     /** Number of currently-selected catalog agents. */
@@ -12,6 +13,9 @@ interface Props {
     onClear: () => void;
     onSelectAll: () => void;
     onAdd: () => void;
+    /** Handoff targets of the selection that are neither installed nor selected. */
+    missingTargets?: IMissingHandoffTarget[];
+    onSelectTarget?: (id: string) => void;
 }
 
 /**
@@ -19,7 +23,15 @@ interface Props {
  * until at least one agent is selected, then floats at the bottom of the
  * marketplace with the count + Select all / Clear / Add selected actions.
  */
-export function BulkInstallBar({ count, busy, onClear, onSelectAll, onAdd }: Props) {
+export function BulkInstallBar({
+    count,
+    busy,
+    onClear,
+    onSelectAll,
+    onAdd,
+    missingTargets = [],
+    onSelectTarget,
+}: Props) {
     if (count === 0) return null;
 
     const ghostButton = {
@@ -39,6 +51,7 @@ export function BulkInstallBar({ count, busy, onClear, onSelectAll, onAdd }: Pro
                 mx: 'auto',
                 maxWidth: 640,
                 display: 'flex',
+                flexWrap: 'wrap',
                 alignItems: 'center',
                 gap: 1.5,
                 px: 3,
@@ -74,6 +87,24 @@ export function BulkInstallBar({ count, busy, onClear, onSelectAll, onAdd }: Pro
             >
                 {busy ? 'Adding…' : 'Add selected'}
             </Button>
+            {missingTargets.map((t) => (
+                <Box
+                    key={t.id}
+                    sx={{ flexBasis: '100%', display: 'flex', alignItems: 'center', gap: 1.5 }}
+                >
+                    <Typography sx={{ fontSize: 12, flex: 1, color: ATLAS_PALETTE.white }}>
+                        {t.sourceNames.join(', ')} hands off to {t.name}, which isn&apos;t installed.
+                    </Typography>
+                    <Button
+                        size="small"
+                        onClick={() => onSelectTarget?.(t.id)}
+                        disabled={busy}
+                        sx={ghostButton}
+                    >
+                        Add {t.name} too
+                    </Button>
+                </Box>
+            ))}
         </Box>
     );
 }

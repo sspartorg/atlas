@@ -12,6 +12,7 @@ import {
     useUpdateProjectGuardrailScript,
     useDeleteProjectGuardrailScript,
 } from '../../hooks/useProjectGuardrails.js';
+import { useGuardrailScripts } from '../../hooks/useGuardrails.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { ScriptModal, type ScriptModalValues } from '../../components/ScriptModal.js';
@@ -105,6 +106,10 @@ export function ProjectGuardrailScriptsTab({ projectId }: { projectId: string })
     const toast = useToast();
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<ScriptModalValues | null>(null);
+    const { data: workspaceScripts = [] } = useGuardrailScripts({ enabled: modalOpen && !editing });
+    const overridable = workspaceScripts
+        .filter((w) => !scripts.some((s) => s.id === w.id))
+        .map((w) => ({ id: w.id, name: w.name }));
 
     function openAdd() {
         setEditing(null);
@@ -208,6 +213,7 @@ export function ProjectGuardrailScriptsTab({ projectId }: { projectId: string })
                 onClose={() => setModalOpen(false)}
                 onSubmit={handleSubmit}
                 onDelete={handleDelete}
+                slugSuggestions={overridable}
             />
         </Box>
     );

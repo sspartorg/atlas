@@ -349,6 +349,30 @@ describe('RelatedItemsCard', () => {
             expect(screen.getByRole('button', { name: /Add PR link/i })).toBeInTheDocument();
         });
 
+        it('shows an Open / Merged / Closed chip from pr_state and none when unknown', () => {
+            server.use(...defaultHandlers);
+            renderWithProviders(
+                <RelatedItemsCard
+                    issueType="story"
+                    issueId="S1"
+                    relatedLinks={[]}
+                    externalLinks={[
+                        makeExtLink({ id: 1, external_ref: '1', pr_state: 'open' }),
+                        makeExtLink({ id: 2, external_ref: '2', pr_state: 'merged' }),
+                        makeExtLink({ id: 3, external_ref: '3', pr_state: 'closed' }),
+                        makeExtLink({ id: 4, external_ref: '4', pr_state: null }),
+                        makeExtLink({ id: 5, external_ref: '5' }),
+                    ]}
+                    agents={[]}
+                    onOpenPicker={vi.fn()}
+                />,
+            );
+            expect(screen.getByText('Open')).toBeInTheDocument();
+            expect(screen.getByText('Merged')).toBeInTheDocument();
+            expect(screen.getByText('Closed')).toBeInTheDocument();
+            expect(document.querySelectorAll('.MuiChip-root')).toHaveLength(3);
+        });
+
         it('renders each PR row with #number, title, and an external-tab anchor', () => {
             server.use(...defaultHandlers);
             const links = [

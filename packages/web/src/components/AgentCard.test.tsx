@@ -4,6 +4,7 @@ import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { makeAgent } from '../test-utils/factories.js';
 import { AgentCard } from './AgentCard.js';
 import type { IAgentRun } from '@atlas/shared';
+import { ATLAS_PALETTE } from '../theme/tokens.js';
 
 function makeRun(overrides: Partial<IAgentRun> = {}): IAgentRun {
     return {
@@ -110,6 +111,24 @@ describe('AgentCard', () => {
             />,
         );
         expect(document.body.textContent).toContain('Queued');
+    });
+
+    it('renders Queued (not Idle) when items are queued but no run exists yet', () => {
+        renderWithProviders(
+            <AgentCard agent={makeAgent({ status: 'active' })} runs={[]} queueDepth={1} />,
+        );
+        expect(screen.getByText('Queued')).toBeInTheDocument();
+        expect(screen.queryByText('Idle')).not.toBeInTheDocument();
+    });
+
+    it('colours a Failed label with the error slot, not success', () => {
+        renderWithProviders(
+            <AgentCard
+                agent={makeAgent({ status: 'active' })}
+                runs={[makeRun({ status: 'error' })]}
+            />,
+        );
+        expect(screen.getByText('Failed')).toHaveStyle({ color: ATLAS_PALETTE.error });
     });
 
     it('renders Idle for an active agent with nothing in flight', () => {
@@ -240,5 +259,15 @@ describe('AgentCard', () => {
         );
         fireEvent.click(container.firstElementChild!);
         expect(onClickSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows a CLI-missing warning chip when the parent passes a cliWarning', () => {
+        renderWithProviders(
+            <AgentCard
+                agent={makeAgent({ cli: 'copilot' })}
+                cliWarning="copilot is not installed on this machine — runs will fail until it is."
+            />,
+        );
+        expect(screen.getByText('CLI missing')).toBeInTheDocument();
     });
 });

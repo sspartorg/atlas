@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -638,7 +638,7 @@ describe('HandoffsTabContent', () => {
         );
     });
 
-    it('renderValue: value is non-empty, non-owner, no matching agent — renders raw value', async () => {
+    it('renderValue: value is non-empty, non-owner, no matching agent — renders the id marked not installed', async () => {
         server.use(
             http.get(`${BASE}/agents/${agent.id}/handoff-rules`, () =>
                 HttpResponse.json([
@@ -660,9 +660,8 @@ describe('HandoffsTabContent', () => {
             ),
         );
         renderWithProviders(<HandoffsTabContent agent={agent} />);
-        // The raw id should be displayed because no agent matches it
         await waitFor(() =>
-            expect(screen.getByText('unknown-agent-xyz')).toBeInTheDocument(),
+            expect(screen.getByText('unknown-agent-xyz (not installed)')).toBeInTheDocument(),
         );
     });
 
@@ -928,5 +927,33 @@ describe('HandoffsTabContent', () => {
         const updatedInputs = Array.from(document.querySelectorAll('input'));
         const secondInput = updatedInputs.find((el) => (el as HTMLInputElement).value === 'Second check');
         expect(secondInput).toBeDefined();
+    });
+
+    it('renders a rule pointing at an uninstalled agent as "<slug> (not installed)" instead of an out-of-range value', async () => {
+        server.use(
+            http.get(`${BASE}/agents/${agent.id}/handoff-rules`, () =>
+                HttpResponse.json([
+                    {
+                        id: 1,
+                        agent_id: agent.id,
+                        target_agent_id: 'agent-code-reviewer',
+                        kind: 'on-pass',
+                        status: 'ready',
+                    },
+                ]),
+            ),
+        );
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        renderWithProviders(<HandoffsTabContent agent={agent} />);
+        expect(
+            await screen.findByText('agent-code-reviewer (not installed)'),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText(/Install agent-code-reviewer or pick another agent/i),
+        ).toBeInTheDocument();
+        expect(
+            warn.mock.calls.some((c) => String(c[0]).includes('out-of-range value')),
+        ).toBe(false);
+        warn.mockRestore();
     });
 });

@@ -6,6 +6,7 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { useSidenavCounts } from '../hooks/useSidenavCounts.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { prefetchRoute } from '../utils/prefetchRoute.js';
+import { useConfirmLeave } from '../hooks/useDraftGuard.js';
 import type { SidenavCounts } from '../api/types.js';
 import { InitialAvatar } from './InitialAvatar.js';
 import { AtlasLogo } from './AtlasLogo.js';
@@ -110,10 +111,13 @@ export function Sidenav({ onNavigate }: SidenavProps = {}) {
 
     const ownerName = settings?.owner_name ?? 'Owner';
 
-    const go = (path: string) => {
-        navigate(path);
-        onNavigate?.();
-    };
+    const confirmLeave = useConfirmLeave();
+
+    const go = (path: string) =>
+        confirmLeave(() => {
+            navigate(path);
+            onNavigate?.();
+        });
 
     const activeKey = (() => {
         const path = location.pathname;

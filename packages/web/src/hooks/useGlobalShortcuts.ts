@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useConfirmLeave } from './useDraftGuard.js';
 
 interface IGlobalShortcutOptions {
     onOpenShortcuts: () => void;
@@ -20,6 +21,7 @@ const GOTO_TIMEOUT_MS = 1200;
 
 export function useGlobalShortcuts({ onOpenShortcuts }: IGlobalShortcutOptions) {
     const navigate = useNavigate();
+    const confirmLeave = useConfirmLeave();
 
     useEffect(() => {
         let gotoPending = false;
@@ -63,7 +65,7 @@ export function useGlobalShortcuts({ onOpenShortcuts }: IGlobalShortcutOptions) 
                 clearPending();
                 if (path) {
                     e.preventDefault();
-                    navigate(path);
+                    confirmLeave(() => navigate(path));
                 }
                 return;
             }
@@ -78,5 +80,5 @@ export function useGlobalShortcuts({ onOpenShortcuts }: IGlobalShortcutOptions) 
             window.removeEventListener('keydown', handler);
             clearPending();
         };
-    }, [onOpenShortcuts, navigate]);
+    }, [onOpenShortcuts, navigate, confirmLeave]);
 }

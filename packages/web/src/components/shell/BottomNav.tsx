@@ -4,6 +4,7 @@ import BottomNavigationAction from '@mui/material/BottomNavigationAction';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ATLAS_PALETTE, MOBILE_SHELL } from '../../theme/tokens.js';
 import { prefetchRoute } from '../../utils/prefetchRoute.js';
+import { useConfirmLeave } from '../../hooks/useDraftGuard.js';
 
 interface Props {
     onOpenMore: () => void;
@@ -59,6 +60,7 @@ const TABS: TabSpec[] = [
 
 export function BottomNav({ onOpenMore }: Props) {
     const navigate = useNavigate();
+    const confirmLeave = useConfirmLeave();
     const { pathname } = useLocation();
     const activeKey = TABS.find((t) => t.matches(pathname))?.key ?? null;
 
@@ -107,7 +109,8 @@ export function BottomNav({ onOpenMore }: Props) {
                                 onOpenMore();
                                 return;
                             }
-                            if (tab.path) navigate(tab.path);
+                            const { path } = tab;
+                            if (path) confirmLeave(() => navigate(path));
                         }}
                         onPointerEnter={() => {
                             if (tab.key !== 'more') prefetchRoute(tab.key);

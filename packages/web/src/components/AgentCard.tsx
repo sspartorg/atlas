@@ -6,6 +6,7 @@ import type { IAgent, IAgentRun } from '@atlas/shared';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 import { AgentCardMenu, type AgentCardMenuActions } from '../pages/agents/AgentCardMenu.js';
 import {
+    agentStatusColor,
     agentSubtitle,
     getAgentView,
     getRuntimeStats,
@@ -30,6 +31,8 @@ interface Props {
      *  Driven by the parent which compares marketplace_pulled_version against
      *  the catalog's current version. */
     upgradeAvailable?: boolean;
+    /** Set by the parent when this agent's CLI binary isn't installed. */
+    cliWarning?: string | null;
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -52,27 +55,21 @@ export function AgentCard({
     focused = false,
     runtimeError = false,
     upgradeAvailable = false,
+    cliWarning = null,
 }: Props) {
     const view = useMemo(() => getAgentView(agent), [agent]);
     const stats = useMemo(() => getRuntimeStats(runs), [runs]);
 
     const isPaused = agent.status === 'inactive';
     // One definition, shared with the Queue page and the Agent Detail hero.
+    // queueDepth counts Ready items, which exist before any run is queued.
     const statusLabel = resolveAgentStatusLabel(
         agent.status,
         stats.runningCount,
-        stats.queuedCount,
+        stats.queuedCount + queueDepth,
         stats.lastRunErrored
     );
-    // Mercury collapses brand-hue slots (`green`, `gold`) to neutral accent —
-    // black in light / white in dark — so they can't carry semantic meaning.
-    // The live-state indicator needs the functional success/warning slots,
-    // which keep their actual green / amber values across both themes.
-    const statusColor = isPaused
-        ? ATLAS_PALETTE.slate60
-        : statusLabel === 'Queued'
-          ? ATLAS_PALETTE.warning
-          : ATLAS_PALETTE.success;
+    const statusColor = agentStatusColor(statusLabel);
 
     const lastRunLabel = runtimeError
         ? 'last run —'
@@ -186,6 +183,28 @@ export function AgentCard({
                                     }}
                                 >
                                     Upgrade
+                                </Box>
+                            </Tooltip>
+                        )}
+                        {cliWarning && (
+                            <Tooltip title={cliWarning} arrow>
+                                <Box
+                                    sx={{
+                                        flexShrink: 0,
+                                        px: 1,
+                                        height: 18,
+                                        borderRadius: '9px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        bgcolor: ATLAS_PALETTE.warnSoft,
+                                        color: ATLAS_PALETTE.warnFg,
+                                        fontSize: 10,
+                                        fontWeight: 600,
+                                        letterSpacing: '0.04em',
+                                        textTransform: 'uppercase',
+                                    }}
+                                >
+                                    CLI missing
                                 </Box>
                             </Tooltip>
                         )}

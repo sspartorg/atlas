@@ -1225,6 +1225,22 @@ describe('NewProjectModal', () => {
         }, { timeout: 3000 });
     });
 
+    it('does not claim the workspace path is missing before a URL is typed when it IS set', async () => {
+        server.use(
+            http.get(`${BASE}/settings`, () =>
+                HttpResponse.json({
+                    id: 1,
+                    owner_name: 'Owner',
+                    onboarding_complete: 1,
+                    workspace_path: '/home/user/projects',
+                }),
+            ),
+        );
+        renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
+        expect(await screen.findByText('/home/user/projects/…')).toBeInTheDocument();
+        expect(screen.queryByText(/Set a workspace path in Settings first/i)).not.toBeInTheDocument();
+    });
+
     // -------------------------------------------------------------------------
     // connect_error view — origin_mismatch error_kind
     // -------------------------------------------------------------------------
@@ -2145,6 +2161,54 @@ describe('NewProjectModal', () => {
         }, { timeout: 10000 });
         // No " (null)" or " ()" should appear
         expect(screen.queryByText(/def5678.*\(.*\)/i)).not.toBeInTheDocument();
+    });
+
+    it('success view: agents row is truthful (global, not per-project) and links to Marketplace when none are installed', async () => {
+        const PROJECT = {
+            id: 'proj-agents',
+            name: 'myrepo',
+            git_path: '/workspace/myrepo',
+            default_branch: 'main',
+            repo_url: 'https://github.com/acme/myrepo.git',
+            issue_key_prefix: 'ACM',
+            created_at: '2026-01-01T00:00:00.000Z',
+            updated_at: '2026-01-01T00:00:00.000Z',
+        };
+        const onClose = vi.fn();
+        server.use(
+            http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
+            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
+            http.post(`${BASE}/projects/clone`, () =>
+                HttpResponse.json({ clone_id: 'clone-agents', destination: '/workspace/myrepo' }),
+            ),
+            http.get(`${BASE}/projects/proj-agents/head`, () =>
+                HttpResponse.json({ short_sha: null, subject: null, relative_time: null }),
+            ),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+        );
+        renderWithProviders(<NewProjectModal open onClose={onClose} />);
+        const urlInput = await screen.findByLabelText(/repository url/i);
+        fireEvent.change(urlInput, { target: { value: 'https://github.com/acme/myrepo.git' } });
+        const prefixInput = await screen.findByLabelText(/issue key prefix/i);
+        fireEvent.change(prefixInput, { target: { value: 'ACM' } });
+        await waitFor(
+            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
+            { timeout: 5000 },
+        );
+        fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
+        await waitFor(() => screen.getByText(/Cloning repository/i), { timeout: 5000 });
+        act(() => {
+            (window as Window & { __pushSse?: (e: object) => void }).__pushSse!({
+                type: 'clone_completed',
+                cloneId: 'clone-agents',
+                project: PROJECT,
+            });
+        });
+        await screen.findByText('Project ready', {}, { timeout: 15000 });
+        expect(screen.queryByText('Agents attached')).not.toBeInTheDocument();
+        const browse = await screen.findByRole('button', { name: /browse marketplace/i });
+        fireEvent.click(browse);
+        expect(onClose).toHaveBeenCalled();
     });
 
     // -------------------------------------------------------------------------
