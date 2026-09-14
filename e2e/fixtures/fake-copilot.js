@@ -23,6 +23,12 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 const args = process.argv.slice(2);
+// `GET /api/cli/availability` probes `<binary> --version`; answer like the
+// real CLI instead of starting the interactive stand-in and timing out.
+if (args[0] === '--version') {
+    process.stdout.write('0.0.0 (fake-copilot)\n');
+    process.exit(0);
+}
 let sessionId = null;
 let resumeId = null;
 let model = 'fake-copilot-model';
