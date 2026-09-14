@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { usePauseWhileTyping } from '../hooks/usePauseWhileTyping.js';
 import type { ComponentType } from 'react';
 import Box from '@mui/material/Box';
 import Tooltip from '@mui/material/Tooltip';
@@ -219,8 +218,6 @@ export function HeaderMascot({ size = 40 }: HeaderMascotProps) {
         if (typeof window === 'undefined' || !window.matchMedia) return false;
         return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     }, []);
-
-    usePauseWhileTyping(lottieRef, !prefersReducedMotion);
 
     const rawAnimationData = hasActiveRuns ? workingData : idleData;
     // Rotate the bot's warm identity colour to the per-theme hue. Re-runs
