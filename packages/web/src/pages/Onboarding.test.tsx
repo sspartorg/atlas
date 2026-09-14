@@ -324,8 +324,7 @@ describe('Onboarding — workspace path error clears on retype', () => {
 describe('Onboarding — WORKSPACE_PLACEHOLDER platform branch', () => {
     it('renders a platform-appropriate path placeholder in the workspace field', async () => {
         // WORKSPACE_PLACEHOLDER is an IIFE evaluated at module load time using
-        // navigator.userAgent. jsdom's UA does not include "mac"/"linux", so the
-        // Windows fallback fires: "e.g. C:\Users\You\Projects".
+        // navigator.userAgent.
         renderOnboarding();
         await screen.findByText('Welcome to Atlas.');
         await advanceToStep2();
@@ -333,8 +332,15 @@ describe('Onboarding — WORKSPACE_PLACEHOLDER platform branch', () => {
         // The placeholder always starts with "e.g. " regardless of platform.
         const workspaceInput = screen.getByPlaceholderText(/^e\.g\./i);
         expect(workspaceInput).toBeInTheDocument();
-        // jsdom UA falls through to the Windows default branch
-        expect((workspaceInput as HTMLInputElement).placeholder).toMatch(/C:\\Users\\/i);
+        // jsdom's UA embeds the host platform (e.g. "linux" on CI), so derive
+        // the expected branch from it instead of assuming the Windows default.
+        const ua = navigator.userAgent.toLowerCase();
+        const expected = /mac|iphone|ipad/.test(ua)
+            ? /\/Users\/you/
+            : /linux|android/.test(ua)
+              ? /\/home\/you/
+              : /C:\\Users\\/i;
+        expect((workspaceInput as HTMLInputElement).placeholder).toMatch(expected);
     });
 });
 
