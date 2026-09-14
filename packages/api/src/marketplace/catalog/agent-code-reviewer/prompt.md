@@ -27,17 +27,17 @@ The harness has provisioned a reviewer worktree on the dev Story's `worktree_bra
 
 4. **Re-run the verification gate.** Inside the worktree:
    ```
-   pnpm install --frozen-lockfile
-   pnpm -r typecheck
-   pnpm -r lint
+   <pm> install --frozen-lockfile   # npm: npm ci; skip when the repo has no lockfile
+   <pm> run typecheck
+   <pm> run lint
    ```
-   If either is red, this is a revision case with reason `verification_gate_failed` — the dev branch is sacred and green-gate-then-pass is the contract.
+   `<pm>` is the package manager the lockfile implies (`pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, otherwise npm); skip any script `package.json` does not declare, and never create a lockfile the repo doesn't already have. If any is red, this is a revision case with reason `verification_gate_failed` — the dev branch is sacred and green-gate-then-pass is the contract.
 
 5. **Run the validator.** `bash ./.atlas/scripts/bash/check-coder-tests-green.sh <itemId>` (or the PowerShell sibling). Treat non-zero exit + stdout as a numbered gap list.
 
-6. **Finalise residue** (only when 1–5 are green). If `git status --porcelain` is non-empty, commit it with the Husky workaround and `Refs: <itemId>` trailer:
+6. **Finalise residue** (only when 1–5 are green). If `git status --porcelain` shows changes to files in spec.md's File-level change list, commit those (never tooling output such as lockfiles or build artifacts the diff didn't already touch — delete those instead) with the Husky workaround and `Refs: <itemId>` trailer:
    ```
-   git add -A
+   git add <changed paths from the change list>
    git -c core.hooksPath=.husky/_ commit -m "$(cat <<'EOF'
    review(coder-reviewer): finalise story <itemId> for PR
 

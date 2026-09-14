@@ -10,6 +10,7 @@ import {
     IssueTypeSchema,
     ItemLabelsOptionalSchema,
     SubTaskStatusSchema,
+    WORKTREE_BRANCH_RE_SOURCE,
 } from '@atlas/shared';
 import type { IssueType } from '@atlas/shared';
 import type { ToolRegistration } from '../registrations.js';
@@ -39,7 +40,7 @@ function resolveAgentId(callerAgentId: string | undefined): string | null {
 // Tool consolidation 2026-07: the 17-tool items surface collapsed into FIVE:
 //   * search_item  — full-text search
 //   * create_item  — issue_type discriminator (replaces createEpic/createStory/createSubTask/createSubBug/createBug)
-//   * get_item     — always returns full envelope (item + parent + project + children + comments + item_links + external_links + activity); replaces getEpic / getItemFull / listComments / listItemLinks / listItemExternalLinks / replyToItem's read-context mode
+//   * get_item     — always returns full envelope (item + parent + project + children + comments + related_links + external_links + activity); replaces getEpic / getItemFull / listComments / listItemLinks / listItemExternalLinks / replyToItem's read-context mode
 //   * update_item  — `action` discriminator (replaces updateItem / transitionItemStatus / assignItem / addCommentToItem / replyToItem's write mode / createItemLink / deleteItemLink / createItemExternalLink / deleteItemExternalLink)
 //   * delete_item  — issue_type + id
 
@@ -90,6 +91,10 @@ const UpdatePatchSchema = z
         spec_md: z.string().nullable().optional(),
         pr_url: z.string().nullable().optional(),
         points: z.number().int().optional(),
+        // PO Writer's contract sets this on every dev/QA leg; the API's
+        // UpdateStorySchema already accepts it, so omitting it here made
+        // the contract impossible to satisfy through MCP.
+        worktree_branch: z.string().regex(new RegExp(WORKTREE_BRANCH_RE_SOURCE)).nullable().optional(),
         reporter_agent_id: z.string().nullable().optional(),
         steps_to_reproduce: z.string().optional(),
         expected: z.string().optional(),
@@ -213,7 +218,7 @@ export const ITEM_TOOLS: ToolRegistration[] = [
             '- `project` (id, name, default_branch, git_path…)',
             '- `children` (sub_tasks + sub_bugs for stories; stories + bugs for epics; empty otherwise)',
             '- `comments` — full thread, oldest first',
-            '- `item_links` — every depends_on / relates_to / tested_by link touching this item, both directions',
+            '- `related_links` — every depends_on / relates_to / tested_by link touching this item, both directions',
             '- `external_links` — off-platform refs (e.g. GitHub PR URLs)',
             '- `activity` — recent issue_events (status_changed, assigned, comment_added, etc.)',
             '- `agents` + `round_count` for UI / orchestrator',
@@ -246,7 +251,7 @@ export const ITEM_TOOLS: ToolRegistration[] = [
             '',
             'Actions and their payload fields:',
             '',
-            "- `action: 'patch_fields'` → patch core fields. `payload` accepts: `title`, `description`, `priority`, `acceptance_criteria`, `labels` (full replacement — send the full array; to append, get_item → merge → send). Story extras: `spec_md`, `pr_url`, `points`. Bug / sub_bug extras: `steps_to_reproduce`, `expected`, `actual`, `frequency`, `failure_scope`. Per-type Zod schema rejects fields that don't apply.",
+            "- `action: 'patch_fields'` → patch core fields. `payload` accepts: `title`, `description`, `priority`, `acceptance_criteria`, `labels` (full replacement — send the full array; to append, get_item → merge → send). Story extras: `spec_md`, `pr_url`, `points`, `worktree_branch` (must match `atlas/<role>/<id>`, e.g. `atlas/dev/ATL-2`). Bug / sub_bug extras: `steps_to_reproduce`, `expected`, `actual`, `frequency`, `failure_scope`. Per-type Zod schema rejects fields that don't apply.",
             '',
             "- `action: 'change_status'` → move item to a new status. Required: `status` (string). Optional: `override` (boolean, Owner-only — bypasses status-machine guard), `agent_id` (string — credit the change to a specific agent). Status-machine guard rejects illegal transitions unless `override` is true.",
             '',
@@ -256,7 +261,7 @@ export const ITEM_TOOLS: ToolRegistration[] = [
             '',
             "- `action: 'add_link'` → link two items. Required: `to_id` (string, the other item's id), `relation_type` ('depends_on' | 'relates_to' | 'tested_by'). The current item is the `from`. `depends_on` is directed (cycles rejected); `relates_to` is undirected; `tested_by` is directed QA→dev (PO Writer is the canonical writer). Idempotent.",
             '',
-            "- `action: 'remove_link'` → delete an item-link row by numeric id. Required: `link_id` (number). Get link ids from `get_item` → `item_links[].id`.",
+            "- `action: 'remove_link'` → delete an item-link row by numeric id. Required: `link_id` (number). Get link ids from `get_item` → `related_links[].id`.",
             '',
             "- `action: 'add_external_link'` → attach an off-platform URL. Required: `link_kind` ('pull_request'), `url` (must match https://github.com/<owner>/<repo>/pull/<number>). Optional: `title`. Idempotent on (item, url).",
             '',

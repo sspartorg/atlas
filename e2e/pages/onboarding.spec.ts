@@ -19,9 +19,11 @@ test.describe('/onboarding', () => {
     test.afterEach(async ({ request }) => {
         // Restore onboarding_complete so the route guard works normally
         // for subsequent specs that navigate to seeded pages.
-        await request.post(`${API}/api/settings/onboard`, {
-            data: { owner_name: 'Owner', workspace_path: '/workspace' },
+        // onboard() now mkdirs the path, so it must be writable on every OS.
+        const res = await request.post(`${API}/api/settings/onboard`, {
+            data: { owner_name: 'Owner', workspace_path: '/tmp/atlas-e2e' },
         });
+        expect(res.ok()).toBe(true);
     });
 
     test('Step 1: welcome heading, step indicator, and Next button are visible', async ({

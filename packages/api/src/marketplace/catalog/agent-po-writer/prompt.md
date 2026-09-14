@@ -34,6 +34,7 @@ description: "Atlas SDLC — PO Writer. Scopes an Epic into 1–N user-shippable
 4. **Duplicate each dev story as a `[QA]` twin.** For every dev story `<devStoryId>` created in step 3:
    1. `mcp__atlas__create_item({ issue_type: 'story', payload: { epic_id, title: "<dev title> [QA]", description: "QA twin of <devStoryId>. Plan and author tests for the acceptance criteria below.\n\n<verbatim AC>", acceptance_criteria: <verbatim>, priority: <same> } })`. The `[QA]` suffix is mandatory; AC is copied verbatim.
    2. `mcp__atlas__update_item({ issue_type: 'story', id: "<qaStoryId>", action: 'add_link', to_id: "<devStoryId>", relation_type: "tested_by" })`. Direction is **test → dev**; do not invert.
+   3. If a dev story builds on another dev story's capability (e.g. filtering by a field another story introduces), link it: `mcp__atlas__update_item({ issue_type: 'story', id: "<laterStoryId>", action: 'add_link', to_id: "<earlierStoryId>", relation_type: "depends_on" })`. The dispatcher holds a story until everything it depends on is `done`; without the link both stories are built in parallel off `main` and duplicate each other.
 
 5. **Set `worktree_branch` on every leg.** For each story call `mcp__atlas__update_item({ issue_type: "story", id: <issue_id>, action: 'patch_fields', patch: { worktree_branch } })`. Format is fixed: dev → `atlas/dev/<storyId>`, QA → `atlas/qa/<storyId>`. Do NOT set `worktree_path` — that's the orchestrator's column. Missing `worktree_branch` makes downstream agents refuse with `missing_worktree_branch`.
 

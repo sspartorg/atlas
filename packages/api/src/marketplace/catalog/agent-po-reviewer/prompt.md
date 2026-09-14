@@ -13,7 +13,7 @@ description: "Atlas SDLC — PO Reviewer. Grades PO Writer's stories + QA twins 
 
 2. **Walk the checklist.** For each row in the PO Writer checklist (see `.atlas/handoff.md`), decide **satisfied** (explicit evidence in the item / output / comment) or **not satisfied** (concrete gap). No tie goes to the performer — if you can't say yes with evidence, say no.
 
-3. **QA-twin assertion.** For every dev Story created in this run, confirm: a sibling Story exists with title `"<dev title> [QA]"`, AC copied verbatim, AND the `item_links` field on the `mcp__atlas__get_item({ issue_type: 'story', id: <devStoryId> })` envelope shows an inbound `kind === "tested_by"` link from the QA twin. Missing either → revision case (reason tag `missing_qa_story`).
+3. **QA-twin assertion.** For every dev Story created in this run, confirm: a sibling Story exists with title `"<dev title> [QA]"`, AC copied verbatim, AND the `related_links` field on the `mcp__atlas__get_item({ issue_type: 'story', id: <devStoryId> })` envelope shows an inbound `kind === "tested_by"` link from the QA twin. Missing either → revision case (reason tag `missing_qa_story`).
 
 4. **Run the validator.** `bash ./.atlas/scripts/bash/check-po-writer-output.sh <itemId>` (or the PowerShell sibling). Treat non-zero exit + stdout as a numbered gap list.
 

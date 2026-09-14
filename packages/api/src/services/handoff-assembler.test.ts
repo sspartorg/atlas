@@ -170,6 +170,26 @@ describe('assembleHandoff', () => {
         expect(body).toContain('unable to assign to "agent-ghost"');
     });
 
+    it('tells the agent to pass its own agent_id on every update_item call (rule + fallback + no-rule paths)', async () => {
+        // The in-process MCP host has no bound agent id, so without an explicit
+        // `agent_id` the writes are Owner-attributed and self-routing looks like
+        // a third-party reassign (duplicate "assigned" activity row).
+        await seedAgent('agent-withfb');
+        await db
+            .insertInto('agent_handoff_rules')
+            .values({ agent_id: 'agent-withfb', kind: 'on-pass', target_agent_id: 'agent-ghost', status: 'ready' })
+            .execute();
+        const body = readFileSync(
+            (await assembleHandoff({ worktreePath, agentId: 'agent-withfb' })).handoffPath,
+            'utf8',
+        );
+        const calls = body.match(/`mcp__atlas__update_item`/g) ?? [];
+        const credited = body.match(/agent_id: "agent-withfb"/g) ?? [];
+        // intro rule + 3 primary + 3 fallback (on-pass) + 3 park-with-Owner (on-fail, no rule).
+        expect(calls.length).toBe(10);
+        expect(credited.length).toBe(calls.length);
+    });
+
     it('renders without checklist section when no required rows exist', async () => {
         await seedAgent('agent-bare');
         await db

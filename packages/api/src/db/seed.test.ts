@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { execSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { AGENT_SEEDS, GUARDRAIL_SCRIPT_SEEDS, HANDOFF_RULE_SEEDS, runSeed } from './seed.js';
 import { db } from './kysely-client.js';
@@ -1216,6 +1218,52 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
                 ).toBeLessThan(128);
             }
         }
+    });
+
+    describe.skipIf(process.platform === 'win32')('coder-tests-green runs on non-pnpm projects', () => {
+        const seed = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === 'coder-tests-green');
+
+        function repoWith(files: Record<string, string>, changed: Record<string, string>): string {
+            const dir = mkdtempSync(join(tmpdir(), 'coder-gate-'));
+            const sh = (cmd: string) => execSync(cmd, { cwd: dir, stdio: 'pipe' });
+            sh('git init -q -b main && git config user.email t@t && git config user.name t');
+            for (const [p, body] of Object.entries(files)) writeFileSync(join(dir, p), body);
+            sh('git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD');
+            for (const [p, body] of Object.entries(changed)) writeFileSync(join(dir, p), body);
+            sh('git add -A && git commit -qm change');
+            writeFileSync(join(dir, 'gate.sh'), seed?.body_sh ?? '');
+            return dir;
+        }
+
+        function gateExit(dir: string): number {
+            try {
+                execSync('bash gate.sh X', { cwd: dir, stdio: 'pipe' });
+                return 0;
+            } catch (err) {
+                return (err as { status: number }).status;
+            }
+        }
+
+        it('passes a plain npm + JS project with a changed *.test.js and no typecheck/lint scripts', () => {
+            const dir = repoWith(
+                { 'package.json': '{"scripts":{"test":"node --test"}}' },
+                { 'a.test.js': 'x' },
+            );
+            expect(gateExit(dir)).toBe(0);
+        });
+
+        it('still fails when a declared typecheck script fails', () => {
+            const dir = repoWith(
+                { 'package.json': '{"scripts":{"typecheck":"exit 1"}}' },
+                { 'a.test.ts': 'x' },
+            );
+            expect(gateExit(dir)).toBe(1);
+        });
+
+        it('still fails when no test file changed', () => {
+            const dir = repoWith({ 'package.json': '{"scripts":{}}' }, { 'a.js': 'x' });
+            expect(gateExit(dir)).toBe(1);
+        });
     });
 
     it('each script body is <= 80 lines (per the plan budget)', () => {

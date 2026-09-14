@@ -1222,29 +1222,30 @@ exit 1
         id: 'coder-tests-green',
         name: 'Coder typecheck/lint/tests changed',
         description:
-            'Coder gate: pnpm typecheck and pnpm lint must exit 0, and the diff against origin/main (or HEAD~10) must add or modify at least one *.test.ts file.',
+            "Coder gate: the project's own typecheck and lint scripts (run only when package.json declares them, via the package manager its lockfile implies) must exit 0, and the diff against origin/main (or HEAD~10) must add or modify at least one test file (*.test|spec.{js,ts,jsx,tsx,mjs,cjs}, *_test.go, test_*.py).",
         sort_order: 103,
         body_sh: `#!/usr/bin/env bash
 # Coder gate. $1 is the item id (unused).
+# Project-agnostic: scripts run only if package.json declares them, with
+# the package manager the lockfile implies.
 set -u
 gaps=""
 n=0
-pnpm typecheck >/dev/null 2>&1
-tc=$?
-if [ "$tc" -ne 0 ]; then
-    n=$((n+1))
-    gaps="$gaps$n. typecheck failed
+pm=npm
+[ -f pnpm-lock.yaml ] && pm=pnpm
+[ -f yarn.lock ] && pm=yarn
+has_script() {
+    [ -f package.json ] && node -e "process.exit((require('./package.json').scripts || {})['$1'] ? 0 : 1)" 2>/dev/null
+}
+for s in typecheck lint; do
+    if has_script "$s" && ! "$pm" run "$s" >/dev/null 2>&1; then
+        n=$((n+1))
+        gaps="$gaps$n. $s failed
 "
-fi
-pnpm lint >/dev/null 2>&1
-lt=$?
-if [ "$lt" -ne 0 ]; then
-    n=$((n+1))
-    gaps="$gaps$n. lint failed
-"
-fi
+    fi
+done
 base="$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD~10)"
-changed_tests="$(git diff --name-only "$base" HEAD 2>/dev/null | grep -E '\\.test\\.ts$' || true)"
+changed_tests="$(git diff --name-only "$base" HEAD 2>/dev/null | grep -E '(\\.(test|spec)\\.[cm]?[jt]sx?$)|(_test\\.go$)|((^|/)test_[^/]*\\.py$)' || true)"
 if [ -z "$changed_tests" ]; then
     n=$((n+1))
     gaps="$gaps$n. no test files added/modified
@@ -1257,17 +1258,26 @@ exit 1
         body_ps1: `# Coder gate. $args[0] is the item id (unused).
 $ErrorActionPreference = 'Continue'
 $gaps = New-Object System.Collections.ArrayList
-pnpm typecheck 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) { [void]$gaps.Add('typecheck failed') }
-pnpm lint 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) { [void]$gaps.Add('lint failed') }
+$pm = 'npm'
+if (Test-Path 'pnpm-lock.yaml') { $pm = 'pnpm' }
+if (Test-Path 'yarn.lock') { $pm = 'yarn' }
+$scripts = $null
+if (Test-Path 'package.json') {
+    try { $scripts = (Get-Content -Raw 'package.json' | ConvertFrom-Json).scripts } catch { $scripts = $null }
+}
+foreach ($s in @('typecheck', 'lint')) {
+    if ($scripts -and ($scripts.PSObject.Properties.Name -contains $s)) {
+        & $pm run $s 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { [void]$gaps.Add("$s failed") }
+    }
+}
 $base = git merge-base HEAD origin/main 2>$null
 if ([string]::IsNullOrWhiteSpace($base)) { $base = 'HEAD~10' }
 $changed = git diff --name-only $base HEAD 2>$null
 $tests = @()
 if (-not [string]::IsNullOrWhiteSpace($changed)) {
     foreach ($line in ($changed -split "\`r?\`n")) {
-        if ($line -match '\\.test\\.ts$') { $tests += $line }
+        if ($line -match '(\\.(test|spec)\\.[cm]?[jt]sx?$)|(_test\\.go$)|((^|/)test_[^/]*\\.py$)') { $tests += $line }
     }
 }
 if ($tests.Count -eq 0) { [void]$gaps.Add('no test files added/modified') }

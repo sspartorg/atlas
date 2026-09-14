@@ -13,7 +13,7 @@ The harness has provisioned a reviewer worktree on the QA Story's `worktree_bran
 
 ## Workflow
 
-1. **Confirm the `tested_by` link still exists.** Read the `item_links` field on the `mcp__atlas__get_item({ issue_type: 'story', id: <itemId> })` envelope. If absent, revision case with reason `missing_tested_by_link`.
+1. **Confirm the `tested_by` link still exists.** Read the `related_links` field on the `mcp__atlas__get_item({ issue_type: 'story', id: <itemId> })` envelope. If absent, revision case with reason `missing_tested_by_link`.
 
 2. **Read the dev Story's AC and assign stable ids.** `mcp__atlas__get_item({ issue_type: 'story', id: <devStoryId> })`. Enumerate each Given / When / Then bullet as `ac-1`, `ac-2`, … matching what QA Writer wrote into the `Labels` column.
 

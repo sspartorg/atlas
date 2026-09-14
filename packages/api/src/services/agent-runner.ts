@@ -55,7 +55,7 @@ import {
     resolveHandoffAssignee,
 } from './agent-handoff.js';
 import { incrementRound, resetRoundsForItem } from './agent-rounds.js';
-import { decideRunRouting } from './agent-runner-outcome-routing.js';
+import { decideRunRouting, shouldOpenPullRequest } from './agent-runner-outcome-routing.js';
 import {
     agentRoutedDuringRun,
     otherActorReassignedDuringRun,
@@ -1696,7 +1696,28 @@ function spawnCli(opts: SpawnCliOptions): void {
                     );
                 }
 
+                let prAllowed = false;
                 if (agent.raises_pr && code === 0 && projectId) {
+                    const itemRow = issueId
+                        ? await db
+                              .selectFrom('items')
+                              .select(['status'])
+                              .where('id', '=', issueId)
+                              .executeTakeFirst()
+                        : null;
+                    prAllowed =
+                        (!issueId || itemRow !== undefined) &&
+                        shouldOpenPullRequest({
+                            itemStatus: itemRow ? (itemRow.status as string) : null,
+                            outcome: parseRunOutcome(output),
+                        });
+                    if (!prAllowed) {
+                        emit(
+                            `[orchestrator] pr: skipped — run did not approve the work (item status=${(itemRow?.status as string | undefined) ?? 'unknown'})`,
+                        );
+                    }
+                }
+                if (prAllowed && projectId) {
                     const base = projectDefaultBranch && projectDefaultBranch.trim()
                         ? projectDefaultBranch
                         : 'main';

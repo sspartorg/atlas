@@ -95,25 +95,30 @@ describe('countsService', () => {
             // with updated_at = now(), so it matches.
             expect(k.doneThisWeek).toBe(1);
             expect(k.projectCount).toBe(1);
-            expect(k.agentStatsByCategory['software-dev']).toEqual({ queued: 0, running: 0 });
+            // queued = Ready + agent-assigned items (s5), same rule as the Queue badge.
+            expect(k.agentStatsByCategory['software-dev']).toEqual({ queued: 1, running: 0 });
             expect(k.agentStatsByCategory.marketing).toEqual({ queued: 0, running: 0 });
             expect(k.todaysPass.total).toBe(0);
         });
     });
 
     describe('getAgentCategoryStats', () => {
-        it('counts queued + running by category', async () => {
+        it('queued = Ready + agent-assigned items by category; running = in_progress runs', async () => {
+            // Ready + assigned to the marketer, not yet dispatched (no run row).
+            await insertItem({ id: 's6', type: 'story', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'epic', title: 'S6', status: 'ready', assignee_agent_id: 'agent-marketer' });
             await testDb
                 .insertInto('agent_runs')
                 .values([
+                    // A queued run row does not count: queued tracks items awaiting dispatch.
                     { id: 'r1', agent_id: 'agent-coder', item_id: 's1', status: 'queued' },
                     { id: 'r2', agent_id: 'agent-coder', item_id: 's2', status: 'in_progress' },
-                    { id: 'r3', agent_id: 'agent-marketer', item_id: 's3', status: 'queued' },
                 ])
                 .execute();
             const stats = await countsService.getAgentCategoryStats();
+            // s5 (ready, agent-coder); s3 is ready but Owner-assigned so excluded.
             expect(stats['software-dev']).toEqual({ queued: 1, running: 1 });
             expect(stats.marketing).toEqual({ queued: 1, running: 0 });
+            expect(stats.design).toEqual({ queued: 0, running: 0 });
         });
 
         it('includes design when an agent in that category has a live run', async () => {

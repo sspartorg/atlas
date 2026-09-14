@@ -439,7 +439,9 @@ export function buildConstitutionMarkdown(
 // runtime; all information they need is baked into the prompt prior to
 // dispatch. depends_on shows outgoing-only (items
 // THIS task waits on); relates_to shows both directions because the
-// relation is undirected.
+// relation is undirected. tested_by shows both directions with role labels
+// (`Tests` on the QA twin, `Tested by` on the dev story) — dropping it made
+// QA Writer conclude its twin link was missing.
 //
 // B04 — the `Depends on` subsection now also bakes in each dep's
 // description + acceptance_criteria so the agent can plan against the dep
@@ -459,6 +461,9 @@ export async function buildLinkedItemsSection(itemId: string): Promise<string> {
         (l) => l.relation_type === 'depends_on' && l.direction === 'incoming',
     );
     const relatesTo = links.filter((l) => l.relation_type === 'relates_to');
+    // tested_by points test → dev: outgoing on the QA twin, incoming on the dev story.
+    const tests = links.filter((l) => l.relation_type === 'tested_by' && l.direction === 'outgoing');
+    const testedBy = links.filter((l) => l.relation_type === 'tested_by' && l.direction === 'incoming');
 
     // Pull description + acceptance_criteria for every dep we'll render in
     // the `Depends on` section. One query covers all deps; we partition on
@@ -535,6 +540,18 @@ export async function buildLinkedItemsSection(itemId: string): Promise<string> {
     if (relatesTo.length > 0) {
         lines.push('', '### Relates to (context only — no blocking semantics)');
         for (const l of relatesTo) {
+            lines.push(`- \`${l.short_id}\` (status: ${l.status}) — ${l.title}`);
+        }
+    }
+    if (tests.length > 0) {
+        lines.push('', '### Tests (the dev item this QA item verifies)');
+        for (const l of tests) {
+            lines.push(`- \`${l.short_id}\` (status: ${l.status}) — ${l.title}`);
+        }
+    }
+    if (testedBy.length > 0) {
+        lines.push('', '### Tested by (the QA item that verifies this task)');
+        for (const l of testedBy) {
             lines.push(`- \`${l.short_id}\` (status: ${l.status}) — ${l.title}`);
         }
     }

@@ -250,6 +250,53 @@ describe('tickAgentScheduler — dispatchOneAgent branches via due item-driven a
     });
 });
 
+describe('tickAgentScheduler — dispatch on ready (item-driven agents ignore their cadence slot)', () => {
+    async function pushSlotIntoFuture(agentId: string): Promise<void> {
+        await testDb
+            .updateTable('agents')
+            .set({ next_run_at: '2999-01-01T00:00:00.000Z' })
+            .where('id', '=', agentId)
+            .execute();
+    }
+
+    it('ASRTICK-15: item-driven agent with a future slot still dispatches a ready item on this tick', async () => {
+        const { maybeAutoDispatch } = await import('./agent-dispatcher.js');
+        vi.mocked(maybeAutoDispatch).mockResolvedValueOnce({ dispatched: true, runId: 'r-ready' });
+
+        await insertProject('atk-p15', 'GTK');
+        await insertDueAgent('atk-agent-15', { concurrent_runs: 1 });
+        await pushSlotIntoFuture('atk-agent-15');
+        const epicId = await insertItem({
+            id: 'GTK-epic-1',
+            type: 'epic',
+            project_id: 'atk-p15',
+            title: 'Epic',
+        });
+        await insertItem({
+            type: 'story',
+            project_id: 'atk-p15',
+            parent_id: epicId,
+            parent_type: 'epic',
+            title: 'Ready now',
+            status: 'ready',
+            assignee_agent_id: 'atk-agent-15',
+        });
+
+        await tickAgentScheduler();
+        expect(maybeAutoDispatch).toHaveBeenCalledTimes(1);
+    });
+
+    it('ASRTICK-16: freedom-mode agent with a future slot does NOT spawn', async () => {
+        const { spawnAgentRun } = await import('./agent-runner.js');
+        await insertProject('atk-p16', 'HTK');
+        await insertDueAgent('atk-agent-16', { requires_item: false, concurrent_runs: 1 });
+        await pushSlotIntoFuture('atk-agent-16');
+
+        await tickAgentScheduler();
+        expect(spawnAgentRun).not.toHaveBeenCalled();
+    });
+});
+
 describe('tickAgentScheduler — dispatchOneAgent freedom-mode branches (ASRTICK)', () => {
     it('ASRTICK-9: freedom-mode agent at capacity does NOT spawn (at_capacity branch)', async () => {
         await insertProject('atk-p5', 'ETK');

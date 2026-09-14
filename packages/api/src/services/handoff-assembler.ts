@@ -107,6 +107,11 @@ function renderHandoffMarkdown(
             'never goes silent.',
     );
     lines.push('');
+    lines.push(
+        `Pass \`agent_id: "${agentId}"\` on EVERY \`mcp__atlas__update_item\` call (add_comment, change_status, assign) ` +
+            'so the activity log credits you — omitting it records the change as the Owner.',
+    );
+    lines.push('');
 
     if (checklist.length > 0) {
         lines.push('## Required checklist');
@@ -119,12 +124,12 @@ function renderHandoffMarkdown(
 
     lines.push('## When all required items pass');
     lines.push('');
-    renderRoutingBlock(lines, 'on-pass', onPass);
+    renderRoutingBlock(lines, 'on-pass', onPass, agentId);
     lines.push('');
 
     lines.push('## When any required item fails');
     lines.push('');
-    renderRoutingBlock(lines, 'on-fail', onFail);
+    renderRoutingBlock(lines, 'on-fail', onFail, agentId);
     lines.push('');
 
     lines.push('## Run output to the orchestrator');
@@ -167,7 +172,12 @@ function renderRoutingBlock(
     lines: string[],
     kind: 'on-pass' | 'on-fail',
     rule: HandoffRuleRow | undefined,
+    agentId: string,
 ): void {
+    // The in-process MCP host has no bound agent id, so `agent_id` is the
+    // only thing crediting these writes to the agent. Without it they land
+    // Owner-attributed and self-routing reads as a third-party reassign.
+    const credit = `agent_id: "${agentId}"`;
     const fallbackStatusLabel = getStatusLabel(FALLBACK_STATUS as never);
     const commentVerb =
         kind === 'on-pass'
@@ -177,23 +187,23 @@ function renderRoutingBlock(
     if (rule) {
         const ruleLabel = getStatusLabel(rule.status as never);
         lines.push(
-            `1. Call \`mcp__atlas__update_item\` with \`action: 'add_comment'\` on this item with ${commentVerb}`,
+            `1. Call \`mcp__atlas__update_item\` with \`action: 'add_comment'\`, ${credit} on this item with ${commentVerb}`,
         );
         lines.push(
-            `2. Call \`mcp__atlas__update_item\` with \`action: 'change_status'\` and status EXACTLY: "${ruleLabel}".`,
+            `2. Call \`mcp__atlas__update_item\` with \`action: 'change_status'\`, ${credit} and status EXACTLY: "${ruleLabel}".`,
         );
         lines.push(
             `   The literal string above is what you pass to the API. Do NOT substitute any other status name — only "${ruleLabel}" routes this item correctly.`,
         );
         lines.push(
-            `3. Call \`mcp__atlas__update_item\` with \`action: 'assign'\` and assignee_agent_id: ${renderAssignee(rule.target_agent_id)}.`,
+            `3. Call \`mcp__atlas__update_item\` with \`action: 'assign'\`, ${credit} and assignee_agent_id: ${renderAssignee(rule.target_agent_id)}.`,
         );
         lines.push('');
         lines.push(
             `   **Fallback if step 3 errors** (e.g. the target agent is not installed): ` +
-                `call \`mcp__atlas__update_item\` (\`action: 'assign'\`) with assignee_agent_id: null, ` +
-                `then \`mcp__atlas__update_item\` (\`action: 'change_status'\`) with status EXACTLY: "${fallbackStatusLabel}", ` +
-                `then \`mcp__atlas__update_item\` (\`action: 'add_comment'\`) explaining: unable to assign to ${renderAssignee(rule.target_agent_id)}, parked with Owner.`,
+                `call \`mcp__atlas__update_item\` (\`action: 'assign'\`, ${credit}) with assignee_agent_id: null, ` +
+                `then \`mcp__atlas__update_item\` (\`action: 'change_status'\`, ${credit}) with status EXACTLY: "${fallbackStatusLabel}", ` +
+                `then \`mcp__atlas__update_item\` (\`action: 'add_comment'\`, ${credit}) explaining: unable to assign to ${renderAssignee(rule.target_agent_id)}, parked with Owner.`,
         );
     } else {
         const reason =
@@ -203,13 +213,13 @@ function renderRoutingBlock(
         lines.push(reason);
         lines.push('');
         lines.push(
-            `1. Call \`mcp__atlas__update_item\` (\`action: 'add_comment'\`) with ${commentVerb}`,
+            `1. Call \`mcp__atlas__update_item\` (\`action: 'add_comment'\`, ${credit}) with ${commentVerb}`,
         );
         lines.push(
-            `2. Call \`mcp__atlas__update_item\` (\`action: 'assign'\`) with assignee_agent_id: null.`,
+            `2. Call \`mcp__atlas__update_item\` (\`action: 'assign'\`, ${credit}) with assignee_agent_id: null.`,
         );
         lines.push(
-            `3. Call \`mcp__atlas__update_item\` (\`action: 'change_status'\`) with status EXACTLY: "${fallbackStatusLabel}".`,
+            `3. Call \`mcp__atlas__update_item\` (\`action: 'change_status'\`, ${credit}) with status EXACTLY: "${fallbackStatusLabel}".`,
         );
     }
 }

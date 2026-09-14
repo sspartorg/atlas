@@ -1,5 +1,8 @@
 import { describe, expect, it, beforeEach, afterAll, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 vi.mock('../routes/events.js', () => ({
     eventsRoutes: async () => {
@@ -175,15 +178,28 @@ describe('GET /api/settings', () => {
 
 describe('POST /api/settings/onboard', () => {
     it('returns 200 with updated settings', async () => {
+        const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'atlas-onboard-'));
         const res = await app.inject({
             method: 'POST',
             url: '/api/settings/onboard',
-            payload: { owner_name: 'Alice', workspace_path: '/home/alice' },
+            payload: { owner_name: 'Alice', workspace_path: ws },
         });
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body) as Record<string, unknown>;
         expect(body.owner_name).toBe('Alice');
-        expect(body.workspace_path).toBe('/home/alice');
+        expect(body.workspace_path).toBe(ws);
+    });
+
+    it('returns 400 validation_error when the workspace folder cannot be created', async () => {
+        const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'atlas-onboard-')), 'a-file');
+        fs.writeFileSync(file, 'x');
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/settings/onboard',
+            payload: { owner_name: 'Alice', workspace_path: path.join(file, 'sub') },
+        });
+        expect(res.statusCode).toBe(400);
+        expect(JSON.parse(res.body)).toMatchObject({ kind: 'validation_error' });
     });
 });
 
@@ -404,15 +420,16 @@ describe('POST /api/settings/onboard — Zod rejection', () => {
     });
 
     it('returns 200 with both fields correctly set (re-onboard)', async () => {
+        const ws = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'atlas-onboard-')), 'bob');
         const res = await app.inject({
             method: 'POST',
             url: '/api/settings/onboard',
-            payload: { owner_name: 'Bob', workspace_path: '/workspace/bob' },
+            payload: { owner_name: 'Bob', workspace_path: ws },
         });
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body) as Record<string, unknown>;
         expect(body.owner_name).toBe('Bob');
-        expect(body.workspace_path).toBe('/workspace/bob');
+        expect(body.workspace_path).toBe(ws);
         expect(body.onboarding_complete).toBe(1);
     });
 });

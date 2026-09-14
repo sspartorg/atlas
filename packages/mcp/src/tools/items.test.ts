@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { ITEM_TOOLS, registerItemTools } from './items.js';
@@ -246,6 +247,19 @@ describe('update_item', () => {
         expect(updateItem).toHaveBeenCalledWith('story', 'ATL-2', {
             labels: ['CER_Stories'],
         });
+    });
+
+    it("action='patch_fields' schema accepts a canonical worktree_branch and rejects a malformed one", () => {
+        const entry = ITEM_TOOLS.find((t) => t.name === 'update_item');
+        const schema = z.object(entry!.inputSchema as z.ZodRawShape);
+        const base = { issue_type: 'story', id: 'SDB-2', action: 'patch_fields' };
+        expect(
+            schema.safeParse({ ...base, patch: { worktree_branch: 'atlas/dev/SDB-2' } }).success,
+        ).toBe(true);
+        expect(
+            schema.safeParse({ ...base, patch: { worktree_branch: 'feature/whatever' } }).success,
+        ).toBe(false);
+        expect(entry!.description).toContain('worktree_branch');
     });
 
     it("action='patch_fields' surfaces per-type Zod rejections from the API", async () => {

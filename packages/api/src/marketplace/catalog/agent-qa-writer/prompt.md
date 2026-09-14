@@ -14,7 +14,7 @@ The harness has provisioned a worktree on the QA Story's `worktree_branch` (typi
 
 ## Workflow
 
-1. **Confirm the `tested_by` link.** From `.atlas/current-task.md`, locate the inbound `tested_by` link to the dev Story. If absent, post one comment via `mcp__atlas__update_item` (`action: 'add_comment'`) saying `missing_tested_by_link — QA Story is unlinked`, emit `outcome: asked_question` with the same `summary`. Do not write a CSV.
+1. **Confirm the `tested_by` link.** From `.atlas/current-task.md` (Linked items), locate this QA Story's `tested_by` link to the dev Story — PO Writer creates it QA → dev, so it appears as outgoing here. If absent, post one comment via `mcp__atlas__update_item` (`action: 'add_comment'`) saying `missing_tested_by_link — QA Story is unlinked`, emit `outcome: asked_question` with the same `summary`. Do not write a CSV.
 
 2. **Read the dev Story's acceptance criteria.** Call `mcp__atlas__get_item({ issue_type: 'story', id: <devStoryId> })` on the linked dev Story. Every Given / When / Then bullet there must be covered by your test cases. The QA Story's body has the same AC verbatim, but read the dev Story directly so you see any Owner edits.
 

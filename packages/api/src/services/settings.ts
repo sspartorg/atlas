@@ -1,4 +1,7 @@
+import { mkdirSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import { db } from '../db/kysely-client.js';
+import { ApiError } from '../utils/errors.js';
 import { encrypt, decrypt } from './crypto.js';
 import type { ExternalNotificationProvider, ISettings } from '@atlas/shared';
 
@@ -159,6 +162,27 @@ export const settingsService = {
     },
 
     async onboard(ownerName: string, workspacePath: string): Promise<ISettings> {
+        // Onboarding promises "We'll create this folder if it doesn't exist".
+        // Create before persisting so a bad path never completes onboarding.
+        // Relative paths are rejected: mkdir would resolve them against the
+        // API process cwd and scatter folders inside the repo.
+        if (!isAbsolute(workspacePath)) {
+            throw new ApiError(
+                'validation_error',
+                `Workspace folder must be an absolute path: ${workspacePath}`,
+                400,
+            );
+        }
+        try {
+            mkdirSync(workspacePath, { recursive: true });
+        } catch (err) {
+            const reason = err instanceof Error ? err.message : String(err);
+            throw new ApiError(
+                'validation_error',
+                `Could not create workspace folder ${workspacePath}: ${reason}`,
+                400,
+            );
+        }
         await db
             .updateTable('settings')
             .set({
