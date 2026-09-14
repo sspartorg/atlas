@@ -33,7 +33,7 @@ Design one workflow on a ReactFlow canvas (`@xyflow/react`, lazy chunk) and list
   - Start / nothing → `StartInspector`: Name, Description, Project, **Input** cards (item: "Each ready item assigned to this workflow, one at a time" / none: "Runs on the project"), **Trigger** (Manual / On item ready / Scheduled — picking Scheduled seeds `daily` 09:00), schedule presets via shared `SchedulePresetFields` (also used by `AutoFetchScheduleModal`) + Time of day for daily/weekly, **Max loops** (1–20), **Active** switch.
   - Agent → Agent select (swap), CLI / Model / Effort read-only, link "Open agent" → `/agents/:id`, pass/fail explainer.
   - Owner → explanation of parking and resume.
-  - End → **Use a worktree** / **Push branch** / **Open pull request** switches (workflow-level `use_worktree` / `push_code` / `raises_pr`) + **Child workflow** select (same project, `input_kind=item`, not itself).
+  - End → **Use a worktree** / **Push branch** / **Open pull request** switches (workflow-level `use_worktree` / `push_code` / `raises_pr`) + **Child workflow** select (same project, `input_kind=item`, not itself) + **Test items workflow** select (same choices, "Same as child workflow" by default) for created items with an outgoing `tested_by` link.
 - **Unsaved-changes guard** — `useDraftGuard(dirty)`: app navigation asks "Discard draft?", reload warns. A newer server copy (SSE refetch) replaces the draft only when it isn't dirty.
 
 **`RunWorkflowDialog`** — **Ready item** select over the project's ready epics / stories / bugs (from `useIssues({projectId})`), items already queued for this workflow first. **Start run** → `POST /api/workflows/:id/runs {item_id}` → run view. API 400/404/409 messages show inline.

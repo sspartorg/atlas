@@ -424,16 +424,12 @@ async function park(run: RunRow, nodeId: string | null, reason: string, stepPost
         // completion comment; a second comment would only repeat it.
         if (!stepPostedReason) {
             const item = await loadItem(run.item_id);
-            const lastStep = await db
-                .selectFrom('agent_runs')
-                .select('agent_id')
-                .where('workflow_run_id', '=', run.id)
-                .orderBy('created_at', 'desc')
-                .executeTakeFirst();
             try {
+                // No agent_id: the workflow speaks here, not the last agent
+                // (the comment thread labels it "Workflow").
                 await commentsService.create({
                     author: 'agent',
-                    agent_id: lastStep?.agent_id ?? null,
+                    agent_id: null,
                     issue_type: item?.type as IssueType,
                     issue_id: run.item_id,
                     body: `**${name}** is waiting for you: ${reason}\n\nReply here to continue the workflow.`,
@@ -564,6 +560,8 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
             result.prUrl = pr.url;
             log.push(`pr: ${pr.url}`);
             if (item) {
+                // Agents read the PR from `pr_url` (Automation checks the dev PR is merged).
+                await db.updateTable('items').set({ pr_url: pr.url }).where('id', '=', item.id).execute();
                 try {
                     const parsed = parseGithubPrUrl(pr.url);
                     await externalLinks.create({
@@ -628,9 +626,11 @@ async function finishRun(run: RunRow, endNode: IWorkflowNode): Promise<void> {
     const name = workflow?.name ?? 'Workflow';
     let routedChildren = 0;
     if (run.item_id) {
-        const finalStatus = delivery.prUrl ? 'in_review' : 'done';
-        await setItemStatus(run.item_id, finalStatus, `workflow_completed: ${name}`, { clearAssignee: true });
         routedChildren = await routeChildren(run, endNode);
+        // A PR waits for review, and so does an item whose work was handed to
+        // children (a planned epic isn't done until its stories are).
+        const finalStatus = delivery.prUrl || routedChildren > 0 ? 'in_review' : 'done';
+        await setItemStatus(run.item_id, finalStatus, `workflow_completed: ${name}`, { clearAssignee: true });
         const suffix = delivery.prUrl ? ` PR: ${delivery.prUrl}` : '';
         await notifyOwner(
             run,
@@ -659,9 +659,22 @@ async function routeChildren(run: RunRow, endNode: IWorkflowNode): Promise<numbe
         );
     q = q.where('status', 'in', ['draft', 'ready']);
     const children = await q.execute();
+    // Children that test another item (an outgoing tested_by link, e.g. a
+    // `[QA]` twin) go to the End node's test workflow when it has one.
+    const testIds = new Set<string>();
+    if (endNode.test_child_workflow_id && children.length > 0) {
+        const links = await db
+            .selectFrom('item_links')
+            .select('from_id')
+            .where('relation_type', '=', 'tested_by')
+            .where('from_id', 'in', children.map((c) => c.id))
+            .execute();
+        for (const l of links) testIds.add(l.from_id);
+    }
     let routed = 0;
     for (const child of children) {
-        const workflowId = child.workflow_id ?? endNode.child_workflow_id ?? null;
+        const routeTo = testIds.has(child.id) ? endNode.test_child_workflow_id : endNode.child_workflow_id;
+        const workflowId = child.workflow_id ?? routeTo ?? null;
         if (!workflowId) continue;
         await db.updateTable('items').set({ workflow_id: workflowId, status: 'ready' }).where('id', '=', child.id).execute();
         if (child.status !== 'ready') {
@@ -773,6 +786,20 @@ async function oldestReadyItem(workflowId: string, readyBy: string | null): Prom
                         .select('wr.id')
                         .whereRef('wr.item_id', '=', 'i.id')
                         .where('wr.status', 'in', ['running', 'waiting_for_owner']),
+                ),
+            ),
+        )
+        // Skip items still waiting on a depends_on target, so one blocked
+        // story doesn't hold the whole queue (startWorkflowRun would refuse it).
+        .where(({ not, exists, selectFrom }) =>
+            not(
+                exists(
+                    selectFrom('item_links as l')
+                        .innerJoin('items as t', 't.id', 'l.to_id')
+                        .select('l.from_id')
+                        .whereRef('l.from_id', '=', 'i.id')
+                        .where('l.relation_type', '=', 'depends_on')
+                        .where('t.status', '!=', 'done'),
                 ),
             ),
         )

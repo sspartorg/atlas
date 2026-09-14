@@ -17,6 +17,7 @@ import { ATLAS_PALETTE } from '../../theme/tokens.js';
 export interface IWfNodeData extends Record<string, unknown> {
     agent_id?: string | undefined;
     child_workflow_id?: string | undefined;
+    test_child_workflow_id?: string | undefined;
 }
 export type WfNode = Node<IWfNodeData, WorkflowNodeType>;
 export type WfEdge = Edge<{ kind: WorkflowEdgeKind }>;
@@ -45,6 +46,7 @@ export function toFlow(graph: IWorkflowGraph): { nodes: WfNode[]; edges: WfEdge[
             data: {
                 ...(n.agent_id ? { agent_id: n.agent_id } : {}),
                 ...(n.child_workflow_id ? { child_workflow_id: n.child_workflow_id } : {}),
+                ...(n.test_child_workflow_id ? { test_child_workflow_id: n.test_child_workflow_id } : {}),
             },
             deletable: n.type !== 'start',
         })),
@@ -60,6 +62,7 @@ export function toGraph(nodes: WfNode[], edges: WfEdge[]): IWorkflowGraph {
             position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
             ...(n.data.agent_id ? { agent_id: n.data.agent_id } : {}),
             ...(n.data.child_workflow_id ? { child_workflow_id: n.data.child_workflow_id } : {}),
+            ...(n.data.test_child_workflow_id ? { test_child_workflow_id: n.data.test_child_workflow_id } : {}),
         })),
         edges: edges.map((e) => ({
             id: e.id,

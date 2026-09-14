@@ -158,6 +158,8 @@ describe('workflow engine — happy path', () => {
         expect(git.cleanupWorktreeAfterPush).toHaveBeenCalledTimes(1);
         expect(await runOf(runId)).toMatchObject({ status: 'completed', pr_url: 'https://github.com/o/r/pull/7', worktree_path: '/tmp/atlas-wf-test' });
         expect(await itemOf('ATL-2')).toMatchObject({ status: 'in_review', assignee_agent_id: null });
+        const { pr_url } = await testDb.selectFrom('items').select('pr_url').where('id', '=', 'ATL-2').executeTakeFirstOrThrow();
+        expect(pr_url).toBe('https://github.com/o/r/pull/7');
     });
 
     it('parks at End when delivery fails and retries delivery on resume', async () => {
@@ -215,7 +217,9 @@ describe('workflow engine — loops and parking', () => {
         const runId = await startWorkflowRun('wf-dev', 'ATL-2');
         await finishStep('completed', null);
         expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'coder', park_reason: 'agent_did_not_signal_outcome' });
-        expect(await parkComments()).toHaveLength(1);
+        const parked = await parkComments();
+        expect(parked).toHaveLength(1);
+        expect(parked[0]).toMatchObject({ author: 'agent', agent_id: null });
     });
 
     it('re-runs the asking step with a fresh loop budget when the Owner replies on the item', async () => {
@@ -278,9 +282,13 @@ describe('workflow engine — stop, reconcile, children, dispatch', () => {
 
     it('queues items created during the run for the child workflow and starts it', async () => {
         await insertWorkflow('wf-child', { trigger: 'item_ready', graph: JSON.stringify(devGraph()) });
+        await insertWorkflow('wf-qa', { trigger: 'manual' });
+        const planning = devGraph('wf-child');
+        const planningEnd = planning.nodes.find((n) => n.type === 'end')!; // reason: devGraph always has an End node
+        planningEnd.test_child_workflow_id = 'wf-qa';
         await testDb
             .updateTable('workflows')
-            .set({ graph: JSON.stringify(devGraph('wf-child')) })
+            .set({ graph: JSON.stringify(planning), push_code: false, raises_pr: false })
             .where('id', '=', 'wf-dev')
             .execute();
         await testDb.updateTable('items').set({ status: 'ready' }).where('id', '=', 'ATL-100').execute();
@@ -288,11 +296,16 @@ describe('workflow engine — stop, reconcile, children, dispatch', () => {
 
         const runId = await startWorkflowRun('wf-dev', 'ATL-100');
         await insertItem({ id: 'ATL-9', type: 'story', project_id: 'p1', parent_id: 'ATL-100', parent_type: 'epic', title: 'Child', status: 'draft' });
+        await insertItem({ id: 'ATL-10', type: 'story', project_id: 'p1', parent_id: 'ATL-100', parent_type: 'epic', title: 'Child [QA]', status: 'draft' });
+        await testDb.insertInto('item_links').values({ from_id: 'ATL-10', to_id: 'ATL-9', relation_type: 'tested_by' }).execute();
         await finishStep('completed', 'done');
         await finishStep('completed', 'done');
 
         expect(await runOf(runId)).toMatchObject({ status: 'completed' });
         expect(await itemOf('ATL-9')).toMatchObject({ workflow_id: 'wf-child' });
+        expect(await itemOf('ATL-10')).toMatchObject({ workflow_id: 'wf-qa', status: 'ready' });
+        // No PR, but the epic's work moved to its stories: it waits in review, not done.
+        expect(await itemOf('ATL-100')).toMatchObject({ status: 'in_review' });
         await vi.waitFor(async () => {
             const childRun = await testDb.selectFrom('workflow_runs').select('status').where('item_id', '=', 'ATL-9').executeTakeFirst();
             expect(childRun?.status).toBe('running');
@@ -343,6 +356,20 @@ describe('workflow engine — stop, reconcile, children, dispatch', () => {
         expect(await tickWorkflowDispatch()).toBe(1);
         const live = await testDb.selectFrom('workflow_runs').select(['item_id', 'status']).orderBy('started_at').execute();
         expect(live.map((r) => r.status)).toEqual(['waiting_for_owner', 'running']);
+    });
+
+    it('dispatch skips a ready item whose dependency is not done instead of stalling the queue', async () => {
+        await testDb.updateTable('workflows').set({ trigger: 'item_ready' }).where('id', '=', 'wf-dev').execute();
+        await insertItem({ id: 'ATL-3', type: 'story', project_id: 'p1', parent_id: 'ATL-100', parent_type: 'epic', title: 'Blocker', status: 'in_review' });
+        await insertItem({ id: 'ATL-4', type: 'story', project_id: 'p1', parent_id: 'ATL-100', parent_type: 'epic', title: 'Free', status: 'ready' });
+        // Queued in this order (a trigger stamps updated_at), so the blocked ATL-2 is first in line.
+        await testDb.updateTable('items').set({ workflow_id: 'wf-dev' }).where('id', '=', 'ATL-2').execute();
+        await testDb.updateTable('items').set({ workflow_id: 'wf-dev' }).where('id', '=', 'ATL-4').execute();
+        await testDb.insertInto('item_links').values({ from_id: 'ATL-2', to_id: 'ATL-3', relation_type: 'depends_on' }).execute();
+
+        expect(await tickWorkflowDispatch()).toBe(1);
+        const live = await testDb.selectFrom('workflow_runs').select('item_id').execute();
+        expect(live.map((r) => r.item_id)).toEqual(['ATL-4']);
     });
 
     it('a scheduled project-level workflow starts when its cron fires', async () => {

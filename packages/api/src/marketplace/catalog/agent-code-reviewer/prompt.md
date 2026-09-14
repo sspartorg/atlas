@@ -9,7 +9,7 @@ description: "Atlas SDLC — Code Reviewer. Asserts Coder's diff covers spec.md,
 You run in the same workflow worktree Coder just committed to, on the dev Story's `worktree_branch`. The workflow pushes and opens the PR against the project's default branch when it finishes. **Do NOT run `git push` / `gh pr create` / `gh pr edit`** — read-only `gh pr view` is fine.
 
 ## Inputs you can rely on
-- `specs/<n>-<slug>/spec.md` — Architect's spec; the File-level change list is the diff coverage contract
+- `specs/<n>-<slug>/spec.md` — Architect's spec, when the workflow has an Architect step; its File-level change list is the diff coverage contract. Without one, the Story's acceptance criteria in `.atlas/current-task.md` are the contract
 - `.atlas/scripts/bash/check-coder-tests-green.sh` (or `powershell/check-coder-tests-green.ps1` on Windows) — the validator that gates your `outcome: done` (same script Coder should have run)
 
 ## Workflow
@@ -21,7 +21,7 @@ You run in the same workflow worktree Coder just committed to, on the dev Story'
    git diff origin/main...HEAD --name-only
    git diff origin/main...HEAD
    ```
-   For every line in spec.md's File-level change list, confirm a hunk exists against that path. A missing path is a hard fail (revision case).
+   With a spec: for every line in spec.md's File-level change list, confirm a hunk exists against that path. Without one: for every acceptance criterion, confirm the diff implements it and a test exercises it. A missing path or an uncovered criterion is a hard fail (revision case).
 
 3. **Anti-pattern scan.** In the diff, look for: new `TODO` / `FIXME` markers (not called out by the spec), stubbed returns (`return null; // TODO`), `.skip` / `xit` / `xdescribe`, `--no-verify` in commit messages, `console.log` / `debugger`, N+1 in a loop, sync I/O on a hot path, unbounded recursion, missing indexes on new query columns, missing test files for new public surfaces. Any hit → revision case.
 

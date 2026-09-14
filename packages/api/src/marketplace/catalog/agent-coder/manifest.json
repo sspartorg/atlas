@@ -16,6 +16,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Implements the dev Story Architect spec'd in the same workflow worktree, runs the spec-kit lifecycle (clarify/plan/task/implement/verify/analyze) committing each phase.",
-  "version": 2,
+  "version": 3,
   "published_at": "2026-07-01T00:00:00Z"
 }

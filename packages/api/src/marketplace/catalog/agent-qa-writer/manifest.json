@@ -16,6 +16,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Takes a QA Story (the `[QA]` twin from PO Writer) and files test-case sub-tasks across five kinds — API, UI, E2E, Integration, Regression — each tagged `[automation_candidate]` or `[manual_only]`.",
-  "version": 2,
+  "version": 3,
   "published_at": "2026-07-01T00:00:00Z"
 }

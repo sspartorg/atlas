@@ -84,10 +84,12 @@ describe('validateWorkflowGraph', () => {
         const graph = devGraph();
         graph.nodes[0] = node('start', 'start', { agent_id: 'agent-coder' });
         graph.nodes[1] = node('coder', 'agent', { child_workflow_id: 'wf-x' });
+        graph.nodes[2] = node('review', 'agent', { agent_id: 'agent-reviewer', test_child_workflow_id: 'wf-qa' });
         expect(errorsOf(graph)).toEqual([
             'start: Only agent nodes reference an agent',
             'coder: Choose an agent for this node',
             'coder: Only End nodes route children to a workflow',
+            'review: Only End nodes route children to a workflow',
         ]);
     });
 

@@ -22,6 +22,12 @@ export interface IWorkflowNode {
     type: WorkflowNodeType;
     agent_id?: string | undefined;
     child_workflow_id?: string | undefined;
+    /**
+     * End only: where children that test another item go (they carry an
+     * outgoing `tested_by` link, like PO Writer's `[QA]` twins). Unset →
+     * they follow `child_workflow_id` with every other child.
+     */
+    test_child_workflow_id?: string | undefined;
     position: { x: number; y: number };
 }
 
@@ -96,6 +102,7 @@ export const WorkflowGraphSchema: z.ZodType<IWorkflowGraph> = z.object({
                 type: z.enum(WORKFLOW_NODE_TYPES),
                 agent_id: ID.optional(),
                 child_workflow_id: ID.optional(),
+                test_child_workflow_id: ID.optional(),
                 position: z.object({ x: z.number(), y: z.number() }),
             }),
         )
@@ -207,7 +214,7 @@ export function validateWorkflowGraph(graph: IWorkflowGraph): IWorkflowGraphErro
         const failCount = out.length - passCount;
         if (n.type !== 'agent' && n.agent_id) errors.push({ node_id: n.id, message: 'Only agent nodes reference an agent' });
         if (n.type === 'agent' && !n.agent_id) errors.push({ node_id: n.id, message: 'Choose an agent for this node' });
-        if (n.type !== 'end' && n.child_workflow_id) {
+        if (n.type !== 'end' && (n.child_workflow_id || n.test_child_workflow_id)) {
             errors.push({ node_id: n.id, message: 'Only End nodes route children to a workflow' });
         }
         if (n.type === 'start' && graph.edges.some((e) => e.target === n.id)) {

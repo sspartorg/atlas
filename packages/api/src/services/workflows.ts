@@ -253,26 +253,30 @@ export const workflowsService = {
             if (!exists) await marketplaceService.install(agentId);
         }
 
+        // `template:<id>` → that template's workflow in this project, by name.
+        // Children created by this workflow must land somewhere, so the child
+        // workflow is created too when the project lacks it.
+        const resolveRef = async (ref: string | undefined): Promise<string | undefined> => {
+            if (!ref?.startsWith(TEMPLATE_REF)) return ref;
+            const childTemplate = this.listTemplates().find((t) => `${TEMPLATE_REF}${t.id}` === ref);
+            if (!childTemplate) return undefined;
+            const existing = await db
+                .selectFrom('workflows')
+                .select('id')
+                .where('project_id', '=', projectId)
+                .where('name', '=', childTemplate.name)
+                .executeTakeFirst();
+            return (existing ?? (await this.createFromTemplate(childTemplate.id, projectId))).id;
+        };
         const nodes = [];
-        for (const node of template.graph.nodes) {
-            if (node.child_workflow_id?.startsWith(TEMPLATE_REF)) {
-                const childTemplate = this.listTemplates().find((t) => `${TEMPLATE_REF}${t.id}` === node.child_workflow_id);
-                const existing = childTemplate
-                    ? await db
-                          .selectFrom('workflows')
-                          .select('id')
-                          .where('project_id', '=', projectId)
-                          .where('name', '=', childTemplate.name)
-                          .executeTakeFirst()
-                    : undefined;
-                // Children created by this workflow must land somewhere, so the
-                // child workflow is created too when the project lacks it.
-                const child = existing ?? (childTemplate ? await this.createFromTemplate(childTemplate.id, projectId) : undefined);
-                const { child_workflow_id: _ref, ...rest } = node;
-                nodes.push(child ? { ...rest, child_workflow_id: child.id } : rest);
-            } else {
-                nodes.push(node);
-            }
+        for (const { child_workflow_id, test_child_workflow_id, ...rest } of template.graph.nodes) {
+            const child = await resolveRef(child_workflow_id);
+            const testChild = await resolveRef(test_child_workflow_id);
+            nodes.push({
+                ...rest,
+                ...(child ? { child_workflow_id: child } : {}),
+                ...(testChild ? { test_child_workflow_id: testChild } : {}),
+            });
         }
 
         return this.create({

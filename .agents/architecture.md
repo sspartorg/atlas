@@ -266,7 +266,7 @@ Scouts (`kind_slug` ∈ `ai-news | market-research | regulations | jira-to-epic`
 - **Scheduled** — `trigger='schedule'`; `schedule_preset` + time / weekday materialise to `workflows.cron_expr` (`materializeCron`) and `next_run_at` (croner, `settings.quiet_hours_timezone`). The dispatch tick starts one project-level run when due.
 - **Manual** — `POST /api/workflows/:id/runs` with no body.
 - **Prompt** — `prompt-builder` renders the constitution, the role with `{{ key }}` substitution against `settings_json` and the outcome contract, then either `# Project Context` (name, description, guardrails, every epic + spec, commit discipline) when the workflow has a project, or a `# Project-level Run` paragraph when it doesn't, then output instructions and self-memory. Steps read `.atlas/outcome.md` + `.atlas/self-memory.md` from the working directory.
-- **Children** — an item the step's agent creates is stamped `created_by_workflow_run_id`; End queues it for the End node's `child_workflow_id` as `ready`.
+- **Children** — an item the step's agent creates is stamped `created_by_workflow_run_id`; End queues it for the End node's `child_workflow_id` as `ready` (or `test_child_workflow_id` when it has an outgoing `tested_by` link). An item whose run routed children ends `in_review`, not `done`.
 
 **Settings flow**: PATCH `/api/agents/:id` carries `settings_json`. The route looks up `kind_slug` (incoming OR current), grabs the schema via `getAgentSettingsSchema(kind_slug)`, and runs `.safeParse()`; failures return 400 with structured `detail`.
 

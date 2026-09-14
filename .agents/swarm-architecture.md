@@ -45,14 +45,14 @@ Each has `role_id` pointing at a row in [`role-catalog.md`](role-catalog.md). Ag
 
 | Template | Input / trigger | Graph | Delivery |
 |---|---|---|---|
-| `planning` ("Planning") | item / `item_ready` | PO Writer → PO Reviewer → End; PO Writer fail → Owner → PO Writer; PO Reviewer fail → PO Writer | worktree, no push, no PR. End `child_workflow_id: template:dev` queues every story created during the run for the project's Development workflow (resolved only if it already exists) |
+| `planning` ("Planning") | item / `item_ready` | PO Writer → PO Reviewer → End; PO Writer fail → Owner → PO Writer; PO Reviewer fail → PO Writer | worktree, no push, no PR. End `child_workflow_id: template:dev` queues the dev stories created during the run for the project's Development workflow and `test_child_workflow_id: template:qa` queues their `[QA]` twins for Quality (both created from their templates when the project lacks them) |
 | `dev` ("Development") | item / `item_ready` | Architect → Architect Reviewer → Coder → Code Reviewer → End; reviewer fails loop back | push + one PR; item → `in_review` |
 | `qa` ("Quality") | item / `item_ready` | QA Writer → QA Reviewer → Automation → Automation Reviewer → End; reviewer fails loop back | push + one PR |
 | `ai-readiness` ("AI Readiness") | none / `manual` | AI Readiness → End | push + one PR |
 
 **Routing rules (engine):** a fail connection increments `loop_count`; past `max_loops` (default 3) the run parks with the Owner. `asked_question`, a missing outcome block, a step error or a missing/inactive agent also park. A parked run holds its worktree; the Owner's comment on the item re-runs the asking step. Nothing reaches `done` automatically when a PR opens — the item goes to `in_review`.
 
-**`[QA]` twins:** `planning`'s End routes every child to its `child_workflow_id`, so dev stories and their `[QA]` twins both land in Development. Per-child routing to `qa` is not implemented; start the `qa` workflow on a twin by hand (or queue it with `PUT /api/items/:id/workflow`).
+**`[QA]` twins:** PO Writer links each twin to its dev story with `tested_by` (twin → dev). `planning`'s End sends children with that outgoing link to `test_child_workflow_id` (Quality) and the rest to `child_workflow_id` (Development). Automation parks on `waiting_on_dev_pr_merge` until the dev PR is merged; merge it and reply on the twin to continue.
 
 **Run isolation:** item runs on the claude / ollama dialect spawn with `--setting-sources project,local --strict-mcp-config --mcp-config <atlas only>`, so the Owner's `~/.claude` hooks, plugins, user CLAUDE.md and user MCP servers don't leak into agent runs; only the Atlas MCP (`http://127.0.0.1:4500/mcp`) is available. Runs with no item keep the Owner's config, because scouts rely on the Owner's Playwright plugin and claude.ai Atlassian connector. Copilot runs are not isolated. Copilot-default agents fail with `cli_not_installed` when `copilot` is not on PATH — switch their CLI + model on Agent Detail.
 

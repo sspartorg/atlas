@@ -766,6 +766,17 @@ describe('ConversationCard — additional comment branches', () => {
         }, { timeout: 3000 });
     });
 
+    it('an agent comment with no agent_id is labelled as the workflow', async () => {
+        const comment = makeComment({ id: 12, author: 'agent', agent_id: null, body: '**Development** is waiting for you: unclear' });
+        const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
+        server.use(
+            ...defaultHandlers,
+            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+        );
+        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        expect(await screen.findByText('Workflow')).toBeInTheDocument();
+    });
+
     it('agent-authored comment enters edit mode and shows Preview/Back to editor toggle', async () => {
         const agent = makeAgent({ id: 'agent-writer', name: 'Writer' });
         const comment = makeComment({ id: 11, author: 'agent', agent_id: 'agent-writer', body: '## Agent markdown' });

@@ -54,8 +54,12 @@ export function buildOrchestratorRunCompletedBody(
         return `**${agentName}** — orchestrator: run completed on this ${issueType} without an outcome block.${tail}`;
     }
     const parts = [`**${agentName}** ${OUTCOME_LABEL[outcome.kind]} (\`${outcome.kind}\`).`];
-    if (outcome.reason?.trim()) parts.push(`**Reason:** ${clip(outcome.reason.trim(), SUMMARY_CAP)}`);
-    if (outcome.summary?.trim()) parts.push(clip(outcome.summary.trim(), SUMMARY_CAP));
+    const reason = outcome.reason?.trim();
+    const summary = outcome.summary?.trim();
+    // A multi-line reason (numbered questions, a heading) gets its own block
+    // so its markdown still renders.
+    if (reason) parts.push(reason.includes('\n') ? `**Reason:**\n\n${clip(reason, SUMMARY_CAP)}` : `**Reason:** ${clip(reason, SUMMARY_CAP)}`);
+    if (summary && summary !== reason) parts.push(clip(summary, SUMMARY_CAP));
     return `${parts.join('\n\n')}\n${tail}`;
 }
 

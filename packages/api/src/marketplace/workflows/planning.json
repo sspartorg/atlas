@@ -1,7 +1,7 @@
 {
     "id": "planning",
     "name": "Planning",
-    "description": "PO Writer breaks an epic into stories and a PO Reviewer checks them. Unclear epics come back to you; approved stories are queued for the Development workflow.",
+    "description": "PO Writer breaks an epic into stories and a PO Reviewer checks them. Unclear epics come back to you; approved stories are queued for the Development workflow and their [QA] twins for Quality.",
     "input_kind": "item",
     "trigger": "item_ready",
     "use_worktree": true,
@@ -13,7 +13,7 @@
             { "id": "po-writer", "type": "agent", "agent_id": "agent-po-writer", "position": { "x": 220, "y": 120 } },
             { "id": "po-review", "type": "agent", "agent_id": "agent-po-reviewer", "position": { "x": 480, "y": 120 } },
             { "id": "owner", "type": "owner", "position": { "x": 220, "y": 320 } },
-            { "id": "end", "type": "end", "child_workflow_id": "template:dev", "position": { "x": 740, "y": 120 } }
+            { "id": "end", "type": "end", "child_workflow_id": "template:dev", "test_child_workflow_id": "template:qa", "position": { "x": 740, "y": 120 } }
         ],
         "edges": [
             { "id": "e-start", "source": "start", "target": "po-writer", "kind": "pass" },

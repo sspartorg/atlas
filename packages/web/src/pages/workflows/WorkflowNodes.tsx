@@ -342,6 +342,7 @@ function OwnerNode({ id, selected }: NodeProps<WfNode>) {
 function EndNode({ id, data, selected }: NodeProps<WfNode>) {
     const { delivery, workflowsById } = useContext(CanvasContext);
     const child = data.child_workflow_id ? workflowsById.get(data.child_workflow_id) : undefined;
+    const testChild = data.test_child_workflow_id ? workflowsById.get(data.test_child_workflow_id) : undefined;
     return (
         <NodeShell
             id={id}
@@ -355,6 +356,9 @@ function EndNode({ id, data, selected }: NodeProps<WfNode>) {
                 <Caption>{deliveryLabel(delivery)}</Caption>
                 {data.child_workflow_id && (
                     <Caption>→ {child?.name ?? 'Child workflow'}</Caption>
+                )}
+                {data.test_child_workflow_id && (
+                    <Caption>Tests → {testChild?.name ?? 'Test workflow'}</Caption>
                 )}
             </Box>
         </NodeShell>

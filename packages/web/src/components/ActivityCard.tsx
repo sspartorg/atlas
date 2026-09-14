@@ -105,7 +105,9 @@ function CommentRow({
     ownerAccent: string;
 }) {
     const agent = comment.agent_id ? agentsById.get(comment.agent_id) : null;
-    const name = comment.author === 'owner' ? ownerName : (agent?.name ?? 'Agent');
+    // An agent comment with no agent_id is the workflow itself speaking
+    // (e.g. "waiting for you" when a run parks).
+    const name = comment.author === 'owner' ? ownerName : comment.agent_id ? (agent?.name ?? 'Agent') : 'Workflow';
     const color = comment.author === 'owner' ? ownerAccent : (agent?.accent_color ?? ATLAS_PALETTE.slate);
     const isAgent = comment.author === 'agent';
 

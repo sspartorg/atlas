@@ -18,7 +18,7 @@ The workflow has provisioned one git worktree for this run on the QA Story's `wo
    ```
    gh pr view <num> --json state,mergedAt
    ```
-   If `state` is not `MERGED`, post one comment via `mcp__atlas__update_item` (`action: 'add_comment'`) saying `waiting_on_dev_pr_merge — dev PR <num> is <state>` and emit `outcome: asked_question` with `summary: waiting on dev PR merge`. Do not write tests; do not change status.
+   If `state` is not `MERGED`, emit `outcome: asked_question` with `reason: waiting_on_dev_pr_merge — dev PR <num> is <state>. Merge it and reply to continue.` Do not write tests; do not change status.
 
 2. **Read the CSV.** `Read` `tests/qa/<storyId>.csv`. If absent, post `missing_test_plan_csv — tests/qa/<storyId>.csv is not on this worktree` and emit `outcome: asked_question`. Otherwise parse the header (`Summary,Description,Issue Type,Priority,Labels,Components`) and split rows into `automation-yes` (your work) and `automation-no` (acknowledgement-only).
 

@@ -10,11 +10,11 @@ description: "Atlas SDLC — PO Writer. Scopes an Epic into 1–N user-shippable
 
 ## Workflow
 
-1. **Kind guard.** Refuse non-epics. If `.atlas/current-task.md` shows `issue_type != "epic"`, post one comment via `mcp__atlas__update_item` (`action: 'add_comment'`) saying PO Writer is epic-only, create nothing, and end with `outcome: asked_question` (`reason: PO Writer only scopes epics — this item is a <issue_type>.`).
+1. **Kind guard.** Refuse non-epics. If `.atlas/current-task.md` shows `issue_type != "epic"`, create nothing and end with `outcome: asked_question` (`reason: PO Writer only scopes epics — this item is a <issue_type>.`).
 
-2. **Read the epic + brainstorm pass.** Read the Epic body and comment thread from `.atlas/current-task.md`. Look for a prior comment from yourself starting `## Brainstorm — open questions`.
-   - **No prior brainstorm comment** → this is Run 1. Generate 3–7 clarifying questions that would change scoping (user, surface boundaries, rollback, out-of-scope, SLAs, dependencies, AI-readiness gaps). Post them as ONE comment via `mcp__atlas__update_item` (`action: 'add_comment'`) with body starting `## Brainstorm — open questions` (verbatim prefix — mandatory). Create no stories; end with `outcome: asked_question` and `reason: Answer the brainstorm questions in the comment above.` The workflow parks the Epic with the Owner and re-runs you once they reply.
-   - **Prior brainstorm + Owner replied** → re-read questions and answers. If the Owner explicitly said "draft / proceed / ready" or all material gaps are answered, proceed to step 3. Otherwise post a SHORT (1–3 question) follow-up under the same prefix and end with `outcome: asked_question` again.
+2. **Read the epic + brainstorm pass.** Read the Epic body and comment thread from `.atlas/current-task.md`. Look for a prior PO Writer comment in the thread (the orchestrator posts your `reason`) containing `## Brainstorm — open questions`.
+   - **No prior brainstorm comment** → this is Run 1. Generate 3–7 clarifying questions that would change scoping (user, surface boundaries, rollback, out-of-scope, SLAs, dependencies, AI-readiness gaps). Create no stories; end with `outcome: asked_question` whose `reason` starts `## Brainstorm — open questions` (verbatim prefix — mandatory) followed by the numbered questions. Do not post them as a separate comment — the orchestrator posts your `reason`. The workflow parks the Epic with the Owner and re-runs you once they reply.
+   - **Prior brainstorm + Owner replied** → re-read questions and answers. If the Owner explicitly said "draft / proceed / ready" or all material gaps are answered, proceed to step 3. Otherwise end with `outcome: asked_question` again, its `reason` a SHORT (1–3 question) follow-up under the same prefix.
 
 3. **Scope into Stories.** Split into 1–N stories where each delivers ONE end-to-end user-shippable capability. A story may touch FE + BE + DB + MCP — whatever it needs. A story may NOT be "the FE half" or "the BE half" of capability X (merge them). Soft cap 8; if you need more, go back to step 2. Use the shape in `.atlas/templates/story.md`. For each, call:
    ```

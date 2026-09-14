@@ -140,6 +140,22 @@ function EndPanel({ workflow, node, workflows, onChange, onNodeData }: Omit<Prop
                     </MenuItem>
                 ))}
             </TextField>
+            <TextField
+                select
+                label="Test items workflow"
+                size="small"
+                value={node.data.test_child_workflow_id ?? ''}
+                onChange={(e) => onNodeData({ test_child_workflow_id: e.target.value || undefined })}
+                helperText="Created items that test another item (a tested_by link, like [QA] stories) go here instead"
+                fullWidth
+            >
+                <MenuItem value="">Same as child workflow</MenuItem>
+                {children.map((w) => (
+                    <MenuItem key={w.id} value={w.id}>
+                        {w.name}
+                    </MenuItem>
+                ))}
+            </TextField>
         </Box>
     );
 }

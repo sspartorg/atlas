@@ -5,6 +5,7 @@ import { connectEdges, nodeRunStates, normalizeGraph, toFlow, toGraph } from './
 describe('workflow graph helpers', () => {
     it('round-trips a saved graph through the canvas shapes', () => {
         const { graph } = makeWorkflow();
+        graph.nodes = graph.nodes.map((n) => (n.type === 'end' ? { ...n, child_workflow_id: 'wf-dev', test_child_workflow_id: 'wf-qa' } : n));
         const flow = toFlow(graph);
         expect(flow.nodes.find((n) => n.id === 'start')?.deletable).toBe(false);
         expect(flow.edges.find((e) => e.id === 'e4')?.sourceHandle).toBe('fail');

@@ -127,6 +127,18 @@ describe('workflow CRUD', () => {
         const ids = (res.json() as Array<{ id: string }>).map((t) => t.id).sort();
         expect(ids).toEqual(['ai-readiness', 'dev', 'planning', 'qa']);
     });
+
+    it('creates Planning with its stories routed to Development and its test stories to Quality', async () => {
+        const agents = ['po-writer', 'po-reviewer', 'architect', 'architect-reviewer', 'code-reviewer', 'qa-writer', 'qa-reviewer', 'automation', 'automation-reviewer'];
+        for (const a of agents) await insertAgent({ id: `agent-${a}`, status: 'active' });
+
+        const res = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'planning', project_id: 'p1' } });
+        expect(res.statusCode).toBe(201);
+        const all = (await app.inject({ method: 'GET', url: '/api/workflows' })).json() as Array<{ id: string; name: string }>;
+        const idOf = (name: string) => all.find((w) => w.name === name)?.id;
+        const end = (res.json().graph.nodes as Array<{ type: string }>).find((n) => n.type === 'end');
+        expect(end).toMatchObject({ child_workflow_id: idOf('Development'), test_child_workflow_id: idOf('Quality') });
+    });
 });
 
 describe('workflow runs over HTTP', () => {

@@ -14,7 +14,7 @@ The workflow has provisioned one git worktree for this run on the dev Story's `w
 
 ## Workflow
 
-1. **Refuse non-dev-stories.** From `.atlas/current-task.md`, confirm `issue_type === "story"` AND `epic_id` is non-empty. Otherwise post one comment via `mcp__atlas__update_item` (`action: 'add_comment'`) saying Architect only operates on dev Stories with a parent epic, and end with `outcome: asked_question` naming the mismatch.
+1. **Refuse non-dev-stories.** From `.atlas/current-task.md`, confirm `issue_type === "story"` AND `epic_id` is non-empty. Otherwise end with `outcome: asked_question` and a `reason` saying Architect only operates on dev Stories with a parent epic, naming the mismatch.
 
 2. **Author `specs/<n>-<slug>/spec.md`.** `<n>` is the next ordinal in `specs/` (or `1`); `<slug>` is the story title kebab-cased to ≤40 chars. Use `.atlas/templates/spec.md` as the shape. Every one of the 6 required sections must have substantive content — no placeholders, `(none)` / `(no concerns)` are valid where they actually apply but silence is not. The File-level change list names every file Coder will touch with `<path> — <what changes>`. If a review step rejected your previous spec, its `reason` is in the comment thread — close every gap it lists.
 

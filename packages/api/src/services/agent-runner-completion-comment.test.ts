@@ -28,6 +28,18 @@ describe('buildOrchestratorRunCompletedBody', () => {
         );
     });
 
+    it('puts a multi-line question in its own block and does not repeat an identical summary', () => {
+        const reason = '## Brainstorm — open questions\n1. Who uses it?\n2. What is out of scope?';
+        const body = buildOrchestratorRunCompletedBody({
+            agentId: 'agent-po-writer',
+            agentName: 'PO Writer',
+            runId: 'r3',
+            issueType: 'epic',
+            outcome: { kind: 'asked_question', reason, summary: reason },
+        });
+        expect(body).toBe(`**PO Writer** needs an answer (\`asked_question\`).\n\n**Reason:**\n\n${reason}\n\nRun: [r3](/agents/agent-po-writer/runs/r3)`);
+    });
+
     it('says so when the agent emitted no outcome block', () => {
         const body = buildOrchestratorRunCompletedBody({
             agentId: 'agent-coder',
