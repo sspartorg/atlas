@@ -72,6 +72,7 @@ export function makeRunDetail(overrides: Partial<IWorkflowRunDetail> = {}): IWor
         graph_snapshot: wf.graph,
         current_node_id: 'review',
         parked_node_id: null,
+        park_reason: null,
         loop_count: 0,
         branch: 'atlas/wf/ATL-7',
         worktree_path: null,

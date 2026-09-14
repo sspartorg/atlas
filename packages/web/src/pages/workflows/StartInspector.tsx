@@ -53,7 +53,8 @@ export function StartInspector({ workflow: wf, projects, onChange }: Props) {
                 select
                 label="Project"
                 size="small"
-                value={wf.project_id ?? ''}
+                // Until projects load, an id with no matching option makes MUI warn.
+                value={projects.some((p) => p.id === wf.project_id) ? (wf.project_id ?? '') : ''}
                 onChange={(e) => onChange({ project_id: e.target.value || null })}
                 fullWidth
             >

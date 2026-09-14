@@ -69,6 +69,8 @@ export interface IWorkflowRun {
     graph_snapshot: IWorkflowGraph;
     current_node_id: string | null;
     parked_node_id: string | null;
+    /** Why the run is waiting for the Owner; null unless `waiting_for_owner`. */
+    park_reason: string | null;
     loop_count: number;
     branch: string | null;
     worktree_path: string | null;

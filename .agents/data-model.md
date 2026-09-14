@@ -356,7 +356,7 @@ Fields: `id, project_id, name, description, status, graph, input_kind, trigger, 
 ### IWorkflowRun (ADR 0014)
 **Why this entity exists**: One execution of a workflow over one item (or the project). It owns the worktree and branch for its whole life, so consecutive agent steps share state with no push or re-provision between them, and it holds the item while no step is live.
 
-Fields: `id, workflow_id, item_id, project_id, status, graph_snapshot, current_node_id, parked_node_id, loop_count, branch, worktree_path, setup_done, pr_url, started_at, updated_at, finished_at`
+Fields: `id, workflow_id, item_id, project_id, status, graph_snapshot, current_node_id, parked_node_id, park_reason, loop_count, branch, worktree_path, setup_done, pr_url, started_at, updated_at, finished_at`
 
 - `status` ∈ `running | waiting_for_owner | completed | cancelled | error`. `running` → `waiting_for_owner` (park) → `running` (Owner reply or resume) → `completed` (End) / `cancelled` (stop). The engine never writes `error`; a failed step parks instead.
 - `graph_snapshot` is the graph frozen at start; later edits to the workflow don't affect a live run.

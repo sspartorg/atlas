@@ -90,6 +90,19 @@ describe('WorkflowBuilder', () => {
         await waitFor(() => expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument());
     });
 
+    it('steps palette-added nodes apart instead of stacking them on one spot', async () => {
+        const user = userEvent.setup();
+        mount(makeWorkflow());
+        await screen.findByTestId('workflow-canvas');
+        await user.click(await screen.findByRole('button', { name: 'Add Owner' }));
+        await user.click(screen.getByRole('button', { name: 'Add Owner' }));
+        await waitFor(() => {
+            const owners = [...document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="owner"]')];
+            expect(owners).toHaveLength(2);
+            expect(owners[0]?.style.transform).not.toBe(owners[1]?.style.transform);
+        });
+    });
+
     it('surfaces graph errors the server rejects the save with', async () => {
         const user = userEvent.setup();
         const wf = makeWorkflow();

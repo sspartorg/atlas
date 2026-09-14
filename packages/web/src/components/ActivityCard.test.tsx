@@ -281,16 +281,11 @@ describe('ActivityCard', () => {
 });
 
 describe('ConversationCard', () => {
-    describe('owner-reply hand-back hint', () => {
+    describe('owner-reply resume hint', () => {
         const coder = makeAgent({ id: 'agent-coder', name: 'Coder', status: 'active' });
-        const qa = makeAgent({ id: 'agent-qa', name: 'QA', status: 'active' });
-        const run = (agent_id: string, created_at: string) =>
-            ({ id: `r-${agent_id}`, agent_id, created_at }) as IAgentRun;
-        const runs = [
-            run('agent-qa', '2026-09-01T09:00:00.000Z'),
-            run('agent-coder', '2026-09-02T09:00:00.000Z'),
-        ];
-        const hint = /Replying hands this back to/;
+        const run = (created_at: string, workflow_run_id: string | null) =>
+            ({ id: `r-${created_at}`, agent_id: 'agent-coder', created_at, workflow_run_id }) as IAgentRun;
+        const hint = /Replying continues the waiting workflow run/;
 
         function renderCard(overrides: Partial<Parameters<typeof ConversationCard>[0]> = {}) {
             server.use(...defaultHandlers);
@@ -299,30 +294,28 @@ describe('ConversationCard', () => {
                     issueType="story"
                     issueId="S1"
                     activity={[]}
-                    agents={[coder, qa]}
+                    agents={[coder]}
                     status="waiting_for_info"
                     assigneeAgentId={null}
-                    runs={runs}
+                    runs={[run('2026-09-01T09:00:00.000Z', null), run('2026-09-02T09:00:00.000Z', 'wr-1')]}
                     {...overrides}
                 />,
             );
         }
 
-        it('names the agent of the most recent run when the item is parked unassigned', () => {
+        it('shows when the parked item latest step belongs to a workflow run', () => {
             renderCard();
-            expect(
-                screen.getByText('Replying hands this back to Coder and sets it Ready.'),
-            ).toBeInTheDocument();
+            expect(screen.getByText(hint)).toBeInTheDocument();
         });
 
-        it('stays hidden when the item is assigned, not waiting, or the last agent is paused', () => {
-            const { unmount } = renderCard({ assigneeAgentId: 'agent-qa' });
+        it('stays hidden when the item is assigned, not waiting, or its latest run is not a workflow step', () => {
+            const { unmount } = renderCard({ assigneeAgentId: 'agent-coder' });
             expect(screen.queryByText(hint)).not.toBeInTheDocument();
             unmount();
             const second = renderCard({ status: 'ready' });
             expect(screen.queryByText(hint)).not.toBeInTheDocument();
             second.unmount();
-            renderCard({ agents: [{ ...coder, status: 'inactive' }, qa] });
+            renderCard({ runs: [run('2026-09-03T09:00:00.000Z', null)] });
             expect(screen.queryByText(hint)).not.toBeInTheDocument();
         });
     });

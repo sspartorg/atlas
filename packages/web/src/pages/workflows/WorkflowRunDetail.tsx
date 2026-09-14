@@ -89,6 +89,11 @@ function RunBanner({ run, itemPath }: { run: IWorkflowRunDetail; itemPath: strin
     if (run.status === 'waiting_for_owner') {
         return (
             <Alert severity="warning" sx={{ mb: 3 }}>
+                {run.park_reason && (
+                    <Box component="span" sx={{ display: 'block', fontWeight: 600, mb: 0.5 }}>
+                        {run.park_reason}
+                    </Box>
+                )}
                 The run is waiting for you.{' '}
                 {run.item_id ? (
                     <>

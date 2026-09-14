@@ -262,14 +262,14 @@ export async function startWorkflowRun(workflowId: string, itemId: string | null
 
 // ─── Moving through the graph ───────────────────────────────────────────────
 
-async function goTo(run: RunRow, nodeId: string): Promise<void> {
+async function goTo(run: RunRow, nodeId: string, why?: string): Promise<void> {
     const node = nodeById(run.graph_snapshot, nodeId);
     if (!node) {
         await park(run, run.current_node_id, `Workflow graph has no node ${nodeId}`);
         return;
     }
     if (node.type === 'owner') {
-        await park(run, node.id, 'The workflow reached an Owner step — review and reply to continue');
+        await park(run, node.id, why ? `Sent back to you: ${why}` : 'The workflow reached an Owner step — review and reply to continue');
         return;
     }
     if (node.type === 'end') {
@@ -289,7 +289,7 @@ async function spawnNode(run: RunRow, node: IWorkflowNode): Promise<void> {
     }
     await db
         .updateTable('workflow_runs')
-        .set({ current_node_id: node.id, status: 'running', parked_node_id: null })
+        .set({ current_node_id: node.id, status: 'running', parked_node_id: null, park_reason: null })
         .where('id', '=', run.id)
         .execute();
     run.current_node_id = node.id;
@@ -402,7 +402,7 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
     }
     await db.updateTable('workflow_runs').set({ loop_count: loops }).where('id', '=', run.id).execute();
     run.loop_count = loops;
-    await goTo(run, failTarget);
+    await goTo(run, failTarget, decision.detail ?? 'the step failed');
 }
 
 // ─── Park / resume ──────────────────────────────────────────────────────────
@@ -410,7 +410,7 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
 async function park(run: RunRow, nodeId: string | null, reason: string): Promise<void> {
     await db
         .updateTable('workflow_runs')
-        .set({ status: 'waiting_for_owner', parked_node_id: nodeId, current_node_id: nodeId })
+        .set({ status: 'waiting_for_owner', parked_node_id: nodeId, current_node_id: nodeId, park_reason: reason.slice(0, 1000) })
         .where('id', '=', run.id)
         .execute();
     run.status = 'waiting_for_owner';
@@ -447,7 +447,7 @@ async function park(run: RunRow, nodeId: string | null, reason: string): Promise
 export async function resumeWorkflowRun(runId: string): Promise<void> {
     const updated = await db
         .updateTable('workflow_runs')
-        .set({ status: 'running' })
+        .set({ status: 'running', park_reason: null })
         .where('id', '=', runId)
         .where('status', '=', 'waiting_for_owner')
         .executeTakeFirst();
@@ -473,6 +473,10 @@ export async function continueResumedRun(runId: string): Promise<void> {
     if (parked.type === 'owner') {
         const next = nextNodeId(run.graph_snapshot, parked.id, 'pass');
         if (next) await goTo(run, next);
+        return;
+    }
+    if (parked.type === 'end') {
+        await finishRun(run, parked);
         return;
     }
     // Re-run the step that asked, with a fresh loop budget: the Owner's reply
@@ -505,12 +509,14 @@ async function commitPending(worktreePath: string, credentialId: string | null, 
 interface DeliveryResult {
     pushed: boolean;
     prUrl: string | null;
+    /** Set when a delivery step the workflow asked for did not happen. */
+    failure: string | null;
     log: string[];
 }
 
 async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<DeliveryResult> {
     const log: string[] = [];
-    const result: DeliveryResult = { pushed: false, prUrl: null, log };
+    const result: DeliveryResult = { pushed: false, prUrl: null, failure: null, log };
     const workflow = await loadWorkflow(run.workflow_id);
     if (!workflow || !run.worktree_path || !run.branch || !run.project_id) return result;
     const project = await db
@@ -528,6 +534,7 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
         pushOk = push.pushed || push.alreadyUpToDate;
         result.pushed = push.pushed;
         log.push(pushOk ? `pushed ${run.branch}` : `push failed: ${push.error ?? 'unknown'}`);
+        if (!pushOk) result.failure = `Push failed: ${push.error ?? 'unknown error'}`;
     }
 
     if (opts.openPr && workflow.raises_pr && workflow.push_code && pushOk) {
@@ -569,11 +576,13 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
             }
         } else {
             log.push(`pr failed: ${pr.error ?? 'unknown'}`);
+            result.failure = `Pull request failed: ${pr.error ?? 'unknown error'}`;
         }
     }
 
-    // A failed push keeps the worktree on disk so the work can be recovered.
-    if (pushOk && project.git_path) {
+    // Any delivery failure keeps the worktree so a resumed run can retry
+    // from exactly this state.
+    if (pushOk && !result.failure && project.git_path) {
         const cleanup = await cleanupWorktreeAfterPush({
             itemId: null,
             projectId: project.id,
@@ -595,6 +604,12 @@ async function finishRun(run: RunRow, endNode: IWorkflowNode): Promise<void> {
         .execute();
     broadcastRun(run, 'running', endNode.id);
     const delivery = await deliver(run, { openPr: true });
+    if (delivery.failure) {
+        // Parked at End: fixing the cause (e.g. the project credential) and
+        // resuming re-runs delivery against the kept worktree.
+        await park(run, endNode.id, `${delivery.failure}. Resume the run to retry delivery.`);
+        return;
+    }
 
     const now = new Date().toISOString();
     await db

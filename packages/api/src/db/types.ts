@@ -676,6 +676,7 @@ export interface WorkflowRunsTable {
     graph_snapshot: ColumnType<IWorkflowGraph, string, string>;
     current_node_id: StrN;
     parked_node_id: StrN;
+    park_reason: StrN;
     loop_count: Int;
     branch: StrN;
     worktree_path: StrN;

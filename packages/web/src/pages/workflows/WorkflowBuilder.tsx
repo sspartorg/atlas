@@ -177,15 +177,25 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
                 y: (rect?.top ?? 0) + (rect?.height ?? 0) / 2,
             };
             const p = screenToFlowPosition(at);
-            const node: WfNode = {
-                id: newNodeId(item.type),
-                type: item.type,
-                position: { x: p.x - 108, y: p.y - 32 },
-                data: item.agent_id ? { agent_id: item.agent_id } : {},
-                selected: true,
-            };
-            setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), node]);
-            setSelectedId(node.id);
+            const id = newNodeId(item.type);
+            setNodes((ns) => {
+                // Palette clicks all target the canvas centre; step each new
+                // node down past any node already sitting there so they
+                // never stack invisibly on top of each other.
+                const position = { x: p.x - 108, y: p.y - 32 };
+                while (ns.some((n) => Math.abs(n.position.x - position.x) < 40 && Math.abs(n.position.y - position.y) < 40)) {
+                    position.y += 80;
+                }
+                const node: WfNode = {
+                    id,
+                    type: item.type,
+                    position,
+                    data: item.agent_id ? { agent_id: item.agent_id } : {},
+                    selected: true,
+                };
+                return [...ns.map((n) => ({ ...n, selected: false })), node];
+            });
+            setSelectedId(id);
         },
         [screenToFlowPosition],
     );

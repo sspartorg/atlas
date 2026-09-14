@@ -26,7 +26,7 @@ async function claimParkedWorkflowRun(
         .executeTakeFirst();
     if (!run) return null;
     const item = await trx.selectFrom('items').select('status').where('id', '=', itemId).executeTakeFirst();
-    await trx.updateTable('workflow_runs').set({ status: 'running' }).where('id', '=', run.id).execute();
+    await trx.updateTable('workflow_runs').set({ status: 'running', park_reason: null }).where('id', '=', run.id).execute();
     await trx.updateTable('items').set({ status: 'in_progress' }).where('id', '=', itemId).execute();
     if (item && item.status !== 'in_progress') {
         await eventsLog.record(

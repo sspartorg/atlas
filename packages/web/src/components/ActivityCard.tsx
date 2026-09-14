@@ -697,17 +697,18 @@ export function ConversationCard({
         propActivity,
         propAgents,
     );
-    // Mirrors the API's owner-reply auto-resume (commentsService): a parked,
-    // unassigned item goes back to the agent of its latest run, if active.
-    const resumeAgent = useMemo(() => {
-        if (status !== 'waiting_for_info' || assigneeAgentId) return null;
+    // Mirrors the API's owner-reply auto-resume (commentsService, ADR 0014): a
+    // reply on a parked item continues the workflow run its latest step
+    // belongs to. Which step runs next is the workflow's call, so the hint
+    // doesn't name an agent.
+    const resumesWorkflow = useMemo(() => {
+        if (status !== 'waiting_for_info' || assigneeAgentId) return false;
         const latest = (runs ?? []).reduce<IAgentRun | null>(
             (acc, r) => (!acc || r.created_at > acc.created_at ? r : acc),
             null,
         );
-        const agent = latest ? agentsById.get(latest.agent_id) : undefined;
-        return agent?.status === 'active' ? agent : null;
-    }, [status, assigneeAgentId, runs, agentsById]);
+        return Boolean(latest?.workflow_run_id);
+    }, [status, assigneeAgentId, runs]);
     const createComment = useCreateComment();
     const qc = useQueryClient();
     const [draft, setDraft] = useState('');
@@ -786,9 +787,7 @@ export function ConversationCard({
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     helperText={
-                        resumeAgent
-                            ? `Replying hands this back to ${resumeAgent.name} and sets it Ready.`
-                            : undefined
+                        resumesWorkflow ? 'Replying continues the waiting workflow run.' : undefined
                     }
                     slotProps={{
                         input: {

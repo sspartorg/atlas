@@ -25,7 +25,7 @@ Watch one workflow run move node-by-node: the run's `graph_snapshot` on a read-o
 - `error` → "The run stopped on an error. Check the failed step's log."
 
 **Canvas** (read-only `WorkflowCanvas`)
-- Node state from `nodeRunStates(run)` (`pages/workflows/graph.ts`): Start always done; each agent node takes its latest step's status (completed → done / green border + check, error·setup_failed → failed / red + error icon, cancelled → grey + block icon, queued·in_progress → current); `parked_node_id` on a waiting run → parked (amber + hand icon); `current_node_id` on a running run → current (accent border, pulsing halo, live dot); on a completed run the `current_node_id` (the End) is done. Nodes never reached are dimmed.
+- Node state from `nodeRunStates(run)` (`pages/workflows/graph.ts`): Start always done; each agent node takes its latest step's status (completed → done / green border + check, error·setup_failed → failed / red + error icon, cancelled → grey + block icon, queued·in_progress → current); `parked_node_id` on a waiting run → parked (amber + hand icon; the warning banner leads with `park_reason`, e.g. a failed checklist or push); `current_node_id` on a running run → current (accent border, pulsing halo, live dot); on a completed run the `current_node_id` (the End) is done. Nodes never reached are dimmed.
 - **×N** badge when a node ran more than once (fail loops).
 
 **Steps panel**

@@ -37,7 +37,10 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 function ToggleRow({ label, sub, checked, onChange }: { label: string; sub: string; checked: boolean; onChange: (v: boolean) => void }) {
     return (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5, borderBottom: `1px solid ${ATLAS_PALETTE.slate06}` }}>
+        <Box
+            component="label"
+            sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5, cursor: 'pointer', borderBottom: `1px solid ${ATLAS_PALETTE.slate06}` }}
+        >
             <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate }}>{label}</Typography>
                 <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>{sub}</Typography>

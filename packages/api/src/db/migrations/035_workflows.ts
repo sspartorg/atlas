@@ -60,6 +60,8 @@ export async function up(knex: Knex): Promise<void> {
             graph_snapshot jsonb NOT NULL,
             current_node_id text,
             parked_node_id text,
+            -- Why the run is waiting for the Owner; null while running.
+            park_reason text,
             loop_count integer NOT NULL DEFAULT 0,
             branch text,
             worktree_path text,

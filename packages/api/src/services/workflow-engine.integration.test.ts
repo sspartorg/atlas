@@ -158,6 +158,27 @@ describe('workflow engine — happy path', () => {
         expect(await itemOf('ATL-2')).toMatchObject({ status: 'in_review', assignee_agent_id: null });
     });
 
+    it('parks at End when delivery fails and retries delivery on resume', async () => {
+        git.pushWorktree.mockResolvedValueOnce({ pushed: false, alreadyUpToDate: false, error: 'no credential' } as never);
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        await finishStep('completed', 'done');
+        await finishStep('completed', 'done');
+
+        expect(await runOf(runId)).toMatchObject({
+            status: 'waiting_for_owner',
+            parked_node_id: 'end',
+            park_reason: 'Push failed: no credential. Resume the run to retry delivery.',
+        });
+        expect(git.cleanupWorktreeAfterPush).not.toHaveBeenCalled();
+        expect(await itemOf('ATL-2')).toMatchObject({ status: 'waiting_for_info' });
+
+        await resumeWorkflowRun(runId);
+        expect(git.pushWorktree).toHaveBeenCalledTimes(2);
+        expect(await runOf(runId)).toMatchObject({ status: 'completed', pr_url: 'https://github.com/o/r/pull/7' });
+        expect(await itemOf('ATL-2')).toMatchObject({ status: 'in_review' });
+        expect(spawned).toHaveLength(2);
+    });
+
     it('refuses a second live run on the same item', async () => {
         await startWorkflowRun('wf-dev', 'ATL-2');
         await expect(startWorkflowRun('wf-dev', 'ATL-2')).rejects.toBeInstanceOf(WorkflowStartError);
@@ -191,7 +212,7 @@ describe('workflow engine — loops and parking', () => {
     it('treats a missing outcome block as a question for the Owner', async () => {
         const runId = await startWorkflowRun('wf-dev', 'ATL-2');
         await finishStep('completed', null);
-        expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'coder' });
+        expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'coder', park_reason: 'agent_did_not_signal_outcome' });
     });
 
     it('re-runs the asking step with a fresh loop budget when the Owner replies on the item', async () => {
@@ -211,11 +232,11 @@ describe('workflow engine — loops and parking', () => {
     it('parks at an Owner node and continues along its pass connection on resume', async () => {
         const runId = await startWorkflowRun('wf-dev', 'ATL-2');
         await finishStep('completed', 'rejected', 'cannot start'); // coder fail → owner
-        expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'owner' });
+        expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'owner', park_reason: 'Sent back to you: rejected: cannot start' });
 
         await resumeWorkflowRun(runId);
         expect(spawned.map((s) => s.nodeId)).toEqual(['coder', 'coder']);
-        expect(await runOf(runId)).toMatchObject({ status: 'running', current_node_id: 'coder' });
+        expect(await runOf(runId)).toMatchObject({ status: 'running', current_node_id: 'coder', park_reason: null });
     });
 
     it('parks when a step errors or its setup fails', async () => {

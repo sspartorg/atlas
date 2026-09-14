@@ -64,6 +64,7 @@ function asRunSummary(row: Record<string, unknown>): IWorkflowRunSummary {
         graph_snapshot: row['graph_snapshot'] as IWorkflowGraph,
         current_node_id: (row['current_node_id'] as string | null) ?? null,
         parked_node_id: (row['parked_node_id'] as string | null) ?? null,
+        park_reason: (row['park_reason'] as string | null) ?? null,
         loop_count: row['loop_count'] as number,
         branch: (row['branch'] as string | null) ?? null,
         worktree_path: (row['worktree_path'] as string | null) ?? null,
