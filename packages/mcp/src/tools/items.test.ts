@@ -238,10 +238,12 @@ describe('update_item', () => {
             action: 'patch_fields',
             patch: { title: 'new title', priority: 'high' },
         });
-        expect(updateItem).toHaveBeenCalledWith('story', 'ATL-2', {
-            title: 'new title',
-            priority: 'high',
-        });
+        expect(updateItem).toHaveBeenCalledWith(
+            'story',
+            'ATL-2',
+            { title: 'new title', priority: 'high' },
+            null,
+        );
         const parsed = parseToolResult<{ id: string }>(result);
         expect(parsed.id).toBe('ATL-2');
     });
@@ -256,9 +258,21 @@ describe('update_item', () => {
             action: 'patch_fields',
             patch: { labels: ['CER_Stories'] },
         });
-        expect(updateItem).toHaveBeenCalledWith('story', 'ATL-2', {
-            labels: ['CER_Stories'],
+        expect(updateItem).toHaveBeenCalledWith('story', 'ATL-2', { labels: ['CER_Stories'] }, null);
+    });
+
+    it("action='patch_fields' forwards agent_id so field edits are credited to the agent", async () => {
+        const { server, tools } = captureServer();
+        const updateItem = vi.fn().mockResolvedValue({ id: 'ATL-2' });
+        registerItemTools(server, makeFakeApiClient({ updateItem }));
+        await tools.get('update_item')!.handler({
+            issue_type: 'story',
+            id: 'ATL-2',
+            action: 'patch_fields',
+            patch: { title: 't' },
+            agent_id: 'agent-po-writer',
         });
+        expect(updateItem).toHaveBeenCalledWith('story', 'ATL-2', { title: 't' }, 'agent-po-writer');
     });
 
     it("action='patch_fields' schema accepts a canonical worktree_branch and rejects a malformed one", () => {

@@ -351,7 +351,9 @@ export const ITEM_TOOLS: ToolRegistration[] = [
                 case 'patch_fields': {
                     if (!a.patch)
                         throw new Error("update_item: `patch` is required for action='patch_fields'");
-                    return toToolResult(await client.updateItem(a.issue_type, a.id, a.patch));
+                    return toToolResult(
+                        await client.updateItem(a.issue_type, a.id, a.patch, resolveAgentId(a.agent_id)),
+                    );
                 }
                 case 'change_status': {
                     if (!a.status)

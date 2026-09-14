@@ -139,6 +139,7 @@ export const subTasksService = {
             acceptance_criteria?: string | undefined;
             priority?: IssuePriority | undefined;
         },
+        actorAgentId: string | null = null,
     ): Promise<ISubTask> {
         const before = await this.get(id);
         if (!before) throw new Error('Sub-task not found');
@@ -153,7 +154,7 @@ export const subTasksService = {
             'points',
             'acceptance_criteria',
             'priority',
-        ]);
+        ], actorAgentId);
         return (await this.get(id))!;
     },
 
@@ -313,6 +314,7 @@ export const subBugsService = {
             failure_scope?: BugFailureScope | undefined;
             priority?: IssuePriority | undefined;
         },
+        actorAgentId: string | null = null,
     ): Promise<ISubBug> {
         const before = await this.get(id);
         if (!before) throw new Error('Sub-bug not found');
@@ -329,7 +331,7 @@ export const subBugsService = {
             'actual',
             'frequency',
             'failure_scope',
-        ]);
+        ], actorAgentId);
         return (await this.get(id))!;
     },
 
@@ -468,6 +470,7 @@ export const bugsService = {
             failure_scope?: BugFailureScope | undefined;
             priority?: IssuePriority | undefined;
         },
+        actorAgentId: string | null = null,
     ): Promise<IBug> {
         const before = await this.get(id);
         if (!before) throw new Error('Bug not found');
@@ -484,7 +487,7 @@ export const bugsService = {
             'actual',
             'frequency',
             'failure_scope',
-        ]);
+        ], actorAgentId);
         return (await this.get(id))!;
     },
 

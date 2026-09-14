@@ -73,6 +73,7 @@ A08 â€” `POST /api/agents` and `PATCH /api/agents/:id` accept an optional `
 | GET | `/api/epics?project_id=â€¦` | List epics, optional project filter |
 | GET | `/api/epics/stats` | Aggregate counts (awaiting PO etc.) |
 | GET | `/api/epics/:id` | Single epic |
+| PATCH | `/api/{epics,stories,sub-tasks,sub-bugs,bugs}/:id` (attribution) | **2026-09-14:** every field PATCH route credits the optional `x-atlas-agent-id` header (sent by MCP `patch_fields` when the agent passes `agent_id`) as the `field_updated` event actor; unknown ids fall back to the Owner. The orchestrator also credits the run's agent on the PR `link_created` event it writes. |
 | POST | `/api/epics` | Create epic. Optional `x-atlas-agent-id` header (sent by MCP `create_item` when the agent passes `agent_id`): credited as the `created` event actor and used as `reporter_agent_id` when the body omits it. Unknown agent ids are ignored (Owner attribution). Same for every create route below (`services/request-actor.ts::headerAgentId`) |
 | PATCH | `/api/epics/:id` | Update epic (description) |
 | PATCH | `/api/epics/:id/status` | Transition status (validates via `isValidTransition`) |

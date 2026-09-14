@@ -57,7 +57,7 @@ export async function epicsRoutes(app: FastifyInstance) {
         const { id } = req.params as { id: string };
         if (!(await epicsService.get(id))) return reply.status(404).send({ error: 'Epic not found' });
         const body = UpdateEpicSchema.parse(req.body);
-        return reply.send(await epicsService.update(id, body));
+        return reply.send(await epicsService.update(id, body, await headerAgentId(req.headers)));
     });
 
     app.patch('/api/epics/:id/status', { preHandler: requireMcpToken }, async (req, reply) => {

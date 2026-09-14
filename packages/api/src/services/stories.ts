@@ -82,6 +82,7 @@ export const storiesService = {
             // T2 — see UpdateStorySchema in @atlas/shared.
             worktree_branch?: string | null | undefined;
         },
+        actorAgentId: string | null = null,
     ): Promise<IStory> {
         const before = await this.get(id);
         if (!before) throw new Error('Story not found');
@@ -100,6 +101,7 @@ export const storiesService = {
             before as unknown as Record<string, unknown>,
             data as unknown as Record<string, unknown>,
             ['title', 'description', 'spec_md', 'pr_url', 'points', 'acceptance_criteria', 'priority'],
+            actorAgentId,
         );
         return (await this.get(id))!;
     },

@@ -43,7 +43,7 @@ export async function bugsRoutes(app: FastifyInstance) {
         const { id } = req.params as { id: string };
         if (!(await bugsService.get(id))) return reply.status(404).send({ error: 'Bug not found' });
         const body = UpdateBugSchema.parse(req.body);
-        return reply.send(await bugsService.update(id, body));
+        return reply.send(await bugsService.update(id, body, await headerAgentId(req.headers)));
     });
 
     app.patch('/api/bugs/:id/status', { preHandler: requireMcpToken }, async (req, reply) => {

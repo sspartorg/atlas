@@ -364,7 +364,12 @@ export interface IApiClient {
     // `patch` through verbatim; the per-type Zod schema on the route enforces
     // which fields are accepted, so a typo or wrong-type field gets a 400 with
     // the Zod error message.
-    updateItem(issueType: IssueType, id: string, patch: Record<string, unknown>): Promise<unknown>;
+    updateItem(
+        issueType: IssueType,
+        id: string,
+        patch: Record<string, unknown>,
+        actorAgentId?: string | null,
+    ): Promise<unknown>;
     transitionItemStatus(
         issueType: IssueType,
         id: string,
@@ -711,11 +716,12 @@ export function createApiClient(config: IMcpConfig): IApiClient {
         // issueTypeToRouteSegment() helper so the same client.<method>() call
         // reaches the right per-type route. PATCH/DELETE pass through to the
         // server-side Zod schema for validation.
-        updateItem: (issueType, id, patch) => {
+        updateItem: (issueType, id, patch, actorAgentId) => {
             const seg = issueTypeToRouteSegment(issueType);
             return request<unknown>(`/api/${seg}/${encodeURIComponent(id)}`, {
                 method: 'PATCH',
                 body: patch,
+                ...agentHeader(actorAgentId),
             });
         },
         transitionItemStatus: (issueType, id, status, override, requestedByAgentId) => {

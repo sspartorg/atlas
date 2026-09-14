@@ -106,7 +106,7 @@ export const epicsService = {
         return epic;
     },
 
-    async update(id: string, data: UpdateInput): Promise<IEpic> {
+    async update(id: string, data: UpdateInput, actorAgentId: string | null = null): Promise<IEpic> {
         const before = await this.get(id);
         if (!before) throw new Error('Epic not found');
         const keys = Object.keys(data).filter((k) => data[k as keyof UpdateInput] !== undefined);
@@ -118,6 +118,7 @@ export const epicsService = {
             before as unknown as Record<string, unknown>,
             data as unknown as Record<string, unknown>,
             ['title', 'description', 'priority', 'reporter'],
+            actorAgentId,
         );
         return (await this.get(id))!;
     },

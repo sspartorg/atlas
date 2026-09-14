@@ -1808,6 +1808,7 @@ function spawnCli(opts: SpawnCliOptions): void {
                                 title,
                                 externalRef: parsed?.number ?? null,
                                 createdByRunId: runId,
+                                actorAgentId: agent.id,
                             });
                         } catch (urlErr) {
                             emit(`[orchestrator] pr: persist external link failed: ${(urlErr as Error).message}`);

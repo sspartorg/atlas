@@ -242,7 +242,7 @@ guardrail / global-settings mutation.
 is credited to an agent only when the call passes `agent_id`; the generated
 `.atlas/handoff.md` (`handoff-assembler.ts`) tells the agent to pass its own
 id on every `update_item` call. `create_item` (top-level `agent_id`) and
-`update_item` `add_link` / `remove_link` / `add_external_link` forward it as
+`update_item` `patch_fields` / `add_link` / `remove_link` / `add_external_link` forward it as
 the `x-atlas-agent-id` header; the create routes credit it as the `created`
 event actor (and default `reporter_agent_id`), the item-link routes as the
 `link_created` / `link_deleted` actor on both endpoints. An id that is not a

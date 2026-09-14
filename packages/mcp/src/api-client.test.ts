@@ -625,11 +625,12 @@ describe('createApiClient — items (getItemFull / search / projects / links)', 
             },
             'agent-po-writer',
         );
+        await client.updateItem('story', 'S1', { title: 'x' }, 'agent-po-writer');
         await client.createStory({ epic_id: 'E1', title: 'S' }, null);
         const agentHeaders = fetchSpy.mock.calls.map(
             ([, init]) => ((init as RequestInit).headers as Record<string, string>)['x-atlas-agent-id'],
         );
-        expect(agentHeaders).toEqual([...Array(8).fill('agent-po-writer'), undefined]);
+        expect(agentHeaders).toEqual([...Array(9).fill('agent-po-writer'), undefined]);
     });
 
     it('listItemExternalLinks GETs /api/issues/:type/:id/external-links', async () => {

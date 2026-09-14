@@ -99,7 +99,7 @@ export async function storiesRoutes(app: FastifyInstance) {
         const { id } = req.params as { id: string };
         if (!(await storiesService.get(id))) return reply.status(404).send({ error: 'Story not found' });
         const body = UpdateStorySchema.parse(req.body);
-        return reply.send(await storiesService.update(id, body));
+        return reply.send(await storiesService.update(id, body, await headerAgentId(req.headers)));
     });
 
     app.patch('/api/stories/:id/status', { preHandler: requireMcpToken }, async (req, reply) => {
@@ -184,7 +184,7 @@ export async function storiesRoutes(app: FastifyInstance) {
         if (!(await subTasksService.get(id)))
             return reply.status(404).send({ error: 'Sub-task not found' });
         const body = UpdateSubTaskSchema.parse(req.body);
-        return reply.send(await subTasksService.update(id, body));
+        return reply.send(await subTasksService.update(id, body, await headerAgentId(req.headers)));
     });
 
     app.patch('/api/sub-tasks/:id/status', { preHandler: requireMcpToken }, async (req, reply) => {
@@ -266,7 +266,7 @@ export async function storiesRoutes(app: FastifyInstance) {
         if (!(await subBugsService.get(id)))
             return reply.status(404).send({ error: 'Sub-bug not found' });
         const body = UpdateSubBugSchema.parse(req.body);
-        return reply.send(await subBugsService.update(id, body));
+        return reply.send(await subBugsService.update(id, body, await headerAgentId(req.headers)));
     });
 
     app.patch('/api/sub-bugs/:id/status', { preHandler: requireMcpToken }, async (req, reply) => {

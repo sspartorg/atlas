@@ -1022,6 +1022,30 @@ describe('PATCH /api/sub-bugs/:id/status — override=1 branch (STORIES-OVERRIDE
 
 // MCP create_item forwards the calling agent as `x-atlas-agent-id`; without
 // it the `created` event had a null actor and rendered as the Owner.
+describe('PATCH routes — x-atlas-agent-id attribution on field_updated', () => {
+    const cases = [
+        { url: '/api/stories/ATL-2', payload: { title: 'Renamed story' } },
+        { url: '/api/epics/ATL-1', payload: { title: 'Renamed epic' } },
+    ];
+    for (const c of cases) {
+        it(`PATCH ${c.url} credits the header agent on field_updated`, async () => {
+            const res = await app.inject({
+                method: 'PATCH',
+                url: c.url,
+                headers: { 'x-atlas-agent-id': 'agent-coder' },
+                payload: c.payload,
+            });
+            expect(res.statusCode).toBe(200);
+            const events = await testDb
+                .selectFrom('issue_events')
+                .select('actor_agent_id')
+                .where('event_type', '=', 'field_updated')
+                .execute();
+            expect(events.map((e) => e.actor_agent_id)).toEqual(['agent-coder']);
+        });
+    }
+});
+
 describe('create routes — x-atlas-agent-id attribution', () => {
     async function createdEvent(itemId: string) {
         return testDb
