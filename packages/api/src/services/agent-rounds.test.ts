@@ -4,6 +4,7 @@ import {
     getRound,
     resetRoundsForItem,
     resetRoundsForIssue,
+    resetRoundsUnlessBounceBack,
 } from './agent-rounds.js';
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
 import { insertProject, insertItem, insertAgent } from '../../tests/_items.js';
@@ -134,5 +135,43 @@ describe('resetRoundsForIssue — Owner escape hatch', () => {
         const result = await resetRoundsForIssue('ATL-1');
         expect(result.previousCount).toBe(0);
         expect(result.assigneeAgentId).toBeNull();
+    });
+});
+
+// Loop guard — a self-routed run only wipes the item's counters on forward
+// progress. Handing the item back to an agent that already ran on it (a
+// writer↔reviewer bounce) must keep them so the dispatcher's max_rounds cap
+// can eventually park the item with the Owner.
+describe('resetRoundsUnlessBounceBack', () => {
+    beforeEach(async () => {
+        await insertAgent({ id: 'agent-writer' });
+        await insertAgent({ id: 'agent-reviewer' });
+        await testDb
+            .insertInto('agent_runs')
+            .values({ id: 'run-writer-1', agent_id: 'agent-writer', item_id: 'ATL-1', status: 'completed' })
+            .execute();
+        await incrementRound('ATL-1', 'agent-writer');
+    });
+
+    async function assign(assignee: string | null): Promise<void> {
+        await testDb.updateTable('items').set({ assignee_agent_id: assignee }).where('id', '=', 'ATL-1').execute();
+    }
+
+    it('resets on forward progress — the new assignee has never run on this item', async () => {
+        await assign('agent-reviewer');
+        await resetRoundsUnlessBounceBack('ATL-1');
+        expect(await getRound('ATL-1', 'agent-writer')).toBe(0);
+    });
+
+    it('keeps the counters on a bounce-back to an agent that already ran on this item', async () => {
+        await assign('agent-writer');
+        await resetRoundsUnlessBounceBack('ATL-1');
+        expect(await getRound('ATL-1', 'agent-writer')).toBe(1);
+    });
+
+    it('resets when the item lands with the Owner', async () => {
+        await assign(null);
+        await resetRoundsUnlessBounceBack('ATL-1');
+        expect(await getRound('ATL-1', 'agent-writer')).toBe(0);
     });
 });

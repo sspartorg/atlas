@@ -601,6 +601,37 @@ describe('createApiClient — items (getItemFull / search / projects / links)', 
         expect((req.headers as Record<string, string>)['x-atlas-agent-id']).toBe('agent-coder');
     });
 
+    it('create* / item-link writes forward the agent id as x-atlas-agent-id (and omit it when null)', async () => {
+        const fetchSpy = vi
+            .spyOn(globalThis, 'fetch')
+            .mockImplementation(async () => okJson({ id: 1 }));
+        const client = createApiClient(config);
+        await client.createEpic({ project_id: 'p1', title: 'E' }, 'agent-po-writer');
+        await client.createStory({ epic_id: 'E1', title: 'S' }, 'agent-po-writer');
+        await client.createSubTask({ story_id: 'S1', title: 't' }, 'agent-po-writer');
+        await client.createSubBug({ story_id: 'S1', title: 'b' }, 'agent-po-writer');
+        await client.createBug({ epic_id: 'E1', title: 'b' }, 'agent-po-writer');
+        await client.createItemLink(
+            { from_type: 'story', from_id: 'S2', to_id: 'S1', relation_type: 'tested_by' },
+            'agent-po-writer',
+        );
+        await client.deleteItemLink(5, 'agent-po-writer');
+        await client.createItemExternalLink(
+            {
+                issue_type: 'story',
+                issue_id: 'S1',
+                link_kind: 'pull_request',
+                url: 'https://github.com/o/r/pull/3',
+            },
+            'agent-po-writer',
+        );
+        await client.createStory({ epic_id: 'E1', title: 'S' }, null);
+        const agentHeaders = fetchSpy.mock.calls.map(
+            ([, init]) => ((init as RequestInit).headers as Record<string, string>)['x-atlas-agent-id'],
+        );
+        expect(agentHeaders).toEqual([...Array(8).fill('agent-po-writer'), undefined]);
+    });
+
     it('listItemExternalLinks GETs /api/issues/:type/:id/external-links', async () => {
         const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(okJson([]));
         await createApiClient(config).listItemExternalLinks('story', 'S1');

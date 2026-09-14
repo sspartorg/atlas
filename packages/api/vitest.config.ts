@@ -55,6 +55,7 @@ export default defineConfig({
             'src/services/agent-runner-completion-comment.test.ts',
             'src/services/agent-runner-result-detector.test.ts',
             'src/services/agent-runner.notifications.test.ts',
+            'src/services/agent-runner-spawn.test.ts',
             'src/services/commands-assembler.test.ts',
             'src/services/current-task-writer.test.ts',
             // Task 12 — unified run-outcome contract (replaces performer/reviewer split).
@@ -157,6 +158,7 @@ export default defineConfig({
             'src/scripts/check-prereqs.test.ts',
             'src/scripts/recover-architect-stranded.test.ts',
             'src/db/migrations.test.ts',
+            'src/db/reviewer-on-fail-migration.test.ts',
             // W13 — migration rollback safety static check.
             'src/db/migrations-rollback.test.ts',
             'src/db/seed.test.ts',
@@ -223,6 +225,7 @@ export default defineConfig({
             'src/routes/tool-catalog.test.ts',
             'src/routes/issues.test.ts',
             'src/routes/cli-models.test.ts',
+            'src/routes/cli-availability.test.ts',
             // W3 — hot-path index verification (migration 021)
             'src/db/hot-path-indexes.test.ts',
             // W4 — per-route perf stats

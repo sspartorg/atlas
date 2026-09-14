@@ -23,6 +23,7 @@ import {
 // what makes a reviewer "review" is its prompt + the on-pass / on-fail
 // handoff wiring below.
 import type { AgentCli, SdlcRole } from '@atlas/shared';
+import { WORKTREE_BRANCH_RE_SOURCE } from '@atlas/shared';
 
 // Theme 09 — defensive boot check that the regulations matrix has
 // at least one source per project_type × region we ship. Catches
@@ -45,13 +46,13 @@ function loadPrompt(name: string): string {
 
 // ─── Agent seed ──────────────────────────────────────────────────────────────
 //
-// Four production-grade agents. The handoff chain is intentionally linear:
+// SDLC chain (on-pass shown; performer on-fail → Owner / waiting_for_info,
+// reviewer on-fail → its writer / ready — see HANDOFF_RULE_SEEDS and the
+// marketplace catalog handoff_rules.json):
 //
-//   PO Writer ──pass──▶ Spec Writer ──pass──▶ Coder ──pass──▶ QA Writer ──pass──▶ Owner
-//        ▲                  │                   │                 │
-//        └──fail── Spec ────┘                   │                 │
-//                                 ──fail── Coder┘                 │
-//                                                  ──fail── QA ───┘
+//   PO Writer ─▶ PO Reviewer ─▶ Owner (children dispatched from the reviewer prompt)
+//   dev story:  Architect ─▶ Architect Reviewer ─▶ Coder ─▶ Code Reviewer ─▶ Owner
+//   [QA] twin:  QA Writer ─▶ QA Reviewer ─▶ Owner;  Automation ─▶ Automation Reviewer ─▶ Owner
 //
 // Each agent has its own checklist + allowed-tools set. The Owner mutates these
 // via the four MCP tools (`listAgents`, `getAgent`, `createAgent`, `updateAgent`)
@@ -254,8 +255,8 @@ export const AGENT_SEEDS: AgentSeed[] = [
         // origin/main, runs spec-kit (`specify init` + `specify specify
         // --idea`), hand-edits the generated spec.md to senior-engineer
         // quality, commits + pushes, comments branch + spec path on the
-        // dev story, transitions to `ready_for_dev`, and hands off to
-        // Coder (who reuses the worktree). Migration 033 reconciles
+        // dev story, and hands off to Architect Reviewer (then Coder,
+        // who reuses the worktree). Migration 033 reconciles
         // existing installs.
         id: 'agent-architect',
         name: 'Architect',
@@ -650,8 +651,7 @@ export const AGENT_SEEDS: AgentSeed[] = [
 // 2026-05-31 — Handoff rules realigned: handoffs are ONLY the agent's
 // terminal "I'm done" routing. Two rows per SDLC agent (on-pass +
 // on-fail), uniform shape. Intermediate routing — PO Reviewer
-// dispatching dev/QA children to Architect/QA Writer, any reviewer
-// sending a story back to its paired performer for revision — lives in
+// dispatching dev/QA children to Architect/QA Writer — lives in
 // the prompt, where the agent uses Atlas MCP (`assignItem`,
 // `transitionItemStatus`, `addCommentToItem`) directly. The runner
 // detects mid-run reassignment and silently skips the on-pass rule
@@ -663,13 +663,14 @@ export const AGENT_SEEDS: AgentSeed[] = [
 //   Reviewer:  on-pass → next-phase agent (`ready`) OR owner
 //              (`in_review` for terminal reviewers — PO/Engineer/QA/
 //              Automation Reviewer end with Owner-in-review)
-//              on-fail → owner / `waiting_for_info`
+//              on-fail → paired writer / `ready` (revision round)
 //
 // Terminal reviewers route to Owner with `in_review` (work product is
 // ready for Owner to inspect / merge). Mid-chain reviewers route to
 // the next performer with `ready` so it can be picked up immediately.
-// on-fail uniformly escalates to Owner — never bounces back to the
-// performer (that's the prompt-driven revision loop, not a handoff).
+// 2026-09-14: reviewer on-fail bounces the item back to its paired
+// writer with `ready` (it used to escalate to Owner); performer on-fail
+// still escalates to Owner. Migration 032 aligns installed rows.
 export const HANDOFF_RULE_SEEDS: HandoffRuleSeed[] = [
     // ── Performers: on-pass → paired reviewer (ready) ───────────────
     { agent_id: 'agent-po-writer', target_agent_id: 'agent-po-reviewer', kind: 'on-pass', status: 'ready' },
@@ -692,20 +693,22 @@ export const HANDOFF_RULE_SEEDS: HandoffRuleSeed[] = [
     { agent_id: 'agent-qa-reviewer', target_agent_id: 'owner', kind: 'on-pass', status: 'in_review' },
     { agent_id: 'agent-automation-reviewer', target_agent_id: 'owner', kind: 'on-pass', status: 'in_review' },
 
-    // ── Every SDLC agent: on-fail → Owner (waiting_for_info) ────────
-    // Uniform escalation. on-fail means "I'm blocked / I have a
-    // question Owner must answer". The reviewer-needs-revision loop
-    // is NOT on-fail — it's handled in the prompt via MCP.
+    // ── On-fail ─────────────────────────────────────────────────────
+    // Performers: on-fail → Owner (waiting_for_info) — "I'm blocked / I
+    // have a question Owner must answer". Reviewers: on-fail → their
+    // paired writer (ready) so a failed review goes back for revision
+    // (2026-09-14; migration 032 aligns installed rows, catalog
+    // handoff_rules.json carries the same rows).
     { agent_id: 'agent-po-writer', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-po-reviewer', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
+    { agent_id: 'agent-po-reviewer', target_agent_id: 'agent-po-writer', kind: 'on-fail', status: 'ready' },
     { agent_id: 'agent-architect', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-architect-reviewer', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
+    { agent_id: 'agent-architect-reviewer', target_agent_id: 'agent-architect', kind: 'on-fail', status: 'ready' },
     { agent_id: 'agent-coder', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-code-reviewer', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
+    { agent_id: 'agent-code-reviewer', target_agent_id: 'agent-coder', kind: 'on-fail', status: 'ready' },
     { agent_id: 'agent-qa-writer', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-qa-reviewer', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
+    { agent_id: 'agent-qa-reviewer', target_agent_id: 'agent-qa-writer', kind: 'on-fail', status: 'ready' },
     { agent_id: 'agent-automation', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-automation-reviewer', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
+    { agent_id: 'agent-automation-reviewer', target_agent_id: 'agent-automation', kind: 'on-fail', status: 'ready' },
     // 2026-05-30 — Self-contained agents (Jira Importer, AI Readiness
     // Specialist, AI News Scout, Market Research, Regulations Scout,
     // Knowledge Base Curator). These don't pass work to a downstream
@@ -989,8 +992,18 @@ As a **<user role>**, I want **<outcome>**, so that **<reason>**.
 > use these lines as the test contract.
 `;
 
-const QA_PLAN_TEMPLATE_CSV = `test-id,criterion-id,kind,automation-yes-no,scenario,expected
-# Example (delete before commit): T01,AC1,functional,automation-yes,User signs in with valid creds,Dashboard loads within 2s
+// Jira-importable schema the QA Writer / QA Reviewer / Automation prompts
+// and the qa-writer-csv + check-automation-tests gates all share. Labels is
+// one cell of `;`-separated tags: ac-<id>, automation-yes|no, kind-<kind>.
+const QA_PLAN_TEMPLATE_CSV = `Summary,Description,Issue Type,Priority,Labels,Components
+"Example - replace: sign in with valid credentials","## Steps
+1. Open the sign-in page
+2. Submit a valid email and password
+
+## Expected
+The dashboard loads
+
+AC: ac-1",Test,normal,ac-1;automation-yes;kind-functional,
 `;
 
 const AGENT_TEMPLATE_SEEDS: AgentTemplateSeed[] = [
@@ -1110,37 +1123,85 @@ exit 1
         id: 'po-writer-output',
         name: 'PO Writer output check',
         description:
-            'Verifies the PO Writer staged a current-task snapshot for the epic. Phase 3.5 will deepen this once MCP CLI bindings exist (needs cross-checks for [QA] twins and tested_by links).',
+            "Reads the epic's stories from the Atlas API ($ATLAS_API_URL) and verifies the PO Writer contract: at least one dev story, non-empty acceptance_criteria on every dev story, a `<dev title> [QA]` twin joined to it by a tested_by link (either direction), and a valid worktree_branch on every story.",
         sort_order: 101,
         body_sh: `#!/usr/bin/env bash
-# PO Writer output gate. $1 is the epic id.
-# Phase 3.5 will deepen this once MCP CLI bindings exist.
-# For now, verify .atlas/current-task.md was written and is non-empty.
+# PO Writer output gate. $1 is the epic id. Reads the epic's stories from the
+# Atlas API at $ATLAS_API_URL (set on every agent run's env).
 set -u
-gaps=""
-n=0
-if [ ! -f .atlas/current-task.md ]; then
-    n=$((n+1))
-    gaps="$gaps$n. .atlas/current-task.md missing
-"
-elif [ ! -s .atlas/current-task.md ]; then
-    n=$((n+1))
-    gaps="$gaps$n. .atlas/current-task.md is empty
-"
-fi
-if [ -z "$gaps" ]; then exit 0; fi
-printf "po-writer-output:\\n%s" "$gaps"
-exit 1
+epic="\${1:-}"
+fail() { printf "po-writer-output:\\n1. %s\\n" "$1"; exit 1; }
+[ -n "$epic" ] || fail 'epic id ($1) missing'
+[ -n "\${ATLAS_API_URL:-}" ] || fail "ATLAS_API_URL is not set -- cannot read the epic's stories from the Atlas API"
+api="\${ATLAS_API_URL%/}"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+curl -fsS "$api/api/epics/$epic/full" -o "$tmp/epic.json" 2>/dev/null || fail "GET $api/api/epics/$epic/full failed"
+ids="$(node -e 'for (const s of require(process.argv[1]).stories || []) console.log(s.id)' "$tmp/epic.json" 2>/dev/null)"
+for id in $ids; do
+    curl -fsS "$api/api/issues/story/$id/links" -o "$tmp/links-$id.json" 2>/dev/null || echo '[]' > "$tmp/links-$id.json"
+done
+node -e '
+const dir = process.argv[1];
+const stories = require(dir + "/epic.json").stories || [];
+const branchRe = new RegExp("${WORKTREE_BRANCH_RE_SOURCE}");
+const gaps = [];
+const dev = stories.filter((s) => !s.title.trimEnd().endsWith("[QA]"));
+if (dev.length === 0) gaps.push("no dev stories (titles not ending [QA]) under the epic");
+for (const s of stories) {
+    if (!branchRe.test(s.worktree_branch || "")) gaps.push(s.id + " worktree_branch missing or malformed: " + s.worktree_branch);
+}
+for (const d of dev) {
+    if (!(d.acceptance_criteria || "").trim()) gaps.push(d.id + " has empty acceptance_criteria");
+    const twinTitle = d.title + " [QA]";
+    const qa = stories.find((s) => s.title === twinTitle);
+    if (!qa) {
+        gaps.push(d.id + " has no [QA] twin titled " + JSON.stringify(twinTitle));
+        continue;
+    }
+    const links = require(dir + "/links-" + d.id + ".json");
+    if (!links.some((l) => l.relation_type === "tested_by" && l.item_id === qa.id)) {
+        gaps.push(d.id + " has no tested_by link to its [QA] twin " + qa.id);
+    }
+}
+if (gaps.length === 0) process.exit(0);
+console.log("po-writer-output:");
+gaps.forEach((g, i) => console.log(i + 1 + ". " + g));
+process.exit(1);
+' "$tmp"
 `,
-        body_ps1: `# PO Writer output gate. $args[0] is the epic id.
-# Phase 3.5 will deepen this once MCP CLI bindings exist.
+        body_ps1: `# PO Writer output gate. $args[0] is the epic id. Reads the epic's stories
+# from the Atlas API at $env:ATLAS_API_URL (see body_sh for the contract).
 $ErrorActionPreference = 'Continue'
+$epic = if ($args.Count -gt 0) { $args[0] } else { '' }
+function Fail([string]$msg) { Write-Output 'po-writer-output:'; Write-Output ('1. ' + $msg); exit 1 }
+if ([string]::IsNullOrWhiteSpace($epic)) { Fail 'epic id ($args[0]) missing' }
+if ([string]::IsNullOrWhiteSpace($env:ATLAS_API_URL)) { Fail "ATLAS_API_URL is not set -- cannot read the epic's stories from the Atlas API" }
+$api = $env:ATLAS_API_URL.TrimEnd('/')
+try { $full = Invoke-RestMethod -Uri "$api/api/epics/$epic/full" -ErrorAction Stop } catch { Fail "GET $api/api/epics/$epic/full failed" }
+$stories = @()
+if ($full.stories) { $stories = @($full.stories) }
+$re = '${WORKTREE_BRANCH_RE_SOURCE}'
 $gaps = New-Object System.Collections.ArrayList
-$path = '.atlas/current-task.md'
-if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-    [void]$gaps.Add('.atlas/current-task.md missing')
-} elseif ((Get-Item -LiteralPath $path).Length -eq 0) {
-    [void]$gaps.Add('.atlas/current-task.md is empty')
+$dev = @()
+foreach ($s in $stories) { if (-not "$($s.title)".TrimEnd().EndsWith('[QA]')) { $dev += $s } }
+if ($dev.Count -eq 0) { [void]$gaps.Add('no dev stories (titles not ending [QA]) under the epic') }
+foreach ($s in $stories) {
+    if (-not ("$($s.worktree_branch)" -cmatch $re)) { [void]$gaps.Add("$($s.id) worktree_branch missing or malformed: $($s.worktree_branch)") }
+}
+foreach ($d in $dev) {
+    if ([string]::IsNullOrWhiteSpace($d.acceptance_criteria)) { [void]$gaps.Add("$($d.id) has empty acceptance_criteria") }
+    $twinTitle = "$($d.title) [QA]"
+    $qa = $null
+    foreach ($s in $stories) { if ($s.title -ceq $twinTitle) { $qa = $s } }
+    if ($null -eq $qa) { [void]$gaps.Add("$($d.id) has no [QA] twin titled '$twinTitle'"); continue }
+    $linked = $false
+    try {
+        foreach ($l in (Invoke-RestMethod -Uri "$api/api/issues/story/$($d.id)/links" -ErrorAction Stop)) {
+            if ($l.relation_type -eq 'tested_by' -and $l.item_id -eq $qa.id) { $linked = $true }
+        }
+    } catch { }
+    if (-not $linked) { [void]$gaps.Add("$($d.id) has no tested_by link to its [QA] twin $($qa.id)") }
 }
 if ($gaps.Count -eq 0) { exit 0 }
 Write-Output 'po-writer-output:'
@@ -1292,13 +1353,13 @@ exit 1
         id: 'qa-writer-csv',
         name: 'QA Writer test-plan CSV',
         description:
-            'QA Writer gate: tests/qa/<storyId>.csv must exist, carry the canonical header row, and contain at least one body row.',
+            'QA Writer gate: tests/qa/<storyId>.csv must exist, carry the Jira-importable header `Summary,Description,Issue Type,Priority,Labels,Components`, contain at least one body row, and be touched by the HEAD commit.',
         sort_order: 104,
         body_sh: `#!/usr/bin/env bash
 # QA Writer gate. $1 is the story id.
 set -u
 story="\${1:-}"
-expected_header="test-id,criterion-id,kind,automation-yes-no,scenario,expected"
+expected_header="Summary,Description,Issue Type,Priority,Labels,Components"
 gaps=""
 n=0
 if [ -z "$story" ]; then
@@ -1316,8 +1377,8 @@ if [ "$header" != "$expected_header" ]; then
     gaps="$gaps$n. header mismatch (got: $header)
 "
 fi
-row_count="$(($(wc -l < "$csv") - 1))"
-if [ "$row_count" -le 0 ]; then
+# Rows can span lines (quoted Description), so count non-blank content, not lines.
+if ! tail -n +2 "$csv" | grep -q '[^[:space:]]'; then
     n=$((n+1))
     gaps="$gaps$n. no test rows
 "
@@ -1341,7 +1402,7 @@ exit 1
         body_ps1: `# QA Writer gate. $args[0] is the story id.
 $ErrorActionPreference = 'Continue'
 $story = if ($args.Count -gt 0) { $args[0] } else { '' }
-$expected = 'test-id,criterion-id,kind,automation-yes-no,scenario,expected'
+$expected = 'Summary,Description,Issue Type,Priority,Labels,Components'
 $gaps = New-Object System.Collections.ArrayList
 if ([string]::IsNullOrWhiteSpace($story)) {
     Write-Output 'qa-writer-csv:'
@@ -1359,8 +1420,8 @@ $header = if ($lines.Count -gt 0) { $lines[0].TrimEnd("\`r") } else { '' }
 if ($header -ne $expected) {
     [void]$gaps.Add("header mismatch (got: $header)")
 }
-$rows = $lines.Count - 1
-if ($rows -le 0) { [void]$gaps.Add('no test rows') }
+$rows = @($lines | Select-Object -Skip 1 | Where-Object { $_ -match '\\S' })
+if ($rows.Count -eq 0) { [void]$gaps.Add('no test rows') }
 # F-006 -- assert HEAD commit touched the CSV. Catches the case where
 # the agent claims "I committed N cases" but the CSV is unchanged
 # from a previous run. If the latest commit's name-only output lists
@@ -1386,14 +1447,12 @@ exit 1
         id: 'check-automation-tests',
         name: 'Automation Engineer test coverage (CSV automation-yes rows)',
         description:
-            'Automation Engineer gate: tests/qa/<storyId>.csv must exist; every `automation-yes` row must have its test-id (column 1) appearing in at least one test file added or modified between merge-base and HEAD.',
+            'Automation Engineer gate: tests/qa/<storyId>.csv must exist; for every row whose Labels carry `automation-yes`, a test file added or modified between merge-base and HEAD (*.test|spec.{js,ts,jsx,tsx,mjs,cjs}, *_test.go, test_*.py) must contain the row Summary. The CSV is parsed RFC-4180 (quoted cells may hold commas and newlines).',
         sort_order: 105,
         body_sh: `#!/usr/bin/env bash
 # Automation Engineer gate. $1 is the story id.
 set -u
 story="\${1:-}"
-gaps=""
-n=0
 if [ -z "$story" ]; then
     printf "check-automation-tests:\\n1. story id (\\$1) missing\\n"
     exit 1
@@ -1404,40 +1463,48 @@ if [ ! -f "$csv" ]; then
     exit 1
 fi
 base="$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD~10)"
-test_files="$(git diff --name-only "$base"..HEAD 2>/dev/null | grep -E '\\.test\\.(ts|tsx|js|jsx)$' || true)"
-if [ -z "$test_files" ]; then
-    printf "check-automation-tests:\\n1. no .test.{ts,tsx,js,jsx} files added or modified between %s and HEAD\\n" "$base"
-    exit 1
-fi
-# Walk automation-yes rows. CSV columns: test-id,criterion-id,kind,automation-yes-no,scenario,expected
-tail -n +2 "$csv" | while IFS=, read -r test_id _criterion _kind automation _rest; do
-    if [ "$automation" = "yes" ] && [ -n "$test_id" ]; then
-        found=0
-        for f in $test_files; do
-            [ -f "$f" ] || continue
-            if grep -q -- "$test_id" "$f"; then
-                found=1
-                break
-            fi
-        done
-        if [ "$found" -eq 0 ]; then
-            n=$((n+1))
-            echo "$n. row $test_id has no matching test in any new/modified test file" >> /tmp/check-auto-gaps.\$\$
-        fi
-    fi
-done
-if [ -f /tmp/check-auto-gaps.\$\$ ]; then
-    gaps="$(cat /tmp/check-auto-gaps.\$\$)"
-    rm -f /tmp/check-auto-gaps.\$\$
-fi
-if [ -z "$gaps" ]; then exit 0; fi
-printf "check-automation-tests (%s):\\n%s\\n" "$csv" "$gaps"
-exit 1
+test_files="$(git diff --name-only "$base" HEAD 2>/dev/null | grep -E '(\\.(test|spec)\\.[cm]?[jt]sx?$)|(_test\\.go$)|((^|/)test_[^/]*\\.py$)' || true)"
+TEST_FILES="$test_files" node -e '
+const fs = require("fs");
+const csv = process.argv[1];
+const text = fs.readFileSync(csv, "utf8");
+const Q = String.fromCharCode(34);
+const rows = [];
+let row = [], cell = "", quoted = false;
+for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+        if (c !== Q) cell += c;
+        else if (text[i + 1] === Q) { cell += Q; i++; }
+        else quoted = false;
+    } else if (c === Q) quoted = true;
+    else if (c === ",") { row.push(cell); cell = ""; }
+    else if (c === "\\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
+    else if (c !== "\\r") cell += c;
+}
+if (cell !== "" || row.length > 0) { row.push(cell); rows.push(row); }
+const header = rows.shift() || [];
+const si = header.indexOf("Summary");
+const li = header.indexOf("Labels");
+const gaps = [];
+if (si < 0 || li < 0) gaps.push("header lacks Summary / Labels columns");
+const bodies = (process.env.TEST_FILES || "").split("\\n").filter((f) => f && fs.existsSync(f)).map((f) => fs.readFileSync(f, "utf8"));
+for (const r of si < 0 || li < 0 ? [] : rows) {
+    if (!(r[li] || "").split(";").map((l) => l.trim()).includes("automation-yes")) continue;
+    const summary = (r[si] || "").trim();
+    if (!summary || !bodies.some((b) => b.includes(summary))) {
+        gaps.push("automation-yes row " + JSON.stringify(summary) + " has no changed test file containing its Summary");
+    }
+}
+if (gaps.length === 0) process.exit(0);
+console.log("check-automation-tests (" + csv + "):");
+gaps.forEach((g, i) => console.log(i + 1 + ". " + g));
+process.exit(1);
+' "$csv"
 `,
         body_ps1: `# Automation Engineer gate. $args[0] is the story id.
 $ErrorActionPreference = 'Continue'
 $story = if ($args.Count -gt 0) { $args[0] } else { '' }
-$gaps = New-Object System.Collections.ArrayList
 if ([string]::IsNullOrWhiteSpace($story)) {
     Write-Output 'check-automation-tests:'
     Write-Output '1. story id ($args[0]) missing'
@@ -1451,35 +1518,28 @@ if (-not (Test-Path -LiteralPath $csv -PathType Leaf)) {
 }
 $base = git merge-base HEAD origin/main 2>$null
 if ([string]::IsNullOrWhiteSpace($base)) { $base = 'HEAD~10' }
-$diffRaw = git diff --name-only "$base..HEAD" 2>$null
-$testFiles = @()
-if ($diffRaw) {
-    $testFiles = ($diffRaw -split "\`r?\`n") | Where-Object { $_ -match '\\.test\\.(ts|tsx|js|jsx)$' -and (Test-Path -LiteralPath $_ -PathType Leaf) }
-}
-if ($testFiles.Count -eq 0) {
-    Write-Output 'check-automation-tests:'
-    Write-Output ("1. no .test.{{ts,tsx,js,jsx}} files added or modified between {0} and HEAD" -f $base)
-    exit 1
-}
-# Walk automation-yes rows. CSV columns: test-id,criterion-id,kind,automation-yes-no,scenario,expected
-$lines = Get-Content -LiteralPath $csv
-for ($i = 1; $i -lt $lines.Count; $i++) {
-    $parts = $lines[$i] -split ','
-    if ($parts.Count -lt 4) { continue }
-    $testId = $parts[0].Trim()
-    $automation = $parts[3].Trim()
-    if ($automation -ne 'yes' -or [string]::IsNullOrWhiteSpace($testId)) { continue }
-    $found = $false
-    foreach ($f in $testFiles) {
-        try {
-            if (Select-String -LiteralPath $f -SimpleMatch -Pattern $testId -Quiet) {
-                $found = $true
-                break
-            }
-        } catch { }
+$changed = git diff --name-only $base HEAD 2>$null
+$bodies = @()
+if (-not [string]::IsNullOrWhiteSpace($changed)) {
+    foreach ($line in ($changed -split "\`r?\`n")) {
+        if ($line -match '(\\.(test|spec)\\.[cm]?[jt]sx?$)|(_test\\.go$)|((^|/)test_[^/]*\\.py$)' -and (Test-Path -LiteralPath $line -PathType Leaf)) {
+            $bodies += "$(Get-Content -LiteralPath $line -Raw)"
+        }
     }
-    if (-not $found) {
-        [void]$gaps.Add("row $testId has no matching test in any new/modified test file")
+}
+$gaps = New-Object System.Collections.ArrayList
+$header = @((Get-Content -LiteralPath $csv -TotalCount 1) -split ',' | ForEach-Object { $_.Trim('"') })
+if (($header -notcontains 'Summary') -or ($header -notcontains 'Labels')) {
+    [void]$gaps.Add('header lacks Summary / Labels columns')
+} else {
+    # Import-Csv is RFC-4180: quoted cells may carry commas and newlines.
+    foreach ($row in (Import-Csv -LiteralPath $csv)) {
+        $labels = @("$($row.Labels)" -split ';' | ForEach-Object { $_.Trim() })
+        if ($labels -notcontains 'automation-yes') { continue }
+        $summary = "$($row.Summary)".Trim()
+        $found = $false
+        foreach ($b in $bodies) { if ($summary -and $b.Contains($summary)) { $found = $true; break } }
+        if (-not $found) { [void]$gaps.Add("automation-yes row '$summary' has no changed test file containing its Summary") }
     }
 }
 if ($gaps.Count -eq 0) { exit 0 }

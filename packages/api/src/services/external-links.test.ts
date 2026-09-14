@@ -1,5 +1,15 @@
 import { describe, expect, it, beforeEach, afterEach, afterAll, vi } from 'vitest';
-import { externalLinks, parseGithubPrUrl, fetchGithubPrTitle } from './external-links.js';
+
+vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
+
+import {
+    externalLinks,
+    parseGithubPrUrl,
+    fetchGithubPrTitle,
+    fetchGithubPrState,
+} from './external-links.js';
+import { broadcastSSE } from '../routes/events.js';
+import { credentialsService } from './credentials.js';
 import { eventsLog } from './events-log.js';
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
 import { insertProject, insertItem } from '../../tests/_items.js';
@@ -292,5 +302,145 @@ describe('external link cascade on item delete', () => {
             .selectAll()
             .execute();
         expect(rows).toEqual([]);
+    });
+});
+
+describe('fetchGithubPrState', () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    function stubGithub(status: number, body: unknown) {
+        const fetchMock = vi.fn(async () => new Response(JSON.stringify(body), { status }));
+        vi.stubGlobal('fetch', fetchMock);
+        return fetchMock;
+    }
+
+    it('GETs the pulls endpoint with the bearer token and maps merged_at to merged', async () => {
+        const fetchMock = stubGithub(200, { state: 'closed', merged_at: '2026-09-01T00:00:00Z' });
+        expect(await fetchGithubPrState('https://github.com/foo/bar/pull/42', 'tok')).toBe('merged');
+        const [calledUrl, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(calledUrl).toBe('https://api.github.com/repos/foo/bar/pulls/42');
+        expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer tok');
+    });
+
+    it('maps an unmerged closed PR to closed and anything else to open', async () => {
+        stubGithub(200, { state: 'closed', merged_at: null });
+        expect(await fetchGithubPrState('https://github.com/foo/bar/pull/1', 'tok')).toBe('closed');
+        stubGithub(200, { state: 'open', merged_at: null });
+        expect(await fetchGithubPrState('https://github.com/foo/bar/pull/1', 'tok')).toBe('open');
+    });
+
+    it('returns null on a GitHub error, a network failure, or a non-PR URL', async () => {
+        stubGithub(404, { message: 'Not Found' });
+        expect(await fetchGithubPrState('https://github.com/foo/bar/pull/1', 'tok')).toBeNull();
+        vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
+        expect(await fetchGithubPrState('https://github.com/foo/bar/pull/1', 'tok')).toBeNull();
+        expect(await fetchGithubPrState('https://github.com/foo/bar/issues/1', 'tok')).toBeNull();
+    });
+});
+
+describe('PR state refresh', () => {
+    const url = 'https://github.com/foo/bar/pull/42';
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(async () => {
+        vi.mocked(broadcastSSE).mockClear();
+        await testDb
+            .insertInto('credentials')
+            .values({
+                id: 'cred-1',
+                label: 'GH PAT',
+                host: 'github',
+                kind: 'pat',
+                username: 'octocat',
+                token_encrypted: 'enc',
+                token_fingerprint: 'fp',
+                scope: 'repo',
+                expires_at: null,
+            })
+            .execute();
+        await testDb.updateTable('projects').set({ credential_id: 'cred-1' }).where('id', '=', 'p1').execute();
+        vi.spyOn(credentialsService, 'getToken').mockResolvedValue('tok');
+        fetchMock = vi.fn(async () =>
+            new Response(JSON.stringify({ state: 'closed', merged_at: '2026-09-01T00:00:00Z' }), {
+                status: 200,
+            }),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        await externalLinks.create({ itemId: 'ATL-1', url, linkKind: 'pull_request' });
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+    });
+
+    async function storedState() {
+        return testDb
+            .selectFrom('item_external_links')
+            .select(['pr_state', 'pr_state_checked_at'])
+            .where('item_id', '=', 'ATL-1')
+            .executeTakeFirstOrThrow();
+    }
+
+    it('refreshPrStates fetches synchronously, persists the state and broadcasts the change', async () => {
+        const links = await externalLinks.refreshPrStates('ATL-1');
+        expect(links).toHaveLength(1);
+        expect(links[0]?.pr_state).toBe('merged');
+        expect(links[0]).not.toHaveProperty('pr_state_checked_at');
+        expect((await storedState()).pr_state_checked_at).not.toBeNull();
+        expect(broadcastSSE).toHaveBeenCalledWith({
+            type: 'counts_changed',
+            issueType: 'story',
+            issueId: 'ATL-1',
+        });
+    });
+
+    it('does not broadcast when the state is unchanged', async () => {
+        await externalLinks.refreshPrStates('ATL-1');
+        vi.mocked(broadcastSSE).mockClear();
+        await externalLinks.refreshPrStates('ATL-1');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(broadcastSSE).not.toHaveBeenCalled();
+    });
+
+    it('stamps checked_at but keeps the last state when the lookup fails', async () => {
+        await externalLinks.refreshPrStates('ATL-1');
+        await testDb.updateTable('item_external_links').set({ pr_state_checked_at: null }).execute();
+        fetchMock.mockResolvedValueOnce(new Response('{}', { status: 502 }));
+        const links = await externalLinks.refreshPrStates('ATL-1');
+        expect(links[0]?.pr_state).toBe('merged');
+        expect((await storedState()).pr_state_checked_at).not.toBeNull();
+    });
+
+    it('skips GitHub entirely when the project has no credential', async () => {
+        await testDb.updateTable('projects').set({ credential_id: null }).where('id', '=', 'p1').execute();
+        const links = await externalLinks.refreshPrStates('ATL-1');
+        expect(links[0]?.pr_state).toBeNull();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('list returns immediately and refreshes never-checked links in the background', async () => {
+        const links = await externalLinks.list('ATL-1');
+        expect(links[0]?.pr_state).toBeNull();
+        await vi.waitFor(async () => expect((await storedState()).pr_state).toBe('merged'));
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('list does not re-check a link checked within the last 5 minutes', async () => {
+        await externalLinks.refreshPrStates('ATL-1');
+        fetchMock.mockClear();
+        await externalLinks.list('ATL-1');
+        // Give a (wrongly) scheduled background refresh time to hit fetch.
+        await new Promise((r) => setTimeout(r, 50));
+        expect(fetchMock).not.toHaveBeenCalled();
+
+        await testDb
+            .updateTable('item_external_links')
+            .set({ pr_state_checked_at: new Date(Date.now() - 6 * 60_000).toISOString() })
+            .execute();
+        await externalLinks.list('ATL-1');
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     });
 });

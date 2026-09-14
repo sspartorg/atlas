@@ -687,8 +687,8 @@ async function ensureWorktreeInner(
 
         // Protect the target project from atlas's per-run scratch by
         // injecting the patterns into the worktree's tracked `.gitignore`
-        // and staging the change. The agent's commit picks it up; once
-        // pushed and merged the protection lives on `main` permanently.
+        // and committing that change on its own. Once pushed and merged
+        // the protection lives on `main` permanently.
         // Idempotent — repeats on the same worktree are no-ops.
         await ensureWorktreeGitignore(worktreePath, gitConfigPath);
 
@@ -712,8 +712,8 @@ const ATLAS_GITIGNORE_HEADER = '# Atlas scratch — orchestrator-managed, do not
 
 /**
  * Ensures the worktree's `.gitignore` contains every atlas-scratch
- * pattern, then runs `git add .gitignore` so the agent's commit will
- * include the change. The previous `.git/info/exclude` approach
+ * pattern, then commits just that file as
+ * `chore(atlas): ignore Atlas scratch paths`. The previous `.git/info/exclude` approach
  * (untracked, local-only) didn't stop `.atlas/` files from being pushed
  * once an agent explicitly added them or ran `git add -A` after a file
  * had been tracked in an earlier run — committing the gitignore is the
@@ -747,19 +747,19 @@ export async function ensureWorktreeGitignore(
         '\n';
     const next = existing + prefix + block;
     writeFileSync(gitignorePath, next, 'utf8');
-    // Stage so the next commit (the agent's, or a follow-up) includes it.
-    // Best-effort: if `git add` fails (e.g. worktree mid-tear-down), log
-    // the error path but don't throw — the worst case is that the agent
-    // commits without the gitignore and we try again on the next run.
+    // Commit it on its own so it doesn't ride inside the agent's first
+    // commit (noise in every PR diff). Pathspec commit = only `.gitignore`,
+    // whatever else is staged stays staged. Same `gitConfigPath` as every
+    // other orchestrator git op, so the author is the credential's [user].
+    // Best-effort: if the commit fails (no identity, a project hook
+    // rejects it, worktree mid-tear-down) the file stays staged and rides
+    // the agent's commit as before.
+    const ctx = { cwd: worktreePath, gitConfigPath };
     try {
-        await runGit(
-            { cwd: worktreePath, gitConfigPath },
-            ['add', '.gitignore'],
-            30_000,
-        );
+        await runGit(ctx, ['add', '.gitignore'], 30_000);
+        await runGit(ctx, ['commit', '-m', 'chore(atlas): ignore Atlas scratch paths', '--', '.gitignore'], 60_000);
     } catch {
-        // Defensive — see comment above. The file is still on disk and
-        // a future run will re-attempt the staging.
+        // Defensive — see comment above.
     }
 }
 

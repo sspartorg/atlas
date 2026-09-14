@@ -13,8 +13,8 @@ import type { IssueType } from '@atlas/shared';
 //
 // `agent-runner.completeRun` and `errorRun` call `incrementRound`
 // AFTER the CLI completes (so a failed-to-spawn run never counts);
-// the returned count is the AFTER-this-CLI value the routing
-// decisions cap-check against `agents.max_rounds`.
+// the cap check against `agents.max_rounds` lives in
+// `agent-dispatcher.maybeAutoDispatch`, before the next CLI spawns.
 
 export async function incrementRound(
     itemId: string,
@@ -63,6 +63,26 @@ export async function resetRoundsForItem(itemId: string): Promise<void> {
         .deleteFrom('agent_round_counts')
         .where('item_id', '=', itemId)
         .execute();
+}
+
+// Post-run reset for runs that routed the item themselves (or via the
+// on-fail rule). Rounds are the writer↔reviewer loop guard: a reset on
+// every run kept each counter at 1, so `maybeAutoDispatch`'s max_rounds
+// cap never fired. Only forward progress wipes them — the item landed with
+// the Owner or with an agent that has never run on it. A hand-back to an
+// agent with a prior run on this item is a bounce, so the counters stay.
+export async function resetRoundsUnlessBounceBack(itemId: string): Promise<void> {
+    const priorRun = await db
+        .selectFrom('items as i')
+        .innerJoin('agent_runs as r', (join) =>
+            join.onRef('r.item_id', '=', 'i.id').onRef('r.agent_id', '=', 'i.assignee_agent_id'),
+        )
+        .select('r.id')
+        .where('i.id', '=', itemId)
+        .limit(1)
+        .executeTakeFirst();
+    if (priorRun) return;
+    await resetRoundsForItem(itemId);
 }
 
 export interface ResetRoundsForIssueResult {

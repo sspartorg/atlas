@@ -18,6 +18,7 @@ import {
     PruneItemHistorySchema,
 } from '@atlas/shared';
 import { historyPruneService } from '../services/history-prune.js';
+import { headerAgentId } from '../services/request-actor.js';
 import type { IssueType, IssueStatus, IItemLinkRow, IReplyResponse } from '@atlas/shared';
 
 const VALID_TYPES = new Set<IssueType>(['epic', 'story', 'sub_task', 'sub_bug', 'bug']);
@@ -190,7 +191,12 @@ export async function commentsRoutes(app: FastifyInstance) {
         }
         const parsed = CreateIssueLinkSchema.parse(req.body);
         const rel = parsed.relation_type ?? 'relates_to';
-        const result = await itemLinks.create(id, parsed.to_id, rel);
+        const result = await itemLinks.create(
+            id,
+            parsed.to_id,
+            rel,
+            await headerAgentId(req.headers),
+        );
         if (!result.ok) {
             const message =
                 result.reason === 'self'
@@ -211,7 +217,7 @@ export async function commentsRoutes(app: FastifyInstance) {
         if (!Number.isFinite(id)) {
             return reply.status(400).send({ error: 'Invalid link id' });
         }
-        await itemLinks.delete(id);
+        await itemLinks.delete(id, await headerAgentId(req.headers));
         return reply.status(204).send();
     });
 
@@ -223,6 +229,21 @@ export async function commentsRoutes(app: FastifyInstance) {
             return reply.status(400).send({ error: `Unknown issue type: ${type}` });
         }
         return reply.send(await externalLinks.list(id));
+    });
+
+    // POST /api/issues/:type/:id/external-links/refresh — re-check every PR
+    // link's GitHub state now (the list above only refreshes stale links in
+    // the background) and return the updated list. The web "Done" guard
+    // needs the answer before it lets the transition through.
+    app.post('/api/issues/:type/:id/external-links/refresh', async (req, reply) => {
+        const { type, id } = req.params as { type: string; id: string };
+        if (!VALID_TYPES.has(type as IssueType)) {
+            return reply.status(400).send({ error: `Unknown issue type: ${type}` });
+        }
+        if (!(await getItem(id))) {
+            return reply.status(404).send({ error: `${type} not found: ${id}` });
+        }
+        return reply.send(await externalLinks.refreshPrStates(id));
     });
 
     // POST /api/issues/:type/:id/external-links — create. Idempotent on
@@ -257,6 +278,7 @@ export async function commentsRoutes(app: FastifyInstance) {
             linkKind: parsed.link_kind,
             title,
             externalRef,
+            actorAgentId: await headerAgentId(req.headers),
         });
         return reply.status(201).send(link);
     });

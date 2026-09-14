@@ -42,7 +42,7 @@ export const storiesService = {
         return row ? rowToStory(row) : undefined;
     },
 
-    async create(data: CreateStoryInput): Promise<IStory> {
+    async create(data: CreateStoryInput, actorAgentId: string | null = null): Promise<IStory> {
         const assigneeId = data.assignee_agent_id ?? null;
         const row = await createItem({
             project_id: '', // resolved from parent inside createItem
@@ -62,7 +62,7 @@ export const storiesService = {
             item_id: story.id,
             item_type: 'story',
             event_type: 'created',
-            actor_agent_id: data.reporter_agent_id ?? null,
+            actor_agent_id: actorAgentId ?? data.reporter_agent_id ?? null,
             to_value: data.title,
         });
         broadcastSSE({ type: 'counts_changed' });

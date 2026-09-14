@@ -556,3 +556,71 @@ describe('applyOnFailHandoff', () => {
         expect(plan).toEqual([]);
     });
 });
+
+// A target agent that is not installed (or is inactive) must park the item
+// with the Owner instead of throwing the items.assignee_agent_id FK error or
+// handing work to an agent the dispatcher will never run.
+describe('handoff target unavailable → Owner fallback', () => {
+    it.each([
+        ['not installed', 'agent-not-installed'],
+        ['inactive', 'agent-test-b'],
+    ])('resolveHandoffAssignee parks with Owner when the target is %s', async (_label, target) => {
+        await testDb.updateTable('agents').set({ status: 'inactive' }).where('id', '=', 'agent-test-b').execute();
+        await testDb
+            .insertInto('agent_handoff_rules')
+            .values({ agent_id: 'agent-test-a', target_agent_id: target, kind: 'on-fail', status: 'ready' })
+            .execute();
+        expect(await resolveHandoffAssignee('agent-test-a', 'on-fail')).toEqual({
+            assigneeId: null,
+            status: 'waiting_for_info',
+            unavailableTarget: target,
+        });
+    });
+
+    it('applyOnFailHandoff writes Owner + waiting_for_info with a handoff_target_unavailable detail', async () => {
+        await testDb
+            .insertInto('items')
+            .values({
+                id: 'epic-missing-target',
+                project_id: 'proj-test',
+                type: 'epic',
+                title: 'Parent epic',
+                description: '',
+                status: 'in_progress',
+                assignee_agent_id: 'agent-test-a',
+                parent_id: null,
+                parent_type: null,
+            })
+            .execute();
+        await testDb
+            .insertInto('agent_handoff_rules')
+            .values({ agent_id: 'agent-test-a', target_agent_id: 'agent-not-installed', kind: 'on-fail', status: 'ready' })
+            .execute();
+
+        const plan = await applyOnFailHandoff({
+            agentId: 'agent-test-a',
+            currentItemId: 'epic-missing-target',
+            itemType: 'epic',
+            detail: 'rejected',
+        });
+
+        expect(plan).toEqual([{ itemId: 'epic-missing-target', assigneeAgentId: null, rawTargetAgentId: 'owner' }]);
+        const epic = await testDb
+            .selectFrom('items')
+            .select(['assignee_agent_id', 'status'])
+            .where('id', '=', 'epic-missing-target')
+            .executeTakeFirst();
+        expect(epic).toEqual({ assignee_agent_id: null, status: 'waiting_for_info' });
+        const details = await testDb
+            .selectFrom('issue_events')
+            .select(['event_type', 'detail'])
+            .where('item_id', '=', 'epic-missing-target')
+            .execute();
+        expect(details).toEqual(
+            expect.arrayContaining([
+                { event_type: 'status_changed', detail: 'handoff_target_unavailable: agent-not-installed' },
+                { event_type: 'assigned', detail: 'handoff_target_unavailable: agent-not-installed' },
+            ]),
+        );
+    });
+});

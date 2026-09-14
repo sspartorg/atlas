@@ -14,7 +14,8 @@ import { ensureWorktreeGitignore } from './worktree-orchestrator.js';
 // in an earlier run, OR when an agent added a atlas path explicitly.
 //
 // New implementation appends three patterns to the worktree's tracked
-// `.gitignore` AND stages the change so the agent's commit picks it up.
+// `.gitignore` AND commits it on its own (`chore(atlas): ignore Atlas
+// scratch paths`) so it doesn't ride inside the agent's first commit.
 // Once pushed and merged the protection lives on `main` permanently.
 
 const exec = promisify(execFile);
@@ -66,9 +67,36 @@ describe('ensureWorktreeGitignore', () => {
         expect(gitignore).toContain('.atlas/');
         expect(gitignore).toContain('# Atlas scratch');
 
-        // Staged for the next commit.
-        const status = await gitStatusPorcelain(wt);
-        expect(status).toMatch(/^A\s+\.gitignore$/m);
+        // Committed on its own, so nothing is left staged for the agent's commit.
+        expect(await gitStatusPorcelain(wt)).toBe('');
+        const { stdout } = await exec('git', ['-C', wt, 'log', '--format=%s', '--name-only'], { timeout: 5_000 });
+        expect(stdout.trim().split(/\n+/)).toEqual(['chore(atlas): ignore Atlas scratch paths', '.gitignore']);
+    });
+
+    it('commits only .gitignore — changes the agent already staged stay staged', async () => {
+        const wt = await makeGitRepo();
+        writeFileSync(join(wt, 'work.txt'), 'agent work\n', 'utf8');
+        await exec('git', ['-C', wt, 'add', 'work.txt'], { timeout: 5_000 });
+
+        await ensureWorktreeGitignore(wt, null);
+
+        const { stdout } = await exec('git', ['-C', wt, 'show', '--format=', '--name-only', 'HEAD'], { timeout: 5_000 });
+        expect(stdout.trim()).toBe('.gitignore');
+        expect(await gitStatusPorcelain(wt)).toMatch(/^A\s+work\.txt$/m);
+    });
+
+    it('commits with the git identity from the orchestrator config path', async () => {
+        const wt = await makeGitRepo();
+        await exec('git', ['-C', wt, 'config', '--unset', 'user.name'], { timeout: 5_000 });
+        await exec('git', ['-C', wt, 'config', '--unset', 'user.email'], { timeout: 5_000 });
+        const cfg = join(wt, '..', `${wt.split('/').pop()}-gitconfig`);
+        cleanupDirs.push(cfg);
+        writeFileSync(cfg, '[user]\n\tname = atlas-app[bot]\n\temail = 1+atlas-app[bot]@users.noreply.github.com\n', 'utf8');
+
+        await ensureWorktreeGitignore(wt, cfg);
+
+        const { stdout } = await exec('git', ['-C', wt, 'log', '-1', '--format=%an <%ae>'], { timeout: 5_000 });
+        expect(stdout.trim()).toBe('atlas-app[bot] <1+atlas-app[bot]@users.noreply.github.com>');
     });
 
     it('preserves the user\'s existing .gitignore entries verbatim', async () => {

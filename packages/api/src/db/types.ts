@@ -517,6 +517,13 @@ export interface ItemExternalLinksTable {
     external_ref: StrN;
     created_at: CreatedAt;
     created_by_run_id: StrN;
+    // Migration 033 — last observed GitHub PR state (pull_request links only).
+    pr_state: ColumnType<
+        'open' | 'merged' | 'closed' | null,
+        'open' | 'merged' | 'closed' | null | undefined,
+        'open' | 'merged' | 'closed' | null | undefined
+    >;
+    pr_state_checked_at: TSn;
 }
 
 export interface AgentRunsTable {

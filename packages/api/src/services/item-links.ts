@@ -14,11 +14,13 @@ async function recordLinkEvent(
     fromId: string,
     toId: string,
     relation: ItemRelation,
+    actorAgentId: string | null,
 ): Promise<void> {
     await Promise.all([
         eventsLog.record({
             item_id: fromId,
             event_type: eventType,
+            actor_agent_id: actorAgentId,
             field: 'link',
             to_value: toId,
             detail: `${relation} → ${toId}`,
@@ -26,6 +28,7 @@ async function recordLinkEvent(
         eventsLog.record({
             item_id: toId,
             event_type: eventType,
+            actor_agent_id: actorAgentId,
             field: 'link',
             to_value: fromId,
             detail: `${relation} ← ${fromId}`,
@@ -205,6 +208,7 @@ export const itemLinks = {
         fromId: string,
         toId: string,
         relation: ItemRelation,
+        actorAgentId: string | null = null,
     ): Promise<ICreateLinkResult> {
         if (fromId === toId) return { ok: false, reason: 'self' };
         const from = await getItem(fromId);
@@ -223,7 +227,7 @@ export const itemLinks = {
                 .returningAll()
                 .executeTakeFirst();
             if (inserted) {
-                await recordLinkEvent('link_created', fromId, toId, 'depends_on');
+                await recordLinkEvent('link_created', fromId, toId, 'depends_on', actorAgentId);
                 return { ok: true, link: inserted as unknown as IItemLink };
             }
             const existing = await db
@@ -254,7 +258,7 @@ export const itemLinks = {
                 .returningAll()
                 .executeTakeFirst();
             if (inserted) {
-                await recordLinkEvent('link_created', fromId, toId, 'tested_by');
+                await recordLinkEvent('link_created', fromId, toId, 'tested_by', actorAgentId);
                 return { ok: true, link: inserted as unknown as IItemLink };
             }
             const existing = await db
@@ -280,7 +284,7 @@ export const itemLinks = {
             .returningAll()
             .executeTakeFirst();
         if (inserted) {
-            await recordLinkEvent('link_created', a, b, 'relates_to');
+            await recordLinkEvent('link_created', a, b, 'relates_to', actorAgentId);
             return { ok: true, link: inserted as unknown as IItemLink };
         }
         const existing = await db
@@ -297,7 +301,7 @@ export const itemLinks = {
             : { ok: false, reason: 'not_found' };
     },
 
-    async delete(linkId: number): Promise<void> {
+    async delete(linkId: number, actorAgentId: string | null = null): Promise<void> {
         const row = await db
             .selectFrom('item_links')
             .select(['from_id', 'to_id', 'relation_type'])
@@ -310,6 +314,7 @@ export const itemLinks = {
                 row.from_id,
                 row.to_id,
                 row.relation_type as ItemRelation,
+                actorAgentId,
             );
         }
     },

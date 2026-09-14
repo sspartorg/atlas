@@ -18,6 +18,7 @@ import {
 import type { IssueStatus, SubTaskStatus } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
+import { headerAgentId } from '../services/request-actor.js';
 
 // P16 — Reusable closure-rule helper. Loads `items` rows whose `parent_id`
 // matches and runs `assertChildrenDone()` from the shared status machine.
@@ -88,8 +89,10 @@ export async function storiesRoutes(app: FastifyInstance) {
     });
 
     app.post('/api/stories', { preHandler: requireMcpToken }, async (req, reply) => {
-        const body = CreateStorySchema.parse(req.body);
-        return reply.status(201).send(await storiesService.create(body));
+        const actor = await headerAgentId(req.headers);
+        // The header agent is the default reporter; an explicit body value wins.
+        const body = CreateStorySchema.parse({ reporter_agent_id: actor, ...(req.body as object) });
+        return reply.status(201).send(await storiesService.create(body, actor));
     });
 
     app.patch('/api/stories/:id', { preHandler: requireMcpToken }, async (req, reply) => {
@@ -167,8 +170,13 @@ export async function storiesRoutes(app: FastifyInstance) {
 
     app.post('/api/stories/:id/sub-tasks', { preHandler: requireMcpToken }, async (req, reply) => {
         const { id } = req.params as { id: string };
-        const body = CreateSubTaskSchema.parse({ ...(req.body as object), story_id: id });
-        return reply.status(201).send(await subTasksService.create(body));
+        const actor = await headerAgentId(req.headers);
+        const body = CreateSubTaskSchema.parse({
+            reporter_agent_id: actor,
+            ...(req.body as object),
+            story_id: id,
+        });
+        return reply.status(201).send(await subTasksService.create(body, actor));
     });
 
     app.patch('/api/sub-tasks/:id', { preHandler: requireMcpToken }, async (req, reply) => {
@@ -244,8 +252,13 @@ export async function storiesRoutes(app: FastifyInstance) {
 
     app.post('/api/stories/:id/sub-bugs', { preHandler: requireMcpToken }, async (req, reply) => {
         const { id } = req.params as { id: string };
-        const body = CreateSubBugSchema.parse({ ...(req.body as object), story_id: id });
-        return reply.status(201).send(await subBugsService.create(body));
+        const actor = await headerAgentId(req.headers);
+        const body = CreateSubBugSchema.parse({
+            reporter_agent_id: actor,
+            ...(req.body as object),
+            story_id: id,
+        });
+        return reply.status(201).send(await subBugsService.create(body, actor));
     });
 
     app.patch('/api/sub-bugs/:id', { preHandler: requireMcpToken }, async (req, reply) => {

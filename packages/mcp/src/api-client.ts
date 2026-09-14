@@ -312,11 +312,14 @@ export interface IApiClient {
     ): Promise<
         Array<{ issue_type: string; issue_id: string; title: string; description: string; rank: number }>
     >;
-    createEpic(payload: ICreateEpicPayload): Promise<IEpic>;
-    createStory(payload: ICreateStoryPayload): Promise<IStory>;
-    createSubTask(payload: ICreateSubTaskPayload): Promise<ISubTask>;
-    createSubBug(payload: ICreateSubBugPayload): Promise<ISubBug>;
-    createBug(payload: ICreateBugPayload): Promise<IBug>;
+    // `actorAgentId` (create* / item-link writes) is forwarded as the
+    // `x-atlas-agent-id` header so the API credits the activity event to
+    // the calling agent instead of the Owner.
+    createEpic(payload: ICreateEpicPayload, actorAgentId?: string | null): Promise<IEpic>;
+    createStory(payload: ICreateStoryPayload, actorAgentId?: string | null): Promise<IStory>;
+    createSubTask(payload: ICreateSubTaskPayload, actorAgentId?: string | null): Promise<ISubTask>;
+    createSubBug(payload: ICreateSubBugPayload, actorAgentId?: string | null): Promise<ISubBug>;
+    createBug(payload: ICreateBugPayload, actorAgentId?: string | null): Promise<IBug>;
     addComment(payload: IAddCommentPayload): Promise<IComment>;
     listComments(issueType: IssueType, issueId: string): Promise<IComment[]>;
     getReplyContext(issueType: IssueType, issueId: string): Promise<IReplyContext>;
@@ -324,8 +327,8 @@ export interface IApiClient {
     listProjects(): Promise<IProject[]>;
     getProject(id: string): Promise<IProject>;
     listItemLinks(issueType: IssueType, issueId: string): Promise<IIssueLinkRow[]>;
-    createItemLink(payload: ICreateItemLinkPayload): Promise<unknown>;
-    deleteItemLink(linkId: number): Promise<void>;
+    createItemLink(payload: ICreateItemLinkPayload, actorAgentId?: string | null): Promise<unknown>;
+    deleteItemLink(linkId: number, actorAgentId?: string | null): Promise<void>;
     // Bulk history prune: hard-deletes every comment + issue_event on the
     // item with `created_at < before_time`. Backing route:
     // POST /api/issues/:type/:id/history/prune. Used by the MCP
@@ -337,7 +340,10 @@ export interface IApiClient {
         actorAgentId: string | null,
     ): Promise<{ comments_deleted: number; events_deleted: number; owner_comments_preserved: number }>;
     listItemExternalLinks(issueType: IssueType, issueId: string): Promise<IItemExternalLink[]>;
-    createItemExternalLink(payload: ICreateItemExternalLinkPayload): Promise<IItemExternalLink>;
+    createItemExternalLink(
+        payload: ICreateItemExternalLinkPayload,
+        actorAgentId?: string | null,
+    ): Promise<IItemExternalLink>;
     deleteItemExternalLink(linkId: number): Promise<void>;
     listGuardrails(): Promise<IGuardrailRule[]>;
     createGuardrail(payload: IUpsertGuardrailRulePayload): Promise<IGuardrailRule>;
@@ -447,6 +453,9 @@ export function createApiClient(config: IMcpConfig): IApiClient {
         }
     };
 
+    const agentHeader = (actorAgentId: string | null | undefined) =>
+        actorAgentId ? { headers: { 'x-atlas-agent-id': actorAgentId } } : {};
+
     const fetchComposite = async (id: string): Promise<IAgentComposite> => {
         const encoded = encodeURIComponent(id);
         const [agent, handoff_rules, checklists] = await Promise.all([
@@ -488,32 +497,32 @@ export function createApiClient(config: IMcpConfig): IApiClient {
             return fetchComposite(id);
         },
         getEpic: (id) => request<IEpic>(`/api/epics/${encodeURIComponent(id)}`),
-        createEpic: (payload) =>
-            request<IEpic>('/api/epics', { method: 'POST', body: payload }),
-        createStory: (payload) =>
-            request<IStory>('/api/stories', { method: 'POST', body: payload }),
+        createEpic: (payload, actorAgentId) =>
+            request<IEpic>('/api/epics', { method: 'POST', body: payload, ...agentHeader(actorAgentId) }),
+        createStory: (payload, actorAgentId) =>
+            request<IStory>('/api/stories', { method: 'POST', body: payload, ...agentHeader(actorAgentId) }),
         // Sub-tasks / sub-bugs live UNDER a story — the REST route is
         // `/api/stories/:id/sub-{tasks,bugs}` (see packages/api/src/routes/stories.ts).
         // The MCP payload carries `story_id` so we lift it into the URL.
         // The route's handler also re-injects `story_id` from the path
         // before zod-parsing, so leaving it in the body is harmless but
         // we strip it for clarity.
-        createSubTask: (payload) => {
+        createSubTask: (payload, actorAgentId) => {
             const { story_id, ...rest } = payload;
             return request<ISubTask>(
                 `/api/stories/${encodeURIComponent(story_id)}/sub-tasks`,
-                { method: 'POST', body: rest },
+                { method: 'POST', body: rest, ...agentHeader(actorAgentId) },
             );
         },
-        createSubBug: (payload) => {
+        createSubBug: (payload, actorAgentId) => {
             const { story_id, ...rest } = payload;
             return request<ISubBug>(
                 `/api/stories/${encodeURIComponent(story_id)}/sub-bugs`,
-                { method: 'POST', body: rest },
+                { method: 'POST', body: rest, ...agentHeader(actorAgentId) },
             );
         },
-        createBug: (payload) =>
-            request<IBug>('/api/bugs', { method: 'POST', body: payload }),
+        createBug: (payload, actorAgentId) =>
+            request<IBug>('/api/bugs', { method: 'POST', body: payload, ...agentHeader(actorAgentId) }),
         addComment: (payload) =>
             request<IComment>('/api/comments', {
                 method: 'POST',
@@ -609,7 +618,7 @@ export function createApiClient(config: IMcpConfig): IApiClient {
             request<IIssueLinkRow[]>(
                 `/api/issues/${encodeURIComponent(issueType)}/${encodeURIComponent(issueId)}/links`,
             ),
-        createItemLink: (payload) =>
+        createItemLink: (payload, actorAgentId) =>
             request<unknown>(
                 `/api/issues/${encodeURIComponent(payload.from_type)}/${encodeURIComponent(payload.from_id)}/links`,
                 {
@@ -619,10 +628,14 @@ export function createApiClient(config: IMcpConfig): IApiClient {
                         to_id: payload.to_id,
                         relation_type: payload.relation_type,
                     },
+                    ...agentHeader(actorAgentId),
                 },
             ),
-        deleteItemLink: async (linkId) => {
-            await request<void>(`/api/issues/links/${linkId}`, { method: 'DELETE' });
+        deleteItemLink: async (linkId, actorAgentId) => {
+            await request<void>(`/api/issues/links/${linkId}`, {
+                method: 'DELETE',
+                ...agentHeader(actorAgentId),
+            });
         },
 
         pruneItemHistory: (issueType, id, beforeTime, actorAgentId) =>
@@ -631,13 +644,9 @@ export function createApiClient(config: IMcpConfig): IApiClient {
                 {
                     method: 'POST',
                     body: { before_time: beforeTime },
-                    // Forward the bound MCP identity so the audit event
-                    // written by historyPruneService can attribute the
-                    // deletion. Null becomes no header, and the server
-                    // records actor_agent_id=null (unknown caller).
-                    ...(actorAgentId
-                        ? { headers: { 'x-atlas-agent-id': actorAgentId } }
-                        : {}),
+                    // Null becomes no header, and the server records
+                    // actor_agent_id=null (unknown caller).
+                    ...agentHeader(actorAgentId),
                 },
             ),
 
@@ -647,7 +656,7 @@ export function createApiClient(config: IMcpConfig): IApiClient {
             request<IItemExternalLink[]>(
                 `/api/issues/${encodeURIComponent(issueType)}/${encodeURIComponent(issueId)}/external-links`,
             ),
-        createItemExternalLink: (payload) =>
+        createItemExternalLink: (payload, actorAgentId) =>
             request<IItemExternalLink>(
                 `/api/issues/${encodeURIComponent(payload.issue_type)}/${encodeURIComponent(payload.issue_id)}/external-links`,
                 {
@@ -657,6 +666,7 @@ export function createApiClient(config: IMcpConfig): IApiClient {
                         url: payload.url,
                         title: payload.title ?? null,
                     },
+                    ...agentHeader(actorAgentId),
                 },
             ),
         deleteItemExternalLink: async (linkId) => {

@@ -2,7 +2,9 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { db } from '../db/kysely-client.js';
 import { eventsLog } from './events-log.js';
-import type { ExternalLinkKind, IItemExternalLink } from '@atlas/shared';
+import { credentialsService } from './credentials.js';
+import { broadcastSSE } from '../routes/events.js';
+import type { ExternalLinkKind, ExternalPrState, IItemExternalLink } from '@atlas/shared';
 
 const execFileP = promisify(execFile);
 
@@ -46,6 +48,96 @@ export async function fetchGithubPrTitle(
     }
 }
 
+// Current state of a GitHub PR via the REST API (GET /repos/{o}/{r}/pulls/{n}).
+// REST rather than `gh` like fetchGithubPrTitle: this runs on the read path
+// against the project credential's token, so it must not depend on a local
+// `gh` install or the developer's own `gh auth login`. Null on any failure.
+export async function fetchGithubPrState(
+    url: string,
+    token: string,
+): Promise<ExternalPrState | null> {
+    const pr = parseGithubPrUrl(url);
+    if (!pr) return null;
+    try {
+        const r = await fetch(
+            `https://api.github.com/repos/${encodeURIComponent(pr.owner)}/${encodeURIComponent(pr.repo)}/pulls/${pr.number}`,
+            {
+                headers: {
+                    Accept: 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28',
+                    'User-Agent': 'atlas/external-links',
+                    Authorization: `Bearer ${token}`,
+                },
+                signal: AbortSignal.timeout(10_000),
+            },
+        );
+        if (!r.ok) {
+            // Drain so undici releases the socket.
+            await r.text().catch(() => '');
+            return null;
+        }
+        const body = (await r.json()) as { state?: unknown; merged_at?: unknown };
+        if (body.merged_at) return 'merged';
+        return body.state === 'closed' ? 'closed' : 'open';
+    } catch {
+        return null;
+    }
+}
+
+const PR_STATE_TTL_MS = 5 * 60_000;
+// Items with a background refresh already running — a detail page fans out
+// several list() calls per render, which would otherwise each hit GitHub.
+const refreshing = new Set<string>();
+
+function isStalePr(row: ExternalLinkRow): boolean {
+    if (row.link_kind !== 'pull_request') return false;
+    if (!row.pr_state_checked_at) return true;
+    return Date.now() - new Date(row.pr_state_checked_at).getTime() >= PR_STATE_TTL_MS;
+}
+
+// Re-reads each pull_request link's state from GitHub and persists it.
+// `onlyStale` limits it to links unchecked for PR_STATE_TTL_MS. No project
+// credential → nothing is fetched and pr_state stays null. checked_at is
+// stamped even on a failed lookup so a broken link isn't retried per read.
+async function syncPrStates(itemId: string, onlyStale: boolean): Promise<void> {
+    const item = await db
+        .selectFrom('items')
+        .innerJoin('projects', 'projects.id', 'items.project_id')
+        .select(['items.type', 'projects.credential_id'])
+        .where('items.id', '=', itemId)
+        .executeTakeFirst();
+    if (!item?.credential_id) return;
+    const rows = await db
+        .selectFrom('item_external_links')
+        .selectAll()
+        .where('item_id', '=', itemId)
+        .where('link_kind', '=', 'pull_request')
+        .execute();
+    const due = onlyStale ? rows.filter(isStalePr) : rows;
+    if (due.length === 0) return;
+    let token: string;
+    try {
+        token = await credentialsService.getToken(item.credential_id);
+    } catch {
+        return;
+    }
+    let changed = false;
+    for (const row of due) {
+        const state = await fetchGithubPrState(row.url, token);
+        await db
+            .updateTable('item_external_links')
+            .set({
+                pr_state_checked_at: new Date().toISOString(),
+                ...(state ? { pr_state: state } : {}),
+            })
+            .where('id', '=', row.id)
+            .execute();
+        if (state && state !== row.pr_state) changed = true;
+    }
+    // counts_changed is what the item detail + list queries already refetch on.
+    if (changed) broadcastSSE({ type: 'counts_changed', issueType: item.type, issueId: itemId });
+}
+
 interface CreateInput {
     itemId: string;
     url: string;
@@ -53,6 +145,7 @@ interface CreateInput {
     title?: string | null;
     externalRef?: string | null;
     createdByRunId?: string | null;
+    actorAgentId?: string | null;
 }
 
 async function recordExternalLinkEvent(
@@ -60,10 +153,12 @@ async function recordExternalLinkEvent(
     itemId: string,
     linkKind: ExternalLinkKind,
     url: string,
+    actorAgentId: string | null = null,
 ): Promise<void> {
     await eventsLog.record({
         item_id: itemId,
         event_type: eventType,
+        actor_agent_id: actorAgentId,
         field: 'external_link',
         to_value: url,
         detail: `${linkKind} → ${url}`,
@@ -80,7 +175,19 @@ export const externalLinks = {
             .orderBy('created_at', 'desc')
             .orderBy('id', 'desc')
             .execute();
+        if (rows.some(isStalePr) && !refreshing.has(itemId)) {
+            refreshing.add(itemId);
+            void syncPrStates(itemId, true)
+                .catch(() => undefined)
+                .finally(() => refreshing.delete(itemId));
+        }
         return rows.map(rowToShared);
+    },
+
+    /** Synchronously re-check every PR link on the item, then return the fresh list. */
+    async refreshPrStates(itemId: string): Promise<IItemExternalLink[]> {
+        await syncPrStates(itemId, false);
+        return this.list(itemId);
     },
 
     /**
@@ -108,6 +215,7 @@ export const externalLinks = {
                 input.itemId,
                 input.linkKind,
                 input.url,
+                input.actorAgentId ?? null,
             );
             return rowToShared(inserted);
         }
@@ -159,6 +267,8 @@ interface ExternalLinkRow {
     external_ref: string | null;
     created_at: string | Date;
     created_by_run_id: string | null;
+    pr_state: ExternalPrState | null;
+    pr_state_checked_at: string | Date | null;
 }
 
 function rowToShared(row: ExternalLinkRow): IItemExternalLink {
@@ -185,5 +295,6 @@ function rowToShared(row: ExternalLinkRow): IItemExternalLink {
                 ? row.created_at.toISOString()
                 : (row.created_at as string),
         created_by_run_id: row.created_by_run_id,
+        pr_state: row.pr_state,
     };
 }

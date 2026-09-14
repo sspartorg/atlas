@@ -148,23 +148,29 @@ export const ITEM_TOOLS: ToolRegistration[] = [
             "- `issue_type: 'bug'` → requires `epic_id` + `title`. Standalone bug under an epic. Same bug-specific optionals as sub_bug.",
             '',
             'Common optional fields across all types: `description`, `priority` (default `normal`), `assignee_agent_id`, `reporter_agent_id`, `labels` (array of strings, up to 20 labels / 40 chars each — e.g. `["CER_Stories", "backend"]`).',
+            '',
+            'Optional top-level `agent_id` (string, your own agent id): credits the `created` activity event to you and defaults `reporter_agent_id` to you when the payload does not set it. Without it the create is recorded as the Owner.',
         ].join('\n'),
         group_name: 'ITEMS',
         sort_order: 21,
         inputSchema: {
             issue_type: IssueTypeSchema,
             payload: CreateItemPayloadSchema,
+            agent_id: z.string().min(1).optional(),
         },
         handler: async (args, { client }) => {
-            const { issue_type, payload } = args as {
+            const { issue_type, payload, agent_id } = args as {
                 issue_type: IssueType;
                 payload: Record<string, unknown>;
+                agent_id?: string;
             };
+            const actor = resolveAgentId(agent_id);
             switch (issue_type) {
                 case 'epic': {
                     return toToolResult(
                         await client.createEpic(
                             payload as unknown as Parameters<IApiClient['createEpic']>[0],
+                            actor,
                         ),
                     );
                 }
@@ -172,6 +178,7 @@ export const ITEM_TOOLS: ToolRegistration[] = [
                     return toToolResult(
                         await client.createStory(
                             payload as unknown as Parameters<IApiClient['createStory']>[0],
+                            actor,
                         ),
                     );
                 }
@@ -187,6 +194,7 @@ export const ITEM_TOOLS: ToolRegistration[] = [
                     return toToolResult(
                         await client.createSubTask(
                             lifted as unknown as Parameters<IApiClient['createSubTask']>[0],
+                            actor,
                         ),
                     );
                 }
@@ -194,6 +202,7 @@ export const ITEM_TOOLS: ToolRegistration[] = [
                     return toToolResult(
                         await client.createSubBug(
                             payload as unknown as Parameters<IApiClient['createSubBug']>[0],
+                            actor,
                         ),
                     );
                 }
@@ -201,6 +210,7 @@ export const ITEM_TOOLS: ToolRegistration[] = [
                     return toToolResult(
                         await client.createBug(
                             payload as unknown as Parameters<IApiClient['createBug']>[0],
+                            actor,
                         ),
                     );
                 }
@@ -259,11 +269,11 @@ export const ITEM_TOOLS: ToolRegistration[] = [
             '',
             "- `action: 'add_comment'` → post a comment. Required: `body` (string). Optional: `author` ('owner' | 'agent', default 'agent'), `agent_id` (string — the comment's avatar / chip).",
             '',
-            "- `action: 'add_link'` → link two items. Required: `to_id` (string, the other item's id), `relation_type` ('depends_on' | 'relates_to' | 'tested_by'). The current item is the `from`. `depends_on` is directed (cycles rejected); `relates_to` is undirected; `tested_by` is directed QA→dev (PO Writer is the canonical writer). Idempotent.",
+            "- `action: 'add_link'` → link two items. Required: `to_id` (string, the other item's id), `relation_type` ('depends_on' | 'relates_to' | 'tested_by'). The current item is the `from`. `depends_on` is directed (cycles rejected); `relates_to` is undirected; `tested_by` is directed QA→dev (PO Writer is the canonical writer). Idempotent. Optional: `agent_id` (string — credit the link event to a specific agent; otherwise it is recorded as the Owner).",
             '',
-            "- `action: 'remove_link'` → delete an item-link row by numeric id. Required: `link_id` (number). Get link ids from `get_item` → `related_links[].id`.",
+            "- `action: 'remove_link'` → delete an item-link row by numeric id. Required: `link_id` (number). Get link ids from `get_item` → `related_links[].id`. Optional: `agent_id` (string — credit the unlink event).",
             '',
-            "- `action: 'add_external_link'` → attach an off-platform URL. Required: `link_kind` ('pull_request'), `url` (must match https://github.com/<owner>/<repo>/pull/<number>). Optional: `title`. Idempotent on (item, url).",
+            "- `action: 'add_external_link'` → attach an off-platform URL. Required: `link_kind` ('pull_request'), `url` (must match https://github.com/<owner>/<repo>/pull/<number>). Optional: `title`, `agent_id` (string — forwarded as the acting agent). Idempotent on (item, url).",
             '',
             "- `action: 'remove_external_link'` → delete an external-link row. Required: `link_id` (number). Get from `get_item` → `external_links[].id`.",
             '',
@@ -286,7 +296,8 @@ export const ITEM_TOOLS: ToolRegistration[] = [
                 'remove_history',
             ]),
             patch: UpdatePatchSchema.optional(),
-            // change_status / assign credit fields
+            // change_status / assign / add_comment / add_link / remove_link /
+            // add_external_link / remove_history credit field
             status: z.string().min(1).optional(),
             override: z.boolean().optional(),
             agent_id: z.string().min(1).optional(),
@@ -415,12 +426,15 @@ export const ITEM_TOOLS: ToolRegistration[] = [
                             "update_item: `to_id` + `relation_type` are required for action='add_link'",
                         );
                     return toToolResult(
-                        await client.createItemLink({
-                            from_type: a.issue_type,
-                            from_id: a.id,
-                            to_id: a.to_id,
-                            relation_type: a.relation_type,
-                        }),
+                        await client.createItemLink(
+                            {
+                                from_type: a.issue_type,
+                                from_id: a.id,
+                                to_id: a.to_id,
+                                relation_type: a.relation_type,
+                            },
+                            resolveAgentId(a.agent_id),
+                        ),
                     );
                 }
                 case 'remove_link': {
@@ -428,7 +442,7 @@ export const ITEM_TOOLS: ToolRegistration[] = [
                         throw new Error(
                             "update_item: `link_id` is required for action='remove_link'",
                         );
-                    await client.deleteItemLink(a.link_id);
+                    await client.deleteItemLink(a.link_id, resolveAgentId(a.agent_id));
                     return toToolResult({ deleted: true, link_id: a.link_id });
                 }
                 case 'add_external_link': {
@@ -443,7 +457,9 @@ export const ITEM_TOOLS: ToolRegistration[] = [
                         url: a.url,
                     };
                     if (a.title !== undefined) ext.title = a.title;
-                    return toToolResult(await client.createItemExternalLink(ext));
+                    return toToolResult(
+                        await client.createItemExternalLink(ext, resolveAgentId(a.agent_id)),
+                    );
                 }
                 case 'remove_external_link': {
                     if (a.link_id === undefined)

@@ -363,7 +363,7 @@ Use this id wherever a tool asks for \`agent_id\`.
 
 ### Step 1 — Read the QA Story and confirm the \`tested_by\` link
 
-Call \`mcp__atlas__getItemFull({ id: <itemId> })\` on the assigned item. The QA Story is the \`[QA]\` twin PO Writer produced; it carries an inbound \`tested_by\` link to the matching dev Story. Locate that link by reading the item's \`links\` array (or call \`mcp__atlas__listItemLinks({ itemId: <itemId> })\` if the payload doesn't include it).
+Call \`mcp__atlas__getItemFull({ id: <itemId> })\` on the assigned item. The QA Story is the \`[QA]\` twin PO Writer produced; it carries an outgoing \`tested_by\` link to the matching dev Story (PO Writer creates it QA → dev). Locate that link by reading the item's \`links\` array (or call \`mcp__atlas__listItemLinks({ itemId: <itemId> })\` if the payload doesn't include it).
 
 If the \`tested_by\` link is **absent**, the upstream contract broke. Post a single comment naming the problem and exit:
 
@@ -505,7 +505,7 @@ The on-pass handoff rule routes the QA Story to \`agent-qa-reviewer\` with statu
 
 The paired reviewer agent walks this checklist line by line on its own run.
 
-1. **\`tested_by\` link verified** — the QA Story has an inbound \`tested_by\` link to a dev Story, OR Step 1 refusal path was taken with the \`missing_tested_by_link\` comment + \`asked_question\` outcome.
+1. **\`tested_by\` link verified** — the QA Story has an outgoing \`tested_by\` link to a dev Story, OR Step 1 refusal path was taken with the \`missing_tested_by_link\` comment + \`asked_question\` outcome.
 2. **CSV exists at the canonical path** — \`tests/qa/<storyId>.csv\` is present in the QA story's worktree AND on \`origin/atlas/qa/<storyId>\`.
 3. **Header row matches the locked schema** — exactly \`Summary,Description,Issue Type,Priority,Labels,Components\`.
 4. **Per-AC coverage** — every acceptance criterion on the dev Story has at least one row tagged \`ac-<id>\` AND \`kind-functional\` AND at least one row tagged \`ac-<id>\` AND \`kind-edge\`. Other kinds (\`integration\`, \`e2e\`, \`regression\`) appear when applicable or have a one-line rationale in the QA Story body.
@@ -656,15 +656,9 @@ update_item({
 
 The phrase \`Hand off to Architect Reviewer\` is the explicit handoff marker, mandatory and verbatim — \`agent-architect-reviewer\` is the immediate next agent in the chain (its on-pass handoff routes to Coder, and the reviewer's own approval comment carries the \`Hand off to Coder\` marker Coder later greps for). Use the actual \`worktree_branch\` value from the dev Story row (the harness exposes the same name on the worktree it provisioned).
 
-### Step 8 — Transition the story
+### Step 8 — Leave routing to the handoff rule
 
-The story arrived in \`in_progress\` (the orchestrator marks the active assignee's item in_progress when the run starts). Move it forward so the Architect Reviewer (and downstream Coder) can pick it up:
-
-\`\`\`
-transitionItemStatus({ issue_type: "story", issue_id: "<itemId>", to: "ready_for_dev" })
-\`\`\`
-
-\`ready_for_dev\` is the conventional label the team uses for "spec landed, awaiting Coder". The runtime status machine accepts a forward move to \`in_review\` here as the canonical alternative if your installation rejects custom labels.
+The story arrived in \`in_progress\` (the orchestrator marks the active assignee's item in_progress when the run starts). The on-pass handoff rule routes the dev Story to \`agent-architect-reviewer\` with status \`ready\` automatically — do NOT call \`transitionItemStatus\` or \`assignItem\` yourself.
 
 ## Architect checklist
 
@@ -714,7 +708,7 @@ If the QA branch has already been merged into \`main\` (Coder's PR landed and QA
 
 ### Step 1 — Read the QA Story; resolve to the dev story; confirm dev PR is MERGED
 
-Call \`mcp__atlas__getItemFull({ id: <itemId> })\` on the assigned item. The item is a QA Story; walk its item-links to find the inbound \`kind === "tested_by"\` link and resolve to the dev story id.
+Call \`mcp__atlas__getItemFull({ id: <itemId> })\` on the assigned item. The item is a QA Story; walk its item-links to find the outgoing \`kind === "tested_by"\` link (QA → dev) and resolve to the dev story id.
 
 Read the dev story's \`pr_url\` column (populated by the Code Reviewer's run after Coder finished). Extract the PR number from the URL, then check it with the read-only \`gh\` CLI (no mutation, fine to run via Bash):
 
@@ -1228,7 +1222,7 @@ const QA_TEST_CASE_ASSERTION_CLAUSE = `
 
 QA Writer v3 delivers its test plan as a CSV at \`tests/qa/<storyId>.csv\` inside the QA Story's worktree, committed and pushed to \`atlas/qa/<storyId>\`. No sub-tasks. The reviewer agent MUST fetch and parse the CSV before passing.
 
-1. Confirm the QA Story still has an inbound \`tested_by\` link to a dev Story (\`listItemLinks({ itemId: <itemId> })\`). If absent, this is a revision case — use the MCP revision path (assign back to \`agent-qa-writer\`, status \`ready\`, comment "Revision required — missing tested_by link", reason tag \`missing_tested_by_link\`) then \`submit_review({ outcome: "pass" })\`.
+1. Confirm the QA Story still has an outgoing \`tested_by\` link to a dev Story (\`listItemLinks({ itemId: <itemId> })\`). If absent, this is a revision case — use the MCP revision path (assign back to \`agent-qa-writer\`, status \`ready\`, comment "Revision required — missing tested_by link", reason tag \`missing_tested_by_link\`) then \`submit_review({ outcome: "pass" })\`.
 
 2. Fetch the dev Story's acceptance criteria (\`getItemFull({ id: <devStoryId> })\`). Enumerate each Given / When / Then bullet and assign each a stable id you'll use to count coverage (the simplest id is the dev story's bullet ordinal — \`ac-1\`, \`ac-2\`, etc. — matching what QA Writer wrote into the \`Labels\` column).
 

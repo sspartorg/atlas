@@ -8,6 +8,7 @@ import type { IAgent } from '@atlas/shared';
 import { testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertProject, insertAgent, insertItem } from '../../tests/_items.js';
 import { DependenciesNotReadyError } from './dependency-guard.js';
+import { incrementRound, resetRoundsUnlessBounceBack } from './agent-rounds.js';
 
 const activeAgent: IAgent = {
     id: 'agent-coder',
@@ -218,5 +219,44 @@ describe('findLiveRunOnItem + maybeAutoDispatch (DB-backed)', () => {
         spawnAgentRunMock.mockRejectedValue(new Error('Unexpected failure'));
         await insertItem({ id: 'ATL-207', type: 'epic', project_id: 'p1', title: 'Unexpected error', status: 'ready', assignee_agent_id: 'agent-coder' });
         await expect(maybeAutoDispatch('ATL-207')).rejects.toThrow('Unexpected failure');
+    });
+});
+
+describe('maybeAutoDispatch — max_rounds loop guard', () => {
+    beforeEach(async () => {
+        spawnAgentRunMock.mockReset();
+        spawnAgentRunMock.mockResolvedValue('run-mock');
+        await truncateAll();
+        await insertProject('p1', 'ATL');
+        await insertAgent({ id: 'agent-writer' });
+        await insertAgent({ id: 'agent-reviewer' });
+        await testDb.updateTable('agents').set({ max_rounds: 2 }).execute();
+        await insertItem({ id: 'ATL-300', type: 'epic', project_id: 'p1', title: 'Bouncing', status: 'ready', assignee_agent_id: 'agent-writer' });
+    });
+
+    it('parks the item with the Owner once a writer↔reviewer bounce exhausts max_rounds', async () => {
+        const next: Record<string, string> = { 'agent-writer': 'agent-reviewer', 'agent-reviewer': 'agent-writer' };
+        let dispatches = 0;
+        let result = await maybeAutoDispatch('ATL-300');
+        // Simulate completeRun's self-routing path for every dispatched run:
+        // round bump, agent reassigns via MCP, then the conditional reset.
+        while (result.dispatched && dispatches < 20) {
+            dispatches += 1;
+            const item = await testDb.selectFrom('items').select('assignee_agent_id').where('id', '=', 'ATL-300').executeTakeFirstOrThrow();
+            const runner = item.assignee_agent_id as string;
+            await testDb.insertInto('agent_runs').values({ id: `run-${dispatches}`, agent_id: runner, item_id: 'ATL-300', status: 'completed' }).execute();
+            await incrementRound('ATL-300', runner);
+            await testDb.updateTable('items').set({ assignee_agent_id: next[runner] ?? null, status: 'ready' }).where('id', '=', 'ATL-300').execute();
+            await resetRoundsUnlessBounceBack('ATL-300');
+            result = await maybeAutoDispatch('ATL-300');
+        }
+
+        expect(result).toEqual({ dispatched: false, reason: 'max_rounds_reached' });
+        // writer (forward, reset) → reviewer ×2 / writer ×2 bounces → reviewer at cap.
+        expect(dispatches).toBe(5);
+        const item = await testDb.selectFrom('items').select(['assignee_agent_id', 'status']).where('id', '=', 'ATL-300').executeTakeFirstOrThrow();
+        expect(item).toEqual({ assignee_agent_id: null, status: 'waiting_for_info' });
+        const events = await testDb.selectFrom('issue_events').select(['event_type', 'detail']).where('item_id', '=', 'ATL-300').execute();
+        expect(events).toContainEqual({ event_type: 'status_changed', detail: 'max_rounds_reached: agent-reviewer (2/2)' });
     });
 });
