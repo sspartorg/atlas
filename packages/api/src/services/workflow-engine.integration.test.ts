@@ -235,6 +235,8 @@ describe('workflow engine — loops and parking', () => {
         await vi.waitFor(async () => expect(spawned.at(-1)?.nodeId).toBe('coder'));
         await vi.waitFor(async () => expect(await runOf(runId)).toMatchObject({ status: 'running', loop_count: 0, current_node_id: 'coder' }));
         expect(spawned).toHaveLength(4);
+        // The resumed step runs on a branch refreshed onto the latest default branch.
+        expect(git.ensureWorktree).toHaveBeenCalledTimes(2);
         expect(await itemOf('ATL-2')).toMatchObject({ status: 'in_progress' });
     });
 
@@ -246,6 +248,20 @@ describe('workflow engine — loops and parking', () => {
         await resumeWorkflowRun(runId);
         expect(spawned.map((s) => s.nodeId)).toEqual(['coder', 'coder']);
         expect(await runOf(runId)).toMatchObject({ status: 'running', current_node_id: 'coder', park_reason: null });
+    });
+
+    it('parks instead of continuing when the resumed branch cannot be refreshed onto main', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        await finishStep('completed', 'asked_question', 'Which API version?');
+        git.ensureWorktree.mockRejectedValueOnce(new Error('rebase conflict on abc1234'));
+
+        await resumeWorkflowRun(runId);
+        expect(spawned).toHaveLength(1);
+        expect(await runOf(runId)).toMatchObject({
+            status: 'waiting_for_owner',
+            parked_node_id: 'coder',
+            park_reason: 'Could not refresh the worktree onto the latest default branch: rebase conflict on abc1234',
+        });
     });
 
     it('parks when a step errors or its setup fails', async () => {

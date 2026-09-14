@@ -226,38 +226,55 @@ export async function startWorkflowRun(workflowId: string, itemId: string | null
         }
     }
 
-    if (workflow.use_worktree && branch && projectId) {
-        const project = await db
-            .selectFrom('projects')
-            .select(['id', 'git_path', 'credential_id', 'default_branch'])
-            .where('id', '=', projectId)
-            .executeTakeFirst();
-        try {
-            if (!project?.git_path) throw new Error('Project has no cloned repository on disk');
-            // item: null — the path lives on workflow_runs only. Writing it to
-            // items.worktree_path would let the boot orphan reaper push and
-            // delete the shared worktree between steps.
-            const wt = await ensureWorktree({
-                item: null,
-                branch,
-                project: {
-                    id: project.id,
-                    git_path: project.git_path,
-                    credential_id: project.credential_id,
-                    default_branch: project.default_branch,
-                },
-                pushUpstream: workflow.push_code,
-            });
-            await db.updateTable('workflow_runs').set({ worktree_path: wt.path }).where('id', '=', runId).execute();
-            run.worktree_path = wt.path;
-        } catch (err) {
-            await park(run, firstNodeId, `Could not prepare the worktree: ${(err as Error).message}`);
+    if (workflow.use_worktree) {
+        const failure = await prepareWorktree(run, workflow.push_code);
+        if (failure) {
+            await park(run, firstNodeId, `Could not prepare the worktree: ${failure}`);
             return runId;
         }
     }
 
     await goTo(run, firstNodeId);
     return runId;
+}
+
+/**
+ * Provisions the run's worktree, or — when it already exists — brings the
+ * branch onto the latest default branch (ensureWorktree pulls ff-only and
+ * rebases its commits onto fresh origin/<default>). Returns why it failed, or
+ * null. ensureWorktree discards uncommitted files, so leftovers are committed
+ * first.
+ */
+async function prepareWorktree(run: RunRow, pushUpstream: boolean): Promise<string | null> {
+    if (!run.branch || !run.project_id) return null;
+    const project = await db
+        .selectFrom('projects')
+        .select(['id', 'git_path', 'credential_id', 'default_branch'])
+        .where('id', '=', run.project_id)
+        .executeTakeFirst();
+    try {
+        if (!project?.git_path) throw new Error('Project has no cloned repository on disk');
+        if (run.worktree_path) await commitPending(run.worktree_path, project.credential_id, run.id);
+        // item: null — the path lives on workflow_runs only. Writing it to
+        // items.worktree_path would let the boot orphan reaper push and
+        // delete the shared worktree between steps.
+        const wt = await ensureWorktree({
+            item: null,
+            branch: run.branch,
+            project: {
+                id: project.id,
+                git_path: project.git_path,
+                credential_id: project.credential_id,
+                default_branch: project.default_branch,
+            },
+            pushUpstream,
+        });
+        await db.updateTable('workflow_runs').set({ worktree_path: wt.path }).where('id', '=', run.id).execute();
+        run.worktree_path = wt.path;
+        return null;
+    } catch (err) {
+        return (err as Error).message;
+    }
 }
 
 // ─── Moving through the graph ───────────────────────────────────────────────
@@ -483,6 +500,19 @@ export async function continueResumedRun(runId: string): Promise<void> {
         return;
     }
     broadcastRun(run, 'running', parked.id);
+    if (parked.type !== 'end') {
+        // A parked run can wait days. Refresh the branch onto the latest
+        // default branch so the next step sees what merged meanwhile — e.g.
+        // the dev PR a QA run's Automation step was waiting on.
+        const workflow = await loadWorkflow(run.workflow_id);
+        if (workflow?.use_worktree) {
+            const failure = await prepareWorktree(run, workflow.push_code);
+            if (failure) {
+                await park(run, parked.id, `Could not refresh the worktree onto the latest default branch: ${failure}`);
+                return;
+            }
+        }
+    }
     if (parked.type === 'owner') {
         const next = nextNodeId(run.graph_snapshot, parked.id, 'pass');
         if (next) await goTo(run, next);
