@@ -253,6 +253,17 @@ describe('workflow engine — loops and parking', () => {
         await finishStep('setup_failed', null);
         expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'coder', setup_done: false });
     });
+
+    it('an errored step parks with the error line the reaper left', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        const step = spawned.at(-1)!; // reason: startWorkflowRun spawned the first node above
+        await testDb.updateTable('agent_runs').set({ output_text: '{"type":"system"}\n[ERROR] API restarted before run completed' }).where('id', '=', step.runId).execute();
+        await finishStep('error', null);
+        expect(await runOf(runId)).toMatchObject({
+            status: 'waiting_for_owner',
+            park_reason: 'The agent step errored: API restarted before run completed',
+        });
+    });
 });
 
 describe('workflow engine — stop, reconcile, children, dispatch', () => {

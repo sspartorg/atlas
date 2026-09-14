@@ -347,8 +347,20 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
         await cancelWorkflowRun(run.id);
         return;
     }
-    if (step.status === 'error' || step.status === 'setup_failed') {
-        await park(run, step.node_id, step.status === 'setup_failed' ? 'Project setup script failed' : 'The agent step errored');
+    if (step.status === 'setup_failed') {
+        await park(run, step.node_id, 'Project setup script failed');
+        return;
+    }
+    if (step.status === 'error') {
+        // The runner, reaper and watchdog each leave a tagged line in
+        // output_text; the Owner needs it to decide whether to just reply.
+        const row = await db.selectFrom('agent_runs').select('output_text').where('id', '=', agentRunId).executeTakeFirst();
+        const line = row?.output_text
+            ?.split('\n')
+            .reverse()
+            .find((l) => l.startsWith('[ERROR]') || l.startsWith('[watchdog]'));
+        const detail = line?.replace(/^\[ERROR\]\s*/, '').slice(0, 300);
+        await park(run, step.node_id, detail ? `The agent step errored: ${detail}` : 'The agent step errored');
         return;
     }
     if (step.status !== 'completed') return;

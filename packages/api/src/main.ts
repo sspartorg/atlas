@@ -50,6 +50,7 @@ process.on('unhandledRejection', (reason) => {
 // runs crossed the 60 s mark.
 const ORPHAN_REAPER_INTERVAL_MS = 60_000;
 const ORPHAN_REAPER_PERIODIC_CUTOFF_MS = 30 * 60_000;
+const PROCESS_STARTED_AT = Date.now();
 let orphanReaperTimer: NodeJS.Timeout | null = null;
 let orphanReaperRunning = false;
 
@@ -223,7 +224,13 @@ async function main(): Promise<void> {
         orphanReaperRunning = true;
         void (async () => {
             try {
-                await failOrphanedRuns({ cutoffMs: ORPHAN_REAPER_PERIODIC_CUTOFF_MS });
+                // A row that started before this process booted can't be one
+                // of its runs, so it's reaped on the first tick instead of
+                // waiting out the 30-min floor (the boot pass skips rows
+                // under 60 s old — a step killed in its first minute by an
+                // API restart would otherwise hold its workflow run for 30 min).
+                const sinceBoot = Date.now() - PROCESS_STARTED_AT;
+                await failOrphanedRuns({ cutoffMs: Math.min(ORPHAN_REAPER_PERIODIC_CUTOFF_MS, sinceBoot) });
             } finally {
                 orphanReaperRunning = false;
             }
