@@ -248,9 +248,16 @@ export const workflowsService = {
         const project = await db.selectFrom('projects').select('id').where('id', '=', projectId).executeTakeFirst();
         if (!project) throw new ApiError('not_found', 'Project not found', 404);
 
-        for (const agentId of new Set(template.graph.nodes.flatMap((n) => (n.agent_id ? [n.agent_id] : [])))) {
+        const agentIds = [...new Set(template.graph.nodes.flatMap((n) => (n.agent_id ? [n.agent_id] : [])))];
+        for (const agentId of agentIds) {
             const exists = await db.selectFrom('agents').select('id').where('id', '=', agentId).executeTakeFirst();
             if (!exists) await marketplaceService.install(agentId);
+        }
+        // Some catalog agents ship `inactive` (a leftover from per-agent
+        // schedules); the engine parks on an inactive agent, so a workflow made
+        // from a template would never run.
+        if (agentIds.length > 0) {
+            await db.updateTable('agents').set({ status: 'active' }).where('id', 'in', agentIds).where('status', '!=', 'active').execute();
         }
 
         // `template:<id>` → that template's workflow in this project, by name.

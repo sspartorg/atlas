@@ -139,6 +139,14 @@ describe('workflow CRUD', () => {
         const end = (res.json().graph.nodes as Array<{ type: string }>).find((n) => n.type === 'end');
         expect(end).toMatchObject({ child_workflow_id: idOf('Development'), test_child_workflow_id: idOf('Quality') });
     });
+
+    it('activates an inactive agent the template uses, so the workflow can run', async () => {
+        await insertAgent({ id: 'agent-ai-readiness', status: 'inactive' });
+        const res = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'ai-readiness', project_id: 'p1' } });
+        expect(res.statusCode).toBe(201);
+        const agent = await testDb.selectFrom('agents').select('status').where('id', '=', 'agent-ai-readiness').executeTakeFirstOrThrow();
+        expect(agent.status).toBe('active');
+    });
 });
 
 describe('workflow runs over HTTP', () => {
