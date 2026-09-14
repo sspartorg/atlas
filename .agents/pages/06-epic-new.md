@@ -59,7 +59,7 @@ Single-page form to draft an epic and either save as draft or submit it to PO Wr
 - If the transition to `ready_for_po` fails after a successful create, the toast says "Saved" (not the original "Submitted") and the epic stays in `draft` (lines 72-74).
 - "OWNER" is rendered as a special select value mapped to `null` in the create payload.
 - The draft guard covers app-level navigation only. The app runs on `<BrowserRouter>`, so react-router's `useBlocker` is unavailable; in-page exits (**Cancel**, the breadcrumb, the post-submit redirect) are deliberate and leave without asking.
-- Fast synthetic typing (zero-delay `keyboard.type`) used to lose ~1 char per 50 in any controlled field because the Topbar `HeaderMascot` Lottie loop contends for the main thread. Fixed 2026-09-14: `usePauseWhileTyping` pauses the mascot while an input / textarea / contenteditable has focus and resumes it when focus leaves editable content (skipped under prefers-reduced-motion).
+- Synthetic typing at ~4–5 ms per key (browser automation) loses ~1 char per 50 in React-controlled fields on this page (title and description alike); a plain uncontrolled input on the same page loses none, and no loss occurs at ≥5 ms per key, far faster than any human types. Verified 2026-09-14 that pausing the header mascot does not change it, so there is no app fix; automation should set values via the native value setter + `input` event or type with a per-key delay.
 
 ## Connectivity
 - **Pages**: [Epics](05-epics.md) — Cancel target and the only entry point that doesn't pre-fill `?project=`; [Epic Detail](07-epic-detail.md) — the redirect target after successful submit.
