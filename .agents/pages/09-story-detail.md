@@ -22,7 +22,7 @@ Single-story view. Uses the unified `IssueDetailShell` shared with Epic / Sub-ta
 
 **Body cards** (in order)
 - `EditableMarkdownCard` "Description" â€” Save â†’ `useUpdateStory`.
-- `EditableMarkdownCard` "Acceptance criteria" â€” body renders as `<ul>` via `renderBody`; Save â†’ `useUpdateStory({ acceptance_criteria })`.
+- `EditableMarkdownCard` "Acceptance criteria" — body renders through `MarkdownPreview` like Description (bold, code, lists); Save → `useUpdateStory({ acceptance_criteria })`.
 - **Sub-items** card â€” lists sub-tasks + sub-bugs (id, title, kind chip, status chip). Row click â†’ detail page. **Hidden entirely when empty** â€” the `+` menu under the title is the canonical add path.
 - `ConversationCard` â€” comments + compose box.
 
@@ -32,7 +32,7 @@ Single-story view. Uses the unified `IssueDetailShell` shared with Epic / Sub-ta
 
 ## Why these affordances exist
 - **Editable Description / Acceptance criteria as separate cards** â€” Description is Owner-authored intent; AC is the Spec Writer's testable contract. Two lifecycles, two save endpoints. (The legacy "Proposed Plan" card was retired by A03's revised design â€” agent narrative now flows through the comments thread.)
-- **Acceptance criteria as a list** â€” Sub-tasks and QA agents key off discrete criteria; rendering as `<ul>` enforces the bullet shape that downstream agents expect to parse.
+- **Acceptance criteria as markdown** — Agents write AC as markdown bullets (`- **Given** …`); rendering it as markdown shows the bullets without leaking raw `**` into the page.
 - **AddRelatedMenu (`+` under title)** â€” Jira-style adder. Sub-task / sub-bug creation lives behind the menu instead of an inline link so the affordance doesn't disappear when the sub-items table is hidden (which happens on an empty story).
 - **Hide-when-empty on Sub-items table** â€” A story with no sub-items shows only its description + AC; the table appears the moment the first child lands. Removes visual noise from freshly-spec'd stories.
 - **Epic parent link in rail** â€” Sub-tasks tunnel up through story â†’ epic to find their project; one click up the rail is faster than back-navigating through Issues.

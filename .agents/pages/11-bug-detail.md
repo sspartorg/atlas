@@ -25,7 +25,7 @@ Standalone bug view (nested under an epic, not a story). Uses the unified `Issue
 - `EditableMarkdownCard` "Description" — Save → `useUpdateBug`.
 - `BugBodyCards` — renders the bug-specific section:
   - **Frequency** / **Failure scope** chips at the top are now editable `Select` dropdowns.
-  - `EditableMarkdownCard` for **Acceptance criteria** (renders as `<ul>`) and **Steps to reproduce** (renders as `<ol>`).
+  - `EditableMarkdownCard` for **Acceptance criteria** and **Steps to reproduce**, both rendered as markdown via `MarkdownPreview`.
   - Combined **Expected vs Actual** card with two stacked textareas in edit mode.
 
 **Right rail**

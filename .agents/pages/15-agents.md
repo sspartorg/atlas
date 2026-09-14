@@ -19,12 +19,13 @@ Grid of all agent cards, grouped by category. Per-card actions: open, edit, paus
 **Filters (`AgentFilterChips`)**
 - Category chips: software-dev / marketing / content / design + Favorites
 - **Role dropdown** (A08) — narrows to one of the 10 SDLC roles (PO / Spec Writer / Engineer / QA / Architect / Tester / Automation / DevOps / Security / Designer) on top of the category filter. Selecting a specific role excludes autonomous agents (`role_id` NULL) entirely; `All roles` keeps them visible. Per-role counts are computed client-side from `useAgents()` data — no separate fetch.
-- Sort dropdown: last-run / queue-depth / category-role
+- Sort dropdown: last-run / queue-depth / category-role. Queue-depth sorts by the same item-based count the card shows.
 
 **Card grid (`AgentCategorySection` → `AgentCard`)**
 - Agent accent dot + name + `designation · category` sub-label. A08 — when `designation` is empty, `agentSubtitle()` in `agentViewModel.ts` now falls back to the SDLC role label (via `SDLC_ROLE_LABELS[role_id]`) before dropping to category alone. Autonomous agents (`role_id` NULL) still render category alone when designation is empty.
 - Star toggle (line 383) → `favorites.toggle(w.id)` (localStorage)
 - **Status label** — `Paused` / `Failed` / `Running` / `Queued` / `Idle`, from `resolveAgentStatusLabel()` in `pages/queue/queueViewModel.ts`. That is the ONE definition, shared with the Queue page and the Agent Detail hero. Until 2026-09-12 `AgentCard` and `AgentHero` each derived it from `getRuntimeStats().queueDepth`, which counts `queued` AND `in_progress` together, so the labels were inverted: every active-but-idle agent showed **Running** with a pulsing `LiveDot`, an agent with a genuinely in-flight run showed **Queued**, and `AgentCard` called a paused agent **Idle** — the same word the Queue page uses for active-and-not-running. `getRuntimeStats` now also returns `runningCount`, `queuedCount` and `lastRunErrored`; the `runtimeError` prop still means "the runs query failed to load" and no longer feeds the label.
+- **queue N** caption — ready + in-progress items assigned to the agent, passed in as the `queueDepth` prop from `useQueueDepthByAgent()` (same count as the Queue page and Agent Detail hero). Previously run-based (`getRuntimeStats().queueDepth`, now removed).
 - Card click → `/agents/:id`
 - ⋯ Card menu (`AgentCardMenu`):
   - Open / Edit → `/agents/:id`

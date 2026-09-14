@@ -23,7 +23,7 @@ Single-page form to draft an epic and either save as draft or submit it to PO Wr
 - **Project** — Select; **required**; pre-filled from `?project=` query param. Renders inline error below the Select when invalid.
 - **Priority** — Select; options `low | normal | high | urgent`; default `low`.
 - **Reporter** — Select; default `OWNER`; options = Owner + active agents.
-- **Assignee** — Select; defaults to `OWNER` (Theme 04 — was hardcoded to PO Writer; any agent or the Owner can be the initial assignee).
+- **Assignee** — Select; defaults to `agent-po-writer` when that agent is installed and active, otherwise `OWNER`. The default is derived until the Owner picks, because agents load after first render.
 
 **Actions** — both buttons stay enabled regardless of form validity. Clicking with invalid fields sets `submitAttempted=true`, which surfaces all per-field errors and aborts the submit.
 - **Save as draft** — `submit('draft')`; disabled only while the mutation is pending.
@@ -34,7 +34,7 @@ Single-page form to draft an epic and either save as draft or submit it to PO Wr
 - **Save as draft vs. Submit** — Drafts stage an epic without committing PO Writer; Submit is the explicit hand-off that transitions to `ready_for_po`. Splitting them prevents accidental agent spawns.
 - **`?project=` pre-fill** — The most common entry is from a project's "New Epic" affordance; re-picking the project would be a tax.
 - **Reporter default OWNER** — Manually-created epics are Owner-reported; agent-created epics stamp themselves.
-- **Assignee default OWNER** — Theme 04 dropped the PO-Writer hardcoded default. The owner picks the receiving agent explicitly; the API has always supported any assignee, the UI just used to pre-bias toward PO Writer.
+- **Assignee default PO Writer (if installed)** — The PO Writer is the agent that breaks an epic down, so a new epic lands on it by default; without it the Owner routes the epic.
 - **submitAttempted gate** — Buttons stay enabled but invalid submits surface all errors at once; faster than blocking on a per-field dirty check.
 
 ## Modals / drawers
@@ -54,7 +54,7 @@ None.
 - Post-onboarding only.
 
 ## Edge cases / quirks
-- Assignee auto-selects PO Writer via case-insensitive name match `w.name.toLowerCase().includes('po writer')` (line 45). If PO Writer is renamed, the default falls back to `OWNER`.
+- Assignee auto-selects PO Writer by id (`agent-po-writer`), not name — a renamed PO Writer is still the default; a paused or uninstalled one falls back to `OWNER`.
 - If the transition to `ready_for_po` fails after a successful create, the toast says "Saved" (not the original "Submitted") and the epic stays in `draft` (lines 72-74).
 - "OWNER" is rendered as a special select value mapped to `null` in the create payload.
 

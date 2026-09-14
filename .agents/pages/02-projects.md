@@ -52,7 +52,7 @@ List all projects with cards or table view; create new ones; trigger reclone, de
 - **Schedule fetch** — Background `git fetch` keeps remote refs fresh so the Owner doesn't have to pull manually before each session.
 
 ## Modals / drawers
-- `NewProjectModal` — credential picker + URL + path; calls `POST /api/projects/clone`
+- `NewProjectModal` — credential picker + URL + path; calls `POST /api/projects/clone`. The credential chip reads `App` for `github_app` credentials, `PAT` otherwise. **Project name** follows the repo name in the URL on every keystroke until the Owner types a name of their own (`nameTouched`); clearing the field re-enables auto-fill, and closing / **Add another** resets it.
 - `DeleteProjectModal` — confirms `DELETE /api/projects/:id` (delete-runner)
 - `RecloneProjectModal` — confirms `POST /api/projects/:id/reclone`
 - `AutoFetchScheduleModal` — `PUT /api/projects/:id/schedule` (cron + guards)

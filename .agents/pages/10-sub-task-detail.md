@@ -23,7 +23,7 @@ Single sub-task view. Uses the unified `IssueDetailShell`. Title, description, p
 
 **Body cards** (in order)
 - `EditableMarkdownCard` "Description".
-- `EditableMarkdownCard` "Acceptance criteria" — body renders as `<ul>` via `renderBody`.
+- `EditableMarkdownCard` "Acceptance criteria" — body renders as markdown via `MarkdownPreview`.
 
 **Right rail**
 - `DetailsRailCard` with Project, Parent story (link), Status (`StatusPickerPopover`), Assignee (`AssigneePickerPopover`), Rounds (A04 — `X / Y` against the assignee's `max_rounds`; hidden when no assignee; clickable → `ResetRoundsPopover` so Owner can wipe the counter and give the agent a fresh budget), Created, Last updated.

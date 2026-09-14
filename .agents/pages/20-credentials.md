@@ -20,7 +20,7 @@ Manage encrypted git credentials. Today only Personal Access Tokens (PAT) are fu
 
 **Security alert** — AES-256-GCM at rest copy + badge "local · aes-256-gcm". Read-only.
 
-**`CredentialsTable`** — columns: Label (icon + name + `cred-XXXX` id), Host (hardcoded GitHub today), Kind chip (`PAT` / `GitHub App`, from `credential.kind` — was a hardcoded `PAT` literal until 2026-09-12, so every `github_app` row was mislabeled), Scope chips, Fingerprint, Status (Active / Expiring N d / Unused N d), Last used, Actions (Edit icon + `CredentialRowMenu`).
+**`CredentialsTable`** — columns: Label (icon + name + `cred-XXXX` id), Host (hardcoded GitHub today), Kind chip (`PAT` / `GitHub App`, from `credential.kind` — was a hardcoded `PAT` literal until 2026-09-12, so every `github_app` row was mislabeled), Scope chips, Fingerprint, Status (Active / Expiring N d / Unused N d — `github_app` rows never show Expiring), Last used, Actions (Edit icon + `CredentialRowMenu`).
 
 **Fingerprint is not a hash.** `crypto.ts::fingerprint()` returns a host prefix (`ghp_` / `gpat_` / `tok_`) + 16 mask dots + the token's last 4 characters. Until 2026-09-12 `stripSecretsForApi` nulled it on every read, so this column, the saved-view detail row and the row menu's **Copy fingerprint** action were all permanently blank. Only `token_encrypted` is stripped now.
 
@@ -65,7 +65,7 @@ Manage encrypted git credentials. Today only Personal Access Tokens (PAT) are fu
 
 ## Edge cases / quirks
 - **Verify** and **Check expiries** are stubs (see coming-soon).
-- "Expiring soon" is computed client-side as `expires_at <= now + 30d`. Status chip rules: Active (not expiring AND used recently or <30d old); Expiring (expiry in next 0-60d); Unused (no use for ≥30d).
+- "Expiring soon" and the Expiring chip share `daysUntilExpiry()` in `CredentialsTable.tsx`: expiry within 0-30 days (`EXPIRY_WARN_DAYS`). `github_app` credentials are skipped — their `expires_at` is the ~1h installation token the API re-mints on its own. Status chip rules: Active (not expiring AND used recently or <30d old); Expiring (0-30d); Unused (no use for ≥30d).
 - In edit mode, blank token keeps the existing token. Revealing does NOT populate the submit payload — `revealedToken` is transient display state, `token` stays empty, so saving after a reveal preserves the stored value.
 - Host is locked to GitHub today even though the schema permits other hosts.
 

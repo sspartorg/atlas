@@ -198,7 +198,7 @@ Manual `POST /api/run` flows through the same `spawnAgentRun`, so user-clicked "
 
 Every step in the scheduler logs to console with the `[agent-schedule]` prefix â€” if dispatches aren't happening, the API server log is the canonical place to look for "not eligible" / "at capacity" / "no ready items" / dispatch result.
 
-**Known concurrency gap (deferred):** there is no DB-level uniqueness on `(item_id, agent_id)` for live run statuses. The race window is the time between `agent-dispatcher.ts`'s live-run SELECT and `agent-runner.ts`'s `agent_runs` INSERT (â‰ª1s). With scheduler-only dispatch (no on-assign + on-transition fan-out), the race window is much narrower than it would be otherwise â€” two simultaneous ticks for the same agent would need to land in the same millisecond. The proper fix is a partial unique index migration, tracked separately.
+**Concurrency (resolved):** migration `003_active_run_invariant` adds partial unique index `agent_runs_one_live_per_item` — one `queued`/`in_progress` run per item. The note below is historical: previously there was no DB-level uniqueness on `(item_id, agent_id)` for live run statuses. The race window is the time between `agent-dispatcher.ts`'s live-run SELECT and `agent-runner.ts`'s `agent_runs` INSERT (â‰ª1s). With scheduler-only dispatch (no on-assign + on-transition fan-out), the race window is much narrower than it would be otherwise â€” two simultaneous ticks for the same agent would need to land in the same millisecond. The proper fix is a partial unique index migration, tracked separately.
 
 ---
 
