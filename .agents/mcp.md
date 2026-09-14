@@ -89,6 +89,7 @@ Two transports, share the same tool registrations (`registerAllTools()`):
   owning instance and start the other.
 - Opt-out via `ATLAS_HOST_MCP=false` on a given instance â€” useful when
   running a second stack headless or in CI.
+- `ATLAS_MCP_PORT` moves the listener off 4500 for a second stack that needs its own MCP (a test stack whose agents must reach its own database). Item-attached agent runs receive the port via `--mcp-config`; runs using the Owner's `~/.claude.json` still reach 4500.
 - Loopback only. No LAN exposure regardless of `ATLAS_LAN_ACCESS`.
 - MCP â†’ API loopback HTTP still carries `X-Atlas-Token` per the existing
   `api-client.ts`; the token is the `ATLAS_MCP_TOKEN` from `.env` /

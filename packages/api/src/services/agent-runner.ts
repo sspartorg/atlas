@@ -478,7 +478,8 @@ export async function completeRun(
 
     // Persisted for every run shape: the workflow engine routes on these
     // columns, including project-level runs that have no item.
-    await persistRunOutcome(runId, parseRunOutcome(output));
+    const outcome = parseRunOutcome(output);
+    await persistRunOutcome(runId, outcome);
 
     if (wasCancelled) {
         broadcastSSE({ type: 'run_completed', agentId, runId, status: 'cancelled' });
@@ -497,9 +498,9 @@ export async function completeRun(
 
     const inWorkflow = await isWorkflowStep(runId);
     if (issueId && issueType) {
-        // A tiny static pin so the Owner can jump from the comment thread to
-        // the run-detail page. The agent's own structured comment is the
-        // authoritative narrative.
+        // The agent's outcome (result, reason, summary) plus a run link. The
+        // next workflow step reads this thread, so a rejection reason reaches
+        // the step that has to fix it.
         try {
             await commentsService.create({
                 author: 'agent',
@@ -511,6 +512,7 @@ export async function completeRun(
                     agentName: agent?.name ?? agentId,
                     runId,
                     issueType,
+                    outcome,
                 }),
             });
         } catch {
