@@ -511,13 +511,16 @@ exit 1
         id: 'coder-tests-green',
         name: 'Coder typecheck/lint/tests changed',
         description:
-            "Coder gate: the project's own typecheck and lint scripts (run only when package.json declares them, via the package manager its lockfile implies) must exit 0, and the diff against origin/main (or HEAD~10) must add or modify at least one test file (*.test|spec.{js,ts,jsx,tsx,mjs,cjs}, *_test.go, test_*.py).",
+            "Coder gate: the project's own typecheck and lint scripts (run only when package.json declares them, via the package manager its lockfile implies) must exit 0, and the diff against origin/main (or HEAD~10) must add or modify at least one test file (*.test|spec.{js,ts,jsx,tsx,mjs,cjs}, *_test.go, test_*.py). With `--run-tests` as the second argument (Code Reviewer) the declared `test` script must pass too.",
         sort_order: 103,
         body_sh: `#!/usr/bin/env bash
-# Coder gate. $1 is the item id (unused).
+# Coder gate. $1 is the item id (unused). $2 = --run-tests also runs the
+# project's test script (Code Reviewer owns the full suite; Coder skips it).
 # Project-agnostic: scripts run only if package.json declares them, with
 # the package manager the lockfile implies.
 set -u
+checks="typecheck lint"
+[ "\${2:-}" = "--run-tests" ] && checks="$checks test"
 gaps=""
 n=0
 pm=npm
@@ -526,7 +529,7 @@ pm=npm
 has_script() {
     [ -f package.json ] && node -e "process.exit((require('./package.json').scripts || {})['$1'] ? 0 : 1)" 2>/dev/null
 }
-for s in typecheck lint; do
+for s in $checks; do
     if has_script "$s" && ! "$pm" run "$s" >/dev/null 2>&1; then
         n=$((n+1))
         gaps="$gaps$n. $s failed
@@ -544,7 +547,8 @@ if [ -z "$gaps" ]; then exit 0; fi
 printf "coder-tests-green:\\n%s" "$gaps"
 exit 1
 `,
-        body_ps1: `# Coder gate. $args[0] is the item id (unused).
+        body_ps1: `# Coder gate. $args[0] is the item id (unused). $args[1] = --run-tests also
+# runs the project's test script (Code Reviewer owns the full suite).
 $ErrorActionPreference = 'Continue'
 $gaps = New-Object System.Collections.ArrayList
 $pm = 'npm'
@@ -554,7 +558,9 @@ $scripts = $null
 if (Test-Path 'package.json') {
     try { $scripts = (Get-Content -Raw 'package.json' | ConvertFrom-Json).scripts } catch { $scripts = $null }
 }
-foreach ($s in @('typecheck', 'lint')) {
+$checks = @('typecheck', 'lint')
+if ($args.Count -gt 1 -and $args[1] -eq '--run-tests') { $checks += 'test' }
+foreach ($s in $checks) {
     if ($scripts -and ($scripts.PSObject.Properties.Name -contains $s)) {
         & $pm run $s 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) { [void]$gaps.Add("$s failed") }

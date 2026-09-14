@@ -152,9 +152,9 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
             return dir;
         }
 
-        function gateExit(dir: string): number {
+        function gateExit(dir: string, flag = ''): number {
             try {
-                execSync('bash gate.sh X', { cwd: dir, stdio: 'pipe' });
+                execSync(`bash gate.sh X ${flag}`, { cwd: dir, stdio: 'pipe' });
                 return 0;
             } catch (err) {
                 return (err as { status: number }).status;
@@ -175,6 +175,12 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
                 { 'a.test.ts': 'x' },
             );
             expect(gateExit(dir)).toBe(1);
+        });
+
+        it('runs the declared test script only with --run-tests', () => {
+            const dir = repoWith({ 'package.json': '{"scripts":{"test":"exit 1"}}' }, { 'a.test.js': 'x' });
+            expect(gateExit(dir)).toBe(0);
+            expect(gateExit(dir, '--run-tests')).toBe(1);
         });
 
         it('still fails when no test file changed', () => {
