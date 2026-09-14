@@ -20,7 +20,7 @@
 - Comments explain WHY only.
 - Migrations are append-only, export both `up` and `down`, and use `knex.schema.raw` with CHECK constraints (no enum types).
 - API responses must match `@atlas/shared` types. This phase adds **no** response fields, because run and item rows are mapped field-by-field (`services/agents.ts:124 asAgentRun`, `services/items.ts:63-192 rowTo*`).
-- API tests run against a private DB so they don't queue behind other sessions: prefix every api test command with `TEST_DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1`. globalSetup creates it and runs migrations.
+- API tests run against a private DB so they don't queue behind other sessions: prefix every api test command with both `DATABASE_URL` and `TEST_DATABASE_URL` set to `postgres://atlas:atlas@localhost:5500/atlas_test_wf1` (globalSetup reads `DATABASE_URL`). globalSetup creates it and runs migrations.
 - Git in this worktree: use `/usr/bin/git` (the rtk rewrite of `git` is refused by the worktree guard).
 - Update `.agents/` docs in the same task as the code they describe.
 
@@ -563,7 +563,7 @@ First add the file to the api allow-list, or vitest reports "No test files found
             'src/db/workflows-migration.test.ts',
 ```
 
-Run: `TEST_DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 pnpm -F @atlas/api exec vitest run src/db/workflows-migration.test.ts`
+Run: `DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 TEST_DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 pnpm -F @atlas/api exec vitest run src/db/workflows-migration.test.ts`
 Expected: FAIL at runtime with `relation "workflows" does not exist` (vitest doesn't typecheck; the missing `WorkflowsTable` type surfaces in Step 5).
 
 - [ ] **Step 3: Write the migration**
@@ -794,7 +794,7 @@ In `packages/api/tests/_pg-db.ts` `TRUNCATE_TABLES`, insert directly before `'cl
 
 - [ ] **Step 5: Run the test and the api typecheck**
 
-Run: `TEST_DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 pnpm -F @atlas/api exec vitest run src/db/workflows-migration.test.ts src/db/migrations.test.ts src/db/migrations-rollback.test.ts && pnpm -F @atlas/api typecheck`
+Run: `DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 TEST_DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 pnpm -F @atlas/api exec vitest run src/db/workflows-migration.test.ts src/db/migrations.test.ts src/db/migrations-rollback.test.ts && pnpm -F @atlas/api typecheck`
 Expected: all PASS, and typecheck `Done`.
 - If `insertAgent` rejects `cli`/`model` pairs, confirm the fixture seeds `cli_models` (`tests/_items.ts:66`); it does for its defaults.
 - If `timestamp` columns select as `Date` instead of `string`, match how `agent_runs.started_at` behaves. Don't change the type parser.
@@ -959,7 +959,7 @@ describe('spawnAgentRun — agent config snapshot', () => {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `TEST_DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 pnpm -F @atlas/api exec vitest run src/services/agent-runner-run-config.integration.test.ts`
+Run: `DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 TEST_DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 pnpm -F @atlas/api exec vitest run src/services/agent-runner-run-config.integration.test.ts`
 Expected: FAIL on both tests, with `expected { cli: null, model: null, effort: null, prompt_version: null } to deeply equal { cli: 'claude', … }`.
 - If a test instead throws before reaching the assertions (for example `spawnAgentRun` rejecting the pre-inserted row path), read `agent-runner.ts:2019-2100` for the precondition it hit and fix the **fixture**, not the runner.
 - `insertAgent` accepts `prompt_version` (`tests/_items.ts:54`). `effort` is set by the UPDATE because the fixture doesn't accept it.
@@ -995,13 +995,13 @@ Add `...runConfig,` to the INSERT's `.values({ … })` object, after `started_at
 
 - [ ] **Step 4: Run the test and the typecheck**
 
-Run: `TEST_DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 pnpm -F @atlas/api exec vitest run src/services/agent-runner-run-config.integration.test.ts && pnpm -F @atlas/api typecheck`
+Run: `DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 TEST_DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 pnpm -F @atlas/api exec vitest run src/services/agent-runner-run-config.integration.test.ts && pnpm -F @atlas/api typecheck`
 Expected: 2 tests PASS, typecheck `Done`.
 If typecheck rejects `agent.effort` against `StrN`, check `IAgent['effort']` in shared. It's a string union, which is assignable to `string | null`, so no cast is needed.
 
 - [ ] **Step 5: Run the runner-adjacent suites for regressions**
 
-Run: `TEST_DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 pnpm -F @atlas/api exec vitest run src/services/agent-dispatcher.integration.test.ts src/routes/run.test.ts src/services/agent-schedule-registry-tick.test.ts`
+Run: `DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 TEST_DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 pnpm -F @atlas/api exec vitest run src/services/agent-dispatcher.integration.test.ts src/routes/run.test.ts src/services/agent-schedule-registry-tick.test.ts`
 Expected: PASS, with the same pass counts as on `main`. If anything fails, run the same command on the parent checkout to confirm whether it's a pre-existing failure before touching code.
 
 - [ ] **Step 6: Commit**
@@ -1022,7 +1022,7 @@ Expected: PASS, with the same pass counts as on `main`. If anything fails, run t
 Run:
 ```bash
 pnpm -F @atlas/shared typecheck && pnpm -F @atlas/shared test:coverage
-TEST_DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 pnpm -F @atlas/api test:coverage
+DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 TEST_DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_test_wf1 pnpm -F @atlas/api test:coverage
 pnpm -F @atlas/api typecheck && pnpm -F @atlas/web typecheck && pnpm -F @atlas/mcp typecheck
 pnpm -w run lint:knip
 pnpm -F @atlas/shared lint && pnpm -F @atlas/api lint

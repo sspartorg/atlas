@@ -186,6 +186,8 @@ Fields: `id, project_id, title, description, status, assignee_agent_id, reporter
 
 > **All issue types carry a nullable `reporter_agent_id`** referencing `agents.id`. Auto-created sub-items stamp the creating agent as reporter; UI-created items stamp `null`, which the detail-page rail and Issues list render as Owner.
 
+> **All issue types also carry `workflow_id` and `created_by_workflow_run_id`** (migration 035, ADR 0014). `workflow_id` (FK → `workflows`, SET NULL) is the workflow the item is queued for; `created_by_workflow_run_id` (FK → `workflow_runs`, SET NULL) is the run that created it.
+
 ### IStory
 **Why this entity exists**: Stories are the unit of implementation â€” one PR per story is the target. They carry `spec_md` + `acceptance_criteria` + `pr_url` because those are what a Coder agent needs to start and what a QA agent needs to verify. Distinct from Epic because epics span multiple stories; distinct from SubTask because stories cross the full state machine including the spec/review phases that sub-tasks skip.
 
@@ -300,6 +302,8 @@ Fields: `id, agent_id, issue_type, issue_id, project_id, status, started_at, end
 
 **Two-persona columns:** `persona`, `review_outcome` and `review_reason` were removed with the in-agent reviewer persona; only `parent_run_id` (self-FK, ON DELETE CASCADE) remains.
 
+**Workflow + config snapshot columns (migration 035):** `workflow_run_id` (FK → `workflow_runs`, ON DELETE SET NULL) and `node_id` tie a run to a workflow step. `cli`, `model`, `effort`, `prompt_version` record the agent config the run spawned with. `spawnAgentRun` writes them on both write paths.
+
 ### ICliSession (Terminal v1+v2)
 **Why this entity exists**: The Terminal page hosts long-lived, interactive CLI sessions (Claude Code, GitHub Copilot CLI, or Claude Code-on-Ollama) inside Atlas so the Owner can drive a scoped worktree from the same UI as the rest of the app. Sessions are first-class rows — not ephemeral process handles — because we need cross-restart resume (`claude --resume <sid>` / `copilot --resume <sid>`), idle-notification deep links, per-(project, branch) uniqueness, and an audit trail of which branch went where. The PTY itself lives in-memory in `services/cli-session-host.ts`; the row carries everything else.
 
@@ -345,6 +349,24 @@ Fields: `owner_name, accent_color, workspace_path, onboarding_complete, external
 Per-CLI model registry; controls what shows up in the Add Agent dialog and per-agent model dropdowns.
 
 Fields: `id, cli, model_name, note, created_at`
+
+### IWorkflow (ADR 0014)
+**Why this entity exists**: Orchestration moves off agents. A workflow is the Owner-designed graph that decides which agents run, in what order, and where the work goes (worktree, push, PR, child workflow). Agents stay reusable across many workflows because they no longer carry routing or schedule state.
+
+Fields: `id, project_id, name, description, status, graph, input_kind, trigger, use_worktree, push_code, raises_pr, max_loops, schedule_preset, schedule_time_of_day, schedule_weekday, cron_expr, next_run_at, last_run_at, created_at, updated_at`
+
+- `graph` JSONB: `{ nodes: [{id, type: start|agent|owner|end, agent_id?, child_workflow_id?, position}], edges: [{id, source, target, kind: pass|fail}] }`. Shape comes from `WorkflowGraphSchema`, rules from `validateWorkflowGraph` (`@atlas/shared` `workflows/`): one Start, at least one End, one pass edge per non-End node, a fail edge only on agent nodes, pass edges acyclic, everything reachable from Start.
+- `project_id` may be null only when `input_kind = 'none'` and `use_worktree = false` (`workflows_project_required_check`).
+- Schedule columns mirror `IProjectSchedule` so `materializeCron` is reused.
+
+### IWorkflowRun (ADR 0014)
+**Why this entity exists**: One execution of a workflow over one item (or the project). It owns the worktree and branch for its whole life, so consecutive agent steps share state without a push / re-provision between them.
+
+Fields: `id, workflow_id, item_id, project_id, status, graph_snapshot, current_node_id, parked_node_id, loop_count, branch, worktree_path, setup_done, pr_url, started_at, updated_at, finished_at`
+
+- `status` ∈ `running | waiting_for_owner | completed | cancelled | error`.
+- `workflow_runs_one_live_per_item` allows one `running` or `waiting_for_owner` run per item. It covers the gaps between steps where no `agent_runs` row is live.
+- Each step is an ordinary `agent_runs` row with `workflow_run_id` + `node_id` set.
 
 ### IProjectSchedule
 **Why this entity exists**: Different repos have different staleness tolerances (a documentation repo can fetch daily; a hot product repo wants every 15 minutes). Modeling schedules per-project rather than globally lets each repo carry its own cadence. The dirty / idle / agents guards live here because skipping a fetch is more situational than skipping a project â€” the policy needs to read the repo's live state at fire time.

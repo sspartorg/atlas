@@ -57,6 +57,9 @@ export async function closeTestDb(): Promise<void> {
 // list is intentionally explicit (not "every table") so adding new tables
 // makes you think about whether they need test cleanup.
 const TRUNCATE_TABLES = [
+    // ADR 0014 — listed explicitly for the same reason as cli_sessions.
+    'workflow_runs',
+    'workflows',
     // 2026-06-22 — Terminal v1. FK → projects.id with ON DELETE CASCADE,
     // but listed explicitly so tests that only touch cli_sessions still
     // clear it (CASCADE only fires when projects is truncated).

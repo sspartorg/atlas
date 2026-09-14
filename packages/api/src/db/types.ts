@@ -1,5 +1,12 @@
 import type { ColumnType, Generated } from 'kysely';
-import type { AgentCli } from '@atlas/shared';
+import type {
+    AgentCli,
+    IWorkflowGraph,
+    SchedulePreset,
+    WorkflowInputKind,
+    WorkflowRunStatus,
+    WorkflowTrigger,
+} from '@atlas/shared';
 
 // Helper aliases
 type TS = ColumnType<string, string | undefined, string>;
@@ -495,6 +502,12 @@ export interface ItemsTable {
     // accept string[] | undefined (DB defaults to []).
     labels: ColumnType<string[], string[] | undefined, string[] | undefined>;
 
+    // ADR 0014 — the workflow this item is queued for, and the run that
+    // created it (child routing at End for project-level runs, which have
+    // no parent item to match on).
+    workflow_id: StrN;
+    created_by_workflow_run_id: StrN;
+
     created_at: CreatedAt;
     updated_at: UpdatedAt;
     search_tsv: ColumnType<string, never, never>;
@@ -576,6 +589,15 @@ export interface AgentRunsTable {
     // UI can render it as a subscript under the dollar amount. Null on
     // Claude runs.
     credits: ColumnType<number | null, number | null | undefined, number | null | undefined>;
+    // ADR 0014 — workflow step linkage, plus the agent config the step ran
+    // with. Snapshotted at spawn so later agent edits don't rewrite history
+    // that model comparison reads.
+    workflow_run_id: StrN;
+    node_id: StrN;
+    cli: ColumnType<AgentCli | null, AgentCli | null | undefined, AgentCli | null | undefined>;
+    model: StrN;
+    effort: StrN;
+    prompt_version: IntN;
     created_at: CreatedAt;
 }
 
@@ -694,8 +716,55 @@ export interface ScratchPadTable {
     updated_at: UpdatedAt;
 }
 
+// ADR 0014 — see migration 035_workflows.ts. JSONB columns select as parsed
+// objects; inserts / updates pass JSON.stringify'd strings (same convention
+// as agent_runs.outcome_checklist).
+export interface WorkflowsTable {
+    id: string;
+    project_id: StrN;
+    name: string;
+    description: StrN;
+    status: ColumnType<'active' | 'inactive', 'active' | 'inactive' | undefined, 'active' | 'inactive'>;
+    graph: ColumnType<IWorkflowGraph, string | undefined, string>;
+    input_kind: ColumnType<WorkflowInputKind, WorkflowInputKind | undefined, WorkflowInputKind>;
+    trigger: ColumnType<WorkflowTrigger, WorkflowTrigger | undefined, WorkflowTrigger>;
+    use_worktree: ColumnType<boolean, boolean | undefined, boolean>;
+    push_code: ColumnType<boolean, boolean | undefined, boolean>;
+    raises_pr: ColumnType<boolean, boolean | undefined, boolean>;
+    max_loops: Int;
+    schedule_preset: ColumnType<SchedulePreset | null, SchedulePreset | null | undefined, SchedulePreset | null | undefined>;
+    schedule_time_of_day: StrN;
+    schedule_weekday: IntN;
+    cron_expr: StrN;
+    next_run_at: TSn;
+    last_run_at: TSn;
+    created_at: CreatedAt;
+    updated_at: UpdatedAt;
+}
+
+export interface WorkflowRunsTable {
+    id: string;
+    workflow_id: string;
+    item_id: StrN;
+    project_id: StrN;
+    status: ColumnType<WorkflowRunStatus, WorkflowRunStatus | undefined, WorkflowRunStatus>;
+    graph_snapshot: ColumnType<IWorkflowGraph, string, string>;
+    current_node_id: StrN;
+    parked_node_id: StrN;
+    loop_count: Int;
+    branch: StrN;
+    worktree_path: StrN;
+    setup_done: ColumnType<boolean, boolean | undefined, boolean>;
+    pr_url: StrN;
+    started_at: CreatedAt;
+    updated_at: UpdatedAt;
+    finished_at: TSn;
+}
+
 export interface DB {
     settings: SettingsTable;
+    workflows: WorkflowsTable;
+    workflow_runs: WorkflowRunsTable;
     agents: AgentsTable;
     roles: RolesTable;
     agent_round_counts: AgentRoundCountsTable;

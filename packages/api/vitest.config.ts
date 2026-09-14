@@ -168,6 +168,7 @@ export default defineConfig({
             // W2 chunk 6 — dry-run CLI connection test service.
             'src/services/dry-run.test.ts',
             'src/services/agent-dispatcher.integration.test.ts',
+            'src/services/agent-runner-run-config.integration.test.ts',
             'src/routes/run.test.ts',
             // W2 — Analytics per-project / per-epic cost drill-down.
             'src/routes/analytics.test.ts',
@@ -185,6 +186,8 @@ export default defineConfig({
             'tests/e2e-lifecycle.test.ts',
             'tests/pg-db-truncate.test.ts',
             'src/db/catalog-sync-migration.test.ts',
+            // ADR 0014 — workflows schema constraints (migration 035).
+            'src/db/workflows-migration.test.ts',
             // W2 chunk N — subprocess wrappers + boot files.
             'src/services/git-status.test.ts',
             'src/services/git-verify.test.ts',
