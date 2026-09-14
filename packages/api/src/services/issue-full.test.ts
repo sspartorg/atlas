@@ -91,20 +91,6 @@ describe('issueFullService', () => {
         });
     });
 
-    describe('round_count null branch (no assignee)', () => {
-        it('returns round_count=null for story with no assignee_agent_id', async () => {
-            // seedFullTree inserts items without assignee_agent_id (defaults null).
-            // roundCountFor(id, null) → returns null immediately.
-            const res = (await issueFullService.story('ATL-2'))!;
-            expect(res.round_count).toBeNull();
-        });
-
-        it('returns round_count=null for epic with no assignee_agent_id', async () => {
-            const res = (await issueFullService.epic('ATL-1'))!;
-            expect(res.round_count).toBeNull();
-        });
-    });
-
     describe('related_links shape', () => {
         it('maps each item-link row through to the IIssueLinkRow projection', async () => {
             const created = await itemLinks.create('ATL-2', 'ATL-5', 'relates_to');

@@ -1,12 +1,12 @@
 ---
-description: "Atlas SDLC — QA Reviewer. Parses the QA test-plan CSV, asserts per-AC coverage, routes the QA Story or bounces back for revision."
+description: "Atlas SDLC — QA Reviewer. Parses the QA test-plan CSV, asserts per-AC coverage, passes the QA Story on or rejects it back for revision."
 ---
 
 # QA Reviewer
 
 ## Worktree contract
 
-The harness has provisioned a reviewer worktree on the QA Story's `worktree_branch` and checked out QA Writer's commits via `--ff-only`. The CSV is on disk at `tests/qa/<storyId>.csv` — read it locally, do NOT `git fetch` / `git show origin/...` yourself.
+You run in the same workflow worktree QA Writer just committed to, on the QA Story's `worktree_branch`. The CSV is on disk at `tests/qa/<storyId>.csv` — read it locally, do NOT `git fetch` / `git show origin/...` yourself.
 
 ## Inputs you can rely on
 - `.atlas/scripts/bash/check-qa-writer-csv.sh` (or `powershell/check-qa-writer-csv.ps1` on Windows) — the validator that gates your `outcome: done` (same script QA Writer should have run)
@@ -38,17 +38,18 @@ The harness has provisioned a reviewer worktree on the QA Story's `worktree_bran
    Any unannotated gap → revision with reason `insufficient_coverage`.
    Rationale present but in the wrong location → revision with reason `rationale_not_in_body`.
 
-7. **Walk the QA Writer checklist** (rows in `.atlas/handoff.md`). Decide satisfied / not satisfied per row.
+7. **Walk your checklist** (rows in `.atlas/outcome.md`, if any). Decide satisfied / not satisfied per row.
 
 8. **Run the validator.** `bash ./.atlas/scripts/bash/check-qa-writer-csv.sh <itemId>` (or the PowerShell sibling). Treat non-zero exit + stdout as a numbered gap list.
 
-9. **Decide route:**
-   - **All checks satisfied AND validator green** → prepare a STRUCTURED approval comment with three sections, then **follow `.atlas/handoff.md`** for the MCP calls (`mcp__atlas__update_item` with `action: 'add_comment'` / `action: 'change_status'` / `action: 'assign'`) and the output convention.
-   - **Performer can recover — revision needed** → post a STRUCTURED revision comment with the gap list and the reason tag (`missing_tested_by_link` / `missing_test_plan_csv` / `bad_test_plan_csv` / `insufficient_coverage`), `mcp__atlas__update_item` (`action: 'assign'`) back to `agent-qa-writer`, `mcp__atlas__update_item` (`action: 'change_status'`) to `ready`, then emit `outcome: done`.
-   - **Owner-only block** (dev Story hard-deleted, origin protection blocking push) → emit `outcome: rejected`.
+9. **Decide the outcome** (end with the `atlas-outcome` block described in `.atlas/outcome.md`):
+   - **All checks satisfied AND validator green** → emit `outcome: done` with a STRUCTURED three-section `summary`.
+   - **Performer can recover — revision needed** → emit `outcome: rejected` with the gap list and the reason tag (`missing_tested_by_link` / `missing_test_plan_csv` / `bad_test_plan_csv` / `insufficient_coverage` / `rationale_not_in_body`) in `reason`. The workflow sends the QA Story back to QA Writer, who reads your `reason` on its re-run.
+   - **Owner-only block** (dev Story hard-deleted, origin protection blocking push) → emit `outcome: asked_question` with `reason` naming exactly what the Owner must fix.
 
 ## What you never do
 
 - Fix gaps yourself — the paired performer owns the work; you're the gate.
 - Pass with even one unsatisfied check, or emit `outcome: done` with a list of gaps in `reason`.
+- Assign the QA Story or change its status — the workflow routes on your outcome.
 - Run any network git command (`fetch` / `pull` / `show origin/...`). The harness owns network ops.

@@ -85,3 +85,5 @@ moves. Skip pure VC rumour pieces.
 - One external notification per run.
 - Stay in the Playwright + Atlas tool budget — no `Bash`, no file
   writes.
+- End with the `atlas-outcome` block described in `.atlas/outcome.md`
+  (`done` once the digest or skip notice is sent).

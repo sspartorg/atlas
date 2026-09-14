@@ -18,7 +18,10 @@ const writeCurrentTaskMock = vi.fn().mockResolvedValue({
     currentTaskPath: '/worktree/.atlas/current-task.md',
 });
 
-const assembleHandoffMock = vi.fn().mockResolvedValue(undefined);
+const renderOutcomeMock = vi.fn().mockResolvedValue('# Run Outcome Contract');
+const renderMemoryMock = vi.fn().mockResolvedValue('');
+const writeFileSyncMock = vi.fn();
+const mkdirSyncMock = vi.fn();
 
 vi.mock('./constitution-assembler.js', () => ({
     assembleConstitution: assembleConstitutionMock,
@@ -32,8 +35,13 @@ vi.mock('./commands-assembler.js', () => ({
 vi.mock('./current-task-writer.js', () => ({
     writeCurrentTask: writeCurrentTaskMock,
 }));
-vi.mock('./handoff-assembler.js', () => ({
-    assembleHandoff: assembleHandoffMock,
+vi.mock('./prompt-builder.js', () => ({
+    renderRunOutcomeContract: renderOutcomeMock,
+    renderSelfMemorySection: renderMemoryMock,
+}));
+vi.mock('node:fs', () => ({
+    writeFileSync: writeFileSyncMock,
+    mkdirSync: mkdirSyncMock,
 }));
 
 const { stageCliWorktree } = await import('./worktree-stage.js');
@@ -126,25 +134,47 @@ describe('stageCliWorktree', () => {
         expect(writeCurrentTaskMock).not.toHaveBeenCalled();
     });
 
-    it('assembles handoff when includeHandoff is provided', async () => {
+    it('writes outcome.md and self-memory.md when includeOutcome is provided', async () => {
+        renderMemoryMock.mockResolvedValueOnce('## Self-memory\n\n- prefer small commits');
         await stageCliWorktree({
             worktreePath: WORKTREE,
             projectId: PROJECT_ID,
-            includeHandoff: { agentId: 'agent-coder' },
+            includeOutcome: { agentId: 'agent-coder' },
         });
 
-        expect(assembleHandoffMock).toHaveBeenCalledWith({
-            worktreePath: WORKTREE,
-            agentId: 'agent-coder',
-        });
+        expect(renderOutcomeMock).toHaveBeenCalledWith('agent-coder');
+        expect(writeFileSyncMock).toHaveBeenCalledWith(
+            `${WORKTREE}/.atlas/outcome.md`,
+            '# Run Outcome Contract\n',
+            'utf8',
+        );
+        expect(writeFileSyncMock).toHaveBeenCalledWith(
+            `${WORKTREE}/.atlas/self-memory.md`,
+            '## Self-memory\n\n- prefer small commits\n',
+            'utf8',
+        );
     });
 
-    it('does NOT assemble handoff when includeHandoff is absent', async () => {
+    it('writes a placeholder self-memory.md for an agent with no memory yet', async () => {
+        await stageCliWorktree({
+            worktreePath: WORKTREE,
+            projectId: PROJECT_ID,
+            includeOutcome: { agentId: 'agent-coder' },
+        });
+        expect(writeFileSyncMock).toHaveBeenCalledWith(
+            `${WORKTREE}/.atlas/self-memory.md`,
+            '# Self-memory\n\n_No entries yet._\n',
+            'utf8',
+        );
+    });
+
+    it('writes no outcome files when includeOutcome is absent (terminal sessions)', async () => {
         await stageCliWorktree({
             worktreePath: WORKTREE,
             projectId: PROJECT_ID,
         });
-        expect(assembleHandoffMock).not.toHaveBeenCalled();
+        expect(renderOutcomeMock).not.toHaveBeenCalled();
+        expect(writeFileSyncMock).not.toHaveBeenCalled();
     });
 
     it('passes activeRunCopilotAgent to assembleCommands when provided', async () => {

@@ -1,9 +1,11 @@
 import { describe, expect, it, beforeEach, afterAll, vi } from 'vitest';
 
 vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
+vi.mock('./workflow-engine.js', () => ({ continueResumedRun: vi.fn(async () => undefined) }));
 
 import { commentsService } from './comments.js';
 import { broadcastSSE } from '../routes/events.js';
+import { continueResumedRun } from './workflow-engine.js';
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
 import { insertProject, insertAgent, insertItem } from '../../tests/_items.js';
 
@@ -192,10 +194,12 @@ describe('commentsService', () => {
     });
 });
 
-describe('commentsService.create — Owner reply resumes a parked item', () => {
+describe('commentsService.create — Owner reply resumes a parked workflow run', () => {
+    const RUN_ID = '55555555-5555-5555-5555-555555555555';
+
     beforeEach(async () => {
         vi.mocked(broadcastSSE).mockClear();
-        await insertAgent({ id: 'agent-old', name: 'Old' });
+        vi.mocked(continueResumedRun).mockClear();
         await insertItem({
             id: 'ATL-9',
             type: 'story',
@@ -205,36 +209,28 @@ describe('commentsService.create — Owner reply resumes a parked item', () => {
             title: 'Parked',
             status: 'waiting_for_info',
         });
-        // Two runs so "most recent" is actually exercised.
         await testDb
-            .insertInto('agent_runs')
-            .values([
-                {
-                    id: '33333333-3333-3333-3333-333333333333',
-                    agent_id: 'agent-old',
-                    item_id: 'ATL-9',
-                    project_id: 'p1',
-                    status: 'completed',
-                    created_at: '2026-01-01T00:00:00Z',
-                },
-                {
-                    id: '44444444-4444-4444-4444-444444444444',
-                    agent_id: 'agent-coder',
-                    item_id: 'ATL-9',
-                    project_id: 'p1',
-                    status: 'completed',
-                    created_at: '2026-01-02T00:00:00Z',
-                },
-            ])
+            .insertInto('workflows')
+            .values({ id: 'wf-dev', project_id: 'p1', name: 'Dev' })
+            .execute();
+        await testDb
+            .insertInto('workflow_runs')
+            .values({
+                id: RUN_ID,
+                workflow_id: 'wf-dev',
+                item_id: 'ATL-9',
+                project_id: 'p1',
+                status: 'waiting_for_owner',
+                parked_node_id: 'coder',
+                graph_snapshot: JSON.stringify({ nodes: [], edges: [] }),
+            })
             .execute();
     });
 
-    async function itemRow() {
-        return testDb
-            .selectFrom('items')
-            .select(['status', 'assignee_agent_id'])
-            .where('id', '=', 'ATL-9')
-            .executeTakeFirstOrThrow();
+    async function state() {
+        const item = await testDb.selectFrom('items').select('status').where('id', '=', 'ATL-9').executeTakeFirstOrThrow();
+        const run = await testDb.selectFrom('workflow_runs').select('status').where('id', '=', RUN_ID).executeTakeFirstOrThrow();
+        return { item: item.status, run: run.status };
     }
 
     async function resumeEvents() {
@@ -243,7 +239,6 @@ describe('commentsService.create — Owner reply resumes a parked item', () => {
             .select(['event_type', 'actor_agent_id', 'from_value', 'to_value'])
             .where('item_id', '=', 'ATL-9')
             .where('detail', '=', 'resumed_by_owner_reply')
-            .orderBy('event_type')
             .execute();
     }
 
@@ -256,56 +251,27 @@ describe('commentsService.create — Owner reply resumes a parked item', () => {
             body: 'here is the answer',
         });
 
-    it('reassigns the last run agent, moves to ready, logs Owner events and broadcasts', async () => {
+    it('claims the parked run, moves the item back to in_progress and continues the run after commit', async () => {
         await reply();
-        expect(await itemRow()).toEqual({ status: 'ready', assignee_agent_id: 'agent-coder' });
+        expect(await state()).toEqual({ item: 'in_progress', run: 'running' });
         expect(await resumeEvents()).toEqual([
-            { event_type: 'assigned', actor_agent_id: null, from_value: null, to_value: 'agent-coder' },
-            {
-                event_type: 'status_changed',
-                actor_agent_id: null,
-                from_value: 'waiting_for_info',
-                to_value: 'ready',
-            },
+            { event_type: 'status_changed', actor_agent_id: null, from_value: 'waiting_for_info', to_value: 'in_progress' },
         ]);
-        expect(broadcastSSE).toHaveBeenCalledWith({
-            type: 'counts_changed',
-            issueType: 'story',
-            issueId: 'ATL-9',
-        });
+        expect(broadcastSSE).toHaveBeenCalledWith({ type: 'counts_changed', issueType: 'story', issueId: 'ATL-9' });
+        await vi.waitFor(() => expect(continueResumedRun).toHaveBeenCalledWith(RUN_ID));
     });
 
-    it('is a no-op when the item already has an assignee', async () => {
-        await testDb.updateTable('items').set({ assignee_agent_id: 'agent-old' }).where('id', '=', 'ATL-9').execute();
+    it('is a no-op when no workflow run is waiting on the item', async () => {
+        await testDb.updateTable('workflow_runs').set({ status: 'running' }).where('id', '=', RUN_ID).execute();
         await reply();
-        expect(await itemRow()).toEqual({ status: 'waiting_for_info', assignee_agent_id: 'agent-old' });
+        expect(await state()).toEqual({ item: 'waiting_for_info', run: 'running' });
         expect(await resumeEvents()).toEqual([]);
-    });
-
-    it('is a no-op when the item is not waiting_for_info', async () => {
-        await testDb.updateTable('items').set({ status: 'in_review' }).where('id', '=', 'ATL-9').execute();
-        await reply();
-        expect(await itemRow()).toEqual({ status: 'in_review', assignee_agent_id: null });
-        expect(await resumeEvents()).toEqual([]);
-    });
-
-    it('is a no-op when the last run agent is inactive', async () => {
-        await testDb.updateTable('agents').set({ status: 'inactive' }).where('id', '=', 'agent-coder').execute();
-        await reply();
-        expect(await itemRow()).toEqual({ status: 'waiting_for_info', assignee_agent_id: null });
-        expect(await resumeEvents()).toEqual([]);
-        expect(broadcastSSE).not.toHaveBeenCalled();
-    });
-
-    it('is a no-op when the item has no runs', async () => {
-        await testDb.deleteFrom('agent_runs').where('item_id', '=', 'ATL-9').execute();
-        await reply();
-        expect(await itemRow()).toEqual({ status: 'waiting_for_info', assignee_agent_id: null });
+        expect(continueResumedRun).not.toHaveBeenCalled();
     });
 
     it('never triggers on an agent-authored comment', async () => {
         await reply('agent');
-        expect(await itemRow()).toEqual({ status: 'waiting_for_info', assignee_agent_id: null });
-        expect(await resumeEvents()).toEqual([]);
+        expect(await state()).toEqual({ item: 'waiting_for_info', run: 'waiting_for_owner' });
+        expect(continueResumedRun).not.toHaveBeenCalled();
     });
 });

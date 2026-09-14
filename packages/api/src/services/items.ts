@@ -28,6 +28,7 @@ export interface IItemRow {
     description: string | null;
     status: IssueStatus;
     assignee_agent_id: string | null;
+    workflow_id: string | null;
     reporter_agent_id: string | null;
     priority: IssuePriority | null;
     spec_md: string | null;
@@ -69,6 +70,7 @@ export function rowToEpic(r: IItemRow): IEpic {
         description: NN(r.description),
         status: r.status,
         assignee_agent_id: r.assignee_agent_id,
+        workflow_id: r.workflow_id ?? null,
         reporter_agent_id: r.reporter_agent_id,
         priority: r.priority ?? 'normal',
         // DB column default is `[]`; never null in practice.
@@ -90,6 +92,7 @@ export function rowToStory(r: IItemRow): IStory {
         description: NN(r.description),
         status: r.status,
         assignee_agent_id: r.assignee_agent_id,
+        workflow_id: r.workflow_id ?? null,
         reporter_agent_id: r.reporter_agent_id,
         priority: r.priority ?? 'normal',
         spec_md: r.spec_md,
@@ -118,6 +121,7 @@ export function rowToSubTask(r: IItemRow): ISubTask {
         description: NN(r.description),
         status: r.status,
         assignee_agent_id: r.assignee_agent_id,
+        workflow_id: r.workflow_id ?? null,
         reporter_agent_id: r.reporter_agent_id,
         priority: r.priority ?? 'normal',
         acceptance_criteria: NN(r.acceptance_criteria),
@@ -141,6 +145,7 @@ export function rowToSubBug(r: IItemRow): ISubBug {
         description: NN(r.description),
         status: r.status,
         assignee_agent_id: r.assignee_agent_id,
+        workflow_id: r.workflow_id ?? null,
         reporter_agent_id: r.reporter_agent_id,
         priority: r.priority ?? 'normal',
         acceptance_criteria: NN(r.acceptance_criteria),
@@ -175,6 +180,7 @@ export function rowToBug(r: IItemRow): IBug {
         description: NN(r.description),
         status: r.status,
         assignee_agent_id: r.assignee_agent_id,
+        workflow_id: r.workflow_id ?? null,
         reporter_agent_id: r.reporter_agent_id,
         priority: r.priority ?? 'normal',
         acceptance_criteria: NN(r.acceptance_criteria),
@@ -268,6 +274,19 @@ export async function createItem(input: CreateItemInput): Promise<IItemRow> {
         if (!projRow) throw new Error(`Project ${projectId} not found`);
         const id = `${projRow.issue_key_prefix}-${counterRow.last_seq}`;
 
+        // ADR 0014 — an item an agent creates during a workflow step belongs
+        // to that workflow run; its End step queues it for the child workflow.
+        const createdByRun = input.reporter_agent_id
+            ? await trx
+                  .selectFrom('agent_runs')
+                  .select('workflow_run_id')
+                  .where('agent_id', '=', input.reporter_agent_id)
+                  .where('status', 'in', ['queued', 'in_progress'])
+                  .where('workflow_run_id', 'is not', null)
+                  .orderBy('created_at', 'desc')
+                  .executeTakeFirst()
+            : undefined;
+
         const inserted = await trx
             .insertInto('items')
             .values({
@@ -294,6 +313,7 @@ export async function createItem(input: CreateItemInput): Promise<IItemRow> {
                 // Postgres array syntax (`{a,b}`), not JSONB. Stringify
                 // explicitly so PG accepts it as a JSONB value.
                 labels: JSON.stringify(input.labels ?? []) as never,
+                created_by_workflow_run_id: createdByRun?.workflow_run_id ?? null,
             })
             .returningAll()
             .executeTakeFirstOrThrow();

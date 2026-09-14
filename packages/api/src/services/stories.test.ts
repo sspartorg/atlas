@@ -143,45 +143,6 @@ describe('storiesService', () => {
             expect(s.assignee_agent_id).toBeNull();
         });
 
-        it('defaults to Owner (assignee=null, status=draft) even when reporter has on-pass rule', async () => {
-            await insertAgent({ id: 'agent-reviewer', name: 'Reviewer' });
-            await testDb
-                .insertInto('agent_handoff_rules')
-                .values({
-                    agent_id: 'agent-coder',
-                    target_agent_id: 'agent-reviewer',
-                    kind: 'on-pass',
-                    status: 'ready',
-                })
-                .execute();
-            const s = await storiesService.create({
-                epic_id: 'ATL-1',
-                title: 'Child story',
-                reporter_agent_id: 'agent-coder',
-            });
-            expect(s.assignee_agent_id).toBeNull();
-            expect(s.status).toBe('draft');
-        });
-
-        it('respects explicit assignee override even when reporter has on-pass rule', async () => {
-            await insertAgent({ id: 'agent-reviewer', name: 'Reviewer' });
-            await testDb
-                .insertInto('agent_handoff_rules')
-                .values({
-                    agent_id: 'agent-coder',
-                    target_agent_id: 'agent-reviewer',
-                    kind: 'on-pass',
-                    status: 'ready',
-                })
-                .execute();
-            const s = await storiesService.create({
-                epic_id: 'ATL-1',
-                title: 'Child story',
-                reporter_agent_id: 'agent-coder',
-                assignee_agent_id: 'agent-reviewer',
-            });
-            expect(s.assignee_agent_id).toBe('agent-reviewer');
-        });
     });
 
     describe('update', () => {

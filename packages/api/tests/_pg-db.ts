@@ -78,7 +78,6 @@ const TRUNCATE_TABLES = [
     'items',
     'projects',
     'credentials',
-    'agent_handoff_rules',
     'agent_checklists',
     'agent_memory',
     'agent_prompt_versions',
@@ -105,7 +104,6 @@ const TRUNCATE_TABLES = [
     // P12 — Scratch Pad tiles.
     'scratch_pad',
     // Marketplace catalog + cascades.
-    'marketplace_agent_handoffs',
     'marketplace_agent_checklists',
     'marketplace_agents',
 ] as const;

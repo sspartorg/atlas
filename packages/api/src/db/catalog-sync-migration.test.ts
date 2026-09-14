@@ -19,11 +19,9 @@ afterAll(async () => {
     await knex.destroy();
 });
 
+// Descriptions are not pinned here: the ADR 0014 catalog rewrite moved them
+// past migration 034's targets.
 describe('migration 034 targets match the current catalog', () => {
-    it.each(DESCRIPTION_UPDATES.map((u) => [u.agentId, u.to]))('%s description', (agentId, to) => {
-        expect((JSON.parse(catalog(agentId, 'manifest.json')) as { description: string }).description).toBe(to);
-    });
-
     it('coder checklist labels', () => {
         const labels = (JSON.parse(catalog('agent-coder', 'checklists.json')) as Array<{ label: string }>).map(
             (c) => c.label,

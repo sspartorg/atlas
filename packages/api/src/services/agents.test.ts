@@ -9,15 +9,11 @@ import { describe, expect, it, beforeEach, afterAll, vi } from 'vitest';
 // there is nothing to assert against — and "the write happened but no client
 // was told" is exactly the bug this guards.
 vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
-import {
-    agentsService,
-    ModelNotInRegistryError,
-    CronExpressionInvalidError,
-    assertCronExprValid,
-} from './agents.js';
+import { agentsService, ModelNotInRegistryError } from './agents.js';
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
 import { broadcastSSE } from '../routes/events.js';
 import { insertProject, insertItem } from '../../tests/_items.js';
+import { ApiError } from '../utils/errors.js';
 
 // Minimal valid agent create input, reused across tests.
 const BASE_AGENT = {
@@ -45,44 +41,6 @@ beforeEach(async () => {
 
 afterAll(async () => {
     await closeTestDb();
-});
-
-// ──────────────────────────────────────────────────────────────────────────────
-// assertCronExprValid — pure guard, no DB needed
-// ──────────────────────────────────────────────────────────────────────────────
-
-describe('assertCronExprValid', () => {
-    it('accepts null without error', () => {
-        expect(() => assertCronExprValid(null)).not.toThrow();
-    });
-
-    it('accepts undefined without error', () => {
-        expect(() => assertCronExprValid(undefined)).not.toThrow();
-    });
-
-    it('accepts empty string without error', () => {
-        expect(() => assertCronExprValid('')).not.toThrow();
-    });
-
-    it('accepts a valid 5-field cron expression', () => {
-        expect(() => assertCronExprValid('0 9 * * 1-5')).not.toThrow();
-    });
-
-    it('throws CronExpressionInvalidError for a bogus expression', () => {
-        expect(() => assertCronExprValid('not-a-cron')).toThrow(CronExpressionInvalidError);
-    });
-
-    it('error carries the invalid expression in the message', () => {
-        let caught: CronExpressionInvalidError | undefined;
-        try {
-            assertCronExprValid('99 99 99 99 99');
-        } catch (e) {
-            caught = e as CronExpressionInvalidError;
-        }
-        expect(caught).toBeInstanceOf(CronExpressionInvalidError);
-        expect(caught?.code).toBe('CRON_EXPRESSION_INVALID');
-        expect(caught?.message).toMatch(/99 99 99 99 99/);
-    });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -129,7 +87,6 @@ describe('agentsService.create', () => {
         expect(agent.name).toBe('Test Writer');
         expect(agent.status).toBe('active');
         expect(agent.prompt_version).toBe(1);
-        expect(agent.concurrent_runs).toBe(1);
         expect(agent.kind_slug).toBe('custom');
         expect(agent.memory_cadence).toBe(1);
     });
@@ -162,32 +119,6 @@ describe('agentsService.create', () => {
         await expect(
             agentsService.create({ ...BASE_AGENT, model: 'totally-fake-model' }),
         ).rejects.toThrow(ModelNotInRegistryError);
-    });
-
-    it('throws CronExpressionInvalidError for invalid cron_expr', async () => {
-        await expect(
-            agentsService.create({ ...BASE_AGENT, cron_expr: 'not-a-cron' }),
-        ).rejects.toThrow(CronExpressionInvalidError);
-    });
-
-    it('creates inactive agent with null next_run_at', async () => {
-        const agent = await agentsService.create({ ...BASE_AGENT, status: 'inactive' });
-        expect(agent.status).toBe('inactive');
-        expect(agent.next_run_at).toBeNull();
-    });
-
-    it('creates agent with handoff_rules when provided', async () => {
-        const target = await agentsService.create({ ...BASE_AGENT, name: 'Target Agent', id: 'target-agent' });
-        const agent = await agentsService.create({
-            ...BASE_AGENT,
-            id: 'source-agent',
-            name: 'Source Agent',
-            handoff_rules: [{ target_agent_id: target.id, kind: 'on-pass', status: 'in_review' }],
-        });
-        const rules = await agentsService.getHandoffRules(agent.id);
-        expect(rules).toHaveLength(1);
-        expect(rules[0]!.target_agent_id).toBe(target.id);
-        expect(rules[0]!.kind).toBe('on-pass');
     });
 
     it('creates agent with checklists when provided', async () => {
@@ -232,28 +163,6 @@ describe('agentsService.update', () => {
         expect(versions[1]!.body_md).toBe('v1');
     });
 
-    it('replaces handoff_rules when provided', async () => {
-        const target = await agentsService.create({ ...BASE_AGENT, name: 'Target', id: 'target-1' });
-        const agent = await agentsService.create(BASE_AGENT);
-        await agentsService.update(agent.id, {
-            handoff_rules: [{ target_agent_id: target.id, kind: 'on-fail', status: 'ready' }],
-        });
-        const rules = await agentsService.getHandoffRules(agent.id);
-        expect(rules).toHaveLength(1);
-        expect(rules[0]!.kind).toBe('on-fail');
-    });
-
-    it('clears handoff_rules when empty array is provided', async () => {
-        const target = await agentsService.create({ ...BASE_AGENT, name: 'Target', id: 'target-2' });
-        const agent = await agentsService.create({
-            ...BASE_AGENT,
-            handoff_rules: [{ target_agent_id: target.id, kind: 'on-pass', status: 'in_review' }],
-        });
-        await agentsService.update(agent.id, { handoff_rules: [] });
-        const rules = await agentsService.getHandoffRules(agent.id);
-        expect(rules).toHaveLength(0);
-    });
-
     it('replaces checklists when provided', async () => {
         const agent = await agentsService.create({
             ...BASE_AGENT,
@@ -274,38 +183,11 @@ describe('agentsService.update', () => {
         ).rejects.toThrow(ModelNotInRegistryError);
     });
 
-    it('throws CronExpressionInvalidError for invalid cron_expr in update', async () => {
-        const agent = await agentsService.create(BASE_AGENT);
-        await expect(
-            agentsService.update(agent.id, { cron_expr: 'bad cron' }),
-        ).rejects.toThrow(CronExpressionInvalidError);
-    });
-
     it('returns current row unchanged when no scalar changes are made', async () => {
         const agent = await agentsService.create(BASE_AGENT);
-        // Passing only handoff_rules=undefined means no scalar changes
         const result = await agentsService.update(agent.id, {});
         expect(result.id).toBe(agent.id);
         expect(result.name).toBe('Test Writer');
-    });
-
-    it('recomputes next_run_at when schedule_hours changes on an active agent (lines 490-510)', async () => {
-        // Creating an active agent then patching schedule_hours touches the
-        // SCHEDULE_TRIGGER_FIELDS list (scheduleTouched=true) and the agent
-        // is active → computeNextAgentSlot is called to set next_run_at.
-        const agent = await agentsService.create({ ...BASE_AGENT, status: 'active' });
-        const updated = await agentsService.update(agent.id, { schedule_hours: 4 });
-        expect(updated.schedule_hours).toBe(4);
-        // next_run_at should be a non-null ISO string when agent is active
-        expect(updated.next_run_at).not.toBeNull();
-    });
-
-    it('sets next_run_at to null when schedule_hours changes on an inactive agent', async () => {
-        // scheduleTouched=true but agent is inactive → next_run_at stays null.
-        const agent = await agentsService.create({ ...BASE_AGENT, status: 'inactive' });
-        const updated = await agentsService.update(agent.id, { schedule_hours: 4 });
-        expect(updated.schedule_hours).toBe(4);
-        expect(updated.next_run_at).toBeNull();
     });
 
     it('uses existing cli when only model is provided in update (line 422 branch)', async () => {
@@ -349,6 +231,33 @@ describe('agentsService.delete', () => {
             .execute();
         expect(versions).toHaveLength(0);
     });
+
+    it('refuses with a 409 ApiError while a workflow graph uses the agent', async () => {
+        const agent = await agentsService.create(BASE_AGENT);
+        await testDb
+            .insertInto('workflows')
+            .values({
+                id: 'wf-1',
+                name: 'Dev flow',
+                input_kind: 'none',
+                trigger: 'manual',
+                use_worktree: false,
+                graph: JSON.stringify({
+                    nodes: [
+                        { id: 'n1', type: 'agent', agent_id: agent.id, position: { x: 0, y: 0 } },
+                    ],
+                    edges: [],
+                }),
+            } as never)
+            .execute();
+
+        const err = await agentsService.delete(agent.id).catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(ApiError);
+        expect((err as ApiError).status).toBe(409);
+        expect((err as ApiError).kind).toBe('conflict');
+        expect((err as ApiError).message).toContain('Dev flow');
+        expect(await agentsService.get(agent.id)).toBeDefined();
+    });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -388,46 +297,6 @@ describe('agentsService.getRuns', () => {
         expect(runs).toHaveLength(2);
         // run-b was inserted last, so should be first (newest)
         expect(runs[0]!.id).toBe('run-b');
-    });
-});
-
-// ──────────────────────────────────────────────────────────────────────────────
-// getHandoffRules / setHandoffRules
-// ──────────────────────────────────────────────────────────────────────────────
-
-describe('agentsService.getHandoffRules / setHandoffRules', () => {
-    it('returns empty list when no rules exist', async () => {
-        const agent = await agentsService.create(BASE_AGENT);
-        expect(await agentsService.getHandoffRules(agent.id)).toEqual([]);
-    });
-
-    it('setHandoffRules replaces all rules atomically', async () => {
-        const target = await agentsService.create({ ...BASE_AGENT, name: 'Target', id: 'target-3' });
-        const agent = await agentsService.create(BASE_AGENT);
-        await agentsService.setHandoffRules(agent.id, [
-            { target_agent_id: target.id, kind: 'on-pass', status: 'in_review' },
-        ]);
-        let rules = await agentsService.getHandoffRules(agent.id);
-        expect(rules).toHaveLength(1);
-
-        // Replacing with different rules
-        await agentsService.setHandoffRules(agent.id, [
-            { target_agent_id: target.id, kind: 'on-fail', status: 'ready' },
-            { target_agent_id: target.id, kind: 'on-pass', status: 'done' },
-        ]);
-        rules = await agentsService.getHandoffRules(agent.id);
-        expect(rules).toHaveLength(2);
-    });
-
-    it('setHandoffRules clears all rules when empty array is passed', async () => {
-        const target = await agentsService.create({ ...BASE_AGENT, name: 'Target', id: 'target-4' });
-        const agent = await agentsService.create(BASE_AGENT);
-        await agentsService.setHandoffRules(agent.id, [
-            { target_agent_id: target.id, kind: 'on-pass', status: 'in_review' },
-        ]);
-        await agentsService.setHandoffRules(agent.id, []);
-        const rules = await agentsService.getHandoffRules(agent.id);
-        expect(rules).toHaveLength(0);
     });
 });
 
@@ -517,32 +386,6 @@ describe('agentsService.revertPrompt', () => {
         await expect(agentsService.revertPrompt(agent.id, 999)).rejects.toThrow(
             /Version not found/,
         );
-    });
-});
-
-// ──────────────────────────────────────────────────────────────────────────────
-// scheduleTouched catch branch (agents.ts lines 493-502)
-// When computeNextAgentSlot throws (e.g. monthly preset without
-// schedule_day_of_month), the catch swallows the error and leaves
-// next_run_at as null rather than propagating to the caller.
-// ──────────────────────────────────────────────────────────────────────────────
-
-describe('agentsService.update — scheduleTouched catch branch', () => {
-    it('leaves next_run_at null and does not throw when computeNextAgentSlot errors (monthly without day_of_month)', async () => {
-        // Create an active agent, then switch it to monthly preset without
-        // setting schedule_day_of_month. computeNextAgentSlot('monthly') throws
-        // when schedule_day_of_month is null — the catch branch sets nextRunAt=null.
-        const agent = await agentsService.create({ ...BASE_AGENT, status: 'active' });
-        // Patch to monthly preset; schedule_day_of_month stays null (column default).
-        // This is a SCHEDULE_TRIGGER_FIELDS update on an active agent →
-        // scheduleTouched=true → computeNextAgentSlot called → throws →
-        // catch fires → next_run_at stays null.
-        const updated = await agentsService.update(agent.id, {
-            schedule_preset: 'monthly',
-        });
-        // Should not throw, and next_run_at should be null (catch branch fired).
-        expect(updated.schedule_preset).toBe('monthly');
-        expect(updated.next_run_at).toBeNull();
     });
 });
 

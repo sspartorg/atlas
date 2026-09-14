@@ -2,70 +2,48 @@ import { db } from '../db/kysely-client.js';
 import type { Transaction } from 'kysely';
 import type { DB } from '../db/types.js';
 import type { IComment, IssueType } from '@atlas/shared';
-import { isValidTransition } from '@atlas/shared';
 import { eventsLog } from './events-log.js';
-import { patchItem } from './items.js';
 import { broadcastSSE } from '../routes/events.js';
 
 const RESUME_DETAIL = 'resumed_by_owner_reply';
 
-// An agent that asks a question parks the item at waiting_for_info with no
-// assignee. The Owner's reply IS the answer, so hand the item straight back
-// to the agent that last ran on it and re-queue it — otherwise the Owner has
-// to comment, reassign and set Ready by hand. The scheduler's dispatch-on-
-// ready picks it up from there. Written against patchItem + eventsLog with
-// the comment's transaction (not the per-type services, which run outside
-// one) so the comment, reassign and re-queue land or roll back together.
-async function resumeParkedItem(
+// ADR 0014 — a workflow step that asks a question parks its workflow run and
+// the item at waiting_for_info. The Owner's reply IS the answer, so claim the
+// parked run inside the comment's transaction (comment + resume land or roll
+// back together) and let the caller continue it after commit — spawning the
+// next step inside the transaction would read uncommitted state.
+async function claimParkedWorkflowRun(
     trx: Transaction<DB>,
     itemId: string,
     type: IssueType,
-): Promise<boolean> {
-    const item = await trx
-        .selectFrom('items')
-        .select(['status', 'assignee_agent_id'])
-        .where('id', '=', itemId)
+): Promise<string | null> {
+    const run = await trx
+        .selectFrom('workflow_runs')
+        .select(['id'])
+        .where('item_id', '=', itemId)
+        .where('status', '=', 'waiting_for_owner')
         .forUpdate()
         .executeTakeFirst();
-    if (!item || item.status !== 'waiting_for_info' || item.assignee_agent_id !== null) return false;
-    if (!isValidTransition(type, item.status, 'ready')) return false;
-    const last = await trx
-        .selectFrom('agent_runs')
-        .innerJoin('agents', 'agents.id', 'agent_runs.agent_id')
-        .select(['agent_runs.agent_id', 'agents.status'])
-        .where('agent_runs.item_id', '=', itemId)
-        .orderBy('agent_runs.created_at', 'desc')
-        .limit(1)
-        .executeTakeFirst();
-    if (!last || last.status !== 'active') return false;
-    await patchItem(itemId, { assignee_agent_id: last.agent_id, status: 'ready' }, trx);
-    await eventsLog.record(
-        {
-            item_id: itemId,
-            item_type: type,
-            event_type: 'assigned',
-            actor_agent_id: null,
-            field: 'assignee',
-            from_value: null,
-            to_value: last.agent_id,
-            detail: RESUME_DETAIL,
-        },
-        trx,
-    );
-    await eventsLog.record(
-        {
-            item_id: itemId,
-            item_type: type,
-            event_type: 'status_changed',
-            actor_agent_id: null,
-            field: 'status',
-            from_value: item.status,
-            to_value: 'ready',
-            detail: RESUME_DETAIL,
-        },
-        trx,
-    );
-    return true;
+    if (!run) return null;
+    const item = await trx.selectFrom('items').select('status').where('id', '=', itemId).executeTakeFirst();
+    await trx.updateTable('workflow_runs').set({ status: 'running' }).where('id', '=', run.id).execute();
+    await trx.updateTable('items').set({ status: 'in_progress' }).where('id', '=', itemId).execute();
+    if (item && item.status !== 'in_progress') {
+        await eventsLog.record(
+            {
+                item_id: itemId,
+                item_type: type,
+                event_type: 'status_changed',
+                actor_agent_id: null,
+                field: 'status',
+                from_value: item.status,
+                to_value: 'in_progress',
+                detail: RESUME_DETAIL,
+            },
+            trx,
+        );
+    }
+    return run.id;
 }
 
 async function lookupItemType(itemId: string): Promise<IssueType | undefined> {
@@ -165,7 +143,7 @@ export const commentsService = {
         // comment — the caller sees a 500 and NO comment/event rows,
         // rather than a visible comment that never appeared in the
         // activity stream.
-        let resumed = false;
+        let resumedRunId: string | null = null;
         const inserted = await db.transaction().execute(async (trx) => {
             const row = await trx
                 .insertInto('comments')
@@ -194,11 +172,21 @@ export const commentsService = {
                 },
                 trx
             );
-            if (data.author === 'owner') resumed = await resumeParkedItem(trx, data.issue_id, type);
+            if (data.author === 'owner') resumedRunId = await claimParkedWorkflowRun(trx, data.issue_id, type);
             return row;
         });
-        // Same event the per-type assign/transition services broadcast.
-        if (resumed) broadcastSSE({ type: 'counts_changed', issueType: type, issueId: data.issue_id });
+        if (resumedRunId) {
+            broadcastSSE({ type: 'counts_changed', issueType: type, issueId: data.issue_id });
+            const runId = resumedRunId;
+            // Dynamic import: the engine imports this service for its park
+            // comments. Not awaited — the reply is saved; the step spawns in
+            // the background.
+            void import('./workflow-engine.js')
+                .then(({ continueResumedRun }) => continueResumedRun(runId))
+                .catch((err: unknown) => {
+                    console.warn(`[comments] resuming workflow run ${runId} failed: ${(err as Error).message}`);
+                });
+        }
         return asComment(inserted as never, type);
     },
 

@@ -21,6 +21,8 @@ export interface IItem {
     description: string | null;
     status: IssueStatus;
     assignee_agent_id: string | null;
+    /** ADR 0014 — the workflow this item is queued for; null = unassigned. */
+    workflow_id: string | null;
     reporter_agent_id: string | null;
 
     priority: IssuePriority | null;

@@ -1,0 +1,21 @@
+{
+    "id": "ai-readiness",
+    "name": "AI Readiness",
+    "description": "Audits the repository for AI-agent readiness and opens a pull request with the scaffold it generates.",
+    "input_kind": "none",
+    "trigger": "manual",
+    "use_worktree": true,
+    "push_code": true,
+    "raises_pr": true,
+    "graph": {
+        "nodes": [
+            { "id": "start", "type": "start", "position": { "x": 0, "y": 120 } },
+            { "id": "ai-readiness", "type": "agent", "agent_id": "agent-ai-readiness", "position": { "x": 220, "y": 120 } },
+            { "id": "end", "type": "end", "position": { "x": 480, "y": 120 } }
+        ],
+        "edges": [
+            { "id": "e-start", "source": "start", "target": "ai-readiness", "kind": "pass" },
+            { "id": "e-ai-readiness", "source": "ai-readiness", "target": "end", "kind": "pass" }
+        ]
+    }
+}

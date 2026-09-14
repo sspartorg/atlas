@@ -401,7 +401,7 @@ describe('renderRunOutcomeContract', () => {
             .execute();
         const out = await renderRunOutcomeContract('agent-coder');
         expect(out).toMatch(/strict/i);
-        expect(out).toContain('on-fail');
+        expect(out).toContain('**fail** connection');
     });
 
     it('honours sort_order — lower sort_order appears first', async () => {
@@ -590,7 +590,7 @@ describe('buildPrompt project-scope (Theme 09b)', () => {
         expect(out).toContain('The PRD body');
         expect(out).toContain('Commit Discipline');
         expect(out).not.toContain('# Current Task');
-        expect(out).not.toContain('# Freedom Run');
+        expect(out).not.toContain('# Project-level Run');
     });
 
     it('renders an empty-epics fallback when project has no epics', async () => {
@@ -626,7 +626,7 @@ describe('buildPrompt project-scope (Theme 09b)', () => {
             projectId: null,
             constitutionMd: '',
         });
-        expect(out).toContain('# Freedom Run');
+        expect(out).toContain('# Project-level Run');
     });
 
     // A06 — freedom-run prompts SKIP the memory-draft clause. Freedom agents
@@ -1105,7 +1105,7 @@ describe('buildPrompt — self-memory injection (P10)', () => {
             issueId: null,
             constitutionMd: '',
         });
-        expect(out).toContain('# Freedom Run');
+        expect(out).toContain('# Project-level Run');
         expect(out).toContain('## Self-memory (your past course-corrections)');
         expect(out).toContain('Freedom-mode lesson');
     });
@@ -1280,7 +1280,7 @@ describe('prompt-builder — remaining branch gaps (PB-EXTRA)', () => {
             constitutionMd: '## Freedom Rules',
         });
         expect(out).toContain('## Freedom Rules');
-        expect(out).toContain('# Freedom Run');
+        expect(out).toContain('# Project-level Run');
     });
 });
 
@@ -1528,7 +1528,7 @@ describe('buildPrompt — freedom-run empty prompt_md branch (round 2)', () => {
             issueId: null,
             constitutionMd: '',
         });
-        expect(out).toContain('# Freedom Run');
+        expect(out).toContain('# Project-level Run');
         expect(out).not.toContain('# Your Role');
     });
 });

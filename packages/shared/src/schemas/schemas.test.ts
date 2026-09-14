@@ -176,43 +176,11 @@ describe('A08 — role_id on agent schemas', () => {
         expect(parsed.role_id).toBeNull();
     });
 
-    it('UpdateAgentSchema accepts push_code / requires_worktree / kind_slug / settings_json / cron_expr', () => {
-        const parsed = UpdateAgentSchema.parse({
-            push_code: true,
-            requires_worktree: true,
-            kind_slug: 'jira-to-epic',
-            settings_json: { topic: 'compliance' },
-            cron_expr: '0 9 * * *',
-        });
-        expect(parsed.push_code).toBe(true);
-        expect(parsed.requires_worktree).toBe(true);
-        expect(parsed.kind_slug).toBe('jira-to-epic');
-        expect(parsed.settings_json).toEqual({ topic: 'compliance' });
-        expect(parsed.cron_expr).toBe('0 9 * * *');
-    });
-
     it('UpdateAgentSchema stays strict — unknown keys still rejected', () => {
         const result = UpdateAgentSchema.safeParse({ totally_made_up_field: 'nope' });
         expect(result.success).toBe(false);
     });
 
-    it('UpdateAgentSchema accepts null cron_expr (clearing the override)', () => {
-        const parsed = UpdateAgentSchema.parse({ cron_expr: null });
-        expect(parsed.cron_expr).toBeNull();
-    });
-
-    it('UpdateAgentSchema rejects cron_expr longer than 200 chars', () => {
-        const tooLong = '* '.repeat(101); // 202 chars including spaces
-        const result = UpdateAgentSchema.safeParse({ cron_expr: tooLong });
-        expect(result.success).toBe(false);
-    });
-
-    it('UpdateAgentSchema accepts any non-empty cron_expr up to the length cap (service does croner-parse)', () => {
-        // Boundary validation lives in the service layer where croner is a
-        // dep; the schema just enforces the size cap.
-        const parsed = UpdateAgentSchema.parse({ cron_expr: 'literally anything 200 chars or less' });
-        expect(parsed.cron_expr).toBe('literally anything 200 chars or less');
-    });
 });
 
 describe('IssueKeyPrefixSchema', () => {
@@ -931,64 +899,6 @@ describe('Theme 08 enum schemas', () => {
 // Schedule refinement branches — each preset has its own validation
 // path; previous tests covered the happy paths via Create/UpdateAgent
 // shapes but not every refinement branch.
-describe('UpdateAgentSchema schedule refinement branches', () => {
-    it('every_n_hours requires schedule_hours > 0', () => {
-        const bad = UpdateAgentSchema.safeParse({
-            schedule_preset: 'every_n_hours',
-            schedule_hours: 0,
-        });
-        expect(bad.success).toBe(false);
-        const good = UpdateAgentSchema.safeParse({
-            schedule_preset: 'every_n_hours',
-            schedule_hours: 6,
-        });
-        expect(good.success).toBe(true);
-    });
-
-    it('daily requires schedule_time_of_day in HH:MM', () => {
-        const bad = UpdateAgentSchema.safeParse({ schedule_preset: 'daily' });
-        expect(bad.success).toBe(false);
-        const bad2 = UpdateAgentSchema.safeParse({
-            schedule_preset: 'daily',
-            schedule_time_of_day: '25:00',
-        });
-        expect(bad2.success).toBe(false);
-        const good = UpdateAgentSchema.safeParse({
-            schedule_preset: 'daily',
-            schedule_time_of_day: '09:00',
-        });
-        expect(good.success).toBe(true);
-    });
-
-    it('weekly requires schedule_weekdays + time_of_day', () => {
-        const noDays = UpdateAgentSchema.safeParse({
-            schedule_preset: 'weekly',
-            schedule_time_of_day: '09:00',
-        });
-        expect(noDays.success).toBe(false);
-        const good = UpdateAgentSchema.safeParse({
-            schedule_preset: 'weekly',
-            schedule_time_of_day: '09:00',
-            schedule_weekdays: [1, 2, 3],
-        });
-        expect(good.success).toBe(true);
-    });
-
-    it('monthly requires schedule_day_of_month 1..31', () => {
-        const oob = UpdateAgentSchema.safeParse({
-            schedule_preset: 'monthly',
-            schedule_time_of_day: '09:00',
-            schedule_day_of_month: 32,
-        });
-        expect(oob.success).toBe(false);
-        const good = UpdateAgentSchema.safeParse({
-            schedule_preset: 'monthly',
-            schedule_time_of_day: '09:00',
-            schedule_day_of_month: 15,
-        });
-        expect(good.success).toBe(true);
-    });
-});
 
 // items/types.ts — ITEM_RELATIONS export. Touching it in a test
 // guarantees the module is loaded with full statement coverage and
@@ -1029,14 +939,6 @@ describe('CreateIssueLinkSchema relation_type', () => {
 });
 
 describe('refine-callback coverage', () => {
-    it('UpdateAgentSchema rejects duplicate schedule_weekdays (AgentWeekdaysSchema refine)', () => {
-        const dup = UpdateAgentSchema.safeParse({
-            schedule_preset: 'weekly',
-            schedule_time_of_day: '09:00',
-            schedule_weekdays: [1, 2, 2, 3],
-        });
-        expect(dup.success).toBe(false);
-    });
 
     it("ReplyToItemSchema rejects author='agent' without agent_id", () => {
         const bad = ReplyToItemSchema.safeParse({ body: 'hi', author: 'agent' });

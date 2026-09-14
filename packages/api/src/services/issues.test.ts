@@ -101,46 +101,6 @@ describe('subTasksService', () => {
             expect(t.status).toBe('draft');
         });
 
-        it('defaults to Owner (assignee=null, status=draft) even when reporter has on-pass rule', async () => {
-            await insertAgent({ id: 'agent-reviewer', name: 'Reviewer' });
-            await testDb
-                .insertInto('agent_handoff_rules')
-                .values({
-                    agent_id: 'agent-coder',
-                    target_agent_id: 'agent-reviewer',
-                    kind: 'on-pass',
-                    status: 'ready',
-                })
-                .execute();
-            const t = await subTasksService.create({
-                story_id: 'ATL-2',
-                title: 'Spawned sub-task',
-                reporter_agent_id: 'agent-coder',
-            });
-            expect(t.assignee_agent_id).toBeNull();
-            expect(t.status).toBe('draft');
-        });
-
-        it('respects explicit assignee override even when reporter has on-pass rule', async () => {
-            await insertAgent({ id: 'agent-reviewer', name: 'Reviewer' });
-            await testDb
-                .insertInto('agent_handoff_rules')
-                .values({
-                    agent_id: 'agent-coder',
-                    target_agent_id: 'agent-reviewer',
-                    kind: 'on-pass',
-                    status: 'ready',
-                })
-                .execute();
-            const t = await subTasksService.create({
-                story_id: 'ATL-2',
-                title: 'Spawned sub-task',
-                reporter_agent_id: 'agent-coder',
-                assignee_agent_id: 'agent-reviewer',
-            });
-            expect(t.assignee_agent_id).toBe('agent-reviewer');
-        });
-
         it('list scopes to one story; listAll returns all', async () => {
             await insertItem({
                 id: 'ATL-99',
@@ -285,46 +245,6 @@ describe('subBugsService', () => {
             expect(b.frequency).toBe('sometimes');
             expect(b.failure_scope).toBe('cosmetic');
             expect(b.status).toBe('draft');
-        });
-
-        it('defaults to Owner (assignee=null, status=draft) even when reporter has on-pass rule', async () => {
-            await insertAgent({ id: 'agent-reviewer', name: 'Reviewer' });
-            await testDb
-                .insertInto('agent_handoff_rules')
-                .values({
-                    agent_id: 'agent-coder',
-                    target_agent_id: 'agent-reviewer',
-                    kind: 'on-pass',
-                    status: 'ready',
-                })
-                .execute();
-            const b = await subBugsService.create({
-                story_id: 'ATL-2',
-                title: 'Spawned sub-bug',
-                reporter_agent_id: 'agent-coder',
-            });
-            expect(b.assignee_agent_id).toBeNull();
-            expect(b.status).toBe('draft');
-        });
-
-        it('respects explicit assignee override even when reporter has on-pass rule', async () => {
-            await insertAgent({ id: 'agent-reviewer', name: 'Reviewer' });
-            await testDb
-                .insertInto('agent_handoff_rules')
-                .values({
-                    agent_id: 'agent-coder',
-                    target_agent_id: 'agent-reviewer',
-                    kind: 'on-pass',
-                    status: 'ready',
-                })
-                .execute();
-            const b = await subBugsService.create({
-                story_id: 'ATL-2',
-                title: 'Spawned sub-bug',
-                reporter_agent_id: 'agent-coder',
-                assignee_agent_id: 'agent-reviewer',
-            });
-            expect(b.assignee_agent_id).toBe('agent-reviewer');
         });
 
         it('list/listAll/get', async () => {
@@ -486,46 +406,6 @@ describe('bugsService', () => {
             const b = await bugsService.create({ epic_id: 'ATL-1', title: 'min' });
             expect(b.frequency).toBe('sometimes');
             expect(b.failure_scope).toBe('cosmetic');
-        });
-
-        it('defaults to Owner (assignee=null, status=draft) even when reporter has on-pass rule', async () => {
-            await insertAgent({ id: 'agent-reviewer', name: 'Reviewer' });
-            await testDb
-                .insertInto('agent_handoff_rules')
-                .values({
-                    agent_id: 'agent-coder',
-                    target_agent_id: 'agent-reviewer',
-                    kind: 'on-pass',
-                    status: 'ready',
-                })
-                .execute();
-            const b = await bugsService.create({
-                epic_id: 'ATL-1',
-                title: 'Spawned bug',
-                reporter_agent_id: 'agent-coder',
-            });
-            expect(b.assignee_agent_id).toBeNull();
-            expect(b.status).toBe('draft');
-        });
-
-        it('respects explicit assignee override even when reporter has on-pass rule', async () => {
-            await insertAgent({ id: 'agent-reviewer', name: 'Reviewer' });
-            await testDb
-                .insertInto('agent_handoff_rules')
-                .values({
-                    agent_id: 'agent-coder',
-                    target_agent_id: 'agent-reviewer',
-                    kind: 'on-pass',
-                    status: 'ready',
-                })
-                .execute();
-            const b = await bugsService.create({
-                epic_id: 'ATL-1',
-                title: 'Spawned bug',
-                reporter_agent_id: 'agent-coder',
-                assignee_agent_id: 'agent-reviewer',
-            });
-            expect(b.assignee_agent_id).toBe('agent-reviewer');
         });
 
         it('update logs title/description; no-op when undefined', async () => {

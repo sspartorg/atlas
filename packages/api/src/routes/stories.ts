@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import { storiesService } from '../services/stories.js';
 import { subTasksService, subBugsService } from '../services/issues.js';
 import { issueFullService } from '../services/issue-full.js';
-import { resetRoundsForIssue } from '../services/agent-rounds.js';
 import {
     CreateStorySchema,
     CreateSubTaskSchema,
@@ -139,13 +138,6 @@ export async function storiesRoutes(app: FastifyInstance) {
         );
     });
 
-    app.post('/api/stories/:id/reset-rounds', { preHandler: requireMcpToken }, async (req, reply) => {
-        const { id } = req.params as { id: string };
-        if (!(await storiesService.get(id))) return reply.status(404).send({ error: 'Story not found' });
-        await resetRoundsForIssue(id);
-        return reply.status(204).send();
-    });
-
     app.delete('/api/stories/:id', { preHandler: requireMcpToken }, async (req, reply) => {
         const { id } = req.params as { id: string };
         if (!(await storiesService.get(id))) return reply.status(404).send({ error: 'Story not found' });
@@ -221,14 +213,6 @@ export async function storiesRoutes(app: FastifyInstance) {
         );
     });
 
-    app.post('/api/sub-tasks/:id/reset-rounds', { preHandler: requireMcpToken }, async (req, reply) => {
-        const { id } = req.params as { id: string };
-        if (!(await subTasksService.get(id)))
-            return reply.status(404).send({ error: 'Sub-task not found' });
-        await resetRoundsForIssue(id);
-        return reply.status(204).send();
-    });
-
     app.delete('/api/sub-tasks/:id', { preHandler: requireMcpToken }, async (req, reply) => {
         const { id } = req.params as { id: string };
         await subTasksService.delete(id);
@@ -298,14 +282,6 @@ export async function storiesRoutes(app: FastifyInstance) {
         return reply.send(
             await subBugsService.assign(id, assignee_agent_id, requested_by_agent_id ?? null),
         );
-    });
-
-    app.post('/api/sub-bugs/:id/reset-rounds', { preHandler: requireMcpToken }, async (req, reply) => {
-        const { id } = req.params as { id: string };
-        if (!(await subBugsService.get(id)))
-            return reply.status(404).send({ error: 'Sub-bug not found' });
-        await resetRoundsForIssue(id);
-        return reply.status(204).send();
     });
 
     app.delete('/api/sub-bugs/:id', { preHandler: requireMcpToken }, async (req, reply) => {

@@ -5,7 +5,6 @@ import type {
     BugFrequency,
     IAgent,
     IAgentChecklistItem,
-    IAgentHandoffRule,
     IAgentRun,
     IBug,
     IComment,
@@ -59,7 +58,6 @@ export class AtlasApiError extends Error {
  */
 export interface IAgentComposite {
     agent: IAgent;
-    handoff_rules: IAgentHandoffRule[];
     checklists: IAgentChecklistItem[];
 }
 
@@ -75,7 +73,6 @@ export interface IAgentWritePayload {
     model?: string;
     framework?: string;
     prompt_md?: string;
-    handoff_prompt_md?: string;
     status?: IAgent['status'];
     accent_color?: string;
     sort_order?: number;
@@ -84,10 +81,7 @@ export interface IAgentWritePayload {
     // A08 — FK into the SDLC role catalog. null detaches the agent
     // from the catalog (autonomous-style).
     role_id?: IAgent['role_id'];
-    schedule_hours?: number;
-    concurrent_runs?: number;
     glyph?: string;
-    handoff_rules?: Array<Pick<IAgentHandoffRule, 'target_agent_id' | 'kind' | 'status'>>;
     checklists?: Array<Pick<IAgentChecklistItem, 'label' | 'sort_order' | 'required'>>;
 }
 
@@ -412,10 +406,9 @@ export interface IApiClient {
     ): Promise<IProjectSchedule>;
     deleteProjectSchedule(projectId: string): Promise<void>;
     triggerProjectAutoFetch(projectId: string): Promise<{ autofetch_id: string }>;
-    // Plan E (Owner request, 2026-06-01) — `execGitHub` removed. The
-    // orchestrator now owns git push + `gh pr create` (gated on
-    // `agents.raises_pr`); agents commit only. See
-    // `services/worktree-orchestrator.ts: pushWorktree / openPullRequest`.
+    // Plan E (Owner request, 2026-06-01) — `execGitHub` removed. Workflows
+    // own git push + `gh pr create` (ADR 0014); agents commit only. See
+    // `services/workflow-engine.ts`.
 }
 
 export function createApiClient(config: IMcpConfig): IApiClient {
@@ -463,12 +456,11 @@ export function createApiClient(config: IMcpConfig): IApiClient {
 
     const fetchComposite = async (id: string): Promise<IAgentComposite> => {
         const encoded = encodeURIComponent(id);
-        const [agent, handoff_rules, checklists] = await Promise.all([
+        const [agent, checklists] = await Promise.all([
             request<IAgent>(`/api/agents/${encoded}`),
-            request<IAgentHandoffRule[]>(`/api/agents/${encoded}/handoff-rules`),
             request<IAgentChecklistItem[]>(`/api/agents/${encoded}/checklists`),
         ]);
-        return { agent, handoff_rules, checklists };
+        return { agent, checklists };
     };
 
     return {

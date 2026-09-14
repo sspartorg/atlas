@@ -68,7 +68,6 @@ export interface AgentsTable {
     framework: Str;
     prompt_md: Str;
     prompt_version: Int;
-    handoff_prompt_md: Str;
     status: 'active' | 'inactive';
     accent_color: Str;
     sort_order: Int;
@@ -77,25 +76,7 @@ export interface AgentsTable {
     // A08 — FK into the SDLC role catalog. Nullable: autonomous agents
     // (kind_slug != 'custom') stay NULL.
     role_id: StrN;
-    max_rounds: Int;
-    requires_item: ColumnType<boolean, boolean | undefined, boolean>;
-    schedule_hours: ColumnType<number, number | undefined, number>;
-    schedule_preset: ColumnType<
-        'every_n_hours' | 'daily' | 'weekly' | 'monthly',
-        'every_n_hours' | 'daily' | 'weekly' | 'monthly' | undefined,
-        'every_n_hours' | 'daily' | 'weekly' | 'monthly'
-    >;
-    schedule_time_of_day: StrN;
-    schedule_weekdays: ColumnType<
-        number[] | null,
-        number[] | null | undefined,
-        number[] | null | undefined
-    >;
-    schedule_day_of_month: IntN;
-    concurrent_runs: Int;
     glyph: Str;
-    last_run_at: TSn;
-    next_run_at: TSn;
     memory_cadence: Int;
     // Theme 09 — autonomous-agent fleet. `kind_slug` is a soft tag
     // (no CHECK constraint) so custom agents can carry their own.
@@ -108,17 +89,6 @@ export interface AgentsTable {
         Record<string, unknown> | undefined,
         Record<string, unknown>
     >;
-    cron_expr: StrN;
-    // Plan E — when true, the orchestrator opens a PR at run-end after
-    // a successful push. Default false at the DB level (migration 055).
-    raises_pr: ColumnType<boolean, boolean | undefined, boolean>;
-    // Plan #7 — when true, the orchestrator pushes the worktree branch
-    // to origin at run-end. When false, the branch lives locally only
-    // and is deleted at cleanup. Default false (migration 066).
-    push_code: ColumnType<boolean, boolean | undefined, boolean>;
-    // When true, the orchestrator provisions a worktree before dispatch.
-    // See IAgent.requires_worktree in shared/types for the full contract.
-    requires_worktree: ColumnType<boolean, boolean | undefined, boolean>;
     // Marketplace back-link. NULL on user-only agents and on agents that
     // were detached. Editing the local agent never clears these; the user
     // explicitly Detaches to opt out of upgrade-available indicators.
@@ -145,18 +115,12 @@ export interface MarketplaceAgentsTable {
     >;
     framework: Str;
     prompt_md: Str;
-    handoff_prompt_md: Str;
     description: Str;
     designation: Str;
     accent_color: Str;
     sort_order: Int;
     glyph: Str;
     role_id: StrN;
-    max_rounds: Int;
-    requires_item: ColumnType<boolean, boolean | undefined, boolean>;
-    requires_worktree: ColumnType<boolean, boolean | undefined, boolean>;
-    push_code: ColumnType<boolean, boolean | undefined, boolean>;
-    raises_pr: ColumnType<boolean, boolean | undefined, boolean>;
     status: 'active' | 'inactive';
     kind_slug: Str;
     settings_json: ColumnType<
@@ -164,21 +128,6 @@ export interface MarketplaceAgentsTable {
         Record<string, unknown> | undefined,
         Record<string, unknown>
     >;
-    schedule_hours: ColumnType<number, number | undefined, number>;
-    schedule_preset: ColumnType<
-        'every_n_hours' | 'daily' | 'weekly' | 'monthly',
-        'every_n_hours' | 'daily' | 'weekly' | 'monthly' | undefined,
-        'every_n_hours' | 'daily' | 'weekly' | 'monthly'
-    >;
-    schedule_time_of_day: StrN;
-    schedule_weekdays: ColumnType<
-        number[] | null,
-        number[] | null | undefined,
-        number[] | null | undefined
-    >;
-    schedule_day_of_month: IntN;
-    cron_expr: StrN;
-    concurrent_runs: Int;
     memory_cadence: Int;
     memory_template_md: Str;
     summary: Str;
@@ -186,14 +135,6 @@ export interface MarketplaceAgentsTable {
     content_hash: Str;
     published_at: TS;
     updated_at: UpdatedAt;
-}
-
-export interface MarketplaceAgentHandoffsTable {
-    id: Generated<number>;
-    marketplace_agent_id: string;
-    target_agent_id: Str;
-    kind: 'on-pass' | 'on-fail';
-    status: Str;
 }
 
 export interface MarketplaceAgentChecklistsTable {
@@ -217,14 +158,6 @@ export interface RolesTable {
     sort_order: Int;
     created_at: CreatedAt;
     updated_at: UpdatedAt;
-}
-
-export interface AgentHandoffRulesTable {
-    id: Generated<number>;
-    agent_id: string;
-    target_agent_id: Str;
-    kind: 'on-pass' | 'on-fail';
-    status: Str;
 }
 
 export interface AgentChecklistsTable {
@@ -670,14 +603,6 @@ export interface IssueEventsTable {
     created_at: CreatedAt;
 }
 
-export interface AgentRoundCountsTable {
-    id: Generated<number>;
-    item_id: string;
-    performer_agent_id: string;
-    count: Int;
-    last_incremented_at: TS;
-}
-
 export interface RemindersTable {
     id: Generated<number>;
     label: Str;
@@ -767,10 +692,8 @@ export interface DB {
     workflow_runs: WorkflowRunsTable;
     agents: AgentsTable;
     roles: RolesTable;
-    agent_round_counts: AgentRoundCountsTable;
     reminders: RemindersTable;
     scratch_pad: ScratchPadTable;
-    agent_handoff_rules: AgentHandoffRulesTable;
     agent_checklists: AgentChecklistsTable;
     agent_memory: AgentMemoryTable;
     agent_prompt_versions: AgentPromptVersionsTable;
@@ -795,7 +718,6 @@ export interface DB {
     memory_regenerations: MemoryRegenerationsTable;
     commit_verifications: CommitVerificationsTable;
     marketplace_agents: MarketplaceAgentsTable;
-    marketplace_agent_handoffs: MarketplaceAgentHandoffsTable;
     marketplace_agent_checklists: MarketplaceAgentChecklistsTable;
     guardrail_scripts: GuardrailScriptsTable;
     project_guardrail_scripts: ProjectGuardrailScriptsTable;

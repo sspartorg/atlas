@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { bugsService } from '../services/issues.js';
 import { issueFullService } from '../services/issue-full.js';
-import { resetRoundsForIssue } from '../services/agent-rounds.js';
 import {
     CreateBugSchema,
     UpdateBugSchema,
@@ -75,13 +74,6 @@ export async function bugsRoutes(app: FastifyInstance) {
         return reply.send(
             await bugsService.assign(id, assignee_agent_id, requested_by_agent_id ?? null),
         );
-    });
-
-    app.post('/api/bugs/:id/reset-rounds', { preHandler: requireMcpToken }, async (req, reply) => {
-        const { id } = req.params as { id: string };
-        if (!(await bugsService.get(id))) return reply.status(404).send({ error: 'Bug not found' });
-        await resetRoundsForIssue(id);
-        return reply.status(204).send();
     });
 
     app.delete('/api/bugs/:id', { preHandler: requireMcpToken }, async (req, reply) => {

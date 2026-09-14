@@ -1,6 +1,5 @@
 import { describe, expect, it, beforeEach, afterAll, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import type * as AgentDispatcherModule from '../services/agent-dispatcher.js';
 
 // Mock SSE and notifications — the route under test only spawns runs; we
 // don't want either side effect leaking across tests. Pattern mirrors
@@ -21,62 +20,17 @@ vi.mock('../services/notifications.js', () => ({
     },
 }));
 
-// Mock spawnAgentRun to keep just the depends_on gate behavior (the actual
-// thing we're testing here) without the simulated-CLI setTimeout chain. The
-// chain fires ~400ms later and writes to agent_round_counts for an item that
-// the next test's truncateAll has wiped, surfacing as a false-positive
-// "Unhandled Rejection" in the suite. The end-to-end happy path is still
-// covered by agent-dispatcher.integration.test.ts which uses fake timers.
-vi.mock('../services/agent-runner.js', () => {
-    // LiveRunOnItemError must be exported from the mock so the route code
-    // (`err instanceof LiveRunOnItemError`) resolves against the same
-    // class reference at runtime.
-    class LiveRunOnItemError extends Error {
-        constructor(public readonly itemId: string) {
-            super(`Item ${itemId} already has an active run.`);
-            this.name = 'LiveRunOnItemError';
-        }
-    }
-    return {
-        LiveRunOnItemError,
-        spawnAgentRun: vi
-            .fn()
-            .mockImplementation(
-                async (opts: {
-                    agentId: string;
-                    issueType?: string;
-                    issueId?: string;
-                    projectId?: string;
-                }) => {
-                    if (opts.issueId) {
-                        const { assertDepsAllDoneForDispatch } =
-                            await import('../services/dependency-guard.js');
-                        await assertDepsAllDoneForDispatch(opts.issueId, opts.agentId);
-                    }
-                    return `fake-run-${Math.random().toString(36).slice(2)}`;
-                }
-            ),
-        // W3 — GET /api/run/:id reads this registry to serve live in-memory
-        // output between 10s DB flushes. Tests don't exercise the live path
-        // (no real subprocess), so an empty Map is sufficient.
-        runOutputRegistry: new Map<string, string>(),
-        // The stop endpoint calls cancelRun to kill the live CLI subprocess
-        // (best-effort). No real child here, so report "not in registry".
-        cancelRun: vi.fn().mockResolvedValue({ cancelled: false, pidKilled: null }),
-    };
-});
-
-// Passthrough mock for agent-dispatcher so we can vi.spyOn findLiveRunOnItem
-// in the 23505 race test without breaking existing tests that use the real
-// DB-backed implementation.
-vi.mock('../services/agent-dispatcher.js', async (importOriginal) => {
-    return importOriginal<typeof AgentDispatcherModule>();
-});
+// No CLI: spawnAgentRun just returns an id. cancelRun reports "not in the
+// registry" (no live child). The workflow engine runs for real.
+vi.mock('../services/agent-runner.js', () => ({
+    spawnAgentRun: vi.fn().mockImplementation(async () => `fake-run-${Math.random().toString(36).slice(2)}`),
+    runOutputRegistry: new Map<string, string>(),
+    cancelRun: vi.fn().mockResolvedValue({ cancelled: false, pidKilled: null }),
+}));
 
 import { buildApp } from '../server.js';
 import { truncateAll, closeTestDb, testDb } from '../../tests/_pg-db.js';
 import { insertProject, insertAgent, insertItem } from '../../tests/_items.js';
-import { itemLinks } from '../services/item-links.js';
 
 let app: FastifyInstance;
 
@@ -110,100 +64,21 @@ afterAll(async () => {
     await closeTestDb();
 });
 
-describe('POST /api/run — depends_on hard-gate (B04)', () => {
-    it('returns 409 with the blocker list when a depends_on target is non-done', async () => {
-        await insertItem({
-            id: 'ATL-1',
-            type: 'story',
-            project_id: 'p1',
-            parent_id: 'ATL-100',
-            parent_type: 'epic',
-            title: 'Upstream',
-            status: 'in_progress',
-        });
-        await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
-
+describe('POST /api/run — ad-hoc agent runs (ADR 0014)', () => {
+    it('returns 400 for a run on an item — item work goes through a workflow', async () => {
         const res = await app.inject({
             method: 'POST',
             url: '/api/run',
             payload: { agent_id: 'agent-coder', issue_type: 'story', issue_id: 'ATL-2' },
-        });
-
-        expect(res.statusCode).toBe(409);
-        const body = res.json();
-        expect(body.error).toBe('dependencies_not_ready');
-        expect(body.blockers).toEqual([
-            expect.objectContaining({ id: 'ATL-1', status: 'in_progress' }),
-        ]);
-    });
-
-    it('returns 409 when a depends_on target is in_review (in_review does not satisfy)', async () => {
-        await insertItem({
-            id: 'ATL-1',
-            type: 'story',
-            project_id: 'p1',
-            parent_id: 'ATL-100',
-            parent_type: 'epic',
-            title: 'Upstream in review',
-            status: 'in_review',
-        });
-        await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
-
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/run',
-            payload: { agent_id: 'agent-coder', issue_type: 'story', issue_id: 'ATL-2' },
-        });
-
-        expect(res.statusCode).toBe(409);
-        const body = res.json();
-        expect(body.error).toBe('dependencies_not_ready');
-        expect(body.blockers[0]).toEqual(
-            expect.objectContaining({ id: 'ATL-1', status: 'in_review' })
-        );
-    });
-
-    it('returns 202 with a runId when every depends_on target is done', async () => {
-        await insertItem({
-            id: 'ATL-1',
-            type: 'story',
-            project_id: 'p1',
-            parent_id: 'ATL-100',
-            parent_type: 'epic',
-            title: 'Upstream done',
-            status: 'done',
-        });
-        await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
-
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/run',
-            payload: { agent_id: 'agent-coder', issue_type: 'story', issue_id: 'ATL-2' },
-        });
-
-        expect(res.statusCode).toBe(202);
-        const body = res.json();
-        expect(typeof body.runId).toBe('string');
-    });
-});
-
-describe('POST /api/run — freedom-mode manual launch', () => {
-    it('returns 400 when an item-driven agent is launched without item params', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/run',
-            payload: { agent_id: 'agent-coder' },
         });
         expect(res.statusCode).toBe(400);
-        expect(res.json().error).toMatch(/issue_type and issue_id/);
+        expect(res.json()).toMatchObject({ kind: 'validation_error' });
+        expect(res.json().error).toMatch(/workflow/);
     });
 
-    it('returns 202 when a freedom-mode agent is launched without item params', async () => {
-        await insertAgent({
-            id: 'agent-freedom',
-            status: 'active',
-            requires_item: false,
-        });
+
+    it('returns 202 when an agent is launched without item params', async () => {
+        await insertAgent({ id: 'agent-freedom', status: 'active' });
 
         const res = await app.inject({
             method: 'POST',
@@ -260,31 +135,6 @@ describe('POST /api/run — typed error envelope (W4)', () => {
         });
     });
 
-    it('returns kind=conflict with top-level blockers when deps not ready', async () => {
-        await insertItem({
-            id: 'ATL-1',
-            type: 'story',
-            project_id: 'p1',
-            parent_id: 'ATL-100',
-            parent_type: 'epic',
-            title: 'Upstream',
-            status: 'in_progress',
-        });
-        await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
-
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/run',
-            payload: { agent_id: 'agent-coder', issue_type: 'story', issue_id: 'ATL-2' },
-        });
-        expect(res.statusCode).toBe(409);
-        const body = res.json();
-        expect(body).toMatchObject({
-            error: 'dependencies_not_ready',
-            kind: 'conflict',
-        });
-        expect(Array.isArray(body.blockers)).toBe(true);
-    });
 });
 
 // P9 — Delete-a-run + item unstick. The endpoint exists so the Owner can
@@ -603,31 +453,13 @@ describe('GET /api/run/:id — single run endpoint', () => {
 });
 
 describe('POST /api/run — additional validation', () => {
-    it('returns 400 when issue_type is not a valid runnable type', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/run',
-            payload: {
-                agent_id: 'agent-coder',
-                issue_type: 'invalid_type',
-                issue_id: 'ATL-2',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-        const body = res.json();
-        expect(body.kind).toBe('validation_error');
-    });
 
     it('returns 400 when agent is inactive', async () => {
         await insertAgent({ id: 'agent-dormant', status: 'inactive' });
         const res = await app.inject({
             method: 'POST',
             url: '/api/run',
-            payload: {
-                agent_id: 'agent-dormant',
-                issue_type: 'story',
-                issue_id: 'ATL-2',
-            },
+            payload: { agent_id: 'agent-dormant' },
         });
         expect(res.statusCode).toBe(400);
     });
@@ -638,74 +470,12 @@ describe('POST /api/run — additional validation', () => {
 // Live run lock (lines 90-95): when findLiveRunOnItem returns a blocker,
 // POST /api/run must return 409 before reaching the INSERT. We seed a
 // live run on the same item directly to trigger the lock.
-describe('POST /api/run — live run item lock (findLiveRunOnItem)', () => {
-    it('returns 409 when a live run already exists on the same item', async () => {
-        // Insert a live (in_progress) run on ATL-2 directly, bypassing the
-        // route so we avoid the unique-partial-index race in the other direction.
-        await testDb
-            .insertInto('agent_runs')
-            .values({
-                id: 'run-live-blocker',
-                agent_id: 'agent-coder',
-                item_id: 'ATL-2',
-                status: 'in_progress',
-                parent_run_id: null,
-            })
-            .execute();
-
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/run',
-            payload: { agent_id: 'agent-coder', issue_type: 'story', issue_id: 'ATL-2' },
-        });
-
-        expect(res.statusCode).toBe(409);
-        const body = res.json();
-        expect(body.error).toMatch(/already has an active run/);
-        expect(body.kind).toBe('conflict');
-    });
-});
 
 // DB INSERT 23505 race (lines 156-165): the unique partial index
 // `agent_runs_one_live_per_item` blocks a second live row per item. This
 // race can only happen between the `findLiveRunOnItem` check and the INSERT.
 // We simulate it by: (1) bypassing `findLiveRunOnItem` via spy, (2) pre-
 // seeding a live run, so the INSERT itself fails with 23505.
-describe('POST /api/run — DB 23505 race guard (lines 156-165)', () => {
-    it('returns 409 when the unique partial index fires (race between check and INSERT)', async () => {
-        // Pre-seed a live run on ATL-2 (unique partial index will block a
-        // second in-progress row for the same item).
-        await testDb
-            .insertInto('agent_runs')
-            .values({
-                id: 'run-race-seed',
-                agent_id: 'agent-coder',
-                item_id: 'ATL-2',
-                status: 'in_progress',
-                parent_run_id: null,
-            })
-            .execute();
-
-        // Bypass the findLiveRunOnItem pre-check (simulates the window
-        // between the check passing and the INSERT failing).
-        const agentDispatcher = await import('../services/agent-dispatcher.js');
-        const spy = vi.spyOn(agentDispatcher, 'findLiveRunOnItem').mockResolvedValueOnce(null);
-
-        try {
-            const res = await app.inject({
-                method: 'POST',
-                url: '/api/run',
-                payload: { agent_id: 'agent-coder', issue_type: 'story', issue_id: 'ATL-2' },
-            });
-            expect(res.statusCode).toBe(409);
-            const body = res.json();
-            expect(body.error).toMatch(/race-blocked/);
-            expect(body.kind).toBe('conflict');
-        } finally {
-            spy.mockRestore();
-        }
-    });
-});
 
 // GET /api/run/:id with ?since parameter (lines 259-263).
 // The `since` param tells the server to return only bytes after offset N.
@@ -876,139 +646,16 @@ describe('POST /api/run — background spawn failure marks row as error', () => 
         expect(row?.outcome_summary).toMatch(/simulated spawn failure/);
     });
 
-    it('marks run as error when spawnAgentRun rejects with LiveRunOnItemError (covers LiveRunOnItemError branch)', async () => {
-        const { spawnAgentRun, LiveRunOnItemError } = await import('../services/agent-runner.js');
-        (spawnAgentRun as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-            new LiveRunOnItemError('ATL-LIVE')
-        );
-
-        await insertAgent({ id: 'agent-live-err', status: 'active', requires_item: false });
-
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/run',
-            payload: { agent_id: 'agent-live-err' },
-        });
-        expect(res.statusCode).toBe(202);
-        const { runId } = res.json();
-
-        await new Promise((r) => setTimeout(r, 400));
-
-        const row = await testDb
-            .selectFrom('agent_runs')
-            .select(['status', 'outcome_summary'])
-            .where('id', '=', runId)
-            .executeTakeFirst();
-        expect(row?.status).toBe('error');
-        expect(row?.outcome_summary).toMatch(/already has an active run/);
-    });
-
-    it('marks run as error when spawnAgentRun rejects with DependenciesNotReadyError in background (covers deps-branch in queueMicrotask)', async () => {
-        const { spawnAgentRun } = await import('../services/agent-runner.js');
-        const { DependenciesNotReadyError } = await import('../services/dependency-guard.js');
-        (spawnAgentRun as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-            new DependenciesNotReadyError([
-                { id: 'ATL-BG-DEP', title: 'Blocker', status: 'in_progress' },
-            ])
-        );
-
-        await insertAgent({ id: 'agent-dep-bg', status: 'active', requires_item: false });
-
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/run',
-            payload: { agent_id: 'agent-dep-bg' },
-        });
-        expect(res.statusCode).toBe(202);
-        const { runId } = res.json();
-
-        await new Promise((r) => setTimeout(r, 400));
-
-        const row = await testDb
-            .selectFrom('agent_runs')
-            .select(['status', 'outcome_summary'])
-            .where('id', '=', runId)
-            .executeTakeFirst();
-        expect(row?.status).toBe('error');
-        expect(row?.outcome_summary).toMatch(/dependencies not ready/);
-    });
 });
 
 // ── Additional branch coverage ────────────────────────────────────────────
 
 // POST /api/run — broadcastSSE is called with issueType/issueId when hasItem.
 // Exercises the ternary on line 171: `...(hasItem ? { issueType, issueId } : {})`.
-describe('POST /api/run — broadcastSSE carries item fields when hasItem=true', () => {
-    it('broadcasts run_queued with issueType and issueId for an item-driven dispatch', async () => {
-        const { broadcastSSE } = await import('../routes/events.js');
-        (broadcastSSE as unknown as ReturnType<typeof vi.fn>).mockClear();
-
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/run',
-            payload: { agent_id: 'agent-coder', issue_type: 'story', issue_id: 'ATL-2' },
-        });
-
-        expect(res.statusCode).toBe(202);
-        expect(broadcastSSE).toHaveBeenCalledWith(
-            expect.objectContaining({
-                type: 'run_queued',
-                issueType: 'story',
-                issueId: 'ATL-2',
-            })
-        );
-    });
-
-    it('broadcasts run_queued WITHOUT issueType/issueId for a freedom-mode dispatch', async () => {
-        await insertAgent({ id: 'agent-free2', status: 'active', requires_item: false });
-        const { broadcastSSE } = await import('../routes/events.js');
-        (broadcastSSE as unknown as ReturnType<typeof vi.fn>).mockClear();
-
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/run',
-            payload: { agent_id: 'agent-free2' },
-        });
-
-        expect(res.statusCode).toBe(202);
-        const call = (broadcastSSE as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as {
-            type: string;
-            issueType?: string;
-            issueId?: string;
-        };
-        expect(call.type).toBe('run_queued');
-        expect(call.issueType).toBeUndefined();
-        expect(call.issueId).toBeUndefined();
-    });
-});
 
 // POST /api/run — freedom-mode agent can also receive item params (hasItem=true
 // path with requires_item=false). Exercises the freedom-mode agent with item params
 // taking the normal item-check path (findLiveRunOnItem + assertDepsAllDoneForDispatch).
-describe('POST /api/run — freedom-mode agent with item params', () => {
-    it('returns 202 when a freedom-mode agent is dispatched WITH item params', async () => {
-        await insertAgent({ id: 'agent-free-item', status: 'active', requires_item: false });
-
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/run',
-            payload: { agent_id: 'agent-free-item', issue_type: 'story', issue_id: 'ATL-2' },
-        });
-
-        expect(res.statusCode).toBe(202);
-        const body = res.json();
-        expect(typeof body.runId).toBe('string');
-
-        // Verify the run row was inserted with the correct item_id.
-        const row = await testDb
-            .selectFrom('agent_runs')
-            .select(['item_id', 'status'])
-            .where('id', '=', body.runId)
-            .executeTakeFirst();
-        expect(row?.item_id).toBe('ATL-2');
-        expect(row?.status).toBe('queued');
-    });
-});
 
 // GET /api/run — limit query clamping (line 435: Math.min(Number(limit ?? 50), 500)).
 // Tests the explicit limit param code path.

@@ -188,24 +188,6 @@ describe('PATCH /api/bugs/:id/assign', () => {
     });
 });
 
-describe('POST /api/bugs/:id/reset-rounds', () => {
-    it('returns 204 when bug exists', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/bugs/ATL-2/reset-rounds',
-        });
-        expect(res.statusCode).toBe(204);
-    });
-
-    it('returns 404 when bug does not exist', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/bugs/ATL-9999/reset-rounds',
-        });
-        expect(res.statusCode).toBe(404);
-    });
-});
-
 describe('DELETE /api/bugs/:id', () => {
     it('returns 204 when deleted successfully', async () => {
         const res = await app.inject({ method: 'DELETE', url: '/api/bugs/ATL-2' });

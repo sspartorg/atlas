@@ -23,42 +23,10 @@ import { buildPrompt } from './prompt-builder.js';
 import { stageCliWorktree } from './worktree-stage.js';
 import { sendExternalForNotification } from './external-notifications.js';
 import { notificationsService } from './notifications.js';
-import { eventsLog } from './events-log.js';
-import {
-    externalLinks,
-    parseGithubPrUrl,
-    fetchGithubPrTitle,
-} from './external-links.js';
 import { agentMemoryService } from './agent-memory.js';
 import { verifyRunCommits } from './commit-verifier.js';
-// credentialsService — previously used here to hand-build the per-run
-// http.extraheader config. Now replaced by `buildGitAuth` from
-// `./git-credentials.js`, which returns the temp config path AND the
-// plaintext token so both `git` and `gh` inside the spawned CLI
-// authenticate as the App identity. The import is retired to keep
-// this file's surface minimal.
-import {
-    ensureWorktree,
-    buildWorktreePreamble,
-    pushWorktree,
-    openPullRequest,
-    cleanupWorktreeAfterPush,
-    WorktreeProvisioningError,
-} from './worktree-orchestrator.js';
+import { buildWorktreePreamble } from './worktree-orchestrator.js';
 import { runProjectSetup } from './project-setup-runner.js';
-import {
-    assertDepsAllDoneForDispatch,
-} from './dependency-guard.js';
-import {
-    applyOnFailHandoff,
-    applyOnPassHandoff,
-} from './agent-handoff.js';
-import { incrementRound, resetRoundsForItem, resetRoundsUnlessBounceBack } from './agent-rounds.js';
-import { decideRunRouting, shouldOpenPullRequest } from './agent-runner-outcome-routing.js';
-import {
-    agentRoutedDuringRun,
-    otherActorReassignedDuringRun,
-} from './agent-self-routing.js';
 import { parseRunOutcome } from './run-outcome-parser.js';
 import {
     buildCompletionCommentBody,
@@ -74,7 +42,6 @@ import { buildGitAuth, cleanupGitConfig } from './git-credentials.js';
 import { agentIdToSlug } from './commands-assembler.js';
 import { assemblePreamble } from './preamble-assembler.js';
 import {
-    getStatusLabel,
     CLI_DIALECT,
     type AgentCli,
     type ApiErrorKind,
@@ -425,85 +392,28 @@ async function getAgent(agentId: string): Promise<IAgent | undefined> {
     return row as unknown as IAgent | undefined;
 }
 
-async function getSettings(): Promise<{ constitution_md: string | null; workspace_path: string | null }> {
+// ADR 0014 — every terminal exit of a run reports to the workflow engine,
+// which decides the next step. Runs outside a workflow (project scaffold,
+// ad-hoc test runs) make it a no-op. Dynamic import breaks the
+// runner → engine → runner cycle.
+async function notifyStep(runId: string): Promise<void> {
+    try {
+        const { onStepFinished } = await import('./workflow-engine.js');
+        await onStepFinished(runId);
+    } catch (err) {
+        console.warn(
+            `[agent-runner] workflow step report failed for ${runId}: ${(err as Error).message}`,
+        );
+    }
+}
+
+async function isWorkflowStep(runId: string): Promise<boolean> {
     const row = await db
-        .selectFrom('settings')
-        .select(['constitution_md', 'workspace_path'])
-        .where('id', '=', 1)
+        .selectFrom('agent_runs')
+        .select('workflow_run_id')
+        .where('id', '=', runId)
         .executeTakeFirst();
-    return row ?? { constitution_md: null, workspace_path: null };
-}
-
-// Lightweight helpers used by the handoff path. Each does one column read
-// so the reviewer-completion branch can reason about whether the run
-// already routed the item via Atlas MCP (mid-run reassignment guard) or
-// what status to record in the events log.
-async function getItemAssignee(itemId: string): Promise<string | null> {
-    const row = await db
-        .selectFrom('items')
-        .select(['assignee_agent_id'])
-        .where('id', '=', itemId)
-        .executeTakeFirst();
-    return (row?.assignee_agent_id as string | null) ?? null;
-}
-
-// Used by the notification path after handoff routing applies. Returns the
-// item's current `status` (raw enum) PLUS a display-friendly `statusLabel`
-// ('Waiting for Info' instead of 'waiting_for_info') and assignee label
-// (agent name, or `'Owner'` when the item is unassigned). The raw enum
-// stays available for `deriveNotifKind`'s state check; the labels are
-// what land in external + in-app notifications. Generic: the caller
-// never branches on agent identity — the message it produces is
-// derived purely from observed final state.
-async function fetchItemFinalState(itemId: string): Promise<{
-    status: string;
-    statusLabel: string;
-    assigneeId: string | null;
-    assigneeLabel: string;
-}> {
-    const row = await db
-        .selectFrom('items')
-        .leftJoin('agents', 'agents.id', 'items.assignee_agent_id')
-        .select([
-            'items.status',
-            'items.assignee_agent_id',
-            'agents.name as assignee_name',
-        ])
-        .where('items.id', '=', itemId)
-        .executeTakeFirst();
-    const status = (row?.status as string | null) ?? 'unknown';
-    // `getStatusLabel` is `IssueStatus | SubTaskStatus`-typed; cast through
-    // `string` to allow the fallback `'unknown'` path. The helper itself
-    // falls through to the raw string for any unknown enum value.
-    const statusLabel = getStatusLabel(status as never);
-    const assigneeId = (row?.assignee_agent_id as string | null) ?? null;
-    const assigneeLabel =
-        assigneeId === null
-            ? 'Owner'
-            : ((row?.assignee_name as string | null) ?? assigneeId);
-    return { status, statusLabel, assigneeId, assigneeLabel };
-}
-
-function deriveNotifKind(
-    finalAssigneeId: string | null,
-    finalStatus: string,
-): 'needs_you' | 'update' {
-    return finalAssigneeId === null || finalStatus === 'waiting_for_info'
-        ? 'needs_you'
-        : 'update';
-}
-
-// Map an item's final status (post-handoff) to the per-event external-notification
-// key. Only `waiting_for_info` and `in_review` have user-facing toggles; every
-// other status (in_progress, done, draft, ready) means the in-app notification
-// stands alone and the external channel stays silent — the Owner asked us to
-// stop pinging on `Done` and to remove the AI-Readiness PR-opened pseudo-event.
-// `undefined` here is the signal to the caller "skip the external send entirely;
-// the in-app row is enough."
-export function deriveItemEventKey(finalStatus: string): ExternalNotificationEventKey | undefined {
-    if (finalStatus === 'waiting_for_info') return 'item.status_changed:waiting_for_info';
-    if (finalStatus === 'in_review') return 'item.status_changed:in_review';
-    return undefined;
+    return Boolean(row?.workflow_run_id);
 }
 
 async function createAgentNotification(opts: {
@@ -525,19 +435,10 @@ async function createAgentNotification(opts: {
     return row.id;
 }
 
-// 2026-06-01 (Plan E) — orchestrator reclaimed ownership of push +
-// `gh pr create`. The post-run hook in `child.on('close')` calls
-// `pushWorktree` unconditionally (success OR failure) and then
-// `openPullRequest` when the agent row has `raises_pr = true` AND the
-// CLI exited cleanly. The boot-time orphan reaper in `main.ts` still
-// invokes `pushWorktree` as a rescue path for runs that died before
-// the hook fired.
-
 // Agent-agnostic by design — agents persist their own deliverables via
-// Atlas MCP tools (architect → `updateItem({ spec_md })`, coder → `pr_url`).
-// If an agent fails to persist, its prompt MUST exit `asked_question` with
-// a clear error; the orchestrator does NOT backfill or retry on the agent's
-// behalf. Silent backfill hides broken prompts; loud failures surface them.
+// Atlas MCP tools (architect → `updateItem({ spec_md })`). If an agent fails
+// to persist, its prompt MUST exit `asked_question` with a clear error; the
+// orchestrator does NOT backfill or retry on the agent's behalf.
 
 export async function completeRun(
     runId: string,
@@ -549,17 +450,12 @@ export async function completeRun(
     const now = new Date().toISOString();
     // Look up the agent's CLI so the cost parser picks the right NDJSON
     // shape (Claude stream-json vs Copilot json). Missing agent (deleted
-    // mid-run) falls back to Claude — preserves the legacy behaviour.
+    // mid-run) falls back to Claude.
     const agent = await getAgent(agentId);
     const cli: AgentCli = agent?.cli ?? 'claude';
     const cost = parseCostFromOutput(output, cli);
-    // Workstream #6 — if the Owner clicked Stop while this run was
-    // mid-flight, the row has already been flipped to `cancelled` by
-    // `POST /api/run/:id/stop`. Don't overwrite that with `completed`,
-    // and don't apply the on-pass handoff below — the Owner asked us
-    // to halt; advancing the chain would defeat the kill switch.
-    // Persist the output + cost (those bytes were earned regardless)
-    // but leave the terminal status alone.
+    // If the Owner clicked Stop mid-flight the row is already `cancelled`.
+    // Keep that status; the output + cost were earned regardless.
     const currentRow = await db
         .selectFrom('agent_runs')
         .select('status')
@@ -581,35 +477,50 @@ export async function completeRun(
         .where('id', '=', runId)
         .execute();
 
+    // Persisted for every run shape: the workflow engine routes on these
+    // columns, including project-level runs that have no item.
+    await persistRunOutcome(runId, parseRunOutcome(output));
+
     if (wasCancelled) {
-        // Owner-cancelled: skip handoff + round bump + completion SSE.
-        // The post-run hook (push + worktree cleanup) still ran in the
-        // outer `spawnCli` close-handler, so committed work is
-        // preserved and the worktree is gone.
-        broadcastSSE({
-            type: 'run_completed',
-            agentId,
-            runId,
-            status: 'cancelled',
-        });
+        broadcastSSE({ type: 'run_completed', agentId, runId, status: 'cancelled' });
+        await notifyStep(runId);
         return;
     }
 
-    // Freedom-mode run (no item) — broadcast completion, then emit a
-    // notification so the Owner knows the run finished. Previously this
-    // path returned silently and the Owner had no signal that e.g. an
-    // AI-Readiness or project-scope run had completed. The in-app row
-    // is always created (matches the "in-app always published" rule);
-    // the external-notification side is gated by the new
-    // `agent.run_finished_no_item` toggle + quiet hours.
-    if (!issueId || !issueType) {
-        broadcastSSE({
-            type: 'run_completed',
-            agentId,
-            runId,
-            status: 'completed',
-        });
-        const noItemMessage = `Agent "${agent?.name ?? agentId}" finished a freedom-mode run successfully.`;
+    broadcastSSE({
+        type: 'run_completed',
+        agentId,
+        runId,
+        ...(issueType ? { issueType } : {}),
+        ...(issueId ? { issueId } : {}),
+        status: 'completed',
+    });
+
+    const inWorkflow = await isWorkflowStep(runId);
+    if (issueId && issueType) {
+        // A tiny static pin so the Owner can jump from the comment thread to
+        // the run-detail page. The agent's own structured comment is the
+        // authoritative narrative.
+        try {
+            await commentsService.create({
+                author: 'agent',
+                agent_id: agentId,
+                issue_type: issueType,
+                issue_id: issueId,
+                body: buildOrchestratorRunCompletedBody({
+                    agentId,
+                    agentName: agent?.name ?? agentId,
+                    runId,
+                    issueType,
+                }),
+            });
+        } catch {
+            /* run-info pin is best-effort */
+        }
+    } else if (!inWorkflow) {
+        // Workflow steps notify at park / End; a standalone run has no one
+        // else to tell the Owner it finished.
+        const noItemMessage = `Agent "${agent?.name ?? agentId}" finished a run.`;
         const noItemNotificationId = await createAgentNotification({
             eventType: 'agent_completed_no_item',
             message: noItemMessage,
@@ -627,259 +538,19 @@ export async function completeRun(
         } catch {
             /* External notification optional. */
         }
-        return;
     }
 
-    // A04 — every CLI invocation that reaches this point counts as one
-    // round against (item, agent). The increment fires AFTER the CLI
-    // completes so a failed-to-spawn run doesn't count (errorRun does
-    // the same bump on the crash path). Post-handoff-realignment
-    // (2026-05-31) the routing decisions no longer cap-check rounds —
-    // the revision loop moved into the reviewer agent's prompt — but
-    // the per-(item, agent) count is still useful for analytics + the
-    // queue UI, so the bump stays.
-    await incrementRound(issueId, agentId);
+    await notifyStep(runId);
 
-    // Task 12 — single, role-agnostic routing path.
-    //
-    // Every agent (performer, reviewer, autonomous — no distinction in
-    // code anymore) ends its CLI output with a fenced `atlas-outcome`
-    // block. The orchestrator parses it, persists the four `outcome_*`
-    // columns on agent_runs, and routes based on the parsed kind +
-    // any required `agent_checklists` rows.
-    const outcome = parseRunOutcome(output);
-    await persistRunOutcome(runId, outcome);
-
-    // Load the agent's required checklist (any agent — reviewer or
-    // performer — that has rows gets verified). `agent_checklists.id`
-    // is a bigint column → pg returns it as a STRING; `Number()` coerces
-    // back to JS number so the Set<number> comparison in the decision
-    // function works. Without this the on-pass branch never matches and
-    // every item lands with the Owner via on-fail.
-    const requiredChecklistRows = await db
-        .selectFrom('agent_checklists')
-        .select(['id', 'label'])
-        .where('agent_id', '=', agentId)
-        .where('required', '=', true)
-        .orderBy('sort_order', 'asc')
-        .execute();
-    const requiredChecklist = requiredChecklistRows.map((r) => ({
-        id: Number(r.id),
-        label: r.label as string,
-    }));
-
-    const decision = decideRunRouting({ outcome, requiredChecklist });
-
-    // 2026-06-12 — orchestrator self-routing guard. If the agent already
-    // updated the item's assignee or status via MCP during the run
-    // (`mcp__atlas__update_item` with `action: 'assign'` or
-    // `action: 'change_status'`), trust its decision and skip the post-run
-    // override entirely. Without
-    // this, the `park_waiting_for_info` branch below would stomp on the
-    // agent's self-assignment whenever the agent omitted a fenced
-    // `atlas-outcome` block (i.e. every Path-A migrated agent).
-    //
-    // Detection uses `issue_events`, which is written by the same API
-    // routes both the UI and MCP `assignItem`/`transitionItemStatus`
-    // tools hit. `addCommentToItem` writes `comment_added` events, not
-    // `assigned`/`status_changed`, so comment-only runs still fall
-    // through to the existing safety net.
-    const runStartRow = await db
-        .selectFrom('agent_runs')
-        .select(['started_at'])
-        .where('id', '=', runId)
-        .executeTakeFirst();
-    const runStartedAt =
-        (runStartRow?.started_at as string | null | undefined) ?? new Date().toISOString();
-    const agentRouted = await agentRoutedDuringRun({
-        agentId,
-        itemId: issueId,
-        sinceRunStartedAt: runStartedAt,
-    });
-
-    // Mid-run third-party-intervention guard shared across every non-
-    // self-routed branch (park_waiting_for_info / apply_on_fail /
-    // apply_on_pass). Owner via UI writes `assigned` with
-    // actor_agent_id=null; another agent via MCP writes it with a
-    // different agent id — either counts as intervention. The deleted
-    // top-level `currentAssignee !== agentId` early-return covered ALL
-    // three branches before cedcd43; the fix restored the guard only in
-    // apply_on_pass, silently regressing park + on_fail to clobber
-    // mid-run reassignments. See 2026-07-03 audit round 2, agent-runner
-    // .ts:696 / :720.
-    const reassignedByOther =
-        !agentRouted &&
-        (await otherActorReassignedDuringRun({
-            itemId: issueId,
-            sinceRunStartedAt: runStartedAt,
-            excludeAgentId: agentId,
-        }));
-
-    if (agentRouted) {
-        // Self-routing path — the agent's own `issue_events` rows are the
-        // audit trail; no orchestrator-side write needed. Logged to the
-        // API process stdout for debugging; the run's output_text already
-        // captured the MCP calls that produced the routing decision.
-        //
-        // Rounds reset only on forward progress. Resetting on every self-
-        // routed run kept writer↔reviewer bounce loops at round 1 forever,
-        // so the dispatcher's max_rounds cap never parked them.
-        console.log(
-            `[orchestrator] run ${runId} (${agentId} on ${issueId}): self-routing detected — agent updated assignee/status via MCP; skipping post-run override`,
-        );
-        broadcastSSE({ type: 'counts_changed', issueType, issueId });
-        await resetRoundsUnlessBounceBack(issueId);
-    } else if (reassignedByOther) {
-        // Third-party (Owner or another agent) reassigned during the run.
-        // Respect the intervention on ALL decision branches — record an
-        // audit event and skip park / on-fail / on-pass writes so we
-        // don't overwrite the manual routing.
-        const currentAssignee = await getItemAssignee(issueId);
-        await eventsLog.record({
-            item_id: issueId,
-            item_type: issueType,
-            event_type: 'assigned',
-            actor_agent_id: agentId,
-            field: 'assignee',
-            from_value: agentId,
-            to_value: currentAssignee,
-            detail: `assignee changed by another actor during run; ${decision.kind} skipped`,
-        });
-        broadcastSSE({ type: 'counts_changed', issueType, issueId });
-    } else if (decision.kind === 'park_waiting_for_info') {
-        const itemNow = await db
-            .selectFrom('items')
-            .select(['status'])
-            .where('id', '=', issueId)
-            .executeTakeFirst();
-        const fromStatus = (itemNow?.status as string | null) ?? 'in_progress';
-        await db
-            .updateTable('items')
-            .set({ status: 'waiting_for_info', assignee_agent_id: null })
-            .where('id', '=', issueId)
-            .execute();
-        await eventsLog.record({
-            item_id: issueId,
-            item_type: issueType,
-            event_type: 'status_changed',
-            actor_agent_id: agentId,
-            field: 'status',
-            from_value: fromStatus,
-            to_value: 'waiting_for_info',
-            detail: decision.detail ?? 'agent_did_not_signal_outcome',
-        });
-        broadcastSSE({ type: 'counts_changed', issueType, issueId });
-        await resetRoundsForItem(issueId);
-    } else if (decision.kind === 'apply_on_fail') {
-        await applyOnFailHandoff({
-            agentId,
-            currentItemId: issueId,
-            itemType: issueType,
-            detail: (decision.detail ?? 'rejected').slice(0, 200),
-        });
-        broadcastSSE({ type: 'counts_changed', issueType, issueId });
-        await resetRoundsUnlessBounceBack(issueId);
-    } else {
-        // apply_on_pass — no third-party intervention (the shared guard
-        // above already handled that case). The data-driven handoff is
-        // safe to apply now.
-        const plan = await applyOnPassHandoff({
-            agentId,
-            currentItemId: issueId,
-            itemType: issueType,
-        });
-        for (const a of plan) {
-            if (a.assigneeAgentId === null) {
-                await resetRoundsForItem(a.itemId);
-            }
-        }
-    }
-
-    // 2026-06-08 — Single Run-link pin from the orchestrator. The
-    // agent's own structured `What I did / verified / Open questions`
-    // comment (posted via `mcp__atlas__update_item({ action: 'add_comment' })` from the
-    // prompt) is the authoritative comment on the item. The orchestrator
-    // only drops a tiny static pin so the Owner can jump straight to the
-    // run-detail page from the comment thread. Same body shape as the
-    // self-routed branch above (lines 575-594) — one model for both.
-    //
-    // Before this collapse the runner posted up to two extra comments
-    // per run: an "auto-summary" repost of `outcome.summary` (when the
-    // last MCP-posted comment was too short to clear the substantive
-    // gate) plus a templated `**Agent** completed work on this <type>`
-    // line that re-summarised what the agent already said. Both were
-    // noise once every SDLC agent migrated to structured MCP comments.
-    try {
-        await commentsService.create({
-            author: 'agent',
-            agent_id: agentId,
-            issue_type: issueType,
-            issue_id: issueId,
-            body: buildOrchestratorRunCompletedBody({
-                agentId,
-                agentName: agent?.name ?? agentId,
-                runId,
-                issueType,
-            }),
-        });
-    } catch {
-        /* run-info pin is best-effort */
-    }
-
-    broadcastSSE({
-        type: 'run_completed',
-        agentId,
-        runId,
-        issueType,
-        issueId,
-        status: 'completed',
-    });
-
-    // Generic completion notification — collapses the legacy four-way
-    // outcome.kind branching into a single message derived from observed
-    // final state (item status + assignee after handoff routing
-    // applied). The agent's outcome block — fenced or absent (per
-    // handoff.md's MCP-self-route convention) — no longer steers the
-    // notification text. `needs_you` fires when the item lands on Owner
-    // or waiting_for_info; everything else is routine progress.
-    const finalState = await fetchItemFinalState(issueId);
-    const message = `Agent "${agent?.name ?? agentId}" completed on ${issueType} ${issueId}. Status: "${finalState.statusLabel}". Assignee: "${finalState.assigneeLabel}".`;
-    const eventType = 'agent_completed';
-    const notifKind = deriveNotifKind(finalState.assigneeId, finalState.status);
-    const notificationId = await createAgentNotification({
-        eventType,
-        message,
-        issueType,
-        issueId,
-        agentId,
-        kind: notifKind,
-    });
-
-    // Map by final item status — only waiting_for_info / in_review have
-    // per-event toggles; other final statuses (Done, in_progress, etc.)
-    // get the in-app row above but no external-notification ping.
-    const itemEventKey = deriveItemEventKey(finalState.status);
-    if (itemEventKey) {
-        try {
-            await sendExternalForNotification(notificationId, message, itemEventKey);
-        } catch {
-            /* External notification optional. */
-        }
-    }
-
-    // Theme 08 — post-run memory hook. Increments the per-agent
-    // cadence counter (errors carry more signal); fires a regen when
-    // cadence trips or the Owner posted a `[lesson:]` marker on the
-    // item. Wrapped in try/catch — a memory failure must NOT fail the
-    // run itself.
+    // Theme 08 — post-run memory hook. Best-effort; a memory failure must
+    // NOT fail the run itself.
     try {
         await agentMemoryService.maybeRegenerateAfterRun(agentId, runId, 'completed');
     } catch {
         /* memory hook is best-effort */
     }
 
-    // Theme 11 — commit-discipline verifier. Skip freedom runs (no
-    // item to anchor the audit to). Best-effort; never fails the run.
+    // Theme 11 — commit-discipline verifier. Best-effort.
     if (issueId && issueType) {
         try {
             await runCommitVerifier(runId, agentId, issueType, issueId);
@@ -899,18 +570,14 @@ async function errorRun(
 ): Promise<void> {
     const now = new Date().toISOString();
     // W4 — prepend the classification marker so the run-detail page can
-    // parse the kind out of `output_text` and render a typed banner. When
-    // no classification is supplied (the common "untagged crash" case), the
-    // marker is omitted and the legacy `[ERROR] …` prefix stands alone.
+    // parse the kind out of `output_text` and render a typed banner.
     const marker = classification ? `${formatErrorMarker(classification)} ` : '';
     const errOutput = `[ERROR] ${marker}${errorMsg}`;
     const errAgent = await getAgent(agentId);
     const errCli: AgentCli = errAgent?.cli ?? 'claude';
     const errCost = parseCostFromOutput(errorMsg, errCli);
-    // Workstream #6 — preserve `cancelled` status the same way
-    // `completeRun` does. The Owner clicked Stop; the natural crash
-    // path that follows the SIGTERM/SIGKILL should not flip the row
-    // back to `error`. Persist the output + cost; keep status.
+    // Preserve `cancelled` the same way completeRun does: the crash that
+    // follows SIGTERM must not flip the row back to `error`.
     const errCurrentRow = await db
         .selectFrom('agent_runs')
         .select('status')
@@ -933,188 +600,74 @@ async function errorRun(
         .execute();
 
     if (errWasCancelled) {
-        broadcastSSE({
-            type: 'run_completed',
-            agentId,
-            runId,
-            status: 'cancelled',
-        });
+        broadcastSSE({ type: 'run_completed', agentId, runId, status: 'cancelled' });
+        await notifyStep(runId);
         return;
-    }
-
-    // Freedom-mode run (no item) — broadcast, then emit a `needs_you`
-    // notification so the Owner sees the crash. Same gating model as
-    // the success branch above (in-app always; external notification
-    // via `agent.run_finished_no_item` + quiet hours).
-    if (!issueId || !issueType) {
-        broadcastSSE({
-            type: 'run_error',
-            agentId,
-            runId,
-            status: 'error',
-            errorDetail: errorMsg,
-            ...(classification?.kind ? { errorKind: classification.kind } : {}),
-            ...(classification?.details !== undefined
-                ? { errorDetails: classification.details }
-                : {}),
-        });
-        const noItemErrAgent = await getAgent(agentId);
-        const noItemErrMessage = `Agent "${noItemErrAgent?.name ?? agentId}" errored on a freedom-mode run. Error: ${errorMsg}`;
-        const noItemErrNotificationId = await createAgentNotification({
-            eventType: 'agent_error_no_item',
-            message: noItemErrMessage,
-            issueType: null,
-            issueId: null,
-            agentId,
-            kind: 'needs_you',
-        });
-        try {
-            await sendExternalForNotification(
-                noItemErrNotificationId,
-                noItemErrMessage,
-                'agent.run_finished_no_item',
-            );
-        } catch {
-            /* External notification optional. */
-        }
-        return;
-    }
-
-    // A04 — every CLI invocation counts as one round, including the
-    // ones that crashed. The Owner pays for the failed turn; restart of
-    // the workflow is via reassignment. Mirrors the universal bump in
-    // completeRun above.
-    await incrementRound(issueId, agentId);
-
-    // If the run was advancing an item (ready → in_progress at spawn time),
-    // an error leaves it stranded with no live run. Send it to waiting_for_info
-    // so it surfaces in the Queue's "waiting on you" section and the Owner can
-    // requeue or fix it.
-    //
-    // Widened from `in_progress` only to `in_progress` OR `in_review`: an
-    // Owner mid-run can manually transition the item (e.g. reacting to an
-    // aspirational "Spec ready" comment from a still-running agent). If the
-    // agent then crashes, the item is in `in_review` with no live run — the
-    // same orphaned shape as `in_progress`-without-a-run. MON-2 (2026-05-31)
-    // landed there because the prior narrower guard skipped recovery once
-    // the manual transition fired. Recovery should reach both states.
-    // `ready` is intentionally excluded (a fresh ready item legitimately
-    // has no live run yet).
-    const currentItem = await db
-        .selectFrom('items')
-        .select('status')
-        .where('id', '=', issueId)
-        .executeTakeFirst();
-    if (currentItem?.status === 'in_progress' || currentItem?.status === 'in_review') {
-        const fromStatus = currentItem.status;
-        await db
-            .updateTable('items')
-            .set({ status: 'waiting_for_info' })
-            .where('id', '=', issueId)
-            .execute();
-        // Activity-log: the agent surfaced a failure to the Owner.
-        await eventsLog.record({
-            item_id: issueId,
-            item_type: issueType,
-            event_type: 'status_changed',
-            actor_agent_id: agentId,
-            field: 'status',
-            from_value: fromStatus,
-            to_value: 'waiting_for_info',
-            detail: errorMsg.slice(0, 200),
-        });
-        broadcastSSE({ type: 'counts_changed', issueType, issueId });
-    }
-
-    // 2026-06-01 (Plan E) — error-path push lives in the close-handler
-    // hook (which runs before this `errorRun` call), so committed work
-    // lands on origin even on a non-zero exit. If the runner itself
-    // crashed before the hook fired, the boot-time orphan reaper in
-    // `main.ts` is the safety net.
-
-    // A crash is not a verdict, so it parks with the Owner instead of
-    // following the on-fail rule. Reviewer on-fail rules now hand the item
-    // back to the writer as `ready` (migration 032); applying them here
-    // would auto-dispatch the writer on every reviewer crash.
-    await db
-        .updateTable('items')
-        .set({ assignee_agent_id: null, status: 'waiting_for_info' })
-        .where('id', '=', issueId)
-        .execute();
-
-    const agent = await getAgent(agentId);
-
-    // Error path also leaves one comment per run, so the activity feed
-    // stays uniform whether the run succeeded or crashed. The crash
-    // path skips outcome parsing since the agent didn't get to emit
-    // the `atlas-outcome` block. Best-effort: a comment failure never
-    // compounds the run failure.
-    try {
-        await commentsService.create({
-            author: 'agent',
-            agent_id: agentId,
-            issue_type: issueType,
-            issue_id: issueId,
-            body: buildCompletionCommentBody({
-                agentId,
-                agentName: agent?.name ?? agentId,
-                runId,
-                issueType,
-                errorMsg,
-            }),
-        });
-    } catch {
-        /* auto-comment is best-effort */
     }
 
     broadcastSSE({
         type: 'run_error',
         agentId,
         runId,
-        issueType,
-        issueId,
+        ...(issueType ? { issueType } : {}),
+        ...(issueId ? { issueId } : {}),
         status: 'error',
+        errorDetail: errorMsg,
         ...(classification?.kind ? { errorKind: classification.kind } : {}),
-        ...(classification?.details !== undefined
-            ? { errorDetails: classification.details }
-            : {}),
+        ...(classification?.details !== undefined ? { errorDetails: classification.details } : {}),
     });
 
-    // Include the item's current status + assignee when the item id is
-    // known, so the Owner can see at-a-glance whether the failed run
-    // left the chain stalled or still routable. issueId can be null for
-    // freedom-mode runs.
-    const errorState = issueId ? await fetchItemFinalState(issueId) : null;
-    const stateSuffix = errorState
-        ? ` Status: "${errorState.statusLabel}". Assignee: "${errorState.assigneeLabel}".`
-        : '';
-    const message = `Agent "${agent?.name ?? agentId}" errored on ${issueType} ${issueId}.${stateSuffix} Error: ${errorMsg}`;
-    const notificationId = await createAgentNotification({
-        eventType: 'agent_error',
-        message,
-        issueType,
-        issueId,
-        agentId,
-        kind: 'needs_you',
-    });
-
-    try {
-        await sendExternalForNotification(notificationId, message, 'agent.failed');
-    } catch {
-        /* non-fatal */
+    const inWorkflow = await isWorkflowStep(runId);
+    if (issueId && issueType) {
+        // One comment per run keeps the activity feed uniform whether the
+        // run succeeded or crashed. Best-effort.
+        try {
+            await commentsService.create({
+                author: 'agent',
+                agent_id: agentId,
+                issue_type: issueType,
+                issue_id: issueId,
+                body: buildCompletionCommentBody({
+                    agentId,
+                    agentName: errAgent?.name ?? agentId,
+                    runId,
+                    issueType,
+                    errorMsg,
+                }),
+            });
+        } catch {
+            /* auto-comment is best-effort */
+        }
+    }
+    if (!inWorkflow) {
+        const message = `Agent "${errAgent?.name ?? agentId}" errored${issueId ? ` on ${issueType} ${issueId}` : ''}. Error: ${errorMsg}`;
+        const notificationId = await createAgentNotification({
+            eventType: issueId ? 'agent_error' : 'agent_error_no_item',
+            message,
+            issueType,
+            issueId,
+            agentId,
+            kind: 'needs_you',
+        });
+        try {
+            await sendExternalForNotification(
+                notificationId,
+                message,
+                issueId ? 'agent.failed' : 'agent.run_finished_no_item',
+            );
+        } catch {
+            /* non-fatal */
+        }
     }
 
-    // Theme 08 — post-run memory hook (error path). Bumps the counter
-    // by 2 (errors carry more signal). Wrapped so a memory failure
-    // doesn't compound the run failure.
+    await notifyStep(runId);
+
     try {
         await agentMemoryService.maybeRegenerateAfterRun(agentId, runId, 'error');
     } catch {
         /* memory hook is best-effort */
     }
 
-    // Theme 11 — commit-discipline verifier (error path). Same skip
-    // rules as completeRun; best-effort wrap.
     if (issueId && issueType) {
         try {
             await runCommitVerifier(runId, agentId, issueType, issueId);
@@ -1124,9 +677,9 @@ async function errorRun(
     }
 }
 
-// Theme 11 — looks up the run + item to resolve cwd + started_at,
-// then delegates to the verifier service. Kept inline so the hook
-// at both call sites is one line.
+// Theme 11 — resolves cwd + started_at, then delegates to the verifier.
+// A workflow step's commits live in the run's worktree, not the project
+// checkout, so prefer that path when there is one.
 async function runCommitVerifier(
     runId: string,
     agentId: string,
@@ -1134,9 +687,10 @@ async function runCommitVerifier(
     issueId: string,
 ): Promise<void> {
     const run = await db
-        .selectFrom('agent_runs')
-        .select(['started_at'])
-        .where('id', '=', runId)
+        .selectFrom('agent_runs as r')
+        .leftJoin('workflow_runs as w', 'w.id', 'r.workflow_run_id')
+        .select(['r.started_at', 'w.worktree_path'])
+        .where('r.id', '=', runId)
         .executeTakeFirst();
     if (!run?.started_at) return;
     const settings = await db
@@ -1151,7 +705,10 @@ async function runCommitVerifier(
         .select(['p.git_path as project_git_path'])
         .where('i.id', '=', issueId)
         .executeTakeFirst();
-    const cwd = (itemRow?.project_git_path as string | null) || workspacePath;
+    const cwd =
+        (run.worktree_path as string | null) ||
+        (itemRow?.project_git_path as string | null) ||
+        workspacePath;
     await verifyRunCommits({
         runId,
         agentId,
@@ -1187,7 +744,9 @@ function simulateRun(
             i++;
             setTimeout(tick, 600);
         } else {
-            const simulatedOutput = `[SIMULATED — set ATLAS_AI_ENABLED=true to use real CLI]\n\nPrompt length: ${prompt.length} chars\n\nThis is a placeholder response that would be generated by the assigned agent CLI.`;
+            // The outcome block lets AI-disabled environments (e2e, demos)
+            // walk a workflow end to end.
+            const simulatedOutput = `[SIMULATED — set ATLAS_AI_ENABLED=true to use real CLI]\n\nPrompt length: ${prompt.length} chars\n\nThis is a placeholder response that would be generated by the assigned agent CLI.\n\n\`\`\`atlas-outcome\noutcome: done\nsummary: Simulated run.\n\`\`\``;
             void completeRun(runId, agentId, issueType, issueId, simulatedOutput);
         }
     };
@@ -1213,27 +772,6 @@ interface SpawnCliOptions {
      *  as the App instead of falling back to the developer's local
      *  `gh auth login` in `~/.config/gh/hosts.yml`. */
     ghToken?: string | null;
-    /** Plan E — orchestrator post-run hook context. Populated when the
-     *  worktree orchestrator provisioned a branch for this run; null on
-     *  freedom-mode and bare-clone runs. Carried separately from
-     *  `gitConfigPath` because the post-run hooks build their own
-     *  short-lived config (the spawn's may have been unlinked by the
-     *  time push fires). */
-    worktreeBranch?: string | null;
-    worktreePath?: string | null;
-    /** Owner's "remote is source of truth" lifecycle — the main repo
-     *  path used as cwd for `git worktree remove` / `git branch -D`
-     *  after a successful push. Null on freedom-mode + bare-clone runs;
-     *  cleanup is skipped when null. */
-    projectGitPath?: string | null;
-    projectCredentialId?: string | null;
-    projectDefaultBranch?: string | null;
-    /** Workstream #3 — project identity for the per-project git mutex
-     *  guarding `pushWorktree` / `openPullRequest` / cleanup. Null on
-     *  freedom-mode + bare-clone runs (those paths skip the orchestrator
-     *  post-run hook entirely). */
-    projectId?: string | null;
-    itemTitle?: string | null;
     /** Plan #7 — when the run has no worktree, the artefact files
      *  (MANDATE_CONSTITUTION.md + WORK.md) live in this throwaway
      *  os.tmpdir() subdirectory. Recursively removed by the exit /
@@ -1260,11 +798,12 @@ interface SpawnCliOptions {
  * strict MCP config declares only the Atlas HTTP server, which needs no auth
  * header. `--mcp-config` is variadic, so the prompt must stay on stdin.
  */
-export function claudeIsolationArgs(agent: Pick<IAgent, 'requires_item'>): string[] {
-    // Freedom-mode scouts (ai-news, market-research, regulations, jira-to-epic)
-    // depend on Owner-scoped MCP servers — the Playwright plugin and claude.ai
-    // connectors — that a strict Atlas-only config would strip.
-    if (!agent.requires_item) return [];
+export function claudeIsolationArgs(itemAttached: boolean): string[] {
+    // Runs without an item (ai-news, market-research, regulations,
+    // jira-to-epic scouts) depend on Owner-scoped MCP servers — the Playwright
+    // plugin and claude.ai connectors — that a strict Atlas-only config would
+    // strip.
+    if (!itemAttached) return [];
     return [
         '--setting-sources', 'project,local',
         '--strict-mcp-config',
@@ -1302,13 +841,6 @@ function spawnCli(opts: SpawnCliOptions): void {
         cwd,
         gitConfigPath,
         ghToken,
-        worktreeBranch,
-        worktreePath,
-        projectGitPath,
-        projectCredentialId,
-        projectDefaultBranch,
-        projectId,
-        itemTitle,
         artefactTmpRoot,
         copilotUserAgentPath,
     } = opts;
@@ -1389,7 +921,7 @@ function spawnCli(opts: SpawnCliOptions): void {
     void prompt;
     const slug = agentIdToSlug(agent.id);
     const slashCommand = `/atlas-${slug}`;
-    const copilotTrigger = `Execute the atlas-${slug} agent — read .atlas/constitution.md, .atlas/handoff.md, .atlas/current-task.md, and the relevant template, then complete the work.`;
+    const copilotTrigger = `Execute the atlas-${slug} agent — read .atlas/constitution.md, .atlas/current-task.md, .atlas/outcome.md, and the relevant template, then complete the work.`;
 
     // `--effort` is omitted on the Ollama dialect. Ollama's docs scope thinking
     // controls to "compatible models" only, and most local models have no
@@ -1441,7 +973,7 @@ function spawnCli(opts: SpawnCliOptions): void {
               // consume stdin).
               '--print',
               '--verbose',
-              ...claudeIsolationArgs(agent),
+              ...claudeIsolationArgs(issueId !== null),
               '--model', model,
               ...effortArgs,
               '--output-format', 'stream-json',
@@ -1668,190 +1200,6 @@ function spawnCli(opts: SpawnCliOptions): void {
             await killProcessTree(child.pid ?? null);
         }
 
-        // Plan E — orchestrator-owned post-run repo ops. Push always
-        // fires (success OR failure) so committed work never strands on
-        // disk; PR creation gates on (raises_pr && code === 0 && pushed).
-        // Both are best-effort: failures append to `output_text` but do
-        // not flip the run's terminal status. Skipped for freedom-mode
-        // and bare-clone runs (no worktreeBranch).
-        if (worktreePath && worktreeBranch) {
-            // Owner's two-file proposal — delete the run artefact
-            // Phase 1.5b — legacy .atlas-run/ artefact cleanup has
-            // been retired (the directory is no longer written). The
-            // phase-1 `.atlas/` tree is excluded from git via
-            // `.git/info/exclude`, so nothing reaches origin even
-            // without an explicit rm. The worktree's `.atlas/` does
-            // not need to be cleaned between runs because the
-            // regenerator wipes it at the start of every run.
-            // Plan #7 — `push` is populated only when the agent has
-            // `push_code = true`. When push_code is false (PO Writer,
-            // read-only reviewers), we skip the push entirely AND
-            // still want cleanup to fire — so we model the no-push
-            // case as `{ pushed: false, alreadyUpToDate: true }` which
-            // the cleanup gate below already treats as a happy path.
-            let push: {
-                pushed: boolean;
-                alreadyUpToDate: boolean;
-                error?: string;
-            } = { pushed: false, alreadyUpToDate: true };
-            try {
-                if (agent.push_code === true) {
-                    emit(
-                        `[orchestrator] push: auth=${projectCredentialId ? 'extraheader' : 'NONE'} branch=${worktreeBranch}`,
-                    );
-                    push = await pushWorktree(
-                        worktreePath,
-                        worktreeBranch,
-                        projectCredentialId ?? null,
-                        projectId as string,
-                    );
-                    if (push.pushed) {
-                        emit(`[orchestrator] push: pushed ${worktreeBranch}`);
-                    } else if (push.alreadyUpToDate) {
-                        emit(`[orchestrator] push: up-to-date ${worktreeBranch}`);
-                    } else {
-                        emit(`[orchestrator] push: FAILED ${worktreeBranch}: ${push.error ?? 'unknown'}`);
-                    }
-                } else {
-                    emit(
-                        `[orchestrator] push: skipped (push_code=false) branch=${worktreeBranch}`,
-                    );
-                }
-
-                let prAllowed = false;
-                if (agent.raises_pr && code === 0 && projectId) {
-                    const itemRow = issueId
-                        ? await db
-                              .selectFrom('items')
-                              .select(['status'])
-                              .where('id', '=', issueId)
-                              .executeTakeFirst()
-                        : null;
-                    prAllowed =
-                        (!issueId || itemRow !== undefined) &&
-                        shouldOpenPullRequest({
-                            itemStatus: itemRow ? (itemRow.status as string) : null,
-                            outcome: parseRunOutcome(output),
-                        });
-                    if (!prAllowed) {
-                        emit(
-                            `[orchestrator] pr: skipped — run did not approve the work (item status=${(itemRow?.status as string | undefined) ?? 'unknown'})`,
-                        );
-                    }
-                }
-                if (prAllowed && projectId) {
-                    const base = projectDefaultBranch && projectDefaultBranch.trim()
-                        ? projectDefaultBranch
-                        : 'main';
-                    // Title + body shapes diverge: item-attached PRs reference
-                    // the issueId (Closes-link works); project-scope PRs use
-                    // the project name + agent name since there's no item.
-                    let prTitle: string;
-                    let prBody: string;
-                    if (issueId) {
-                        const titleShort = (itemTitle ?? '').trim().slice(0, 80) || issueId;
-                        prTitle = `[${issueId}] ${titleShort}`;
-                        prBody = [
-                            `Automated PR opened by orchestrator for ${issueId}.`,
-                            '',
-                            `- Closes #${issueId}`,
-                            `- Reviewer: ${agent.name} (${agent.id})`,
-                            `- Run: \`${runId}\``,
-                        ].join('\n');
-                    } else {
-                        const projName = await db
-                            .selectFrom('projects')
-                            .select('name')
-                            .where('id', '=', projectId)
-                            .executeTakeFirst();
-                        const projectName = (projName?.name as string | null) ?? projectId;
-                        prTitle = `[${agent.name}] ${projectName}`;
-                        prBody = [
-                            `Automated PR opened by orchestrator for ${agent.name} run.`,
-                            '',
-                            `- Project: ${projectName}`,
-                            `- Agent: ${agent.name} (${agent.id})`,
-                            `- Run: \`${runId}\``,
-                        ].join('\n');
-                    }
-                    const pr = await openPullRequest({
-                        worktreePath,
-                        branch: worktreeBranch,
-                        base,
-                        title: prTitle,
-                        body: prBody,
-                        credentialId: projectCredentialId ?? null,
-                        projectId,
-                    });
-                    if (pr.opened && pr.url) {
-                        emit(`[orchestrator] pr: opened ${pr.url}`);
-                    } else if (pr.alreadyExists && pr.url) {
-                        emit(`[orchestrator] pr: already exists ${pr.url}`);
-                    } else if (pr.alreadyExists) {
-                        emit(`[orchestrator] pr: already exists (url lookup failed: ${pr.error ?? 'unknown'})`);
-                    } else {
-                        emit(`[orchestrator] pr: FAILED: ${pr.error ?? 'unknown'}`);
-                    }
-                    // Persist the PR URL as an item_external_links row so
-                    // each successive PR on the same item accumulates rather
-                    // than overwriting the prior URL (the old code path
-                    // wrote `items.pr_url` which held a single scalar).
-                    // Project-scope PRs have no item to bind to.
-                    if (pr.url && issueId) {
-                        try {
-                            const parsed = parseGithubPrUrl(pr.url);
-                            const title = await fetchGithubPrTitle(pr.url).catch(() => null);
-                            await externalLinks.create({
-                                itemId: issueId,
-                                url: pr.url,
-                                linkKind: 'pull_request',
-                                title,
-                                externalRef: parsed?.number ?? null,
-                                createdByRunId: runId,
-                                actorAgentId: agent.id,
-                            });
-                        } catch (urlErr) {
-                            emit(`[orchestrator] pr: persist external link failed: ${(urlErr as Error).message}`);
-                        }
-                    }
-                }
-
-                // Owner's "remote is source of truth" lifecycle —
-                // when push succeeded, delete the local worktree
-                // folder and local branch ref so the next run on
-                // this item re-provisions from origin. Gated on
-                // push.pushed || push.alreadyUpToDate; a failed
-                // push leaves everything in place for manual
-                // recovery. Runs AFTER the PR block because
-                // `gh pr create` uses worktreePath as cwd.
-                if ((push.pushed || push.alreadyUpToDate) && projectId && projectGitPath) {
-                    const cleanup = await cleanupWorktreeAfterPush({
-                        // Null for project-scope runs — Step 3 (items.worktree_path
-                        // null-out) is skipped; the local worktree remove + branch
-                        // delete + fetch --prune all still fire.
-                        itemId: issueId ?? null,
-                        projectId,
-                        projectGitPath,
-                        worktreePath,
-                        branch: worktreeBranch,
-                        // GCM-safety: Step 4 (`git fetch origin --prune`) is a
-                        // network call; without the project credential it would
-                        // fall through to GCM on Windows. Mirror the credential
-                        // already passed to `openPullRequest` above.
-                        credentialId: projectCredentialId ?? null,
-                    });
-                    emit(
-                        `[orchestrator] cleanup: wt=${cleanup.worktreeRemoved} br=${cleanup.branchDeleted} db=${cleanup.dbCleared}`,
-                    );
-                    for (const w of cleanup.warnings) {
-                        emit(`[orchestrator] cleanup warn: ${w}`);
-                    }
-                }
-            } catch (hookErr) {
-                emit(`[orchestrator] post-run hook crashed: ${(hookErr as Error).message}`);
-            }
-        }
-
         if (code === 0) {
             await completeRun(runId, agent.id, issueType, issueId, output);
         } else {
@@ -1992,28 +1340,30 @@ export interface SpawnAgentRunOptions {
     issueType?: IssueType | null;
     issueId?: string | null;
     /**
-     * Theme 09b — project-scope runs (e.g., the AI-Readiness Agent).
-     * When set with no `issueId`, the run lifecycle is "project-scope":
-     * agent_runs row carries project_id, cwd = project.git_path, the
-     * prompt-builder renders a project preamble instead of item /
-     * freedom-mode shapes, and `git push` auth flows via a per-run
-     * GIT_CONFIG_GLOBAL temp file populated with `http.extraheader`
-     * Basic from the project's stored PAT credential.
+     * Project-level runs (no item): the project whose guardrails and
+     * credential the run uses.
      */
     projectId?: string | null;
     /**
      * When set, the caller has already INSERTed the `agent_runs` row
      * (status='queued', prompt=null) and is responsible for surfacing
      * the unique-index race as 409. `spawnAgentRun` reuses this runId
-     * for the rest of the lifecycle and UPDATEs the prompt_snapshot
-     * once it's built (rather than INSERTing a second row).
-     *
-     * Used by `POST /api/run` so the HTTP 202 returns in ~50 ms
-     * (before worktree provisioning) — see `routes/run.ts`. The slow
-     * worktree + constitution + prompt-build work still happens, just
-     * off the request thread.
+     * and UPDATEs the prompt_snapshot once it's built.
      */
     existingRunId?: string;
+    /**
+     * ADR 0014 — the workflow step this run executes. The engine owns the
+     * worktree (provisioned once per workflow run), item status and routing;
+     * the runner only stages, spawns and reports back.
+     */
+    workflowRun?: {
+        id: string;
+        nodeId: string;
+        worktreePath: string | null;
+        branch: string | null;
+        /** Project setup already ran for this workflow run. */
+        skipSetup: boolean;
+    } | null;
 }
 
 export async function spawnAgentRun(
@@ -2025,275 +1375,71 @@ export async function spawnAgentRun(
         issueId = null,
         projectId = null,
         existingRunId,
+        workflowRun = null,
     } = opts;
     const agent = await getAgent(agentId);
     if (!agent) throw new Error(`Agent ${agentId} not found`);
 
-    // B04 — pre-dispatch depends_on gate. Item-attached runs only; freedom-mode
-    // and project-scope runs have no item and thus no item_links to consult.
-    // Throws DependenciesNotReadyError + records a `dispatch_blocked` activity
-    // event if any depends_on target of `issueId` is non-`done`. Catchers:
-    // routes/run.ts → 409; agent-dispatcher.maybeAutoDispatch → reason
-    // 'deps_blocked'. Reviewer-leg + performer-retry helpers below check
-    // again defensively for the rare case where an Owner relinked mid-cycle.
-    if (issueId) {
-        await assertDepsAllDoneForDispatch(issueId, agentId);
-    }
-
-    const settings = await getSettings();
-    const workspacePath = settings.workspace_path ?? process.cwd();
-
-    // The CLI must execute INSIDE the project's cloned repo so it can read/edit
-    // real source. Three cwd resolution paths:
-    //   - project-scope (Theme 09b): cwd = project.git_path
-    //   - item-attached: cwd = project.git_path via item -> project lookup,
-    //     then narrowed to the per-item worktree by `ensureWorktree` below
-    //     (T2). The agent's prompt gets a "worktree is pre-provisioned"
-    //     preamble so it doesn't try to re-create or pull on its own.
-    //   - freedom-mode: cwd = workspace
-    let cwd = workspacePath;
-    let projectGitPath: string | null = null;
-    let projectCredentialId: string | null = null;
-    let projectDefaultBranch: string | null = null;
-    let itemTitle: string | null = null;
-    // T2 — populated when an item-attached run successfully provisions a
-    // worktree. spawnCli reads `cwd` directly; we keep the resolved
-    // branch + freshlyCreated flags alongside so the prompt preamble has
-    // the right context. `worktreePath` is the on-disk path (`= cwd` once
-    // the worktree is provisioned) — captured separately so the post-run
-    // hook can still locate it after `cwd` is overwritten by a follow-on
-    // code path.
-    let worktreeBranch: string | null = null;
-    let worktreePath: string | null = null;
-    let worktreeFreshlyCreated = false;
-    // Hoisted so the worktree-provisioning block below can use it both as
-    // the branch's short-id source and as an error-context string. The
-    // agent_runs row insert below reuses this same value.
-    // If the caller (e.g. `POST /api/run`) already INSERTed the row
-    // synchronously to keep the HTTP response under the slow-request
-    // threshold, reuse that runId and UPDATE the row's prompt_snapshot
-    // once it's built. Otherwise fall back to the legacy path: generate
-    // here and INSERT below.
     const runId = existingRunId ?? randomUUID();
 
-    // Project info resolution. Two entry points populate the same vars:
-    //   - projectId only → fetch from `projects` directly
-    //   - issueId → join through `items` to find the project, also pull the
-    //     item's worktree_branch / worktree_path / title for downstream use
-    // `effectiveProjectId` is the resolved project id used by the unified
-    // worktree block — equal to opts.projectId when project-scope, or the
-    // item's project_id when item-attached.
+    // The project supplies guardrails (constitution) and git credentials:
+    // explicit for project-level runs, via the item otherwise.
     let effectiveProjectId: string | null = projectId;
-    let itemWorktreeBranch: string | null = null;
-    let itemWorktreePath: string | null = null;
+    let projectCredentialId: string | null = null;
     if (projectId) {
         const proj = await db
             .selectFrom('projects')
-            .select(['git_path', 'credential_id', 'default_branch'])
+            .select(['credential_id'])
             .where('id', '=', projectId)
             .executeTakeFirst();
         if (!proj) throw new Error(`Project ${projectId} not found`);
-        projectGitPath = proj.git_path as string;
         projectCredentialId = (proj.credential_id as string | null) ?? null;
-        projectDefaultBranch = (proj.default_branch as string | null) ?? null;
-        cwd = projectGitPath || workspacePath;
     } else if (issueId) {
         const itemRow = await db
             .selectFrom('items as i')
             .leftJoin('projects as p', 'p.id', 'i.project_id')
-            .select([
-                'p.id as project_id',
-                'p.git_path as project_git_path',
-                'p.credential_id as project_credential_id',
-                'p.default_branch as project_default_branch',
-                'i.title as item_title',
-                'i.worktree_branch as worktree_branch',
-                'i.worktree_path as worktree_path',
-            ])
+            .select(['p.id as project_id', 'p.credential_id as project_credential_id'])
             .where('i.id', '=', issueId)
             .executeTakeFirst();
-        cwd = (itemRow?.project_git_path as string | null) || workspacePath;
         effectiveProjectId = (itemRow?.project_id as string | null) ?? null;
-        projectGitPath = (itemRow?.project_git_path as string | null) ?? null;
         projectCredentialId = (itemRow?.project_credential_id as string | null) ?? null;
-        projectDefaultBranch = (itemRow?.project_default_branch as string | null) ?? null;
-        itemTitle = (itemRow?.item_title as string | null) ?? null;
-        itemWorktreeBranch = (itemRow?.worktree_branch as string | null) ?? null;
-        itemWorktreePath = (itemRow?.worktree_path as string | null) ?? null;
-
-        // Defensive: if an item-attached agent on a git-backed project is
-        // missing worktree_branch, generate `atlas/<role_id>/<itemId>`
-        // and persist it. New epics get this at create time (epics.ts);
-        // stories get it from PO Writer's createStory MCP call. This
-        // fallback covers any legacy or edge-case item that escaped both.
-        if (
-            !itemWorktreeBranch &&
-            agent.requires_worktree === true &&
-            effectiveProjectId &&
-            projectGitPath &&
-            agent.role_id
-        ) {
-            const generated = `atlas/${agent.role_id}/${issueId}`;
-            await db
-                .updateTable('items')
-                .set({ worktree_branch: generated })
-                .where('id', '=', issueId)
-                .where('worktree_branch', 'is', null)
-                .execute();
-            itemWorktreeBranch = generated;
-        }
     }
 
-    // Unified worktree provisioning. `requires_worktree` is the single
-    // switch: item-attached uses item.worktree_branch (resolved above);
-    // project-scope (no item) generates atlas/<kind|role|'run'>/<short-runId>
-    // so cleanup, push, and PR creation all fire through the same downstream
-    // code paths.
-    if (agent.requires_worktree === true && effectiveProjectId && projectGitPath) {
-        let resolvedBranch: string;
-        let itemForEnsure: { id: string; worktree_branch: string | null; worktree_path: string | null } | null;
-
-        if (issueId) {
-            if (!itemWorktreeBranch) {
-                throw new Error(
-                    `Agent ${agent.id} has requires_worktree=true but neither role_id ` +
-                    `nor item.worktree_branch is set for item ${issueId}.`,
-                );
-            }
-            resolvedBranch = itemWorktreeBranch;
-            itemForEnsure = {
-                id: issueId,
-                worktree_branch: itemWorktreeBranch,
-                worktree_path: itemWorktreePath,
-            };
-        } else {
-            // Project-scope — generate a scratch branch keyed off the run id
-            // so re-runs never collide on `atlas/ai-readiness` and the
-            // cleanup path can delete the branch without fear of orphaning
-            // a real human's WIP.
-            const prefix = agent.kind_slug || agent.role_id || 'run';
-            const shortRunId = runId.slice(0, 8);
-            resolvedBranch = `atlas/${prefix}/${shortRunId}`;
-            itemForEnsure = null;
-        }
-
-        try {
-            const result = await ensureWorktree({
-                item: itemForEnsure,
-                // exactOptionalPropertyTypes: only set `branch` when item is null.
-                ...(itemForEnsure ? {} : { branch: resolvedBranch }),
-                project: {
-                    id: effectiveProjectId,
-                    git_path: projectGitPath,
-                    credential_id: projectCredentialId,
-                    default_branch: projectDefaultBranch,
-                },
-                // Plan #7 — only push upstream when the agent commits code.
-                // Read-only reviewers have push_code=false; their scratch
-                // worktrees stay local-only and cleanup deletes the branch.
-                pushUpstream: agent.push_code === true,
-            });
-            cwd = result.path;
-            worktreeBranch = result.branch;
-            worktreePath = result.path;
-            worktreeFreshlyCreated = result.freshlyCreated;
-        } catch (err) {
-            const wtErr = err as Error & { code?: string };
-            throw new Error(
-                `Worktree provisioning failed for ${issueId ?? `run ${runId}`}: ` +
-                    `${wtErr.message}` +
-                    (err instanceof WorktreeProvisioningError && wtErr.code
-                        ? ` (code: ${wtErr.code})`
-                        : ''),
-            );
-        }
-    }
-
-    // 2026-06-12 — Unified working directory. Every run now executes
-    // inside a real on-disk directory with `.atlas/*` scaffolding:
-    //
-    //  - `requires_worktree=true` → real git worktree provisioned above
-    //    (`worktreePath`). Used for any agent that commits / pushes /
-    //    needs branch isolation.
-    //  - `requires_worktree=false` → ephemeral temp dir under
-    //    `<tmpdir>/atlas-run-<runId>-*/`. Same `.atlas/*` files get
-    //    written here. Cleaned up via `artefactTmpRoot` on run finalize.
-    //
-    // This kills the legacy "freedom mode = inline `-p` prompt with the
-    // constitution baked in" code path. Shell scripts, slash commands,
-    // and the Windows 32K CreateProcess limit are now handled uniformly
-    // regardless of whether the agent uses a worktree.
-    //
-    // Handoff scaffolding (`.atlas/handoff.md` + `.atlas/current-task.md`)
-    // is conditional on `requires_item = true` — scout-style agents
-    // (ai-news, market-research, etc.) don't operate on items so they
-    // get the constitution + templates only.
-    let workdirPath: string;
+    // Only a workflow run provisions a worktree (once, shared by every step).
+    // Any other run executes in a throwaway dir with the same `.atlas/*`
+    // scaffolding, removed on finalize via `artefactTmpRoot`.
+    const worktreePath = workflowRun?.worktreePath ?? null;
+    const worktreeBranch = worktreePath ? (workflowRun?.branch ?? null) : null;
+    let cwd: string;
     let artefactTmpRoot: string | null = null;
     if (worktreePath) {
-        workdirPath = worktreePath;
+        cwd = worktreePath;
     } else {
         artefactTmpRoot = mkdtempSync(join(tmpdir(), `atlas-run-${runId}-`));
-        workdirPath = artefactTmpRoot;
-        cwd = workdirPath;
+        cwd = artefactTmpRoot;
     }
 
-    // All worktree-context staging — constitution, templates, slash-command
-    // bodies for every agent, the per-run item snapshot, and the routing
-    // handoff — goes through the shared `stageCliWorktree` helper that the
-    // terminal-session create route also calls. Differences between the
-    // two flows are carved out by flags:
-    //   - `includeHandoff` writes `.atlas/handoff.md` (agent-only routing
-    //     contract; terminal sessions skip it).
-    //   - `activeRunCopilotAgent` writes the per-run user-level Copilot
-    //     agent file at `~/.copilot/agents/atlas-<runId>.md` so the CLI
-    //     can resolve `--agent atlas-<runId>` (only Copilot agent runs).
-    // writeCurrentTask failures used to be `console.warn`-and-continue
-    // here; that swallowed real bugs (e.g. a deleted item id reaching
-    // dispatch). The shared helper now throws — callers can decide.
+    // Shared with terminal sessions: constitution, templates, slash-command
+    // bodies, the item snapshot, and — agent runs only — the outcome contract
+    // + self-memory the CLI actually reads (the built prompt below is an
+    // audit snapshot; the CLI never sees it).
     const stageResult = await stageCliWorktree({
-        worktreePath: workdirPath,
+        worktreePath: cwd,
         projectId: effectiveProjectId,
-        ...(agent.requires_item === true && issueType && issueId
-            ? { item: { type: issueType, id: issueId } }
-            : {}),
+        ...(issueType && issueId ? { item: { type: issueType, id: issueId } } : {}),
         ...(agent.cli === 'copilot' ? { activeRunCopilotAgent: { runId, agentId } } : {}),
-        ...(agent.requires_item === true ? { includeHandoff: { agentId } } : {}),
+        includeOutcome: { agentId },
     });
     const constitutionMd = stageResult.constitutionMarkdown;
     const copilotUserAgentPath: string | null = stageResult.copilotUserAgentPath ?? null;
 
-    // Theme 09b — build the per-run git auth (http.extraheader Basic +
-    // [credential] helper = disabler + [user] bot identity for github_app
-    // creds) when a project credential is in play. The path lives in
-    // tmpdir; spawnCli inherits GIT_CONFIG_GLOBAL pointing at it AND
-    // GH_TOKEN pointing at the plaintext token so both `git commit` and
-    // `gh pr create` inside the agent's CLI process authenticate as the
-    // bot identity. Cleaned up on child exit.
-    //
-    // NOTE: buildGitAuth is the ONLY correct way to construct this file;
-    // hand-rolled inline configs miss the `[user]` block that attributes
-    // commits to `<slug>[bot]` (see history — the previous inline
-    // writeFileSync-based path caused `git commit` to fall through to
-    // the developer's `~/.gitconfig` for user.name/email).
+    // Per-run git auth (http.extraheader + bot identity) so `git commit`
+    // inside the CLI is attributed to the App, not the developer's
+    // ~/.gitconfig. buildGitAuth is the ONLY correct way to build this file.
     let gitConfigPath: string | null = null;
     let ghToken: string | null = null;
-    // Migration 025 — capture the human-attribution fields for prompt
-    // injection below. Agents get an explicit `--trailer "Co-Authored-By:
-    // <name> <email>"` instruction so their `git commit` invocations
-    // (which use `-c core.hooksPath=.husky/_` and therefore bypass the
-    // prepare-commit-msg hook that GIT_CONFIG_GLOBAL would otherwise
-    // wire) still credit the human.
     let humanName: string | null = null;
     let humanEmail: string | null = null;
-    // Bug fix (2026-07-03): the guard was `if (projectId && projectCredentialId)`,
-    // but `projectId` (from opts) is only populated for project-scope runs. For
-    // item-attached runs like MON-2 the caller doesn't set it, so `projectId`
-    // was null and `buildGitAuth` never fired — meaning the agent's `git commit`
-    // fell through to the developer's `~/.gitconfig` and PRs were authored as
-    // the user, not the bot. Use `effectiveProjectId` (populated for both
-    // project-scope AND item-attached runs) plus `projectCredentialId`
-    // (populated whenever the project has a credential wired).
     if (effectiveProjectId && projectCredentialId) {
         try {
             const auth = await buildGitAuth(projectCredentialId);
@@ -2304,21 +1450,15 @@ export async function spawnAgentRun(
                 humanEmail = auth.humanEmail;
             }
         } catch (err) {
-            // Best-effort — if credential lookup fails, the agent will
-            // hit a 403 on push and report it in the run output.
+            // Best-effort — without auth the agent's commits fall back to
+            // the local identity and the End push reports the failure.
             broadcastSSE({
                 type: 'agent_output',
-                output: `[ai-readiness] warning: could not prepare git auth: ${(err as Error).message}`,
+                output: `[agent-runner] warning: could not prepare git auth: ${(err as Error).message}`,
             });
         }
     }
 
-    // Plan E + run-artefact split (Owner proposal 2026-06-01) — render
-    // the work half of the prompt without the constitution. The
-    // constitution is written to its own file alongside `WORK.md`; the
-    // CLI receives a tiny pointer prompt asking the agent to Read both.
-    // This sidesteps Windows' 32,767-char CreateProcess command-line
-    // limit (the full assembled prompt is 30–33 KB).
     const workBody = await buildPrompt({
         agent,
         issueType,
@@ -2329,48 +1469,24 @@ export async function spawnAgentRun(
         humanName,
         humanEmail,
     });
-    // T2 — when the orchestrator provisioned a worktree above, prepend a
-    // short preamble telling the agent the worktree is already on the
-    // right branch and pulled. Without this the model continues to follow
-    // the prompt-level `git worktree add …` instructions and either
-    // double-creates or stalls on credential helpers.
-    //
-    // 2026-06-12 — for `requires_item=true` agents we also prepend the
-    // centralized "read .atlas/*.md" preamble so the audit snapshot
-    // (`agent_runs.prompt_snapshot`) reflects the same body the agent
-    // saw via its slash command. The agent reads the slash command
-    // body (from `.claude/commands/atlas-<slug>.md` /
-    // `.github/prompts/atlas-<slug>.prompt.md`) which already carries
-    // the preamble via `commands-assembler`; this duplication is just
-    // for the audit trail.
-    const itemHandoffPreamble = agent.requires_item === true
-        ? `${assemblePreamble(agentId)}\n\n`
-        : '';
+    // Mirrors the slash-command body (commands-assembler prepends the same
+    // preamble) so `prompt_snapshot` reflects what the agent was told.
+    const preamble = `${assemblePreamble(agentId)}\n\n`;
     const workMd =
         worktreeBranch !== null
-            ? `${itemHandoffPreamble}${buildWorktreePreamble({
+            ? `${preamble}${buildWorktreePreamble({
                   branch: worktreeBranch,
                   path: cwd,
-                  freshlyCreated: worktreeFreshlyCreated,
+                  freshlyCreated: false,
               })}\n${workBody}`
-            : `${itemHandoffPreamble}${workBody}`;
-    // Keep `prompt_snapshot` byte-for-byte equivalent to the old
-    // assembled-prompt shape so audit / re-render tooling (`/api/run/:id`,
-    // prompt-history diffing) doesn't see a phantom rewrite. The
-    // constitution lives at the top, `---` separator, then the work body
-    // — matches `buildPrompt`'s `sections.join('\n\n---\n\n')`.
+            : `${preamble}${workBody}`;
+    // constitution, `---`, then the work body — matches buildPrompt's
+    // `sections.join('\n\n---\n\n')` so audit tooling sees one shape.
     const fullPrompt = constitutionMd.trim()
         ? `${constitutionMd.trim()}\n\n---\n\n${workMd}`
         : workMd;
     const now = new Date().toISOString();
 
-    // Two write paths:
-    //   - `existingRunId`-driven (HTTP /api/run): caller INSERTed the
-    //     row already with prompt=null; we now UPDATE with the freshly
-    //     built prompt. The unique-index race was caught at INSERT in
-    //     the caller's path.
-    //   - Legacy (auto-dispatcher etc.): INSERT here, catch the unique
-    //     index race ourselves.
     // ADR 0014 — the config this run actually spawned with. Agents are
     // editable, so reading agents.* later would misattribute cost and
     // outcomes when comparing models across runs.
@@ -2379,7 +1495,13 @@ export async function spawnAgentRun(
         model: agent.model,
         effort: agent.effort,
         prompt_version: agent.prompt_version,
+        workflow_run_id: workflowRun?.id ?? null,
+        node_id: workflowRun?.nodeId ?? null,
     };
+    // Two write paths:
+    //   - `existingRunId` (HTTP /api/run): caller INSERTed the row with
+    //     prompt=null; UPDATE it now.
+    //   - otherwise INSERT here and catch the unique-index race ourselves.
     if (existingRunId) {
         await db
             .updateTable('agent_runs')
@@ -2402,75 +1524,13 @@ export async function spawnAgentRun(
                 })
                 .execute();
         } catch (err) {
-            // Race-free fallback for the item-level run lock. The unique
-            // partial index `agent_runs_one_live_per_item` (migration 003)
-            // rejects a second live row for the same item. The dispatcher's
-            // `findLiveRunOnItem` check catches most cases pre-insert; this
-            // catches the race between check + insert.
+            // The partial unique index `agent_runs_one_live_per_item`
+            // (migration 003) rejects a second live row for the same item.
             const code = (err as { code?: string }).code;
             if (code === '23505' && issueId) {
                 throw new LiveRunOnItemError(issueId);
             }
             throw err;
-        }
-    }
-
-    // Advance the item itself so the queue and detail pages reflect that work
-    // is in flight. Only fire on `ready` so manually-triggered runs on other
-    // statuses (draft/in_review/done) don't get nudged forward unexpectedly.
-    // Skipped entirely for freedom-mode runs (no item).
-    //
-    // Wrap the flip + activity-log in one transaction so a failure between
-    // them doesn't strand the item at `in_progress` with no audit-trail
-    // entry. Also add `WHERE status = 'ready'` to the UPDATE so a
-    // concurrent Owner-driven transition (e.g. back to `draft`) between
-    // the SELECT and the UPDATE causes a no-op UPDATE — we detect via
-    // returned rows and skip the activity log accordingly.
-    if (issueId && issueType) {
-        const currentItem = await db
-            .selectFrom('items')
-            .select('status')
-            .where('id', '=', issueId)
-            .executeTakeFirst();
-        if (currentItem?.status === 'ready') {
-            const flipped = await db.transaction().execute(async (trx) => {
-                const updated = await trx
-                    .updateTable('items')
-                    .set({ status: 'in_progress' })
-                    .where('id', '=', issueId)
-                    .where('status', '=', 'ready')
-                    .returning('id')
-                    .executeTakeFirst();
-                if (!updated) return false;
-                // Activity-log: the agent (not the Owner) picked the item up.
-                //
-                // `detail: 'orchestrator_run_start'` marker: this event was
-                // written by the orchestrator at dispatch time, NOT by the
-                // agent's MCP calls. `agentRoutedDuringRun` filters this
-                // out so it isn't mistaken for the agent self-routing via
-                // MCP. Without the marker, every autonomous run
-                // (`assignee = agent` at ready → in_progress) tripped a
-                // false-positive on self-routing and the runner skipped
-                // its post-run status transition, leaving the item stuck
-                // in `in_progress` after the agent finished (bug: JDA-1).
-                await eventsLog.record(
-                    {
-                        item_id: issueId,
-                        item_type: issueType,
-                        event_type: 'status_changed',
-                        actor_agent_id: agentId,
-                        field: 'status',
-                        from_value: 'ready',
-                        to_value: 'in_progress',
-                        detail: 'orchestrator_run_start',
-                    },
-                    trx,
-                );
-                return true;
-            });
-            if (flipped) {
-                broadcastSSE({ type: 'counts_changed', issueType, issueId });
-            }
         }
     }
 
@@ -2492,14 +1552,10 @@ export async function spawnAgentRun(
 
     setTimeout(() => {
         void (async () => {
-            // Promote only a run that is STILL queued. 200 ms is plenty for the
-            // row to leave the live set — cancelled by the Owner, swept by
-            // `failOrphanedRuns`, or deleted with its item — and by then a
-            // replacement run may hold the item's slot. An unconditional flip
-            // put this row back into the live set behind that replacement's
-            // back and tripped `agent_runs_one_live_per_item`, which surfaced
-            // only as "unhandled promise rejection (kept alive)" in the API
-            // log. Losing the flip means the run isn't ours to start.
+            // Promote only a run that is STILL queued. In 200 ms the row may
+            // have left the live set (cancelled, swept, item deleted) and a
+            // replacement may hold the item's slot; an unconditional flip
+            // tripped `agent_runs_one_live_per_item`.
             const promoted = await db
                 .updateTable('agent_runs')
                 .set({ status: 'in_progress' })
@@ -2519,76 +1575,32 @@ export async function spawnAgentRun(
 
             const aiEnabled = process.env['ATLAS_AI_ENABLED'] === 'true';
             if (aiEnabled) {
-                // 2026-06-10 — Per-project setup script. Runs after
-                // worktree staging + status flip to `in_progress` but
-                // BEFORE `spawnCli`. The user-authored .sh / .ps1
-                // body is substituted with `${variable.KEY}` values
-                // from environment_secrets + project_env_vars
-                // (project wins on collision). On any failure the run
-                // is finalized with `status='setup_failed'` and the
-                // CLI is never spawned. Skipped for freedom-mode runs
-                // (no worktree) and runs without a project context.
-                if (effectiveProjectId && worktreePath) {
+                // Per-project setup script, once per workflow run: every
+                // later step shares the already-set-up worktree. On failure
+                // the run is `setup_failed`, the CLI never spawns, and the
+                // engine parks the workflow run with the Owner.
+                if (effectiveProjectId && worktreePath && !workflowRun?.skipSetup) {
                     const setupResult = await runProjectSetup({
                         projectId: effectiveProjectId,
                         worktreePath,
                         runId,
                     });
                     if (!setupResult.ok) {
-                        // Race-aware: if the Owner stopped the run mid-
-                        // setup, respect their `cancelled` status.
                         const current = await db
                             .selectFrom('agent_runs')
                             .select('status')
                             .where('id', '=', runId)
                             .executeTakeFirst();
-                        if (
-                            (current?.status as string | undefined) !== 'cancelled'
-                        ) {
-                            const setupNow = new Date().toISOString();
+                        if ((current?.status as string | undefined) !== 'cancelled') {
                             await db
                                 .updateTable('agent_runs')
                                 .set({
                                     status: 'setup_failed',
                                     setup_output_text: setupResult.output,
-                                    completed_at: setupNow,
+                                    completed_at: new Date().toISOString(),
                                 })
                                 .where('id', '=', runId)
                                 .execute();
-                            // Roll back item `in_progress → ready` so
-                            // the Owner can fix the script / secret and
-                            // re-dispatch immediately. Mirrors the gate
-                            // at run-spawn that promoted `ready` →
-                            // `in_progress` in the first place.
-                            if (issueId && issueType) {
-                                const itemRow = await db
-                                    .selectFrom('items')
-                                    .select('status')
-                                    .where('id', '=', issueId)
-                                    .executeTakeFirst();
-                                if (itemRow?.status === 'in_progress') {
-                                    await db
-                                        .updateTable('items')
-                                        .set({ status: 'ready' })
-                                        .where('id', '=', issueId)
-                                        .execute();
-                                    await eventsLog.record({
-                                        item_id: issueId,
-                                        item_type: issueType,
-                                        event_type: 'status_changed',
-                                        actor_agent_id: agentId,
-                                        field: 'status',
-                                        from_value: 'in_progress',
-                                        to_value: 'ready',
-                                        detail: `setup failed: ${setupResult.kind}`,
-                                    });
-                                    broadcastSSE({
-                                        type: 'counts_changed',
-                                        issueType,
-                                        issueId,
-                                    });
-                                }
-                            }
                             broadcastSSE({
                                 type: 'run_setup_failed',
                                 agentId,
@@ -2601,23 +1613,10 @@ export async function spawnAgentRun(
                                     : {}),
                             });
                         }
+                        await notifyStep(runId);
                         return;
                     }
                 }
-                // 2026-06-09 — /commands framework Phase 4. The CLI no
-                // longer receives the giant `fullPrompt` envelope; it
-                // gets the slash command directly. `fullPrompt` is
-                // still built above and persisted as
-                // `agent_runs.prompt_snapshot` for the audit trail
-                // (the on-disk `.atlas/*` artefacts are what the
-                // agent actually consumed at runtime).
-                //
-                // 2026-06-12 — `artefactTmpRoot` is now hoisted out of
-                // this callback (see the workdir-unification block
-                // above). It points at the `.atlas/*`-scaffolded
-                // temp dir for non-worktree runs, or null when a real
-                // worktree owns the cleanup. spawnCli's finalize hook
-                // still rms it on exit; same shape as before.
                 spawnCli({
                     agent,
                     runId,
@@ -2627,17 +1626,6 @@ export async function spawnAgentRun(
                     cwd,
                     gitConfigPath,
                     ghToken,
-                    worktreeBranch,
-                    worktreePath,
-                    projectGitPath,
-                    projectCredentialId,
-                    projectDefaultBranch,
-                    // Plan E + unified worktrees — pass the resolved project_id
-                    // (from item lookup for issueId-attached runs, or opts for
-                    // project-scope). The post-run hook needs it for push,
-                    // openPullRequest, and cleanupWorktreeAfterPush.
-                    projectId: effectiveProjectId,
-                    itemTitle,
                     artefactTmpRoot,
                     copilotUserAgentPath,
                 });
@@ -2645,11 +1633,8 @@ export async function spawnAgentRun(
                 simulateRun(runId, agentId, issueType, issueId, fullPrompt);
             }
         })().catch((err: unknown) => {
-            // Nothing between the promotion above and `spawnCli` below had a
-            // catch, so any throw here became an unhandled rejection: the run
-            // sat at `in_progress` until the next boot sweep and the reason
-            // lived only in the API log. `errorRun` finalizes the row, puts
-            // the message on the run-detail page and notifies the Owner.
+            // Anything thrown between promotion and spawn would otherwise be
+            // an unhandled rejection with the run stuck at in_progress.
             void errorRun(
                 runId,
                 agentId,

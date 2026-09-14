@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { epicsService } from '../services/epics.js';
 import { issueFullService } from '../services/issue-full.js';
-import { resetRoundsForIssue } from '../services/agent-rounds.js';
 import {
     CreateEpicSchema,
     UpdateEpicSchema,
@@ -125,13 +124,6 @@ export async function epicsRoutes(app: FastifyInstance) {
         return reply.send(
             await epicsService.assign(id, assignee_agent_id, requested_by_agent_id ?? null),
         );
-    });
-
-    app.post('/api/epics/:id/reset-rounds', { preHandler: requireMcpToken }, async (req, reply) => {
-        const { id } = req.params as { id: string };
-        if (!(await epicsService.get(id))) return reply.status(404).send({ error: 'Epic not found' });
-        await resetRoundsForIssue(id);
-        return reply.status(204).send();
     });
 
     app.delete('/api/epics/:id', { preHandler: requireMcpToken }, async (req, reply) => {

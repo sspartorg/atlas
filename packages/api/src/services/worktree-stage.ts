@@ -21,8 +21,10 @@
 //     user prompt is appended as a `## User's initial prompt` section.
 //   - `~/.copilot/agents/atlas-<runId>.md` — when `activeRunCopilotAgent`
 //     is set (agent-runner with copilot + `--agent` only).
-//   - `.atlas/handoff.md` — when `includeHandoff` is set (agent-runner
-//     when the agent's `requires_item` is true). Terminals never set it.
+//   - `.atlas/outcome.md` + `.atlas/self-memory.md` — when `includeOutcome`
+//     is set (every agent run). The CLI only reads what is on disk, so this
+//     is the ONLY way the outcome contract and the agent's memory reach it.
+//     Terminals never set it.
 //
 // What this does NOT do (caller-owned because of cleanup semantics):
 //   - `runProjectSetup` — a failed setup must roll back the worktree, and
@@ -34,8 +36,10 @@ import type { IssueType } from '@atlas/shared';
 import { assembleConstitution } from './constitution-assembler.js';
 import { assembleTemplates } from './templates-assembler.js';
 import { assembleCommands } from './commands-assembler.js';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { writeCurrentTask } from './current-task-writer.js';
-import { assembleHandoff } from './handoff-assembler.js';
+import { renderRunOutcomeContract, renderSelfMemorySection } from './prompt-builder.js';
 
 export interface StageCliWorktreeOpts {
     worktreePath: string;
@@ -55,9 +59,9 @@ export interface StageCliWorktreeOpts {
      *  responsible for cleaning the resulting file up on finalize/error
      *  (the returned `copilotUserAgentPath` is the cleanup target). */
     activeRunCopilotAgent?: { runId: string; agentId: string };
-    /** Agent runs only — writes `.atlas/handoff.md` with the routing
-     *  checklist + on-pass/on-fail rules. */
-    includeHandoff?: { agentId: string };
+    /** Agent runs only — writes `.atlas/outcome.md` (how to report the
+     *  run's result) and `.atlas/self-memory.md` (past course-corrections). */
+    includeOutcome?: { agentId: string };
 }
 
 export interface StageCliWorktreeResult {
@@ -105,11 +109,17 @@ export async function stageCliWorktree(
         currentTaskPath = out.currentTaskPath;
     }
 
-    if (opts.includeHandoff) {
-        await assembleHandoff({
-            worktreePath: opts.worktreePath,
-            agentId: opts.includeHandoff.agentId,
-        });
+    if (opts.includeOutcome) {
+        const atlasDir = join(opts.worktreePath, '.atlas');
+        mkdirSync(atlasDir, { recursive: true });
+        const { agentId } = opts.includeOutcome;
+        writeFileSync(join(atlasDir, 'outcome.md'), `${await renderRunOutcomeContract(agentId)}\n`, 'utf8');
+        const memory = await renderSelfMemorySection(agentId);
+        writeFileSync(
+            join(atlasDir, 'self-memory.md'),
+            memory ? `${memory}\n` : '# Self-memory\n\n_No entries yet._\n',
+            'utf8',
+        );
     }
 
     return {

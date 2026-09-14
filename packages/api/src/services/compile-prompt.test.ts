@@ -23,10 +23,6 @@ function freedomAgent(over: Partial<IAgent> = {}): IAgent {
         sort_order: 1,
         description: '',
         designation: '',
-        max_rounds: 5,
-        requires_item: false,
-        schedule_hours: 0,
-        concurrent_runs: 1,
         glyph: '',
         created_at: '2026-05-28T00:00:00.000Z',
         updated_at: '2026-05-28T00:00:00.000Z',
@@ -56,7 +52,7 @@ describe('compilePromptFor — freedom mode', () => {
 
         expect(result.issue).toBeNull();
         expect(result.filename).toMatch(/^prompt-freedom-scout-freedom-\d{8}-\d{6}\.md$/);
-        expect(result.prompt).toContain('# Freedom Run');
+        expect(result.prompt).toContain('# Project-level Run');
         // The freedom preamble should NOT include any item context block.
         expect(result.prompt).not.toContain('# Current Task');
         // Regression — the constitution header used to render twice because

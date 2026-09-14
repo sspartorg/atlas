@@ -150,11 +150,9 @@ export function formatComments(comments: IComment[]): string {
 // + …) and can technically call any Atlas MCP tool, so the safety net
 // moved to a prompt-level clause.
 //
-// 2026-06-01 (Plan E) — `mcp__atlas__execGitHub` was removed. The
-// orchestrator regains ownership of `git push` and `gh pr create`:
-// `pushWorktree` always fires at run-end, and `openPullRequest` fires
-// when the agent row has `raises_pr = true` AND the run exited cleanly.
-// Agents commit only. The constitution mirrors that contract.
+// ADR 0014 — the workflow owns `git push` and `gh pr create`: it pushes and
+// opens one PR when the whole workflow run reaches End. Agents commit only.
+// The constitution mirrors that contract.
 const FORBIDDEN_TOOLS_SECTION = `## One run = one model session
 
 You may not dispatch sub-agents from this session. Concretely:
@@ -191,9 +189,16 @@ explain that this is an Owner-only action.
 
 ## Repository operations (every agent, no exceptions)
 
-**You commit. The orchestrator pushes and opens the PR.** This split
+**You commit. The workflow pushes and opens the PR.** This split
 is non-negotiable and identical for every role; do not duplicate or
 vary it in a per-agent prompt.
+
+**You are one step of a workflow.** Other agents may run before and
+after you in this same working directory — their commits are already
+here, and yours will be there for the next step. Routing is the
+workflow's job: never assign the item, change its status, or hand the
+work to another agent yourself. Report your result with the
+\`atlas-outcome\` block and stop.
 
 **Commit your own work.** Every commit must use the Husky workaround
 \`git -c core.hooksPath=.husky/_ commit\` (the sandbox can't spawn
@@ -204,17 +209,14 @@ trail credits the AI for the work. Stage with \`git add\` (no
 
 **Do NOT run \`git push\`, \`gh pr create\`, \`gh pr edit\`, or any
 other remote-mutating git/gh command — via Bash or anywhere else.**
-The orchestrator owns those:
+The workflow owns those:
 
-- After your run ends — success OR failure — it pushes the worktree
-  HEAD to \`origin/<worktree_branch>\` so nothing strands on disk.
-- On a clean exit (run status \`completed\`), when your agent row has
-  \`raises_pr = true\`, it opens a pull request against the project's
-  default branch (typically \`main\`). The PR URL is written to
-  \`items.pr_url\` automatically; you do not need to mention it in a
-  comment.
-- The orchestrator uses the API server's stored GitHub credential
-  (HTTPS \`http.extraheader\`) — no token is exposed to your shell.
+- When the workflow run reaches its End step it pushes the branch
+  and, if the workflow is configured to, opens one pull request
+  against the project's default branch. The PR is linked on the
+  item automatically; you do not need to mention it in a comment.
+- It uses the API server's stored GitHub credential (HTTPS
+  \`http.extraheader\`) — no token is exposed to your shell.
 
 Local reads are fine: \`git status\`, \`git diff\`, \`git log\`,
 \`gh pr view\` (read-only). Anything that mutates origin is the
@@ -341,9 +343,9 @@ export async function renderRunOutcomeContract(agentId: string): Promise<string>
         '',
         '## Outcomes',
         '',
-        '- `done` — your work this round is complete; the orchestrator applies your **on-pass** handoff (next agent in the chain).',
-        '- `rejected` — you are explicitly bouncing the work back; the orchestrator applies your **on-fail** handoff (typically back to the prior agent). Provide `reason`.',
-        '- `asked_question` — you cannot proceed without Owner input; the orchestrator parks the item in `waiting_for_info`. Provide `reason`.',
+        '- `done` — your work this round is complete; the workflow follows its **pass** connection to the next step.',
+        '- `rejected` — you are explicitly bouncing the work back; the workflow follows its **fail** connection (typically back to the previous step). Provide `reason` — the next step reads it.',
+        '- `asked_question` — you cannot proceed without Owner input (the request is unclear, contradictory, or missing information); the workflow parks the item with the Owner and re-runs your step once they reply. Provide `reason` as the exact question.',
         '',
         '## Block format',
         '',
@@ -378,7 +380,7 @@ export async function renderRunOutcomeContract(agentId: string): Promise<string>
         }
         lines.push(
             '',
-            '**Strict mode.** If you emit `outcome: done` and any **required** row is either missing from `checklist` or reports `passed: false`, the orchestrator treats your run as a checklist failure and applies the **on-fail** handoff instead (typically back to the prior agent with the failed labels named).',
+            '**Strict mode.** If you emit `outcome: done` and any **required** row is either missing from `checklist` or reports `passed: false`, the workflow treats your run as a checklist failure and follows the **fail** connection instead (or parks with the Owner when there is none).',
             '',
         );
     } else {
@@ -715,12 +717,12 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
         /* v8 ignore next */
         if (outcomeContract) sections.push(outcomeContract);
         sections.push(
-            `# Freedom Run\n\n` +
-                `This is a scheduled run with no item attached. You were dispatched ` +
-                `by the cron scheduler because your \`requires_item\` flag is off. Use ` +
-                `your role prompt above to decide what to produce; results go into ` +
-                `the run output and any side effects (comments, notifications, etc.) ` +
-                `are at your discretion via the MCP tools your agent record grants.`,
+            `# Project-level Run\n\n` +
+                `This run has no item attached — the workflow runs you against the ` +
+                `project (or on its own). Use your role prompt above to decide what ` +
+                `to produce; results go into the run output and any side effects ` +
+                `(items, comments, notifications) are at your discretion via the MCP ` +
+                `tools your agent record grants.`,
         );
         sections.push(
             `# Output Instructions\n\n` +

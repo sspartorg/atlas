@@ -1,23 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'crypto';
 import { sql } from 'kysely';
-import {
-    spawnAgentRun,
-    runOutputRegistry,
-    cancelRun,
-    LiveRunOnItemError,
-} from '../services/agent-runner.js';
-import { findLiveRunOnItem } from '../services/agent-dispatcher.js';
+import { spawnAgentRun, runOutputRegistry, cancelRun } from '../services/agent-runner.js';
+import { cancelWorkflowRun, onStepFinished } from '../services/workflow-engine.js';
 import { broadcastSSE } from './events.js';
 import { asAgentRun } from '../services/agents.js';
-import {
-    DependenciesNotReadyError,
-    assertDepsAllDoneForDispatch,
-} from '../services/dependency-guard.js';
 import { db } from '../db/kysely-client.js';
 import { ApiError } from '../utils/errors.js';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
-import { RUNNABLE_ISSUE_TYPES, type ApiErrorBody, type IssueType } from '@atlas/shared';
+import { type ApiErrorBody, type IssueType } from '@atlas/shared';
 
 // List-mode projection for `output_text`: keep the head (so the
 // `[SIMULATED…]` marker that `isSimulatedRun` looks for survives) plus
@@ -33,165 +24,63 @@ const OUTPUT_TEXT_LIST_SQL = sql<string | null>`CASE
 END`;
 
 export async function runRoutes(app: FastifyInstance) {
+    // ADR 0014 — an ad-hoc run of one agent against the project (or nothing),
+    // e.g. a quick check of a scout's prompt. Work on an item always goes
+    // through a workflow: that is what provisions the worktree, routes the
+    // result, and delivers the PR.
     app.post('/api/run', async (req, reply) => {
-        const { agent_id, issue_type, issue_id } = req.body as {
+        const { agent_id, issue_type, issue_id, project_id } = req.body as {
             agent_id?: string;
             issue_type?: string;
             issue_id?: string;
+            project_id?: string;
         };
 
         if (!agent_id) {
             throw new ApiError('validation_error', 'agent_id is required', 400);
         }
-
-        const hasItem = Boolean(issue_type && issue_id);
-
-        if (hasItem && !RUNNABLE_ISSUE_TYPES.includes(issue_type as IssueType)) {
+        if (issue_type || issue_id) {
             throw new ApiError(
                 'validation_error',
-                `issue_type must be one of: ${RUNNABLE_ISSUE_TYPES.join(', ')}`,
+                'Runs on an item go through a workflow — assign the item to a workflow and start it there',
                 400
             );
         }
 
         const agent = await db
             .selectFrom('agents')
-            .select(['id', 'status', 'requires_item'])
+            .select(['id', 'status'])
             .where('id', '=', agent_id)
             .executeTakeFirst();
         if (!agent) throw new ApiError('not_found', 'Agent not found', 404);
         if (agent.status !== 'active') throw new ApiError('conflict', 'Agent is not active', 400);
 
-        // Freedom-mode agents (`requires_item = false`) can be launched with
-        // no item — runner spawns with null item params and the prompt
-        // builder emits the freedom preamble. Item-driven agents still
-        // require both fields.
-        if (!hasItem && agent.requires_item) {
-            throw new ApiError(
-                'validation_error',
-                'issue_type and issue_id are required for item-driven agents',
-                400
-            );
-        }
-
-        // Item-level run lock — block manual dispatch when another run is
-        // already active on this item, regardless of which agent owns it.
-        // Mirrors the auto-dispatcher's `findLiveRunOnItem` check so the
-        // lock is uniform across manual + automated trigger paths.
-        // Freedom-mode (no item) is exempt.
-        if (hasItem) {
-            const blocker = await findLiveRunOnItem(issue_id!);
-            if (blocker) {
-                throw new ApiError(
-                    'conflict',
-                    `Item ${issue_id} already has an active run by ${blocker.agentId} (run ${blocker.runId}). Wait for it to finish before triggering a new run.`,
-                    409
-                );
-            }
-        }
-
-        // B04 depends_on hard-gate. Pulled UP from spawnAgentRun's prologue
-        // so the 409 + blocker payload still surfaces synchronously after
-        // the perf split (background spawn can't propagate HTTP errors).
-        // Same error shape clients + tests already consume.
-        if (hasItem) {
-            try {
-                await assertDepsAllDoneForDispatch(issue_id!, agent_id);
-            } catch (err) {
-                if (err instanceof DependenciesNotReadyError) {
-                    const body: ApiErrorBody & { blockers: typeof err.blockers } = {
-                        error: 'dependencies_not_ready',
-                        kind: 'conflict',
-                        blockers: err.blockers,
-                    };
-                    return reply.status(409).send(body);
-                }
-                /* v8 ignore next */
-                throw err;
-            }
-        }
-
-        // Split-handler dispatch (perf fix 2026-06-10):
-        //
-        // The old code awaited `spawnAgentRun(...)` end-to-end before sending
-        // 202 — but spawnAgentRun does worktree provisioning, constitution
-        // assembly, commands/templates writes, and prompt building BEFORE
-        // its INSERT. That's where the 2.5–3.5 s tail comes from, every
-        // dispatch was tripping the 250 ms slow-request log.
-        //
-        // Now:
-        //   1. We INSERT the `agent_runs` row here, synchronously, with
-        //      prompt_snapshot=null. Same uniqueness-race handling as
-        //      spawnAgentRun's original block.
-        //   2. We return 202 with the runId.
-        //   3. `queueMicrotask` runs the slow work (worktree → CLI fork)
-        //      off the request thread. `existingRunId` tells
-        //      spawnAgentRun to UPDATE the prompt_snapshot instead of
-        //      doing a second INSERT.
-        //   4. On any error in the background task we mark the row
-        //      status='error' so the failure surfaces in the same UI
-        //      surfaces that render every other run failure.
+        // Insert synchronously so the 202 carries a real run id and returns in
+        // ~50 ms; `existingRunId` tells spawnAgentRun to UPDATE this row instead
+        // of inserting a second one. Background failures land on the row.
         const runId = randomUUID();
         const now = new Date().toISOString();
-        try {
-            await db
-                .insertInto('agent_runs')
-                .values({
-                    id: runId,
-                    agent_id,
-                    item_id: hasItem ? issue_id! : null,
-                    status: 'queued',
-                    prompt_snapshot: null,
-                    started_at: now,
-                })
-                .execute();
-        } catch (err) {
-            // Same race-guard spawnAgentRun used to do — the unique
-            // partial index `agent_runs_one_live_per_item` blocks a
-            // second live row per item.
-            const code = (err as { code?: string }).code;
-            if (code === '23505' && hasItem) {
-                throw new ApiError(
-                    'conflict',
-                    `Item ${issue_id} already has an active run (race-blocked at DB invariant).`,
-                    409
-                );
-            }
-            // Log the raw error server-side (with any DB shape / connection
-            // detail intact) but return a generic message to the client so
-            // a schema / driver failure doesn't disclose column names or
-            // connection strings.
-            /* v8 ignore next 2 */
-            req.log.error({ err }, 'agent_runs insert failed');
-            throw new ApiError('internal_error', 'Could not queue run', 500);
-        }
+        await db
+            .insertInto('agent_runs')
+            .values({
+                id: runId,
+                agent_id,
+                item_id: null,
+                project_id: project_id ?? null,
+                status: 'queued',
+                prompt_snapshot: null,
+                started_at: now,
+            })
+            .execute();
 
-        broadcastSSE({
-            type: 'run_queued',
-            agentId: agent_id,
-            runId,
-            ...(hasItem ? { issueType: issue_type as IssueType, issueId: issue_id } : {}),
-        });
+        broadcastSSE({ type: 'run_queued', agentId: agent_id, runId });
 
         queueMicrotask(() => {
             void spawnAgentRun({
                 agentId: agent_id,
-                issueType: hasItem ? (issue_type as IssueType) : null,
-                issueId: hasItem ? issue_id! : null,
+                projectId: project_id ?? null,
                 existingRunId: runId,
             }).catch(async (err: unknown) => {
-                // Surface background failures via the row instead of HTTP:
-                // depends_on gate / worktree provisioning / prompt build
-                // failures all land here. Skip-and-log strategy keeps the
-                // run discoverable from the UI's runs tab.
-                const reason =
-                    /* v8 ignore next 2 */
-                    err instanceof DependenciesNotReadyError
-                        ? `dependencies not ready: ${err.blockers.map((b) => b.id).join(', ')}`
-                        : /* v8 ignore next */
-                          err instanceof LiveRunOnItemError
-                          ? `item already has an active run (${err.itemId})`
-                          : (err as Error).message;
                 req.log.error({ err, runId }, 'spawn-failed');
                 try {
                     await db
@@ -199,16 +88,13 @@ export async function runRoutes(app: FastifyInstance) {
                         .set({
                             status: 'error',
                             completed_at: new Date().toISOString(),
-                            outcome_summary: reason,
+                            outcome_summary: (err as Error).message,
                         })
                         .where('id', '=', runId)
                         .execute();
                 } catch (updateErr) {
                     /* v8 ignore next */
-                    req.log.error(
-                        { err: updateErr, runId },
-                        'spawn-failed: could not mark row as error'
-                    );
+                    req.log.error({ err: updateErr, runId }, 'spawn-failed: could not mark row as error');
                 }
             });
         });
@@ -296,10 +182,20 @@ export async function runRoutes(app: FastifyInstance) {
         const { id } = req.params as { id: string };
         const run = await db
             .selectFrom('agent_runs')
-            .select(['id', 'item_id'])
+            .select(['id', 'item_id', 'workflow_run_id'])
             .where('id', '=', id)
             .executeTakeFirst();
         if (!run) throw new ApiError('not_found', 'Run not found', 404);
+
+        // A workflow step: stop its workflow run first (kills the live step,
+        // keeps committed work, parks the item with the Owner). Resetting the
+        // item to `ready` below would immediately re-queue it.
+        if (run.workflow_run_id) {
+            await cancelWorkflowRun(run.workflow_run_id);
+            await db.deleteFrom('agent_runs').where('id', '=', id).execute();
+            runOutputRegistry.delete(id);
+            return reply.status(204).send();
+        }
 
         await db.transaction().execute(async (tx) => {
             // Drop the row first — CASCADE clears reviewer-child runs that
@@ -395,6 +291,10 @@ export async function runRoutes(app: FastifyInstance) {
             console.warn(`[run-stop] cancelRun(${id}) threw: ${(err as Error).message}`);
             return { cancelled: false, pidKilled: null };
         });
+        // Stopping a workflow step stops its workflow run. A queued step that
+        // never spawned has no finalize path to report this, so report here;
+        // the engine ignores the duplicate when the killed CLI reports too.
+        await onStepFinished(id);
 
         // Re-read the row AFTER both the UPDATE and the kill, then
         // broadcast / respond with whatever the DB now says. The UPDATE

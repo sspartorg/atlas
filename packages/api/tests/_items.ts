@@ -52,7 +52,6 @@ export async function insertAgent(
         accent_color: string;
         prompt_md: string;
         prompt_version: number;
-        requires_item: boolean;
     }> = {},
 ): Promise<string> {
     const id = overrides.id ?? 'agent-coder';
@@ -89,10 +88,7 @@ export async function insertAgent(
             accent_color: overrides.accent_color ?? '#31AB46',
             sort_order: 1,
             description: '',
-            schedule_hours: 6,
-            concurrent_runs: 1,
             glyph: '',
-            requires_item: overrides.requires_item ?? true,
         })
         .execute();
     return id;

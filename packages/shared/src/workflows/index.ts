@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { SchedulePreset } from '../types/index.js';
+import type { AgentCli, RunOutcomeKind, RunStatus, SchedulePreset } from '../types/index.js';
+import { SchedulePresetSchema } from '../schemas/index.js';
 
 export const WORKFLOW_NODE_TYPES = ['start', 'agent', 'owner', 'end'] as const;
 export type WorkflowNodeType = (typeof WORKFLOW_NODE_TYPES)[number];
@@ -101,6 +102,85 @@ export const WorkflowGraphSchema: z.ZodType<IWorkflowGraph> = z.object({
         .array(z.object({ id: ID, source: ID, target: ID, kind: z.enum(WORKFLOW_EDGE_KINDS) }))
         .max(300),
 });
+
+/** A list row: the run plus the title of the item it worked on. */
+export interface IWorkflowRunSummary extends IWorkflowRun {
+    item_title: string | null;
+}
+
+/** One agent step inside a workflow run — an `agent_runs` row projected for the run view. */
+export interface IWorkflowRunStep {
+    id: string;
+    node_id: string | null;
+    agent_id: string;
+    agent_name: string | null;
+    status: RunStatus;
+    cli: AgentCli | null;
+    model: string | null;
+    outcome_kind: RunOutcomeKind | null;
+    outcome_summary: string | null;
+    outcome_reason: string | null;
+    total_cost_usd: number | null;
+    started_at: string | null;
+    completed_at: string | null;
+}
+
+export interface IWorkflowRunDetail extends IWorkflowRunSummary {
+    workflow_name: string;
+    steps: IWorkflowRunStep[];
+}
+
+const WorkflowFieldsSchema = z.object({
+    name: z.string().trim().min(1).max(200),
+    description: z.string().max(4000).nullable(),
+    project_id: ID.nullable(),
+    status: z.enum(['active', 'inactive']),
+    graph: WorkflowGraphSchema,
+    input_kind: z.enum(WORKFLOW_INPUT_KINDS),
+    trigger: z.enum(WORKFLOW_TRIGGERS),
+    use_worktree: z.boolean(),
+    push_code: z.boolean(),
+    raises_pr: z.boolean(),
+    max_loops: z.number().int().min(1).max(20),
+    schedule_preset: SchedulePresetSchema.nullable(),
+    schedule_time_of_day: z
+        .string()
+        .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+        .nullable(),
+    schedule_weekday: z.number().int().min(0).max(6).nullable(),
+    cron_expr: z.string().max(200).nullable(),
+});
+
+export const CreateWorkflowSchema = WorkflowFieldsSchema.partial().extend({
+    name: WorkflowFieldsSchema.shape.name,
+});
+export type CreateWorkflowInput = z.infer<typeof CreateWorkflowSchema>;
+
+export const UpdateWorkflowSchema = WorkflowFieldsSchema.partial();
+export type UpdateWorkflowInput = z.infer<typeof UpdateWorkflowSchema>;
+
+export const StartWorkflowRunSchema = z.object({ item_id: ID.optional() });
+
+/** Queue an item for a workflow, or take it off every workflow with null. */
+export const SetItemWorkflowSchema = z.object({ workflow_id: ID.nullable() });
+
+export const CreateWorkflowFromTemplateSchema = z.object({
+    template_id: ID,
+    project_id: ID,
+});
+
+/** A shipped starter workflow. Agent nodes reference catalog agent ids. */
+export interface IWorkflowTemplate {
+    id: string;
+    name: string;
+    description: string;
+    input_kind: WorkflowInputKind;
+    trigger: WorkflowTrigger;
+    use_worktree: boolean;
+    push_code: boolean;
+    raises_pr: boolean;
+    graph: IWorkflowGraph;
+}
 
 export function validateWorkflowGraph(graph: IWorkflowGraph): IWorkflowGraphError[] {
     const errors: IWorkflowGraphError[] = [];

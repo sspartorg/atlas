@@ -49,22 +49,15 @@ export default defineConfig({
         // tests are listed too; they don't touch the DB but cost nothing to run.
         include: [
             'src/services/agent-defaults-sync.test.ts',
-            'src/services/agent-dispatcher.test.ts',
-            'src/services/agent-handoff.test.ts',
-            'src/services/agent-rounds.test.ts',
             'src/services/agent-runner-completion-comment.test.ts',
             'src/services/agent-runner-result-detector.test.ts',
-            'src/services/agent-runner.notifications.test.ts',
             'src/services/agent-runner-spawn.test.ts',
             'src/services/commands-assembler.test.ts',
             'src/services/current-task-writer.test.ts',
             // Task 12 — unified run-outcome contract (replaces performer/reviewer split).
             'src/services/run-outcome-parser.test.ts',
             'src/services/agent-runner-outcome-routing.test.ts',
-            'src/services/agent-self-routing.test.ts',
             'src/services/agent-schedule-registry.test.ts',
-            'src/services/agents-cron.test.ts',
-            'src/services/agents-cron-str.test.ts',
             'src/services/agent-schedule-registry-tick.test.ts',
             'src/services/cron-materializer.test.ts',
             'src/services/cron-materializer-str.test.ts',
@@ -123,7 +116,6 @@ export default defineConfig({
             'src/services/commit-discipline.test.ts',
             'src/services/commit-verifier.test.ts',
             'src/services/constitution-assembler.test.ts',
-            'src/services/handoff-assembler.test.ts',
             'src/services/preamble-assembler.test.ts',
             'src/services/templates-assembler.test.ts',
             'src/services/prompt-builder.test.ts',
@@ -158,7 +150,6 @@ export default defineConfig({
             'src/scripts/check-prereqs.test.ts',
             'src/scripts/recover-architect-stranded.test.ts',
             'src/db/migrations.test.ts',
-            'src/db/reviewer-on-fail-migration.test.ts',
             // W13 — migration rollback safety static check.
             'src/db/migrations-rollback.test.ts',
             'src/db/seed.test.ts',
@@ -167,8 +158,10 @@ export default defineConfig({
             'src/services/dependency-guard.test.ts',
             // W2 chunk 6 — dry-run CLI connection test service.
             'src/services/dry-run.test.ts',
-            'src/services/agent-dispatcher.integration.test.ts',
             'src/services/agent-runner-run-config.integration.test.ts',
+            // ADR 0014 — workflow engine against the real DB.
+            'src/services/workflow-engine.integration.test.ts',
+            'src/routes/workflows.test.ts',
             'src/routes/run.test.ts',
             // W2 — Analytics per-project / per-epic cost drill-down.
             'src/routes/analytics.test.ts',

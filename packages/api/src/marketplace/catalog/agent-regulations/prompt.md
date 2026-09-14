@@ -143,3 +143,6 @@ shouldn't get scraped twice when an override + region-wide overlap.
 - Never speculate on impact.
 - Cap at 3 findings per run.
 - Public pages only. No login walls.
+- End with the `atlas-outcome` block described in `.atlas/outcome.md`:
+  `done` once the epic is created, or `asked_question` with the
+  one-line error as `reason` when the Atlas project can't be resolved.

@@ -76,7 +76,6 @@ interface AgentRow {
     id: string;
     name: string;
     prompt_md: string;
-    requires_item: boolean;
 }
 
 const CLAUDE_COMMANDS_SUBDIR = join('.claude', 'commands');
@@ -129,7 +128,7 @@ export async function assembleCommands(
 
     const agents = (await db
         .selectFrom('agents')
-        .select(['id', 'name', 'prompt_md', 'requires_item'])
+        .select(['id', 'name', 'prompt_md'])
         .where('prompt_md', 'is not', null)
         .where('prompt_md', '<>', '')
         .execute()) as AgentRow[];
@@ -225,12 +224,9 @@ function wipeAtlasFiles(dir: string, pattern: RegExp): void {
 
 function renderCommandBody(agent: AgentRow): string {
     const description = renderDescription(agent.name);
-    // Item-attached agents read `.atlas/handoff.md` + sibling files
-    // for routing + context. The "read these files" preamble is
-    // auto-prepended at run time so individual agent prompts don't
-    // need to repeat it. Skipped for freedom-mode agents (scout-style)
-    // because their runs have no `.atlas/handoff.md` to read.
-    const preamble = agent.requires_item ? `${assemblePreamble(agent.id)}\n\n` : '';
+    // Every agent run stages `.atlas/outcome.md` + `.atlas/self-memory.md`,
+    // so every agent gets the "read these files" preamble.
+    const preamble = `${assemblePreamble(agent.id)}\n\n`;
     return `---\ndescription: "${description}"\n---\n\n${preamble}${agent.prompt_md}`;
 }
 
@@ -241,7 +237,7 @@ function renderDescription(name: string): string {
     // in Copilot's prompt list.
     const safe = name.replace(/"/g, '\\"');
     return (
-        `Atlas SDLC agent — ${safe}. Reads .atlas/{constitution,handoff,current-task}.md, ` +
+        `Atlas SDLC agent — ${safe}. Reads .atlas/{constitution,current-task,outcome}.md, ` +
         `fills the relevant .atlas/templates/<x>.md, runs .atlas/scripts/bash/check-<agent>.sh, ` +
         `then posts the structured comment + emits outcome.`
     );

@@ -2,7 +2,6 @@ import { db } from '../db/kysely-client.js';
 import { itemLinks } from './item-links.js';
 import { externalLinks } from './external-links.js';
 import { eventsLog } from './events-log.js';
-import { getRound } from './agent-rounds.js';
 import {
     rowToBug,
     rowToEpic,
@@ -81,17 +80,6 @@ async function getProjectById(id: string | null | undefined): Promise<IProject |
     } as IProject;
 }
 
-// A04 — UI surfaces the round count on the detail rail. Returns null
-// when the item has no current assignee (Owner is holding it) so the
-// frontend can hide the "Rounds: X / Y" row instead of rendering "0 / Y".
-async function roundCountFor(
-    itemId: string,
-    assigneeAgentId: string | null | undefined,
-): Promise<number | null> {
-    if (!assigneeAgentId) return null;
-    return await getRound(itemId, assigneeAgentId);
-}
-
 async function relatedLinks(itemId: string): Promise<IIssueLinkRow[]> {
     const rows = await itemLinks.list(itemId);
     return rows.map(
@@ -116,7 +104,7 @@ export const issueFullService = {
         const epic = await getEpicById(story.epic_id);
         /* v8 ignore next */ // FK trigger `items_check_parent` guarantees the story's epic resolves; the `: null` arm is unreachable post-PG-migration.
         const project = epic ? await getProjectById(epic.project_id) : null;
-        const [subTaskRows, subBugRows, links, ext_links, activity, agents, round_count] =
+        const [subTaskRows, subBugRows, links, ext_links, activity, agents] =
             await Promise.all([
                 db
                     .selectFrom('items')
@@ -136,7 +124,6 @@ export const issueFullService = {
                 externalLinks.list(id),
                 eventsLog.activity(id, 'story'),
                 getAgentsAll(),
-                roundCountFor(id, story.assignee_agent_id),
             ]);
         return {
             story,
@@ -148,7 +135,6 @@ export const issueFullService = {
             external_links: ext_links,
             activity,
             agents,
-            round_count,
         };
     },
 
@@ -164,12 +150,11 @@ export const issueFullService = {
         const epic = await getEpicById(bug.epic_id);
         /* v8 ignore next */ // FK trigger `items_check_parent` guarantees the bug's epic resolves; the `: null` arm is unreachable post-PG-migration.
         const project = epic ? await getProjectById(epic.project_id) : null;
-        const [links, ext_links, activity, agents, round_count] = await Promise.all([
+        const [links, ext_links, activity, agents] = await Promise.all([
             relatedLinks(id),
             externalLinks.list(id),
             eventsLog.activity(id, 'bug'),
             getAgentsAll(),
-            roundCountFor(id, bug.assignee_agent_id),
         ]);
         return {
             bug,
@@ -179,7 +164,6 @@ export const issueFullService = {
             external_links: ext_links,
             activity,
             agents,
-            round_count,
         };
     },
 
@@ -198,12 +182,11 @@ export const issueFullService = {
         const epic = parent_story ? await getEpicById(parent_story.epic_id) : null;
         const project = epic ? await getProjectById(epic.project_id) : null;
         /* v8 ignore stop */
-        const [links, ext_links, activity, agents, round_count] = await Promise.all([
+        const [links, ext_links, activity, agents] = await Promise.all([
             relatedLinks(id),
             externalLinks.list(id),
             eventsLog.activity(id, 'sub_task'),
             getAgentsAll(),
-            roundCountFor(id, sub_task.assignee_agent_id),
         ]);
         return {
             sub_task,
@@ -214,7 +197,6 @@ export const issueFullService = {
             external_links: ext_links,
             activity,
             agents,
-            round_count,
         };
     },
 
@@ -233,12 +215,11 @@ export const issueFullService = {
         const epic = parent_story ? await getEpicById(parent_story.epic_id) : null;
         const project = epic ? await getProjectById(epic.project_id) : null;
         /* v8 ignore stop */
-        const [links, ext_links, activity, agents, round_count] = await Promise.all([
+        const [links, ext_links, activity, agents] = await Promise.all([
             relatedLinks(id),
             externalLinks.list(id),
             eventsLog.activity(id, 'sub_bug'),
             getAgentsAll(),
-            roundCountFor(id, sub_bug.assignee_agent_id),
         ]);
         return {
             sub_bug,
@@ -249,7 +230,6 @@ export const issueFullService = {
             external_links: ext_links,
             activity,
             agents,
-            round_count,
         };
     },
 
@@ -264,7 +244,6 @@ export const issueFullService = {
             ext_links,
             activity,
             agents,
-            round_count,
         ] = await Promise.all([
             getProjectById(epic.project_id),
             db
@@ -285,7 +264,6 @@ export const issueFullService = {
             externalLinks.list(id),
             eventsLog.activity(id, 'epic'),
             getAgentsAll(),
-            roundCountFor(id, epic.assignee_agent_id),
         ]);
         return {
             epic,
@@ -296,7 +274,6 @@ export const issueFullService = {
             external_links: ext_links,
             activity,
             agents,
-            round_count,
         };
     },
 };

@@ -6,8 +6,6 @@ import {
     AgentCategorySchema,
     AgentChecklistItemInputSchema,
     AgentCliSchema,
-    AgentHandoffRuleInputSchema,
-    AgentSchedulePresetSchema,
     AgentStatusSchema,
     SdlcRoleSchema,
 } from '@atlas/shared';
@@ -38,30 +36,13 @@ const AGENT_WRITABLE_FIELDS_SHAPE = {
     model: z.string().min(1).optional(),
     framework: z.string().optional(),
     prompt_md: z.string().optional(),
-    handoff_prompt_md: z.string().optional(),
     status: AgentStatusSchema.optional(),
     accent_color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
     sort_order: z.number().int().optional(),
     description: z.string().optional(),
     designation: z.string().max(100).optional(),
     role_id: SdlcRoleSchema.nullable().optional(),
-    schedule_hours: z.number().nonnegative().optional(),
-    schedule_preset: AgentSchedulePresetSchema.optional(),
-    schedule_time_of_day: z
-        .string()
-        .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
-        .nullable()
-        .optional(),
-    schedule_weekdays: z
-        .array(z.number().int().min(1).max(7))
-        .min(1)
-        .max(7)
-        .nullable()
-        .optional(),
-    schedule_day_of_month: z.number().int().min(1).max(31).nullable().optional(),
-    concurrent_runs: z.number().int().nonnegative().optional(),
     glyph: z.string().optional(),
-    handoff_rules: z.array(AgentHandoffRuleInputSchema).optional(),
     checklists: z.array(AgentChecklistItemInputSchema).optional(),
 } as const;
 
@@ -94,10 +75,10 @@ export const AGENT_TOOLS: ToolRegistration[] = [
             '',
             'Branches on `op`:',
             "- `op: 'search'` → returns the full agent list (compact projection per row: id, name, category, cli, status, sort_order, prompt_version). Use this when you need to find an agent id or audit the roster.",
-            "- `op: 'get'` → fetch one agent by `id` along with its handoff rules and checklists. Required: `id`.",
-            "- `op: 'create'` → install a new agent. Required: `payload` with at minimum `name`, `category`, `cli`, `model`, `accent_color`. A stable kebab-case `id` is strongly recommended so handoff targets and update calls can reference it.",
-            "- `op: 'update'` → patch an existing agent. Required: `id` + `payload` (subset of writable fields). Editing `prompt_md` automatically bumps `prompt_version` and snapshots into `agent_prompt_versions`. Passing `handoff_rules` / `checklists` replaces those collections transactionally.",
-            "- `op: 'delete'` → permanently remove an agent. Required: `id`. Cascade deletes prompt_versions, checklists, handoff_rules, memory. agent_runs survive (preserve history).",
+            "- `op: 'get'` → fetch one agent by `id` along with its checklists. Required: `id`.",
+            "- `op: 'create'` → install a new agent. Required: `payload` with at minimum `name`, `category`, `cli`, `model`, `accent_color`. A stable kebab-case `id` is strongly recommended so workflow graphs and update calls can reference it.",
+            "- `op: 'update'` → patch an existing agent. Required: `id` + `payload` (subset of writable fields). Editing `prompt_md` automatically bumps `prompt_version` and snapshots into `agent_prompt_versions`. Passing `checklists` replaces that collection transactionally. Scheduling, routing and git delivery are not agent fields — they live on workflows.",
+            "- `op: 'delete'` → permanently remove an agent. Required: `id`. Cascade deletes prompt_versions, checklists, memory. agent_runs survive (preserve history).",
             '',
             "**Forbidden for agents.** Per constitution, agents must not call `crud_agent` with `op` in {create, update, delete} — those are reserved for the Owner via the UI. Reading (`search`, `get`) is permitted.",
         ].join('\n'),
@@ -211,7 +192,7 @@ export const AGENT_TOOLS: ToolRegistration[] = [
             '',
             'Branches on `op`:',
             "- `op: 'search'` → returns a lightweight projection of catalog rows (id, name, category, kind_slug, summary, accent_color, glyph, version, installed/linked/upgrade-available flags). Optional filters: `query`, `category`, `kind_slug`, `limit`. Use this first to find a candidate id.",
-            "- `op: 'get'` → fetch the full catalog entry for one marketplace agent: manifest + prompt_md + memory_template_md + handoff_rules + checklists + version + published_at. Required: `id`. Cheaper than three separate calls. Chain after `op='search'`, before installing or applying its prompt to an existing agent via `crud_agent op='update'`.",
+            "- `op: 'get'` → fetch the full catalog entry for one marketplace agent: manifest + prompt_md + memory_template_md + checklists + version + published_at. Required: `id`. Cheaper than three separate calls. Chain after `op='search'`, before installing or applying its prompt to an existing agent via `crud_agent op='update'`.",
             '',
             "The `upgrade_available` flag on a search result is true when the local agent's `marketplace_pulled_version` is strictly less than the catalog version.",
         ].join('\n'),

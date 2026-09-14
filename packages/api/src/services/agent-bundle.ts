@@ -1,6 +1,6 @@
 // Agent bundle pack/unpack. The zip format round-trips losslessly with the
 // on-disk catalog folder layout (manifest.json + prompt.md + memory.md +
-// handoff_rules.json + checklists.json), so the same parsing code serves
+// checklists.json), so the same parsing code serves
 // both "export from local DB" and "fetch from marketplace catalog".
 
 import JSZip from 'jszip';
@@ -9,11 +9,9 @@ import type {
     AgentCategory,
     AgentCli,
     AgentKindSlug,
-    AgentSchedulePreset,
     AgentStatus,
     IAgentBundleManifest,
     IMarketplaceAgentChecklist,
-    IMarketplaceAgentHandoff,
     SdlcRole,
 } from '@atlas/shared';
 import { AGENT_CLIS } from '@atlas/shared';
@@ -26,12 +24,6 @@ const AGENT_CATEGORY_VALUES: readonly AgentCategory[] = [
 ];
 const AGENT_CLI_VALUES: readonly AgentCli[] = AGENT_CLIS;
 const AGENT_STATUS_VALUES: readonly AgentStatus[] = ['active', 'inactive'];
-const AGENT_SCHEDULE_PRESET_VALUES: readonly AgentSchedulePreset[] = [
-    'every_n_hours',
-    'daily',
-    'weekly',
-    'monthly',
-];
 const AGENT_KIND_SLUG_VALUES: readonly AgentKindSlug[] = [
     'ai-news',
     'market-research',
@@ -64,34 +56,13 @@ const AgentBundleManifestSchema = z.object({
     role_id: z
         .enum(SDLC_ROLE_VALUES as readonly [SdlcRole, ...SdlcRole[]])
         .nullable(),
-    max_rounds: z.number().int().min(1).max(100),
-    requires_item: z.boolean(),
-    requires_worktree: z.boolean(),
-    push_code: z.boolean(),
-    raises_pr: z.boolean(),
     status: z.enum(AGENT_STATUS_VALUES as readonly [AgentStatus, ...AgentStatus[]]),
     kind_slug: z.enum(AGENT_KIND_SLUG_VALUES as readonly [AgentKindSlug, ...AgentKindSlug[]]),
     settings_json: z.record(z.string(), z.unknown()),
-    schedule_hours: z.number().min(0),
-    schedule_preset: z.enum(
-        AGENT_SCHEDULE_PRESET_VALUES as readonly [AgentSchedulePreset, ...AgentSchedulePreset[]],
-    ),
-    schedule_time_of_day: z.string().nullable(),
-    schedule_weekdays: z.array(z.number().int().min(1).max(7)).nullable(),
-    schedule_day_of_month: z.number().int().min(1).max(31).nullable(),
-    cron_expr: z.string().nullable(),
-    concurrent_runs: z.number().int().min(1),
     memory_cadence: z.number().int().min(1).max(100),
-    handoff_prompt_md: z.string(),
     summary: z.string(),
     version: z.number().int().min(1),
     published_at: z.string(),
-});
-
-const HandoffSchema = z.object({
-    target_agent_id: z.string(),
-    kind: z.enum(['on-pass', 'on-fail']),
-    status: z.string(),
 });
 
 const ChecklistSchema = z.object({
@@ -104,7 +75,6 @@ export interface AgentBundle {
     manifest: IAgentBundleManifest;
     prompt_md: string;
     memory_md: string;
-    handoff_rules: IMarketplaceAgentHandoff[];
     checklists: IMarketplaceAgentChecklist[];
 }
 
@@ -120,7 +90,6 @@ export async function packAgentBundle(bundle: AgentBundle): Promise<Buffer> {
     zip.file('manifest.json', JSON.stringify(bundle.manifest, null, 2) + '\n');
     zip.file('prompt.md', bundle.prompt_md);
     zip.file('memory.md', bundle.memory_md);
-    zip.file('handoff_rules.json', JSON.stringify(bundle.handoff_rules, null, 2) + '\n');
     zip.file('checklists.json', JSON.stringify(bundle.checklists, null, 2) + '\n');
     return await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
@@ -168,17 +137,6 @@ export async function unpackAgentBundle(zipData: Buffer | Uint8Array): Promise<A
     const prompt_md = (await readZipFile(zip, 'prompt.md', false)) ?? '';
     const memory_md = (await readZipFile(zip, 'memory.md', false)) ?? '';
 
-    const handoffRaw = await readZipFile(zip, 'handoff_rules.json', false);
-    const handoffParsed = handoffRaw
-        ? z.array(HandoffSchema).safeParse(JSON.parse(handoffRaw))
-        : null;
-    if (handoffParsed && !handoffParsed.success) {
-        throw new AgentBundleParseError(
-            `handoff_rules.json failed validation: ${handoffParsed.error.message}`,
-        );
-    }
-    const handoff_rules = (handoffParsed?.data ?? []) as IMarketplaceAgentHandoff[];
-
     const checklistRaw = await readZipFile(zip, 'checklists.json', false);
     const checklistParsed = checklistRaw
         ? z.array(ChecklistSchema).safeParse(JSON.parse(checklistRaw))
@@ -190,5 +148,5 @@ export async function unpackAgentBundle(zipData: Buffer | Uint8Array): Promise<A
     }
     const checklists = (checklistParsed?.data ?? []) as IMarketplaceAgentChecklist[];
 
-    return { manifest, prompt_md, memory_md, handoff_rules, checklists };
+    return { manifest, prompt_md, memory_md, checklists };
 }

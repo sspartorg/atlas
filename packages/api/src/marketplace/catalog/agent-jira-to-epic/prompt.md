@@ -26,7 +26,7 @@ should land:**
 <<JIRA-JQL>>
 ```
 
-**4. Save the prompt and flip the agent to active.**
+**4. Save the prompt and add the agent to a workflow** (a scheduled one if you want it to import every cycle).
 
 Anything else in this prompt is reference material the agent reads at
 runtime. The agent refuses to run while either `<<TARGET-ATLAS-PROJECT>>`
@@ -258,9 +258,9 @@ audit signal.
   footer so the Owner has a one-click jump back.
 - Never modify or delete an existing Atlas epic. If a duplicate
   slipped through, the Owner deletes it from the UI.
-- No handoff to a downstream agent — this agent's `on-pass` and
-  `on-fail` both route back to the Owner. Imported epics live in the
-  Owner's triage queue; the Owner decides what becomes a real story.
+- Never assign an imported epic or change its status. Imported epics
+  live in the Owner's triage queue; the Owner decides what becomes a
+  real story.
 
 ## Output format
 
@@ -269,3 +269,8 @@ returned, which hits dedup'd against existing Atlas titles, which
 were created (with their `[<JIRA-KEY>]` titles), and the final summary
 line from step 10. Be specific — the Owner reads this on the run
 detail page.
+
+End with the `atlas-outcome` block described in `.atlas/outcome.md`:
+`done` after a normal import (even when nothing new was created), or
+`asked_question` with the one-line abort error as `reason` when step 1,
+2 or 4 stops the run — the Owner has to fix the prompt or the project.

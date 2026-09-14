@@ -203,14 +203,6 @@ describe('migrations — triggers + functions present', () => {
         `.execute(testDb);
         expect(rows.rows).toHaveLength(1);
     });
-    it('agents_cleanup_handoff_target function exists', async () => {
-        const rows = await sql<{ proname: string }>`
-            SELECT proname FROM pg_proc p
-            JOIN pg_namespace n ON n.oid = p.pronamespace
-            WHERE n.nspname = 'public' AND proname = 'agents_cleanup_handoff_target'
-        `.execute(testDb);
-        expect(rows.rows).toHaveLength(1);
-    });
     it('atlas_set_updated_at function exists', async () => {
         const rows = await sql<{ proname: string }>`
             SELECT proname FROM pg_proc p
@@ -296,13 +288,10 @@ describe('Workstream #4 — model registry alignment', () => {
                     framework: '',
                     prompt_md: '',
                     prompt_version: 1,
-                    handoff_prompt_md: '',
                     status: 'active',
                     accent_color: '#000000',
                     sort_order: 999,
                     description: '',
-                    schedule_hours: 0,
-                    concurrent_runs: 1,
                     glyph: '',
                 })
                 .execute(),

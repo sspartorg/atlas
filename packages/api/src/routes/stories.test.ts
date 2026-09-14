@@ -334,24 +334,6 @@ describe('PATCH /api/stories/:id/assign', () => {
     });
 });
 
-describe('POST /api/stories/:id/reset-rounds', () => {
-    it('returns 204 when story exists', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/stories/ATL-2/reset-rounds',
-        });
-        expect(res.statusCode).toBe(204);
-    });
-
-    it('returns 404 when story does not exist', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/stories/ATL-9999/reset-rounds',
-        });
-        expect(res.statusCode).toBe(404);
-    });
-});
-
 describe('PATCH /api/sub-tasks/:id/status', () => {
     it('returns 200 for a valid transition (draft → ready)', async () => {
         const created = await app.inject({
@@ -413,32 +395,6 @@ describe('PATCH /api/sub-tasks/:id/assign', () => {
             payload: { assignee_agent_id: 'agent-coder' },
         });
         expect(res.statusCode).toBe(200);
-    });
-});
-
-describe('POST /api/sub-tasks/:id/reset-rounds', () => {
-    it('returns 204 when sub-task exists', async () => {
-        const created = await app.inject({
-            method: 'POST',
-            url: '/api/stories/ATL-2/sub-tasks',
-            payload: { title: 'Sub-task for reset' },
-        });
-        expect(created.statusCode).toBe(201);
-        const subtask = JSON.parse(created.body);
-
-        const res = await app.inject({
-            method: 'POST',
-            url: `/api/sub-tasks/${subtask.id}/reset-rounds`,
-        });
-        expect(res.statusCode).toBe(204);
-    });
-
-    it('returns 404 when sub-task does not exist', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/sub-tasks/ATL-9999/reset-rounds',
-        });
-        expect(res.statusCode).toBe(404);
     });
 });
 
@@ -541,32 +497,6 @@ describe('PATCH /api/sub-bugs/:id/assign', () => {
             payload: { assignee_agent_id: 'agent-coder' },
         });
         expect(res.statusCode).toBe(200);
-    });
-});
-
-describe('POST /api/sub-bugs/:id/reset-rounds', () => {
-    it('returns 204 when sub-bug exists', async () => {
-        const created = await app.inject({
-            method: 'POST',
-            url: '/api/stories/ATL-2/sub-bugs',
-            payload: { title: 'Sub-bug for reset' },
-        });
-        expect(created.statusCode).toBe(201);
-        const subbug = JSON.parse(created.body);
-
-        const res = await app.inject({
-            method: 'POST',
-            url: `/api/sub-bugs/${subbug.id}/reset-rounds`,
-        });
-        expect(res.statusCode).toBe(204);
-    });
-
-    it('returns 404 when sub-bug does not exist', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/sub-bugs/ATL-9999/reset-rounds',
-        });
-        expect(res.statusCode).toBe(404);
     });
 });
 

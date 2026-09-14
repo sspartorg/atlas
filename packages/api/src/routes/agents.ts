@@ -5,7 +5,6 @@ import {
     agentsService,
     ModelNotInRegistryError,
     RoleNotInCatalogError,
-    CronExpressionInvalidError,
 } from '../services/agents.js';
 import { agentMemoryService } from '../services/agent-memory.js';
 import { startDryRun } from '../services/dry-run.js';
@@ -19,7 +18,6 @@ import { unpackAgentBundle, AgentBundleParseError } from '../services/agent-bund
 import { requireMcpToken } from '../plugins/mcp-auth.js';
 import {
     AgentChecklistsPutSchema,
-    AgentHandoffRulesPutSchema,
     AgentMemoryUpdateSchema,
     CreateAgentSchema,
     RUNNABLE_ISSUE_TYPES,
@@ -30,13 +28,7 @@ import {
 const AcceptUpgradeBodySchema = z.object({
     fields: z
         .array(
-            z.enum([
-                'prompt_md',
-                'handoff_prompt_md',
-                'settings_json',
-                'handoff_rules',
-                'checklists',
-            ]),
+            z.enum(['prompt_md', 'settings_json', 'checklists']),
         )
         .min(1),
 });
@@ -56,11 +48,7 @@ export async function agentsRoutes(app: FastifyInstance) {
         try {
             return reply.status(201).send(await agentsService.create(body));
         } catch (err) {
-            if (
-                err instanceof ModelNotInRegistryError ||
-                err instanceof RoleNotInCatalogError ||
-                err instanceof CronExpressionInvalidError
-            ) {
+            if (err instanceof ModelNotInRegistryError || err instanceof RoleNotInCatalogError) {
                 return reply.status(400).send({ error: err.message, code: err.code });
             }
             /* v8 ignore next */
@@ -75,11 +63,7 @@ export async function agentsRoutes(app: FastifyInstance) {
         try {
             return reply.send(await agentsService.update(id, body));
         } catch (err) {
-            if (
-                err instanceof ModelNotInRegistryError ||
-                err instanceof RoleNotInCatalogError ||
-                err instanceof CronExpressionInvalidError
-            ) {
+            if (err instanceof ModelNotInRegistryError || err instanceof RoleNotInCatalogError) {
                 return reply.status(400).send({ error: err.message, code: err.code });
             }
             /* v8 ignore next */
@@ -98,22 +82,6 @@ export async function agentsRoutes(app: FastifyInstance) {
         const { id } = req.params as { id: string };
         return reply.send(await agentsService.getRuns(id));
     });
-
-    app.get('/api/agents/:id/handoff-rules', async (req, reply) => {
-        const { id } = req.params as { id: string };
-        return reply.send(await agentsService.getHandoffRules(id));
-    });
-
-    app.put(
-        '/api/agents/:id/handoff-rules',
-        { preHandler: requireMcpToken },
-        async (req, reply) => {
-            const { id } = req.params as { id: string };
-            const body = AgentHandoffRulesPutSchema.parse(req.body);
-            await agentsService.setHandoffRules(id, body.rules);
-            return reply.send(await agentsService.getHandoffRules(id));
-        }
-    );
 
     app.get('/api/agents/:id/checklists', async (req, reply) => {
         const { id } = req.params as { id: string };
@@ -213,14 +181,6 @@ export async function agentsRoutes(app: FastifyInstance) {
         const body = (req.body ?? {}) as { issue_type?: string; issue_id?: string };
         const hasItem = Boolean(body.issue_type && body.issue_id);
 
-        // Freedom-mode agents (`requires_item = false`) can preview a prompt
-        // with no item — the builder emits the freedom preamble. Item-driven
-        // agents still require both fields.
-        if (!hasItem && agent.requires_item) {
-            return reply
-                .status(400)
-                .send({ error: 'issue_type and issue_id are required' });
-        }
         if (hasItem && !RUNNABLE_ISSUE_TYPES.includes(body.issue_type as IssueType)) {
             return reply.status(400).send({
                 error: `issue_type must be one of: ${RUNNABLE_ISSUE_TYPES.join(', ')}`,

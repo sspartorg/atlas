@@ -42,7 +42,6 @@ const sampleAgent: IAgent = {
     framework: 'agile-po',
     prompt_md: '# PO Writer',
     prompt_version: 1,
-    handoff_prompt_md: 'Hand off when checks pass.',
     status: 'active',
     accent_color: '#007AC9',
     sort_order: 1,
@@ -50,10 +49,6 @@ const sampleAgent: IAgent = {
     designation: 'Product Owner',
     kind: 'performer',
     reviewer_agent_id: null,
-    max_rounds: 5,
-    requires_item: true,
-    schedule_hours: 3,
-    concurrent_runs: 1,
     glyph: 'developer_board',
     created_at: '2026-05-18T00:00:00Z',
     updated_at: '2026-05-18T00:00:00Z',
@@ -61,10 +56,6 @@ const sampleAgent: IAgent = {
 
 const sampleComposite: IAgentComposite = {
     agent: sampleAgent,
-    handoff_rules: [
-        { id: 1, agent_id: 'a1', target_agent_id: 'a2', kind: 'on-pass', status: 'ready' },
-        { id: 2, agent_id: 'a1', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    ],
     checklists: [
         { id: 1, agent_id: 'a1', label: 'All stories follow As-a format', sort_order: 0, required: true },
     ],
@@ -144,7 +135,6 @@ describe('registerAgentTools', () => {
                 model: 'claude-opus-4-7',
                 accent_color: '#007AC9',
                 prompt_md: '# PO',
-                handoff_rules: [{ target_agent_id: 'a2', kind: 'on-pass', status: 'ready' }],
                 checklists: [{ label: 'foo', sort_order: 0, required: true }],
             };
             const result = await tools.get('crud_agent')!.handler({ op: 'create', payload });
@@ -167,11 +157,11 @@ describe('registerAgentTools', () => {
             await tools.get('crud_agent')!.handler({
                 op: 'update',
                 id: 'a1',
-                payload: { description: 'Updated description', handoff_prompt_md: 'New handoff' },
+                payload: { description: 'Updated description', prompt_md: '# New prompt' },
             });
             expect(updateAgent).toHaveBeenCalledWith('a1', {
                 description: 'Updated description',
-                handoff_prompt_md: 'New handoff',
+                prompt_md: '# New prompt',
             });
         });
 
@@ -318,7 +308,6 @@ describe('registerAgentTools', () => {
                 version: 2,
                 prompt_md: '# PO',
                 memory_template_md: '',
-                handoff_rules: [],
                 checklists: [],
                 manifest: { id: 'agent-po-writer', version: 2 },
                 published_at: '2026-07-01T00:00:00Z',

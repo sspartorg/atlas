@@ -27,6 +27,8 @@ import { eventsRoutes } from './routes/events.js';
 import { runRoutes } from './routes/run.js';
 import { fsRoutes } from './routes/fs.js';
 import { schedulesRoutes } from './routes/schedules.js';
+import { workflowsRoutes } from './routes/workflows.js';
+import { registerWorkflowItemLock } from './services/workflow-lock.js';
 import { remindersRoutes } from './routes/reminders.js';
 import { scratchPadRoutes } from './routes/scratchPad.js';
 import { cliModelsRoutes } from './routes/cli-models.js';
@@ -355,8 +357,10 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
         version: '0.2.0',
     }));
 
+    registerWorkflowItemLock(server);
     await server.register(settingsRoutes);
     await server.register(agentsRoutes);
+    await server.register(workflowsRoutes);
     await server.register(marketplaceRoutes);
     await server.register(rolesRoutes);
     await server.register(projectsRoutes);

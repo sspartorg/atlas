@@ -102,15 +102,11 @@ describe('POST /api/agents — model registry validation', () => {
                 framework: 'tdd',
                 prompt_md: '',
                 prompt_version: 1,
-                handoff_prompt_md: '',
                 status: 'active',
                 accent_color: '#000000',
                 sort_order: 99,
                 description: '',
-                schedule_hours: 6,
-                concurrent_runs: 1,
                 glyph: '',
-                requires_item: false,
             },
         });
         expect(res.statusCode).toBe(400);
@@ -204,15 +200,11 @@ describe('POST /api/agents — happy path', () => {
                 framework: 'tdd',
                 prompt_md: 'do stuff',
                 prompt_version: 1,
-                handoff_prompt_md: '',
                 status: 'active',
                 accent_color: '#000000',
                 sort_order: 5,
                 description: 'test agent',
-                schedule_hours: 6,
-                concurrent_runs: 1,
                 glyph: '',
-                requires_item: true,
             },
         });
         expect(res.statusCode).toBe(201);
@@ -270,6 +262,34 @@ describe('DELETE /api/agents/:id', () => {
         });
         expect(res.statusCode).toBe(404);
     });
+
+    it('returns 409 conflict naming the workflow when a workflow graph uses the agent', async () => {
+        await insertAgent({ id: 'agent-in-flow' });
+        await testDb
+            .insertInto('workflows')
+            .values({
+                id: 'wf-uses-agent',
+                name: 'Planning',
+                input_kind: 'none',
+                trigger: 'manual',
+                use_worktree: false,
+                graph: JSON.stringify({
+                    nodes: [
+                        { id: 'n1', type: 'agent', agent_id: 'agent-in-flow', position: { x: 0, y: 0 } },
+                    ],
+                    edges: [],
+                }),
+            } as never)
+            .execute();
+        const res = await app.inject({
+            method: 'DELETE',
+            url: '/api/agents/agent-in-flow',
+        });
+        expect(res.statusCode).toBe(409);
+        const body = JSON.parse(res.body) as { error: string; kind: string };
+        expect(body.kind).toBe('conflict');
+        expect(body.error).toContain('Planning');
+    });
 });
 
 describe('GET /api/agents/:id/runs', () => {
@@ -281,30 +301,6 @@ describe('GET /api/agents/:id/runs', () => {
         });
         expect(res.statusCode).toBe(200);
         expect(JSON.parse(res.body)).toEqual([]);
-    });
-});
-
-describe('GET /api/agents/:id/handoff-rules', () => {
-    it('returns 200 with empty array', async () => {
-        await insertAgent({ id: 'agent-coder' });
-        const res = await app.inject({
-            method: 'GET',
-            url: '/api/agents/agent-coder/handoff-rules',
-        });
-        expect(res.statusCode).toBe(200);
-        expect(JSON.parse(res.body)).toEqual([]);
-    });
-});
-
-describe('PUT /api/agents/:id/handoff-rules', () => {
-    it('returns 200 after setting rules', async () => {
-        await insertAgent({ id: 'agent-coder' });
-        const res = await app.inject({
-            method: 'PUT',
-            url: '/api/agents/agent-coder/handoff-rules',
-            payload: { rules: [] },
-        });
-        expect(res.statusCode).toBe(200);
     });
 });
 
@@ -461,18 +457,8 @@ describe('GET /api/agents/:id/prompt-versions', () => {
 });
 
 describe('POST /api/agents/:id/compile-prompt', () => {
-    it('returns 400 when agent requires_item=true but no issue fields provided', async () => {
-        await insertAgent({ id: 'agent-coder', requires_item: true });
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/agents/agent-coder/compile-prompt',
-            payload: {},
-        });
-        expect(res.statusCode).toBe(400);
-    });
-
-    it('returns 200 for a freedom agent (requires_item=false) with no item fields', async () => {
-        await insertAgent({ id: 'agent-freedom', requires_item: false });
+    it('returns 200 with no item fields (project-level preview)', async () => {
+        await insertAgent({ id: 'agent-freedom' });
         const res = await app.inject({
             method: 'POST',
             url: '/api/agents/agent-freedom/compile-prompt',
@@ -624,54 +610,6 @@ describe('POST /api/agents/import', () => {
     });
 });
 
-// ── Additional coverage for uncovered branches ────────────────────────────
-
-describe('POST /api/agents — CronExpressionInvalidError', () => {
-    it('returns 400 with code CRON_EXPRESSION_INVALID when cron_expr is invalid', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/agents',
-            payload: {
-                id: 'agent-cron-bad',
-                name: 'Cron Bad',
-                category: 'software-dev',
-                cli: 'claude',
-                model: 'claude-opus-4-7',
-                framework: 'tdd',
-                prompt_md: '',
-                prompt_version: 1,
-                handoff_prompt_md: '',
-                status: 'active',
-                accent_color: '#000000',
-                sort_order: 10,
-                description: '',
-                schedule_hours: 6,
-                concurrent_runs: 1,
-                glyph: '',
-                requires_item: false,
-                cron_expr: 'not-a-valid-cron!!!',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-        const body = JSON.parse(res.body) as { code: string };
-        expect(body.code).toBe('CRON_EXPRESSION_INVALID');
-    });
-});
-
-describe('PATCH /api/agents/:id — CronExpressionInvalidError', () => {
-    it('returns 400 with code CRON_EXPRESSION_INVALID when cron_expr is invalid', async () => {
-        await insertAgent({ id: 'agent-coder' });
-        const res = await app.inject({
-            method: 'PATCH',
-            url: '/api/agents/agent-coder',
-            payload: { cron_expr: 'not-a-valid-cron!!!' },
-        });
-        expect(res.statusCode).toBe(400);
-        const body = JSON.parse(res.body) as { code: string };
-        expect(body.code).toBe('CRON_EXPRESSION_INVALID');
-    });
-});
-
 describe('GET /api/agents/:id/memory/history — with limit param', () => {
     it('respects the limit query param (clamps to 1–50)', async () => {
         await insertAgent({ id: 'agent-coder' });
@@ -698,7 +636,7 @@ describe('GET /api/agents/:id/commit-verifications — with limit param', () => 
 
 describe('POST /api/agents/:id/compile-prompt — with issue fields', () => {
     it('returns 200 when hasItem=true with a valid issue_type (uses mocked compilePromptFor)', async () => {
-        await insertAgent({ id: 'agent-item-req', requires_item: true });
+        await insertAgent({ id: 'agent-item-req' });
         const res = await app.inject({
             method: 'POST',
             url: '/api/agents/agent-item-req/compile-prompt',
@@ -709,7 +647,7 @@ describe('POST /api/agents/:id/compile-prompt — with issue fields', () => {
     });
 
     it('returns 400 when hasItem=true but issue_type is not a valid runnable type', async () => {
-        await insertAgent({ id: 'agent-item-req', requires_item: true });
+        await insertAgent({ id: 'agent-item-req' });
         const res = await app.inject({
             method: 'POST',
             url: '/api/agents/agent-item-req/compile-prompt',
@@ -726,7 +664,7 @@ describe('POST /api/agents/:id/compile-prompt — with issue fields', () => {
         (compilePromptFor as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
             new Error('Issue story/MISS-1 not found')
         );
-        await insertAgent({ id: 'agent-item-req2', requires_item: true });
+        await insertAgent({ id: 'agent-item-req2' });
         const res = await app.inject({
             method: 'POST',
             url: '/api/agents/agent-item-req2/compile-prompt',
@@ -742,7 +680,7 @@ describe('POST /api/agents/:id/compile-prompt — with issue fields', () => {
 // ── Unexpected error re-thrown (lines 64-65, 81-82) ─────────────────────
 
 describe('POST /api/agents — unexpected DB error is re-thrown (lines 64-65)', () => {
-    it('propagates a non-ModelNotInRegistry/CronInvalid error (e.g. duplicate key)', async () => {
+    it('propagates a non-ModelNotInRegistry error (e.g. duplicate key)', async () => {
         // Create the agent once so the second POST hits a duplicate-key error.
         await insertAgent({ id: 'agent-dup-key' });
         const res = await app.inject({
@@ -757,15 +695,11 @@ describe('POST /api/agents — unexpected DB error is re-thrown (lines 64-65)', 
                 framework: 'tdd',
                 prompt_md: '',
                 prompt_version: 1,
-                handoff_prompt_md: '',
                 status: 'active',
                 accent_color: '#000000',
                 sort_order: 10,
                 description: '',
-                schedule_hours: 6,
-                concurrent_runs: 1,
                 glyph: '',
-                requires_item: false,
             },
         });
         // The duplicate-key DB error propagates → Fastify error handler returns 500
@@ -774,7 +708,7 @@ describe('POST /api/agents — unexpected DB error is re-thrown (lines 64-65)', 
 });
 
 describe('PATCH /api/agents/:id — unexpected DB error is re-thrown (lines 81-82)', () => {
-    it('propagates a non-ModelNotInRegistry/CronInvalid error from update', async () => {
+    it('propagates a non-ModelNotInRegistry error from update', async () => {
         // Patch with a negative sort_order to trigger a CHECK constraint violation
         // (or similar) — sort_order column has no DB constraint, but we can use
         // a status value that's outside the enum to force a DB error.
@@ -909,23 +843,10 @@ const MINIMAL_MANIFEST = {
     sort_order: 99,
     glyph: '',
     role_id: null,
-    max_rounds: 10,
-    requires_item: false,
-    requires_worktree: false,
-    push_code: false,
-    raises_pr: false,
     status: 'active' as const,
     kind_slug: 'custom' as const,
     settings_json: {},
-    schedule_hours: 6,
-    schedule_preset: 'every_n_hours' as const,
-    schedule_time_of_day: null,
-    schedule_weekdays: null,
-    schedule_day_of_month: null,
-    cron_expr: null,
-    concurrent_runs: 1,
     memory_cadence: 10,
-    handoff_prompt_md: '',
     summary: 'test',
     version: 1,
     published_at: '2026-06-01T00:00:00Z',
@@ -937,7 +858,6 @@ describe('POST /api/agents/import — valid zip bundle', () => {
             manifest: MINIMAL_MANIFEST,
             prompt_md: 'test prompt',
             memory_md: '',
-            handoff_rules: [],
             checklists: [],
         });
         // Ensure the cli_models row for this agent exists (FK guard).
@@ -968,7 +888,6 @@ describe('POST /api/agents/import — valid zip bundle', () => {
             manifest: MINIMAL_MANIFEST,
             prompt_md: 'test prompt',
             memory_md: '',
-            handoff_rules: [],
             checklists: [],
         });
         await testDb
@@ -1099,39 +1018,6 @@ describe('GET /api/agents/:id/commit-verifications — limit clamping boundary (
         });
         expect(res.statusCode).toBe(200);
         expect(Array.isArray(JSON.parse(res.body))).toBe(true);
-    });
-});
-
-// ── PUT /api/agents/:id/handoff-rules — Zod rejection ─────────────────────
-// AgentHandoffRulesPutSchema requires `rules` to be an array of objects each
-// with { target_agent_id: string, kind: AgentHandoffKindSchema, status: IssueStatusSchema }.
-// Sending a non-array for `rules` causes Zod to throw → Fastify returns 400.
-// NOTE: the agent does NOT need to exist here because Zod fires before the
-// DB lookup inside setHandoffRules.
-
-describe('PUT /api/agents/:id/handoff-rules — Zod rejection', () => {
-    it('returns 400 when rules is not an array', async () => {
-        // No insertAgent needed: Zod rejects before any DB query.
-        const res = await app.inject({
-            method: 'PUT',
-            url: '/api/agents/any-agent-id/handoff-rules',
-            payload: { rules: 'not-an-array' },
-        });
-        expect(res.statusCode).toBe(400);
-    });
-
-    it('returns 400 when a rule item is missing required kind field', async () => {
-        const res = await app.inject({
-            method: 'PUT',
-            url: '/api/agents/any-agent-id/handoff-rules',
-            payload: {
-                rules: [
-                    { target_agent_id: 'agent-x', status: 'in_progress' },
-                    // `kind` omitted — Zod should reject
-                ],
-            },
-        });
-        expect(res.statusCode).toBe(400);
     });
 });
 
@@ -1266,7 +1152,6 @@ describe('role_id not in the roles catalog', () => {
         framework: 'tdd',
         prompt_md: '',
         prompt_version: 1,
-        handoff_prompt_md: '',
         status: 'active',
         accent_color: '#000000',
         sort_order: 99,

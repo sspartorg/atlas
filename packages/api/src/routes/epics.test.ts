@@ -200,25 +200,6 @@ describe('PATCH /api/epics/:id/assign', () => {
     });
 });
 
-describe('POST /api/epics/:id/reset-rounds', () => {
-    it('returns 204', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/epics/ATL-1/reset-rounds',
-        });
-        expect(res.statusCode).toBe(204);
-    });
-
-    it('returns 404 when epic does not exist (covers line 128 null-check)', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/epics/ATL-9999/reset-rounds',
-        });
-        expect(res.statusCode).toBe(404);
-        expect(JSON.parse(res.body).error).toBe('Epic not found');
-    });
-});
-
 describe('DELETE /api/epics/:id', () => {
     it('returns 204 when deleted successfully', async () => {
         const res = await app.inject({

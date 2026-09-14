@@ -132,9 +132,9 @@ describe('assembleCommands', () => {
         // Frontmatter present with description line.
         expect(claudeBody.startsWith('---\n')).toBe(true);
         expect(claudeBody).toContain('description: "Atlas SDLC agent — Architect.');
-        // Preamble is auto-prepended for item-attached agents.
+        // Preamble is auto-prepended for every agent.
         expect(claudeBody).toContain('You are agent `agent-architect`.');
-        expect(claudeBody).toContain('.atlas/handoff.md');
+        expect(claudeBody).toContain('.atlas/outcome.md');
         // The original prompt body still appears after the preamble.
         expect(claudeBody).toContain(promptBody);
         // Preamble lands BEFORE the prompt body.
@@ -142,31 +142,6 @@ describe('assembleCommands', () => {
         const promptIdx = claudeBody.indexOf(promptBody);
         expect(preambleIdx).toBeGreaterThan(0);
         expect(promptIdx).toBeGreaterThan(preambleIdx);
-    });
-
-    it('skips the preamble for freedom-mode agents (requires_item=false)', async () => {
-        const promptBody = '# Scout\n\nFetch the news and digest.';
-        await insertAgent({
-            id: 'agent-ai-news',
-            name: 'AI News Scout',
-            prompt_md: promptBody,
-            requires_item: false,
-        });
-
-        await assembleCommands({ worktreePath, projectId: null });
-
-        const claudePath = join(worktreePath, '.claude', 'commands', 'atlas-ai-news.md');
-        const body = readFileSync(claudePath, 'utf8');
-
-        // Frontmatter is still rendered.
-        expect(body.startsWith('---\n')).toBe(true);
-        // No preamble for freedom-mode agents.
-        expect(body).not.toContain('You are agent `agent-ai-news`.');
-        expect(body).not.toContain('.atlas/handoff.md');
-        // Closing fence sits before the prompt body — verbatim, no prefix.
-        const fenceIdx = body.indexOf('---\n\n');
-        expect(fenceIdx).toBeGreaterThan(0);
-        expect(body.slice(fenceIdx + '---\n\n'.length)).toBe(promptBody);
     });
 
     it('wipes stale atlas-* commands from prior runs but preserves user-authored files', async () => {

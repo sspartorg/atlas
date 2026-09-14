@@ -25,7 +25,6 @@ const sampleAgent: IAgent = {
     framework: '',
     prompt_md: '',
     prompt_version: 1,
-    handoff_prompt_md: '',
     status: 'active',
     accent_color: '#007AC9',
     sort_order: 1,
@@ -33,10 +32,6 @@ const sampleAgent: IAgent = {
     designation: '',
     kind: 'performer',
     reviewer_agent_id: null,
-    max_rounds: 5,
-    requires_item: true,
-    schedule_hours: 6,
-    concurrent_runs: 1,
     glyph: '',
     created_at: '2026-05-18T00:00:00Z',
     updated_at: '2026-05-18T00:00:00Z',
@@ -56,18 +51,16 @@ describe('createApiClient — agent endpoints', () => {
         expect(headers['X-Atlas-Token']).toBeUndefined();
     });
 
-    it('getAgent fans out to three parallel GETs', async () => {
+    it('getAgent fans out to two parallel GETs', async () => {
         const fetchSpy = vi
             .spyOn(globalThis, 'fetch')
             .mockResolvedValueOnce(okJson(sampleAgent))
-            .mockResolvedValueOnce(okJson([]))
             .mockResolvedValueOnce(okJson([]));
         const out = await createApiClient(config).getAgent('a1');
         const urls = fetchSpy.mock.calls.map((c) => c[0]).sort();
         expect(urls).toEqual([
             'http://api.test/api/agents/a1',
             'http://api.test/api/agents/a1/checklists',
-            'http://api.test/api/agents/a1/handoff-rules',
         ]);
         expect(out.agent).toEqual(sampleAgent);
     });
@@ -77,7 +70,6 @@ describe('createApiClient — agent endpoints', () => {
             .spyOn(globalThis, 'fetch')
             .mockResolvedValueOnce(okJson({ ...sampleAgent, id: 'a1' })) // POST
             .mockResolvedValueOnce(okJson(sampleAgent)) // GET agent
-            .mockResolvedValueOnce(okJson([])) // handoff
             .mockResolvedValueOnce(okJson([])); // checklists
         await createApiClient(config).createAgent({
             id: 'a1',
@@ -104,7 +96,6 @@ describe('createApiClient — agent endpoints', () => {
             .spyOn(globalThis, 'fetch')
             .mockResolvedValueOnce(okJson(sampleAgent)) // PATCH
             .mockResolvedValueOnce(okJson(sampleAgent))
-            .mockResolvedValueOnce(okJson([]))
             .mockResolvedValueOnce(okJson([]));
         await createApiClient(config).updateAgent('a1', {
             description: 'New description',
@@ -120,14 +111,13 @@ describe('createApiClient — agent endpoints', () => {
         vi.spyOn(globalThis, 'fetch')
             .mockResolvedValueOnce(okEmpty()) // PATCH returns 204
             .mockResolvedValueOnce(okJson(sampleAgent))
-            .mockResolvedValueOnce(okJson([]))
             .mockResolvedValueOnce(okJson([]));
         const out = await createApiClient(config).updateAgent('a1', { description: 'x' });
         expect(out.agent).toEqual(sampleAgent);
     });
 
     it('encodes id segments with reserved characters', async () => {
-        // getAgent fires four parallel requests; each call needs its own Response
+        // getAgent fires parallel requests; each call needs its own Response
         // instance because a body can only be read once.
         const fetchSpy = vi
             .spyOn(globalThis, 'fetch')
@@ -141,7 +131,7 @@ describe('createApiClient — agent endpoints', () => {
         const urls = fetchSpy.mock.calls.map((c) => c[0] as string);
         expect(urls).toContain('http://api.test/api/agents/weird%20id%2Fslash');
         expect(urls).toContain(
-            'http://api.test/api/agents/weird%20id%2Fslash/handoff-rules'
+            'http://api.test/api/agents/weird%20id%2Fslash/checklists'
         );
     });
 

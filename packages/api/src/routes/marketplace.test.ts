@@ -43,26 +43,15 @@ async function seedCatalogEntry(): Promise<void> {
             model: MODEL_NAME,
             framework: '',
             prompt_md: 'you are a coder',
-            handoff_prompt_md: '',
             description: 'test desc',
             designation: '',
             accent_color: '#007AC9',
             sort_order: 1,
             glyph: 'code',
             role_id: null,
-            max_rounds: 5,
-            requires_item: true,
-            requires_worktree: false,
-            push_code: false,
-            raises_pr: false,
             status: 'active',
             kind_slug: 'custom',
             settings_json: {},
-            schedule_hours: 6,
-            schedule_preset: 'every_n_hours',
-            schedule_time_of_day: null,
-            schedule_weekdays: null,
-            schedule_day_of_month: null,
             version: 1,
         })
         .onConflict((oc) => oc.column('id').doNothing())
@@ -120,7 +109,7 @@ describe('GET /api/marketplace/agents/:id', () => {
         });
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body);
-        // getFull returns { agent: {...}, checklists: [...], handoff_rules: [...] }
+        // getFull returns { agent: {...}, checklists: [...] }
         expect(body).toMatchObject({ agent: { id: CATALOG_AGENT_ID } });
     });
 

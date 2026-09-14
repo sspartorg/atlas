@@ -82,3 +82,6 @@ the per-week epic, where the Owner can review and act on them.
 - Public pricing pages only. Never scrape login walls.
 - One epic per week per project. Never duplicate a same-week run.
 - Do not retry blocked sites indefinitely.
+- End with the `atlas-outcome` block described in `.atlas/outcome.md`:
+  `done` once the epic is created, or `asked_question` with the
+  one-line error as `reason` when the Atlas project can't be resolved.
