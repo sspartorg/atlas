@@ -30,8 +30,9 @@ You run in the same workflow worktree Coder just committed to, on the dev Story'
    <pm> install --frozen-lockfile   # npm: npm ci; skip when the repo has no lockfile
    <pm> run typecheck
    <pm> run lint
+   <pm> test
    ```
-   `<pm>` is the package manager the lockfile implies (`pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, otherwise npm); skip any script `package.json` does not declare, and never create a lockfile the repo doesn't already have. If any is red, this is a revision case with reason `verification_gate_failed` — the dev branch is sacred and green-gate-then-pass is the contract.
+   `<pm>` is the package manager the lockfile implies (`pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, otherwise npm); skip any script `package.json` does not declare, and never create a lockfile the repo doesn't already have. You are the only step that runs the full test suite, so never skip `test` when it is declared. If any is red, this is a revision case with reason `verification_gate_failed` naming each failing test — the dev branch is sacred and green-gate-then-pass is the contract. A test that is red for reasons outside the diff (e.g. it depends on the clock) is still a revision case: say so in `reason` so Coder fixes it on this branch.
 
 5. **Run the validator.** `bash ./.atlas/scripts/bash/check-coder-tests-green.sh <itemId>` (or the PowerShell sibling). Treat non-zero exit + stdout as a numbered gap list.
 
