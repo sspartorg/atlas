@@ -5,7 +5,7 @@
   "cli": "copilot",
   "model": "claude-sonnet-4.6",
   "framework": "review",
-  "description": "Dedicated reviewer paired with `agent-coder`. Confirms PR diff covers every spec.md change, scans for anti-patterns, clones the PR head and runs the project's typecheck/lint gate. Routes via the terminal `atlas-outcome` block (done → QA Writer, rejected → Owner, asked_question → Owner).",
+  "description": "Dedicated reviewer paired with `agent-coder`. Confirms PR diff covers every spec.md change, scans for anti-patterns, clones the PR head and runs the project's typecheck/lint gate. Routes via the terminal `atlas-outcome` block (done → Owner with status `in_review` and the PR opened, rejected → Coder for revision, asked_question → Owner).",
   "designation": "Code — Reviewer",
   "accent_color": "#1D8348",
   "sort_order": 14,

@@ -150,12 +150,41 @@ async function reseedCliModels(): Promise<void> {
         .execute();
 }
 
-export async function truncateAll(): Promise<void> {
+interface TruncateOptions {
+    lockTimeoutMs?: number;
+    attempts?: number;
+}
+
+// TRUNCATE needs ACCESS EXCLUSIVE on every table, so one straggler (an
+// un-awaited background query from the previous test, or another vitest
+// process on the same DB) used to park it silently until the 60s hook
+// timeout. Bound the wait, retry, and name the blocker when it never clears.
+export async function truncateAll({ lockTimeoutMs = 10_000, attempts = 3 }: TruncateOptions = {}): Promise<void> {
     const db = getTestDb();
     // One statement, RESTART IDENTITY resets serial counters, CASCADE handles
     // any FK dependency we forgot.
     const list = sql.raw(TRUNCATE_TABLES.join(', '));
-    await sql`TRUNCATE ${list} RESTART IDENTITY CASCADE`.execute(db);
+    for (let attempt = 1; ; attempt++) {
+        try {
+            await db.transaction().execute(async (trx) => {
+                await sql.raw(`SET LOCAL lock_timeout = ${Math.max(1, Math.floor(lockTimeoutMs))}`).execute(trx);
+                await sql`TRUNCATE ${list} RESTART IDENTITY CASCADE`.execute(trx);
+            });
+            break;
+        } catch (err) {
+            const lockTimedOut = (err as { code?: string }).code === '55P03';
+            if (!lockTimedOut) throw err;
+            if (attempt >= attempts) {
+                const blockers = await sql<{ pid: number; state: string | null; query: string }>`
+                    SELECT pid, state, left(query, 200) AS query
+                    FROM pg_stat_activity
+                    WHERE datname = current_database() AND pid <> pg_backend_pid() AND state <> 'idle'
+                `.execute(db);
+                const detail = blockers.rows.map((b) => `pid ${b.pid} (${b.state}): ${b.query}`).join('; ');
+                throw new Error(`truncateAll: TRUNCATE blocked by ${detail || 'an unknown lock holder'}`);
+            }
+        }
+    }
     // Reset settings row to defaults so each test starts with
     // onboarding_complete=0 / empty workspace_path.
     await sql`

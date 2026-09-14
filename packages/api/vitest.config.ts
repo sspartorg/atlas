@@ -183,6 +183,8 @@ export default defineConfig({
             'src/marketplace/catalog-loader.test.ts',
             'src/utils/errors.test.ts',
             'tests/e2e-lifecycle.test.ts',
+            'tests/pg-db-truncate.test.ts',
+            'src/db/catalog-sync-migration.test.ts',
             // W2 chunk N — subprocess wrappers + boot files.
             'src/services/git-status.test.ts',
             'src/services/git-verify.test.ts',

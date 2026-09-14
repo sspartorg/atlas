@@ -69,11 +69,26 @@ export default async function setup(): Promise<() => Promise<void>> {
             `vitest globalSetup refuses to run migrations against ${testUrl} — DB name must contain '_test'.`,
         );
     }
+    // Two vitest processes on the same test DB TRUNCATE each other's rows
+    // mid-test. Hold a session advisory lock (on the maintenance DB, so it
+    // doesn't block CREATE DATABASE) for the whole run: a second run waits
+    // for the first instead of failing at random.
+    const { adminUrl, dbName } = parseDbName(testUrl);
+    const runLock = new Client({ connectionString: adminUrl });
+    await runLock.connect();
+    const lockKey = `atlas-vitest:${dbName}`;
+    const got = await runLock.query<{ ok: boolean }>('SELECT pg_try_advisory_lock(hashtext($1)) AS ok', [lockKey]);
+    if (!got.rows[0]?.ok) {
+        console.warn(`[vitest] another api test run holds ${dbName}; waiting for it to finish…`);
+        await runLock.query('SELECT pg_advisory_lock(hashtext($1))', [lockKey]);
+    }
+
     await ensureDatabase(testUrl);
     await runMigrations(testUrl);
 
     return async () => {
-        // Teardown — no-op for now; the test DB persists between runs so reruns
-        // skip the CREATE/migrate cost.
+        // The test DB persists between runs so reruns skip the CREATE/migrate
+        // cost; ending the session releases the run lock.
+        await runLock.end();
     };
 }
