@@ -215,6 +215,7 @@ Rules:
 ```
 create_item({
   issue_type: 'epic',
+  agent_id: 'agent-jira-to-epic',
   payload: {
     project_id: <target>,
     title: '[<JIRA-KEY>] <jira summary>',
@@ -223,7 +224,9 @@ create_item({
 })
 ```
 
-`create_item` for an epic does not accept a `status` field — the DB
+`agent_id` credits the import to you in the epic's activity log (without
+it the create is recorded as the Owner). `create_item` for an epic does
+not accept a `status` field — the DB
 column default (`draft`) applies, which is exactly what we want for
 triage. The created epic lands in the Atlas project's triage queue.
 

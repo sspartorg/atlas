@@ -242,6 +242,28 @@ describe('NewIssueModal — initialValues pre-fill', () => {
     });
 });
 
+describe('NewIssueModal — unsaved draft guard', () => {
+    function fireUnload(): boolean {
+        const e = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(e);
+        return e.defaultPrevented;
+    }
+
+    it('blocks a browser unload once the draft differs from its initial values', async () => {
+        const { rerender } = renderWithProviders(
+            <NewIssueModal open onClose={vi.fn()} initialValues={{ title: 'Cloned' }} />,
+        );
+        const title = await screen.findByPlaceholderText('Short summary…');
+        expect(fireUnload()).toBe(false);
+
+        fireEvent.change(title, { target: { value: 'Cloned, then edited' } });
+        expect(fireUnload()).toBe(true);
+
+        rerender(<NewIssueModal open={false} onClose={vi.fn()} initialValues={{ title: 'Cloned' }} />);
+        expect(fireUnload()).toBe(false);
+    });
+});
+
 describe('NewIssueModal — sub_bug kind', () => {
     it('renders with sub_bug initialKind (exercises kindAccent sub_bug branch)', async () => {
         renderWithProviders(

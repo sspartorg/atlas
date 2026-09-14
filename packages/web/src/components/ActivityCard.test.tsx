@@ -5,7 +5,7 @@ import { http, HttpResponse } from 'msw';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { makeAgent, makeComment as makeCommentFactory } from '../test-utils/factories.js';
 import { ActivityCard, ConversationCard, ActivityLogCard } from './ActivityCard.js';
-import type { IActivityItem, IIssueEvent, IssueEventField } from '@atlas/shared';
+import type { IActivityItem, IAgentRun, IIssueEvent, IssueEventField } from '@atlas/shared';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 
 const BASE = 'http://localhost:3000/api';
@@ -281,6 +281,52 @@ describe('ActivityCard', () => {
 });
 
 describe('ConversationCard', () => {
+    describe('owner-reply hand-back hint', () => {
+        const coder = makeAgent({ id: 'agent-coder', name: 'Coder', status: 'active' });
+        const qa = makeAgent({ id: 'agent-qa', name: 'QA', status: 'active' });
+        const run = (agent_id: string, created_at: string) =>
+            ({ id: `r-${agent_id}`, agent_id, created_at }) as IAgentRun;
+        const runs = [
+            run('agent-qa', '2026-09-01T09:00:00.000Z'),
+            run('agent-coder', '2026-09-02T09:00:00.000Z'),
+        ];
+        const hint = /Replying hands this back to/;
+
+        function renderCard(overrides: Partial<Parameters<typeof ConversationCard>[0]> = {}) {
+            server.use(...defaultHandlers);
+            return renderWithProviders(
+                <ConversationCard
+                    issueType="story"
+                    issueId="S1"
+                    activity={[]}
+                    agents={[coder, qa]}
+                    status="waiting_for_info"
+                    assigneeAgentId={null}
+                    runs={runs}
+                    {...overrides}
+                />,
+            );
+        }
+
+        it('names the agent of the most recent run when the item is parked unassigned', () => {
+            renderCard();
+            expect(
+                screen.getByText('Replying hands this back to Coder and sets it Ready.'),
+            ).toBeInTheDocument();
+        });
+
+        it('stays hidden when the item is assigned, not waiting, or the last agent is paused', () => {
+            const { unmount } = renderCard({ assigneeAgentId: 'agent-qa' });
+            expect(screen.queryByText(hint)).not.toBeInTheDocument();
+            unmount();
+            const second = renderCard({ status: 'ready' });
+            expect(screen.queryByText(hint)).not.toBeInTheDocument();
+            second.unmount();
+            renderCard({ agents: [{ ...coder, status: 'inactive' }, qa] });
+            expect(screen.queryByText(hint)).not.toBeInTheDocument();
+        });
+    });
+
     it('renders with no comments and shows empty state', async () => {
         server.use(
             ...defaultHandlers,

@@ -30,6 +30,7 @@ import { schedulesRoutes } from './routes/schedules.js';
 import { remindersRoutes } from './routes/reminders.js';
 import { scratchPadRoutes } from './routes/scratchPad.js';
 import { cliModelsRoutes } from './routes/cli-models.js';
+import { cliAvailabilityRoutes } from './routes/cli-availability.js';
 import { toolCatalogRoutes } from './routes/tool-catalog.js';
 import { serverRoutes } from './routes/server.js';
 import { guardrailsRoutes } from './routes/guardrails.js';
@@ -377,6 +378,7 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
     await server.register(runRoutes);
     await server.register(fsRoutes);
     await server.register(cliModelsRoutes);
+    await server.register(cliAvailabilityRoutes);
     await server.register(toolCatalogRoutes);
     await server.register(serverRoutes);
     await server.register(guardrailsRoutes);

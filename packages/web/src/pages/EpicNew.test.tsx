@@ -806,3 +806,45 @@ describe('epicNewBannerCopy', () => {
         );
         expect(ownerEls.length).toBeGreaterThan(0);
     });
+
+    it('assignee picker lists PO-role agents first under "Suggested"', async () => {
+        server.use(
+            http.get(`${BASE}/agents`, () =>
+                HttpResponse.json([
+                    makeAgent({ id: 'agent-coder', name: 'Coder', status: 'active', role_id: 'engineer' }),
+                    makeAgent({ id: 'agent-po', name: 'PO Writer', status: 'active', role_id: 'po' }),
+                ]),
+            ),
+            // Earlier handlers win in MSW, so this /agents stub shadows baseHandlers'.
+            ...baseHandlers(),
+        );
+        renderWithProviders(<EpicNew />, { initialEntries: ['/epics/new'] });
+        const assignee = await screen.findByRole('combobox', { name: 'Assignee' });
+        await waitFor(() => {
+            fireEvent.mouseDown(assignee);
+            expect(screen.getByText('Suggested')).toBeInTheDocument();
+        });
+        const text = screen.getByRole('listbox').textContent ?? '';
+        expect(text.indexOf('PO Writer')).toBeLessThan(text.indexOf('Coder'));
+    });
+
+describe('EpicNew — unsaved draft guard', () => {
+    function fireUnload(): boolean {
+        const e = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(e);
+        return e.defaultPrevented;
+    }
+
+    it('blocks a browser unload only once something has been typed', async () => {
+        server.use(...baseHandlers());
+        renderWithProviders(<EpicNew />, { initialEntries: ['/epics/new'] });
+        const title = await screen.findByPlaceholderText(/Refund automation/i);
+        expect(fireUnload()).toBe(false);
+
+        fireEvent.change(title, { target: { value: 'Half-typed epic' } });
+        expect(fireUnload()).toBe(true);
+
+        fireEvent.change(title, { target: { value: '' } });
+        expect(fireUnload()).toBe(false);
+    });
+});

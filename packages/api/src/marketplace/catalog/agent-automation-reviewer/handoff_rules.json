@@ -5,8 +5,8 @@
     "status": "in_review"
   },
   {
-    "target_agent_id": "owner",
+    "target_agent_id": "agent-automation",
     "kind": "on-fail",
-    "status": "waiting_for_info"
+    "status": "ready"
   }
 ]

@@ -12,6 +12,7 @@ import { buildApp } from '../server.js';
 import { truncateAll, closeTestDb, testDb } from '../../tests/_pg-db.js';
 import { insertProject, insertAgent, insertItem } from '../../tests/_items.js';
 import { commentsService } from '../services/comments.js';
+import { externalLinks } from '../services/external-links.js';
 import type { IComment, IActivityItem } from '@atlas/shared';
 
 let app: FastifyInstance;
@@ -410,6 +411,42 @@ describe('DELETE /api/issues/links/:linkId', () => {
         });
         expect(res.statusCode).toBe(400);
     });
+
+    // MCP add_link / remove_link forward the calling agent as
+    // `x-atlas-agent-id`; recordLinkEvent used to write a null actor on
+    // both endpoints, so every agent link rendered as the Owner.
+    it('credits x-atlas-agent-id as the actor on link_created + link_deleted (both endpoints)', async () => {
+        await insertItem({
+            id: 'ATL-2',
+            type: 'story',
+            project_id: 'p1',
+            parent_id: 'ATL-1',
+            parent_type: 'epic',
+            title: 'Story',
+        });
+        const headers = { 'x-atlas-agent-id': 'agent-coder' };
+        const createRes = await app.inject({
+            method: 'POST',
+            url: '/api/issues/story/ATL-2/links',
+            headers,
+            payload: { to_type: 'epic', to_id: 'ATL-1', relation_type: 'tested_by' },
+        });
+        expect(createRes.statusCode).toBe(201);
+        const created = JSON.parse(createRes.body) as { id: number };
+        const del = await app.inject({
+            method: 'DELETE',
+            url: `/api/issues/links/${created.id}`,
+            headers,
+        });
+        expect(del.statusCode).toBe(204);
+        const events = await testDb
+            .selectFrom('issue_events')
+            .select(['item_id', 'event_type', 'actor_agent_id'])
+            .where('event_type', 'in', ['link_created', 'link_deleted'])
+            .execute();
+        expect(events).toHaveLength(4);
+        expect(events.every((e) => e.actor_agent_id === 'agent-coder')).toBe(true);
+    });
 });
 
 describe('GET /api/issues/:type/:id/reply-context', () => {
@@ -572,6 +609,49 @@ describe('GET /api/issues/:type/:id/external-links', () => {
     });
 });
 
+describe('POST /api/issues/:type/:id/external-links/refresh', () => {
+    it('returns the item links with pr_state after a synchronous refresh', async () => {
+        const refresh = vi
+            .spyOn(externalLinks, 'refreshPrStates')
+            .mockResolvedValueOnce([]);
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/issues/epic/ATL-1/external-links/refresh',
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual([]);
+        expect(refresh).toHaveBeenCalledWith('ATL-1');
+        refresh.mockRestore();
+    });
+
+    it('returns pr_state on each link (null when never checked)', async () => {
+        await externalLinks.create({
+            itemId: 'ATL-1',
+            url: 'https://github.com/foo/bar/pull/5',
+            linkKind: 'pull_request',
+        });
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/issues/epic/ATL-1/external-links/refresh',
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toMatchObject([{ url: 'https://github.com/foo/bar/pull/5', pr_state: null }]);
+    });
+
+    it('returns 404 for an unknown item and 400 for an unknown type', async () => {
+        const missing = await app.inject({
+            method: 'POST',
+            url: '/api/issues/epic/ATL-404/external-links/refresh',
+        });
+        expect(missing.statusCode).toBe(404);
+        const badType = await app.inject({
+            method: 'POST',
+            url: '/api/issues/banana/ATL-1/external-links/refresh',
+        });
+        expect(badType.statusCode).toBe(400);
+    });
+});
+
 describe('POST /api/issues/:type/:id/external-links', () => {
     it('returns 201 with the new link for a valid GitHub PR URL', async () => {
         const res = await app.inject({
@@ -588,6 +668,23 @@ describe('POST /api/issues/:type/:id/external-links', () => {
         expect(body.link_kind).toBe('pull_request');
         expect(body.url).toBe('https://github.com/foo/bar/pull/42');
         expect(body.external_ref).toBe('42');
+    });
+
+    it('credits x-atlas-agent-id as the actor on the external link_created event', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/issues/epic/ATL-1/external-links',
+            headers: { 'x-atlas-agent-id': 'agent-coder' },
+            payload: { link_kind: 'pull_request', url: 'https://github.com/foo/bar/pull/77', title: 'x' },
+        });
+        expect(res.statusCode).toBe(201);
+        const events = await testDb
+            .selectFrom('issue_events')
+            .select(['actor_agent_id'])
+            .where('event_type', '=', 'link_created')
+            .where('field', '=', 'external_link')
+            .execute();
+        expect(events.map((e) => e.actor_agent_id)).toEqual(['agent-coder']);
     });
 
     it('returns 201 idempotently — same URL twice returns the same id', async () => {

@@ -24,6 +24,7 @@
 - Status box: count + first 3 hosts (or "No credentials yet")
 
 **Reset**
+- Subtitle lists everything `POST /api/settings/reset` wipes — projects, epics, stories, bugs, agents, runs, notifications **and saved credentials** — plus the cleared external notification channel; git repos on disk are untouched.
 - **Reset Workspace** button → opens `ResetWorkspaceModal`
 
 ## Tab 2 — Environment (`EnvironmentTab`)

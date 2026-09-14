@@ -187,6 +187,40 @@ describe('ProjectGuardrailScriptsTab', () => {
         }
     });
 
+    it('Add script suggests overridable workspace script slugs (minus ones this project already overrides) with an override note', async () => {
+        let created: Record<string, unknown> | null = null;
+        server.use(
+            http.get(`${BASE}/projects/p1/guardrail-scripts`, () =>
+                HttpResponse.json([makeScript({ id: 'lint', name: 'Project lint' })]),
+            ),
+            http.get(`${BASE}/guardrail-scripts`, () =>
+                HttpResponse.json([
+                    { ...makeScript({ id: 'lint', name: 'Workspace lint' }), project_id: undefined },
+                    { ...makeScript({ id: 'no-secrets', name: 'No secrets' }), project_id: undefined },
+                ]),
+            ),
+            http.post(`${BASE}/projects/p1/guardrail-scripts`, async ({ request }) => {
+                created = (await request.json()) as Record<string, unknown>;
+                return HttpResponse.json(makeScript({ id: 'no-secrets', name: 'No secrets' }));
+            }),
+        );
+        renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
+        fireEvent.click(await screen.findByRole('button', { name: /Add script/i }));
+        expect(
+            await screen.findByText(/same slug overrides the workspace script/i),
+        ).toBeInTheDocument();
+        const chip = await screen.findByRole('button', { name: 'no-secrets' });
+        expect(screen.queryByRole('button', { name: 'lint' })).not.toBeInTheDocument();
+        fireEvent.click(chip);
+        expect(screen.getByRole('textbox', { name: /slug/i })).toHaveValue('no-secrets');
+        expect(screen.getByRole('textbox', { name: /^name/i })).toHaveValue('No secrets');
+        const allTextboxes = screen.getAllByRole('textbox');
+        fireEvent.change(allTextboxes[3]!, { target: { value: '#!/bin/sh\nexit 0' } });
+        fireEvent.change(allTextboxes[4]!, { target: { value: 'exit 0' } });
+        fireEvent.click(screen.getByRole('button', { name: /^Add script$/i }));
+        await waitFor(() => expect(created).toMatchObject({ id: 'no-secrets' }));
+    });
+
     it('renders loading state while scripts query is pending (isLoading branch)', () => {
         // Never-resolving promise keeps isLoading=true
         server.use(

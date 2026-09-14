@@ -10,7 +10,7 @@ The harness has provisioned a worktree on the QA Story's `worktree_branch` (typi
 
 ## Inputs you can rely on
 - `.atlas/templates/qa-plan.csv` — the locked header schema (`Summary,Description,Issue Type,Priority,Labels,Components`) and per-row contract
-- `.atlas/scripts/bash/check-qa-writer-csv.sh` (or `powershell/check-qa-writer-csv.ps1` on Windows) — the validator that gates your `outcome: done` (CSV exists; header matches; ≥1 row per AC; per-row labels well-formed)
+- `.atlas/scripts/bash/check-qa-writer-csv.sh` (or `powershell/check-qa-writer-csv.ps1` on Windows) — the validator that gates your `outcome: done` (CSV exists; header matches exactly; ≥1 data row; your HEAD commit touches the CSV). Per-AC coverage and label shape are checked by QA Reviewer, not the script
 
 ## Workflow
 

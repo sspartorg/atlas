@@ -104,7 +104,7 @@ export const subTasksService = {
         return row ? rowToSubTask(row) : undefined;
     },
 
-    async create(data: CreateSubTaskInput): Promise<ISubTask> {
+    async create(data: CreateSubTaskInput, actorAgentId: string | null = null): Promise<ISubTask> {
         const assigneeId = data.assignee_agent_id ?? null;
         const row = await createItem({
             project_id: '',
@@ -124,7 +124,7 @@ export const subTasksService = {
             item_id: task.id,
             item_type: 'sub_task',
             event_type: 'created',
-            actor_agent_id: data.reporter_agent_id ?? null,
+            actor_agent_id: actorAgentId ?? data.reporter_agent_id ?? null,
             to_value: data.title,
         });
         broadcastSSE({ type: 'counts_changed' });
@@ -139,6 +139,7 @@ export const subTasksService = {
             acceptance_criteria?: string | undefined;
             priority?: IssuePriority | undefined;
         },
+        actorAgentId: string | null = null,
     ): Promise<ISubTask> {
         const before = await this.get(id);
         if (!before) throw new Error('Sub-task not found');
@@ -153,7 +154,7 @@ export const subTasksService = {
             'points',
             'acceptance_criteria',
             'priority',
-        ]);
+        ], actorAgentId);
         return (await this.get(id))!;
     },
 
@@ -262,7 +263,7 @@ export const subBugsService = {
         return row ? rowToSubBug(row) : undefined;
     },
 
-    async create(data: CreateSubBugInput): Promise<ISubBug> {
+    async create(data: CreateSubBugInput, actorAgentId: string | null = null): Promise<ISubBug> {
         const assigneeId = data.assignee_agent_id ?? null;
         const row = await createItem({
             project_id: '',
@@ -293,7 +294,7 @@ export const subBugsService = {
             item_id: bug.id,
             item_type: 'sub_bug',
             event_type: 'created',
-            actor_agent_id: data.reporter_agent_id ?? null,
+            actor_agent_id: actorAgentId ?? data.reporter_agent_id ?? null,
             to_value: data.title,
         });
         broadcastSSE({ type: 'counts_changed' });
@@ -313,6 +314,7 @@ export const subBugsService = {
             failure_scope?: BugFailureScope | undefined;
             priority?: IssuePriority | undefined;
         },
+        actorAgentId: string | null = null,
     ): Promise<ISubBug> {
         const before = await this.get(id);
         if (!before) throw new Error('Sub-bug not found');
@@ -329,7 +331,7 @@ export const subBugsService = {
             'actual',
             'frequency',
             'failure_scope',
-        ]);
+        ], actorAgentId);
         return (await this.get(id))!;
     },
 
@@ -418,7 +420,7 @@ export const bugsService = {
         return row ? rowToBug(row) : undefined;
     },
 
-    async create(data: CreateBugInput): Promise<IBug> {
+    async create(data: CreateBugInput, actorAgentId: string | null = null): Promise<IBug> {
         const assigneeId = data.assignee_agent_id ?? null;
         const row = await createItem({
             project_id: '',
@@ -448,7 +450,7 @@ export const bugsService = {
             item_id: bug.id,
             item_type: 'bug',
             event_type: 'created',
-            actor_agent_id: data.reporter_agent_id ?? null,
+            actor_agent_id: actorAgentId ?? data.reporter_agent_id ?? null,
             to_value: data.title,
         });
         broadcastSSE({ type: 'counts_changed' });
@@ -468,6 +470,7 @@ export const bugsService = {
             failure_scope?: BugFailureScope | undefined;
             priority?: IssuePriority | undefined;
         },
+        actorAgentId: string | null = null,
     ): Promise<IBug> {
         const before = await this.get(id);
         if (!before) throw new Error('Bug not found');
@@ -484,7 +487,7 @@ export const bugsService = {
             'actual',
             'frequency',
             'failure_scope',
-        ]);
+        ], actorAgentId);
         return (await this.get(id))!;
     },
 

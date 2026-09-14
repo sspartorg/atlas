@@ -241,3 +241,24 @@ describe('PATCH /api/bugs/:id/assign — requested_by_agent_id non-null branch',
         expect([200, 400]).toContain(res.statusCode);
     });
 });
+
+describe('POST /api/bugs — x-atlas-agent-id attribution', () => {
+    it('credits the header agent as the created actor + default reporter', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/bugs',
+            headers: { 'x-atlas-agent-id': 'agent-coder' },
+            payload: { epic_id: 'ATL-1', title: 'Crash' },
+        });
+        expect(res.statusCode).toBe(201);
+        const bug = JSON.parse(res.body) as { id: string; reporter_agent_id: string | null };
+        expect(bug.reporter_agent_id).toBe('agent-coder');
+        const ev = await testDb
+            .selectFrom('issue_events')
+            .select('actor_agent_id')
+            .where('item_id', '=', bug.id)
+            .where('event_type', '=', 'created')
+            .executeTakeFirstOrThrow();
+        expect(ev.actor_agent_id).toBe('agent-coder');
+    });
+});

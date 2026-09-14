@@ -49,6 +49,9 @@ export const defaultHandlers = [
     // unhandled-request warning. Default to an empty list; tests that need
     // populated PR links override via server.use(...).
     http.get(`${BASE}/issues/:type/:id/external-links`, () => HttpResponse.json([])),
+    // Agent surfaces warn when a CLI binary is missing; default to "nothing
+    // known" so they render no warning unless a test opts in.
+    http.get(`${BASE}/cli/availability`, () => HttpResponse.json([])),
 ];
 
 // Convenience factories so tests can express "this endpoint returns X" in one line.

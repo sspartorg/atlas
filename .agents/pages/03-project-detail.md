@@ -3,7 +3,7 @@
 **Route:** `/projects/:id` • **Component:** `packages/web/src/pages/ProjectDetail.tsx` • **Slug:** `project`
 
 ## Purpose
-Single-project workspace. 5 tabs (Overview, Epics, Issues, Guard-rails, History) with shared header + right rail.
+Single-project workspace. 6 tabs (Overview, Epics, Issues, Guard-rails, Setup, History) with shared header + right rail.
 
 ## States
 - **Loading**: `projectsLoading` → skeleton (lines 103-111)
@@ -39,6 +39,7 @@ All three **Edit guard-rails** affordances (header badge, actions menu, right-ra
 | Epics | `epics` | `EpicsTab` — owns its own `useEpics(projectId)` hook so the list refetches on every tab activation (matches IssuesTab); shows a Skeleton during the in-flight fetch |
 | Issues | `issues` | `IssuesTab` — owns its own `useIssues({projectId})` hook so the list refetches on every tab activation; shows a Skeleton during the in-flight fetch |
 | Guard-rails | `guardrails` | `GuardrailsTab` — full `ProjectGuardrailsBody` (see page 04) |
+| Setup | `setup` | `SetupTab` — `.sh` + `.ps1` setup-script editors saved on the project (`PATCH /api/projects/:id`). Copy states the real behaviour: the agent runner (`project-setup-runner`) runs the PowerShell body on Windows hosts and the shell body elsewhere in the run's fresh worktree **before the CLI starts**; a failing script ends the run as `setup_failed` and the CLI never spawns. |
 | History | `history` | `HistoryTab` — newest-first list of every agent run that touched any item in this project (epic / story / bug / sub-task / sub-bug). Each row: status dot + agent chip + linked issue id + run-status pill + relative timestamp. Issue id links to the detail page; "in progress / completed / error" link to the run detail page. Empty state when no runs have happened yet. |
 
 **Right rail (`ProjectRightRail`)** — hidden on the guardrails tab.

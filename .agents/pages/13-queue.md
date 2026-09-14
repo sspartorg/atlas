@@ -50,7 +50,7 @@ There are no "Awaiting Decision", "Active", or "Done" sections.
 - Header: agent icon, name, CLI/model/category/queue count, close button
 - Status badge
 - Per-agent queued/running counts come from `summarizeAgents()`; the same ready + in-progress rule is exported as `countQueueDepthByAgent()` and reused by the Agents grid and Agent Detail hero.
-- **Run now** → opens `RunNowDialog` in place with `preselect` set to `summary.queued[0]` (project_id + type + id); falls back to an empty picker if the queue is empty. The dialog still navigates to `/agents/:id/runs/:runId` on successful trigger.
+- **Run now** → opens `RunNowDialog` in place with `preselect` set to `summary.queued[0]` (project_id + type + id); falls back to an empty picker if the queue is empty. The dialog still navigates to `/agents/:id/runs/:runId` on successful trigger. Its issue picker lists this agent's assigned items first (see [Agent Detail](16-agent-detail.md)) and it warns when the agent's CLI binary isn't installed.
 - **Pause/Resume** → toggles agent status via `useUpdateAgent`
 - **Full trace** → navigates to `/agents/:id`
 - Currently Executing section — picks the agent's first `in_progress` (or `queued`) `agent_runs` row, looks up the item via `itemsById`, renders the item card + a live terminal block fed by `useRunOutputTail(runId)` (per-drawer SSE subscription on `/api/events`). When no live run exists, renders an idle state ("Idle until <next pass>") or a failure state if the last run errored.

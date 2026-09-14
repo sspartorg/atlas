@@ -135,7 +135,7 @@ Every mutation is one `update_item` call with an `action` discriminator:
   for Owner corrections).
 - `action: 'assign'` to reassign (active-agent guard on the API).
 - `action: 'add_link' / 'remove_link'` for `depends_on` / `relates_to` /
-  `tested_by` graph edits.
+  `tested_by` graph edits (optional `agent_id` credits the link event).
 - `action: 'add_external_link' / 'remove_external_link'` for off-platform
   refs (GitHub PR URLs today).
 - `delete_item` for outright removal (cascades per type).
@@ -238,11 +238,17 @@ carries an explicit "Forbidden Atlas MCP tool calls" clause that forbids
 `crud_agent` with `op` in `{create, update, delete}` and any project /
 guardrail / global-settings mutation.
 
-**Attribution.** The in-process MCP host has no bound agent id, so an
-`update_item` write is credited to an agent only when the call passes
-`agent_id`; the generated `.atlas/handoff.md` (`handoff-assembler.ts`)
-tells the agent to pass its own id on every `update_item` call. Item
-create/link events from MCP remain Owner-attributed (known limitation).
+**Attribution.** The in-process MCP host has no bound agent id, so a write
+is credited to an agent only when the call passes `agent_id`; the generated
+`.atlas/handoff.md` (`handoff-assembler.ts`) tells the agent to pass its own
+id on every `update_item` call. `create_item` (top-level `agent_id`) and
+`update_item` `patch_fields` / `add_link` / `remove_link` / `add_external_link` forward it as
+the `x-atlas-agent-id` header; the create routes credit it as the `created`
+event actor (and default `reporter_agent_id`), the item-link routes as the
+`link_created` / `link_deleted` actor on both endpoints. An id that is not a
+real agent is ignored (Owner attribution). Catalog prompts that create items
+or links (PO Writer, Jira Importer) pass their literal id. `patch_fields`
+field events still carry no actor.
 
 The `tool_catalog` table (read-only directory at `GET /api/tool-catalog`)
 still lists every Atlas MCP tool the server exposes. It's informational â€”

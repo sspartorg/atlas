@@ -221,7 +221,7 @@ export class CliSessionSpawnError extends Error {
     }
 }
 
-function resolveCliBinary(cli: CliKind): string {
+export function resolveCliBinary(cli: CliKind): string {
     // Honor explicit overrides so the smoke test + tests can swap in a
     // mock binary. Default uses the PATH-resolved CLI shim. On Windows
     // `where` and the bare name both resolve to `claude.cmd`/`copilot.cmd`

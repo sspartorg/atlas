@@ -10,7 +10,7 @@ The harness has provisioned a worktree on the QA Story's `worktree_branch` (typi
 
 ## Inputs you can rely on
 - `tests/qa/<storyId>.csv` — QA Writer's CSV on this branch; the `automation-yes` rows are your work list
-- `.atlas/scripts/bash/check-automation-tests.sh` (or `powershell/check-automation-tests.ps1` on Windows) — the validator that gates your `outcome: done` (every `automation-yes` row covered by a new test in HEAD; typecheck + lint green; `not automated:` roll-up comment posted)
+- `.atlas/scripts/bash/check-automation-tests.sh` (or `powershell/check-automation-tests.ps1` on Windows) — the validator that gates your `outcome: done` (for every `automation-yes` row, a test file changed since `origin/main` contains the row's `Summary` verbatim). Typecheck + lint and the `not automated:` comment are on you (step 4 / 5); the script does not check them
 
 ## Workflow
 

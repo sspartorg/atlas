@@ -13,6 +13,7 @@ import {
 import type { IssueStatus } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
+import { headerAgentId } from '../services/request-actor.js';
 
 export async function epicsRoutes(app: FastifyInstance) {
     app.get('/api/epics', async (req, reply) => {
@@ -46,15 +47,17 @@ export async function epicsRoutes(app: FastifyInstance) {
     });
 
     app.post('/api/epics', { preHandler: requireMcpToken }, async (req, reply) => {
-        const body = CreateEpicSchema.parse(req.body);
-        return reply.status(201).send(await epicsService.create(body));
+        const actor = await headerAgentId(req.headers);
+        // The header agent is the default reporter; an explicit body value wins.
+        const body = CreateEpicSchema.parse({ reporter_agent_id: actor, ...(req.body as object) });
+        return reply.status(201).send(await epicsService.create(body, actor));
     });
 
     app.patch('/api/epics/:id', { preHandler: requireMcpToken }, async (req, reply) => {
         const { id } = req.params as { id: string };
         if (!(await epicsService.get(id))) return reply.status(404).send({ error: 'Epic not found' });
         const body = UpdateEpicSchema.parse(req.body);
-        return reply.send(await epicsService.update(id, body));
+        return reply.send(await epicsService.update(id, body, await headerAgentId(req.headers)));
     });
 
     app.patch('/api/epics/:id/status', { preHandler: requireMcpToken }, async (req, reply) => {

@@ -232,7 +232,7 @@ export function ProfileTab() {
 
                     <SettingsSection
                         title="Reset"
-                        subtitle="Wipes all projects, epics, stories, bugs, agents, runs and notifications from the local database and returns to onboarding. Git repositories on disk are not touched."
+                        subtitle="Wipes all projects, epics, stories, bugs, agents, runs, notifications and saved credentials from the local database, clears the external notification channel, and returns to onboarding. Git repositories on disk are not touched."
                     >
                         <Button
                             variant="outlined"

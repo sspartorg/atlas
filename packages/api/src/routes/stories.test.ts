@@ -1019,3 +1019,87 @@ describe('PATCH /api/sub-bugs/:id/status — override=1 branch (STORIES-OVERRIDE
         expect([200, 400]).toContain(res.statusCode);
     });
 });
+
+// MCP create_item forwards the calling agent as `x-atlas-agent-id`; without
+// it the `created` event had a null actor and rendered as the Owner.
+describe('PATCH routes — x-atlas-agent-id attribution on field_updated', () => {
+    const cases = [
+        { url: '/api/stories/ATL-2', payload: { title: 'Renamed story' } },
+        { url: '/api/epics/ATL-1', payload: { title: 'Renamed epic' } },
+    ];
+    for (const c of cases) {
+        it(`PATCH ${c.url} credits the header agent on field_updated`, async () => {
+            const res = await app.inject({
+                method: 'PATCH',
+                url: c.url,
+                headers: { 'x-atlas-agent-id': 'agent-coder' },
+                payload: c.payload,
+            });
+            expect(res.statusCode).toBe(200);
+            const events = await testDb
+                .selectFrom('issue_events')
+                .select('actor_agent_id')
+                .where('event_type', '=', 'field_updated')
+                .execute();
+            expect(events.map((e) => e.actor_agent_id)).toEqual(['agent-coder']);
+        });
+    }
+});
+
+describe('create routes — x-atlas-agent-id attribution', () => {
+    async function createdEvent(itemId: string) {
+        return testDb
+            .selectFrom('issue_events')
+            .select('actor_agent_id')
+            .where('item_id', '=', itemId)
+            .where('event_type', '=', 'created')
+            .executeTakeFirstOrThrow();
+    }
+
+    const cases = [
+        { url: '/api/stories', payload: { epic_id: 'ATL-1', title: 'S' } },
+        { url: '/api/stories/ATL-2/sub-tasks', payload: { title: 'T' } },
+        { url: '/api/stories/ATL-2/sub-bugs', payload: { title: 'B' } },
+    ];
+
+    for (const c of cases) {
+        it(`POST ${c.url} credits the header agent as actor + default reporter`, async () => {
+            const res = await app.inject({
+                method: 'POST',
+                url: c.url,
+                headers: { 'x-atlas-agent-id': 'agent-coder' },
+                payload: c.payload,
+            });
+            expect(res.statusCode).toBe(201);
+            const item = JSON.parse(res.body) as { id: string; reporter_agent_id: string | null };
+            expect(item.reporter_agent_id).toBe('agent-coder');
+            expect((await createdEvent(item.id)).actor_agent_id).toBe('agent-coder');
+        });
+    }
+
+    it('keeps an explicit body reporter but still credits the header agent as actor', async () => {
+        await insertAgent({ id: 'agent-po-writer' });
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/stories',
+            headers: { 'x-atlas-agent-id': 'agent-po-writer' },
+            payload: { epic_id: 'ATL-1', title: 'S', reporter_agent_id: 'agent-coder' },
+        });
+        const item = JSON.parse(res.body) as { id: string; reporter_agent_id: string | null };
+        expect(item.reporter_agent_id).toBe('agent-coder');
+        expect((await createdEvent(item.id)).actor_agent_id).toBe('agent-po-writer');
+    });
+
+    it('ignores a header naming an unknown agent (Owner attribution, no FK 500)', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/stories',
+            headers: { 'x-atlas-agent-id': 'agent-nope' },
+            payload: { epic_id: 'ATL-1', title: 'S' },
+        });
+        expect(res.statusCode).toBe(201);
+        const item = JSON.parse(res.body) as { id: string; reporter_agent_id: string | null };
+        expect(item.reporter_agent_id).toBeNull();
+        expect((await createdEvent(item.id)).actor_agent_id).toBeNull();
+    });
+});

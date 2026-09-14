@@ -209,6 +209,8 @@ export function SubTaskDetail() {
                 <>
                     <DetailsRailCard
                         issueType="sub_task"
+                        issueId={task.id}
+                        externalLinks={full?.external_links}
                         status={task.status}
                         onStatusPick={(next, override) => void handleStatusPick(next, override)}
                         assigneeAgentId={task.assignee_agent_id}
@@ -277,6 +279,9 @@ export function SubTaskDetail() {
                 issueId={task.id}
                 activity={full?.activity}
                 agents={agents}
+                status={task.status}
+                assigneeAgentId={task.assignee_agent_id}
+                runs={itemRuns}
             />
         </IssueDetailShell>
 

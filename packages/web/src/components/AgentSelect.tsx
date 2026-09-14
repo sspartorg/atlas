@@ -3,7 +3,7 @@ import Autocomplete, { createFilterOptions } from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import type { IAgent } from '@atlas/shared';
+import type { IAgent, SdlcRole } from '@atlas/shared';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 
 // Searchable assignee picker shared between EpicNew and NewIssueModal.
@@ -17,6 +17,7 @@ export interface AgentSelectOption {
     name: string;
     designation: string;
     accent_color: string;
+    suggested?: boolean;
 }
 
 interface Props {
@@ -37,6 +38,8 @@ interface Props {
     ariaLabel?: string | undefined;
     /** Forwarded to Autocomplete so callers can control size in dense forms. */
     size?: 'small' | 'medium';
+    /** Agents with this role_id are listed first under a "Suggested" group. */
+    suggestedRole?: SdlcRole | undefined;
 }
 
 const filterOptions = createFilterOptions<AgentSelectOption>({
@@ -52,6 +55,7 @@ export function AgentSelect({
     label,
     ariaLabel,
     size = 'medium',
+    suggestedRole,
 }: Props) {
     const options = useMemo<AgentSelectOption[]>(() => {
         const opts: AgentSelectOption[] = [];
@@ -64,17 +68,21 @@ export function AgentSelect({
                 accent_color: ATLAS_PALETTE.slate,
             });
         }
+        const suggested: AgentSelectOption[] = [];
         for (const a of agents) {
-            opts.push({
+            const opt: AgentSelectOption = {
                 type: 'agent',
                 id: a.id,
                 name: a.name,
                 designation: a.designation || 'AI',
                 accent_color: a.accent_color,
-            });
+            };
+            if (suggestedRole && a.role_id === suggestedRole) suggested.push({ ...opt, suggested: true });
+            else opts.push(opt);
         }
-        return opts;
-    }, [agents, ownerName]);
+        return [...suggested, ...opts];
+    }, [agents, ownerName, suggestedRole]);
+    const hasSuggested = options.some((o) => o.suggested);
 
     const selected = options.find((o) => o.id === value) ?? null;
 
@@ -86,6 +94,9 @@ export function AgentSelect({
             getOptionLabel={(o) => o.name}
             isOptionEqualToValue={(a, b) => a.id === b.id}
             filterOptions={filterOptions}
+            {...(hasSuggested
+                ? { groupBy: (o: AgentSelectOption) => (o.suggested ? 'Suggested' : 'Everyone else') }
+                : {})}
             // When Owner is in the list, clearing has no useful meaning — Owner is
             // the neutral fallback. Without an Owner option, allow clearing (the
             // parent treats empty as "no assignee yet" and converts to null on

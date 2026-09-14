@@ -23,6 +23,11 @@ import { useAgents, useUpdateAgent } from '../hooks/useAgents.js';
 import { useAgentFavorites } from '../hooks/useAgentFavorites.js';
 import { useQueueDepthByAgent } from '../hooks/useQueueDepthByAgent.js';
 import { useToast } from '../hooks/useToast.js';
+import {
+    cliUnavailableMessage,
+    findMissingCli,
+    useCliAvailability,
+} from '../hooks/useCliAvailability.js';
 import { api } from '../api/api.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { AgentListHeader } from './agents/AgentListHeader.js';
@@ -127,6 +132,11 @@ export function Agents() {
     const [saving, setSaving] = useState(false);
 
     const queueDepthByAgent = useQueueDepthByAgent();
+    const { data: cliAvailability } = useCliAvailability();
+    const cliWarningFor = (cli: AgentCli) => {
+        const missing = findMissingCli(cliAvailability, cli);
+        return missing ? cliUnavailableMessage(missing) : null;
+    };
     const runsByAgent = useMemo(() => {
         const map = new Map<string, IAgentRun[]>();
         for (const r of runsQuery.data ?? []) {
@@ -423,6 +433,7 @@ export function Agents() {
                                 menuActions={handleCardMenu(w)}
                                 runtimeError={!!runsQuery.error}
                                 upgradeAvailable={upgradeByAgentId.get(w.id) === true}
+                                cliWarning={cliWarningFor(w.cli)}
                             />
                         ))}
                     </AgentCategorySection>
@@ -452,6 +463,7 @@ export function Agents() {
                             menuActions={handleCardMenu(w)}
                             runtimeError={!!runsQuery.error}
                             upgradeAvailable={upgradeByAgentId.get(w.id) === true}
+                            cliWarning={cliWarningFor(w.cli)}
                         />
                     ))}
                 </Box>

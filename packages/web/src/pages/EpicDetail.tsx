@@ -169,6 +169,8 @@ export function EpicDetail() {
                 <>
                     <DetailsRailCard
                         issueType="epic"
+                        issueId={epic.id}
+                        externalLinks={full?.external_links}
                         status={epic.status}
                         onStatusPick={(next, override) =>
                             void transitionEpic.mutateAsync({
@@ -280,6 +282,9 @@ export function EpicDetail() {
                 issueId={epic.id}
                 activity={full?.activity}
                 agents={agents}
+                status={epic.status}
+                assigneeAgentId={epic.assignee_agent_id}
+                runs={itemRuns}
             />
         </IssueDetailShell>
 

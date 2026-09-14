@@ -103,7 +103,9 @@ export async function notificationsRoutes(app: FastifyInstance) {
         } catch (err) {
             return reply.status(400).send({ error: (err as Error).message });
         }
-        await sendExternalNotification(body.message, body.event_key as never);
-        return reply.status(202).send({ ok: true });
+        // `sent: false` = gated (quiet hours / event toggle off / no transport),
+        // so the caller can tell a suppressed message from a delivered one.
+        const sent = await sendExternalNotification(body.message, body.event_key as never);
+        return reply.status(202).send({ ok: true, sent });
     });
 }

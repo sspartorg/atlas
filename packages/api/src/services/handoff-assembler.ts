@@ -184,10 +184,18 @@ function renderRoutingBlock(
             ? 'a structured summary: what you did, what you verified, and a per-item verdict line for each checklist row with one-line evidence.'
             : 'an explanation of which items failed, the evidence for each failure, and what the next actor needs to fix.';
 
+    // On-fail to another agent is a revision hand-back: the target is
+    // auto-dispatched the moment it is assigned and works from this comment,
+    // so the gap list must land first.
+    const handsBackToAgent =
+        kind === 'on-fail' && rule !== undefined && renderAssignee(rule.target_agent_id) !== 'null';
+
     if (rule) {
         const ruleLabel = getStatusLabel(rule.status as never);
         lines.push(
-            `1. Call \`mcp__atlas__update_item\` with \`action: 'add_comment'\`, ${credit} on this item with ${commentVerb}`,
+            handsBackToAgent
+                ? `1. FIRST call \`mcp__atlas__update_item\` with \`action: 'add_comment'\`, ${credit} on this item with the gap list: every failed item, the evidence, and exactly what ${renderAssignee(rule.target_agent_id)} must change. Post it BEFORE reassigning — the next agent reads this comment as its revision brief.`
+                : `1. Call \`mcp__atlas__update_item\` with \`action: 'add_comment'\`, ${credit} on this item with ${commentVerb}`,
         );
         lines.push(
             `2. Call \`mcp__atlas__update_item\` with \`action: 'change_status'\`, ${credit} and status EXACTLY: "${ruleLabel}".`,
@@ -205,6 +213,16 @@ function renderRoutingBlock(
                 `then \`mcp__atlas__update_item\` (\`action: 'change_status'\`, ${credit}) with status EXACTLY: "${fallbackStatusLabel}", ` +
                 `then \`mcp__atlas__update_item\` (\`action: 'add_comment'\`, ${credit}) explaining: unable to assign to ${renderAssignee(rule.target_agent_id)}, parked with Owner.`,
         );
+        if (handsBackToAgent) {
+            lines.push('');
+            lines.push(
+                `   **Owner-only blocker** — if a failure is something only the Owner can fix (missing access or credentials, ` +
+                    `a product decision, contradictory requirements) rather than a revision ${renderAssignee(rule.target_agent_id)} can make, do NOT hand it back. Instead ` +
+                    `call \`mcp__atlas__update_item\` (\`action: 'add_comment'\`, ${credit}) stating exactly what the Owner must provide or decide, ` +
+                    `then \`mcp__atlas__update_item\` (\`action: 'assign'\`, ${credit}) with assignee_agent_id: null, ` +
+                    `then \`mcp__atlas__update_item\` (\`action: 'change_status'\`, ${credit}) with status EXACTLY: "${fallbackStatusLabel}".`,
+            );
+        }
     } else {
         const reason =
             kind === 'on-pass'

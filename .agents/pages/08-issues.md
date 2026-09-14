@@ -43,7 +43,7 @@ Unified list across Stories, Bugs, Sub-tasks, Sub-bugs. Filter by project, statu
 - **New issue defaults to story** — The most common manual create; modal lets the Owner pick a different kind without re-entering.
 
 ## Modals / drawers
-- `NewIssueModal` — opens from **New issue**. Pre-fills `initialKind` and `initialProjectId`.
+- `NewIssueModal` — opens from **New issue**. Pre-fills `initialKind` and `initialProjectId`. While open with typed prose that differs from its initial values (title, description, acceptance criteria, steps, expected, actual), `useDraftGuard` blocks reload/tab close (`beforeunload`) and a global `g`+`<key>` shortcut raises **Discard draft?** instead of silently unmounting the modal. The same guard applies wherever the modal is hosted (Epic / Story / Bug / Sub-task / Sub-bug detail).
 
 ## Hooks used
 - `useIssues({projectId})` — calls `GET /api/issues/tree` once. Response inlines `projects` and `agents` plus a hierarchical `tree` (stories+bugs at top, sub-tasks/sub-bugs nested as `children`). `flattenIssueTree(tree)` produces the legacy flat-row shape the table/kanban render pipeline expects.

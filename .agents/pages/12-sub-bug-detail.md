@@ -28,6 +28,11 @@ A defect found while working on a Story. Uses the unified `IssueDetailShell`. Ti
 **Right rail**
 - `DetailsRailCard` with Project, Parent story (link), Status (`StatusPickerPopover`), Assignee (`AssigneePickerPopover`), Rounds (A04 — `X / Y` against the assignee's `max_rounds`; hidden when no assignee; clickable → `ResetRoundsPopover` so Owner can wipe the counter and give the agent a fresh budget), Created, Last updated.
 
+**Owner-reply hand-back + PR merge awareness** (shared components)
+- `ConversationCard` composer — when the item is `waiting_for_info` with no assignee and the most recent run on it (`useItemAgentRuns`) belongs to an active agent, helper text reads *"Replying hands this back to <Agent> and sets it Ready."* It mirrors the API's owner-reply auto-resume (`commentsService`), so posting really does reassign + re-queue.
+- **Pull Requests** rows (`RelatedItemsCard`) carry an **Open** / **Merged** / **Closed** chip from `pr_state`; no chip while the state is unknown (`null`/absent).
+- `DetailsRailCard` status picker → **Done** while any `pull_request` link isn't `merged`: first `POST /api/issues/:type/:id/external-links/refresh`; if still unmerged, a **Mark done anyway?** dialog (`ConfirmActionModal`) lists the PRs (`#ref title (state)`) and only **Mark done** transitions. Refresh failure falls back to the loaded links, so the dialog still guards.
+
 ## Why these affordances exist
 - **Same `BugBodyCards` shape as Bug Detail** — Sub-bugs and bugs share repro semantics; reusing the body components keeps QA agents from special-casing parent-bug vs. sub-bug.
 - **Frequency / Failure scope as editable dropdowns** — Triage data captured at detection often needs revision once a Coder confirms the repro; inline edit lets the author correct without leaving the page.
@@ -49,6 +54,7 @@ A defect found while working on a Story. Uses the unified `IssueDetailShell`. Ti
 - `PATCH /api/sub-bugs/:id` (title, description, AC, steps, expected, actual, frequency, failure_scope, labels)
 - `PATCH /api/sub-bugs/:id/status`, `PATCH /api/sub-bugs/:id/assign`
 - `DELETE /api/sub-bugs/:id`
+- `POST /api/issues/sub_bug/:id/external-links/refresh` — synchronous PR-state re-check before Done (via `useRefreshIssueExternalLinks`)
 
 (Legacy `PATCH /:id/plan` retired; agent narrative flows through the comments thread.)
 

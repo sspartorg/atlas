@@ -16,6 +16,7 @@ import { useProjects } from '../hooks/useProjects.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useToast } from '../hooks/useToast.js';
+import { useDraftGuard } from '../hooks/useDraftGuard.js';
 import { MOBILE_SHELL, ATLAS_PALETTE } from '../theme/tokens.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
@@ -103,6 +104,8 @@ export function EpicNew() {
         project: false,
     });
     const touch = (k: FieldKey) => setTouched((prev) => ({ ...prev, [k]: true }));
+
+    useDraftGuard(Boolean(title.trim() || description.trim()));
 
     const ownerName = settings?.owner_name ?? 'Owner';
     const projectMissing = projects.length === 0;
@@ -465,6 +468,7 @@ export function EpicNew() {
                             onChange={(v) => setAssigneeChoice(v || 'OWNER')}
                             ariaLabel="Assignee"
                             ownerName={ownerName}
+                            suggestedRole="po"
                             placeholder="Search by name or designation…"
                         />
                     </Box>

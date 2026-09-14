@@ -3,6 +3,16 @@
 // before branching on this type anywhere.
 export type AgentCli = 'claude' | 'copilot' | 'ollama';
 
+/** Whether the binary behind an agent CLI is runnable on the API host. */
+export interface ICliAvailability {
+    cli: AgentCli;
+    /** Executable Atlas spawns for this CLI (`ollama` runs through `claude`). */
+    binary: string;
+    available: boolean;
+    /** First line of `<binary> --version`, or null when unavailable. */
+    version: string | null;
+}
+
 // Which binary + argv dialect a CLI value speaks. Ollama runs the Claude Code
 // binary, so it is `claude`. Branch on this — via `CLI_DIALECT` — anywhere the
 // question is "how do I talk to this CLI", never on `AgentCli` directly.
@@ -998,6 +1008,9 @@ export type ExternalLinkKind = 'pull_request';
 
 export const EXTERNAL_LINK_KINDS: ExternalLinkKind[] = ['pull_request'];
 
+/** GitHub PR lifecycle as last observed by the API (null = not yet checked or lookup failed). */
+export type ExternalPrState = 'open' | 'merged' | 'closed';
+
 export interface IItemExternalLink {
     id: number;
     item_id: string;
@@ -1009,6 +1022,8 @@ export interface IItemExternalLink {
     created_at: string;
     /** When set, points at the agent_runs row that opened the link. */
     created_by_run_id: string | null;
+    /** Pull-request links only: last observed GitHub state; null when unknown. */
+    pr_state?: ExternalPrState | null;
 }
 
 /** A link enriched with the target item's display info, for the UI list. */

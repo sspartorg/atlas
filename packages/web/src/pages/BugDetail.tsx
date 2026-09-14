@@ -161,6 +161,8 @@ export function BugDetail() {
                 <>
                     <DetailsRailCard
                         issueType="bug"
+                        issueId={bug.id}
+                        externalLinks={full?.external_links}
                         status={bug.status}
                         onStatusPick={(next, override) =>
                             void transitionBug.mutateAsync({
@@ -250,6 +252,9 @@ export function BugDetail() {
                 issueId={bug.id}
                 activity={full?.activity}
                 agents={agents}
+                status={bug.status}
+                assigneeAgentId={bug.assignee_agent_id}
+                runs={itemRuns}
             />
         </IssueDetailShell>
 

@@ -33,3 +33,8 @@ export function loadConfig(): AppConfig {
     };
     return cached;
 }
+
+/** The API's own listen port. Prefer API_PORT so dev/prod/E2E never fight over a shared PORT var. */
+export function apiPort(): number {
+    return Number(process.env['API_PORT'] ?? process.env['PORT']) || 4001;
+}

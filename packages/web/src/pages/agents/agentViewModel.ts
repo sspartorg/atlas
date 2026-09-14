@@ -1,6 +1,8 @@
 import { Cron } from 'croner';
 import type { IAgent, IAgentRun, AgentCategory, AgentSchedulePreset } from '@atlas/shared';
 import { SDLC_ROLE_LABELS } from '@atlas/shared';
+import { ATLAS_PALETTE } from '../../theme/tokens.js';
+import type { AgentStatusLabel } from '../queue/queueViewModel.js';
 
 // 'cron' is a UI-only preset id; the persisted column stays `cron_expr`,
 // and `schedule_preset` keeps its four canonical values. The picker uses
@@ -487,4 +489,13 @@ export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRu
         totalOutputTokens: hasTokens ? outputTokens : null,
         totalCacheReadTokens: hasTokens ? cacheReadTokens : null,
     };
+}
+
+// Mercury collapses brand-hue slots (`green`, `gold`) to neutral accent, so
+// the live-state indicator uses the functional success/warning/error slots.
+export function agentStatusColor(label: AgentStatusLabel): string {
+    if (label === 'Paused') return ATLAS_PALETTE.slate60;
+    if (label === 'Failed') return ATLAS_PALETTE.error;
+    if (label === 'Queued') return ATLAS_PALETTE.warning;
+    return ATLAS_PALETTE.success;
 }
