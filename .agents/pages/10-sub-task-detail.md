@@ -28,6 +28,11 @@ Single sub-task view. Uses the unified `IssueDetailShell`. Title, description, p
 **Right rail**
 - `DetailsRailCard` with Project, Parent story (link), Status (`StatusPickerPopover`), Assignee (`AssigneePickerPopover`), Rounds (A04 — `X / Y` against the assignee's `max_rounds`; hidden when no assignee; clickable → `ResetRoundsPopover` so Owner can wipe the counter and give the agent a fresh budget), Created, Last updated.
 
+**Owner-reply hand-back + PR merge awareness** (shared components)
+- `ConversationCard` composer — when the item is `waiting_for_info` with no assignee and the most recent run on it (`useItemAgentRuns`) belongs to an active agent, helper text reads *"Replying hands this back to <Agent> and sets it Ready."* It mirrors the API's owner-reply auto-resume (`commentsService`), so posting really does reassign + re-queue.
+- **Pull Requests** rows (`RelatedItemsCard`) carry an **Open** / **Merged** / **Closed** chip from `pr_state`; no chip while the state is unknown (`null`/absent).
+- `DetailsRailCard` status picker → **Done** while any `pull_request` link isn't `merged`: first `POST /api/issues/:type/:id/external-links/refresh`; if still unmerged, a **Mark done anyway?** dialog (`ConfirmActionModal`) lists the PRs (`#ref title (state)`) and only **Mark done** transitions. Refresh failure falls back to the loaded links, so the dialog still guards.
+
 ## Why these affordances exist
 - **EditableTitle + EditableMarkdownCards** — Sub-tasks are the smallest implementation unit; agents (or the Owner) refine them as the work uncovers details. Inline edit keeps the iteration tight without bouncing through a modal.
 - **Acceptance criteria card** — A sub-task without acceptance criteria can't be marked done deterministically; surfacing the field as a first-class card pressures the author to fill it before agent hand-off.
@@ -49,6 +54,7 @@ Single sub-task view. Uses the unified `IssueDetailShell`. Title, description, p
 - `PATCH /api/sub-tasks/:id` (title, description, acceptance_criteria, labels)
 - `PATCH /api/sub-tasks/:id/status`, `PATCH /api/sub-tasks/:id/assign`
 - `DELETE /api/sub-tasks/:id`
+- `POST /api/issues/sub_task/:id/external-links/refresh` — synchronous PR-state re-check before Done (via `useRefreshIssueExternalLinks`)
 
 (Legacy `PATCH /:id/plan` retired; agent narrative flows through the comments thread.)
 

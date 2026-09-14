@@ -25,9 +25,14 @@ Full epic view sharing the unified work-item shell with stories, sub-tasks, sub-
 - `ConversationCard` — comments + compose box for human/agent back-and-forth. The pure interaction surface.
 
 **Right rail**
-- `DetailsRailCard` — Project (link), Status (clickable → `StatusPickerPopover`), Assignee (clickable → `AssigneePickerPopover`, locked when agent is running), Reporter, Priority (clickable picker), **Labels** (via `LabelsRailRow` + `useProjectLabels` — Task 2), Rounds (A04 — `X / Y` against the assignee's `max_rounds`; hidden when no assignee; clickable → `ResetRoundsPopover` so Owner can wipe the counter and give the agent a fresh budget), **Total cost (USD)** rolled up from `useItemAgentRuns`, Created, Last updated.
+- `DetailsRailCard` — Project (link), Status (clickable → `StatusPickerPopover`), Assignee (clickable → `AssigneePickerPopover`, locked when agent is running; on epics PO-role agents are listed first under a **Suggested** header, then Owner + the rest under **Everyone else**), Reporter, Priority (clickable picker), **Labels** (via `LabelsRailRow` + `useProjectLabels` — Task 2), Rounds (A04 — `X / Y` against the assignee's `max_rounds`; hidden when no assignee; clickable → `ResetRoundsPopover` so Owner can wipe the counter and give the agent a fresh budget), **Total cost (USD)** rolled up from `useItemAgentRuns`, Created, Last updated.
 - `IssueDeleteAction` — 3-dots menu carries Delete (calls `useDeleteEpic`; confirms via `ConfirmDeleteModal`).
 - `ActivityLogCard` — read-only feed of status changes, reassignments, and field edits. Lives in the rail beneath the details so audit context sits with the rest of the metadata; on mobile it stacks below Details, after Conversation.
+
+**Owner-reply hand-back + PR merge awareness** (shared components)
+- `ConversationCard` composer — when the item is `waiting_for_info` with no assignee and the most recent run on it (`useItemAgentRuns`) belongs to an active agent, helper text reads *"Replying hands this back to <Agent> and sets it Ready."* It mirrors the API's owner-reply auto-resume (`commentsService`), so posting really does reassign + re-queue.
+- **Pull Requests** rows (`RelatedItemsCard`) carry an **Open** / **Merged** / **Closed** chip from `pr_state`; no chip while the state is unknown (`null`/absent).
+- `DetailsRailCard` status picker → **Done** while any `pull_request` link isn't `merged`: first `POST /api/issues/:type/:id/external-links/refresh`; if still unmerged, a **Mark done anyway?** dialog (`ConfirmActionModal`) lists the PRs (`#ref title (state)`) and only **Mark done** transitions. Refresh failure falls back to the loaded links, so the dialog still guards.
 
 ## Why these affordances exist
 - **Description as a stand-alone Editable card** — The Owner's intent lives in its own card with its own save endpoint. (The legacy "Proposed Plan" card was retired by A03's revised design — agent narrative now flows through the comments thread, with one auto-comment per agent persona at run end.)
@@ -51,6 +56,7 @@ Full epic view sharing the unified work-item shell with stories, sub-tasks, sub-
 - `GET /api/epics/:id/full` — single composite endpoint backing `useEpicFull`
 - `PATCH /api/epics/:id` (title, description), `PATCH /api/epics/:id/status`, `PATCH /api/epics/:id/assign`
 - `POST /api/epics/:id/reset-rounds`, `DELETE /api/epics/:id`
+- `POST /api/issues/epic/:id/external-links/refresh` — synchronous PR-state re-check before Done (via `useRefreshIssueExternalLinks`)
 
 ## Edge cases / quirks
 - Owner override is built into the status popover's "Override" section, so manual transitions land via `transitionEpic({ override: true })`.

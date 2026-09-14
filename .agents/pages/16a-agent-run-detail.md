@@ -8,8 +8,8 @@ Full read of a single `agent_runs` row: status header, issue link card, **per-ev
 ## States
 - **Loading**: centered spinner.
 - **Not found**: "Run not found." when either the agent or the run row is missing.
-- **Populated (queued / in_progress)**: breadcrumbs + hero + issue link card + live log panel (`<QueueLiveLog>`); master-detail viewer hidden.
-- **Populated (completed / error)**: breadcrumbs + hero + issue link card + per-event JSON viewer (master-detail) + (when a `result` event landed) summary panel; live log unmounted.
+- **Populated (queued / in_progress)**: breadcrumbs + hero + issue link card + `live · agent_output` header + per-event viewer (Timeline / Raw text) fed by the SSE tail.
+- **Populated (completed / error)**: breadcrumbs + hero + issue link card + per-event viewer over the persisted `output_text` + (when a `result` event landed) summary panel.
 
 ## UI elements
 
@@ -30,11 +30,12 @@ Full read of a single `agent_runs` row: status header, issue link card, **per-ev
 - Polymorphic link back to the issue (`/issues/{type}/{id}` for stories/bugs/sub-*; `/epics/{id}` for epics). Helps the Owner pivot from "what ran" to "what it ran on".
 
 **Live tail (queued + in-progress)**
-- While `run.status === 'queued'` or `run.status === 'in_progress'`, a `<QueueLiveLog>` panel renders in place of the master-detail viewer — the same component the Queue drawer uses for streaming output. It subscribes to `/api/events` via `useRunOutputTail(runId)`, accumulates each `agent_output` SSE line, and shows `live · agent_output` with a blinking accent dot. The panel mounts on landing (even while the run is still queued, where it shows "Waiting for output…") so there's no flicker as the runner picks the row up — the status pill flips queued → in_progress, the empty copy gives way to streaming lines, and the same DOM stays mounted throughout.
-- When `run_completed` / `run_error` arrives, `useSSE` invalidates `['agent-run', runId]`, the page refetches with the now-populated `output_text`, and React unmounts the live log because `run.status` is no longer streaming — the master-detail viewer takes over without any user action.
-- Cache plumbing: `useSSE` also invalidates `['agent-run', runId]` on `agent_status` events (not only `run_completed` / `run_error`), so the queued → in_progress flip refreshes the run-detail view as soon as the runner takes the row. Without that, the cached row stuck at `queued` for the page's lifetime and the user only saw content after the run finished — see B03 fix `13e91c3` / `e07f85f`.
-- Hidden on `completed` / `error` (the master-detail viewer takes over).
-- The user no longer has to leave the page to follow a run live (the previous behavior was master-detail-only with an "— streaming —" placeholder until `output_text` arrived post-completion).
+- While `run.status === 'queued'` or `'in_progress'`, a small header reads `live · agent_output` with a blinking accent `LiveDot` (`final · no new lines` once `useRunOutputTail` sees `run_completed` / `run_error`).
+- The per-event viewer below renders the SSE tail (`useRunOutputTail(runId)` lines joined) through the **same** `RunEventViewer` parser as a finished run: Timeline events appear incrementally as each `agent_output` line lands, and the Raw text tab shows the raw lines. Empty tail → `Waiting for output…` placeholder.
+- The viewer is one mounted instance across queued → in_progress → completed/error: on completion `useSSE` invalidates `['agent-run', runId]` and its `content` swaps from the SSE tail to the persisted `output_text`, keeping the selected tab/event.
+- The live Timeline shows only lines received since the page mounted (the tail); the flushed `output_text` from before a mid-run reload is not merged in (the gap-fill still splices it into the cached row, which the viewer shows once the run ends).
+- Cache plumbing: `useSSE` also invalidates `['agent-run', runId]` on `agent_status` events, so the queued → in_progress flip refreshes the view as soon as the runner takes the row — see B03 fix `13e91c3` / `e07f85f`.
+- Perf: the viewer re-parses the whole joined tail per new line (bounded by its 5 000-line cap).
 
 **Per-event JSON viewer (master-detail, two-pane)**
 - Two-pane master-detail layout on a dark `#0F1928` surface. Desktop (`md+`): section index on the **left** (260px), log on the **right** (fills remainder), both 540px tall, scroll independently. Mobile (`xs`): section index on **top** (≤200px), log on **bottom** (≤380px), stacked vertically.
@@ -44,7 +45,7 @@ Full read of a single `agent_runs` row: status header, issue link card, **per-ev
 - **Default selection** is event #1 on landing. Resets to #1 whenever the route's `:runId` changes so navigating between runs doesn't carry the previous run's selection over.
 - Header color cues by event kind: cool blue for `assistant`, amber for `user` (tool turns), green for `result`, muted red for error / hook_response, grey for the rest. The section index uses the same palette so the eye lines up across panes.
 - Lines that don't parse as JSON (stderr lines prefixed `[stderr]`, plain stdout from `gh copilot`, partial NDJSON fragments) render as plain-text rows in both panes; stderr rows tint red so shell errors stand out. They're still indexed and selectable in the left pane.
-- Placeholder text when no event is selectable: `— no output captured —` (completed/error with empty `output_text`) — the section index shows `no events yet` in the same case. The viewer itself is hidden during queued/in_progress (the live log panel above takes its place), so the older queued/streaming placeholders are no longer reachable.
+- Placeholder text when no event is selectable: `— no output captured —` (completed/error with empty `output_text`) — the section index shows `no events yet` in the same case. While queued/in_progress with no lines yet the placeholder reads `Waiting for output…`.
 
 **Summary panel**
 - Below the viewer, only on `completed` / `error` runs **and only when a `type:"result"` event was emitted**. Shows the final agent wrap-up by pulling `result.result` out of that event (Claude's own natural-language summary of the turn — the same text the model would print in `--output-format=text`). Header reads **Summary** for completed runs, **Error tail** for errored runs (left border colored to match: green / red). Hidden while the run is queued/in-progress and for non-Claude CLIs (e.g. `gh copilot`) that don't emit a structured result event.
@@ -62,7 +63,7 @@ Full read of a single `agent_runs` row: status header, issue link card, **per-ev
 ## Hooks used
 - `useAgent(id)` — for the breadcrumb agent name and re-run agent id (already cached from the agents list).
 - `useAgentRun(runId)` — new hook wrapping `GET /api/run/:id`.
-- `useRunOutputTail(runId)` — SSE subscriber feeding the live-tail panel while `status === 'queued' || status === 'in_progress'`.
+- `useRunOutputTail(runId)` — SSE subscriber feeding the per-event viewer while `status === 'queued' || status === 'in_progress'`.
 - `useMutation` (inline) for the Re-run trigger.
 
 ## API endpoints touched
@@ -74,7 +75,7 @@ Full read of a single `agent_runs` row: status header, issue link card, **per-ev
 - Post-onboarding only.
 
 ## Edge cases / quirks
-- `output_text` may be `null` for queued or in-progress runs. The master-detail viewer is hidden in those states (the live log panel renders in its place); the hero's Copy / Download buttons still toast "Nothing to copy/download yet" because `output_text` isn't populated until the run terminates.
+- `output_text` may be `null` for queued or in-progress runs. The viewer renders the SSE tail instead in those states; the hero's Copy / Download buttons still toast "Nothing to copy/download yet" because `output_text` isn't populated until the run terminates.
 - `started_at` is `null` until the run is picked up by `agent-runner`; the duration label shows `—` in that case.
 - Summary panel is intentionally hidden mid-run and for runs with no `result` event — Claude only emits one at the very end, and `gh copilot` doesn't emit it at all.
 - Right pane shows a single event at a time (master-detail). To follow a live run, click the latest section row each time the section index grows; there's no auto-follow yet (would steal focus from a row the Owner is actively reading).

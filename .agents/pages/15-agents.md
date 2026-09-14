@@ -25,6 +25,8 @@ Grid of all agent cards, grouped by category. Per-card actions: open, edit, paus
 - Agent accent dot + name + `designation · category` sub-label. A08 — when `designation` is empty, `agentSubtitle()` in `agentViewModel.ts` now falls back to the SDLC role label (via `SDLC_ROLE_LABELS[role_id]`) before dropping to category alone. Autonomous agents (`role_id` NULL) still render category alone when designation is empty.
 - Star toggle (line 383) → `favorites.toggle(w.id)` (localStorage)
 - **Status label** — `Paused` / `Failed` / `Running` / `Queued` / `Idle`, from `resolveAgentStatusLabel()` in `pages/queue/queueViewModel.ts`. That is the ONE definition, shared with the Queue page and the Agent Detail hero. Until 2026-09-12 `AgentCard` and `AgentHero` each derived it from `getRuntimeStats().queueDepth`, which counts `queued` AND `in_progress` together, so the labels were inverted: every active-but-idle agent showed **Running** with a pulsing `LiveDot`, an agent with a genuinely in-flight run showed **Queued**, and `AgentCard` called a paused agent **Idle** — the same word the Queue page uses for active-and-not-running. `getRuntimeStats` now also returns `runningCount`, `queuedCount` and `lastRunErrored`; the `runtimeError` prop still means "the runs query failed to load" and no longer feeds the label.
+- **Queued when items wait** — the queued count fed to the label is `queuedCount + queueDepth`, so an active agent with Ready items but no run yet reads **Queued** (it used to read **Idle** next to "queue 1"). Dot + label colour come from `agentStatusColor()` in `agentViewModel.ts`: Paused slate, Failed `error`, Queued `warning`, Running/Idle `success`.
+- **CLI missing** chip — next to the name when `GET /api/cli/availability` reports the agent's CLI binary unavailable; the tooltip carries the full "`<binary>` is not installed on this machine — runs will fail until it is, or switch the agent to `<available cli>`." copy. The page calls `useCliAvailability()` once and passes `cliWarning` to each card.
 - **queue N** caption — ready + in-progress items assigned to the agent, passed in as the `queueDepth` prop from `useQueueDepthByAgent()` (same count as the Queue page and Agent Detail hero). Previously run-based (`getRuntimeStats().queueDepth`, now removed).
 - Card click → `/agents/:id`
 - ⋯ Card menu (`AgentCardMenu`):
@@ -53,12 +55,14 @@ Grid of all agent cards, grouped by category. Per-card actions: open, edit, paus
 - `useUpdateAgent()`
 - `useRoles()` — `GET /roles`. A08. Infinite cache (the catalog changes only via migration). Surfaces labels for the Role dropdown; the dropdown itself only needs the slug list from `SDLC_ROLES` so a network failure on this hook doesn't break filtering.
 - `useAgentFavorites()` — localStorage
+- `useCliAvailability()` — `GET /cli/availability`, `staleTime` 60s; drives the per-card **CLI missing** chip
 - `useQuery(['runs', 'agents-page'])` — no polling. Invalidated via SSE `run_queued` / `agent_status` / `run_completed`.
 
 ## API endpoints touched
 - `GET /api/agents`
 - `GET /api/roles` (A08 — Role dropdown labels + counts)
 - `GET /api/run?limit=500`
+- `GET /api/cli/availability` (CLI missing chips)
 - `POST /api/agents`
 - `PATCH /api/agents/:id`
 - `DELETE /api/agents/:id`

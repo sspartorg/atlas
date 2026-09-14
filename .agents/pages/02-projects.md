@@ -52,7 +52,7 @@ List all projects with cards or table view; create new ones; trigger reclone, de
 - **Schedule fetch** — Background `git fetch` keeps remote refs fresh so the Owner doesn't have to pull manually before each session.
 
 ## Modals / drawers
-- `NewProjectModal` — credential picker + URL + path; calls `POST /api/projects/clone`. The credential chip reads `App` for `github_app` credentials, `PAT` otherwise. **Project name** follows the repo name in the URL on every keystroke until the Owner types a name of their own (`nameTouched`); clearing the field re-enables auto-fill, and closing / **Add another** resets it.
+- `NewProjectModal` — credential picker + URL + path; calls `POST /api/projects/clone`. The credential chip reads `App` for `github_app` credentials, `PAT` otherwise. **Project name** follows the repo name in the URL on every keystroke until the Owner types a name of their own (`nameTouched`); clearing the field re-enables auto-fill, and closing / **Add another** resets it. **Clone destination** shows `<workspace>/<name>`; before the name resolves it shows `<workspace>/…` (and `…` while settings load) — "Set a workspace path in Settings first" only when settings loaded with an empty `workspace_path`. The success card's **Agents** row says `N installed · shared by all projects` (agents are global, not attached per project); with zero agents it's a **None installed · Browse Marketplace →** button that closes the modal and opens `/agents/marketplace` (`useAgents`, enabled only on the success view).
 - `DeleteProjectModal` — confirms `DELETE /api/projects/:id` (delete-runner)
 - `RecloneProjectModal` — confirms `POST /api/projects/:id/reclone`
 - `AutoFetchScheduleModal` — `PUT /api/projects/:id/schedule` (cron + guards)
