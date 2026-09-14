@@ -2371,10 +2371,19 @@ export async function spawnAgentRun(
     //     the caller's path.
     //   - Legacy (auto-dispatcher etc.): INSERT here, catch the unique
     //     index race ourselves.
+    // ADR 0014 — the config this run actually spawned with. Agents are
+    // editable, so reading agents.* later would misattribute cost and
+    // outcomes when comparing models across runs.
+    const runConfig = {
+        cli: agent.cli,
+        model: agent.model,
+        effort: agent.effort,
+        prompt_version: agent.prompt_version,
+    };
     if (existingRunId) {
         await db
             .updateTable('agent_runs')
-            .set({ prompt_snapshot: fullPrompt })
+            .set({ prompt_snapshot: fullPrompt, ...runConfig })
             .where('id', '=', runId)
             .execute();
     } else {
@@ -2389,6 +2398,7 @@ export async function spawnAgentRun(
                     status: 'queued',
                     prompt_snapshot: fullPrompt,
                     started_at: now,
+                    ...runConfig,
                 })
                 .execute();
         } catch (err) {
