@@ -256,7 +256,7 @@ export const workflowsService = {
         for (const node of template.graph.nodes) {
             if (node.child_workflow_id?.startsWith(TEMPLATE_REF)) {
                 const childTemplate = this.listTemplates().find((t) => `${TEMPLATE_REF}${t.id}` === node.child_workflow_id);
-                const child = childTemplate
+                const existing = childTemplate
                     ? await db
                           .selectFrom('workflows')
                           .select('id')
@@ -264,6 +264,9 @@ export const workflowsService = {
                           .where('name', '=', childTemplate.name)
                           .executeTakeFirst()
                     : undefined;
+                // Children created by this workflow must land somewhere, so the
+                // child workflow is created too when the project lacks it.
+                const child = existing ?? (childTemplate ? await this.createFromTemplate(childTemplate.id, projectId) : undefined);
                 const { child_workflow_id: _ref, ...rest } = node;
                 nodes.push(child ? { ...rest, child_workflow_id: child.id } : rest);
             } else {

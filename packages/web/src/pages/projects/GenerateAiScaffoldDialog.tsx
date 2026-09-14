@@ -14,7 +14,7 @@ import { useToast } from '../../hooks/useToast.js';
 // is already on the Project Detail page so we don't re-state the
 // project; the dialog summarizes WHAT will happen (branch + files
 // + push + PR) and that nothing on `main` is touched. On confirm,
-// dispatches the run and navigates to the run-detail page so the
+// starts the AI Readiness workflow and opens its run view so the
 // Owner watches the work stream.
 
 interface Props {
@@ -31,9 +31,9 @@ export function GenerateAiScaffoldDialog({ project, open, onClose }: Props) {
     async function handleGenerate(): Promise<void> {
         setPending(true);
         try {
-            const { run_id } = await api.projects.generateAiScaffold(project.id);
+            const { run_id, workflow_id } = await api.projects.generateAiScaffold(project.id);
             onClose();
-            navigate(`/agents/agent-ai-readiness/runs/${run_id}`);
+            navigate(`/workflows/${workflow_id}/runs/${run_id}`);
         } catch (err) {
             toast.show({
                 message: 'Generate AI scaffold failed',

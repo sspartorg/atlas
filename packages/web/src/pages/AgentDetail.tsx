@@ -19,7 +19,6 @@ import { AgentHero } from './agents/AgentHero.js';
 import { AgentSidebar } from './agents/AgentSidebar.js';
 import { OverviewTab } from './agents/OverviewTab.js';
 import { PromptTab } from './agents/PromptTab.js';
-import { HandoffsTab } from './agents/HandoffsTab.js';
 import { TestRunTab } from './agents/TestRunTab.js';
 import { RunsTab } from './agents/RunsTab.js';
 import { MemoryTab } from './agents/MemoryTab.js';
@@ -34,7 +33,6 @@ import { useSetPageTitle } from '../components/shell/index.js';
 const TAB_KEYS = [
     'overview',
     'prompt',
-    'handoffs',
     'test',
     'runs',
     'memory',
@@ -258,20 +256,6 @@ export function AgentDetail() {
                                 iconPosition="start"
                             />
                             <Tab
-                                value="handoffs"
-                                label="Handoffs"
-                                icon={
-                                    <Box
-                                        component="span"
-                                        className="material-symbols-rounded"
-                                        sx={{ fontSize: 16 }}
-                                    >
-                                        fork_right
-                                    </Box>
-                                }
-                                iconPosition="start"
-                            />
-                            <Tab
                                 value="test"
                                 label="Test Run"
                                 icon={
@@ -318,7 +302,6 @@ export function AgentDetail() {
 
                     {tab === 'overview' && <OverviewTab agent={agent} view={view} />}
                     {tab === 'prompt' && <PromptTab agent={agent} />}
-                    {tab === 'handoffs' && <HandoffsTab agent={agent} />}
                     {tab === 'test' && <TestRunTab agent={agent} view={view} />}
                     {tab === 'runs' && <RunsTab agent={agent} runs={runs ?? []} />}
                     {tab === 'memory' && <MemoryTab agent={agent} memory={memory} />}
@@ -327,7 +310,6 @@ export function AgentDetail() {
                 <Box sx={{ position: { xs: 'static', md: 'sticky' }, top: 24 }}>
                     <AgentSidebar
                         agent={agent}
-                        view={view}
                         stats={stats}
                         onEditColor={handleEditColor}
                         onReplaceGlyph={handleReplaceGlyph}
@@ -335,9 +317,8 @@ export function AgentDetail() {
                 </Box>
             </Box>
 
-            {/* Conditionally mount modals so their internal hooks (RunNowDialog
-                pulls /api/projects + /api/epics + /api/stories + /api/bugs;
-                DuplicateAgentModal needs the full agent list) don't fire until
+            {/* Conditionally mount modals so their internal hooks
+                (DuplicateAgentModal needs the full agent list) don't fire until
                 the Owner actually opens them. Each modal still gets its
                 expected `open` prop in case React Query needs it for warmup. */}
             {duplicateOpen && (

@@ -737,6 +737,10 @@ export interface IAgentRun {
      * runs (no attached item) and on rows whose item was deleted.
      */
     item_title: string | null;
+    /** ADR 0014 — the workflow run this step belongs to; null for ad-hoc runs. */
+    workflow_run_id: string | null;
+    /** ADR 0014 — the graph node this step executed. */
+    node_id: string | null;
 }
 
 export interface ICostSummary {

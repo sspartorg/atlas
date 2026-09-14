@@ -78,8 +78,8 @@ Grid of all agent cards, grouped by category. Per-card actions: open, edit, paus
 
 ## Connectivity
 - **Pages**: [Agent Detail](16-agent-detail.md) — card click target; [Queue](13-queue.md) — drawer "Full trace" lands back here; [Settings → Model Registry](19-settings.md) — populates the Add Agent dialog's model dropdown.
-- **Routes**: `POST /agents/:id/duplicate` — separate from POST/create because duplicating preserves the prompt body, reviewer prompt, handoff rules, and checklists in one transaction; doing this client-side would re-issue four+ calls.
-- **Entities**: `agent`, `agent_handoff_rule`, `cli_model` (for the model picker).
+- **Routes**: `POST /agents/:id/duplicate` — separate from POST/create because duplicating preserves the prompt body and checklists in one transaction; doing this client-side would re-issue several calls.
+- **Entities**: `agent`, `agent_checklist_item`, `cli_model` (for the model picker).
 
 ## Coming soon on this page
 None.

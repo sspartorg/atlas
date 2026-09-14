@@ -20,7 +20,6 @@ function stubBugFull(
         external_links: unknown[];
         activity: unknown[];
         agents: unknown[];
-        round_count: number | null;
     }> = {},
 ) {
     server.use(
@@ -34,7 +33,6 @@ function stubBugFull(
                 external_links: overrides.external_links ?? [],
                 activity: overrides.activity ?? [],
                 agents: overrides.agents ?? [],
-                round_count: overrides.round_count ?? null,
             }),
         ),
         http.get(`${BASE}/run`, () => HttpResponse.json([])),
@@ -419,7 +417,7 @@ describe('BugDetail page', () => {
     });
 
     it('renders with assignee agent when bug has assignee_agent_id', async () => {
-        const agent = makeAgent({ id: 'agent-1', name: 'Coder Agent', max_rounds: 10 });
+        const agent = makeAgent({ id: 'agent-1', name: 'Coder Agent' });
         stubBugFull('B20', {
             bug: makeBug({ id: 'B20', assignee_agent_id: 'agent-1' }),
             agents: [agent],
@@ -460,22 +458,6 @@ describe('BugDetail page', () => {
         expect(screen.getByText('Assignee')).toBeInTheDocument();
     });
 
-    it('resets rounds via the onResetRounds callback', async () => {
-        const agent = makeAgent({ id: 'agent-reset', name: 'Reset Agent', max_rounds: 3 });
-        stubBugFull('B23', {
-            bug: makeBug({ id: 'B23', assignee_agent_id: 'agent-reset' }),
-            agents: [agent],
-            round_count: 2,
-        });
-        server.use(
-            http.post(`${BASE}/bugs/B23/reset-rounds`, () => HttpResponse.json({ ok: true })),
-        );
-        renderBug('B23');
-        await screen.findByText('Bug One');
-        // Round reset button may appear when round_count is close to max_rounds
-        expect(screen.getByText('Reset Agent')).toBeInTheDocument();
-    });
-
     it('triggers onLabelsChange by clicking Add labels and blurring', async () => {
         stubBugFull('B24', {
             bug: makeBug({ id: 'B24', labels: [] }),
@@ -501,29 +483,6 @@ describe('BugDetail page', () => {
                 fireEvent.change(input, { target: { value: 'frontend' } });
                 fireEvent.blur(input);
             }
-        }
-        expect(document.body).toBeTruthy();
-    });
-
-    it('triggers onResetRounds by clicking the Rounds row and confirming', async () => {
-        const agent = makeAgent({ id: 'agent-rr', name: 'Round Agent', max_rounds: 4 });
-        stubBugFull('B25', {
-            bug: makeBug({ id: 'B25', assignee_agent_id: 'agent-rr' }),
-            agents: [agent],
-            round_count: 2,
-        });
-        server.use(
-            http.post(`${BASE}/bugs/B25/reset-rounds`, () => HttpResponse.json({ ok: true })),
-        );
-        renderBug('B25');
-        await screen.findByText('Bug One');
-
-        // The Rounds row is clickable when roundsClickable = true
-        const roundsRow = screen.queryByText('Rounds')?.closest('div');
-        if (roundsRow) {
-            fireEvent.click(roundsRow);
-            const confirmBtn = await screen.findByRole('button', { name: /Reset rounds/i }).catch(() => null);
-            if (confirmBtn) fireEvent.click(confirmBtn);
         }
         expect(document.body).toBeTruthy();
     });

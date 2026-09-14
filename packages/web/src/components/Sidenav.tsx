@@ -61,6 +61,12 @@ const NAV_GROUPS: NavGroup[] = [
         group: 'Agents',
         items: [
             {
+                key: 'workflows',
+                icon: 'account_tree',
+                label: 'Workflows',
+                path: '/workflows',
+            },
+            {
                 key: 'agents',
                 icon: 'smart_toy',
                 label: 'Agents',

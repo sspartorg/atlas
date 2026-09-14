@@ -30,14 +30,14 @@ test('flow: Issues list renders + heading visible', async ({ page }) => {
     await expect(page.getByRole('heading', { name: /Issues/i }).first()).toBeVisible();
 });
 
-test('flow: Agents list renders + all 6 tabs visible on detail page', async ({ page }) => {
+test('flow: Agents list renders + all 5 tabs visible on detail page', async ({ page }) => {
     await goto(page, '/agents');
     await expect(page.getByRole('heading', { name: /Agents/i }).first()).toBeVisible();
 
     // The seed installs PO Writer via marketplace.install — navigate to its
-    // detail page and verify the 6 tab cluster renders.
+    // detail page and verify the 5 tab cluster renders.
     await goto(page, '/agents/agent-po-writer');
-    const tabs = ['Overview', 'Prompt', 'Handoffs', 'Test Run', 'Runs', 'Memory'];
+    const tabs = ['Overview', 'Prompt', 'Test Run', 'Runs', 'Memory'];
     for (const label of tabs) {
         await expect(page.getByRole('tab', { name: new RegExp(label) })).toBeVisible({
             timeout: 10_000,

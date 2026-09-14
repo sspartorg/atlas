@@ -14,7 +14,6 @@ import {
     useAgentRun,
     useAgentRuns,
     useAgents,
-    useHandoffRules,
     useItemAgentRuns,
     useProjectAgentRuns,
     useRegenerateAgentMemory,
@@ -98,16 +97,11 @@ describe('useUpdateAgent', () => {
 
 });
 
-describe('useAgentRuns + useHandoffRules', () => {
-    it('hits the right endpoints', async () => {
-        server.use(
-            http.get(`${BASE}/agents/a1/runs`, () => HttpResponse.json([])),
-            http.get(`${BASE}/agents/a1/handoff-rules`, () => HttpResponse.json([])),
-        );
+describe('useAgentRuns', () => {
+    it('hits the right endpoint', async () => {
+        server.use(http.get(`${BASE}/agents/a1/runs`, () => HttpResponse.json([])));
         const { result: r1 } = renderHook(() => useAgentRuns('a1'), { wrapper: makeWrapper() });
-        const { result: r2 } = renderHook(() => useHandoffRules('a1'), { wrapper: makeWrapper() });
         await waitFor(() => expect(r1.current.isSuccess).toBe(true));
-        await waitFor(() => expect(r2.current.isSuccess).toBe(true));
     });
 });
 

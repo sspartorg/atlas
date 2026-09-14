@@ -173,6 +173,8 @@ describe('summarizeAgents', () => {
                 total_cost_usd: null,
                 credits: null,
                 item_title: null,
+                workflow_run_id: null,
+                node_id: null,
                 created_at: '2026-05-10T00:00:00.000Z',
             },
         ];
@@ -302,6 +304,8 @@ describe('summarizeAgents — error runs + null completed_at branches', () => {
             total_cost_usd: null,
             credits: null,
             item_title: null,
+            workflow_run_id: null,
+            node_id: null,
             created_at: '2026-01-02T00:00:00.000Z',
         };
         const summaries = summarizeAgents({
@@ -351,6 +355,8 @@ describe('summarizeAgents — error runs + null completed_at branches', () => {
             total_cost_usd: null,
             credits: null,
             item_title: null,
+            workflow_run_id: null,
+            node_id: null,
             created_at: '2026-01-01T00:00:00.000Z',
         };
         const run2: IAgentRun = {

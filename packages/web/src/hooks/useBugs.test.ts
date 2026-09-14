@@ -12,7 +12,6 @@ import {
     useBugs,
     useCreateBug,
     useDeleteBug,
-    useResetRoundsBug,
     useTransitionBug,
     useUpdateBug,
 } from './useBugs.js';
@@ -50,18 +49,6 @@ describe('useBug + useBugFull', () => {
     it('idle when id empty', () => {
         const { result } = renderHook(() => useBug(''), { wrapper: makeWrapper() });
         expect(result.current.fetchStatus).toBe('idle');
-    });
-});
-
-describe('useResetRoundsBug', () => {
-    it('resets rounds and invalidates the full query', async () => {
-        server.use(
-            http.post('http://localhost:3000/api/bugs/B1/reset-rounds', () =>
-                new HttpResponse(null, { status: 204 }),
-            ),
-        );
-        const { result } = renderHook(() => useResetRoundsBug(), { wrapper: makeWrapper() });
-        await expect(result.current.mutateAsync({ id: 'B1' })).resolves.toBeUndefined();
     });
 });
 

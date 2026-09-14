@@ -26,7 +26,6 @@ the 16-entry curated catalog and install one, several, or all of them.
 
 **Footer — `BulkInstallBar`** (visible when `selected.size > 0`)
 - **Select all** — selects every *installable* id, never an already-installed one.
-- **Paired-agent hint** — for each handoff target of the selection that is in the catalog but neither installed (local agent id / `is_installed`) nor selected: "`<Selected>` hands off to `<Target>`, which isn't installed." + **Add `<Target>` too**, which adds it to the selection. Computed by `useMissingHandoffTargets(selectedIds)` (fetches each selected entry's full payload for its `handoff_rules`).
 - **Add selected** → `addSelected()` (`Marketplace.tsx:73`). Runs `runBulkInstall`, invalidates `['agents']` and `['marketplace']`, then branches:
   - all succeeded → navigate to `/agents`
   - partial → toast `Added N agents · couldn't add <ids>` with the per-id reasons in `detail`, **keep the failures selected** so Retry is one click, and stay on the page
@@ -37,11 +36,9 @@ None on this route. The rename-on-conflict flow lives on the detail page.
 
 ## Hooks used
 - `useQuery(['marketplace','list',query,category])` → `api.marketplace.list({q, category, limit:100})`. No `staleTime` override; invalidated by `['marketplace']` after any install.
-- `useMissingHandoffTargets` (`hooks/useMarketplacePairing.ts`) — `['marketplace','full',id]` per selected id + `useAgents` + the unfiltered catalog `['marketplace','list','detail']`.
 
 ## API endpoints touched
 - `GET /api/marketplace/agents?q&category&kind&limit` — catalog list with `is_installed`, `installed_agent_id`, `upgrade_available`
-- `GET /api/marketplace/agents/:id` — full entry per selected id (handoff rules for the paired-agent hint); `GET /api/agents`
 - `POST /api/marketplace/agents/:id/install` — install; `409` with `details.{conflicting_id,suggested_id}` on a slug clash, `400 MODEL_NOT_IN_REGISTRY` when the catalog entry names a pruned model
 
 ## Permissions / guards

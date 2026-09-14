@@ -231,7 +231,7 @@ Implementation runs in a git worktree branch per phase. Parallel api test agents
 - You can see the whole flow, and agents no longer need to know about each other. Adding the 100th agent doesn't make routing harder to follow.
 - Steps chain with no 60s scheduler wait, share one worktree, and deliver one PR per workflow run instead of one per PR-raising agent.
 - Hard cut: existing handoff chains and agent schedules stop working at phase 5. The Owner rebuilds them as workflows, starting from the shipped templates.
-- New dependency `@xyflow/react` in `@atlas/web`, lazy-loaded to stay inside the initial-chunk budget (ADR 0013).
+- New dependency `@xyflow/react` in `@atlas/web`, lazy-loaded to stay inside the initial-chunk budget (ADR 0013). The total-bundle budget in `packages/web/scripts/check-bundle-budget.mjs` rose 830 → 880 KB gz to absorb it (see Implementation notes).
 - Each step records `cli/model/effort/prompt_version`, which unlocks golden-set evaluation and model comparison as a follow-up.
 - The engine owns routing: agents lose MCP `assign`/`change_status` on items held by a live workflow run.
 
@@ -240,3 +240,25 @@ Implementation runs in a git worktree branch per phase. Parallel api test agents
 - For-each node inside one run: add if one PR per epic becomes a requirement.
 - Golden sets / model comparison: the next project, built on the per-step `cli/model/prompt_version/outcome/cost` columns.
 - Auto-layout (dagre/elk): nodes are placed by hand and templates ship positions.
+
+## Implementation notes (2026-09-14)
+
+Where the shipped code differs from the plan above. The code wins; `.agents/` documents the code.
+
+- **Delivery.** All six phases landed on one branch (`worktree-workflows-phase-1`) rather than six PRs.
+- **Per-child routing is not implemented.** MCP `create_item` has no `workflow_id`, and the PO Reviewer prompt does not route `[QA]` twins. End's `child_workflow_id` routes every child (dev stories and `[QA]` twins alike) as `ready`; a child that already has a `workflow_id` (set by the Owner via `PUT /api/items/:id/workflow`) keeps it. The `qa` template (QA Writer ⇄ QA Reviewer → Automation ⇄ Automation Reviewer) is shipped and started per item. Children are matched in `draft` or `ready`; nothing forces them to `draft` during the run.
+- **The routing guard is HTTP-wide, not MCP-only.** `services/workflow-lock.ts` is a global Fastify `preHandler` that 409s `PATCH /api/{epics,stories,bugs,sub-tasks,sub-bugs}/:id/{status,assign}`, so it covers the UI and MCP (which calls the same routes). It locks only while the run is `running`; a parked (`waiting_for_owner`) run doesn't lock, so the Owner can move a parked item by hand.
+- **Agent delete is blocked while a workflow uses the agent** (`DELETE /api/agents/:id` → 409 naming the workflows, via `workflowsService.workflowsUsingAgent`). The engine still parks a run whose snapshot names a missing or inactive agent.
+- **Reconcile threshold is 10 min**, not 5 (`WORKFLOW_RECONCILE_AFTER_MS`), so a slow End push + PR isn't mistaken for a hang.
+- **`ATLAS_WORKFLOW_RUN_ID` is not passed to the CLI.** `items.ts::createItem` stamps `created_by_workflow_run_id` from the reporter agent's live workflow step (`agent_runs` in `queued`/`in_progress` with a `workflow_run_id`), so an agent must pass its `agent_id` to `create_item` for its children to be routed from a project-level run.
+- **Item assignment** is `PUT /api/items/:id/workflow { workflow_id | null }`, not a `workflow_id` field on `PATCH /api/items/:id`. Extra routes: `GET /api/workflows/templates`, `GET /api/items/:id/workflow-runs`.
+- **`POST /api/run`** rejects any `issue_type` / `issue_id` with 400 and runs only ad-hoc no-item runs (temp dir, no routing). It does not start a workflow.
+- **SSE payload** is `workflow_run_updated { workflowId, workflowRunId, workflowRunStatus, nodeId, issueId? }`.
+- **Reaper.** `main.ts` `failOrphanedRuns` no longer pushes or cleans worktrees for any run; it flips orphans to `error` and calls `onStepFinished`.
+- **Deps gate** runs once in `startWorkflowRun`; `spawnAgentRun` no longer checks it.
+- **Templates.** End nodes reference child workflows as `template:<id>`, resolved at `from-template` time to that template's workflow **by name in the same project** and dropped if it doesn't exist yet (create `dev` before `planning`). `planning` also routes a PO Writer fail to an Owner node, and runs with a worktree but no push or PR. `generate-ai-scaffold` finds the project's AI Readiness workflow by template name before creating one.
+- **Scheduled item workflows** drain the items that were `ready` at the last fire, one per tick; later arrivals wait for the next fire.
+- **`workflow_runs.status = 'error'`** is allowed by the CHECK but never written; every failure parks.
+- **Web bundle budget.** The total budget in `packages/web/scripts/check-bundle-budget.mjs` was raised 830 → 880 KB gz: `@xyflow/react` is a 53.9 KB gz lazy chunk plus ~12.5 KB of workflow pages (measured total 863.9 KB). The initial chunk is unchanged (231.8 KB, budget 264 KB) because the canvas loads only on `/workflows` routes.
+- **`IAgentRun`** gained `workflow_run_id` + `node_id` (returned by `GET /api/run/:id` and the run lists); the `cli` / `model` / `effort` / `prompt_version` snapshot stays on the row, surfaced through `IWorkflowRunStep`.
+- **`current-task.md`** needed no change: it already renders the full comment thread, so a resumed step sees the Owner's answer.

@@ -124,12 +124,6 @@ export function SubBugDetail() {
         await qc.invalidateQueries({ queryKey: ['issues'] });
     }
 
-    async function handleResetRounds() {
-        if (!bug) return;
-        await api.subBugs.resetRounds(bug.id);
-        await qc.invalidateQueries({ queryKey: ['sub-bugs', bug.id, 'full'] });
-    }
-
 
     if (isLoading) {
         return <IssueDetailLoading />;
@@ -231,10 +225,6 @@ export function SubBugDetail() {
                         onLabelsChange={(next) => patchBug({ labels: next })}
                         createdAt={bug.created_at}
                         updatedAt={bug.updated_at}
-                        roundCount={full?.round_count ?? null}
-                        maxRounds={assignee?.max_rounds ?? null}
-                        onResetRounds={() => void handleResetRounds()}
-                        assigneeName={assignee?.name ?? null}
                         totalCostUsd={totalCostUsd}
                         worktreeBranch={bug.worktree_branch}
                         worktreePath={bug.worktree_path}

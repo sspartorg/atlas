@@ -27,13 +27,14 @@ Single-story view. Uses the unified `IssueDetailShell` shared with Epic / Sub-ta
 - `ConversationCard` â€” comments + compose box.
 
 **Right rail**
-- `DetailsRailCard` â€” Project (link), Epic parent (link, click navigates to epic), Status (`StatusPickerPopover`), Assignee (`AssigneePickerPopover`), Rounds (A04 â€” `X / Y` against the assignee's `max_rounds`; hidden when no assignee; clickable â†’ `ResetRoundsPopover` so Owner can wipe the counter and give the agent a fresh budget), Created, Last updated.
+- `DetailsRailCard` â€” Project (link), Epic parent (link, click navigates to epic), Status (`StatusPickerPopover`), Assignee (`AssigneePickerPopover`), Created, Last updated.
 - `ActivityLogCard` â€” read-only events feed (status changes, reassignments, field edits), under Details in the rail.
 
 **Owner-reply hand-back + PR merge awareness** (shared components)
 - `ConversationCard` composer — when the item is `waiting_for_info` with no assignee and the most recent run on it (`useItemAgentRuns`) belongs to an active agent, helper text reads *"Replying hands this back to <Agent> and sets it Ready."* It mirrors the API's owner-reply auto-resume (`commentsService`), so posting really does reassign + re-queue.
 - **Pull Requests** rows (`RelatedItemsCard`) carry an **Open** / **Merged** / **Closed** chip from `pr_state`; no chip while the state is unknown (`null`/absent).
 - `DetailsRailCard` status picker → **Done** while any `pull_request` link isn't `merged`: first `POST /api/issues/:type/:id/external-links/refresh`; if still unmerged, a **Mark done anyway?** dialog (`ConfirmActionModal`) lists the PRs (`#ref title (state)`) and only **Mark done** transitions. Refresh failure falls back to the loaded links, so the dialog still guards.
+- `ItemWorkflowPanel` rows under Assignee (ADR 0014): **Workflow** select (None + the project's `input_kind=item` workflows → `PUT /api/items/:id/workflow`; a **Create a workflow** link when the project has none) and **Workflow run** — latest run's status chip (→ `/workflows/:id/runs/:runId`, from `GET /api/items/:id/workflow-runs`) plus **Start now** (`POST /api/workflows/:id/runs`) when a workflow is set and no run is live. See [Workflow Run](35-workflow-run.md).
 
 ## Why these affordances exist
 - **Editable Description / Acceptance criteria as separate cards** â€” Description is Owner-authored intent; AC is the Spec Writer's testable contract. Two lifecycles, two save endpoints. (The legacy "Proposed Plan" card was retired by A03's revised design â€” agent narrative now flows through the comments thread.)
@@ -49,7 +50,7 @@ Single-story view. Uses the unified `IssueDetailShell` shared with Epic / Sub-ta
 ## Hooks used
 - `useStoryFull(id)` â€” single composite hook returning story + sub-tasks + sub-bugs + project + epic + activity (`StoryDetail.tsx:13`)
 - `useEpics`, `useProjects`, `useAgents`, `useSettings`
-- `useTransitionStory`, `useUpdateStory`, `useAssignStory`, `useDeleteStory`, `useResetRoundsStory`
+- `useTransitionStory`, `useUpdateStory`, `useAssignStory`, `useDeleteStory`
 - `useItemAgentRuns(id)` â€” recent agent runs against this story
 - `useProjectLabels(projectId)` â€” labels picker
 
@@ -59,7 +60,7 @@ Single-story view. Uses the unified `IssueDetailShell` shared with Epic / Sub-ta
 - `GET /api/stories/:id/full` â€” single composite endpoint
 - `PATCH /api/stories/:id` (title, description, acceptance_criteria, labels)
 - `PATCH /api/stories/:id/status`, `PATCH /api/stories/:id/assign`
-- `POST /api/stories/:id/reset-rounds`, `DELETE /api/stories/:id`
+- `DELETE /api/stories/:id`
 - `POST /api/issues/story/:id/external-links/refresh` — synchronous PR-state re-check before Done (via `useRefreshIssueExternalLinks`)
 
 ## Edge cases / quirks

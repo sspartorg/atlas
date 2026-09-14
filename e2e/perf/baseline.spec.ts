@@ -248,7 +248,7 @@ test.describe('perf baseline', () => {
         }
         const href = await firstAgentLink.getAttribute('href');
         if (!href) return;
-        const tabs = ['overview', 'prompt', 'handoffs', 'testrun', 'runs', 'memory'] as const;
+        const tabs = ['overview', 'prompt', 'testrun', 'runs', 'memory'] as const;
         for (const tab of tabs) {
             const record = await gotoWithPerf(page, `${href}?tab=${tab}`);
             assertApiBudget(record, `${href}?tab=${tab}`);

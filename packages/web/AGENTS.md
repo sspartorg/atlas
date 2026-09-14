@@ -54,6 +54,7 @@ import { ATLAS_PALETTE, MOTION } from '@/theme/tokens';
 - Use MUI components only: `Box`, `Typography`, `Stack`, `Card`, `Chip`, `Button`, etc.
 - No raw `<div>`, `<span>`, `<p>` — use `<Box component="div">` only when MUI has no equivalent
 - One exception: `<Box component="span" className="material-symbols-rounded">` for Material icons
+- The only allowed library stylesheet is `@xyflow/react/dist/base.css`, imported once in `pages/workflows/WorkflowCanvas.tsx` (lazy workflow routes only). Theme the canvas with `sx` + tokens on its wrapper; never import `@xyflow/react/dist/style.css`.
 
 ## Data Fetching Pattern
 

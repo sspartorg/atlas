@@ -101,14 +101,6 @@ export function useItemAgentRuns(itemId: string | null | undefined) {
     });
 }
 
-export function useHandoffRules(id: string) {
-    return useQuery({
-        queryKey: ['agents', id, 'handoff-rules'],
-        queryFn: () => api.agents.getHandoffRules(id),
-        enabled: Boolean(id),
-    });
-}
-
 export function useAgentChecklists(id: string) {
     return useQuery({
         queryKey: ['agents', id, 'checklists'],

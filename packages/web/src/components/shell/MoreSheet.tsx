@@ -42,6 +42,7 @@ const ITEMS: MoreItem[] = [
         path: '/terminal/standalone',
     },
     // Agents — smart_toy mirrors the Sidenav Agents icon.
+    { key: 'workflows', label: 'Workflows', icon: 'account_tree', path: '/workflows' },
     { key: 'agents', label: 'Agents', icon: 'smart_toy', path: '/agents' },
     { key: 'marketplace', label: 'Marketplace', icon: 'storefront', path: '/agents/marketplace' },
     { key: 'mcp-tools', label: 'MCP Tools', icon: 'build', path: '/agents/mcp-tools' },

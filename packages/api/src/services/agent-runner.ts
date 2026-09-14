@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 // already live on the same item. Routes catch this and map to HTTP 409.
 // The in-app `findLiveRunOnItem` check (agent-dispatcher.ts) is the
 // first line of defence; this is the race-free DB-level fallback.
-export class LiveRunOnItemError extends Error {
+class LiveRunOnItemError extends Error {
     constructor(public readonly itemId: string) {
         super(`Item ${itemId} already has an active run.`);
         this.name = 'LiveRunOnItemError';
@@ -48,7 +48,6 @@ import {
     type IAgent,
     type IRunOutcome,
     type IssueType,
-    type ExternalNotificationEventKey,
 } from '@atlas/shared';
 
 // W4 — Run-error classification. The runner spawns CLIs asynchronously

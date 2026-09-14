@@ -298,33 +298,6 @@ describe('SubBugDetail page', () => {
         }
     });
 
-    it('opens the Reset-rounds popover and confirms (handleResetRounds)', async () => {
-        let reset = false;
-        const agent = makeAgent({ id: 'agent-1', name: 'Bug Hunter', max_rounds: 5 });
-        server.use(
-            ...mountHandlers('SB11', {
-                sub_bug: makeSubBug({ id: 'SB11', assignee_agent_id: 'agent-1' }),
-                parent_story: null,
-                epic: null,
-                project: null,
-                related_links: [],
-                activity: [],
-                agents: [agent],
-                round_count: 4,
-            }),
-            http.post(`${BASE}/sub-bugs/SB11/reset-rounds`, async () => {
-                reset = true;
-                return HttpResponse.json({ ok: true });
-            }),
-        );
-        renderPage('SB11');
-        const rounds = await screen.findByText('Rounds');
-        fireEvent.click(rounds);
-        await screen.findByText('Reset rounds?');
-        fireEvent.click(screen.getByRole('button', { name: /Reset rounds/i }));
-        await waitFor(() => expect(reset).toBe(true));
-    });
-
     it('exercises handleAssign via onAssign in DetailsRailCard — fn#3', async () => {
         const agent = makeAgent({ id: 'agent-1', name: 'Bug Hunter' });
         server.use(
@@ -458,7 +431,6 @@ describe('SubBugDetail page', () => {
                 related_links: [],
                 activity: [],
                 agents: [agent],
-                round_count: 2,
             }),
             http.get(`${BASE}/run`, () =>
                 HttpResponse.json([{ total_cost_usd: 0.05 }]),
@@ -485,7 +457,6 @@ describe('SubBugDetail page', () => {
                 related_links: [],
                 activity: [],
                 agents: [agent],
-                round_count: 1,
             }),
         );
         // Prepend the /run override AFTER the base handlers so it sits at
@@ -583,7 +554,6 @@ describe('SubBugDetail page', () => {
                 related_links: [],
                 activity: [],
                 agents: [agent],
-                round_count: 1,
             }),
         );
         // Prepend /run stub that returns runs with null cost — hasAny stays false.

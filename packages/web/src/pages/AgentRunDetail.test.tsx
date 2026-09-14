@@ -64,12 +64,32 @@ function renderPage() {
     );
 }
 
+// Re-run is only offered for runs outside a workflow with no item (ADR 0014).
+const PROJECT_RUN = { issue_type: null as unknown as string, issue_id: null as unknown as string };
+
 describe('AgentRunDetail page', () => {
+    it('links a workflow step to its workflow run instead of offering Re-run', async () => {
+        server.use(
+            ...defaultHandlers,
+            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
+            http.get(`${BASE}/run/${RUN_ID}`, () =>
+                HttpResponse.json({ ...makeRun(), workflow_run_id: 'wr-1', node_id: 'coder' }),
+            ),
+            http.get(`${BASE}/workflow-runs/wr-1`, () =>
+                HttpResponse.json({ id: 'wr-1', workflow_id: 'wf-dev', steps: [] }),
+            ),
+        );
+        renderPage();
+        const links = await screen.findAllByRole('link', { name: /Open workflow run/i });
+        expect(links[0]).toHaveAttribute('href', '/workflows/wf-dev/runs/wr-1');
+        expect(screen.queryByRole('button', { name: /Re-run/i })).not.toBeInTheDocument();
+    });
+
     it('renders header, status, and log lines once loaded', async () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
-            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun())),
+            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun(PROJECT_RUN))),
         );
         const { findAllByText, findByText, findByRole } = renderPage();
         // Short run id appears in both breadcrumbs and hero.
@@ -151,7 +171,7 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
-            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun())),
+            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun(PROJECT_RUN))),
             http.post(`${BASE}/run`, async () => {
                 posted = true;
                 return HttpResponse.json({ runId: NEW_ID });
@@ -545,7 +565,7 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
-            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun())),
+            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun(PROJECT_RUN))),
             http.post(`${BASE}/run`, () =>
                 HttpResponse.json({ error: 'Server error' }, { status: 500 }),
             ),
@@ -2018,7 +2038,7 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
-            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun())),
+            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun(PROJECT_RUN))),
             http.post(`${BASE}/run`, () => {
                 postCount++;
                 return HttpResponse.json({ runId: NEW_RUN });

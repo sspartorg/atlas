@@ -61,6 +61,15 @@ const MarketplaceAgentDetail = lazyNamed(
     'MarketplaceAgentDetail',
 );
 const AgentRunDetail = lazyNamed(() => import('./pages/AgentRunDetail.js'), 'AgentRunDetail');
+const Workflows = lazyNamed(() => import('./pages/Workflows.js'), 'Workflows');
+const WorkflowBuilder = lazyNamed(
+    () => import('./pages/workflows/WorkflowBuilder.js'),
+    'WorkflowBuilder',
+);
+const WorkflowRunDetail = lazyNamed(
+    () => import('./pages/workflows/WorkflowRunDetail.js'),
+    'WorkflowRunDetail',
+);
 const McpTools = lazyNamed(() => import('./pages/McpTools.js'), 'McpTools');
 const Guardrails = lazyNamed(() => import('./pages/Guardrails.js'), 'Guardrails');
 const Notifications = lazyNamed(() => import('./pages/Notifications.js'), 'Notifications');
@@ -408,6 +417,30 @@ export function App() {
                                 element={
                                     <Wrap name="Terminal Session">
                                         <TerminalSession />
+                                    </Wrap>
+                                }
+                            />
+                            <Route
+                                path="/workflows"
+                                element={
+                                    <Wrap name="Workflows">
+                                        <Workflows />
+                                    </Wrap>
+                                }
+                            />
+                            <Route
+                                path="/workflows/:id"
+                                element={
+                                    <Wrap name="Workflow">
+                                        <WorkflowBuilder />
+                                    </Wrap>
+                                }
+                            />
+                            <Route
+                                path="/workflows/:id/runs/:runId"
+                                element={
+                                    <Wrap name="Workflow run">
+                                        <WorkflowRunDetail />
                                     </Wrap>
                                 }
                             />

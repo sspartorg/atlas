@@ -15,6 +15,7 @@ vi.mock('../pages/Projects.js', () => pageStub);
 vi.mock('../pages/Epics.js', () => pageStub);
 vi.mock('../pages/Issues.js', () => pageStub);
 vi.mock('../pages/Queue.js', () => pageStub);
+vi.mock('../pages/Workflows.js', () => pageStub);
 vi.mock('../pages/Agents.js', () => pageStub);
 vi.mock('../pages/Marketplace.js', () => pageStub);
 vi.mock('../pages/McpTools.js', () => pageStub);
@@ -117,7 +118,7 @@ describe('prefetchRoute', () => {
         const results = await Promise.all(
             Object.values(routes).map((loader) => loader()),
         );
-        expect(results).toHaveLength(17); // 16 unique pages + `home` alias
+        expect(results).toHaveLength(18); // 17 unique pages + `home` alias
         for (const mod of results) {
             expect(mod).toBeDefined();
         }

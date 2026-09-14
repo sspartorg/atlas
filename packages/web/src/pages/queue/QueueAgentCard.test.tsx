@@ -44,6 +44,8 @@ const makeAgentRun = (): IAgentRun => ({
     total_cost_usd: null,
     credits: null,
     item_title: null,
+    workflow_run_id: null,
+    node_id: null,
 });
 
 function makeSummary(overrides: Partial<AgentQueueSummary> = {}): AgentQueueSummary {
@@ -100,12 +102,12 @@ describe('QueueAgentCard', () => {
         expect(screen.getAllByText('ATL-7').length).toBeGreaterThan(0);
     });
 
-    it('item-driven agent with a queued item shows "within a minute" (dispatch on ready), not the cadence slot', () => {
+    it('agent with a queued item that is not running shows "queued"', () => {
         const item = makeQueueItem();
         renderWithProviders(
             <QueueAgentCard
                 summary={makeSummary({
-                    agent: makeAgent({ requires_item: true, concurrent_runs: 1 }),
+                    agent: makeAgent(),
                     queued: [item],
                     nextRunItem: item,
                     totalAssigned: 1,
@@ -115,7 +117,7 @@ describe('QueueAgentCard', () => {
                 onOpen={vi.fn()}
             />,
         );
-        expect(screen.getByText('within a minute')).toBeInTheDocument();
+        expect(screen.getByText('queued')).toBeInTheDocument();
     });
 
     it('calls onOpen when card is clicked', () => {
@@ -297,7 +299,6 @@ describe('QueueAgentCard', () => {
     });
 
     it('shows "running now" in Next Run section when statusLabel is Running with nextRunItem', () => {
-        // Line 249: isRunning ? 'running now' : view.nextPassDelta
         const runningItem = makeQueueItem({ id: 'ATL-10', displayId: 'ATL-10', title: 'Running Work' });
         renderWithProviders(
             <QueueAgentCard

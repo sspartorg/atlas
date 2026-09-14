@@ -79,9 +79,9 @@ the ports / container swapped.
 â”‚                                   â”‚                                â”‚   â”‚
 â”‚                                   â”‚  Croner schedules (in-memory   â”‚   â”‚
 â”‚                                   â”‚   registry) for project auto-  â”‚   â”‚
-â”‚                                   â”‚   fetch + per-agent setIntervalâ”‚   â”‚
-â”‚                                   â”‚   registry for scheduled       â”‚   â”‚
-â”‚                                   â”‚   auto-dispatch; both catch up â”‚   â”‚
+â”‚                                   â”‚   fetch + a 1-min setInterval  â”‚   â”‚
+â”‚                                   â”‚   poller for workflow reconcileâ”‚   â”‚
+â”‚                                   â”‚   + dispatch; both catch up    â”‚   â”‚
 â”‚                                   â”‚   missed fires on boot         â”‚   â”‚
 â”‚                                   â”‚                                â”‚   â”‚
 â”‚                                   â”‚  external notification delivery (HTTPS to   â”‚   â”‚
@@ -102,7 +102,7 @@ Every spawn point in the process model is a cross-platform binary:
 - `explorer.exe` / `open` / `xdg-open` â€” branched per `process.platform` in the `POST /api/projects/:id/reveal` handler.
 - `claude` / `gh` (the agent CLIs) â€” Atlas assumes the user has the right one on `PATH`; the `cli` column on each agent picks which.
 - `cli = 'ollama'` is **not** a third binary. Ollama serves an Anthropic-compatible API, so Atlas spawns the same `claude` binary and repoints it with `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY` from `services/ollama-env.ts` (base URL configurable via `ATLAS_OLLAMA_BASE_URL`, default `http://localhost:11434`). Consequences worth knowing: Ollama runs share Claude's argv, stream-json parsing, `--session-id`/`--resume`, and `~/.claude/projects` transcripts; they record `total_cost_usd = 0`; and the env overlay must always be spread **after** `gitInvokeEnv` so a host `ANTHROPIC_API_KEY` can't divert a free local run to Anthropic. Branch on `CLI_DIALECT` from `@atlas/shared`, never on the raw `cli` value.
-- Item-driven agent runs (`requires_item = true`; `agent-runner.spawnCli`, claude + ollama dialects) are isolated from the Owner's personal Claude Code config (2026-09-14). They add `--setting-sources project,local --strict-mcp-config --mcp-config <Atlas MCP only>`, so no `~/.claude` hooks, plugins, user CLAUDE.md or `~/.claude.json` MCP servers load, while worktree `.claude/commands/atlas-*` still resolve. The prompt stays on stdin because `--mcp-config` is variadic and would swallow a positional prompt. Freedom-mode scouts (`requires_item = false`) are exempt because they depend on Owner-scoped MCP servers (Playwright plugin, claude.ai Atlassian). Copilot runs are not isolated. Every agent run's child env also carries `ATLAS_API_URL=http://127.0.0.1:<API_PORT>` for `.atlas/scripts` validators. Terminal sessions (`cli-session-host.ts`) and dry runs are unchanged.
+- Agent runs on an item (`issueId != null`; `agent-runner.spawnCli`, claude + ollama dialects) are isolated from the Owner's personal Claude Code config. They add `--setting-sources project,local --strict-mcp-config --mcp-config <Atlas MCP only>` (`claudeIsolationArgs`), so no `~/.claude` hooks, plugins, user CLAUDE.md or `~/.claude.json` MCP servers load, while worktree `.claude/commands/atlas-*` still resolve. The prompt stays on stdin because `--mcp-config` is variadic and would swallow a positional prompt. Runs with no item (project-level workflow steps, ad-hoc runs) are exempt because scouts depend on Owner-scoped MCP servers (Playwright plugin, claude.ai Atlassian). Copilot runs are not isolated. Every agent run's child env also carries `ATLAS_API_URL=http://127.0.0.1:<API_PORT>` for `.atlas/scripts` validators. Terminal sessions (`cli-session-host.ts`) and dry runs are unchanged.
 
 Auto-fetch runs in Node on every OS â€” `auto-fetch-runner.ts` calls the typed `performAutoFetch()` in `services/auto-fetch.ts`, which shells out to `git` via `execFile`. The previous PowerShell holdout (`auto-fetch.ps1`) was retired in C01.
 
@@ -156,7 +156,7 @@ Zod schema parse (from @atlas/shared)
 Service layer                               â† packages/api/src/services/stories.ts
         â”‚       isValidTransition(...)      â† @atlas/shared/status-machine
         â–¼
-better-sqlite3 prepared statement
+Kysely query (pg)
         â”‚
         â–¼
 Response (snake_case JSON, matches @atlas/shared types)
@@ -170,36 +170,48 @@ UI refetches and re-renders
 
 If the same mutation should ALSO notify external notification or fire an SSE event, the service layer triggers it after the DB write.
 
+Before the handler, a global `preHandler` (`services/workflow-lock.ts`) returns 409 for `PATCH …/:id/status` and `…/:id/assign` while a `running` workflow run holds the item — the engine is the only writer of that item's status and assignee until the run parks or stops.
+
 ---
 
-## Auto-dispatch (agent kickoff)
+## Workflow runs (agent kickoff)
 
-Auto-dispatch is **scheduler-driven only**. The owner's stance: items run on the agent's schedule, not the moment they're assigned. Setting an item to `ready` does NOT kick off a run â€” it adds the item to the agent's ready-queue, which the next scheduled tick consumes.
+Agents never start themselves and never route items (ADR 0014, `docs/adr/0014-workflows-replace-agent-handoffs.md`). A **workflow** (`workflows` row: graph of Start / Agent / Owner / End nodes joined by pass and fail connections) starts a **workflow run**, and `services/workflow-engine.ts` drives it:
 
-The scheduler lives in `services/agent-schedule-registry.ts` as a **single clock-driven poller** (one `setInterval`, ticks every 60s, first tick aligned to the next wall-clock minute). It works in two phases:
+```
+start (manual POST /api/workflows/:id/runs, dispatch tick, End kick, generate-ai-scaffold)
+   │  startWorkflowRun: deps gate once · insert workflow_runs (graph_snapshot, one live run per item)
+   │  item → in_progress · ensureWorktree({item:null, branch}) once when use_worktree
+   ▼
+goTo(node after Start)
+   ├─ agent node → spawnNode: items.assignee_agent_id = agent · spawnAgentRun({workflowRun})
+   │     CLI runs in the shared worktree, commits, ends with an atlas-outcome block
+   │     runner: completeRun / errorRun / setup_failed / stop / sweep / reaper → onStepFinished
+   │        done (+ required checklist passed) → pass connection → goTo(next)   (no tick wait)
+   │        rejected / checklist failed        → fail connection, loop_count+1 (past max_loops → park)
+   │        asked_question / no outcome / error → park
+   │        cancelled                          → cancel run
+   ├─ owner node → park
+   └─ end node → finishRun: commit leftovers · push (push_code) · PR (raises_pr) · cleanup
+                  item → in_review (PR) | done · route children → child workflow (ready) · kick dispatch
 
-1. **Boot reseed (`reseedAllActiveAgentsOnBoot`).** Runs once from `main.ts` before the poller starts. For every active agent with `schedule_hours > 0`, overwrites `agents.next_run_at` with `computeNextSlot(now, schedule_hours)` â€” the next clock-aligned slot from the current wall time. A 1h agent restarted at 3:42 PM gets `next_run_at = 4:00 PM`; a 6h agent restarted at 3:42 PM gets 6:00 PM. This re-anchors the schedule on every restart and recovers from clock skew, stale rows, or cadence edits that didn't propagate.
+park   → run waiting_for_owner · item waiting_for_info, no assignee · comment + one notification · worktree kept
+resume → Owner comment on the item (comments.ts) or POST /api/workflow-runs/:id/resume
+          owner node: follow its pass connection · agent node: re-run it with loop_count = 0
+stop   → POST /api/workflow-runs/:id/stop, or stop / delete of a step run: cancel steps · push (no PR) · item waiting_for_info
+```
 
-2. **Cron tick (`tickAgentScheduler`).** Every minute, selects active agents where `next_run_at <= now` (minute precision). For each:
-   - Counts live runs (queued + in_progress) and subtracts from `concurrent_runs` for the dispatch capacity. At capacity â†’ hold the clock, retry next minute.
-   - Selects up to `capacity` items with `assignee_agent_id = agent.id AND status = 'ready'`. **No ready items â†’ hold the clock** (don't advance `next_run_at`); the next minute re-checks. Owner rule: only spend a tick when there's actual work.
-   - When capacity + queue both hold: stamp `last_run_at = now`, advance `next_run_at = computeNextSlot(now, schedule_hours)`, then call `maybeAutoDispatch(itemId)` (in `services/agent-dispatcher.ts`) for each ready item. The dispatcher's four preconditions (status=ready, has assignee, agent active, no live run) are checked again before spawning the CLI via `spawnAgentRun()`.
+**The one-minute tick** (`services/agent-schedule-registry.ts`, started from `main.ts`) only *starts* runs and repairs them: stuck-run watchdog → reminders → GitHub App token refresh → `reconcileWorkflowRuns` (parks a `running` run with no live step for 10 min) → `tickWorkflowDispatch`. Dispatch starts, per active workflow with no `running` run, the oldest `ready` item queued for it (`items.workflow_id`, `trigger='item_ready'`), or a scheduled fire (`trigger='schedule'`, croner on `cron_expr`). Parked runs don't hold a workflow's queue.
 
-A brand-new agent created mid-run (e.g. via MCP) with no `next_run_at` is lazy-seeded inside the tick to the next future slot, so it waits one natural slot before its first fire.
+**Failure paths that bypass `completeRun`** all report the step so the run can't hang: `sweepStuckRuns`, the `setup_failed` branch, `POST /api/run/:id/stop`, `DELETE /api/run/:id`, and the `main.ts` orphan reaper (`failOrphanedRuns` flips dead runs to `error`, then `onStepFinished`; it no longer pushes or deletes worktrees). `reconcileWorkflowRuns` is the backstop for anything else, including an API restart between steps.
 
-The runner itself advances the item `ready â†’ in_progress` at run start (so the queue and detail pages reflect in-flight work); the existing completion path advances `in_progress â†’ in_review`; an errored run advances `in_progress â†’ waiting_for_info` so the failure surfaces in the Queue's "waiting on you" section instead of stranding the item.
+**Git ops and locks.** `ensureWorktree` / `pushWorktree` / `openPullRequest` / `cleanupWorktreeAfterPush` each take `withProjectGitLock`, which is not re-entrant — the engine never wraps them. The worktree path lives only on `workflow_runs`, never on `items.worktree_path`.
 
-Off-switches:
+**Concurrency.** `agent_runs_one_live_per_item` (migration 003) allows one `queued` / `in_progress` step per item; `workflow_runs_one_live_per_item` (035) allows one `running` / `waiting_for_owner` workflow run per item and covers the gaps between steps.
 
-- Set the agent to `inactive` â€” the dispatcher skips with reason `agent_inactive` and the scheduler skips the agent entirely.
-- Set `schedule_hours` to 0 â€” the scheduler treats the agent as ineligible (`status=active && schedule_hours > 0` is the gate).
-- Move the item out of `ready` (or unassign) â€” the precondition no longer holds.
+**Ad-hoc runs.** `POST /api/run` (Run-now dialog) spawns one agent with no item in a temp dir: no worktree, no routing, no push. It exists to try a prompt.
 
-Manual `POST /api/run` flows through the same `spawnAgentRun`, so user-clicked "Run now" gets the same `ready â†’ in_progress` advance and the error-path `in_progress â†’ waiting_for_info` as a scheduled dispatch.
-
-Every step in the scheduler logs to console with the `[agent-schedule]` prefix â€” if dispatches aren't happening, the API server log is the canonical place to look for "not eligible" / "at capacity" / "no ready items" / dispatch result.
-
-**Concurrency (resolved):** migration `003_active_run_invariant` adds partial unique index `agent_runs_one_live_per_item` — one `queued`/`in_progress` run per item. The note below is historical: previously there was no DB-level uniqueness on `(item_id, agent_id)` for live run statuses. The race window is the time between `agent-dispatcher.ts`'s live-run SELECT and `agent-runner.ts`'s `agent_runs` INSERT (â‰ª1s). With scheduler-only dispatch (no on-assign + on-transition fan-out), the race window is much narrower than it would be otherwise â€” two simultaneous ticks for the same agent would need to land in the same millisecond. The proper fix is a partial unique index migration, tracked separately.
+Off-switches: set the workflow `inactive` (dispatch skips it), take the item off the workflow (`PUT /api/items/:id/workflow {workflow_id:null}`), or stop the run.
 
 ---
 
@@ -222,7 +234,7 @@ Web client                              API server (single process)
     â”‚                                       â”‚     â”œâ”€â”€ stdout/stderr â†’ SSE
     â”‚                                       â”‚     â”‚   "agent_output"
     â”‚                                       â”‚     â””â”€â”€ on exit â†’ SSE
-    â”‚                                       â”‚         "agent_completed"
+    â”‚                                       â”‚         "run_completed"
     â”‚ data: { "type":"agent_output", ... } â”‚
     â”‚â—€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”‚
     â”‚                                       â”‚
@@ -236,105 +248,55 @@ Web client                              API server (single process)
 **Events emitted today** (full catalogue lives in `api-surface.md`):
 
 - Agent run lifecycle: `agent_status`, `agent_output`, `agent_error`, `run_queued`, `run_completed`, `run_error`
+- Workflows (ADR 0014): `workflow_run_updated` (`workflowId`, `workflowRunId`, `workflowRunStatus`, `nodeId`, `issueId?`) on start, every node move, park, End and stop; the web invalidates `['workflows']`, `['workflow-run', id]`, `['workflow-runs', workflowId]`, `['item-workflow-runs', issueId]`. `run_completed` / `run_error` / `agent_status` also invalidate `['workflow-run']` so a run view's step list refreshes
 - Data mutations (push instead of poll): `counts_changed`, `notification_created`, `notification_updated`
 - Clone: `clone_status`, `clone_output`, `clone_completed`, `clone_error`
 - Reclone: `reclone_status`, `reclone_output`, `reclone_completed`, `reclone_error`
 - Delete: `delete_status`, `delete_output`, `delete_error`
 - Auto-fetch: `autofetch_status`, `autofetch_output`, `autofetch_completed`
 - **Theme 08 â€” Memory regeneration**: `memory_regenerated`
+- Commit discipline: `commit_verification`
 
 SSE state is **in-memory only**. Restarting the API drops all subscribers; web clients auto-reconnect.
 
-## Autonomous agent scheduling (Theme 09)
+## Autonomous and project-level runs (Theme 09 / 09b)
 
-```
-            â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-            â”‚  agents row                         â”‚
-            â”‚   kind_slug âˆˆ {ai-news,             â”‚
-            â”‚     market-research, regulations,   â”‚
-            â”‚     jira-to-epic, custom}           â”‚
-            â”‚   settings_json (JSONB)             â”‚
-            â”‚   cron_expr (nullable)              â”‚
-            â”‚   requires_item = false             â”‚
-            â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                             â”‚
-                             â–¼
-            â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-            â”‚  computeNextAgentSlot(now, agent)   â”‚
-            â”‚   if cron_expr set:                 â”‚
-            â”‚     new Cron(expr).nextRun(now)     â”‚
-            â”‚   else:                             â”‚
-            â”‚     preset-driven math              â”‚
-            â”‚     (every_n_hours / daily / etc.)  â”‚
-            â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                             â”‚
-                             â–¼
-            â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-            â”‚  agent-schedule-registry tick (1m)  â”‚
-            â”‚   freedom-mode branch:              â”‚
-            â”‚     - capacity check                â”‚
-            â”‚     - spawnAgentRun(id, null, null) â”‚
-            â”‚     - update next_run_at            â”‚
-            â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                             â”‚
-                             â–¼
-            â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-            â”‚  prompt-builder freedom-run path    â”‚
-            â”‚   - constitution                    â”‚
-            â”‚   - role with {{key}} substitution  â”‚
-            â”‚     against settings_json           â”‚
-            â”‚   - freedom-run preamble            â”‚
-            â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-```
+Scouts (`kind_slug` ∈ `ai-news | market-research | regulations | jira-to-epic`) and project agents (`agent-ai-readiness`, `agent-knowledge-base`) have no schedule of their own. They run as a step of an `input_kind='none'` workflow:
 
-**Settings flow**: PATCH `/api/agents/:id` carries `settings_json` + `cron_expr`. The route looks up `kind_slug` (incoming OR current), grabs the schema via `getAgentSettingsSchema(kind_slug)`, and runs `.safeParse()`; cron validated via `new Cron(...)` in a try/catch. Failures return 400 with structured `detail`. The web tab (`AutonomousSettingsTab.tsx`) renders a typed form per kind, with a JSON-textarea fallback for `custom`.
+- **Scheduled** — `trigger='schedule'`; `schedule_preset` + time / weekday materialise to `workflows.cron_expr` (`materializeCron`) and `next_run_at` (croner, `settings.quiet_hours_timezone`). The dispatch tick starts one project-level run when due.
+- **Manual** — `POST /api/workflows/:id/runs` with no body.
+- **Prompt** — `prompt-builder` renders the constitution, the role with `{{ key }}` substitution against `settings_json` and the outcome contract, then either `# Project Context` (name, description, guardrails, every epic + spec, commit discipline) when the workflow has a project, or a `# Project-level Run` paragraph when it doesn't, then output instructions and self-memory. Steps read `.atlas/outcome.md` + `.atlas/self-memory.md` from the working directory.
+- **Children** — an item the step's agent creates is stamped `created_by_workflow_run_id`; End queues it for the End node's `child_workflow_id` as `ready`.
 
-## Project-scope agent runs (Theme 09b â€” AI-Readiness Agent)
+**Settings flow**: PATCH `/api/agents/:id` carries `settings_json`. The route looks up `kind_slug` (incoming OR current), grabs the schema via `getAgentSettingsSchema(kind_slug)`, and runs `.safeParse()`; failures return 400 with structured `detail`.
 
-A third `agent_runs` lifecycle alongside item-attached and freedom-mode. Used by the AI-Readiness Agent to operate on a Atlas project rather than a single item.
+### "Generate AI scaffold" (AI Readiness workflow)
 
 ```
 Owner clicks "Generate AI scaffold" on Project Detail
-            â”‚
-            â–¼
+            │
+            ▼
 POST /api/projects/:id/generate-ai-scaffold
   - precondition: clone_status='ready' + credential_id set (else 409)
-  - spawnAgentRun({ agentId: 'agent-ai-readiness', projectId: id })
-            â”‚
-            â–¼
-agent-runner project-scope branch
-  - inserts agent_runs row (item_id null, project_id set)
-  - cwd = project.git_path
-  - if project.credential_id: write tmp git config with
-    http.extraheader Basic auth, set GIT_CONFIG_GLOBAL on the
-    spawn env (unlinks on child exit)
-            â”‚
-            â–¼
-prompt-builder project-scope preamble
-  - constitution + agent role + project context (name, description,
-    guardrails_md, every epic + spec_md) + commit-discipline
-    section + output instructions
-            â”‚
-            â–¼
-Claude Code spawn (cwd=project.git_path) â€” runs the 9-step protocol:
-  1. getProject / listEpics / getEpic via Atlas MCP (PRD context)
-  2. detect stack from package.json / pyproject.toml / etc.
-  3. git fetch origin main; checkout -B atlas/ai-readiness
-  4. existence check via git ls-tree origin/main for each of 7 files
-  5. generate each missing file (tailored to detected stack)
-  6. commit (Conventional + Refs: <project-id>)
-  7. git push -u origin atlas/ai-readiness (auth via tmp config)
-  8. gh pr create â†’ capture PR URL
-  9. emit final [ai-readiness] PR opened: <url> line
-            â”‚
-            â–¼
-SSE run_completed; in-app notification always
-created; external notification delivered under
-event_key='agent.run_finished_no_item'
-(subject to per-event toggle + quiet hours)
+  - find the project's "AI Readiness" workflow, or createFromTemplate('ai-readiness')
+    (installs agent-ai-readiness if missing; input none, worktree + push + PR)
+  - startWorkflowRun(workflow.id, null) → 202 { run_id, workflow_id }
+            │
+            ▼
+workflow-engine: branch atlas/wf/<runId8>, ensureWorktree once, spawn the single agent node
+            │
+            ▼
+agent run (project-level: item_id null, project_id set, cwd = run worktree)
+  - reads project + epics via Atlas MCP, detects the stack
+  - writes the missing scaffold files, bootstraps spec-kit, commits
+  - ends with an atlas-outcome block (no push, no gh)
+            │
+            ▼
+End: push branch · open PR · cleanup worktree · one notification
+     (event_key 'agent.run_finished_no_item', per-event toggle + quiet hours)
 ```
 
-The agent does NOT run typecheck/test/build â€” the PR review IS the validation. It NEVER force-pushes, NEVER overwrites files on `origin/main`, NEVER creates Atlas items. Auth split: `git push` uses the project's stored PAT (via tmp config); `gh pr create` uses the local user's `gh auth login` state (separate token).
+The agent does NOT run typecheck/test/build — the PR review IS the validation. It never overwrites files on `origin/main` and creates no Atlas items. Push and PR use the project's stored credential through the engine's per-call git config.
 
 ### Freshness model: push primary, focus-refetch fallback, short cache
 
@@ -360,7 +322,7 @@ All long-running work runs in spawned subprocesses, never inline in the request 
 
 | Runner | Spawns | Inputs | Outputs |
 |---|---|---|---|
-| `agent-runner.ts` | `claude` or `copilot` CLI (`cli = ollama` spawns `claude` with the Ollama env overlay) | prompt built from agent `prompt_md` + issue context | stdout â†’ `agent_output` SSE; on exit, status transition |
+| `agent-runner.ts` | `claude` or `copilot` CLI (`cli = ollama` spawns `claude` with the Ollama env overlay) | prompt built from agent `prompt_md` + issue context; `.atlas/*` staged in the workflow worktree or a temp dir | stdout â†’ `agent_output` SSE; on exit, cost + outcome persisted and the step reported to `workflow-engine.onStepFinished` |
 | `clone-runner.ts` | `git clone` | repo URL, credential (decrypted in-memory), target path | output â†’ `clone_output` SSE; on success, project `clone_status` â†’ cloned |
 | `reclone-runner.ts` | `rm -rf` + `git clone` | project_id | sequence of SSE events |
 | `delete-runner.ts` | `rm -rf` (workspace folder) | project_id | SSE events |
@@ -499,6 +461,6 @@ reset-rounds banner and A05 Freedom-run pill on the Runs tab.
 ## Key non-obvious invariants
 
 - The status machine is the **only** authority on valid transitions. UI hides invalid actions; API rejects invalid PATCHes. Both call `isValidTransition()` / `getValidNextStatuses()` from `@atlas/shared`.
-- Agent escalation is **only** to the Owner â€” never to another agent. Enforced at the assign endpoint and in the UI's assignee picker.
-- `ATLAS_AI_ENABLED=false` puts `agent-runner.ts` into a simulated mode that emits canned output (line 192) â€” used for development without burning CLI credits.
+- Workflows escalate **only** to the Owner (park â†’ `waiting_for_info`); agents never route items. The engine is the only writer of an item's status + assignee while its workflow run is `running` (`workflow-lock.ts` 409s the PATCH routes, UI and MCP alike).
+- `ATLAS_AI_ENABLED=false` puts `agent-runner.ts` into a simulated mode that emits canned output ending in an `atlas-outcome: done` block, so workflows still advance â€” used for development without burning CLI credits.
 - Clones run with credentials injected via `http.extraheader` (Basic auth), NOT via URL-embedded credentials, because Windows Git Credential Manager will leak URL-embedded tokens.

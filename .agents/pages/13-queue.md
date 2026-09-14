@@ -29,7 +29,7 @@ There are no "Awaiting Decision", "Active", or "Done" sections.
 **Agent cards (`QueueAgentCard`)**
 - Header: agent icon + name
 - Status badge (colored dot; blinks if running)
-- "Next Run" / "Last Completed" two-column summary. Next Run reads `running now` while a run is live; for item-driven agents with a queued item it reads `within a minute` (or `when a run finishes` at `concurrent_runs` capacity) because the scheduler dispatches on ready (2026-09-14); freedom-mode agents still show the cadence slot delta.
+- "Next Run" / "Last Completed" two-column summary. Next Run reads `running now` while a run is live, `queued` when an item waits, and `—` / "nothing queued" otherwise. The header sub-line is `cli · designation · category` (the cadence label went with agent schedules, ADR 0014).
 - Up to 3 queued items; "view all" link opens drawer
 - Click card body → opens `QueueAgentDrawer`
 
@@ -41,7 +41,6 @@ There are no "Awaiting Decision", "Active", or "Done" sections.
 - **Pause All Agents** — One-button kill switch for misbehaving loops or demos; faster than walking each agent's toggle.
 - **Multi-select status chips** — Overlapping states (running AND failed-previously) need combined views; multi-select replaces a query language.
 - **Card click opens drawer (not modal)** — Drawer keeps the queue grid context intact while the Owner inspects one agent.
-- **Run now opens RunNowDialog in place** — Pre-fills the picker with the agent's first queued item (`summary.queued[0]`) so the owner can launch the obvious next target without bouncing to `/agents/:id`. The picker is still editable in case the owner wants a different item.
 - **Full trace navigates to Agent Detail** — The drawer is a viewer for prompt/config edits.
 - **Pause/Resume per agent (drawer)** — Owners usually want to pause one misbehaving agent, not all; the toggle sits beside its diagnostic info for tight cause-effect.
 
@@ -50,10 +49,9 @@ There are no "Awaiting Decision", "Active", or "Done" sections.
 - Header: agent icon, name, CLI/model/category/queue count, close button
 - Status badge
 - Per-agent queued/running counts come from `summarizeAgents()`; the same ready + in-progress rule is exported as `countQueueDepthByAgent()` and reused by the Agents grid and Agent Detail hero.
-- **Run now** → opens `RunNowDialog` in place with `preselect` set to `summary.queued[0]` (project_id + type + id); falls back to an empty picker if the queue is empty. The dialog still navigates to `/agents/:id/runs/:runId` on successful trigger. Its issue picker lists this agent's assigned items first (see [Agent Detail](16-agent-detail.md)) and it warns when the agent's CLI binary isn't installed.
 - **Pause/Resume** → toggles agent status via `useUpdateAgent`
 - **Full trace** → navigates to `/agents/:id`
-- Currently Executing section — picks the agent's first `in_progress` (or `queued`) `agent_runs` row, looks up the item via `itemsById`, renders the item card + a live terminal block fed by `useRunOutputTail(runId)` (per-drawer SSE subscription on `/api/events`). When no live run exists, renders an idle state ("Idle until <next pass>") or a failure state if the last run errored.
+- Currently Executing section — picks the agent's first `in_progress` (or `queued`) `agent_runs` row, looks up the item via `itemsById`, renders the item card + a live terminal block fed by `useRunOutputTail(runId)` (per-drawer SSE subscription on `/api/events`). When no live run exists, renders an idle state ("Idle.") or a failure state if the last run errored.
 - Next Scheduled section — up to 3 queued runs (clicking an item navigates via `issuePath` for the right detail page)
 - Last Completed section — most recent completed/errored run; shows a tail (last 160 chars) of the real `output_text`, not a hardcoded per-agent string
 
@@ -72,10 +70,10 @@ There are no "Awaiting Decision", "Active", or "Done" sections.
 ## Edge cases / quirks
 - Filters are multi-select (`Set<QueueFilterKey>`); empty set means show all (lines 135-150).
 - Each open drawer opens its own `EventSource` against `/api/events` for the live log. Closing the drawer tears the connection down. Trade-off: browsers cap same-origin SSE connections at 6 — for a single-owner app the practical risk is negligible. A shared event-bus refactor would be the right move if a future page needs to live-tail multiple runs simultaneously.
-- The drawer's "Full trace" button navigates to `/agents/:id`; its "Run now" opens `RunNowDialog` in place (see UI elements above).
+- The drawer's "Full trace" button navigates to `/agents/:id`. The drawer's "Run now" button was removed with item-attached ad-hoc runs (ADR 0014); a no-item run starts from the Agent Detail hero.
 
 ## Connectivity
-- **Pages**: [Agents](15-agents.md) — drawer "Full trace" navigates to Agent Detail; drawer "Run now" opens RunNowDialog in place; issue detail pages — drawer rows for queued/running runs deep-link to the issue.
+- **Pages**: [Agents](15-agents.md) — drawer "Full trace" navigates to Agent Detail; issue detail pages — drawer rows for queued/running runs deep-link to the issue.
 - **Routes**: `GET /api/run?limit=500` — fat pull of all recent runs; the page groups client-side because grouping logic varies (by status, by agent) and a server-side group would lock the shape.
 - **Entities**: `agent_run`, `agent`, `epic` / `story` / `sub_task` / `sub_bug` / `bug` (run target).
 

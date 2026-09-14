@@ -110,18 +110,6 @@ export function useAssignEpic() {
     });
 }
 
-// A04 — Owner-initiated reset-rounds escape hatch. See
-// useResetRoundsStory for the full rationale; same shape per kind.
-export function useResetRoundsEpic() {
-    const qc = useQueryClient();
-    return useMutation({
-        mutationFn: ({ id }: { id: string }) => api.epics.resetRounds(id),
-        onSuccess: (_void, { id }) => {
-            void qc.invalidateQueries({ queryKey: ['epics', id, 'full'] });
-        },
-    });
-}
-
 export function useDeleteEpic() {
     const qc = useQueryClient();
     return useMutation({

@@ -9,12 +9,6 @@ import { QueueAgentDrawer } from './QueueAgentDrawer.js';
 import type { AgentQueueSummary, QueueItem } from './queueViewModel.js';
 import type { IAgentRun } from '@atlas/shared';
 
-// Mock the lazy RunNowDialog to avoid Suspense+lazy complexity in jsdom
-vi.mock('../agents/RunNowDialog.js', () => ({
-    RunNowDialog: ({ open }: { open: boolean }) =>
-        open ? <div>RunNowDialog</div> : null,
-}));
-
 const ISO = '2026-05-16T00:00:00.000Z';
 
 const makeQueueItem = (overrides: Partial<QueueItem> = {}): QueueItem => ({
@@ -69,6 +63,8 @@ function makeAgentRun(overrides: Partial<IAgentRun> = {}): IAgentRun {
         cache_read_tokens: null,
         credits: null,
         item_title: null,
+        workflow_run_id: null,
+        node_id: null,
         ...overrides,
     };
 }
@@ -198,27 +194,6 @@ describe('QueueAgentDrawer', () => {
         expect(onClose).toHaveBeenCalled();
     });
 
-    it('shows "Run now" button', async () => {
-        const agent = makeAgent({ name: 'Run Now Agent' });
-        const summary = makeSummary({ agent });
-        renderWithProviders(
-            <QueueAgentDrawer
-                open
-                agent={agent}
-                summary={summary}
-                statusLabel="Idle"
-                runs={[]}
-                itemsById={new Map()}
-                projectNameById={new Map()}
-                onClose={vi.fn()}
-                onPause={vi.fn()}
-            />,
-        );
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /run now/i })).toBeInTheDocument();
-        });
-    });
-
     it('shows run items when completed runs provided', async () => {
         const agent = makeAgent({ name: 'Completed Agent' });
         const summary = makeSummary({ agent });
@@ -264,30 +239,6 @@ describe('QueueAgentDrawer', () => {
         );
         await waitFor(() => {
             expect(screen.getByText(/nothing in the queue/i)).toBeInTheDocument();
-        });
-    });
-
-    it('Run now button click opens RunNowDialog (exercises setRunNowOpen arrow fn)', async () => {
-        const agent = makeAgent({ name: 'RunNow Agent' });
-        const summary = makeSummary({ agent });
-        renderWithProviders(
-            <QueueAgentDrawer
-                open
-                agent={agent}
-                summary={summary}
-                statusLabel="Idle"
-                runs={[]}
-                itemsById={new Map()}
-                projectNameById={new Map()}
-                onClose={vi.fn()}
-                onPause={vi.fn()}
-            />,
-        );
-        const runNowBtn = await screen.findByRole('button', { name: /run now/i });
-        await userEvent.click(runNowBtn);
-        // RunNowDialog mock renders <div>RunNowDialog</div>
-        await waitFor(() => {
-            expect(screen.getByText('RunNowDialog')).toBeInTheDocument();
         });
     });
 
@@ -378,41 +329,6 @@ describe('QueueAgentDrawer', () => {
         await waitFor(() => {
             expect(screen.getByText(/Paused after a failure/i)).toBeInTheDocument();
         });
-    });
-
-    it('RunNowDialog onClose callback (setRunNowOpen false) hides the dialog', async () => {
-        // The top-level vi.mock returns: open ? <div>RunNowDialog</div> : null
-        // We need a mock that also forwards onClose so we can call it.
-        // Re-declare using vi.mocked approach is not possible after hoisting.
-        // Instead use the mocked module that already renders "RunNowDialog" when open,
-        // and verify the close flow by clicking Run now to open, then clicking the
-        // Drawer backdrop (which triggers onClose of the Drawer but not of RunNowDialog).
-        // The setRunNowOpen(false) path is covered by verifying the onClose prop wiring.
-        const agent = makeAgent({ name: 'Dialog Close Agent' });
-        const summary = makeSummary({ agent });
-        renderWithProviders(
-            <QueueAgentDrawer
-                open
-                agent={agent}
-                summary={summary}
-                statusLabel="Idle"
-                runs={[]}
-                itemsById={new Map()}
-                projectNameById={new Map()}
-                onClose={vi.fn()}
-                onPause={vi.fn()}
-            />,
-        );
-        // Open RunNowDialog
-        const runNowBtn = await screen.findByRole('button', { name: /run now/i });
-        await userEvent.click(runNowBtn);
-        // RunNowDialog mock renders <div>RunNowDialog</div> when open=true
-        await waitFor(() =>
-            expect(screen.getByText('RunNowDialog')).toBeInTheDocument(),
-        );
-        // The RunNowDialog is mounted — setRunNowOpen(true) path is exercised.
-        // The onClose={() => setRunNowOpen(false)} is wired as the prop.
-        expect(screen.getByText('RunNowDialog')).toBeInTheDocument();
     });
 
     it('clicking currently executing item navigates to issue path (exercises navigate + issuePath)', async () => {
@@ -760,39 +676,6 @@ describe('QueueAgentDrawer', () => {
         // Just verify no error from the sort
         await waitFor(() => {
             expect(screen.getByText('Sort Fallback Agent')).toBeInTheDocument();
-        });
-    });
-
-    it('Run now with queued item preselects the first queued item — covers lines 583-587', async () => {
-        // When nextForPreselect is not null, RunNowDialog receives a preselect prop
-        const agent = makeAgent({ name: 'Preselect Agent' });
-        const queuedItem = makeQueueItem({
-            id: 'ATL-PS1',
-            displayId: 'ATL-PS1',
-            title: 'Preselect Story',
-            type: 'story',
-            project_id: 'proj-1',
-        });
-        const summary = makeSummary({ agent, queued: [queuedItem] });
-        renderWithProviders(
-            <QueueAgentDrawer
-                open
-                agent={agent}
-                summary={summary}
-                statusLabel="Idle"
-                runs={[]}
-                itemsById={new Map()}
-                projectNameById={new Map([['proj-1', 'Preselect Project']])}
-                onClose={vi.fn()}
-                onPause={vi.fn()}
-            />,
-        );
-        const runNowBtn = await screen.findByRole('button', { name: /run now/i });
-        await userEvent.click(runNowBtn);
-        // RunNowDialog mock renders <div>RunNowDialog</div> when open=true
-        // nextForPreselect === queuedItem → preselect branch executes (lines 583-587)
-        await waitFor(() => {
-            expect(screen.getByText('RunNowDialog')).toBeInTheDocument();
         });
     });
 

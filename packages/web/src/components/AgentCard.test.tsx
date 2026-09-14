@@ -32,6 +32,8 @@ function makeRun(overrides: Partial<IAgentRun> = {}): IAgentRun {
         total_cost_usd: null,
         credits: null,
         item_title: null,
+        workflow_run_id: null,
+        node_id: null,
         ...overrides,
     };
 }

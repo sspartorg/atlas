@@ -345,8 +345,7 @@ export function DuplicateAgentModal({ open, agent, existingIds, onClose }: Props
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 2.5 }}>
                             {[
                                 'Prompt history starts fresh',
-                                'Handoff rules and allowed tools start empty',
-                                'Schedule defaults to the source cadence',
+                                'Allowed tools start empty',
                             ].map((t) => (
                                 <Box
                                     key={t}
@@ -431,7 +430,7 @@ export function DuplicateAgentModal({ open, agent, existingIds, onClose }: Props
                         >
                             <strong>{trimmedName}</strong> is ready.
                             <Box sx={{ fontSize: 12, color: ATLAS_PALETTE.slate70, mt: 0.5 }}>
-                                It starts paused — review the prompt and handoffs, then flip status
+                                It starts paused — review the prompt and checklist, then flip status
                                 to Active.
                             </Box>
                         </Alert>

@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as WorktreeOrchestratorModule from '../services/worktree-orchestrator.js';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 
@@ -26,7 +27,7 @@ vi.mock('../services/agent-runner.js', () => ({
     cancelRun: vi.fn(async () => ({ cancelled: false, pidKilled: null })),
 }));
 vi.mock('../services/worktree-orchestrator.js', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('../services/worktree-orchestrator.js')>()),
+    ...(await importOriginal<typeof WorktreeOrchestratorModule>()),
     ensureWorktree: vi.fn(async () => ({ path: '/tmp/wf', branch: 'atlas/wf/x', freshlyCreated: true })),
     pushWorktree: vi.fn(async () => ({ pushed: true, alreadyUpToDate: false })),
     openPullRequest: vi.fn(async () => ({ opened: false, url: null, alreadyExists: false })),

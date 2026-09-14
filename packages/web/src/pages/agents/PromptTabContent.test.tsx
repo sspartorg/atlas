@@ -16,15 +16,6 @@ const agent = makeAgent({
     name: 'Coder',
     prompt_md: 'You are a coder agent.',
     prompt_version: 1,
-    requires_item: true,
-});
-
-const agentNoItem = makeAgent({
-    id: 'agent-coder',
-    name: 'Coder',
-    prompt_md: 'You are a coder agent.',
-    prompt_version: 1,
-    requires_item: false,
 });
 
 function baseHandlers() {
@@ -48,23 +39,13 @@ describe('PromptTabContent', () => {
         await waitFor(() => expect(container.firstChild).toBeInTheDocument());
     });
 
-    it('shows auto-preamble banner when requires_item=true', async () => {
+    it('shows auto-preamble banner', async () => {
         renderWithProviders(<PromptTabContent agent={agent} />);
         await waitFor(() =>
             expect(
                 screen.getByText(/Auto-prepended at run time/i),
             ).toBeInTheDocument(),
         );
-    });
-
-    it('no preamble banner when requires_item=false', async () => {
-        renderWithProviders(<PromptTabContent agent={agentNoItem} />);
-        await waitFor(() =>
-            expect(screen.getByText(/Active prompt/i)).toBeInTheDocument(),
-        );
-        expect(
-            screen.queryByText(/Auto-prepended at run time/i),
-        ).not.toBeInTheDocument();
     });
 
     it('shows textarea with agent prompt', async () => {
@@ -489,7 +470,6 @@ describe('PromptTabContent', () => {
             name: 'Product Manager #1!',
             prompt_md: 'PM prompt',
             prompt_version: 1,
-            requires_item: false,
         });
         server.use(
             http.get(`${BASE}/agents/agent-pm/prompt-versions`, () =>
@@ -762,14 +742,12 @@ describe('PromptTabContent', () => {
             name: 'Alpha',
             prompt_md: 'Alpha prompt',
             prompt_version: 1,
-            requires_item: false,
         });
         const agentB = makeAgent({
             id: 'agent-beta',
             name: 'Beta',
             prompt_md: 'Beta prompt',
             prompt_version: 1,
-            requires_item: false,
         });
         server.use(
             http.get(`${BASE}/agents/agent-alpha/prompt-versions`, () =>

@@ -139,6 +139,8 @@ export async function runRoutes(app: FastifyInstance) {
                 'r.cache_read_tokens as cache_read_tokens',
                 'r.total_cost_usd as total_cost_usd',
                 'r.credits as credits',
+                'r.workflow_run_id as workflow_run_id',
+                'r.node_id as node_id',
             ])
             .where('r.id', '=', id)
             .executeTakeFirst();
@@ -368,6 +370,8 @@ export async function runRoutes(app: FastifyInstance) {
                 'r.cache_read_tokens as cache_read_tokens',
                 'r.total_cost_usd as total_cost_usd',
                 'r.credits as credits',
+                'r.workflow_run_id as workflow_run_id',
+                'r.node_id as node_id',
             ]);
         if (issue_id) q = q.where('r.item_id', '=', issue_id);
         // 2026-09-12: `agent_id` and `issue_type` were in the accepted query

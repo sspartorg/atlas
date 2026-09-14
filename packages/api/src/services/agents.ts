@@ -119,6 +119,8 @@ export function asAgentRun(r: Record<string, unknown>, issueType: IssueType): IA
         // pulls `i.title as item_title`. NULL on freedom-mode runs and
         // on rows whose item has been deleted.
         item_title: (r['item_title'] as string | null) ?? null,
+        workflow_run_id: (r['workflow_run_id'] as string | null) ?? null,
+        node_id: (r['node_id'] as string | null) ?? null,
     };
 }
 

@@ -51,7 +51,7 @@ export function DeleteAgentModal({ open, agent, busy = false, onConfirm, onClose
             </DialogTitle>
             <DialogContent sx={{ pt: 1 }}>
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate70, mb: 2 }}>
-                    Removes this agent from Atlas. Its prompt, handoff rules, allowed tools,
+                    Removes this agent from Atlas. Its prompt, checklist, allowed tools,
                     memory, and run history are wiped. This cannot be undone.
                 </Typography>
                 <Alert

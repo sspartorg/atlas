@@ -37,8 +37,8 @@ const RUN_STATUS_LABEL: Record<RunStatus, string> = {
 
 // A05 — agent_runs.item_id is nullable; the API projector turns nulls
 // into empty strings so the typed shape stays string-only, then we
-// distinguish freedom-mode (`requires_item=false` scheduled run with
-// no project either) from project-scope (Theme 09b ai-readiness) from
+// distinguish a no-item run with no project either ("freedom") from
+// project-scope (Theme 09b ai-readiness) from
 // item-attached on the way to the row renderer.
 type RunScope =
     | { kind: 'item'; text: string }
@@ -123,10 +123,8 @@ export function RunsTabContent({ agent, runs }: Props) {
                             mb: 3,
                         }}
                     >
-                        This agent is installed and configured, but hasn&apos;t been triggered. The
-                        next scheduled pass will pick up any Epics in &quot;Ready for{' '}
-                        {agent.name.split(' ')[0]}
-                        &quot;.
+                        This agent is installed and configured, but hasn&apos;t been triggered. It
+                        runs when a workflow reaches it.
                     </Typography>
                     <Button
                         variant="contained"

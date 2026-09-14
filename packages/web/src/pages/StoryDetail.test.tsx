@@ -22,7 +22,6 @@ function stubStoryFull(
         external_links: unknown[];
         activity: unknown[];
         agents: unknown[];
-        round_count: number | null;
     }> = {},
 ) {
     server.use(
@@ -38,7 +37,6 @@ function stubStoryFull(
                 external_links: overrides.external_links ?? [],
                 activity: overrides.activity ?? [],
                 agents: overrides.agents ?? [],
-                round_count: overrides.round_count ?? null,
             }),
         ),
         http.get(`${BASE}/run`, () => HttpResponse.json([])),
@@ -401,7 +399,6 @@ describe('StoryDetail page', () => {
                     related_links: [],
                     activity: [],
                     agents: [],
-                    round_count: null,
                 }),
             ),
             http.get(`${BASE}/run`, () => HttpResponse.json([])),
@@ -436,7 +433,6 @@ describe('StoryDetail page', () => {
                     related_links: [],
                     activity: [],
                     agents: [],
-                    round_count: null,
                 }),
             ),
             http.get(`${BASE}/run`, () => HttpResponse.json([])),
@@ -579,7 +575,7 @@ describe('StoryDetail page', () => {
     });
 
     it('renders with assignee agent when story has assignee_agent_id', async () => {
-        const agent = makeAgent({ id: 'story-agent', name: 'Story Coder', max_rounds: 8 });
+        const agent = makeAgent({ id: 'story-agent', name: 'Story Coder' });
         stubStoryFull('S27', {
             story: makeStory({ id: 'S27', assignee_agent_id: 'story-agent' }),
             agents: [agent],
@@ -610,29 +606,6 @@ describe('StoryDetail page', () => {
         await screen.findByText('Story One');
         // hideWhenEmpty means the WorkItemTable should not render its title
         expect(screen.queryByText('Sub-items')).not.toBeInTheDocument();
-    });
-
-    it('triggers onResetRounds by clicking the Rounds row and confirming', async () => {
-        const agent = makeAgent({ id: 'story-rr', name: 'Round Story Agent', max_rounds: 6 });
-        stubStoryFull('S30', {
-            story: makeStory({ id: 'S30', assignee_agent_id: 'story-rr' }),
-            agents: [agent],
-            round_count: 4,
-        });
-        server.use(
-            http.post(`${BASE}/stories/S30/reset-rounds`, () => HttpResponse.json({ ok: true })),
-        );
-        renderStory('S30');
-        await screen.findByText('Story One');
-
-        // Click the Rounds row to open the ResetRoundsPopover
-        const roundsRow = screen.queryByText('Rounds')?.closest('div');
-        if (roundsRow) {
-            fireEvent.click(roundsRow);
-            const confirmBtn = await screen.findByRole('button', { name: /Reset rounds/i }).catch(() => null);
-            if (confirmBtn) fireEvent.click(confirmBtn);
-        }
-        expect(document.body).toBeTruthy();
     });
 
     it('triggers onLabelsChange by opening Add labels and blurring with new value', async () => {

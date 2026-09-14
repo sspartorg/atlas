@@ -82,6 +82,9 @@ This folder is the **single source of truth for application behavior** — what 
 - [`pages/30-analytics.md`](pages/30-analytics.md) — `/analytics`
 - [`pages/31-analytics-project.md`](pages/31-analytics-project.md) — `/analytics/project/:projectId`
 - [`pages/32-analytics-epic.md`](pages/32-analytics-epic.md) — `/analytics/epic/:epicId`
+- [`pages/33-workflows.md`](pages/33-workflows.md) — `/workflows`
+- [`pages/34-workflow-detail.md`](pages/34-workflow-detail.md) — `/workflows/:id`
+- [`pages/35-workflow-run.md`](pages/35-workflow-run.md) — `/workflows/:id/runs/:runId`
 
 ---
 

@@ -14,7 +14,6 @@ import {
     useTransitionStory,
     useUpdateStory,
     useAssignStory,
-    useResetRoundsStory,
     useDeleteStory,
 } from '../hooks/useStories.js';
 import { IssueDeleteAction } from '../components/ConfirmDeleteModal.js';
@@ -59,7 +58,6 @@ export function StoryDetail() {
     const transition = useTransitionStory();
     const updateStory = useUpdateStory();
     const assignStory = useAssignStory();
-    const resetRoundsStory = useResetRoundsStory();
     const deleteStory = useDeleteStory();
     const [createKind, setCreateKind] = useState<NewIssueKind | null>(null);
     const [pickerMode, setPickerMode] = useState<
@@ -224,13 +222,6 @@ export function StoryDetail() {
                             }
                             createdAt={story.created_at}
                             updatedAt={story.updated_at}
-                            roundCount={full?.round_count ?? null}
-                            maxRounds={assignee?.max_rounds ?? null}
-                            onResetRounds={() =>
-                                void resetRoundsStory.mutateAsync({ id: story.id })
-                            }
-                            assigneeName={assignee?.name ?? null}
-                            resetRoundsPending={resetRoundsStory.isPending}
                             totalCostUsd={totalCostUsd}
                             worktreeBranch={story.worktree_branch}
                             worktreePath={story.worktree_path}

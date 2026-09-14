@@ -6,7 +6,6 @@ import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
-import MenuItem from '@mui/material/MenuItem';
 import InputAdornment from '@mui/material/InputAdornment';
 import CircularProgress from '@mui/material/CircularProgress';
 import CloseRounded from '@mui/icons-material/CloseRounded';
@@ -15,11 +14,11 @@ import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
 import type {
     IProject,
     IProjectSchedule,
-    SchedulePreset,
     ScheduleConflictPolicy,
 } from '@atlas/shared';
 import { useProjectSchedule, useSaveProjectSchedule } from '../../hooks/useProjectSchedule.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
+import { SchedulePresetFields, SelectableCard } from '../../components/SchedulePresetFields.js';
 
 interface Props {
     open: boolean;
@@ -28,14 +27,6 @@ interface Props {
 }
 
 const MONO = '"JetBrains Mono", monospace';
-
-const PRESETS: Array<{ value: SchedulePreset; label: string; sub: string }> = [
-    { value: 'hourly', label: 'Every hour', sub: 'on the hour' },
-    { value: 'every_4h', label: 'Every 4 hours', sub: '00, 04, 08…' },
-    { value: 'daily', label: 'Daily', sub: 'at HH:MM local' },
-    { value: 'weekly', label: 'Weekly', sub: 'Mon at 06:00' },
-    { value: 'custom', label: 'Custom cron', sub: 'advanced' },
-];
 
 const POLICIES: Array<{ value: ScheduleConflictPolicy; label: string; sub: string }> = [
     { value: 'skip', label: 'Skip & notify', sub: 'default — leave folder alone' },
@@ -55,57 +46,6 @@ const GUARDS: Array<{ key: 'skip_if_dirty' | 'pause_while_agents_active'; label:
         sub: 'avoid mid-task branch shifts',
     },
 ];
-
-interface SelectableCardProps {
-    title: string;
-    sub: string;
-    selected: boolean;
-    onClick: () => void;
-}
-
-function SelectableCard({ title, sub, selected, onClick }: SelectableCardProps) {
-    return (
-        <Box
-            onClick={onClick}
-            sx={{
-                px: 2,
-                py: 1.5,
-                borderRadius: '10px',
-                cursor: 'pointer',
-                border: `1.5px solid ${
-                    selected ? ATLAS_PALETTE.brandBlue : ATLAS_PALETTE.slate10
-                }`,
-                bgcolor: selected ? 'rgba(0,122,201,.06)' : ATLAS_PALETTE.white,
-                transition: 'background 120ms ease, border-color 120ms ease',
-                '&:hover': {
-                    borderColor: selected ? ATLAS_PALETTE.brandBlue : ATLAS_PALETTE.slate30,
-                    bgcolor: selected ? 'rgba(0,122,201,.08)' : ATLAS_PALETTE.slate06,
-                },
-            }}
-        >
-            <Typography
-                sx={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: selected ? ATLAS_PALETTE.brandBlue : ATLAS_PALETTE.slate,
-                    lineHeight: 1.2,
-                }}
-            >
-                {title}
-            </Typography>
-            <Typography
-                sx={{
-                    fontSize: 11,
-                    color: ATLAS_PALETTE.slate60,
-                    mt: 0.5,
-                    lineHeight: 1.3,
-                }}
-            >
-                {sub}
-            </Typography>
-        </Box>
-    );
-}
 
 function SectionHeader({ title, hint }: { title: string; hint: string }) {
     return (
@@ -393,59 +333,20 @@ export function AutoFetchScheduleModal({ open, project, onClose }: Props) {
 
                         {/* Schedule presets */}
                         <SectionHeader title="Schedule" hint="when to pull" />
-                        <Box
-                            sx={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(3, 1fr)',
-                                gap: 1.5,
-                                mb: 3,
+                        <SchedulePresetFields
+                            value={{
+                                preset: f.preset,
+                                weekday: f.weekday,
+                                cronExpression: f.cron_expression,
                             }}
-                        >
-                            {PRESETS.map((p) => (
-                                <SelectableCard
-                                    key={p.value}
-                                    title={p.label}
-                                    sub={p.sub}
-                                    selected={f.preset === p.value}
-                                    onClick={() => update('preset', p.value)}
-                                />
-                            ))}
-                        </Box>
-
-                        {/* Conditional: weekday */}
-                        {f.preset === 'weekly' && (
-                            <TextField
-                                label="Weekday"
-                                select
-                                value={f.weekday ?? 1}
-                                onChange={(e) => update('weekday', Number(e.target.value))}
-                                size="small"
-                                fullWidth
-                                sx={{ mb: 3 }}
-                            >
-                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(
-                                    (name, i) => (
-                                        <MenuItem key={name} value={i}>
-                                            {name}
-                                        </MenuItem>
-                                    )
-                                )}
-                            </TextField>
-                        )}
-
-                        {/* Conditional: cron */}
-                        {f.preset === 'custom' && (
-                            <TextField
-                                label="Cron expression"
-                                helperText="5-field standard cron (min hour dom month dow)"
-                                value={f.cron_expression}
-                                onChange={(e) => update('cron_expression', e.target.value)}
-                                fullWidth
-                                size="small"
-                                sx={{ mb: 3 }}
-                                inputProps={{ style: { fontFamily: MONO, fontSize: 13 } }}
-                            />
-                        )}
+                            onChange={(patch) => {
+                                if (patch.preset) update('preset', patch.preset);
+                                if (patch.weekday !== undefined) update('weekday', patch.weekday);
+                                if (patch.cronExpression !== undefined) {
+                                    update('cron_expression', patch.cronExpression);
+                                }
+                            }}
+                        />
 
                         {/* Time of day + Branch */}
                         <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>

@@ -97,21 +97,6 @@ export function useAssignStory() {
     });
 }
 
-// A04 — Owner-initiated reset-rounds escape hatch from the Rounds row
-// on `DetailsRailCard`. Backed by `POST /api/stories/:id/reset-rounds`;
-// returns 204 and emits a `rounds_reset` activity event server-side.
-// Invalidates the story-full query so the rail and the activity log
-// both repaint.
-export function useResetRoundsStory() {
-    const qc = useQueryClient();
-    return useMutation({
-        mutationFn: ({ id }: { id: string }) => api.stories.resetRounds(id),
-        onSuccess: (_void, { id }) => {
-            void qc.invalidateQueries({ queryKey: ['stories', id, 'full'] });
-        },
-    });
-}
-
 export function useUpdateStory() {
     const qc = useQueryClient();
     return useMutation({

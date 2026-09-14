@@ -6,7 +6,6 @@ import { goto } from '../helpers/nav.js';
 const TABS = [
     { label: 'Overview', key: 'overview' },
     { label: 'Prompt',   key: 'prompt'   },
-    { label: 'Handoffs', key: 'handoffs' },
     { label: 'Test Run', key: 'test'     },
     { label: 'Runs',     key: 'runs'     },
     { label: 'Memory',   key: 'memory'   },
@@ -23,7 +22,7 @@ async function gotoPoWriter(page: Parameters<typeof goto>[0]): Promise<string> {
 }
 
 test.describe('/agents/:id tabs', () => {
-    test('all 6 tabs are reachable, selected', async ({ page }) => {
+    test('all 5 tabs are reachable, selected', async ({ page }) => {
         const baseUrl = await gotoPoWriter(page);
         // Strip any existing ?tab= so we start from a clean base URL
         const agentUrl = baseUrl.split('?')[0];

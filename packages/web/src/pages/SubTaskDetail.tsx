@@ -122,12 +122,6 @@ export function SubTaskDetail() {
         await qc.invalidateQueries({ queryKey: ['issues'] });
     }
 
-    async function handleResetRounds() {
-        if (!task) return;
-        await api.subTasks.resetRounds(task.id);
-        await qc.invalidateQueries({ queryKey: ['sub-tasks', task.id, 'full'] });
-    }
-
 
     if (isLoading) {
         return <IssueDetailLoading />;
@@ -229,10 +223,6 @@ export function SubTaskDetail() {
                         onLabelsChange={(next) => patchTask({ labels: next })}
                         createdAt={task.created_at}
                         updatedAt={task.updated_at}
-                        roundCount={full?.round_count ?? null}
-                        maxRounds={assignee?.max_rounds ?? null}
-                        onResetRounds={() => void handleResetRounds()}
-                        assigneeName={assignee?.name ?? null}
                         totalCostUsd={totalCostUsd}
                         worktreeBranch={task.worktree_branch}
                         worktreePath={task.worktree_path}

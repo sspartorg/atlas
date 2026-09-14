@@ -27,13 +27,13 @@ The **SDLC role catalog** is the canonical list of roles an agent can play in At
 
 | `id` | Label | Seeded? | Default status | Notes |
 |---|---|---|---|---|
-| `po` | Product Owner | yes | active | PO Writer — brainstorm-before-scope. Paired PO Reviewer agent fans stories out. |
+| `po` | Product Owner | yes | active | PO Writer — brainstorm-before-scope. Paired PO Reviewer agent checks the stories + `[QA]` twins (`planning` workflow; End queues the stories for `dev`). |
 | `spec-writer` | Specification Writer | **no** | — | Type-only. Removed from the chain; Architect now authors the spec. |
-| `engineer` | Engineer | yes | active | Coder. Paired Code Reviewer agent (opens the PR). |
-| `qa` | Quality Assurance | yes | active | QA Writer — test-plan CSV per dev story. Paired QA Reviewer agent. |
-| `architect` | Software Architect | yes | active | Architect — authors `specs/<n>-<slug>/spec.md` ahead of Coder (absorbed Spec Writer). Paired Architect Reviewer agent. |
+| `engineer` | Engineer | yes | active | Coder. Paired Code Reviewer agent (`dev` workflow; the workflow opens the PR at End). |
+| `qa` | Quality Assurance | yes | active | QA Writer — test-plan CSV per dev story. Paired QA Reviewer agent (`qa` workflow). |
+| `architect` | Software Architect | yes | active | Architect — authors `specs/<n>-<slug>/spec.md` ahead of Coder (absorbed Spec Writer). Paired Architect Reviewer agent (`dev` workflow). |
 | `tester` | Exploratory Tester | **no** | — | Type-only. |
-| `automation` | Automation Engineer | yes | active | Automates `[automation-yes]` QA cases after the dev PR merges; Owner assigns manually. Paired Automation Reviewer agent. |
+| `automation` | Automation Engineer | yes | active | Automates `[automation-yes]` QA cases. Paired Automation Reviewer agent (`qa` workflow, after QA Reviewer). |
 | `devops` | DevOps Engineer | **no** | — | Type-only. |
 | `security` | Security Review Lead | **no** | — | Type-only. |
 | `designer` | UX/Visual Designer | **no** | — | Type-only. |
@@ -84,15 +84,15 @@ The runner *never* consults the role catalog at dispatch time. The catalog is se
 - **Zod:** `SdlcRoleSchema`, `UpdateRoleSchema` in `@atlas/shared/schemas`.
 - **API:** `GET /api/roles` (list) · `GET /api/roles/:id` (single) · `PATCH /api/roles/:id` (Owner-only).
 - **Web hook:** `useRoles()` in `packages/web/src/hooks/useRoles.ts` (TanStack Query, infinite cache — catalog only changes via migration).
-- **MCP:** `createAgent` and `updateAgent` accept `role_id` (nullable). No separate `roles` tool surface yet.
+- **MCP:** `crud_agent` `create` / `update` accept `role_id` (nullable). No separate `roles` tool surface yet.
 
 ## How to add a role
 
 1. Append the slug to `SdlcRole` in `packages/shared/src/types/index.ts`.
 2. Append an entry to `SDLC_ROLES`, `SDLC_ROLE_LABELS`, and `SDLC_ROLE_DEFAULT_STATUS` in `packages/shared/src/constants/index.ts`.
 3. Extend the `SdlcRoleSchema` enum in `packages/shared/src/schemas/index.ts`.
-4. Add a `RoleSeed` entry in `packages/api/src/db/seeds/sdlc-roles.ts` with the curated prompt + reviewer prompt.
-5. Author a new migration (e.g. `026_…`) that inserts the role row + (optionally) backfills any existing agents that should adopt the new role.
+4. Author a new numbered migration that inserts the `roles` row with its curated `default_prompt_md` (the five existing rows live in `001_baseline.sql`).
+5. Optionally add a catalog agent for it under `packages/api/src/marketplace/catalog/`.
 6. Update this doc's table.
 
 The catalog shape is governed by code, not by runtime data — there's no Owner-facing "create role" action by design (a runtime-created role would have no shared-type backing and would break the Zod validation at the route boundary).

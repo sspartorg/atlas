@@ -147,7 +147,7 @@ describe('ActivityCard event-type rendering', () => {
     });
 
     it('renders a "rounds_reset" event with the subject agent name + previous count', async () => {
-        const agents = [makeAgent({ id: 'agent-coder', name: 'Coder', max_rounds: 5 })];
+        const agents = [makeAgent({ id: 'agent-coder', name: 'Coder' })];
         setupEvent(
             baseEvent({
                 event_type: 'rounds_reset',
@@ -159,7 +159,6 @@ describe('ActivityCard event-type rendering', () => {
         );
         renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/reset rounds for/i)).toBeInTheDocument());
-        // Previous count (3) + cap (5) format: "(was 3 / 5)"
         await waitFor(() => expect(screen.getByText(/was 3/)).toBeInTheDocument());
     });
 

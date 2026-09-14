@@ -549,15 +549,13 @@ function EventRow({
         icon = <RestartAltRounded sx={{ fontSize: 16, color: ATLAS_PALETTE.brandBlue }} />;
         const subjectAgent = event.to_value ? agentsById.get(event.to_value) : null;
         const subjectName = subjectAgent?.name ?? 'the assigned agent';
-        const cap = subjectAgent?.max_rounds ?? null;
         const prev = event.from_value;
         body = (
             <>
                 <strong>{actorName}</strong> reset rounds for <strong>{subjectName}</strong>
                 {prev != null && (
                     <Box component="span" sx={{ ml: 1, fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
-                        (was {prev}
-                        {cap != null ? ` / ${cap}` : ''})
+                        (was {prev})
                     </Box>
                 )}
             </>

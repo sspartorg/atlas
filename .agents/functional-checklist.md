@@ -99,7 +99,7 @@ Wave letters match the sweep order (entity graph first, readers after).
 | Route | Route-specific checks |
 |---|---|
 | `/agents` | Card count equals `GET /api/agents` length AND the marketplace's `is_installed` count. Sidenav badge vs page count (X4). Pause/resume, disable/enable, duplicate, delete all persist through a reload. Role filter: picking a specific role excludes `role_id IS NULL` autonomous agents **by design** — confirm that is what the user sees, not silent loss. |
-| `/agents/:id` (6 tabs) | Prompt save bumps `prompt_version` and appends an `agent_prompt_versions` row. Handoff rules round-trip. Memory PUT flips `source` to `manual-edit` and bumps `version`. Run-now honours the depends-on gate (409 `dependencies_not_ready`). Model dropdown only offers registered models (X2). |
+| `/agents/:id` (6 tabs) | Prompt save bumps `prompt_version` and appends an `agent_prompt_versions` row. Quality checklist rows round-trip. Memory PUT flips `source` to `manual-edit` and bumps `version`. Run-now starts a no-item run only (`POST /api/run` rejects `issue_id`). Delete is refused with 409 while a workflow uses the agent. Model dropdown only offers registered models (X2). |
 | `/agents/:id/runs/:runId` | Output matches `GET /api/run/:id`. Simulated runs carry the Simulated chip when `ATLAS_AI_ENABLED=false`. Re-run creates a new row, does not mutate this one. |
 | `/agents/marketplace` | Catalog count == `marketplace_agents` rows. Select-all covers every not-installed entry. Bulk install: successes install, failures are **named with their reason** and stay selected; a clean sweep navigates to `/agents` (3). Install with a pruned model returns 400 `MODEL_NOT_IN_REGISTRY`, not a 500 (X2). |
 | `/agents/marketplace/:id` | Install / upgrade / detach / export-zip each do what they claim. A non-409 install error toasts instead of throwing inside the click handler (6). |
@@ -208,8 +208,8 @@ reloading. The transport works: `: connected` flushes immediately and a
 `counts_changed` frame arrives within ~1s of the write. What did *not* work was
 which writes push at all — see **F2** below.
 
-Still untested: a **real agent CLI run** (the whole run → handoff →
-status-advance chain). `ATLAS_AI_ENABLED` was left off for the sweep so the
+Still untested: a **real agent CLI run** (the whole workflow run → step →
+outcome routing → End push/PR chain). `ATLAS_AI_ENABLED` was left off for the sweep so the
 dev workspace kept its data.
 
 Fixed this pass: secrets reveal (4 surfaces), comment attribution + backfill,

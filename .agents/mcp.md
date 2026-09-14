@@ -121,9 +121,10 @@ get.
 ### Coder picking up a sub-task
 `get_item { issue_type: 'sub_task', id }` for the full context â†’
 `search_item { query }` (substring on title / description) to spot prior
-duplicates â†’ after work, `update_item { action: 'add_comment', ... }` to
-comment, `update_item { action: 'change_status', ... }` to move state,
-`update_item { action: 'patch_fields', patch: { pr_url } }` to record the PR.
+duplicates â†’ after work, `update_item { action: 'add_comment', ... }` for
+any note a later step needs. The agent does not move state or record the PR:
+it ends with the `atlas-outcome` block and the workflow routes the item,
+pushes and opens the PR (ADR 0014).
 
 ### Owner-led item maintenance via Claude
 Every mutation is one `update_item` call with an `action` discriminator:
@@ -134,6 +135,9 @@ Every mutation is one `update_item` call with an `action` discriminator:
 - `action: 'change_status'` for status transitions (with optional `override`
   for Owner corrections).
 - `action: 'assign'` to reassign (active-agent guard on the API).
+- Both are Owner-facing: an agent inside a workflow run must not use them to
+  route work. The API returns 409 while a workflow run holds the item, and the
+  tool description tells agents to report via the `atlas-outcome` block.
 - `action: 'add_link' / 'remove_link'` for `depends_on` / `relates_to` /
   `tested_by` graph edits (optional `agent_id` credits the link event).
 - `action: 'add_external_link' / 'remove_external_link'` for off-platform
@@ -154,6 +158,9 @@ linked items, recent activity). Compose your reply with that context, then
 `crud_agent { op: 'search' }` / `{ op: 'get', id }` for read paths;
 `{ op: 'create' / 'update' / 'delete' }` are reserved for Owner via the UI
 and forbidden in agent prompts (constitution `FORBIDDEN_TOOLS_SECTION`).
+`get` returns `{ agent, checklists }`. Schedules, handoff rules and git flags
+are no longer agent fields (ADR 0014) — they live on workflows, which have no
+MCP tool.
 `agent_memory { op: 'get' / 'update' }` is the procedural memory channel.
 `marketplace_agent { op: 'search' / 'get' }` for catalog discovery + install
 chains.
@@ -239,9 +246,8 @@ carries an explicit "Forbidden Atlas MCP tool calls" clause that forbids
 guardrail / global-settings mutation.
 
 **Attribution.** The in-process MCP host has no bound agent id, so a write
-is credited to an agent only when the call passes `agent_id`; the generated
-`.atlas/handoff.md` (`handoff-assembler.ts`) tells the agent to pass its own
-id on every `update_item` call. `create_item` (top-level `agent_id`) and
+is credited to an agent only when the call passes `agent_id`; catalog prompts
+tell the agent to pass its own id on every `create_item` / `update_item` call. `create_item` (top-level `agent_id`) and
 `update_item` `patch_fields` / `add_link` / `remove_link` / `add_external_link` forward it as
 the `x-atlas-agent-id` header; the create routes credit it as the `created`
 event actor (and default `reporter_agent_id`), the item-link routes as the
@@ -300,9 +306,8 @@ per-action tool names.
 
 ## What's deferred (C03 scope boundary, 2026-05-27)
 
-- **Reset-rounds via MCP** â€” Owner-only escape hatch (per A04). Stays UI-only.
 - **Comment edit** â€” `PATCH /api/comments/:id` exists but no MCP tool; audit-trail concern. Revisit if Owner asks.
-- **Run spawning** â€” `POST /api/run` exists but no MCP tool; cross-agent handoffs go through `handoff_rules`, not ad-hoc MCP spawns.
+- **Run spawning** â€” `POST /api/run` exists but no MCP tool; agent steps are chained by workflows (ADR 0014), not ad-hoc MCP spawns.
 - **Project lifecycle** â€” clone / connect / reclone / delete project are onboarding flows; stay Owner-only.
 - **Workspace settings**, **model registry**, **notification settings** â€” explicitly excluded by `requirments_new.md` L19.
 

@@ -1,4 +1,3 @@
-import { Suspense, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -17,11 +16,6 @@ import { relativeTimeShort } from './queueViewModel.js';
 import { getAgentView, CATEGORY_LABEL } from '../agents/agentViewModel.js';
 import { useRunOutputTail } from '../../hooks/useRunOutputTail.js';
 import { QueueLiveLog } from './QueueLiveLog.js';
-import { lazyNamed } from '../../utils/lazyNamed.js';
-const RunNowDialog = lazyNamed(
-    () => import('../agents/RunNowDialog.js'),
-    'RunNowDialog',
-);
 
 const MONO = '"JetBrains Mono", monospace';
 
@@ -72,7 +66,6 @@ export function QueueAgentDrawer({
     onPause,
 }: Props) {
     const navigate = useNavigate();
-    const [runNowOpen, setRunNowOpen] = useState(false);
     if (!agent || !summary) return null;
     const view = getAgentView(agent);
     const statusColor = STATUS_COLOR[statusLabel];
@@ -88,10 +81,6 @@ export function QueueAgentDrawer({
     const { aiEnabled } = useAiEnabled();
 
     const nextScheduled = summary.queued.slice(0, 3);
-    // First queued item drives the "Run now" preselect — the owner asked for
-    // the picker to open with the obvious next target pre-filled so they
-    // don't have to re-pick the same row they were just looking at.
-    const nextForPreselect = summary.queued[0] ?? null;
     const lastCompletedRuns = runs
         .filter((r) => r.status === 'completed' || r.status === 'error')
         .sort((a, b) =>
@@ -226,23 +215,6 @@ export function QueueAgentDrawer({
                     <Button
                         variant="outlined"
                         size="small"
-                        onClick={() => setRunNowOpen(true)}
-                        sx={{ height: 30, fontSize: 12, textTransform: 'none' }}
-                        startIcon={
-                            <Box
-                                component="span"
-                                className="material-symbols-rounded"
-                                sx={{ fontSize: 14 }}
-                            >
-                                play_arrow
-                            </Box>
-                        }
-                    >
-                        Run now
-                    </Button>
-                    <Button
-                        variant="outlined"
-                        size="small"
                         onClick={() => onPause(agent)}
                         sx={{ height: 30, fontSize: 12, textTransform: 'none' }}
                         startIcon={
@@ -347,7 +319,7 @@ export function QueueAgentDrawer({
                         <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate60 }}>
                             {isFailed
                                 ? 'Paused after a failure — review the last completed run.'
-                                : `Idle until ${view.nextPassLabel}.`}
+                                : 'Idle.'}
                         </Typography>
                     </Box>
                 )}
@@ -581,24 +553,6 @@ export function QueueAgentDrawer({
                     })
                 )}
             </Box>
-            {runNowOpen && (
-                <Suspense fallback={null}>
-                    <RunNowDialog
-                        open
-                        agent={agent}
-                        preselect={
-                            nextForPreselect
-                                ? {
-                                      projectId: nextForPreselect.project_id,
-                                      kind: nextForPreselect.type as IssueType,
-                                      issueId: nextForPreselect.id,
-                                  }
-                                : null
-                        }
-                        onClose={() => setRunNowOpen(false)}
-                    />
-                </Suspense>
-            )}
         </Drawer>
     );
 }

@@ -1,4 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as ExternalLinksModule from './external-links.js';
+import type * as WorktreeOrchestratorModule from './worktree-orchestrator.js';
 import { randomUUID } from 'node:crypto';
 import type { IWorkflowGraph, RunOutcomeKind, RunStatus } from '@atlas/shared';
 
@@ -35,11 +37,11 @@ const git = vi.hoisted(() => ({
     cleanupWorktreeAfterPush: vi.fn(async () => ({ worktreeRemoved: true, branchDeleted: true, dbCleared: false, warnings: [] })),
 }));
 vi.mock('./worktree-orchestrator.js', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('./worktree-orchestrator.js')>()),
+    ...(await importOriginal<typeof WorktreeOrchestratorModule>()),
     ...git,
 }));
 vi.mock('./external-links.js', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('./external-links.js')>()),
+    ...(await importOriginal<typeof ExternalLinksModule>()),
     fetchGithubPrTitle: vi.fn(async () => null),
 }));
 vi.mock('../routes/events.js', () => ({ eventsRoutes: async () => undefined, broadcastSSE: vi.fn() }));

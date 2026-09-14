@@ -299,7 +299,6 @@ export function AgentCard({
                 {[
                     ['CLI', agent.cli],
                     ['Model', agent.model],
-                    ['Schedule', `${view.cadenceLabel.toLowerCase()} · next ${view.nextPassDelta}`],
                 ].map(([k, v]) => (
                     <Box key={k} sx={{ display: 'contents' }}>
                         <Typography

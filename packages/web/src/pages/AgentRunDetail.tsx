@@ -9,6 +9,7 @@ import AlertTitle from '@mui/material/AlertTitle';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ApiErrorKind, IAgentRun, IssueType, RunStatus } from '@atlas/shared';
 import { useAgent, useAgentRun } from '../hooks/useAgents.js';
+import { useWorkflowRun } from '../hooks/useWorkflows.js';
 import { ApiErrorAlert } from '../components/ApiErrorAlert.js';
 import { AtlasApiError } from '../api/api.js';
 import { useRunOutputTail } from '../hooks/useRunOutputTail.js';
@@ -243,6 +244,14 @@ export function AgentRunDetail() {
         onError: (e) => toast.show({ message: 'Re-run failed', detail: (e as Error).message }),
     });
 
+    // ADR 0014 — a workflow step can't be re-run on its own: the workflow owns
+    // its worktree and routing. Link back to the workflow run instead.
+    const workflowRun = useWorkflowRun(run?.workflow_run_id ?? '');
+    const workflowRunHref = workflowRun.data
+        ? `/workflows/${workflowRun.data.workflow_id}/runs/${workflowRun.data.id}`
+        : null;
+    const canRerun = Boolean(run && !run.workflow_run_id && !run.issue_id);
+
     // Workstream #6 — Stop-a-run kill switch. Only enabled while the
     // run is queued or in_progress (the button is hidden otherwise).
     // Idempotent on the server: a 409 from an already-terminal row is
@@ -472,32 +481,39 @@ export function AgentRunDetail() {
                                 Stop run
                             </Button>
                         )}
-                        <Button
-                            variant="contained"
-                            onClick={() => rerun.mutate()}
-                            disabled={rerun.isPending}
-                            startIcon={
-                                <Box
-                                    component="span"
-                                    className="material-symbols-rounded"
-                                    sx={{ fontSize: 18 }}
-                                >
-                                    replay
-                                </Box>
-                            }
-                            sx={{
-                                textTransform: 'none',
-                                fontWeight: 600,
-                                bgcolor: ATLAS_PALETTE.green,
-                                boxShadow: 'none',
-                                '&:hover': {
-                                    bgcolor: ATLAS_PALETTE.greenDark,
+                        {workflowRunHref && (
+                            <Button component={RouterLink} to={workflowRunHref} variant="outlined" sx={{ textTransform: 'none', fontWeight: 600 }}>
+                                Open workflow run
+                            </Button>
+                        )}
+                        {canRerun && (
+                            <Button
+                                variant="contained"
+                                onClick={() => rerun.mutate()}
+                                disabled={rerun.isPending}
+                                startIcon={
+                                    <Box
+                                        component="span"
+                                        className="material-symbols-rounded"
+                                        sx={{ fontSize: 18 }}
+                                    >
+                                        replay
+                                    </Box>
+                                }
+                                sx={{
+                                    textTransform: 'none',
+                                    fontWeight: 600,
+                                    bgcolor: ATLAS_PALETTE.green,
                                     boxShadow: 'none',
-                                },
-                            }}
-                        >
-                            Re-run with same inputs
-                        </Button>
+                                    '&:hover': {
+                                        bgcolor: ATLAS_PALETTE.greenDark,
+                                        boxShadow: 'none',
+                                    },
+                                }}
+                            >
+                                Re-run with same inputs
+                            </Button>
+                        )}
                         <Button
                             variant="outlined"
                             onClick={handleCopyLog}
@@ -831,21 +847,28 @@ export function AgentRunDetail() {
                             Stop
                         </Button>
                     )}
-                    <Button
-                        variant="contained"
-                        fullWidth
-                        onClick={() => rerun.mutate()}
-                        disabled={rerun.isPending}
-                        sx={{
-                            textTransform: 'none',
-                            fontWeight: 600,
-                            bgcolor: ATLAS_PALETTE.green,
-                            boxShadow: 'none',
-                            '&:hover': { bgcolor: ATLAS_PALETTE.greenDark, boxShadow: 'none' },
-                        }}
-                    >
-                        Re-run
-                    </Button>
+                    {workflowRunHref && (
+                        <Button component={RouterLink} to={workflowRunHref} variant="outlined" fullWidth sx={{ textTransform: 'none', fontWeight: 600 }}>
+                            Open workflow run
+                        </Button>
+                    )}
+                    {canRerun && (
+                        <Button
+                            variant="contained"
+                            fullWidth
+                            onClick={() => rerun.mutate()}
+                            disabled={rerun.isPending}
+                            sx={{
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                bgcolor: ATLAS_PALETTE.green,
+                                boxShadow: 'none',
+                                '&:hover': { bgcolor: ATLAS_PALETTE.greenDark, boxShadow: 'none' },
+                            }}
+                        >
+                            Re-run
+                        </Button>
+                    )}
                     <Button
                         variant="outlined"
                         fullWidth

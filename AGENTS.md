@@ -33,7 +33,7 @@ Rules of engagement for any AI coding agent operating in this repo (Claude, Code
 - `exactOptionalPropertyTypes` is enabled — don't use `undefined` where a property is required.
 
 ### 6. Never commit or push audit/forensic artifacts
-- The remote `github.com/sspartorg/atlas` must never contain audit logs, forensic findings dumps, screenshots, `.har`/`.ndjson` traces, or per-run handoff files.
+- The remote `github.com/sspartorg/atlas` must never contain audit logs, forensic findings dumps, screenshots, `.har`/`.ndjson` traces, or per-run `.atlas/` files.
 - Patterns that stay LOCAL ONLY: `e2e-logs/**` (except `README.md` and the empty `findings-template.md` scaffold), `docs/visual-audit/**`, `.atlas/**`, `playwright-forensic-report/**`, `test-results/**`, `verification-*.png`, loose `findings-*.md` outside the template, and any `*-screenshots/` directory.
 - `.gitignore` already covers the common cases (`e2e-logs/*`, `docs/visual-audit/`, `.atlas/`, `verification-*.png`, `playwright-forensic-report/`, `test-results/`). Before `git add`, still eyeball staged + untracked entries — anything matching the patterns above must NOT be added even if it slipped past gitignore.
 - If a finding genuinely needs to be persisted, write it as a tracked artifact (ADR under `docs/adr/`, a `.agents/` doc, or a PR description) with prose + `file:line` evidence. The fix goes in code; the rationale goes in a commit message or ADR; the raw evidence stays local.
@@ -105,10 +105,11 @@ For full MUI/data-fetching/status-display patterns, see `packages/web/AGENTS.md`
 - The Owner is always assumed to be the logged-in user
 - All UI is in first-person singular ("Your projects", not "Team projects")
 
-### Agent escalation constraint
-- Agents escalate ONLY to the Owner — never to other agents
-- The reassign endpoint validates this at the API layer
-- The reassign UI only shows the Owner and valid agents for the current status
+### Workflows own routing
+- Workflows escalate ONLY to the Owner: a workflow run parks (item → `waiting_for_info`) and resumes on the Owner's reply
+- Items are queued for workflows (`items.workflow_id`); agents never route items — no agent assigns, changes status, pushes or opens PRs. Every agent ends with an `atlas-outcome` block and the workflow graph decides the next step
+- While a workflow run is working an item, the API rejects status / assign PATCHes with 409 (`services/workflow-lock.ts`) — stop the run to take the item back
+- Design: `docs/adr/0014-workflows-replace-agent-handoffs.md`
 
 ### Status transitions
 - The UI must HIDE invalid transitions (not grey them out, not show them at all)
@@ -123,8 +124,9 @@ For full MUI/data-fetching/status-display patterns, see `packages/web/AGENTS.md`
 ---
 
 ## Agents & Seed Data
-- Agent seed data lives in `packages/api/src/db/seed.ts` — never hardcode agent info in components
-- 10 seeded agents with categories: `software-dev` | `marketing` | `content` | `design`
+- No agents are seeded. Agent definitions live in the marketplace catalog (`packages/api/src/marketplace/catalog/<id>/`: `manifest.json`, `prompt.md`, `checklists.json`); `db/seed.ts` only syncs it into `marketplace_agents`, and the Owner installs from there — never hardcode agent info in components
+- 16 catalog agents (10 SDLC performers + reviewers, 6 autonomous) with categories: `software-dev` | `marketing` | `content` | `design`
+- Starter workflow templates (`dev`, `planning`, `qa`, `ai-readiness`) live in `packages/api/src/marketplace/workflows/*.json`; creating a workflow from one installs the agents it references. Agents carry no schedule, routing or git flags — workflows do
 - Each agent has an `accent_color` from the Atlas palette — use it for agent chips and avatars
 - CLI values: `claude` | `copilot` | `ollama` — these map to real CLI tools wired in Phase 5. `ollama` is not a separate binary: it runs Claude Code against Ollama's Anthropic-compatible API. Branch on `CLI_DIALECT` from `@atlas/shared`, never on the raw `cli` value
 

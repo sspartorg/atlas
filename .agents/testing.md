@@ -45,7 +45,7 @@ The api package lands at lines/statements/functions â‰ˆ 96% and branches â�
 The agent-scheduler rewrite landed after the audit (`bd903c7`, `af0e6d6`, `8426f11`, `e07f344`, `4bd76e9`, etc.) and the supporting services were not unit-tested in lock-step. They are **excluded from coverage** today and slated for backfill once the scheduler design stabilizes:
 
 - `agent-defaults-sync.ts`, `agent-defaults.ts` â€” startup catalog sync + static defaults.
-- `agent-dispatcher.ts`, `agent-memory.ts`, `agent-schedule-registry.ts` â€” scheduler hot-path (has thin tests; not at floor).
+- `agent-memory.ts`, `agent-schedule-registry.ts` â€” scheduler hot-path (has thin tests; not at floor).
 - `agents.ts` â€” agents CRUD (no dedicated test file; covered loosely by E2E).
 - `compile-prompt.ts`, `dependency-guard.ts`, `dry-run.ts` â€” new agent-runtime features.
 - `mcp-config-writer.ts`, `tool-catalog-sync.ts` â€” generated-config + tool catalog sync.

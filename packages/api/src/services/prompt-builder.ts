@@ -649,7 +649,7 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
             ``,
             `**Project id:** ${project.id}`,
             `**Project name:** ${project.name}`,
-            `**Repo path (your cwd):** ${gitPath}`,
+            `**Repo path:** ${gitPath} (a workflow step works in its own worktree of this repo)`,
             ``,
             `## Description`,
             projectDescription,

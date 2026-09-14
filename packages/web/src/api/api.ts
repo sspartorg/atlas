@@ -13,10 +13,7 @@ import type {
     IAgentMemory,
     IMemoryRegeneration,
     IAgentPromptVersion,
-    IAgentHandoffRule,
     IAgentChecklistItem,
-    AgentHandoffKind,
-    IssueStatus,
     IProject,
     IEpic,
     IEpicListItem,
@@ -71,6 +68,14 @@ import type {
     CliSessionDiffSummaryResponse,
     CliSessionFilePatchResponse,
     ICliSessionTranscriptResponse,
+} from '@atlas/shared';
+import type {
+    CreateWorkflowInput,
+    IWorkflow,
+    IWorkflowRunDetail,
+    IWorkflowRunSummary,
+    IWorkflowTemplate,
+    UpdateWorkflowInput,
 } from '@atlas/shared';
 import type {
     SidenavCounts,
@@ -360,15 +365,6 @@ export const api = {
         update: (id: string, data: Partial<IAgent>) => patch<IAgent>(`/agents/${id}`, data),
         delete: (id: string) => del(`/agents/${id}`),
         getRuns: (id: string) => get<IAgentRun[]>(`/agents/${id}/runs`),
-        getHandoffRules: (id: string) => get<IAgentHandoffRule[]>(`/agents/${id}/handoff-rules`),
-        setHandoffRules: (
-            id: string,
-            rules: Array<{
-                target_agent_id: string;
-                kind: AgentHandoffKind;
-                status: IssueStatus;
-            }>
-        ) => put<IAgentHandoffRule[]>(`/agents/${id}/handoff-rules`, { rules }),
         getChecklists: (id: string) =>
             get<IAgentChecklistItem[]>(`/agents/${id}/checklists`),
         setChecklists: (
@@ -513,7 +509,7 @@ export const api = {
             ),
         // Theme 09b — AI-Readiness Agent trigger + chip backing.
         generateAiScaffold: (id: string) =>
-            post<{ run_id: string }>(`/projects/${id}/generate-ai-scaffold`, {}),
+            post<{ run_id: string; workflow_id: string }>(`/projects/${id}/generate-ai-scaffold`, {}),
         connect: (data: {
             folder_path: string;
             repo_url: string;
@@ -664,7 +660,6 @@ export const api = {
             patch<IEpic>(`/epics/${id}/status${override ? '?override=1' : ''}`, { status }),
         assign: (id: string, assignee_agent_id: string | null) =>
             patch<IEpic>(`/epics/${id}/assign`, { assignee_agent_id }),
-        resetRounds: (id: string) => post<void>(`/epics/${id}/reset-rounds`, {}),
         delete: (id: string) => del(`/epics/${id}`),
     },
 
@@ -686,7 +681,6 @@ export const api = {
             patch<IStory>(`/stories/${id}/status${override ? '?override=1' : ''}`, { status }),
         assign: (id: string, assignee_agent_id: string | null) =>
             patch<IStory>(`/stories/${id}/assign`, { assignee_agent_id }),
-        resetRounds: (id: string) => post<void>(`/stories/${id}/reset-rounds`, {}),
         delete: (id: string) => del(`/stories/${id}`),
         getSubTasks: (id: string) => get<ISubTask[]>(`/stories/${id}/sub-tasks`),
         createSubTask: (storyId: string, data: Partial<ISubTask>) =>
@@ -706,7 +700,6 @@ export const api = {
             patch<ISubTask>(`/sub-tasks/${id}/status${override ? '?override=1' : ''}`, { status }),
         assign: (id: string, assignee_agent_id: string | null) =>
             patch<ISubTask>(`/sub-tasks/${id}/assign`, { assignee_agent_id }),
-        resetRounds: (id: string) => post<void>(`/sub-tasks/${id}/reset-rounds`, {}),
         delete: (id: string) => del(`/sub-tasks/${id}`),
     },
 
@@ -720,7 +713,6 @@ export const api = {
             patch<ISubBug>(`/sub-bugs/${id}/status${override ? '?override=1' : ''}`, { status }),
         assign: (id: string, assignee_agent_id: string | null) =>
             patch<ISubBug>(`/sub-bugs/${id}/assign`, { assignee_agent_id }),
-        resetRounds: (id: string) => post<void>(`/sub-bugs/${id}/reset-rounds`, {}),
         delete: (id: string) => del(`/sub-bugs/${id}`),
     },
 
@@ -742,7 +734,6 @@ export const api = {
             patch<IBug>(`/bugs/${id}/status${override ? '?override=1' : ''}`, { status }),
         assign: (id: string, assignee_agent_id: string | null) =>
             patch<IBug>(`/bugs/${id}/assign`, { assignee_agent_id }),
-        resetRounds: (id: string) => post<void>(`/bugs/${id}/reset-rounds`, {}),
         delete: (id: string) => del(`/bugs/${id}`),
     },
 
@@ -1120,5 +1111,39 @@ export const api = {
                 get<ICliSessionTranscriptResponse>(`/cli/sessions/${id}/transcript`),
             delete: (id: string) => del(`/cli/sessions/${id}`),
         },
+    },
+
+    // ADR 0014 — workflows own orchestration: a graph of agents run back-to-back
+    // in one workflow run. PATCH answers 400 with `details.graph_errors` when
+    // the graph is invalid.
+    workflows: {
+        list: (projectId?: string) =>
+            get<IWorkflow[]>(
+                `/workflows${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`,
+            ),
+        templates: () => get<IWorkflowTemplate[]>('/workflows/templates'),
+        get: (id: string) => get<IWorkflow>(`/workflows/${id}`),
+        create: (input: CreateWorkflowInput) => post<IWorkflow>('/workflows', input),
+        createFromTemplate: (templateId: string, projectId: string) =>
+            post<IWorkflow>('/workflows/from-template', {
+                template_id: templateId,
+                project_id: projectId,
+            }),
+        update: (id: string, input: UpdateWorkflowInput) =>
+            patch<IWorkflow>(`/workflows/${id}`, input),
+        delete: (id: string) => del(`/workflows/${id}`),
+        runs: (id: string) => get<IWorkflowRunSummary[]>(`/workflows/${id}/runs`),
+        startRun: (id: string, itemId?: string) =>
+            post<{ run_id: string }>(`/workflows/${id}/runs`, itemId ? { item_id: itemId } : {}),
+        itemRuns: (itemId: string) =>
+            get<IWorkflowRunSummary[]>(`/items/${itemId}/workflow-runs`),
+        setItemWorkflow: (itemId: string, workflowId: string | null) =>
+            put<void>(`/items/${itemId}/workflow`, { workflow_id: workflowId }),
+    },
+
+    workflowRuns: {
+        get: (id: string) => get<IWorkflowRunDetail>(`/workflow-runs/${id}`),
+        stop: (id: string) => post<IWorkflowRunDetail>(`/workflow-runs/${id}/stop`, {}),
+        resume: (id: string) => post<IWorkflowRunDetail>(`/workflow-runs/${id}/resume`, {}),
     },
 };

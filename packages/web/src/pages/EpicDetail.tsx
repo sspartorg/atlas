@@ -29,7 +29,6 @@ import {
     useEpicFull,
     useTransitionEpic,
     useAssignEpic,
-    useResetRoundsEpic,
     useUpdateEpic,
     useDeleteEpic,
 } from '../hooks/useEpics.js';
@@ -52,7 +51,6 @@ export function EpicDetail() {
     const { data: settings } = useSettings();
     const transitionEpic = useTransitionEpic();
     const assignEpic = useAssignEpic();
-    const resetRoundsEpic = useResetRoundsEpic();
     const updateEpic = useUpdateEpic();
     const deleteEpic = useDeleteEpic();
     const [createKind, setCreateKind] = useState<NewIssueKind | null>(null);
@@ -199,13 +197,6 @@ export function EpicDetail() {
                         }
                         createdAt={epic.created_at}
                         updatedAt={epic.updated_at}
-                        roundCount={full?.round_count ?? null}
-                        maxRounds={assignee?.max_rounds ?? null}
-                        onResetRounds={() =>
-                            void resetRoundsEpic.mutateAsync({ id: epic.id })
-                        }
-                        assigneeName={assignee?.name ?? null}
-                        resetRoundsPending={resetRoundsEpic.isPending}
                         totalCostUsd={totalCostUsd}
                     />
                     <ActivityLogCard

@@ -103,18 +103,6 @@ export function useAssignBug() {
     });
 }
 
-// A04 — Owner-initiated reset-rounds escape hatch. See
-// useResetRoundsStory for the full rationale; same shape per kind.
-export function useResetRoundsBug() {
-    const qc = useQueryClient();
-    return useMutation({
-        mutationFn: ({ id }: { id: string }) => api.bugs.resetRounds(id),
-        onSuccess: (_void, { id }) => {
-            void qc.invalidateQueries({ queryKey: ['bugs', id, 'full'] });
-        },
-    });
-}
-
 export function useDeleteBug() {
     const qc = useQueryClient();
     return useMutation({

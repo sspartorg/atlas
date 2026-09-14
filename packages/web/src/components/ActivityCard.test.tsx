@@ -234,7 +234,7 @@ describe('ActivityCard', () => {
     });
 
     it("renders 'rounds_reset' event with previous count", async () => {
-        const agent = makeAgent({ id: 'agent-coder', name: 'Coder', max_rounds: 10 });
+        const agent = makeAgent({ id: 'agent-coder', name: 'Coder' });
         const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
             event_type: 'rounds_reset',
             to_value: 'agent-coder',
@@ -674,7 +674,7 @@ describe('ActivityLogCard', () => {
     });
 
     it('rounds_reset without from_value (no previous count shown)', async () => {
-        const agent = makeAgent({ id: 'agent-coder', name: 'Coder', max_rounds: 10 });
+        const agent = makeAgent({ id: 'agent-coder', name: 'Coder' });
         const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
             event_type: 'rounds_reset',
             to_value: 'agent-coder',
@@ -940,23 +940,6 @@ describe('ActivityLogCard — EventRow branch coverage', () => {
         await screen.findByText(/reassigned from/i);
         // to_value truthy, agent not found → toName = 'unknown'
         expect(screen.getAllByText('unknown').length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('rounds_reset: from_value AND cap (max_rounds) both present → shows "(was X / Y)" bracket', async () => {
-        const agent = makeAgent({ id: 'agent-cap', name: 'Capper', max_rounds: 8 });
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'rounds_reset',
-            to_value: 'agent-cap',
-            from_value: '5',
-        }) }];
-        server.use(...defaultHandlers);
-        // Pass agents directly so React Query cache doesn't interfere
-        renderWithProviders(
-            <ActivityLogCard issueType="story" issueId="S1" activity={activity} agents={[agent]} />,
-        );
-        await screen.findByText(/reset rounds/i);
-        // cap != null branch: should show "(was 5 / 8)"
-        await waitFor(() => expect(screen.getByText(/(was 5 \/ 8)/i)).toBeInTheDocument(), { timeout: 3000 });
     });
 
     it('EventRow: actor_agent_id set but agent not found → falls back to ownerName', async () => {
@@ -1424,7 +1407,7 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
     it('EventRow rounds_reset — to_value matches provided agent (L548 true branch)', async () => {
         // to_value is set and the agent IS in agentsById — exercises the true branch of
         // `event.to_value ? agentsById.get(event.to_value) : null` at L548.
-        const resetAgent = makeAgent({ id: 'agent-reset', name: 'Reset Agent', max_rounds: 5 });
+        const resetAgent = makeAgent({ id: 'agent-reset', name: 'Reset Agent' });
         const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
             event_type: 'rounds_reset',
             actor_agent_id: null,

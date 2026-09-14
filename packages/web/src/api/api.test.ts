@@ -172,10 +172,6 @@ describe('api.agents', () => {
         await api.agents.delete('a1');
         captureGet('/agents/a1/runs', []);
         await api.agents.getRuns('a1');
-        captureGet('/agents/a1/handoff-rules', []);
-        await api.agents.getHandoffRules('a1');
-        captureMethod('put', '/agents/a1/handoff-rules', []);
-        await api.agents.setHandoffRules('a1', []);
     });
 });
 
@@ -870,21 +866,6 @@ describe('api.comments.update', () => {
         const cap = captureMethod('patch', '/comments/1', {});
         await api.comments.update(1, 'new body');
         expect(cap.body).toEqual({ body: 'new body' });
-    });
-});
-
-describe('api.epics.resetRounds + stories + subTasks + subBugs + bugs', () => {
-    it('resetRounds POSTs to /reset-rounds for each type', async () => {
-        captureMethod('post', '/epics/E1/reset-rounds', {});
-        await api.epics.resetRounds('E1');
-        captureMethod('post', '/stories/S1/reset-rounds', {});
-        await api.stories.resetRounds('S1');
-        captureMethod('post', '/sub-tasks/T1/reset-rounds', {});
-        await api.subTasks.resetRounds('T1');
-        captureMethod('post', '/sub-bugs/SB1/reset-rounds', {});
-        await api.subBugs.resetRounds('SB1');
-        captureMethod('post', '/bugs/B1/reset-rounds', {});
-        await api.bugs.resetRounds('B1');
     });
 });
 

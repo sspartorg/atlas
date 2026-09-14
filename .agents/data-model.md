@@ -15,7 +15,7 @@ Authoritative types live in `packages/shared/src/types/index.ts` (`IEpic`, `ISto
 Items can be linked via `item_links(from_id, to_id, relation_type)`:
 - **`relates_to`** â€” semantically undirected. The service normalizes pairs so `(A,B)` and `(B,A)` collapse onto one row. Surfaces a "Relates to" section on the detail page.
 - **`depends_on`** â€” strictly directed. `from depends_on to` means "from is blocked by to". Cycle detection (recursive CTE) rejects edges that would close a `depends_on` cycle. While any blocker isn't `done`, the dependency-guard refuses transitions out of `ready`/`draft` to `in_progress`/`in_review` (escalations to `waiting_for_info` are still allowed). When the last blocker resolves, `notifyDependentsUnblocked(itemId)` emits an `unblocked` issue_event on every dependent.
-- **B04 â€” depends_on is also hard-gated at agent dispatch.** `spawnAgentRun` in `services/agent-runner.ts` calls `assertDepsAllDoneForDispatch(itemId, agentId)` before inserting the `agent_runs` row. If any `depends_on` target is non-`done` (including `in_review` â€” `done` is the only terminal status; there is no `closed`), the function throws `DependenciesNotReadyError` and records a `dispatch_blocked` issue_event on the item. The previous post-completion `assertNoOpenBlockers` check inside `advanceIssueStatus` stays as a secondary safety net for any direct status-mutation path that bypasses the runner. `POST /api/run` surfaces the throw as `409 {error: 'dependencies_not_ready', blockers}`; `maybeAutoDispatch` catches it as `{dispatched: false, reason: 'deps_blocked', blockers}`. Reviewer-leg and performer-retry dispatch paths also re-check defensively in case the Owner relinks mid-cycle. Companion change in `services/prompt-builder.ts`: the `## Related items â†’ ### Depends on` section bakes each dep's description + acceptance_criteria into the calling prompt up-front so the agent doesn't need to MCP-fetch the dep mid-run.
+- **B04 — depends_on is also hard-gated at workflow start.** `workflow-engine.startWorkflowRun` calls `assertDepsAllDoneForDispatch(itemId, firstAgentId)` once, before inserting the `workflow_runs` row. If any `depends_on` target is non-`done` (including `in_review` — `done` is the only terminal status; there is no `closed`), it throws `DependenciesNotReadyError` and records a `dispatch_blocked` issue_event on the item. `POST /api/workflows/:id/runs` surfaces it as `409 {details:{blockers}}`; the dispatch tick logs and skips. Steps inside a running workflow are not re-gated, and engine status writes (`in_progress`, `in_review`, `done`) bypass `assertNoOpenBlockers`. Companion change in `services/prompt-builder.ts`: the `## Related items → ### Depends on` section bakes each dep's description + acceptance_criteria into the prompt up-front so the agent doesn't need to MCP-fetch the dep mid-run.
 
 **B05 â€” who creates links, and how.** Link creation has two paths and **no runner-side auto-link**:
 
@@ -29,34 +29,30 @@ The read-side is also worth noting: `services/prompt-builder.ts::buildLinkedItem
 ## Entities
 
 ### Owner (implicit)
-Not a table. Always one. The "Owner" is the human running the app. Stored in `settings.owner_name` + `settings.accent_color`. Agent escalation goes to Owner only.
+Not a table. Always one. The "Owner" is the human running the app. Stored in `settings.owner_name` + `settings.accent_color`. Workflows escalate (park) to the Owner only; agents never route items.
 
 ### IAgent
-**Why this entity exists**: An agent is a reusable AI worker definition (CLI + model + prompt + tool grants + handoff routing). Modeling agents as a first-class entity rather than per-issue invocations lets the same prompt run across many issues, evolve its version history, and inherit consistent guardrails. The shared identity is also what makes assignee chips and handoff chains meaningful â€” every routing decision points at an agent_id.
+**Why this entity exists**: An agent is a reusable AI worker definition (CLI + model + effort + prompt + memory + checklists). Since ADR 0014 it carries no schedule, routing or git-delivery state — workflows own those — so the same agent can be a node in many workflows. The engine sets `items.assignee_agent_id` to the agent of the step currently running, which keeps assignee chips meaningful.
 
-AI agent profiles. **Not seeded** — a fresh DB has zero agents; each row is created by installing a marketplace catalog entry (`/agents/marketplace`, `POST /api/marketplace/agents/:id/install`), which also copies the entry's handoff rules and checklists. (Verified 2026-09-14.)
+AI agent profiles. **Not seeded** — a fresh DB has zero agents; each row is created by installing a marketplace catalog entry (`/agents/marketplace`, `POST /api/marketplace/agents/:id/install`), which also copies the entry's checklists. Creating a workflow from a template installs any catalog agents its graph references.
 
-Fields: `id, name, category, cli, model, framework, prompt_md, prompt_version, status, accent_color, sort_order, description, schedule_hours, concurrent_runs, glyph, last_run_at, next_run_at, created_at, updated_at`
+Fields (`IAgent`): `id, name, category, cli, model, effort, framework, prompt_md, prompt_version, status, accent_color, sort_order, description, designation, role_id, glyph, memory_cadence, kind_slug, settings_json, marketplace_source_id, marketplace_pulled_version, created_at, updated_at`
 
-- `category` âˆˆ `software-dev | marketing | content | design`
-- `cli` âˆˆ `claude | copilot | ollama` (migration 029 widened the CHECK)
-- `status` âˆˆ `active | inactive` (pause/resume toggle)
-- `prompt_version` increments on each prompt edit; history kept client-side in localStorage (see `pages/16-agent-detail.md`)
+- `category` ∈ `software-dev | marketing | content | design`
+- `cli` ∈ `claude | copilot | ollama` (migration 029 widened the CHECK)
+- `status` ∈ `active | inactive` (pause/resume toggle). A workflow step whose agent is missing or inactive parks the workflow run.
+- `prompt_version` increments on each prompt edit; history lives in `agent_prompt_versions`.
 - `accent_color` is a hex string used for chips/avatars
 - `description` is the free-text blurb shown on cards and the Overview tab; editable from the Overview tab.
-- `schedule_hours` is a REAL (allows 0.5h for tight cadences like Coder); editable from the Overview tab.
-- `last_run_at` / `next_run_at` are stamped by `agent-schedule-registry.tickAgentScheduler()` whenever it actually dispatches. `reseedAllActiveAgentsOnBoot()` overwrites `next_run_at` on every server restart to the next clock-aligned slot from the current wall time, so the cron tick always has a wall-clock-honest target regardless of downtime or clock skew. `agents.update()` also recomputes `next_run_at` whenever `status` or `schedule_hours` changes on an active agent.
-- `concurrent_runs` is an INTEGER (max-3 enforced client-side); editable from the Overview tab.
 - `glyph` is a Material Symbols icon name used on the card avatar + agent chips; editable via the Identity panel's "Replace glyph" picker. Empty falls back to a per-category default.
+- **Delete guard (ADR 0014):** `DELETE /api/agents/:id` → 409 while any `workflows.graph` references the agent.
 - **Identity + lifecycle columns**:
-  - `designation` â€” human-readable role label (e.g. "Product Owner", "Code Review Lead"). Shown next to the agent name in the Sidebar identity panel. With A08 it acts as an optional **per-agent display override** on top of `role_id`; empty falls back to the role's canonical label (then category).
-  - `role_id` â€” A08. FK into the SDLC role catalog (`roles.id`, `ON DELETE SET NULL`, indexed `idx_agents_role_id`). NULL on autonomous agents (Theme 09 / 09b: ai-news, market-research, regulations, jira-to-epic, ai-readiness) which sit outside the SDLC chain. SDLC catalog entries carry their `role_id` (`po`, `architect`, `engineer`, `qa`, `automation`); there is no Spec Writer agent (its job merged into Architect).
-  - `max_rounds` â€” cap on TOTAL CLI invocations against `(item, agent)` (default 5). Under A04's per-CLI counting (2026-05-26), performer leg, reviewer leg, and re-spawned performer retry each consume one round; the `agent_round_counts` row UPSERTs from `agent-runner.completeRun` / `errorRun` AFTER the CLI's terminal status is written, so a failed-to-spawn run never counts. When the count reaches `max_rounds`, `agent-dispatcher.maybeAutoDispatch` refuses the next auto-dispatch and parks the item with the Owner (`waiting_for_info`, detail `max_rounds_reached: <agent> (n/max)`). This is the only enforcement point (2026-09-14): the older reviewer-outcome / performer-side cap checks no longer exist, and manual `POST /api/run` is uncapped. Rounds survive a bounce-back, meaning a hand-back to an agent that already has an `agent_runs` row on the item (`agent-rounds.ts::resetRoundsUnlessBounceBack`), and reset on forward progress, so writer↔reviewer loops reach the cap. The detail rail surfaces the live count as `Rounds: X / Y` against this value.
-  - `requires_item` â€” when false, the scheduler dispatches the agent on its cadence even with an empty `ready`-items queue. Resulting `agent_runs` row has `item_id = null`; the prompt builder renders a freedom-run preamble.
-  - **Reviewers are separate agents** (2026-09-14 correction): `reviewer_prompt_md`, `reviewer_prompt_version` and the `submit_review` MCP tool no longer exist. Each performer has a paired reviewer agent (e.g. `agent-coder` → `agent-code-reviewer`) wired through `agent_handoff_rules`.
-  - **Removed columns:** `kind` and `reviewer_agent_id` were Theme 06 paired-agent fields. Both were dropped by migration `019_drop_kind_reviewer_columns.ts` once the two-persona refactor replaced the paired-agent model with same-agent reviewer personas.
+  - `designation` — human-readable role label (e.g. "Product Owner", "Code Review Lead"). Shown next to the agent name in the Sidebar identity panel. With A08 it acts as an optional **per-agent display override** on top of `role_id`; empty falls back to the role's canonical label (then category).
+  - `role_id` — A08. FK into the SDLC role catalog (`roles.id`, `ON DELETE SET NULL`, indexed `idx_agents_role_id`). NULL on autonomous agents (ai-news, market-research, regulations, jira-to-epic, ai-readiness, knowledge-base). SDLC catalog entries carry their `role_id` (`po`, `architect`, `engineer`, `qa`, `automation`); there is no Spec Writer agent (its job merged into Architect).
+  - **Reviewers are separate agents**: each performer has a paired reviewer agent (e.g. `agent-coder` → `agent-code-reviewer`). The pairing lives in a workflow graph (reviewer pass → next step, reviewer fail → back to the writer), not on the agent.
+  - **Removed columns:** `kind` / `reviewer_agent_id` (migration 019); `handoff_prompt_md`, `max_rounds`, `requires_item`, `requires_worktree`, `push_code`, `raises_pr`, `schedule_*`, `cron_expr`, `concurrent_runs`, `last_run_at`, `next_run_at` (migration 036, ADR 0014).
 
-**Related tables:** `agent_handoff_rules` (per-`(agent_id, kind)` on-pass / on-fail routing; only a non-unique index `idx_agent_handoff_rules_agent_kind` — a second rule of the same kind is silently ignored because readers take the first row; `target_agent_id = 'owner'` means the Owner queue. Since 2026-09-14, the five SDLC reviewers' catalog on-fail rules target their writer with `ready`, and migration `032` rewrote installed rows still on the old `owner`/`waiting_for_info` default. A target that is not installed or is inactive falls back to Owner + `waiting_for_info` with event detail `handoff_target_unavailable: <slug>`), `agent_memory` (one row per agent â€” procedural-memory markdown), `agent_prompt_versions` (append-only prompt history), and `agent_round_counts` (per `(item_id, performer_agent_id)` counter; under the two-persona model `performer_agent_id` is the agent's own id since the same agent owns both personas, and under A04 the `count` column increments once per CLI invocation against the pair â€” performer, reviewer, or retry â€” via `agent-rounds.ts::incrementRound`. Owner has an escape hatch: clicking the Rounds row on the detail rail opens a popover that calls `resetRoundsForIssue(itemId)` â€” wipes every counter row for the item and writes a `rounds_reset` event to `issue_events`, so the activity log records each manual reset alongside the assignee at the time).
+**Related tables:** `agent_checklists` (the agent's quality gate: required rows must come back `passed` in the `atlas-outcome` checklist, or a `done` routes as a fail), `agent_memory` (one row per agent — procedural-memory markdown), `agent_prompt_versions` (append-only prompt history). Migration 036 dropped `agent_handoff_rules`, `marketplace_agent_handoffs` and `agent_round_counts`.
 
 ### IRole (A08 â€” SDLC role catalog)
 **Why this entity exists**: A canonical lookup table for the 10 SDLC roles an agent can play (PO, Spec Writer, Engineer, QA, Architect, Tester, Automation, DevOps, Security, Designer). Created in migration 025. Read by the Agents page Role filter chip and the AgentCard subtitle fallback; edited by the Owner via `PATCH /api/roles/:id` to update curated default prompts without touching any existing agent. The catalog *shape* is governed by the `SdlcRole` enum in `@atlas/shared` â€” runtime rows mirror that enum, they don't extend it.
@@ -143,23 +139,16 @@ Migration 013. Index: `idx_commit_verifications_agent_checked` on `(agent_id, ch
 
 ### Theme 09 â€” autonomous-agent fleet columns
 
-Three columns added to `agents` for the seeded autonomous fleet (and any future custom agents):
+Two columns on `agents` for the autonomous fleet (and any future custom agents):
 
 - **`kind_slug` TEXT NOT NULL DEFAULT 'custom'** â€” archetype tag. Fixed slugs for the 4 seeded agents (`ai-news` | `market-research` | `regulations` | `jira-to-epic`); `custom` for everything else. No CHECK constraint â€” Owner-created kinds can carry their own slugs.
 - **`settings_json` JSONB NOT NULL DEFAULT '{}'** â€” per-archetype config. Schema depends on `kind_slug`; validated at the route boundary via the Zod schemas in `@atlas/shared/agents/settings-schemas.ts`. `custom` agents pass through (`.passthrough()`).
-- **`cron_expr` TEXT (nullable)** â€” optional cron expression (croner-compatible). When set, `computeNextAgentSlot` uses it instead of the preset-driven math. The seeded `ai-news` agent ships with `'0 9 * * *'` for 09:00 user-local.
 
 Migration 011. Index: `idx_agents_kind_slug` on `agents(kind_slug)`.
 
-**Seed reshape** â€” 4 new inactive (`status: 'inactive'`) freedom agents (`requires_item: false`):
-- `agent-ai-news` â€” Daily AI News Scout (cron `0 9 * * *`)
-- `agent-market-research` â€” Competitive Analyst (weekly: `schedule_hours: 168`)
-- `agent-regulations` â€” Legal Scout (weekly)
-- `agent-jira-to-epic` â€” Jira Importer (every 4h; ships with `dry_run: true`)
+The autonomous catalog entries (`agent-ai-news`, `agent-market-research`, `agent-regulations`, `agent-jira-to-epic`, `agent-ai-readiness`, `agent-knowledge-base`) ship `status: 'inactive'`. They have no cadence of their own: a `trigger='schedule'` workflow with `input_kind='none'` runs them. The prompt builder renders `{{ key }}` placeholders against `settings_json` so prompts can reference their config (`{{ topic }}`, `{{ competitors }}`, etc.); missing keys render as `(unset)`.
 
-Prompts loaded from `packages/api/src/agents/prompts/<slug>.md` via `fs.readFileSync` at seed-module load. The prompt builder renders `{{ key }}` placeholders against `settings_json` so prompts can reference their config (`{{ topic }}`, `{{ competitors }}`, etc.); missing keys render as `(unset)`.
-
-**Installable agents** come from `packages/api/src/marketplace/catalog/*/manifest.json` (synced into `marketplace_agents` on boot): 10 SDLC agents (PO Writer, PO Reviewer, Architect, Architect Reviewer, Coder, Code Reviewer, QA Writer, QA Reviewer, Automation Engineer, Automation Reviewer) + 6 autonomous agents. See `swarm-architecture.md` for the handoff graph. `AGENT_SEEDS` in `seed.ts` is only read by `scripts/extract-seeds-to-catalog.ts`.
+**Installable agents** come from `packages/api/src/marketplace/catalog/*/{manifest.json,prompt.md,checklists.json}` (synced into `marketplace_agents` by `runSeed`): 10 SDLC agents (PO Writer, PO Reviewer, Architect, Architect Reviewer, Coder, Code Reviewer, QA Writer, QA Reviewer, Automation Engineer, Automation Reviewer) + 6 autonomous agents. The starter workflows that wire them live in `packages/api/src/marketplace/workflows/*.json` — see `swarm-architecture.md`.
 
 ### IProject
 **Why this entity exists**: Projects are the top-level work container â€” every issue tunnels through `project_id`. They're modeled as one cloned git repo because agents operate on code, and `git_path` is the working directory each spawned subprocess inherits. Holding `credential_id` here (vs. inferring per clone) lets the Owner rotate credentials without re-attaching them to every project.
@@ -229,7 +218,7 @@ Since 2026-09-12 `create()` resolves a missing `agent_id` from the item's live r
 
 `comments_agent_id_fkey` is `ON DELETE SET NULL`, so deleting an agent still erases its name from every comment it ever wrote. A denormalized `author_name` column is the only durable answer (`counts.ts` / `routes/analytics.ts` already denormalize `a.name as agent_name` for the dashboard); not shipped - it needs a migration + backfill of its own.
 
-**Owner reply resumes a parked item (2026-09-14).** When the Owner comments on an item that is `waiting_for_info` with no assignee (how an agent parks a question), `create()` hands it back in the same transaction to the agent of the item's most recent `agent_runs` row — if that agent still exists and is `active` — setting `assignee_agent_id` and `status='ready'` (`waiting_for_info → ready` is a status-machine edge). It writes `assigned` + `status_changed` events with `actor_agent_id=null` (Owner) and `detail='resumed_by_owner_reply'`, broadcasts `counts_changed`, and the scheduler's dispatch-on-ready starts the run. Agent comments never trigger it; an item that already has an assignee or another status is left alone.
+**Owner reply resumes a parked workflow run (ADR 0014).** When the Owner comments on an item whose workflow run is `waiting_for_owner`, `create()` claims the run inside the comment's transaction (run → `running`, item → `in_progress`, `status_changed` event with `detail='resumed_by_owner_reply'`), broadcasts `counts_changed` after commit, and calls `workflow-engine.continueResumedRun` in the background: a run parked on an Owner node follows its pass connection; a run parked on an agent node re-runs that step with `loop_count` reset. Agent comments never trigger it; an item without a parked run is left alone.
 
 ### IItemExternalLink
 Off-platform URL attached to an item (today only `link_kind='pull_request'`). Table `item_external_links` (migration 020), UNIQUE `(item_id, url)`, cascades on item delete.
@@ -289,20 +278,22 @@ A spawned subprocess invocation.
 
 Fields: `id, agent_id, issue_type, issue_id, project_id, status, started_at, ended_at, error, output_summary, created_at`
 
-**Three lifecycle shapes** (Theme 09b):
-- **Item-attached** (dominant) â€” `item_id` set, `project_id` null. The agent operates on a specific story / epic / bug.
-- **Freedom-mode** (Theme 06) â€” both `item_id` and `project_id` null. The agent's `requires_item=false` and the scheduler dispatched it on cadence; the prompt-builder renders a freedom preamble.
-- **Project-scope** (Theme 09b) â€” `item_id` null, `project_id` set. The agent operates on a project (currently the AI-Readiness Agent fires from the "Generate AI scaffold" button on Project Detail); the prompt-builder renders a project preamble (name + description + guardrails_md + epic list). The runtime sets `cwd = project.git_path` and injects `GIT_CONFIG_GLOBAL` so `git push` authenticates with the project's stored PAT credential.
+**Three lifecycle shapes** (ADR 0014):
+- **Workflow step on an item** (dominant) — `item_id` + `workflow_run_id` + `node_id` set, `project_id` null. Spawned by the engine in the workflow run's shared worktree.
+- **Workflow step at project level** — `item_id` null, `project_id` + `workflow_run_id` set. Runs an `input_kind='none'` workflow (AI Readiness scaffold, knowledge base, scheduled scouts); the prompt-builder renders `# Project Context` (or `# Project-level Run` for a project-less workflow). Items the agent creates are stamped `created_by_workflow_run_id`.
+- **Ad-hoc** — `workflow_run_id` and `item_id` null, `project_id` optional. `POST /api/run` from the Run-now dialog; runs in a temp dir and never routes. Rows with `item_id` set and no `workflow_run_id` are pre-ADR-0014 history.
 
 `project_id` has no FK so historical rows survive `DELETE FROM projects`. A partial index (`idx_agent_runs_project_id WHERE project_id IS NOT NULL`) keeps lookups cheap when most rows are item-attached.
 
 - `status` ∈ `queued | in_progress | completed | error | cancelled | setup_failed` — matches `RunStatus` in `@atlas/shared` and the `agent_runs_status_check` CHECK. (The doc previously named `running` and `failed`, which have never existed, and omitted `in_progress`, `error` and `setup_failed`, which do.)
 - **The live set is `queued` + `in_progress`**, which is what the partial unique index `agent_runs_one_live_per_item` (migration `003`) constrains to one row per `item_id`. `setup_failed` sits deliberately outside it so a retry isn't blocked (see migration `005`'s header).
-- **Promotion is guarded, not unconditional.** `spawnAgentRun` flips `queued → in_progress` from a 200ms `setTimeout`, and by the time that timer fires the row may have left the live set (Owner cancelled, `failOrphanedRuns` swept it, the item was deleted) with a replacement run already holding the slot. So the UPDATE carries `WHERE status = 'queued'` and checks `numUpdatedRows`: zero rows means the run is no longer ours to start, and the runner returns instead of spawning. Without the predicate the stale row re-entered the live set behind the replacement's back and raised 23505 as an unhandled rejection — the run silently never started and the reason lived only in the API log. Regression test: `services/agent-dispatcher.integration.test.ts`, which asserts both shapes against the real index.
+- **Promotion is guarded, not unconditional.** `spawnAgentRun` flips `queued → in_progress` from a 200ms `setTimeout`, and by the time that timer fires the row may have left the live set (Owner cancelled, `failOrphanedRuns` swept it, the item was deleted) with a replacement run already holding the slot. So the UPDATE carries `WHERE status = 'queued'` and checks `numUpdatedRows`: zero rows means the run is no longer ours to start, and the runner returns instead of spawning. Without the predicate the stale row re-entered the live set behind the replacement's back and raised 23505 as an unhandled rejection — the run silently never started and the reason lived only in the API log. Its regression test (`agent-dispatcher.integration.test.ts`) was deleted with the dispatcher; nothing asserts this against the real index today.
 
 **Two-persona columns:** `persona`, `review_outcome` and `review_reason` were removed with the in-agent reviewer persona; only `parent_run_id` (self-FK, ON DELETE CASCADE) remains.
 
-**Workflow + config snapshot columns (migration 035):** `workflow_run_id` (FK → `workflow_runs`, ON DELETE SET NULL) and `node_id` tie a run to a workflow step. `cli`, `model`, `effort`, `prompt_version` record the agent config the run spawned with. `spawnAgentRun` writes them on both write paths.
+**Workflow + config snapshot columns (migration 035):** `workflow_run_id` (FK → `workflow_runs`, ON DELETE SET NULL) and `node_id` tie a run to a workflow step. `cli`, `model`, `effort`, `prompt_version` record the agent config the run spawned with. `spawnAgentRun` writes them on both write paths. `IAgentRun` exposes `workflow_run_id` + `node_id` (`GET /api/run/:id`, `GET /api/run`, `GET /api/agents/:id/runs`); `cli` / `model` reach the web through `IWorkflowRunStep`, and `effort` / `prompt_version` are DB-only.
+
+**Outcome columns** (`outcome_kind`, `outcome_summary`, `outcome_reason`, `outcome_checklist`) are persisted by `completeRun` for every run shape; the engine routes on them.
 
 ### ICliSession (Terminal v1+v2)
 **Why this entity exists**: The Terminal page hosts long-lived, interactive CLI sessions (Claude Code, GitHub Copilot CLI, or Claude Code-on-Ollama) inside Atlas so the Owner can drive a scoped worktree from the same UI as the rest of the app. Sessions are first-class rows — not ephemeral process handles — because we need cross-restart resume (`claude --resume <sid>` / `copilot --resume <sid>`), idle-notification deep links, per-(project, branch) uniqueness, and an audit trail of which branch went where. The PTY itself lives in-memory in `services/cli-session-host.ts`; the row carries everything else.
@@ -320,7 +311,7 @@ Fields: `id, project_id, title, status, cli, worktree_path, worktree_branch, cre
 - `claude_session_id` — Atlas-minted UUID we pass via `--session-id`. Column name predates copilot support; semantically it's "the session id the CLI knows this run by" for either CLI.
 - `worktree_branch` participates in a unique partial index `cli_sessions_one_active_per_project_branch` covering `(project_id, worktree_branch) WHERE status IN ('active','paused') AND worktree_branch IS NOT NULL` — same invariant as `agent_runs_one_live_per_item` so worktree-authoring paths can't collide. The `IS NOT NULL` clause is why standalone rows need no index change: they carry a null branch and so can never collide with each other or with a worktree, and multiple standalone sessions on one folder are allowed.
 - `item_id` is the optional Atlas item anchor. When set, the create flow stages `.atlas/current-task.md` (orchestrator-style item snapshot) into the worktree. The user's optional `initial_prompt` is appended to the same file as a `## User's initial prompt` section. The PTY auto-types a single pointer line (`Read \`.atlas/current-task.md\` for the full task context, then begin.`) so the CLI picks it up on its first turn.
-- All worktree staging (constitution, templates, `.claude/commands/atlas-*.md`, `.github/prompts/atlas-*.prompt.md`, current-task.md) is owned by the shared `stageCliWorktree` helper at `services/worktree-stage.ts`, which is also the call site used by `agent-runner.spawnAgentRun`. The terminal route skips the helper's `includeHandoff` and `activeRunCopilotAgent` flags — those are agent-routing-only.
+- All worktree staging (constitution, templates, `.claude/commands/atlas-*.md`, `.github/prompts/atlas-*.prompt.md`, current-task.md) is owned by the shared `stageCliWorktree` helper at `services/worktree-stage.ts`, which is also the call site used by `agent-runner.spawnAgentRun`. The terminal route skips the helper's `includeOutcome` and `activeRunCopilotAgent` flags — those are agent-run-only.
 - Idle-notification stream: when a session has no PTY output AND no user keystrokes for `settings.terminal_idle_notify_seconds` (default 300), the host fires a `terminal.waiting_for_input` notification with `link_url: /terminal/<id>`. The host fires once per idle stretch; refreshing the page does NOT re-arm it because the attach replay is a serialized screen snapshot (per-session `@xterm/headless` mirror in `services/terminal-screen-state.ts`) that contains no DSR queries for xterm.js to auto-answer — every inbound byte after attach really is a user keystroke. The snapshot design also means reconnects never render mid-escape-sequence "zombie" characters the way the old byte-ring backlog replay did.
 - `transcript_jsonl` / `transcript_ingested_at` (migration 018) — populated when a session reaches `closed`/`errored`. Service `cli-transcript-ingest.ts` reads the CLI's own on-disk JSONL (`~/.claude/projects/<encoded-cwd>/<sid>.jsonl` or `~/.copilot/session-state/<id>/events.jsonl`) and writes it into the column. `GET /api/cli/sessions/:id/transcript` returns these for terminal-state rows (409 for active/paused) and lazy-ingests when the column is still NULL. Active/paused sessions never carry transcript content because history is only meaningful for finished sessions.
 
@@ -351,22 +342,29 @@ Per-CLI model registry; controls what shows up in the Add Agent dialog and per-a
 Fields: `id, cli, model_name, note, created_at`
 
 ### IWorkflow (ADR 0014)
-**Why this entity exists**: Orchestration moves off agents. A workflow is the Owner-designed graph that decides which agents run, in what order, and where the work goes (worktree, push, PR, child workflow). Agents stay reusable across many workflows because they no longer carry routing or schedule state.
+**Why this entity exists**: Orchestration moved off agents. A workflow is the Owner-designed graph that decides which agents run, in what order, and how the work is delivered (worktree, push, PR, child workflow). Agents stay reusable across many workflows because they carry no routing or schedule state. Types, Zod schemas and the validator live in `packages/shared/src/workflows/index.ts`.
 
 Fields: `id, project_id, name, description, status, graph, input_kind, trigger, use_worktree, push_code, raises_pr, max_loops, schedule_preset, schedule_time_of_day, schedule_weekday, cron_expr, next_run_at, last_run_at, created_at, updated_at`
 
-- `graph` JSONB: `{ nodes: [{id, type: start|agent|owner|end, agent_id?, child_workflow_id?, position}], edges: [{id, source, target, kind: pass|fail}] }`. Shape comes from `WorkflowGraphSchema`, rules from `validateWorkflowGraph` (`@atlas/shared` `workflows/`): one Start, at least one End, one pass edge per non-End node, a fail edge only on agent nodes, pass edges acyclic, everything reachable from Start.
-- `project_id` may be null only when `input_kind = 'none'` and `use_worktree = false` (`workflows_project_required_check`).
-- Schedule columns mirror `IProjectSchedule` so `materializeCron` is reused.
+- `graph` JSONB: `{ nodes: [{id, type: start|agent|owner|end, agent_id?, child_workflow_id?, position}], edges: [{id, source, target, kind: pass|fail}] }` (≤100 nodes, ≤300 edges). `validateWorkflowGraph` rules: unique node ids; exactly one Start with nothing connecting into it; at least one End with no outgoing edges; edges point at existing nodes; `agent_id` only (and required) on agent nodes; `child_workflow_id` only on End; every non-End node has exactly one pass edge; only agent nodes have a fail edge (at most one); every node reachable from Start; pass edges acyclic (loops only through fail edges, so `loop_count` bounds them). Saving also checks every `agent_id` exists.
+- `input_kind` ∈ `item | none`. `item`: one run per item queued via `items.workflow_id`. `none`: a project-level run.
+- `trigger` ∈ `manual | schedule | item_ready`. `item_ready`: the dispatch tick starts the oldest `ready` queued item whenever no run of this workflow is `running`. `schedule`: fires on `cron_expr` (materialised from `schedule_preset` ∈ `hourly | every_4h | daily | weekly | custom` + `schedule_time_of_day` + `schedule_weekday`, same `materializeCron` as `IProjectSchedule`, evaluated in `settings.quiet_hours_timezone`).
+- `use_worktree` / `push_code` / `raises_pr` (defaults true) — End delivery. `max_loops` 1–20, default 3: fail-edge traversals allowed before the run parks.
+- `project_id` (FK CASCADE) may be null only when `input_kind = 'none'` and `use_worktree = false` (`workflows_project_required_check`).
+- **Templates** (`IWorkflowTemplate`, `packages/api/src/marketplace/workflows/*.json`): `dev`, `planning`, `qa`, `ai-readiness`. Agent nodes reference catalog agent ids; an End may name a child as `template:<id>`, resolved at create time.
 
 ### IWorkflowRun (ADR 0014)
-**Why this entity exists**: One execution of a workflow over one item (or the project). It owns the worktree and branch for its whole life, so consecutive agent steps share state without a push / re-provision between them.
+**Why this entity exists**: One execution of a workflow over one item (or the project). It owns the worktree and branch for its whole life, so consecutive agent steps share state with no push or re-provision between them, and it holds the item while no step is live.
 
 Fields: `id, workflow_id, item_id, project_id, status, graph_snapshot, current_node_id, parked_node_id, loop_count, branch, worktree_path, setup_done, pr_url, started_at, updated_at, finished_at`
 
-- `status` ∈ `running | waiting_for_owner | completed | cancelled | error`.
-- `workflow_runs_one_live_per_item` allows one `running` or `waiting_for_owner` run per item. It covers the gaps between steps where no `agent_runs` row is live.
+- `status` ∈ `running | waiting_for_owner | completed | cancelled | error`. `running` → `waiting_for_owner` (park) → `running` (Owner reply or resume) → `completed` (End) / `cancelled` (stop). The engine never writes `error`; a failed step parks instead.
+- `graph_snapshot` is the graph frozen at start; later edits to the workflow don't affect a live run.
+- `branch` = the item's valid `worktree_branch` ?? `atlas/wf/<itemId>`, or `atlas/wf/<runId8>` for project-level runs; null when `!use_worktree`. `worktree_path` lives only here, never on `items.worktree_path`, so the orphan reaper can't push or delete it.
+- `setup_done` flips after the first completed step so later steps skip the project setup script.
+- `workflow_runs_one_live_per_item` allows one `running` or `waiting_for_owner` run per item. It covers the gaps between steps and the End push, where no `agent_runs` row is live. Only `running` locks item status / assignee writes (`workflow-lock.ts`); only `running` blocks the workflow's queue.
 - Each step is an ordinary `agent_runs` row with `workflow_run_id` + `node_id` set.
+- `items.created_by_workflow_run_id` is stamped when a step's agent creates an item (matched by `reporter_agent_id` against the agent's live step); End routes those items, plus children of the run's item created since `started_at`, to `child.workflow_id ?? End.child_workflow_id` as `ready`.
 
 ### IProjectSchedule
 **Why this entity exists**: Different repos have different staleness tolerances (a documentation repo can fetch daily; a hot product repo wants every 15 minutes). Modeling schedules per-project rather than globally lets each repo carry its own cadence. The dirty / idle / agents guards live here because skipping a fetch is more situational than skipping a project â€” the policy needs to read the repo's live state at fire time.
@@ -411,17 +409,17 @@ Each row has: `key, value, secret, restart_required, description`. The full set 
         â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜ â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 
 
-   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â” 1     n â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-   â”‚    Agent    â”‚â”€â”€â”€â”€â”€â”€â”€â”€â”€â”‚ AgentRun â”‚
-   â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”˜         â””â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”˜
-          â”‚ 1                     â”‚ n (issue_type, issue_id)
-          â”‚                       â–¼
-          â”‚              (any issue entity)
-          â”‚ n
-   â”Œâ”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-   â”‚ Agent-Handoff-Rules â”‚
-   â”‚ Agent-Allowed-Tools â”‚
-   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+   Workflow 1 --- n WorkflowRun 1 --- n AgentRun n --- 1 Agent
+      |  graph.nodes[].agent_id -----------------------> Agent (no FK; delete guard)
+      |  graph.nodes[End].child_workflow_id ----------> Workflow
+      n
+   Project (FK CASCADE; nullable for no-item, no-worktree workflows)
+
+   Item.workflow_id --------------> Workflow     (queued for)
+   Item.created_by_workflow_run_id -> WorkflowRun (created during)
+   WorkflowRun.item_id -----------> Item          (one live run per item)
+   AgentRun.item_id --------------> Item
+   Agent 1 --- n AgentChecklist / AgentPromptVersion; 1 --- 1 AgentMemory
 
    Comments  â”€â”€â”€â”€â”€ polymorphic by (issue_type, issue_id)
    Notifications  â”€â”€â”€â”€â”€ polymorphic by (issue_type, issue_id)
@@ -449,23 +447,27 @@ draft → ready → in_progress → in_review → done
 
 ### `waiting_for_info` override
 
-From any non-terminal state on Story/Bug/Epic/SubBug, status can move to `waiting_for_info` (typically an agent pinging the Owner). From `waiting_for_info` it moves to `ready` or `in_progress` (no prior-state memory).
+From any non-terminal state on Story/Bug/Epic/SubBug, status can move to `waiting_for_info` (typically a workflow run parking with the Owner). From `waiting_for_info` it moves to `ready` or `in_progress` (no prior-state memory).
 
-### Transitions emitted by agent-runner
+### Transitions written by the workflow engine
 
-`packages/api/src/services/agent-runner.ts` advances item status at three points across a run's lifecycle:
+`agent-runner.ts` no longer writes item status. `packages/api/src/services/workflow-engine.ts` writes it directly (`setItemStatus`, with a `status_changed` event and `counts_changed` SSE), without going through `isValidTransition` — `in_progress → done` is not a status-machine edge, and the status machine is unchanged:
 
-| When | From | To | Why |
+| When | To | Assignee | Event `detail` |
 |---|---|---|---|
-| Run spawn (in `spawnAgentRun`) | `ready` | `in_progress` | The queue and detail pages reflect that work is in flight. Only fires for `ready` so manual `Run now` on draft/in_review/done items doesn't get nudged. |
-| Run completion (in `completeRun`) | `in_progress` | per routing | No auto-advance. The agent routes the item itself via MCP (`change_status` + `assign`, per `.atlas/handoff.md`); otherwise `decideRunRouting` applies the on-pass / on-fail handoff rule or parks it in `waiting_for_info` with the Owner. |
-| Run error (in `errorRun`) | `in_progress` | `waiting_for_info` | The escape hatch from `in_progress`. Surfaces the failure to the Owner in the Queue's "waiting on you" section instead of stranding the item. Only fires when the item is still `in_progress` so a human override isn't clobbered. |
+| Run start (`startWorkflowRun`) | `in_progress` | unchanged | `workflow_run_started: <name>` |
+| Each agent step spawns (`spawnNode`) | unchanged | the node's agent | — |
+| Park (question, missing outcome, no pass/fail edge, loop limit, Owner node, step error / setup failure, missing agent, worktree failure, reconcile) | `waiting_for_info` | null | `workflow_parked: <reason>` |
+| Owner reply claims the parked run (`comments.ts`) / `POST /api/workflow-runs/:id/resume` | `in_progress` | unchanged | `resumed_by_owner_reply` / `workflow_resumed` |
+| End (`finishRun`) | `in_review` when a PR opened, else `done` | null | `workflow_completed: <name>` |
+| Stop (`cancelWorkflowRun`) | `waiting_for_info` | null | `workflow_run_cancelled` |
+| End routes a child item (`routeChildren`) | `ready` (+ `workflow_id`) | unchanged | `queued_for_workflow: <workflowId>` |
 
-Auto-advancement also honours `assertNoOpenBlockers` from the depends-on graph: if the item has open blockers, the auto-advance is skipped (the run still completes, the item just stays put) and an `[blocked]` line streams via SSE.
+While a workflow run is `running`, `PATCH …/status` and `…/assign` on its item return 409 (`workflow-lock.ts`). A parked run doesn't lock, so the Owner can move a `waiting_for_info` item by hand.
 
-### Auto-dispatch
+### Workflow dispatch
 
-`packages/api/src/services/agent-dispatcher.ts` is called **only** from the periodic scheduler in `agent-schedule-registry.ts` â€” not from transition/assign hooks. The owner's intent is scheduler-driven dispatch: items move to `ready` and wait for the agent's next scheduled tick (every `schedule_hours`). See `architecture.md` for the full scheduler design + off-switches.
+No agent auto-dispatch exists. `tickWorkflowDispatch` (one-minute tick in `agent-schedule-registry.ts`, plus a kick at every End / stop) starts runs for active `item_ready` workflows (oldest `ready` item with that `workflow_id`, only while the workflow has no `running` run) and `schedule` workflows (when `next_run_at` is due). Setting an item `ready` without a `workflow_id` starts nothing. Within a run, steps chain immediately on `onStepFinished` with no tick wait. See `api-surface.md` (`services/agent-schedule-registry.ts`).
 
 ---
 
@@ -478,6 +480,8 @@ Auto-advancement also honours `assertNoOpenBlockers` from the depends-on graph: 
 | Status transitions | `packages/shared/src/status-machine/index.ts` |
 | Zod schemas (Create*, Update*) | `packages/shared/src/schemas/index.ts` |
 | SQL schema | `packages/api/src/db/migrations/*.sql` |
-| Seed data (10 agents + tool catalog) | `packages/api/src/db/seed.ts` |
+| Workflow types, graph schema + validator | `packages/shared/src/workflows/index.ts` |
+| Marketplace catalog sync (agents are installed, not seeded) | `packages/api/src/db/seed.ts`, `packages/api/src/marketplace/catalog/` |
+| Workflow starter templates | `packages/api/src/marketplace/workflows/*.json` |
 | Web hook layer | `packages/web/src/hooks/*` |
 | Web type-safe fetch | `packages/web/src/api/api.ts` |

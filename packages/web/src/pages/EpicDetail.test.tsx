@@ -23,7 +23,6 @@ function stubEpicFull(
         external_links: unknown[];
         activity: unknown[];
         agents: ReturnType<typeof makeAgent>[];
-        round_count: number | null;
     }> = {},
 ) {
     server.use(
@@ -38,7 +37,6 @@ function stubEpicFull(
                 external_links: overrides.external_links ?? [],
                 activity: overrides.activity ?? [],
                 agents: overrides.agents ?? [],
-                round_count: overrides.round_count ?? null,
             }),
         ),
         // Item-scoped agent-run cost sum + activity + labels endpoints fire
@@ -392,7 +390,6 @@ describe('EpicDetail page', () => {
                     related_links: [],
                     activity: [],
                     agents: [],
-                    round_count: null,
                 }),
             ),
             // Return item runs with cost so totalCostUsd is non-null
@@ -424,7 +421,6 @@ describe('EpicDetail page', () => {
                     related_links: [],
                     activity: [],
                     agents: [],
-                    round_count: null,
                 }),
             ),
             // Runs with null cost → hasAny stays false → totalCostUsd = null
@@ -477,33 +473,6 @@ describe('EpicDetail page', () => {
             }
         }
         // Just verify the component doesn't crash
-        expect(document.body).toBeTruthy();
-    });
-
-    it('triggers onResetRounds by clicking the Rounds row and confirming', async () => {
-        const agent = makeAgent({ id: 'agent-r', name: 'Coder', max_rounds: 5 });
-        stubEpicFull('E24', {
-            epic: makeEpic({ id: 'E24', assignee_agent_id: 'agent-r' }),
-            agents: [agent],
-            round_count: 3,
-        });
-        server.use(
-            http.post(`${BASE}/epics/E24/reset-rounds`, () =>
-                HttpResponse.json({ ok: true }),
-            ),
-        );
-        renderEpic('E24');
-        await screen.findByText('Epic One');
-
-        // The Rounds row shows "3 / 5" and is clickable when onResetRounds is wired.
-        // roundsClickable = Boolean(onResetRounds) && roundCount != null && maxRounds != null && maxRounds > 0
-        const roundsRow = screen.queryByText('Rounds')?.closest('div');
-        if (roundsRow) {
-            fireEvent.click(roundsRow);
-            // Popover opens with "Reset rounds?" heading
-            const confirmBtn = await screen.findByRole('button', { name: /Reset rounds/i }).catch(() => null);
-            if (confirmBtn) fireEvent.click(confirmBtn);
-        }
         expect(document.body).toBeTruthy();
     });
 
@@ -584,19 +553,6 @@ describe('EpicDetail page', () => {
             agents: [], // empty — .get() returns undefined → ?? null fires
         });
         renderEpic('E_GHOST');
-        expect(await screen.findByText('Epic One')).toBeInTheDocument();
-        expect(document.body).toBeTruthy();
-    }, 15000);
-
-    it('L201: assignee?.max_rounds ?? null fires when assignee.max_rounds is null', async () => {
-        // When assignee exists but max_rounds is null, the ?? null branch at L201 fires.
-        const agent = makeAgent({ id: 'agent-nr', name: 'NoRoundsAgent', max_rounds: null as unknown as number });
-        stubEpicFull('E_NR', {
-            epic: makeEpic({ id: 'E_NR', assignee_agent_id: 'agent-nr' }),
-            agents: [agent],
-            round_count: 2,
-        });
-        renderEpic('E_NR');
         expect(await screen.findByText('Epic One')).toBeInTheDocument();
         expect(document.body).toBeTruthy();
     }, 15000);

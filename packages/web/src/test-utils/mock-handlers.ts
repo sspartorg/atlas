@@ -52,6 +52,8 @@ export const defaultHandlers = [
     // Agent surfaces warn when a CLI binary is missing; default to "nothing
     // known" so they render no warning unless a test opts in.
     http.get(`${BASE}/cli/availability`, () => HttpResponse.json([])),
+    // The agent Overview tab's Quality checklist card loads this on mount.
+    http.get(`${BASE}/agents/:id/checklists`, () => HttpResponse.json([])),
 ];
 
 // Convenience factories so tests can express "this endpoint returns X" in one line.

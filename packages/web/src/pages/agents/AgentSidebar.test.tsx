@@ -6,7 +6,7 @@ import { defaultHandlers } from '../../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { makeAgent } from '../../test-utils/factories.js';
 import { AgentSidebar } from './AgentSidebar.js';
-import { getAgentView, getRuntimeStats } from './agentViewModel.js';
+import { getRuntimeStats } from './agentViewModel.js';
 
 function makeStats(overrides: Partial<ReturnType<typeof getRuntimeStats>> = {}) {
     return { ...getRuntimeStats([]), ...overrides };
@@ -19,26 +19,11 @@ describe('AgentSidebar', () => {
         renderWithProviders(
             <AgentSidebar
                 agent={agent}
-                view={getAgentView(agent)}
                 stats={makeStats()}
             />,
         );
         expect(await screen.findByText('Coder')).toBeInTheDocument();
         expect(screen.getByText('#31AB46')).toBeInTheDocument();
-    });
-
-    it('renders the Schedule panel with cadence label', async () => {
-        server.use(...defaultHandlers);
-        const agent = makeAgent({ schedule_hours: 6, schedule_preset: 'every_n_hours' });
-        renderWithProviders(
-            <AgentSidebar
-                agent={agent}
-                view={getAgentView(agent)}
-                stats={makeStats()}
-            />,
-        );
-        expect(await screen.findByText('Cadence')).toBeInTheDocument();
-        expect(screen.getByText(/Every 6h/i)).toBeInTheDocument();
     });
 
     it('renders the Telemetry panel with total runs', async () => {
@@ -47,7 +32,6 @@ describe('AgentSidebar', () => {
         renderWithProviders(
             <AgentSidebar
                 agent={agent}
-                view={getAgentView(agent)}
                 stats={makeStats({ totalRunsThisMonth: 7 })}
             />,
         );
@@ -62,7 +46,6 @@ describe('AgentSidebar', () => {
         renderWithProviders(
             <AgentSidebar
                 agent={agent}
-                view={getAgentView(agent)}
                 stats={makeStats()}
                 onEditColor={onEditColor}
             />,
@@ -78,7 +61,6 @@ describe('AgentSidebar', () => {
         renderWithProviders(
             <AgentSidebar
                 agent={agent}
-                view={getAgentView(agent)}
                 stats={makeStats({
                     totalRunsThisMonth: 3,
                     totalCostThisMonthUsd: 1.23,
@@ -100,7 +82,6 @@ describe('AgentSidebar', () => {
         renderWithProviders(
             <AgentSidebar
                 agent={agent}
-                view={getAgentView(agent)}
                 stats={makeStats()}
             />,
         );
@@ -114,7 +95,6 @@ describe('AgentSidebar', () => {
         renderWithProviders(
             <AgentSidebar
                 agent={agent}
-                view={getAgentView(agent)}
                 stats={makeStats()}
             />,
         );
@@ -130,7 +110,6 @@ describe('AgentSidebar', () => {
         renderWithProviders(
             <AgentSidebar
                 agent={agent}
-                view={getAgentView(agent)}
                 stats={makeStats()}
             />,
         );
@@ -147,7 +126,6 @@ describe('AgentSidebar', () => {
         renderWithProviders(
             <AgentSidebar
                 agent={agent}
-                view={getAgentView(agent)}
                 stats={makeStats()}
                 onReplaceGlyph={onReplaceGlyph}
             />,
@@ -163,7 +141,6 @@ describe('AgentSidebar', () => {
         renderWithProviders(
             <AgentSidebar
                 agent={agent}
-                view={getAgentView(agent)}
                 stats={makeStats({
                     totalRunsThisMonth: 0,
                     totalCostThisMonthUsd: null,

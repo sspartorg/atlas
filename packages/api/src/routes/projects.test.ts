@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterAll, vi } from 'vitest';
+import type * as WorkflowEngineModule from '../services/workflow-engine.js';
 import type { FastifyInstance } from 'fastify';
 
 vi.mock('../routes/events.js', () => ({
@@ -43,7 +44,7 @@ vi.mock('../services/agent-runner.js', () => ({
 }));
 // ADR 0014 — the scaffold button starts the project's AI Readiness workflow.
 vi.mock('../services/workflow-engine.js', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('../services/workflow-engine.js')>()),
+    ...(await importOriginal<typeof WorkflowEngineModule>()),
     startWorkflowRun: vi.fn().mockResolvedValue('wf-run-1'),
 }));
 vi.mock('../services/workflows.js', () => ({

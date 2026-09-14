@@ -68,6 +68,8 @@ export function useSSE() {
         const unsubEvents = subscribeToEvents((event: SSEEvent) => {
             // Invalidate relevant queries based on event type.
             if (event.type === 'run_completed' || event.type === 'run_error') {
+                // A workflow run view lists its steps' statuses (ADR 0014).
+                void queryClient.invalidateQueries({ queryKey: ['workflow-run'] });
                 void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
                 void queryClient.invalidateQueries({ queryKey: ['sidenav-counts'] });
                 void queryClient.invalidateQueries({ queryKey: ['runs'] });
@@ -87,6 +89,7 @@ export function useSSE() {
                 }
             }
             if (event.type === 'agent_status') {
+                void queryClient.invalidateQueries({ queryKey: ['workflow-run'] });
                 void queryClient.invalidateQueries({ queryKey: ['agents'] });
                 void queryClient.invalidateQueries({ queryKey: ['runs'] });
                 if (event.agentId) {
@@ -141,6 +144,8 @@ export function useSSE() {
                 // next to it moved. That reads as "the agent wasn't added".
                 void queryClient.invalidateQueries({ queryKey: ['agents'] });
                 void queryClient.invalidateQueries({ queryKey: ['projects'] });
+                // Workflow create/update/delete broadcast this event too.
+                void queryClient.invalidateQueries({ queryKey: ['workflows'] });
             }
             if (event.type === 'notification_created') {
                 void queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -169,6 +174,27 @@ export function useSSE() {
                 void queryClient.invalidateQueries({
                     queryKey: ['agents', event.agentId, 'commit-verifications'],
                 });
+            }
+            // ADR 0014 — a workflow run moved node or changed status. Item
+            // status changes the engine makes arrive separately as
+            // `counts_changed`, so only workflow reads are refreshed here.
+            if (event.type === 'workflow_run_updated') {
+                void queryClient.invalidateQueries({ queryKey: ['workflows'] });
+                if (event.workflowRunId) {
+                    void queryClient.invalidateQueries({
+                        queryKey: ['workflow-run', event.workflowRunId],
+                    });
+                }
+                if (event.workflowId) {
+                    void queryClient.invalidateQueries({
+                        queryKey: ['workflow-runs', event.workflowId],
+                    });
+                }
+                if (event.issueId) {
+                    void queryClient.invalidateQueries({
+                        queryKey: ['item-workflow-runs', event.issueId],
+                    });
+                }
             }
             // 2026-06-22 — Terminal v1 events. The PTY byte stream goes
             // over a dedicated WebSocket; these SSE events only carry the

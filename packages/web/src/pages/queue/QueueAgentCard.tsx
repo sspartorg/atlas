@@ -152,8 +152,7 @@ export function QueueAgentCard({
                             mt: 0.25,
                         }}
                     >
-                        {agent.cli} · {agentSubtitle(agent)} ·{' '}
-                        {view.cadenceLabel.toLowerCase()}
+                        {agent.cli} · {agentSubtitle(agent)}
                     </Typography>
                 </Box>
                 <Box
@@ -247,13 +246,7 @@ export function QueueAgentCard({
                                     textOverflow: 'ellipsis',
                                 }}
                             >
-                                {isRunning
-                                    ? 'running now'
-                                    : agent.requires_item
-                                      ? running.length >= agent.concurrent_runs
-                                          ? 'when a run finishes'
-                                          : 'within a minute'
-                                      : view.nextPassDelta}
+                                {isRunning ? 'running now' : 'queued'}
                             </Typography>
                             <Typography
                                 sx={{
@@ -280,7 +273,7 @@ export function QueueAgentCard({
                                     textOverflow: 'ellipsis',
                                 }}
                             >
-                                {view.nextPassDelta}
+                                —
                             </Typography>
                             <Typography
                                 sx={{ fontSize: 11, color: ATLAS_PALETTE.slate40, mt: 0.25 }}

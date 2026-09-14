@@ -4,12 +4,11 @@ import Typography from '@mui/material/Typography';
 import type { IAgent } from '@atlas/shared';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { InfoPanel, InfoRow } from '../../components/InfoPanel.js';
-import { type AgentRuntimeStats, type AgentView } from './agentViewModel.js';
+import type { AgentRuntimeStats } from './agentViewModel.js';
 import { formatCostUsd, formatTokenCount } from '../../utils/formatCost.js';
 
 interface Props {
     agent: IAgent;
-    view: AgentView;
     stats: AgentRuntimeStats;
     onReplaceGlyph?: () => void;
     onEditColor?: () => void;
@@ -17,7 +16,6 @@ interface Props {
 
 export const AgentSidebar = memo(function AgentSidebar({
     agent,
-    view,
     stats,
     onReplaceGlyph,
     onEditColor,
@@ -121,32 +119,6 @@ export const AgentSidebar = memo(function AgentSidebar({
                             Replace…
                         </Box>
                     </Box>
-                </InfoRow>
-            </InfoPanel>
-
-            <InfoPanel label="Schedule" mb={2.5}>
-                <InfoRow label="Cadence">
-                    <Typography
-                        sx={{
-                            fontSize: 12.5,
-                            fontWeight: 600,
-                            color: ATLAS_PALETTE.slate,
-                        }}
-                    >
-                        {view.cadenceLabel}
-                    </Typography>
-                </InfoRow>
-                <InfoRow label="Next pass">
-                    <Typography
-                        sx={{
-                            fontSize: 12,
-                            fontFamily: TYPOGRAPHY.fontFamilyMono,
-                            fontWeight: 500,
-                            color: ATLAS_PALETTE.slate,
-                        }}
-                    >
-                        {view.nextPassLabel}
-                    </Typography>
                 </InfoRow>
             </InfoPanel>
 

@@ -9,7 +9,7 @@ import { MarketplaceAgentDetail } from './MarketplaceAgentDetail.js';
 const BASE = 'http://localhost:3000/api';
 
 // IMarketplaceAgent fixture — properties referenced by the page (name,
-// category, kind_slug, summary, prompt_md, schedule_* etc).
+// category, kind_slug, summary, prompt_md etc).
 const baseAgent = {
     id: 'agent-coder',
     name: 'Coder',
@@ -27,22 +27,9 @@ const baseAgent = {
     designation: 'Coder',
     role_id: null,
     status: 'active',
-    max_rounds: 5,
-    requires_item: true,
-    schedule_hours: 6,
-    schedule_preset: 'every_n_hours' as const,
-    schedule_time_of_day: null,
-    schedule_weekdays: null,
-    schedule_day_of_month: null,
-    concurrent_runs: 1,
     memory_cadence: 1,
     settings_json: {},
-    cron_expr: null,
-    raises_pr: false,
-    push_code: false,
-    requires_worktree: false,
     prompt_md: '# coder prompt',
-    handoff_prompt_md: '',
     prompt_version: 1,
     sort_order: 1,
     created_at: '2026-05-16T00:00:00.000Z',
@@ -51,7 +38,6 @@ const baseAgent = {
 
 const fullPayload = {
     agent: baseAgent,
-    handoff_rules: [],
     checklists: [],
 };
 
@@ -106,46 +92,6 @@ describe('MarketplaceAgentDetail page', () => {
         expect(
             await within(dialog).findByText(/copilot is not installed on this machine/),
         ).toBeInTheDocument();
-    });
-
-    it('offers to install an uninstalled handoff target too, and installs both', async () => {
-        const installed: string[] = [];
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
-                HttpResponse.json({
-                    ...fullPayload,
-                    handoff_rules: [
-                        { target_agent_id: 'agent-code-reviewer', kind: 'on-pass', status: 'ready' },
-                        { target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-                    ],
-                }),
-            ),
-            http.get(`${BASE}/marketplace/agents`, () =>
-                HttpResponse.json([
-                    summaryRow,
-                    { ...summaryRow, id: 'agent-code-reviewer', name: 'Code Reviewer' },
-                ]),
-            ),
-            http.post(`${BASE}/marketplace/agents/:id/install`, ({ params }) => {
-                installed.push(String(params['id']));
-                return HttpResponse.json({ id: String(params['id']), name: 'x', status: 'active' });
-            }),
-        );
-        renderAt('/marketplace/agent-coder');
-        fireEvent.click(await screen.findByRole('button', { name: /Add to my agents/i }));
-        const dialog = await screen.findByRole('dialog');
-        expect(
-            await within(dialog).findByText(
-                "This agent hands off to Code Reviewer, which isn't installed.",
-            ),
-        ).toBeInTheDocument();
-        fireEvent.click(within(dialog).getByRole('checkbox', { name: /Install Code Reviewer too/i }));
-        await act(async () => {
-            fireEvent.click(within(dialog).getByRole('button', { name: /Add to my agents/i }));
-        });
-        await waitFor(() =>
-            expect([...installed].sort()).toEqual(['agent-code-reviewer', 'agent-coder']),
-        );
     });
 
     it('mounts without crashing while data resolves', async () => {
@@ -237,20 +183,9 @@ describe('MarketplaceAgentDetail page', () => {
         fireEvent.click(upgradeBtn);
     });
 
-    it('renders weekly schedule + handoff rules + checklists branches (formatSchedule weekly)', async () => {
+    it('renders the quality checklist items', async () => {
         const payload = {
-            agent: {
-                ...baseAgent,
-                schedule_preset: 'weekly' as const,
-                schedule_weekdays: [1, 3, 5],
-                schedule_time_of_day: '09:00',
-                settings_json: { foo: 'bar' },
-                handoff_prompt_md: '## handoff prompt',
-            },
-            handoff_rules: [
-                { kind: 'on-pass' as const, status: 'done', target_agent_id: 'agent-reviewer' },
-                { kind: 'on-fail' as const, status: 'in_review', target_agent_id: 'agent-fixer' },
-            ],
+            agent: baseAgent,
             checklists: [{ label: 'tests pass' }, { label: 'lint clean' }],
         };
         server.use(
@@ -259,65 +194,9 @@ describe('MarketplaceAgentDetail page', () => {
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
-        expect(screen.getByText(/handoff rules/i)).toBeInTheDocument();
-        expect(screen.getByText(/checklist/i)).toBeInTheDocument();
-        // Verifies the on-pass + on-fail labels render.
-        expect(screen.getByText('on-pass')).toBeInTheDocument();
-        expect(screen.getByText('on-fail')).toBeInTheDocument();
-    });
-
-    it('renders the daily schedule formatter branch', async () => {
-        const payload = {
-            agent: {
-                ...baseAgent,
-                schedule_preset: 'daily' as const,
-                schedule_time_of_day: '09:00',
-            },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        expect(screen.getByText(/Daily at 09:00/)).toBeInTheDocument();
-    });
-
-    it('renders the monthly schedule formatter branch', async () => {
-        const payload = {
-            agent: {
-                ...baseAgent,
-                schedule_preset: 'monthly' as const,
-                schedule_day_of_month: 15,
-                schedule_time_of_day: '12:00',
-            },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        expect(screen.getByText(/Monthly on day 15 at 12:00/)).toBeInTheDocument();
-    });
-
-    it('renders the "on demand" schedule when schedule_hours <= 0', async () => {
-        const payload = {
-            agent: { ...baseAgent, schedule_hours: 0 },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        expect(screen.getByText(/on demand/i)).toBeInTheDocument();
+        expect(screen.getByText('Quality checklist')).toBeInTheDocument();
+        expect(screen.getByText('tests pass')).toBeInTheDocument();
+        expect(screen.getByText('lint clean')).toBeInTheDocument();
     });
 
     it('mounts without crashing for a 404 not-found response', async () => {
@@ -348,76 +227,9 @@ describe('MarketplaceAgentDetail page', () => {
         }, { timeout: 5000 });
     });
 
-    it('renders every_n_hours schedule with singular "hour" when hours=1', async () => {
-        const payload = {
-            agent: { ...baseAgent, schedule_hours: 1, schedule_preset: 'every_n_hours' as const },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        expect(screen.getByText('Every 1 hour')).toBeInTheDocument();
-    });
-
-    it('renders weekly schedule with empty weekdays showing — for days', async () => {
-        const payload = {
-            agent: {
-                ...baseAgent,
-                schedule_preset: 'weekly' as const,
-                schedule_weekdays: [],
-                schedule_time_of_day: '08:00',
-            },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        // "Weekly on — at 08:00"
-        expect(screen.getByText(/Weekly on/i)).toBeInTheDocument();
-    });
-
-    it('renders default schedule_preset branch returning —', async () => {
-        const payload = {
-            agent: { ...baseAgent, schedule_preset: 'unknown_preset' as never },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        expect(document.body).toBeTruthy();
-    });
-
-    it('renders cron_expr row when agent has a cron expression', async () => {
-        const payload = {
-            agent: { ...baseAgent, cron_expr: '0 9 * * 1-5' },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        expect(screen.getByText('0 9 * * 1-5')).toBeInTheDocument();
-    });
-
     it('renders Custom settings block when settings_json has keys', async () => {
         const payload = {
             agent: { ...baseAgent, settings_json: { theme: 'dark', retries: 3 } },
-            handoff_rules: [],
             checklists: [],
         };
         server.use(
@@ -432,7 +244,6 @@ describe('MarketplaceAgentDetail page', () => {
     it('does not render Custom settings block when settings_json is empty', async () => {
         const payload = {
             agent: { ...baseAgent, settings_json: {} },
-            handoff_rules: [],
             checklists: [],
         };
         server.use(
@@ -444,41 +255,9 @@ describe('MarketplaceAgentDetail page', () => {
         expect(screen.queryByText(/Custom settings/i)).not.toBeInTheDocument();
     });
 
-    it('renders handoff_prompt_md section when provided', async () => {
-        const payload = {
-            agent: { ...baseAgent, handoff_prompt_md: 'Hand off instructions here.' },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        expect(screen.getByText('Hand off instructions here.')).toBeInTheDocument();
-        expect(screen.getByText(/Handoff prompt/i)).toBeInTheDocument();
-    });
-
-    it('does not render handoff_prompt_md section when empty', async () => {
-        const payload = {
-            agent: { ...baseAgent, handoff_prompt_md: '' },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        expect(screen.queryByText(/Handoff prompt/i)).not.toBeInTheDocument();
-    });
-
     it('does not render summary section when agent.summary is falsy', async () => {
         const payload = {
             agent: { ...baseAgent, summary: '' },
-            handoff_rules: [],
             checklists: [],
         };
         server.use(
@@ -508,7 +287,6 @@ describe('MarketplaceAgentDetail page', () => {
     it('renders framework row when agent.framework is set', async () => {
         const payload = {
             agent: { ...baseAgent, framework: 'bdd' },
-            handoff_rules: [],
             checklists: [],
         };
         server.use(
@@ -523,7 +301,6 @@ describe('MarketplaceAgentDetail page', () => {
     it('renders role_id as — when null', async () => {
         const payload = {
             agent: { ...baseAgent, role_id: null },
-            handoff_rules: [],
             checklists: [],
         };
         server.use(
@@ -539,7 +316,6 @@ describe('MarketplaceAgentDetail page', () => {
     it('renders designation row when agent.designation is set', async () => {
         const payload = {
             agent: { ...baseAgent, designation: 'Tech Lead' },
-            handoff_rules: [],
             checklists: [],
         };
         server.use(
@@ -551,30 +327,9 @@ describe('MarketplaceAgentDetail page', () => {
         expect(screen.getByText('Tech Lead')).toBeInTheDocument();
     });
 
-    it('renders weekly schedule with weekday indexes including out-of-range index', async () => {
-        const payload = {
-            agent: {
-                ...baseAgent,
-                schedule_preset: 'weekly' as const,
-                schedule_weekdays: [1, 9],  // 9 is out-of-range → '?'
-                schedule_time_of_day: '10:00',
-            },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        expect(screen.getByText(/Weekly on Mon\/\?/i)).toBeInTheDocument();
-    });
-
     it('uses glyph fallback "smart_toy" when agent.glyph is empty', async () => {
         const payload = {
             agent: { ...baseAgent, glyph: '' },
-            handoff_rules: [],
             checklists: [],
         };
         server.use(
@@ -684,40 +439,6 @@ describe('MarketplaceAgentDetail page', () => {
         }
         expect(document.body).toBeTruthy();
     }, 30000);
-
-    it('renders KvRow with mono=true (JetBrains Mono font applied)', async () => {
-        // KvRow mono prop is used for cron_expr; add a cron_expr to trigger it
-        const payload = {
-            agent: { ...baseAgent, cron_expr: '0 9 * * 1' },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        // cron_expr row uses mono font — verify the cron expression renders
-        expect(screen.getByText('0 9 * * 1')).toBeInTheDocument();
-    });
-
-    it('renders BoolRow for raises_pr=true and BoolRow for push_code=false', async () => {
-        const payload = {
-            agent: { ...baseAgent, raises_pr: true, push_code: true, requires_worktree: true, requires_item: false },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        // BoolRow renders ✓ for true values
-        const checkmarks = screen.getAllByText('✓');
-        expect(checkmarks.length).toBeGreaterThan(0);
-    });
 
     // ── New tests for uncovered branches ────────────────────────────────────
 
@@ -874,7 +595,6 @@ describe('MarketplaceAgentDetail page', () => {
     it('L399 — settings_json=null/undefined does not render Custom settings block', async () => {
         const payload = {
             agent: { ...baseAgent, settings_json: null as never },
-            handoff_rules: [],
             checklists: [],
         };
         server.use(
@@ -885,77 +605,6 @@ describe('MarketplaceAgentDetail page', () => {
         await screen.findAllByText('Coder');
         // settings_json ?? {} → empty object → length 0 → block not shown
         expect(screen.queryByText(/Custom settings/i)).not.toBeInTheDocument();
-    });
-
-    it('renders "On demand" for a negative schedule_hours value (h <= 0 branch, negative side)', async () => {
-        const payload = {
-            agent: { ...baseAgent, schedule_hours: -1, schedule_preset: 'every_n_hours' as const },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        expect(screen.getByText(/on demand/i)).toBeInTheDocument();
-    });
-
-    it('renders weekly schedule with schedule_weekdays=null (?? [] fallback branch)', async () => {
-        const payload = {
-            agent: {
-                ...baseAgent,
-                schedule_preset: 'weekly' as const,
-                schedule_weekdays: null,
-                schedule_time_of_day: '07:30',
-            },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        // schedule_weekdays=null → (a.schedule_weekdays ?? []) → [] → days='' → '—'
-        expect(screen.getByText(/Weekly on — at 07:30/i)).toBeInTheDocument();
-    });
-
-    it('renders daily schedule with schedule_time_of_day=null (?? "—" fallback)', async () => {
-        const payload = {
-            agent: { ...baseAgent, schedule_preset: 'daily' as const, schedule_time_of_day: null },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        expect(screen.getByText(/Daily at —/i)).toBeInTheDocument();
-    });
-
-    it('renders monthly schedule with schedule_day_of_month=null and schedule_time_of_day=null (both ?? "—" fallbacks)', async () => {
-        const payload = {
-            agent: {
-                ...baseAgent,
-                schedule_preset: 'monthly' as const,
-                schedule_day_of_month: null,
-                schedule_time_of_day: null,
-            },
-            handoff_rules: [],
-            checklists: [],
-        };
-        server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
-        renderAt('/marketplace/agent-coder');
-        await screen.findAllByText('Coder');
-        expect(screen.getByText(/Monthly on day — at —/i)).toBeInTheDocument();
     });
 
     it('mounts without crashing when no :id route param is present (full.isLoading || !id branch)', async () => {

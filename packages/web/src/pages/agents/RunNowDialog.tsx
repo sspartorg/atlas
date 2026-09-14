@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
@@ -7,18 +7,11 @@ import DialogActions from '@mui/material/DialogActions';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
-import MenuItem from '@mui/material/MenuItem';
-import ListSubheader from '@mui/material/ListSubheader';
-import TextField from '@mui/material/TextField';
 import { useMutation } from '@tanstack/react-query';
-import type { IAgent, IssueType } from '@atlas/shared';
+import type { IAgent } from '@atlas/shared';
 import { api } from '../../api/api.js';
-import { useProjects } from '../../hooks/useProjects.js';
-import { useEpics } from '../../hooks/useEpics.js';
-import { useStories } from '../../hooks/useStories.js';
-import { useBugs } from '../../hooks/useBugs.js';
 import { useToast } from '../../hooks/useToast.js';
-import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
+import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { PromptPreviewDialog } from './PromptPreviewDialog.js';
 import { ApiErrorAlert } from '../../components/ApiErrorAlert.js';
 import { CliUnavailableAlert } from '../../components/CliUnavailableAlert.js';
@@ -27,100 +20,16 @@ interface Props {
     open: boolean;
     agent: IAgent;
     onClose: () => void;
-    // Pre-fill the picker when the dialog is opened from a context that already
-    // knows the target — e.g. the Queue page's per-agent "Run now" button,
-    // which passes the agent's next-scheduled item. The owner can still change
-    // any of the three fields before running. Omit `preselect` and the dialog
-    // opens empty as before.
-    preselect?: {
-        projectId: string | null;
-        kind: IssueType;
-        issueId: string;
-    } | null;
 }
 
-type Kind = Extract<IssueType, 'epic' | 'story' | 'bug'>;
-
-const KIND_LABEL: Record<Kind, string> = {
-    epic: 'Epic',
-    story: 'Story',
-    bug: 'Bug',
-};
-
-const KIND_PLURAL: Record<Kind, string> = {
-    epic: 'epics',
-    story: 'stories',
-    bug: 'bugs',
-};
-
-function isKind(t: IssueType): t is Kind {
-    return t === 'epic' || t === 'story' || t === 'bug';
-}
-
-export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) {
+// Item-attached ad-hoc runs are gone (ADR 0014): work on an item runs through
+// its workflow. This dialog only starts a project-level run with no item.
+export function RunNowDialog({ open, agent, onClose }: Props) {
     const navigate = useNavigate();
     const toast = useToast();
 
-    const { data: projects = [] } = useProjects();
-    // PO-role agents operate on epics; every other role starts from a story.
-    const defaultKind: Kind = agent.role_id === 'po' ? 'epic' : 'story';
-    const [projectId, setProjectId] = useState<string>('');
-    const [kind, setKind] = useState<Kind>(defaultKind);
-    const [issueId, setIssueId] = useState<string>('');
-
-    useEffect(() => {
-        if (!open) {
-            setProjectId('');
-            setKind(defaultKind);
-            setIssueId('');
-            return;
-        }
-        // Hydrate from preselect on open. Sub-task / sub-bug aren't yet a
-        // launch target — fall back to the default kind for those so the
-        // picker still opens with the parent project chosen.
-        if (preselect) {
-            setProjectId(preselect.projectId ?? '');
-            if (isKind(preselect.kind)) {
-                setKind(preselect.kind);
-                setIssueId(preselect.issueId);
-            } else {
-                setKind(defaultKind);
-                setIssueId('');
-            }
-        }
-    }, [open, preselect, defaultKind]);
-
-    useEffect(() => {
-        if (!projectId && projects[0]) setProjectId(projects[0].id);
-    }, [projects, projectId]);
-
-    const { data: epics = [] } = useEpics(projectId || undefined);
-    const { data: stories = [] } = useStories({ projectId: projectId || undefined });
-    const { data: bugs = [] } = useBugs({ projectId: projectId || undefined });
-
-    // This agent's own items first, so running it on another agent's item is
-    // a deliberate pick rather than the top of an unordered list.
-    const { issues, ownCount } = useMemo(() => {
-        const rows = kind === 'epic' ? epics : kind === 'story' ? stories : bugs;
-        const own = rows.filter((r) => r.assignee_agent_id === agent.id);
-        const rest = rows.filter((r) => r.assignee_agent_id !== agent.id);
-        return {
-            issues: [...own, ...rest].map((r) => ({ id: r.id, title: r.title })),
-            ownCount: own.length,
-        };
-    }, [kind, epics, stories, bugs, agent.id]);
-
-    // (issueId clears in the onChange handlers below, not via an effect on
-    // projectId/kind — the effect approach would wipe a preselect right after
-    // the open-effect hydrated it.)
-
-    const isFreedom = agent.requires_item === false;
-
     const triggerRun = useMutation({
-        mutationFn: () =>
-            isFreedom
-                ? api.run.trigger(agent.id, null, null)
-                : api.run.trigger(agent.id, kind as IssueType, issueId),
+        mutationFn: () => api.run.trigger(agent.id, null, null),
         onSuccess: ({ runId }) => {
             toast.show({ message: `${agent.name} run queued`, detail: runId.slice(0, 8) });
             onClose();
@@ -135,10 +44,7 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
 
     const [previewOpen, setPreviewOpen] = useState(false);
     const compilePreview = useMutation({
-        mutationFn: () =>
-            isFreedom
-                ? api.agents.compilePrompt(agent.id, null, null)
-                : api.agents.compilePrompt(agent.id, kind as IssueType, issueId),
+        mutationFn: () => api.agents.compilePrompt(agent.id, null, null),
         onMutate: () => {
             setPreviewOpen(true);
         },
@@ -150,13 +56,6 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
             });
         },
     });
-
-    const canSubmit =
-        (isFreedom || Boolean(projectId && issueId)) && !triggerRun.isPending;
-    const canPreview =
-        (isFreedom || Boolean(projectId && issueId)) &&
-        !compilePreview.isPending &&
-        !triggerRun.isPending;
 
     return (
         <Dialog
@@ -174,7 +73,7 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
                     pb: 1,
                 }}
             >
-                {isFreedom ? `Run ${agent.name}` : `Run ${agent.name} on an issue`}
+                {`Run ${agent.name}`}
             </DialogTitle>
             <DialogContent sx={{ pt: 1 }}>
                 <Typography
@@ -184,14 +83,10 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
                         mb: 3,
                     }}
                 >
-                    {isFreedom
-                        ? `This agent runs in freedom mode (requires_item = false). No item needed — the run will spawn immediately and stream output into its Runs tab.`
-                        : `Picks the target now; the agent will queue immediately and stream output into its Runs tab.`}
+                    Starts a run with no item. It spawns immediately and streams output into
+                    the Runs tab. To run an agent on an item, assign the item to a workflow.
                 </Typography>
 
-                {/* W4 — typed alert for /api/run failures. Shows MCP-token,
-                    CLI-not-installed, validation, etc. inline so the user
-                    doesn't have to read the toast and re-open the dialog. */}
                 {triggerRun.error && (
                     <Box sx={{ mb: 2 }}>
                         <ApiErrorAlert
@@ -202,111 +97,6 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
                 )}
 
                 <CliUnavailableAlert cli={agent.cli} sx={{ mb: 2 }} />
-
-                {isFreedom ? null : (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-                    <TextField
-                        select
-                        label="Project"
-                        value={projectId}
-                        onChange={(e) => {
-                            setProjectId(e.target.value);
-                            setIssueId('');
-                        }}
-                        size="small"
-                        fullWidth
-                    >
-                        {projects.map((p) => (
-                            <MenuItem key={p.id} value={p.id}>
-                                <Box
-                                    component="span"
-                                    sx={{
-                                        fontFamily: TYPOGRAPHY.fontFamilyMono,
-                                        color: ATLAS_PALETTE.slate60,
-                                        fontSize: 11.5,
-                                        mr: 1,
-                                    }}
-                                >
-                                    {p.issue_key_prefix}
-                                </Box>
-                                {p.name}
-                            </MenuItem>
-                        ))}
-                        {projects.length === 0 ? (
-                            <MenuItem value="" disabled>
-                                No projects yet
-                            </MenuItem>
-                        ) : null}
-                    </TextField>
-
-                    <TextField
-                        select
-                        label="Issue type"
-                        value={kind}
-                        onChange={(e) => {
-                            setKind(e.target.value as Kind);
-                            setIssueId('');
-                        }}
-                        size="small"
-                        fullWidth
-                    >
-                        {(Object.keys(KIND_LABEL) as Kind[]).map((k) => (
-                            <MenuItem key={k} value={k}>
-                                {KIND_LABEL[k]}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-
-                    <TextField
-                        select
-                        label={KIND_LABEL[kind]}
-                        // Race-guard: when the dialog opens with `issueId`
-                        // carried from a prior session but the `issues`
-                        // query hasn't resolved yet, the option list is
-                        // empty and MUI logs "out-of-range value MON-N".
-                        // Falling back to '' until the matching option
-                        // exists silences the warning; the Select snaps to
-                        // the real value once the option lands.
-                        value={
-                            issues.some((it) => it.id === issueId) ? issueId : ''
-                        }
-                        onChange={(e) => setIssueId(e.target.value)}
-                        size="small"
-                        fullWidth
-                        disabled={!projectId || issues.length === 0}
-                        helperText={
-                            !projectId
-                                ? 'Pick a project first'
-                                : issues.length === 0
-                                  ? `No ${KIND_PLURAL[kind]} in this project yet`
-                                  : undefined
-                        }
-                    >
-                        {issues.flatMap((it, i) => [
-                            ...(ownCount > 0 && i === 0
-                                ? [<ListSubheader key="own">Assigned to this agent</ListSubheader>]
-                                : []),
-                            ...(ownCount > 0 && i === ownCount
-                                ? [<ListSubheader key="rest">Other items</ListSubheader>]
-                                : []),
-                            <MenuItem key={it.id} value={it.id}>
-                                <Box
-                                    component="span"
-                                    sx={{
-                                        fontFamily: TYPOGRAPHY.fontFamilyMono,
-                                        color: ATLAS_PALETTE.slate60,
-                                        fontSize: 11.5,
-                                        mr: 1,
-                                    }}
-                                >
-                                    {it.id}
-                                </Box>
-                                {it.title}
-                            </MenuItem>,
-                        ])}
-                    </TextField>
-                </Box>
-                )}
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 3, gap: 1, flexWrap: 'wrap' }}>
                 <Button
@@ -319,7 +109,7 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
                 <Button
                     variant="outlined"
                     onClick={() => compilePreview.mutate()}
-                    disabled={!canPreview}
+                    disabled={compilePreview.isPending || triggerRun.isPending}
                     startIcon={
                         <Box
                             component="span"
@@ -345,7 +135,7 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
                 <Button
                     variant="contained"
                     onClick={() => triggerRun.mutate()}
-                    disabled={!canSubmit}
+                    disabled={triggerRun.isPending}
                     startIcon={
                         <Box
                             component="span"

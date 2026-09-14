@@ -26,12 +26,13 @@ A defect found while working on a Story. Uses the unified `IssueDetailShell`. Ti
 - `BugBodyCards` — editable Frequency / Failure scope dropdowns, plus editable Acceptance criteria, Steps to reproduce, Expected vs Actual, and Environment cards.
 
 **Right rail**
-- `DetailsRailCard` with Project, Parent story (link), Status (`StatusPickerPopover`), Assignee (`AssigneePickerPopover`), Rounds (A04 — `X / Y` against the assignee's `max_rounds`; hidden when no assignee; clickable → `ResetRoundsPopover` so Owner can wipe the counter and give the agent a fresh budget), Created, Last updated.
+- `DetailsRailCard` with Project, Parent story (link), Status (`StatusPickerPopover`), Assignee (`AssigneePickerPopover`), Created, Last updated.
 
 **Owner-reply hand-back + PR merge awareness** (shared components)
 - `ConversationCard` composer — when the item is `waiting_for_info` with no assignee and the most recent run on it (`useItemAgentRuns`) belongs to an active agent, helper text reads *"Replying hands this back to <Agent> and sets it Ready."* It mirrors the API's owner-reply auto-resume (`commentsService`), so posting really does reassign + re-queue.
 - **Pull Requests** rows (`RelatedItemsCard`) carry an **Open** / **Merged** / **Closed** chip from `pr_state`; no chip while the state is unknown (`null`/absent).
 - `DetailsRailCard` status picker → **Done** while any `pull_request` link isn't `merged`: first `POST /api/issues/:type/:id/external-links/refresh`; if still unmerged, a **Mark done anyway?** dialog (`ConfirmActionModal`) lists the PRs (`#ref title (state)`) and only **Mark done** transitions. Refresh failure falls back to the loaded links, so the dialog still guards.
+- `ItemWorkflowPanel` rows under Assignee (ADR 0014): **Workflow** select (None + the project's `input_kind=item` workflows → `PUT /api/items/:id/workflow`; a **Create a workflow** link when the project has none) and **Workflow run** — latest run's status chip (→ `/workflows/:id/runs/:runId`, from `GET /api/items/:id/workflow-runs`) plus **Start now** (`POST /api/workflows/:id/runs`) when a workflow is set and no run is live. See [Workflow Run](35-workflow-run.md).
 
 ## Why these affordances exist
 - **Same `BugBodyCards` shape as Bug Detail** — Sub-bugs and bugs share repro semantics; reusing the body components keeps QA agents from special-casing parent-bug vs. sub-bug.

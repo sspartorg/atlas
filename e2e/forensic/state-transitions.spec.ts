@@ -333,13 +333,12 @@ test.describe('state transitions — non-destructive', () => {
             });
             return;
         }
-        const tabs = ['overview', 'prompt', 'handoffs', 'test', 'runs', 'memory'] as const;
+        const tabs = ['overview', 'prompt', 'test', 'runs', 'memory'] as const;
         // AgentDetail Tabs also render Material-Symbols icons; the
         // role=tab name includes the icon text. Match by substring.
         const AGENT_LABELS: Record<string, RegExp> = {
             overview: /Overview/i,
             prompt: /Prompt/i,
-            handoffs: /Handoffs/i,
             test: /Test run|Test/i,
             runs: /Runs/i,
             memory: /Memory/i,

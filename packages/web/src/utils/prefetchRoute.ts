@@ -19,6 +19,7 @@ export const routes: Record<string, () => Promise<unknown>> = {
     epics: () => import('../pages/Epics.js'),
     issues: () => import('../pages/Issues.js'),
     queue: () => import('../pages/Queue.js'),
+    workflows: () => import('../pages/Workflows.js'),
     agents: () => import('../pages/Agents.js'),
     marketplace: () => import('../pages/Marketplace.js'),
     'mcp-tools': () => import('../pages/McpTools.js'),

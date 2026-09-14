@@ -9,7 +9,7 @@ import { db } from '../db/kysely-client.js';
 // (`waiting_for_owner`) does not lock the item.
 const ITEM_ROUTING_URL = /^\/api\/(?:epics|stories|bugs|sub-tasks|sub-bugs)\/([^/?]+)\/(?:status|assign)(?:\?|$)/;
 
-export async function runningWorkflowRunOnItem(itemId: string): Promise<string | null> {
+async function runningWorkflowRunOnItem(itemId: string): Promise<string | null> {
     const row = await db
         .selectFrom('workflow_runs')
         .select('id')

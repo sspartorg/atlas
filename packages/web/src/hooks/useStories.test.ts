@@ -11,7 +11,6 @@ import {
     useDeleteStory,
     useDeleteSubBug,
     useDeleteSubTask,
-    useResetRoundsStory,
     useStories,
     useStory,
     useStoryFull,
@@ -108,18 +107,6 @@ describe('mutations', () => {
         );
         const { result } = renderHook(() => useDeleteStory(), { wrapper: makeWrapper() });
         await expect(result.current.mutateAsync('S1')).resolves.toBeUndefined();
-    });
-});
-
-describe('useResetRoundsStory', () => {
-    it('posts to reset-rounds and invalidates the full query', async () => {
-        server.use(
-            http.post('http://localhost:3000/api/stories/S1/reset-rounds', () =>
-                new HttpResponse(null, { status: 204 }),
-            ),
-        );
-        const { result } = renderHook(() => useResetRoundsStory(), { wrapper: makeWrapper() });
-        await expect(result.current.mutateAsync({ id: 'S1' })).resolves.toBeUndefined();
     });
 });
 

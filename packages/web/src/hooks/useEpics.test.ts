@@ -13,7 +13,6 @@ import {
     useEpicFull,
     useEpicStats,
     useEpics,
-    useResetRoundsEpic,
     useTransitionEpic,
     useUpdateEpic,
 } from './useEpics.js';
@@ -104,18 +103,6 @@ describe('useCreateEpic + useUpdateEpic + useDeleteEpic', () => {
         );
         const { result } = renderHook(() => useDeleteEpic(), { wrapper: makeWrapper() });
         await expect(result.current.mutateAsync('E1')).resolves.toBeUndefined();
-    });
-});
-
-describe('useResetRoundsEpic', () => {
-    it('posts to reset-rounds and invalidates the full query', async () => {
-        server.use(
-            http.post('http://localhost:3000/api/epics/E1/reset-rounds', () =>
-                new HttpResponse(null, { status: 204 }),
-            ),
-        );
-        const { result } = renderHook(() => useResetRoundsEpic(), { wrapper: makeWrapper() });
-        await expect(result.current.mutateAsync({ id: 'E1' })).resolves.toBeUndefined();
     });
 });
 

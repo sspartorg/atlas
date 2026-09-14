@@ -54,7 +54,7 @@ const TABS: Record<string, readonly string[]> = {
 // Detail pages: (list path → tabs to walk after entering first row)
 const DETAIL_WALKS: Array<{ list: string; tabs?: readonly string[]; label: string }> = [
     { list: '/projects', tabs: ['overview', 'epics', 'issues', 'guardrails', 'setup', 'history'], label: 'project' },
-    { list: '/agents', tabs: ['overview', 'prompt', 'handoffs', 'test', 'runs', 'memory'], label: 'agent' },
+    { list: '/agents', tabs: ['overview', 'prompt', 'test', 'runs', 'memory'], label: 'agent' },
     { list: '/epics', label: 'epic' },
 ];
 

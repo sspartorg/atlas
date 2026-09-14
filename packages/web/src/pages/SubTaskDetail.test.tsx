@@ -329,35 +329,6 @@ describe('SubTaskDetail page', () => {
         }
     });
 
-    it('opens the Reset-rounds popover and confirms (handleResetRounds)', async () => {
-        let reset = false;
-        const agent = makeAgent({ id: 'agent-1', name: 'Coder', max_rounds: 5 });
-        server.use(
-            ...mountHandlers('T11', {
-                sub_task: makeSubTask({ id: 'T11', assignee_agent_id: 'agent-1' }),
-                parent_story: null,
-                epic: null,
-                project: null,
-                related_links: [],
-                activity: [],
-                agents: [agent],
-                round_count: 3,
-            }),
-            http.post(`${BASE}/sub-tasks/T11/reset-rounds`, async () => {
-                reset = true;
-                return HttpResponse.json({ ok: true });
-            }),
-        );
-        renderPage('T11');
-        // Wait for the Rounds row to render and click it.
-        const rounds = await screen.findByText('Rounds');
-        fireEvent.click(rounds);
-        // The ResetRoundsPopover renders "Reset rounds?" + confirm/cancel.
-        await screen.findByText('Reset rounds?');
-        fireEvent.click(screen.getByRole('button', { name: /Reset rounds/i }));
-        await waitFor(() => expect(reset).toBe(true));
-    });
-
     it('exercises handleAssign via onAssign in DetailsRailCard — fn#3 (line 114)', async () => {
         const agent = makeAgent({ id: 'agent-1', name: 'Coder' });
         server.use(
@@ -488,7 +459,6 @@ describe('SubTaskDetail page', () => {
                 related_links: [],
                 activity: [],
                 agents: [agent],
-                round_count: 1,
             }),
             http.get(`${BASE}/run`, () =>
                 HttpResponse.json([{ total_cost_usd: 0.0123 }]),
@@ -517,7 +487,6 @@ describe('SubTaskDetail page', () => {
                 related_links: [],
                 activity: [],
                 agents: [agent],
-                round_count: 1,
             }),
         );
         // Prepend the /run override AFTER the base handlers so it sits at
@@ -615,7 +584,6 @@ describe('SubTaskDetail page', () => {
                 related_links: [],
                 activity: [],
                 agents: [agent],
-                round_count: 1,
             }),
         );
         // Prepend /run stub that returns runs with null cost — hasAny stays false.
