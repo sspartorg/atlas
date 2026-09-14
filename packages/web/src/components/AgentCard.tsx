@@ -18,6 +18,8 @@ import { resolveAgentStatusLabel } from '../pages/queue/queueViewModel.js';
 interface Props {
     agent: IAgent;
     runs?: IAgentRun[];
+    /** Ready + in-progress items assigned to this agent — the Queue page's count. */
+    queueDepth?: number;
     isFavorite?: boolean;
     onToggleFavorite?: () => void;
     onClick?: () => void;
@@ -42,6 +44,7 @@ function hexToRgba(hex: string, alpha: number): string {
 export function AgentCard({
     agent,
     runs,
+    queueDepth = 0,
     isFavorite = false,
     onToggleFavorite,
     onClick,
@@ -329,7 +332,7 @@ export function AgentCard({
                     </Typography>
                 </Box>
                 <Typography sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate60 }}>
-                    queue {stats.queueDepth}
+                    queue {queueDepth}
                 </Typography>
                 <Typography sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate40 }}>·</Typography>
                 <Typography sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate60 }}>

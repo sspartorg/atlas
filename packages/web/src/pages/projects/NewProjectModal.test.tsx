@@ -339,6 +339,38 @@ describe('NewProjectModal', () => {
         });
     });
 
+    it('keeps auto-filling the project name while the URL is typed character by character', async () => {
+        renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
+        const urlInput = await screen.findByLabelText(/repository url/i);
+        const nameInput = screen.getByLabelText(/project name/i) as HTMLInputElement;
+        fireEvent.change(urlInput, { target: { value: 'https://github.com/owner/a' } });
+        await waitFor(() => expect(nameInput.value).toBe('a'));
+        fireEvent.change(urlInput, { target: { value: 'https://github.com/owner/atlas' } });
+        await waitFor(() => expect(nameInput.value).toBe('atlas'));
+    });
+
+    it('stops auto-filling once the Owner edits the project name', async () => {
+        renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
+        const urlInput = await screen.findByLabelText(/repository url/i);
+        const nameInput = screen.getByLabelText(/project name/i) as HTMLInputElement;
+        fireEvent.change(nameInput, { target: { value: 'my-name' } });
+        fireEvent.change(urlInput, { target: { value: 'https://github.com/owner/atlas' } });
+        await new Promise((r) => setTimeout(r, 50));
+        expect(nameInput.value).toBe('my-name');
+    });
+
+    it('labels a GitHub App credential "App", not "PAT"', async () => {
+        server.use(
+            http.get(`${BASE}/credentials`, () =>
+                HttpResponse.json([{ ...CREDENTIAL, label: 'Atlas App', kind: 'github_app' }]),
+            ),
+        );
+        renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
+        expect(await screen.findByText(/GitHub · Atlas App/i)).toBeInTheDocument();
+        expect(screen.getByText('App')).toBeInTheDocument();
+        expect(screen.queryByText('PAT')).not.toBeInTheDocument();
+    });
+
     // -------------------------------------------------------------------------
     // startClone — prefix 409 collision sets collision state
     // -------------------------------------------------------------------------

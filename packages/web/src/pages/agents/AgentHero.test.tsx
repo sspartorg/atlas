@@ -28,6 +28,7 @@ describe('AgentHero', () => {
                 agent={makeAgent({ name: 'My Coder' })}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -45,6 +46,7 @@ describe('AgentHero', () => {
                 agent={makeAgent({ status: 'inactive' })}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -62,6 +64,7 @@ describe('AgentHero', () => {
                 agent={makeAgent()}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={onRunNow}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -79,6 +82,7 @@ describe('AgentHero', () => {
                 agent={makeAgent()}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={onPauseToggle}
                 menuActions={noopMenuActions}
@@ -94,13 +98,14 @@ describe('AgentHero', () => {
             <AgentHero
                 agent={makeAgent()}
                 view={makeView()}
-                stats={{ ...makeStats(), queueDepth: 3, lastRunAt: null }}
+                stats={{ ...makeStats(), lastRunAt: null }}
+                queueDepth={3}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
             />,
         );
-        expect(await screen.findByText(/Queue:/i)).toBeInTheDocument();
+        expect(await screen.findByText(/Queue:/i)).toHaveTextContent('Queue: 3 items');
         expect(screen.getByText(/Last run:/i)).toBeInTheDocument();
     });
 
@@ -117,6 +122,7 @@ describe('AgentHero', () => {
                 agent={agent}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -144,6 +150,7 @@ describe('AgentHero', () => {
                 agent={agent}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -172,6 +179,7 @@ describe('AgentHero', () => {
                 agent={agent}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -198,6 +206,7 @@ describe('AgentHero', () => {
                 agent={agent}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -215,13 +224,14 @@ describe('AgentHero', () => {
         await waitFor(() => expect(screen.queryByText('Coder')).toBeInTheDocument());
     });
 
-    it('renders Queued statusLabel when stats.queueDepth > 0 on active agent (Queued branch)', async () => {
+    it('renders Queued statusLabel when stats.queuedCount > 0 on active agent (Queued branch)', async () => {
         server.use(...defaultHandlers);
         renderWithProviders(
             <AgentHero
                 agent={makeAgent({ status: 'active' })}
                 view={makeView()}
-                stats={{ ...makeStats(), queueDepth: 2, queuedCount: 2, lastRunAt: new Date().toISOString() }}
+                stats={{ ...makeStats(), queuedCount: 2, lastRunAt: new Date().toISOString() }}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -237,7 +247,8 @@ describe('AgentHero', () => {
             <AgentHero
                 agent={makeAgent()}
                 view={makeView()}
-                stats={{ ...makeStats(), queueDepth: 0, lastRunAt: pastDate }}
+                stats={{ ...makeStats(), lastRunAt: pastDate }}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -254,6 +265,7 @@ describe('AgentHero', () => {
                 agent={makeAgent({ accent_color: 'notacolor' })}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -268,7 +280,8 @@ describe('AgentHero', () => {
             <AgentHero
                 agent={makeAgent({ status: 'active' })}
                 view={makeView()}
-                stats={{ ...makeStats(), queueDepth: 1, lastRunAt: null }}
+                stats={{ ...makeStats(), lastRunAt: null }}
+                queueDepth={1}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -294,6 +307,7 @@ describe('AgentHero', () => {
                 agent={makeAgent()}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -333,6 +347,7 @@ describe('AgentHero', () => {
                 agent={agent}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -367,6 +382,7 @@ describe('AgentHero', () => {
                 agent={agent}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}

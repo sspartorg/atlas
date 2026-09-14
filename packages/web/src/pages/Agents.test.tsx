@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
-import { makeAgent } from '../test-utils/factories.js';
+import { makeAgent, makeStory } from '../test-utils/factories.js';
 import { defaultHandlers, handlers } from '../test-utils/mock-handlers.js';
 import { Agents } from './Agents.js';
 
@@ -1184,37 +1184,17 @@ describe('Agents page', () => {
         ];
         server.use(
             handlers.listAgents(agents),
-            http.get(`${BASE}/run`, () =>
+            http.get(`${BASE}/run`, () => HttpResponse.json([])),
+            http.get(`${BASE}/stories`, () =>
                 HttpResponse.json([
-                    {
-                        id: 'r1',
-                        agent_id: 'a2',
-                        issue_type: 'story',
-                        issue_id: 'S1',
-                        item_title: 'Story 1',
-                        status: 'queued',
-                        created_at: '2026-06-22T10:00:00Z',
-                        started_at: null,
-                        completed_at: null,
-                        total_cost_usd: null,
-                    },
-                    {
-                        id: 'r2',
-                        agent_id: 'a2',
-                        issue_type: 'story',
-                        issue_id: 'S2',
-                        item_title: 'Story 2',
-                        status: 'in_progress',
-                        created_at: '2026-06-22T10:05:00Z',
-                        started_at: '2026-06-22T10:05:05Z',
-                        completed_at: null,
-                        total_cost_usd: null,
-                    },
+                    makeStory({ id: 'S1', assignee_agent_id: 'a2', status: 'ready' }),
+                    makeStory({ id: 'S2', assignee_agent_id: 'a2', status: 'in_progress' }),
                 ]),
             ),
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('LowQueue')).toBeTruthy());
+        expect(await screen.findByText('queue 2')).toBeInTheDocument();
         const sortSelects = screen.queryAllByRole('combobox');
         for (const sel of sortSelects) {
             fireEvent.mouseDown(sel);

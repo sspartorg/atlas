@@ -65,6 +65,16 @@ describe('StoryDetail page', () => {
         expect(container.firstChild).toBeInTheDocument();
     });
 
+    it('renders acceptance criteria as markdown, not raw asterisks', async () => {
+        stubStoryFull('S3', {
+            story: makeStory({ id: 'S3', acceptance_criteria: '- **Given** a user\n- **Then** it works' }),
+        });
+        renderStory('S3');
+        const given = await screen.findByText('Given');
+        expect(given.tagName).not.toBe('LI');
+        expect(document.body.textContent).not.toContain('**Given**');
+    });
+
     it('renders Branch + Path rows with values when worktree is provisioned', async () => {
         stubStoryFull('S2', {
             story: makeStory({

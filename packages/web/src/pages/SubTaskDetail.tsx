@@ -260,25 +260,6 @@ export function SubTaskDetail() {
                 emptyHint="Click to add acceptance criteria, one per line…"
                 saving={saving}
                 onSave={(next) => patchTask({ acceptance_criteria: next })}
-                renderBody={(body) => {
-                    const lines = body.split('\n').filter((l) => l.trim().length > 0);
-                    return (
-                        <Box
-                            component="ul"
-                            sx={{
-                                pl: 3,
-                                m: 0,
-                                color: ATLAS_PALETTE.slate80,
-                                fontSize: 13.5,
-                                lineHeight: 1.8,
-                            }}
-                        >
-                            {lines.map((line, i) => (
-                                <li key={i}>{line.replace(/^[-*]\s*/, '')}</li>
-                            ))}
-                        </Box>
-                    );
-                }}
             />
 
             <RelatedItemsCard

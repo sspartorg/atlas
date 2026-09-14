@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
-import { makeAgent } from '../test-utils/factories.js';
+import { makeAgent, makeStory } from '../test-utils/factories.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { server } from '../test-setup.js';
 import { AgentDetail } from './AgentDetail.js';
@@ -76,6 +76,18 @@ describe('AgentDetail', () => {
     describe('happy path', () => {
         beforeEach(() => {
             setupDefaultHandlers();
+        });
+
+        it('counts Ready items assigned to the agent in the hero queue, even with no runs', async () => {
+            server.use(
+                http.get(`${BASE}/stories`, () =>
+                    HttpResponse.json([
+                        makeStory({ id: 'SDB-4', assignee_agent_id: 'agent-coder', status: 'ready' }),
+                    ]),
+                ),
+            );
+            renderAgentDetail();
+            expect(await screen.findByText(/Queue:/)).toHaveTextContent('Queue: 1 item');
         });
 
         it('renders the agent name in breadcrumbs', async () => {

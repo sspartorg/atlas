@@ -28,6 +28,8 @@ interface Props {
     agent: IAgent;
     view: AgentView;
     stats: AgentRuntimeStats;
+    /** Ready + in-progress items assigned to this agent — the Queue page's count. */
+    queueDepth: number;
     onRunNow: () => void;
     onPauseToggle: () => void;
     menuActions: AgentCardMenuActions;
@@ -37,6 +39,7 @@ export const AgentHero = memo(function AgentHero({
     agent,
     view,
     stats,
+    queueDepth,
     onRunNow,
     onPauseToggle,
     menuActions,
@@ -268,8 +271,8 @@ export const AgentHero = memo(function AgentHero({
                                 cursor: 'pointer',
                             }}
                         >
-                            Queue: <strong>{stats.queueDepth}</strong> item
-                            {stats.queueDepth === 1 ? '' : 's'}
+                            Queue: <strong>{queueDepth}</strong> item
+                            {queueDepth === 1 ? '' : 's'}
                         </Typography>
                         <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
                             Last run: {stats.lastRunAt ? relativeTime(stats.lastRunAt) : '—'}

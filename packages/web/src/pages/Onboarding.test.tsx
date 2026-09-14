@@ -114,6 +114,23 @@ describe('Onboarding — Step 1 → Step 2', () => {
 });
 
 describe('Onboarding — Step 2', () => {
+    it('step 1 copy does not claim everything else is already configured', async () => {
+        renderOnboarding();
+        await screen.findByText('Welcome to Atlas.');
+        expect(screen.queryByText(/already configured/i)).not.toBeInTheDocument();
+        expect(screen.getByText(/credentials, a project and agents next/i)).toBeInTheDocument();
+    });
+
+    it('step 2 points workspace edits at Settings → Profile', async () => {
+        renderOnboarding();
+        await screen.findByText('Welcome to Atlas.');
+        await advanceToStep2();
+        expect(screen.getByText(/We'll create this folder if it doesn't exist/)).toHaveTextContent(
+            'Settings → Profile',
+        );
+        expect(screen.queryByText(/Settings → Environment/)).not.toBeInTheDocument();
+    });
+
     it('shows a Back button on step 2', async () => {
         renderOnboarding();
         await screen.findByText('Welcome to Atlas.');

@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { Route, Routes } from 'react-router-dom';
+import { server } from '../../test-setup.js';
+import { defaultHandlers, handlers } from '../../test-utils/mock-handlers.js';
+import { makeAgent } from '../../test-utils/factories.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { DashboardEmptyState } from './DashboardEmptyState.js';
 
@@ -15,6 +19,37 @@ vi.mock('../projects/NewProjectModal.js', () => ({
 }));
 
 describe('DashboardEmptyState', () => {
+    beforeEach(() => {
+        server.use(...defaultHandlers);
+    });
+
+    it('only promises GitHub URLs and GitHub credential kinds the API accepts', () => {
+        renderWithProviders(<DashboardEmptyState ownerFirstName="Bob" />);
+        const text = document.body.textContent ?? '';
+        expect(text).not.toMatch(/GitLab|Bitbucket|SSH/);
+        expect(text).toContain('Personal Access Token or GitHub App');
+    });
+
+    it('points to the Marketplace when no agents are installed', async () => {
+        renderWithProviders(
+            <Routes>
+                <Route path="/" element={<DashboardEmptyState ownerFirstName="Bob" />} />
+                <Route path="/agents/marketplace" element={<div>Marketplace page</div>} />
+            </Routes>,
+            { initialEntries: ['/'] },
+        );
+        fireEvent.click(await screen.findByText('Agents → Marketplace'));
+        expect(await screen.findByText('Marketplace page')).toBeInTheDocument();
+    });
+
+    it('hides the Marketplace hint once an agent is installed', async () => {
+        server.use(handlers.listAgents([makeAgent()]));
+        renderWithProviders(<DashboardEmptyState ownerFirstName="Bob" />);
+        await waitFor(() => expect(screen.getByText(/No projects yet/)).toBeInTheDocument());
+        await new Promise((r) => setTimeout(r, 50));
+        expect(screen.queryByText('Agents → Marketplace')).not.toBeInTheDocument();
+    });
+
     it('renders the no-projects copy', () => {
         renderWithProviders(<DashboardEmptyState ownerFirstName="Bob" />);
         expect(screen.getByText(/No projects yet/)).toBeInTheDocument();

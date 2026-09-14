@@ -85,6 +85,19 @@ describe('Credentials page', () => {
         expect(screen.getByText(/1 credential · 1 host/i)).toBeInTheDocument();
     });
 
+    it('does not count a GitHub App as expiring soon', async () => {
+        const inAnHour = new Date(Date.now() + 3600_000).toISOString();
+        server.use(
+            ...defaultHandlers,
+            http.get(`${BASE}/credentials`, () =>
+                HttpResponse.json([makeCredential({ kind: 'github_app', expires_at: inAnHour })]),
+            ),
+        );
+        renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
+        await screen.findByText('GitHub PAT');
+        expect(screen.queryByText(/expiring soon/i)).not.toBeInTheDocument();
+    });
+
     it('renders the expiring-soon banner when within 30 days (expiringSoon branch)', async () => {
         const soon = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
         server.use(

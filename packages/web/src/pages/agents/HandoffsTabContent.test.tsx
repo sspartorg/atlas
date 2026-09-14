@@ -32,6 +32,9 @@ function baseHandlers() {
         http.get(`${BASE}/agents/${agent.id}/checklists`, () =>
             HttpResponse.json([]),
         ),
+        http.get(`${BASE}/settings`, () =>
+            HttpResponse.json({ id: 1, owner_name: 'Ada Lovelace', onboarding_complete: 1 }),
+        ),
         ...defaultHandlers,
     ];
 }
@@ -264,7 +267,7 @@ describe('HandoffsTabContent', () => {
 
         const allComboboxes = screen.getAllByRole('combobox');
         fireEvent.mouseDown(allComboboxes[2]!);
-        const ownerOption = await screen.findByRole('option', { name: /Owner \(sspart\)/i }, { timeout: 5000 });
+        const ownerOption = await screen.findByRole('option', { name: /Owner \(Ada Lovelace\)/i }, { timeout: 5000 });
         fireEvent.click(ownerOption);
 
         await waitFor(() =>
@@ -306,7 +309,7 @@ describe('HandoffsTabContent', () => {
 
         const allComboboxes = screen.getAllByRole('combobox');
         fireEvent.mouseDown(allComboboxes[2]!);
-        const ownerOption = await screen.findByRole('option', { name: /Owner \(sspart\)/i }, { timeout: 5000 });
+        const ownerOption = await screen.findByRole('option', { name: /Owner \(Ada Lovelace\)/i }, { timeout: 5000 });
         fireEvent.click(ownerOption);
 
         await waitFor(() =>
@@ -375,7 +378,7 @@ describe('HandoffsTabContent', () => {
         // Open the on-fail select (index 2 which is "Assign to" for on-fail)
         const allComboboxes = screen.getAllByRole('combobox');
         fireEvent.mouseDown(allComboboxes[2]!);
-        const ownerOption = await screen.findByRole('option', { name: /Owner \(sspart\)/i });
+        const ownerOption = await screen.findByRole('option', { name: /Owner \(Ada Lovelace\)/i });
         expect(ownerOption).toBeInTheDocument();
         fireEvent.click(ownerOption);
     });
@@ -409,7 +412,7 @@ describe('HandoffsTabContent', () => {
         // Assign on-fail to Owner first (index 2)
         const allComboboxes = screen.getAllByRole('combobox');
         fireEvent.mouseDown(allComboboxes[2]!);
-        const ownerOption = await screen.findByRole('option', { name: /Owner \(sspart\)/i });
+        const ownerOption = await screen.findByRole('option', { name: /Owner \(Ada Lovelace\)/i });
         fireEvent.click(ownerOption);
         await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
 
@@ -421,7 +424,7 @@ describe('HandoffsTabContent', () => {
         await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
     });
 
-    it('selected "owner" on on-fail shows "Owner (sspart)" as rendered value', async () => {
+    it('selected "owner" on on-fail shows "Owner (<owner_name>)" as rendered value', async () => {
         server.use(
             http.get(`${BASE}/agents/${agent.id}/handoff-rules`, () =>
                 HttpResponse.json([
@@ -443,9 +446,9 @@ describe('HandoffsTabContent', () => {
             ),
         );
         renderWithProviders(<HandoffsTabContent agent={agent} />);
-        // After hydration, the on-fail card should display "Owner (sspart)"
+        // After hydration, the on-fail card should display the settings owner_name
         await waitFor(() =>
-            expect(screen.getByText('Owner (sspart)')).toBeInTheDocument(),
+            expect(screen.getByText('Owner (Ada Lovelace)')).toBeInTheDocument(),
         );
     });
 
@@ -755,7 +758,7 @@ describe('HandoffsTabContent', () => {
         // Assign on-fail to Owner (combobox 2)
         const comboboxes2 = screen.getAllByRole('combobox');
         fireEvent.mouseDown(comboboxes2[2]!);
-        const ownerOption = await screen.findByRole('option', { name: /Owner \(sspart\)/i }, { timeout: 5000 });
+        const ownerOption = await screen.findByRole('option', { name: /Owner \(Ada Lovelace\)/i }, { timeout: 5000 });
         fireEvent.click(ownerOption);
         await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
 
@@ -805,7 +808,7 @@ describe('HandoffsTabContent', () => {
 
         const allComboboxes = screen.getAllByRole('combobox');
         fireEvent.mouseDown(allComboboxes[2]!);
-        const ownerOption = await screen.findByRole('option', { name: /Owner \(sspart\)/i }, { timeout: 5000 });
+        const ownerOption = await screen.findByRole('option', { name: /Owner \(Ada Lovelace\)/i }, { timeout: 5000 });
         fireEvent.click(ownerOption);
         await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
 
@@ -844,7 +847,7 @@ describe('HandoffsTabContent', () => {
 
         const allComboboxes = screen.getAllByRole('combobox');
         fireEvent.mouseDown(allComboboxes[2]!);
-        const ownerOption = await screen.findByRole('option', { name: /Owner \(sspart\)/i });
+        const ownerOption = await screen.findByRole('option', { name: /Owner \(Ada Lovelace\)/i });
         fireEvent.click(ownerOption);
         await waitFor(() =>
             expect(screen.getByRole('button', { name: /Save handoffs/i })).not.toBeDisabled(),

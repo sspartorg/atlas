@@ -21,6 +21,7 @@ import { useProjects } from '../../hooks/useProjects.js';
 import { useEpics } from '../../hooks/useEpics.js';
 import { useStories } from '../../hooks/useStories.js';
 import { useAgents } from '../../hooks/useAgents.js';
+import { useSettings } from '../../hooks/useSettings.js';
 import { api } from '../../api/api.js';
 import type { IAgent, BugFrequency, BugFailureScope, IssueType } from '@atlas/shared';
 import { AgentSelect } from '../AgentSelect.js';
@@ -131,6 +132,7 @@ export function NewIssueModal({
     const { data: epics = [] } = useEpics();
     const { data: stories = [] } = useStories();
     const { data: agents = [] } = useAgents();
+    const { data: settings } = useSettings();
 
     const [kind, setKind] = useState<NewIssueKind>(initialKind);
     const [projectId, setProjectId] = useState<string>('');
@@ -768,7 +770,7 @@ export function NewIssueModal({
                             sx={{ fontSize: 13, background: ATLAS_PALETTE.white }}
                         >
                             <MenuItem value="owner" sx={{ fontSize: 13 }}>
-                                sspart · Owner
+                                {settings?.owner_name ?? 'Owner'} · Owner
                             </MenuItem>
                         </Select>
                     </FormControl>

@@ -53,8 +53,7 @@ describe('KpiStrip', () => {
                 }}
             />,
         );
-        // formatCostUsd(3.14) renders something with "$" and the run count
-        expect(document.body.textContent).toContain('runs');
+        expect(document.body.textContent).toContain('7 completed runs');
     });
 
     it('shows "No activity yet" when both costSummary30d and terminalCostSummary30d are undefined', () => {

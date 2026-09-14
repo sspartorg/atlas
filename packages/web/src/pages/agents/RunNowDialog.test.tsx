@@ -20,6 +20,30 @@ describe('RunNowDialog', () => {
         expect(await findByRole('button', { name: /Run now/i })).toBeInTheDocument();
     });
 
+    it('defaults Issue type to Epic for a PO agent and pluralises the empty state', async () => {
+        server.use(
+            http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject({ id: 'p1' })])),
+            http.get(`${BASE}/epics`, () => HttpResponse.json([])),
+            ...defaultHandlers,
+        );
+        renderWithProviders(
+            <RunNowDialog agent={makeAgent({ name: 'PO Writer', role_id: 'po' })} open onClose={() => {}} />
+        );
+        expect(await screen.findByText('No epics in this project yet')).toBeInTheDocument();
+    });
+
+    it('defaults Issue type to Story for non-PO agents with a correct plural', async () => {
+        server.use(
+            http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject({ id: 'p1' })])),
+            http.get(`${BASE}/stories`, () => HttpResponse.json([])),
+            ...defaultHandlers,
+        );
+        renderWithProviders(
+            <RunNowDialog agent={makeAgent({ name: 'Coder', role_id: 'engineer' })} open onClose={() => {}} />
+        );
+        expect(await screen.findByText('No stories in this project yet')).toBeInTheDocument();
+    });
+
     it('does not render when closed', () => {
         server.use(...defaultHandlers);
         const { queryByText } = renderWithProviders(

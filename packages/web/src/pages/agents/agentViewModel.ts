@@ -382,9 +382,7 @@ export function getAgentView(agent: IAgent, now: Date = new Date()): AgentView {
 export { relativeTime } from '../../utils/time.js';
 
 export interface AgentRuntimeStats {
-    /** queued + in_progress. Kept as-is — the "queue N" caption shows it. */
-    queueDepth: number;
-    /** Runs actually in flight. Split out from queueDepth so the status
+    /** Runs actually in flight. Split out from queued runs so the status
      *  label can tell "running" from "waiting to run"; conflating them is
      *  what made AgentCard / AgentHero report the two states inverted. */
     runningCount: number;
@@ -407,7 +405,6 @@ export interface AgentRuntimeStats {
 export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRuntimeStats {
     if (!runs || runs.length === 0) {
         return {
-            queueDepth: 0,
             runningCount: 0,
             queuedCount: 0,
             lastRunErrored: false,
@@ -422,7 +419,6 @@ export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRu
     }
     const now = new Date();
     const cutoff = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    let queueDepth = 0;
     let runningCount = 0;
     let queuedCount = 0;
     let lastRunAt: string | null = null;
@@ -436,7 +432,6 @@ export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRu
     let cacheReadTokens = 0;
     let hasTokens = false;
     for (const r of runs) {
-        if (r.status === 'queued' || r.status === 'in_progress') queueDepth += 1;
         if (r.status === 'in_progress') runningCount += 1;
         if (r.status === 'queued') queuedCount += 1;
         const createdMs = new Date(r.created_at).getTime();
@@ -481,7 +476,6 @@ export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRu
     const lastRunErrored = terminal[0]?.status === 'error';
 
     return {
-        queueDepth,
         runningCount,
         queuedCount,
         lastRunErrored,

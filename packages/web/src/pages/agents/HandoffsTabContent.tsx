@@ -26,6 +26,7 @@ import {
     useUpdateAgent,
 } from '../../hooks/useAgents.js';
 import { useToast } from '../../hooks/useToast.js';
+import { useSettings } from '../../hooks/useSettings.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { FormHeading } from '../../components/FormHeading.js';
 
@@ -587,6 +588,8 @@ function RouteCard({
     onChange,
     error = false,
 }: RouteCardProps) {
+    const { data: settings } = useSettings();
+    const ownerLabel = `Owner (${settings?.owner_name ?? 'Owner'})`;
     return (
         <Box
             sx={{
@@ -632,7 +635,7 @@ function RouteCard({
                                 </Box>
                             );
                         }
-                        if (value === 'owner') return 'Owner (sspart)';
+                        if (value === 'owner') return ownerLabel;
                         const match = options.find((o) => o.id === value);
                         return match ? match.name : value;
                     }}
@@ -641,7 +644,7 @@ function RouteCard({
                         '& .MuiOutlinedInput-input': { fontSize: 13, py: 1 },
                     }}
                 >
-                    {ownerOption ? <MenuItem value="owner">Owner (sspart)</MenuItem> : null}
+                    {ownerOption ? <MenuItem value="owner">{ownerLabel}</MenuItem> : null}
                     {options.map((w) => (
                         <MenuItem key={w.id} value={w.id}>
                             {w.name}

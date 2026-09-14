@@ -45,6 +45,12 @@ const KIND_LABEL: Record<Kind, string> = {
     bug: 'Bug',
 };
 
+const KIND_PLURAL: Record<Kind, string> = {
+    epic: 'epics',
+    story: 'stories',
+    bug: 'bugs',
+};
+
 function isKind(t: IssueType): t is Kind {
     return t === 'epic' || t === 'story' || t === 'bug';
 }
@@ -54,14 +60,16 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
     const toast = useToast();
 
     const { data: projects = [] } = useProjects();
+    // PO-role agents operate on epics; every other role starts from a story.
+    const defaultKind: Kind = agent.role_id === 'po' ? 'epic' : 'story';
     const [projectId, setProjectId] = useState<string>('');
-    const [kind, setKind] = useState<Kind>('story');
+    const [kind, setKind] = useState<Kind>(defaultKind);
     const [issueId, setIssueId] = useState<string>('');
 
     useEffect(() => {
         if (!open) {
             setProjectId('');
-            setKind('story');
+            setKind(defaultKind);
             setIssueId('');
             return;
         }
@@ -74,11 +82,11 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
                 setKind(preselect.kind);
                 setIssueId(preselect.issueId);
             } else {
-                setKind('story');
+                setKind(defaultKind);
                 setIssueId('');
             }
         }
-    }, [open, preselect]);
+    }, [open, preselect, defaultKind]);
 
     useEffect(() => {
         if (!projectId && projects[0]) setProjectId(projects[0].id);
@@ -260,7 +268,7 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
                             !projectId
                                 ? 'Pick a project first'
                                 : issues.length === 0
-                                  ? `No ${KIND_LABEL[kind].toLowerCase()}s in this project yet`
+                                  ? `No ${KIND_PLURAL[kind]} in this project yet`
                                   : undefined
                         }
                     >

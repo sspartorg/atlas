@@ -177,6 +177,7 @@ export function NewProjectModal({ open, onClose }: Props) {
     const [repoUrl, setRepoUrl] = useState('');
     const [credentialId, setCredentialId] = useState<string>('');
     const [projectName, setProjectName] = useState('');
+    const [nameTouched, setNameTouched] = useState(false);
     const [issueKeyPrefix, setIssueKeyPrefix] = useState('');
     const [prefixStatus, setPrefixStatus] = useState<
         | { kind: 'idle' }
@@ -206,6 +207,7 @@ export function NewProjectModal({ open, onClose }: Props) {
             setRepoUrl('');
             setCredentialId('');
             setProjectName('');
+            setNameTouched(false);
             setIssueKeyPrefix('');
             setPrefixStatus({ kind: 'idle' });
             setDefaultBranch('main');
@@ -257,13 +259,14 @@ export function NewProjectModal({ open, onClose }: Props) {
         return () => window.clearTimeout(handle);
     }, [issueKeyPrefix, open]);
 
-    // Auto-fill project name from URL.
+    // Follow the URL until the Owner types their own name — a name-empty guard
+    // froze on the first partial match ("a" from github.com/owner/a…).
     useEffect(() => {
         const m = repoUrl.match(REPO_RE);
-        if (m && !projectName.trim()) {
+        if (m && !nameTouched) {
             setProjectName(m[2] ?? '');
         }
-    }, [repoUrl, projectName]);
+    }, [repoUrl, nameTouched]);
 
     // Auto-select first credential.
     useEffect(() => {
@@ -440,6 +443,7 @@ export function NewProjectModal({ open, onClose }: Props) {
         setCloneId(null);
         setRepoUrl('');
         setProjectName('');
+        setNameTouched(false);
         setIssueKeyPrefix('');
         setPrefixStatus({ kind: 'idle' });
         setDefaultBranch('main');
@@ -560,7 +564,7 @@ export function NewProjectModal({ open, onClose }: Props) {
                                     borderRadius: '4px',
                                 }}
                             >
-                                PAT
+                                {c.kind === 'github_app' ? 'App' : 'PAT'}
                             </Box>
                         </Box>
                     );
@@ -843,7 +847,10 @@ export function NewProjectModal({ open, onClose }: Props) {
                                         size="small"
                                         label="Project name"
                                         value={projectName}
-                                        onChange={(e) => setProjectName(e.target.value)}
+                                        onChange={(e) => {
+                                            setProjectName(e.target.value);
+                                            setNameTouched(e.target.value.trim() !== '');
+                                        }}
                                         placeholder="orion-pricing"
                                         helperText="Auto-filled from the URL."
                                     />

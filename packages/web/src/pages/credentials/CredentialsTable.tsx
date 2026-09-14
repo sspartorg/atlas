@@ -20,16 +20,24 @@ interface Props {
 
 type StatusKind = 'active' | 'expiring' | 'unused';
 
+const EXPIRY_WARN_DAYS = 30;
+
+/** Days until expiry when inside the warning window, else null. A GitHub App's
+ *  `expires_at` is its ~1h installation token, which the API re-mints itself,
+ *  so it never counts as expiring. */
+export function daysUntilExpiry(c: ICredential): number | null {
+    if (c.kind === 'github_app' || !c.expires_at) return null;
+    const expMs = new Date(c.expires_at).getTime();
+    if (Number.isNaN(expMs)) return null;
+    const days = Math.round((expMs - Date.now()) / (1000 * 60 * 60 * 24));
+    return days >= 0 && days <= EXPIRY_WARN_DAYS ? days : null;
+}
+
 function deriveStatus(c: ICredential): { kind: StatusKind; label: string } {
     const now = Date.now();
-    if (c.expires_at) {
-        const expMs = new Date(c.expires_at).getTime();
-        if (!Number.isNaN(expMs)) {
-            const days = Math.round((expMs - now) / (1000 * 60 * 60 * 24));
-            if (days >= 0 && days <= 60) {
-                return { kind: 'expiring', label: `Expires in ${days} d` };
-            }
-        }
+    const expiresInDays = daysUntilExpiry(c);
+    if (expiresInDays !== null) {
+        return { kind: 'expiring', label: `Expires in ${expiresInDays} d` };
     }
     if (c.last_used_at) {
         const days = Math.round((now - new Date(c.last_used_at).getTime()) / (1000 * 60 * 60 * 24));

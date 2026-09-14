@@ -9,6 +9,7 @@ import Typography from '@mui/material/Typography';
 import { useQueryClient, useIsFetching } from '@tanstack/react-query';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { useAgent, useUpdateAgent, useAgentRuns, useAgents, useAgentMemory } from '../hooks/useAgents.js';
+import { useQueueDepthByAgent } from '../hooks/useQueueDepthByAgent.js';
 import { RefreshButton } from '../components/index.js';
 import { useToast } from '../hooks/useToast.js';
 import { api } from '../api/api.js';
@@ -48,6 +49,7 @@ export function AgentDetail() {
     const { data: agent, isLoading } = useAgent(id);
     const updateAgent = useUpdateAgent();
     const { data: runs } = useAgentRuns(id);
+    const queueDepth = useQueueDepthByAgent().get(id) ?? 0;
     const [duplicateOpen, setDuplicateOpen] = useState(false);
     const [runNowOpen, setRunNowOpen] = useState(false);
     const [colorOpen, setColorOpen] = useState(false);
@@ -180,6 +182,7 @@ export function AgentDetail() {
                 agent={agent}
                 view={view}
                 stats={stats}
+                queueDepth={queueDepth}
                 onRunNow={handleRunNow}
                 onPauseToggle={handlePauseToggle}
                 menuActions={menuActions}

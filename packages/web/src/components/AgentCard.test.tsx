@@ -36,6 +36,11 @@ function makeRun(overrides: Partial<IAgentRun> = {}): IAgentRun {
 }
 
 describe('AgentCard', () => {
+    it('renders the item-based queue depth passed by the parent', () => {
+        renderWithProviders(<AgentCard agent={makeAgent()} runs={[]} queueDepth={2} />);
+        expect(screen.getByText('queue 2')).toBeInTheDocument();
+    });
+
     it('renders agent name and category', () => {
         renderWithProviders(<AgentCard agent={makeAgent({ name: 'Coder', category: 'software-dev' })} />);
         expect(screen.getByText('Coder')).toBeInTheDocument();
