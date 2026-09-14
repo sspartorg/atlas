@@ -120,6 +120,8 @@ async function finishStep(status: RunStatus, outcome: RunOutcomeKind | null = 'd
 }
 
 const runOf = (id: string) => testDb.selectFrom('workflow_runs').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+const parkComments = async () =>
+    (await commentsService.list('story', 'ATL-2')).filter((c) => c.body.includes('is waiting for you'));
 const itemOf = (id: string) =>
     testDb.selectFrom('items').select(['status', 'assignee_agent_id', 'workflow_id']).where('id', '=', id).executeTakeFirstOrThrow();
 
@@ -213,6 +215,7 @@ describe('workflow engine — loops and parking', () => {
         const runId = await startWorkflowRun('wf-dev', 'ATL-2');
         await finishStep('completed', null);
         expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'coder', park_reason: 'agent_did_not_signal_outcome' });
+        expect(await parkComments()).toHaveLength(1);
     });
 
     it('re-runs the asking step with a fresh loop budget when the Owner replies on the item', async () => {
@@ -221,6 +224,8 @@ describe('workflow engine — loops and parking', () => {
         await finishStep('completed', 'rejected', 'x'); // loop 1
         await finishStep('completed', 'asked_question', 'Which API version?');
         expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'coder' });
+        // The step's completion comment already carries the question.
+        expect(await parkComments()).toHaveLength(0);
 
         await commentsService.create({ author: 'owner', issue_type: 'story', issue_id: 'ATL-2', body: 'Use v2.' });
         await vi.waitFor(async () => expect(spawned.at(-1)?.nodeId).toBe('coder'));

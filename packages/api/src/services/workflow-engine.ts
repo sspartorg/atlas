@@ -377,7 +377,7 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
     const decision = decideRunRouting({ outcome, requiredChecklist });
 
     if (decision.kind === 'park_waiting_for_info') {
-        await park(run, step.node_id, outcome?.reason ?? decision.detail ?? 'The agent needs input');
+        await park(run, step.node_id, outcome?.reason ?? decision.detail ?? 'The agent needs input', Boolean(outcome?.reason));
         return;
     }
     if (decision.kind === 'apply_on_pass') {
@@ -391,7 +391,8 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
     }
     const failTarget = nextNodeId(run.graph_snapshot, step.node_id, 'fail');
     if (!failTarget) {
-        await park(run, step.node_id, decision.detail ?? 'The agent rejected the work');
+        const reasonPosted = Boolean(outcome?.reason) && decision.detail === outcome?.reason;
+        await park(run, step.node_id, decision.detail ?? 'The agent rejected the work', reasonPosted);
         return;
     }
     const workflow = await loadWorkflow(run.workflow_id);
@@ -407,7 +408,7 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
 
 // ─── Park / resume ──────────────────────────────────────────────────────────
 
-async function park(run: RunRow, nodeId: string | null, reason: string): Promise<void> {
+async function park(run: RunRow, nodeId: string | null, reason: string, stepPostedReason = false): Promise<void> {
     await db
         .updateTable('workflow_runs')
         .set({ status: 'waiting_for_owner', parked_node_id: nodeId, current_node_id: nodeId, park_reason: reason.slice(0, 1000) })
@@ -419,23 +420,27 @@ async function park(run: RunRow, nodeId: string | null, reason: string): Promise
     const name = workflow?.name ?? 'Workflow';
     if (run.item_id) {
         await setItemStatus(run.item_id, 'waiting_for_info', `workflow_parked: ${reason}`.slice(0, 280), { clearAssignee: true });
-        const item = await loadItem(run.item_id);
-        const lastStep = await db
-            .selectFrom('agent_runs')
-            .select('agent_id')
-            .where('workflow_run_id', '=', run.id)
-            .orderBy('created_at', 'desc')
-            .executeTakeFirst();
-        try {
-            await commentsService.create({
-                author: 'agent',
-                agent_id: lastStep?.agent_id ?? null,
-                issue_type: item?.type as IssueType,
-                issue_id: run.item_id,
-                body: `**${name}** is waiting for you: ${reason}\n\nReply here to continue the workflow.`,
-            });
-        } catch {
-            /* the item status + notification already carry the signal */
+        // A step that asked or rejected already posted this exact reason in its
+        // completion comment; a second comment would only repeat it.
+        if (!stepPostedReason) {
+            const item = await loadItem(run.item_id);
+            const lastStep = await db
+                .selectFrom('agent_runs')
+                .select('agent_id')
+                .where('workflow_run_id', '=', run.id)
+                .orderBy('created_at', 'desc')
+                .executeTakeFirst();
+            try {
+                await commentsService.create({
+                    author: 'agent',
+                    agent_id: lastStep?.agent_id ?? null,
+                    issue_type: item?.type as IssueType,
+                    issue_id: run.item_id,
+                    body: `**${name}** is waiting for you: ${reason}\n\nReply here to continue the workflow.`,
+                });
+            } catch {
+                /* the item status + notification already carry the signal */
+            }
         }
         await notifyOwner(run, `${name} needs you on ${run.item_id}: ${reason}`, 'needs_you', 'item.status_changed:waiting_for_info');
     } else {
