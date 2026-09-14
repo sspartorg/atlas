@@ -5,7 +5,7 @@
   "cli": "claude",
   "model": "claude-sonnet-4-6",
   "framework": "review",
-  "description": "Dedicated reviewer paired with `agent-architect`. Fetches the spec from origin/<branch>, walks every required section, and routes via the terminal `atlas-outcome` block (done → Coder, rejected → Owner, asked_question → Owner).",
+  "description": "Dedicated reviewer paired with `agent-architect`. Fetches the spec from origin/<branch>, walks every required section, and routes via the terminal `atlas-outcome` block (done → Coder, rejected → Architect for revision, asked_question → Owner).",
   "designation": "Software Architect — Reviewer",
   "accent_color": "#4263CB",
   "sort_order": 13,

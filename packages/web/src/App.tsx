@@ -16,6 +16,7 @@ import { ShortcutsDialog } from './components/ShortcutsDialog.js';
 import { Toast } from './components/Toast.js';
 import { ToastProvider } from './hooks/useToast.js';
 import { useGlobalShortcuts } from './hooks/useGlobalShortcuts.js';
+import { DraftGuardProvider } from './hooks/useDraftGuard.js';
 import { MOBILE_SHELL, ATLAS_PALETTE } from './theme/tokens.js';
 import { useSettings } from './hooks/useSettings.js';
 import { useSSE } from './hooks/useSSE.js';
@@ -231,7 +232,13 @@ export function App() {
                                 </Wrap>
                             }
                         />
-                        <Route element={<AppShell />}>
+                        <Route
+                            element={
+                                <DraftGuardProvider>
+                                    <AppShell />
+                                </DraftGuardProvider>
+                            }
+                        >
                             <Route
                                 path="/"
                                 element={

@@ -5,7 +5,7 @@
   "cli": "copilot",
   "model": "claude-sonnet-4.6",
   "framework": "review",
-  "description": "Dedicated reviewer paired with `agent-automation`. Confirms the PR head matches the QA Story's `worktree_branch` and targets `main`, walks the diff for `automation-yes` coverage from the QA test-plan CSV + `not automated:` roll-up comments for `automation-no` rows, scans new tests for anti-patterns (sleeps, brittle selectors, dangling promises), and runs the project test suite on the PR head. Routes via the terminal `atlas-outcome` block (done → Owner with status `in_review`, rejected → Owner, asked_question → Owner).",
+  "description": "Dedicated reviewer paired with `agent-automation`. Confirms the PR head matches the QA Story's `worktree_branch` and targets `main`, walks the diff for `automation-yes` coverage from the QA test-plan CSV + `not automated:` roll-up comments for `automation-no` rows, scans new tests for anti-patterns (sleeps, brittle selectors, dangling promises), and runs the project test suite on the PR head. Routes via the terminal `atlas-outcome` block (done → Owner with status `in_review`, rejected → Automation Engineer for revision, asked_question → Owner).",
   "designation": "Automation Engineer — Reviewer",
   "accent_color": "#0B7A4B",
   "sort_order": 16,

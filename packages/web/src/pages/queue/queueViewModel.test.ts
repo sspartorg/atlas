@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     buildQueueItems,
+    countQueueDepthByAgent,
     formatNextRunDelta,
     getAgentStatusLabel,
     isQueuedStatus,
@@ -44,6 +45,19 @@ describe('queueViewModel status predicates', () => {
 
     it('shortId returns the id unchanged', () => {
         expect(shortId('CER-12', 'EPC')).toBe('CER-12');
+    });
+});
+
+describe('countQueueDepthByAgent', () => {
+    it('counts ready and in_progress items per assignee, like the Queue page', () => {
+        const depth = countQueueDepthByAgent([
+            makeStory({ id: 'S-1', assignee_agent_id: 'a1', status: 'ready' }),
+            makeBug({ id: 'B-1', assignee_agent_id: 'a1', status: 'in_progress' }),
+            makeEpic({ id: 'E-1', assignee_agent_id: 'a1', status: 'in_review' }),
+            makeStory({ id: 'S-2', assignee_agent_id: null, status: 'ready' }),
+        ]);
+        expect(depth.get('a1')).toBe(2);
+        expect(depth.size).toBe(1);
     });
 });
 

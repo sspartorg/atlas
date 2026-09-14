@@ -24,6 +24,13 @@ export interface HandoffOutcome {
      * Pulled from the same `agent_handoff_rules` row.
      */
     status: string;
+    /**
+     * Set when the rule names an agent that is not installed or not active.
+     * The outcome is then rewritten to park with the Owner so the handoff
+     * never trips the `items.assignee_agent_id` FK or strands the item on an
+     * agent the dispatcher will not run.
+     */
+    unavailableTarget?: string;
 }
 
 // Look up `agent_handoff_rules` for the given agent + kind. Returns null when
@@ -48,10 +55,16 @@ export async function resolveHandoffAssignee(
         .executeTakeFirst();
     if (!row) return null;
     const target = row.target_agent_id;
-    return {
-        assigneeId: target === 'owner' ? null : target,
-        status: row.status as string,
-    };
+    if (target === 'owner') return { assigneeId: null, status: row.status as string };
+    const targetAgent = await db
+        .selectFrom('agents')
+        .select('status')
+        .where('id', '=', target)
+        .executeTakeFirst();
+    if (targetAgent?.status !== 'active') {
+        return { assigneeId: null, status: 'waiting_for_info', unavailableTarget: target };
+    }
+    return { assigneeId: target, status: row.status as string };
 }
 
 /**
@@ -133,6 +146,10 @@ async function applyHandoff(opts: {
         .executeTakeFirst();
     const fromStatus = (before?.status as string | null) ?? null;
     const fromAssignee = (before?.assignee_agent_id as string | null) ?? null;
+    const detail =
+        outcome.unavailableTarget !== undefined
+            ? `handoff_target_unavailable: ${outcome.unavailableTarget}`
+            : (opts.detail ?? null);
 
     // 2026-05-31 — Both `assignee_agent_id` AND `status` come from the
     // rule. The handoff is authoritative for the item's next state; the
@@ -162,7 +179,7 @@ async function applyHandoff(opts: {
             field: 'status',
             from_value: fromStatus,
             to_value: outcome.status,
-            detail: opts.detail ?? null,
+            detail,
         });
     }
     if (fromAssignee !== outcome.assigneeId) {
@@ -174,7 +191,7 @@ async function applyHandoff(opts: {
             field: 'assignee',
             from_value: fromAssignee,
             to_value: outcome.assigneeId,
-            detail: opts.detail ?? null,
+            detail,
         });
     }
 

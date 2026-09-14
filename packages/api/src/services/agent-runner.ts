@@ -52,10 +52,9 @@ import {
 import {
     applyOnFailHandoff,
     applyOnPassHandoff,
-    resolveHandoffAssignee,
 } from './agent-handoff.js';
-import { incrementRound, resetRoundsForItem } from './agent-rounds.js';
-import { decideRunRouting } from './agent-runner-outcome-routing.js';
+import { incrementRound, resetRoundsForItem, resetRoundsUnlessBounceBack } from './agent-rounds.js';
+import { decideRunRouting, shouldOpenPullRequest } from './agent-runner-outcome-routing.js';
 import {
     agentRoutedDuringRun,
     otherActorReassignedDuringRun,
@@ -69,6 +68,8 @@ import { commentsService } from './comments.js';
 import { normalizeModelForCli, resolveSpawn } from './cli-model-naming.js';
 import { ollamaEnv } from './ollama-env.js';
 import { gitInvokeEnv } from './git-env.js';
+import { ATLAS_MCP_URL } from '../plugins/mcp-host.js';
+import { apiPort } from '../config.js';
 import { buildGitAuth, cleanupGitConfig } from './git-credentials.js';
 import { agentIdToSlug } from './commands-assembler.js';
 import { assemblePreamble } from './preamble-assembler.js';
@@ -720,20 +721,14 @@ export async function completeRun(
         // API process stdout for debugging; the run's output_text already
         // captured the MCP calls that produced the routing decision.
         //
-        // NOTE: `resetRoundsForItem` fires here on every self-routed run,
-        // including status-only MCP transitions where the assignee didn't
-        // change. This is a behavior shift from the pre-cedcd43 early-
-        // return block, which never touched round counters on the self-
-        // routed path. Preserved as-is because rounds are per-(item,agent)
-        // and an agent that self-routes has effectively completed the
-        // work-cycle it was counting toward. If round-storm bugs surface
-        // on status-only self-transitions, gate this on the actual
-        // `assigned` event rather than any self-routing detection.
+        // Rounds reset only on forward progress. Resetting on every self-
+        // routed run kept writer↔reviewer bounce loops at round 1 forever,
+        // so the dispatcher's max_rounds cap never parked them.
         console.log(
             `[orchestrator] run ${runId} (${agentId} on ${issueId}): self-routing detected — agent updated assignee/status via MCP; skipping post-run override`,
         );
         broadcastSSE({ type: 'counts_changed', issueType, issueId });
-        await resetRoundsForItem(issueId);
+        await resetRoundsUnlessBounceBack(issueId);
     } else if (reassignedByOther) {
         // Third-party (Owner or another agent) reassigned during the run.
         // Respect the intervention on ALL decision branches — record an
@@ -783,7 +778,7 @@ export async function completeRun(
             detail: (decision.detail ?? 'rejected').slice(0, 200),
         });
         broadcastSSE({ type: 'counts_changed', issueType, issueId });
-        await resetRoundsForItem(issueId);
+        await resetRoundsUnlessBounceBack(issueId);
     } else {
         // apply_on_pass — no third-party intervention (the shared guard
         // above already handled that case). The data-driven handoff is
@@ -1037,25 +1032,15 @@ async function errorRun(
     // crashed before the hook fired, the boot-time orphan reaper in
     // `main.ts` is the safety net.
 
-    // Orchestrator on-fail handoff. Consult `agent_handoff_rules` for
-    // the `on-fail` row and reassign the item per the rule. Migration
-    // 048 made every SDLC on-fail row route to Owner with
-    // `waiting_for_info`, matching the status set above; we read both
-    // assignee and status from the rule so a future override is just a
-    // data change (and so we don't double-write the status block above
-    // — the rule's status is consistent with what the upstream branch
-    // already set).
-    const failHandoff = await resolveHandoffAssignee(agentId, 'on-fail');
-    if (failHandoff) {
-        await db
-            .updateTable('items')
-            .set({
-                assignee_agent_id: failHandoff.assigneeId,
-                status: failHandoff.status as 'ready' | 'in_review' | 'in_progress' | 'done' | 'waiting_for_info' | 'draft',
-            })
-            .where('id', '=', issueId)
-            .execute();
-    }
+    // A crash is not a verdict, so it parks with the Owner instead of
+    // following the on-fail rule. Reviewer on-fail rules now hand the item
+    // back to the writer as `ready` (migration 032); applying them here
+    // would auto-dispatch the writer on every reviewer crash.
+    await db
+        .updateTable('items')
+        .set({ assignee_agent_id: null, status: 'waiting_for_info' })
+        .where('id', '=', issueId)
+        .execute();
 
     const agent = await getAgent(agentId);
 
@@ -1266,6 +1251,47 @@ interface SpawnCliOptions {
     copilotUserAgentPath?: string | null;
 }
 
+/**
+ * Claude-dialect flags that cut an agent run off from the Owner's personal
+ * Claude Code config. Without them the child inherits ~/.claude hooks and
+ * plugins (the Owner's SessionStart hooks ran inside agent runs), the user
+ * CLAUDE.md, and whatever MCP servers ~/.claude.json declares. `project,local`
+ * keeps the worktree's `.claude/commands/atlas-*` slash commands loading; the
+ * strict MCP config declares only the Atlas HTTP server, which needs no auth
+ * header. `--mcp-config` is variadic, so the prompt must stay on stdin.
+ */
+export function claudeIsolationArgs(agent: Pick<IAgent, 'requires_item'>): string[] {
+    // Freedom-mode scouts (ai-news, market-research, regulations, jira-to-epic)
+    // depend on Owner-scoped MCP servers — the Playwright plugin and claude.ai
+    // connectors — that a strict Atlas-only config would strip.
+    if (!agent.requires_item) return [];
+    return [
+        '--setting-sources', 'project,local',
+        '--strict-mcp-config',
+        '--mcp-config', JSON.stringify({ mcpServers: { atlas: { type: 'http', url: ATLAS_MCP_URL } } }),
+    ];
+}
+
+/**
+ * Child env for every agent run. `ATLAS_API_URL` lets `.atlas/scripts`
+ * validators query the API directly. The ollama overlay MUST come after the
+ * `gitInvokeEnv` spread (which spreads process.env), or an
+ * ANTHROPIC_API_KEY in the Owner's shell wins and this nominally-free local
+ * run bills Anthropic instead.
+ */
+export function agentRunEnv(
+    cli: AgentCli,
+    model: string,
+    gitConfigPath: string | null,
+    ghToken: string | null,
+): NodeJS.ProcessEnv {
+    return {
+        ...gitInvokeEnv(gitConfigPath, ghToken),
+        ATLAS_API_URL: `http://127.0.0.1:${apiPort()}`,
+        ...ollamaEnv(cli, model),
+    };
+}
+
 function spawnCli(opts: SpawnCliOptions): void {
     const {
         agent,
@@ -1291,9 +1317,11 @@ function spawnCli(opts: SpawnCliOptions): void {
     const dialect = CLI_DIALECT[agent.cli];
     const bin = dialect === 'claude' ? 'claude' : 'copilot';
 
-    // Claude Code CLI: --print = non-interactive, prompt on stdin. The spawned
-    // CLI inherits Owner's full user-level MCP config (Atlas + Playwright +
-    // any claude.ai-OAuth'd integrations like Atlassian) from ~/.claude.json.
+    // Claude Code CLI: --print = non-interactive, prompt on stdin. Since
+    // 2026-09-14 `claudeIsolationArgs` limits item-driven (SDLC) runs to
+    // project/local settings and the Atlas MCP server only; freedom-mode scouts
+    // keep the Owner's config because their playwright / claude.ai Atlassian
+    // prefixes below come from Owner-scoped servers.
     // To silence --print-mode permission prompts on MCP tool calls — without
     // an interactive UI to answer them, an un-allowlisted call either denies
     // or hangs and worker models then overgeneralise to "I don't have
@@ -1413,6 +1441,7 @@ function spawnCli(opts: SpawnCliOptions): void {
               // consume stdin).
               '--print',
               '--verbose',
+              ...claudeIsolationArgs(agent),
               '--model', model,
               ...effortArgs,
               '--output-format', 'stream-json',
@@ -1484,14 +1513,7 @@ function spawnCli(opts: SpawnCliOptions): void {
     // inherit the exact same GCM-silencing env shape. Drift between
     // the spawn env and the orchestrator's would re-open the same
     // class of leak we just closed.
-    const childEnv: NodeJS.ProcessEnv = {
-        ...gitInvokeEnv(gitConfigPath ?? null, ghToken ?? null),
-        // MUST come after the gitInvokeEnv spread (which spreads process.env),
-        // or an ANTHROPIC_API_KEY in the Owner's shell wins and this
-        // nominally-free local run bills Anthropic instead. No-op unless
-        // agent.cli === 'ollama'.
-        ...ollamaEnv(agent.cli, model),
-    };
+    const childEnv = agentRunEnv(agent.cli, model, gitConfigPath ?? null, ghToken ?? null);
 
     let child: ReturnType<typeof nodeSpawn>;
     try {
@@ -1696,7 +1718,28 @@ function spawnCli(opts: SpawnCliOptions): void {
                     );
                 }
 
+                let prAllowed = false;
                 if (agent.raises_pr && code === 0 && projectId) {
+                    const itemRow = issueId
+                        ? await db
+                              .selectFrom('items')
+                              .select(['status'])
+                              .where('id', '=', issueId)
+                              .executeTakeFirst()
+                        : null;
+                    prAllowed =
+                        (!issueId || itemRow !== undefined) &&
+                        shouldOpenPullRequest({
+                            itemStatus: itemRow ? (itemRow.status as string) : null,
+                            outcome: parseRunOutcome(output),
+                        });
+                    if (!prAllowed) {
+                        emit(
+                            `[orchestrator] pr: skipped — run did not approve the work (item status=${(itemRow?.status as string | undefined) ?? 'unknown'})`,
+                        );
+                    }
+                }
+                if (prAllowed && projectId) {
                     const base = projectDefaultBranch && projectDefaultBranch.trim()
                         ? projectDefaultBranch
                         : 'main';
@@ -1765,6 +1808,7 @@ function spawnCli(opts: SpawnCliOptions): void {
                                 title,
                                 externalRef: parsed?.number ?? null,
                                 createdByRunId: runId,
+                                actorAgentId: agent.id,
                             });
                         } catch (urlErr) {
                             emit(`[orchestrator] pr: persist external link failed: ${(urlErr as Error).message}`);

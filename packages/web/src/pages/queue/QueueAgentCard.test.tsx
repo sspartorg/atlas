@@ -100,6 +100,24 @@ describe('QueueAgentCard', () => {
         expect(screen.getAllByText('ATL-7').length).toBeGreaterThan(0);
     });
 
+    it('item-driven agent with a queued item shows "within a minute" (dispatch on ready), not the cadence slot', () => {
+        const item = makeQueueItem();
+        renderWithProviders(
+            <QueueAgentCard
+                summary={makeSummary({
+                    agent: makeAgent({ requires_item: true, concurrent_runs: 1 }),
+                    queued: [item],
+                    nextRunItem: item,
+                    totalAssigned: 1,
+                })}
+                statusLabel="Queued"
+                projectNameById={new Map()}
+                onOpen={vi.fn()}
+            />,
+        );
+        expect(screen.getByText('within a minute')).toBeInTheDocument();
+    });
+
     it('calls onOpen when card is clicked', () => {
         const onOpen = vi.fn();
         renderWithProviders(

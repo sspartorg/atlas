@@ -479,6 +479,18 @@ describe('buildLinkedItemsSection', () => {
         expect(out).not.toContain('### Blocks');
     });
 
+    it('renders `Tests` on the QA twin (outgoing tested_by) and `Tested by` on the dev story (incoming)', async () => {
+        // Direction is test → dev: the QA twin (ATL-2) holds `tested_by` to the dev story (ATL-1).
+        await itemLinks.create('ATL-2', 'ATL-1', 'tested_by');
+        const qa = await buildLinkedItemsSection('ATL-2');
+        expect(qa).toContain('### Tests');
+        expect(qa).toMatch(/### Tests[^\n]*\n- `ATL-1` \(status: [a-z_]+\) — Epic A/);
+        expect(qa).not.toContain('### Tested by');
+        const dev = await buildLinkedItemsSection('ATL-1');
+        expect(dev).toMatch(/### Tested by[^\n]*\n- `ATL-2` \(status: [a-z_]+\) — Epic B/);
+        expect(dev).not.toContain('### Tests ');
+    });
+
     it('keeps subsections in canonical order: Depends on → Blocks → Relates to', async () => {
         await itemLinks.create('ATL-1', 'ATL-2', 'depends_on'); // outgoing depends_on
         await itemLinks.create('ATL-3', 'ATL-1', 'depends_on'); // incoming depends_on (ATL-3 depends on ATL-1)

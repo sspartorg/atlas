@@ -192,7 +192,6 @@ describe('previewNextSlot — cron branch', () => {
 describe('getRuntimeStats', () => {
     it('returns zeros when no runs', () => {
         expect(getRuntimeStats([])).toEqual({
-            queueDepth: 0,
             runningCount: 0,
             queuedCount: 0,
             lastRunErrored: false,
@@ -205,7 +204,6 @@ describe('getRuntimeStats', () => {
             totalCacheReadTokens: null,
         });
         expect(getRuntimeStats(undefined)).toEqual({
-            queueDepth: 0,
             runningCount: 0,
             queuedCount: 0,
             lastRunErrored: false,
@@ -219,14 +217,14 @@ describe('getRuntimeStats', () => {
         });
     });
 
-    it('counts queued and in_progress as depth', () => {
+    it('splits queued and in_progress runs', () => {
         const now = new Date().toISOString();
         const runs: IAgentRun[] = [
             { status: 'queued', created_at: now, started_at: null, completed_at: null } as IAgentRun,
             { status: 'in_progress', created_at: now, started_at: null, completed_at: null } as IAgentRun,
             { status: 'completed', created_at: now, started_at: null, completed_at: null } as IAgentRun,
         ];
-        expect(getRuntimeStats(runs).queueDepth).toBe(2);
+        expect(getRuntimeStats(runs)).toMatchObject({ queuedCount: 1, runningCount: 1 });
     });
 
     it('computes a p50 duration from started/completed pairs', () => {
@@ -754,7 +752,6 @@ describe('getRuntimeStats — started_at set but completed_at null', () => {
         const stats = getRuntimeStats(runs);
         // No completed_at → durations array stays empty → p50DurationSec is null
         expect(stats.p50DurationSec).toBeNull();
-        // queueDepth should count in_progress
-        expect(stats.queueDepth).toBe(1);
+        expect(stats.runningCount).toBe(1);
     });
 });

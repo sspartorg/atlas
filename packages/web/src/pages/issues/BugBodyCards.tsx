@@ -335,25 +335,6 @@ export function BugBodyCards({
                 placeholder={'- User can…\n- System ensures…'}
                 saving={saving}
                 onSave={(next) => onUpdate({ acceptance_criteria: next })}
-                renderBody={(body) => {
-                    const lines = body.split('\n').filter((l) => l.trim().length > 0);
-                    return (
-                        <Box
-                            component="ul"
-                            sx={{
-                                pl: 3,
-                                m: 0,
-                                color: ATLAS_PALETTE.slate80,
-                                fontSize: 13.5,
-                                lineHeight: 1.8,
-                            }}
-                        >
-                            {lines.map((line, i) => (
-                                <li key={i}>{line.replace(/^[-*]\s*/, '')}</li>
-                            ))}
-                        </Box>
-                    );
-                }}
             />
 
             <EditableMarkdownCard
@@ -363,25 +344,6 @@ export function BugBodyCards({
                 placeholder={'1. Open page X\n2. Click Y\n3. Observe Z'}
                 saving={saving}
                 onSave={(next) => onUpdate({ steps_to_reproduce: next })}
-                renderBody={(body) => {
-                    const lines = body.split('\n').filter((l) => l.trim().length > 0);
-                    return (
-                        <Box
-                            component="ol"
-                            sx={{
-                                pl: 3,
-                                m: 0,
-                                color: ATLAS_PALETTE.slate80,
-                                fontSize: 13.5,
-                                lineHeight: 1.8,
-                            }}
-                        >
-                            {lines.map((line, i) => (
-                                <li key={i}>{line.replace(/^\d+\.\s*/, '')}</li>
-                            ))}
-                        </Box>
-                    );
-                }}
             />
 
             <ExpectedActualCard

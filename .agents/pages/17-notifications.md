@@ -79,6 +79,8 @@ None.
 - The header "last delivery" age uses `useNow` to tick every minute â€” UI updates without refetch.
 - Marking all read does **not** mark externally delivered notifications as cancelled â€” it's a separate read-state field.
 - Quiet hours suppress external notifications only â€” in-app notifications keep arriving.
+- A send skipped by quiet hours, an off event toggle, or an unconfigured channel leaves the row at `external_status='none'` — it never shows **Sent** unless a transport actually delivered (2026-09-14; before, any non-throwing skip was stamped `sent`).
+- A `needs_you` completion row (`event_type='agent_completed'`) drops out of the In-App Feed and the unread count once its item leaves `waiting_for_info` / `in_review`. `agent_error`, terminal-idle, and item-less `needs_you` rows are unaffected.
 
 ## Connectivity
 - **Pages**: [Settings â†’ external notification](19-settings.md) â€” header CTA target for configuring the bridge; [Issues](08-issues.md) and [Epic Detail](07-epic-detail.md) â€” row "Open" navigation when the notification references an entity.

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Dialog from '@mui/material/Dialog';
 import Box from '@mui/material/Box';
@@ -26,6 +26,7 @@ import CloudDownloadRounded from '@mui/icons-material/CloudDownloadRounded';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCredentials } from '../../hooks/useCredentials.js';
 import { useSettings } from '../../hooks/useSettings.js';
+import { useAgents } from '../../hooks/useAgents.js';
 import { useCloneJob } from '../../hooks/useCloneJob.js';
 import { api } from '../../api/api.js';
 import type { ConnectError } from '../../api/api.js';
@@ -171,12 +172,13 @@ export function NewProjectModal({ open, onClose }: Props) {
     const qc = useQueryClient();
     const { data: credentials = [] } = useCredentials();
     const { data: settings } = useSettings();
-
     const [view, setView] = useState<View>('form');
+    const { data: agents } = useAgents({ enabled: view === 'success' });
     const [createMode, setCreateMode] = useState<CreateMode>('clone');
     const [repoUrl, setRepoUrl] = useState('');
     const [credentialId, setCredentialId] = useState<string>('');
     const [projectName, setProjectName] = useState('');
+    const [nameTouched, setNameTouched] = useState(false);
     const [issueKeyPrefix, setIssueKeyPrefix] = useState('');
     const [prefixStatus, setPrefixStatus] = useState<
         | { kind: 'idle' }
@@ -206,6 +208,7 @@ export function NewProjectModal({ open, onClose }: Props) {
             setRepoUrl('');
             setCredentialId('');
             setProjectName('');
+            setNameTouched(false);
             setIssueKeyPrefix('');
             setPrefixStatus({ kind: 'idle' });
             setDefaultBranch('main');
@@ -257,13 +260,14 @@ export function NewProjectModal({ open, onClose }: Props) {
         return () => window.clearTimeout(handle);
     }, [issueKeyPrefix, open]);
 
-    // Auto-fill project name from URL.
+    // Follow the URL until the Owner types their own name — a name-empty guard
+    // froze on the first partial match ("a" from github.com/owner/a…).
     useEffect(() => {
         const m = repoUrl.match(REPO_RE);
-        if (m && !projectName.trim()) {
+        if (m && !nameTouched) {
             setProjectName(m[2] ?? '');
         }
-    }, [repoUrl, projectName]);
+    }, [repoUrl, nameTouched]);
 
     // Auto-select first credential.
     useEffect(() => {
@@ -311,9 +315,11 @@ export function NewProjectModal({ open, onClose }: Props) {
 
     const workspacePath = settings?.workspace_path ?? '';
     const computedDest = useMemo(() => {
-        if (!workspacePath || !projectName.trim()) return '';
+        if (!workspacePath) return '';
         const sep = workspacePath.includes('\\') ? '\\' : '/';
-        return `${workspacePath.replace(/[\\/]$/, '')}${sep}${projectName.trim()}`;
+        // Until the name resolves from the URL, show the workspace root with a
+        // neutral tail rather than claiming the workspace path is unset.
+        return `${workspacePath.replace(/[\\/]$/, '')}${sep}${projectName.trim() || '…'}`;
     }, [workspacePath, projectName]);
 
     const repoIsValid = REPO_RE.test(repoUrl.trim());
@@ -440,6 +446,7 @@ export function NewProjectModal({ open, onClose }: Props) {
         setCloneId(null);
         setRepoUrl('');
         setProjectName('');
+        setNameTouched(false);
         setIssueKeyPrefix('');
         setPrefixStatus({ kind: 'idle' });
         setDefaultBranch('main');
@@ -560,7 +567,7 @@ export function NewProjectModal({ open, onClose }: Props) {
                                     borderRadius: '4px',
                                 }}
                             >
-                                PAT
+                                {c.kind === 'github_app' ? 'App' : 'PAT'}
                             </Box>
                         </Box>
                     );
@@ -843,7 +850,10 @@ export function NewProjectModal({ open, onClose }: Props) {
                                         size="small"
                                         label="Project name"
                                         value={projectName}
-                                        onChange={(e) => setProjectName(e.target.value)}
+                                        onChange={(e) => {
+                                            setProjectName(e.target.value);
+                                            setNameTouched(e.target.value.trim() !== '');
+                                        }}
                                         placeholder="orion-pricing"
                                         helperText="Auto-filled from the URL."
                                     />
@@ -903,7 +913,8 @@ export function NewProjectModal({ open, onClose }: Props) {
                                             flex: 1,
                                         }}
                                     >
-                                        {computedDest || 'Set a workspace path in Settings first'}
+                                        {computedDest ||
+                                            (settings ? 'Set a workspace path in Settings first' : '…')}
                                     </Typography>
                                 </Box>
 
@@ -1325,7 +1336,8 @@ export function NewProjectModal({ open, onClose }: Props) {
                                 overflow: 'hidden',
                             }}
                         >
-                            {[
+                            {(
+                                [
                                 ['Project ID', job.project.id.slice(0, 8)],
                                 ['Default branch', job.project.default_branch],
                                 [
@@ -1334,8 +1346,28 @@ export function NewProjectModal({ open, onClose }: Props) {
                                         ? `${headInfo.short_sha} · ${headInfo.subject ?? '—'}${headInfo.relative_time ? ` (${headInfo.relative_time})` : ''}`
                                         : '—',
                                 ],
-                                ['Agents attached', '—'],
-                            ].map(([k, v], i) => (
+                                [
+                                    'Agents',
+                                    // Agents are global — every installed agent can work this project.
+                                    agents === undefined ? (
+                                        '—'
+                                    ) : agents.length > 0 ? (
+                                        `${agents.length} installed · shared by all projects`
+                                    ) : (
+                                        <Button
+                                            size="small"
+                                            onClick={() => {
+                                                onClose();
+                                                navigate('/agents/marketplace');
+                                            }}
+                                            sx={{ textTransform: 'none', p: 0, minWidth: 0 }}
+                                        >
+                                            None installed · Browse Marketplace →
+                                        </Button>
+                                    ),
+                                ],
+                            ] as Array<[string, ReactNode]>
+                            ).map(([k, v], i) => (
                                 <Box
                                     key={k}
                                     sx={{

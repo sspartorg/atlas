@@ -63,7 +63,7 @@ describe('SubTaskDetail page', () => {
                     id: 'T2',
                     title: 'Wire reset endpoint',
                     description: 'Reset rounds counter on the assignee.',
-                    acceptance_criteria: '- Endpoint returns 200\n- Counter is zero',
+                    acceptance_criteria: '- **Given** endpoint returns 200\n- Counter is zero',
                 }),
                 parent_story: makeStory({ id: 'ATL-2' }),
                 epic: null,
@@ -80,8 +80,8 @@ describe('SubTaskDetail page', () => {
         // Both EditableMarkdownCards rendered.
         expect(screen.getByText('Description')).toBeInTheDocument();
         expect(screen.getByText('Acceptance criteria')).toBeInTheDocument();
-        // The list renderer (renderBody) — splits each line into <li>.
-        expect(screen.getByText('Endpoint returns 200')).toBeInTheDocument();
+        expect(screen.getByText('Given')).toBeInTheDocument();
+        expect(document.body.textContent).not.toContain('**Given**');
         expect(screen.getByText('Counter is zero')).toBeInTheDocument();
     });
 

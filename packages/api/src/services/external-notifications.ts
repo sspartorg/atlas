@@ -103,7 +103,7 @@ async function loadGatingSettings(): Promise<GatingSettings> {
 export async function sendExternalNotification(
     message: string,
     eventKey?: ExternalNotificationEventKey,
-): Promise<void> {
+): Promise<boolean> {
     // getWithSecrets: `transport.isConfigured(settings)` reads
     // external_notification_webhook_url (teams) and
     // external_notification_token / _chat_id (telegram). The redacted
@@ -113,11 +113,11 @@ export async function sendExternalNotification(
     const gating = await loadGatingSettings();
     // Quiet hours apply to EVERY send, with or without an event key — same
     // invariant as the pre-multi-provider Telegram path.
-    if (isInQuietHours(gating)) return;
-    if (eventKey && !shouldSendForEvent(eventKey, gating)) return;
+    if (isInQuietHours(gating)) return false;
+    if (eventKey && !shouldSendForEvent(eventKey, gating)) return false;
 
     const transport = transports[settings.external_notification_provider];
-    if (!transport.isConfigured(settings)) return;
+    if (!transport.isConfigured(settings)) return false;
     // Pass the already-decrypted settings down so the transport doesn't
     // hit the DB a second time (previously each dispatch cost 2× settings
     // queries — orchestrator + transport). Also closes the narrow race
@@ -125,6 +125,7 @@ export async function sendExternalNotification(
     // above and the transport's own re-fetch; both now use the same
     // snapshot. See ExternalNotificationTransport.send docstring.
     await transport.send(message, settings);
+    return true;
 }
 
 export async function sendExternalForNotification(
@@ -134,8 +135,11 @@ export async function sendExternalForNotification(
 ): Promise<void> {
     await notificationsService.updateExternalStatus(notificationId, 'pending');
     try {
-        await sendExternalNotification(message, eventKey);
-        await notificationsService.updateExternalStatus(notificationId, 'sent');
+        // A gated/unconfigured skip is not a delivery — revert to 'none' (the
+        // schema's "no external delivery" value, same as cancel) so the
+        // Notification Log never claims "Sent" with no channel connected.
+        const delivered = await sendExternalNotification(message, eventKey);
+        await notificationsService.updateExternalStatus(notificationId, delivered ? 'sent' : 'none');
     } catch (err) {
         await notificationsService.updateExternalStatus(
             notificationId,

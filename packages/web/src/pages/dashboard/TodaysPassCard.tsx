@@ -13,12 +13,6 @@ interface ITodaysPassCardProps {
 
 const MONO_FONT = '"JetBrains Mono", monospace';
 
-function shortIssueId(item: TodaysPassItem): string {
-    const prefix = item.issue_type === 'epic' ? 'EPC' : item.issue_type === 'bug' ? 'BUG' : 'STR';
-    const tail = item.issue_id.split('-').slice(-1)[0] ?? item.issue_id;
-    return `${prefix}-${tail.slice(0, 6).toUpperCase()}`;
-}
-
 export function TodaysPassCard({ label, color, icon, items }: ITodaysPassCardProps) {
     return (
         <Paper
@@ -87,7 +81,7 @@ export function TodaysPassCard({ label, color, icon, items }: ITodaysPassCardPro
                                     component="span"
                                     sx={{ fontFamily: MONO_FONT, color: ATLAS_PALETTE.slate }}
                                 >
-                                    {shortIssueId(item)}
+                                    {item.issue_id}
                                 </Box>
                             </Typography>
                         </Box>

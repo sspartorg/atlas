@@ -20,7 +20,9 @@ import {
     formatNextPassDelta,
     isCronExpressionValid,
 } from './agentViewModel.js';
-import { ModelSelect } from '../../components/ModelSelect.js';
+import { ModelSelect, modelsForCli } from '../../components/ModelSelect.js';
+import { CliUnavailableAlert } from '../../components/CliUnavailableAlert.js';
+import { useCliModels } from '../../hooks/useCliModels.js';
 import { FormSection, FormRow } from '../../components/FormSection.js';
 import { api } from '../../api/api.js';
 
@@ -70,6 +72,7 @@ const DEFAULT_CRON = '0 9 * * 1-5';
 export function OverviewTabContent({ agent, view }: Props) {
     const updateAgent = useUpdateAgent();
     const toast = useToast();
+    const { data: cliModels = [] } = useCliModels();
     const [description, setDescription] = useState(view.description);
     const [editingDescription, setEditingDescription] = useState(false);
     const [cli, setCli] = useState(agent.cli);
@@ -166,6 +169,19 @@ export function OverviewTabContent({ agent, view }: Props) {
             },
             { onSuccess: () => toast.show({ message: 'Configuration saved' }) },
         );
+    }
+
+    // The old CLI's model is never valid for the new one (walkthrough:
+    // copilot→claude left "claude-sonnet-4.6 (not in registry)"), so jump
+    // to the new CLI's registry default — ModelSelect's first option.
+    function handleCliChange(next: IAgent['cli']) {
+        setCli(next);
+        if (next === agent.cli) {
+            setModel(agent.model);
+            return;
+        }
+        const first = modelsForCli(cliModels, next)[0];
+        if (first) setModel(first.model_name);
     }
 
     function handleSaveDescription(next: string) {
@@ -270,11 +286,12 @@ export function OverviewTabContent({ agent, view }: Props) {
             <CommitDisciplineTile agentId={agent.id} />
 
             <FormSection label="Configuration">
+                <CliUnavailableAlert cli={cli} sx={{ mb: 2 }} />
                 <FormRow label="CLI">
                     <Select
                         size="small"
                         value={cli}
-                        onChange={(e) => setCli(e.target.value as IAgent['cli'])}
+                        onChange={(e) => handleCliChange(e.target.value as IAgent['cli'])}
                         fullWidth
                         sx={{
                             fontSize: 13.5,

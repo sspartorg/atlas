@@ -18,7 +18,7 @@ import { useToast } from '../hooks/useToast.js';
 import { api } from '../api/api.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { CredentialsEmptyState } from './credentials/CredentialsEmptyState.js';
-import { CredentialsTable } from './credentials/CredentialsTable.js';
+import { CredentialsTable, daysUntilExpiry } from './credentials/CredentialsTable.js';
 import { type CredentialModalMode } from './credentials/CredentialModal.js';
 const CredentialModal = lazyNamed(
     () => import('./credentials/CredentialModal.js'),
@@ -38,16 +38,10 @@ export function Credentials() {
     const [modalMode, setModalMode] = useState<CredentialModalMode>({ kind: 'add' });
     const [deleteId, setDeleteId] = useState<string | null>(null);
 
-    const expiringSoon = useMemo(() => {
-        const now = Date.now();
-        return rows.filter((c) => {
-            if (!c.expires_at) return false;
-            const ms = new Date(c.expires_at).getTime();
-            if (Number.isNaN(ms)) return false;
-            const days = Math.round((ms - now) / (1000 * 60 * 60 * 24));
-            return days >= 0 && days <= 30;
-        }).length;
-    }, [rows]);
+    const expiringSoon = useMemo(
+        () => rows.filter((c) => daysUntilExpiry(c) !== null).length,
+        [rows],
+    );
 
     const hostsCount = useMemo(() => new Set(rows.map((c) => c.host)).size, [rows]);
 

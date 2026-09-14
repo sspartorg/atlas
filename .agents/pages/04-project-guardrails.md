@@ -34,6 +34,9 @@ Per-project safety rules. The standalone route immediately redirects into the Pr
 **Empty state**
 - Shield icon, copy "No guard-rails yet for this project", **Add first rule** button.
 
+**Scripts tab (`ProjectGuardrailScriptsTab`)** — project-scoped guardrail scripts (cards → `ScriptModal` edit; **Add script** / **Add first script** → `ScriptModal` add).
+- In add mode the modal notes "A project script with the same slug overrides the workspace script" and offers one clickable slug chip per workspace script (`useGuardrailScripts({ enabled: modal open in add mode })` → `GET /api/guardrail-scripts`) that this project doesn't already override. Clicking a chip fills the slug (and the name when empty).
+
 ## Why these affordances exist
 - **Add rule** — Per-project rules diverge from workspace defaults (e.g., "don't touch `/migrations` in this repo"); a fast add-path keeps the Owner from leaving for the global Guard-rails page just to scope a one-repo rule.
 - **Toggle switch per rule** — Rules can become temporarily wrong (e.g., during a planned migration); a toggle preserves the rule body so the Owner can re-enable later instead of re-typing it.
@@ -47,11 +50,13 @@ Per-project safety rules. The standalone route immediately redirects into the Pr
 - `useProjectGuardrails(projectId)` — staleTime 15s
 - `useCreateProjectGuardrail(projectId)`
 - `useToggleProjectGuardrail(projectId)`
+- Scripts tab: `useProjectGuardrailScripts(projectId)` + create/update/delete mutations; `useGuardrailScripts({ enabled })` for the override-slug chips
 
 ## API endpoints touched
 - `GET /api/projects/:projectId/guardrails`
 - `POST /api/projects/:projectId/guardrails` — payload: `{ title, body_md, applies_to?, icon, enabled, sort_order }`
 - `PATCH /api/projects/:projectId/guardrails/:id/toggle` — payload: `{ enabled: 1 | 0 }`
+- `GET/POST/PATCH/DELETE /api/projects/:projectId/guardrail-scripts` (Scripts tab); `GET /api/guardrail-scripts` (workspace slugs offered as overrides in the add modal)
 
 ## Permissions / guards
 - Post-onboarding only.

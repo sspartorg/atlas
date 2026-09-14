@@ -10,8 +10,10 @@ import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { AgentCardMenu, type AgentCardMenuActions } from './AgentCardMenu.js';
 import { LiveDot } from '../../components/LiveDot.js';
+import { CliUnavailableAlert } from '../../components/CliUnavailableAlert.js';
 import { resolveAgentStatusLabel } from '../queue/queueViewModel.js';
 import {
+    agentStatusColor,
     agentSubtitle,
     relativeTime,
     type AgentView,
@@ -28,6 +30,8 @@ interface Props {
     agent: IAgent;
     view: AgentView;
     stats: AgentRuntimeStats;
+    /** Ready + in-progress items assigned to this agent — the Queue page's count. */
+    queueDepth: number;
     onRunNow: () => void;
     onPauseToggle: () => void;
     menuActions: AgentCardMenuActions;
@@ -37,6 +41,7 @@ export const AgentHero = memo(function AgentHero({
     agent,
     view,
     stats,
+    queueDepth,
     onRunNow,
     onPauseToggle,
     menuActions,
@@ -78,20 +83,14 @@ export const AgentHero = memo(function AgentHero({
     }
 
     const isPaused = agent.status === 'inactive';
+    // queueDepth counts Ready items, which exist before any run is queued.
     const statusLabel = resolveAgentStatusLabel(
         agent.status,
         stats.runningCount,
-        stats.queuedCount,
+        stats.queuedCount + queueDepth,
         stats.lastRunErrored
     );
-    // Use the semantic slots (`success`, `warning`) — Mercury collapses
-    // `green` and `gold` to brand-accent (black/white) so they can't carry
-    // a live/queued signal.
-    const statusColor = isPaused
-        ? ATLAS_PALETTE.slate60
-        : statusLabel === 'Queued'
-          ? ATLAS_PALETTE.warning
-          : ATLAS_PALETTE.success;
+    const statusColor = agentStatusColor(statusLabel);
 
     return (
         <Box
@@ -268,8 +267,8 @@ export const AgentHero = memo(function AgentHero({
                                 cursor: 'pointer',
                             }}
                         >
-                            Queue: <strong>{stats.queueDepth}</strong> item
-                            {stats.queueDepth === 1 ? '' : 's'}
+                            Queue: <strong>{queueDepth}</strong> item
+                            {queueDepth === 1 ? '' : 's'}
                         </Typography>
                         <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
                             Last run: {stats.lastRunAt ? relativeTime(stats.lastRunAt) : '—'}
@@ -344,6 +343,7 @@ export const AgentHero = memo(function AgentHero({
                 </Button>
                 <AgentCardMenu actions={{ ...menuActions, paused: isPaused }} />
             </Box>
+            <CliUnavailableAlert cli={agent.cli} sx={{ flexBasis: '100%' }} />
         </Box>
     );
 });

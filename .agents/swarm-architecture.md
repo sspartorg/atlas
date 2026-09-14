@@ -2,7 +2,7 @@
 
 The **autonomous SDLC swarm** is Atlas's long-term fleet vision: one agent per phase of the software lifecycle plus the product-lifecycle adjacencies â€” discovery, build, review, ship, monitor, learn. This doc captures the strategic shape of that fleet. For the implementation details of how a single agent is wired, see [`freedom-agents.md`](freedom-agents.md). For the canonical role list and disable-by-default seed policy, see [`role-catalog.md`](role-catalog.md).
 
-The fleet ships **engineering + engineering-reviewer agents active** by default. Every other agent is seeded with `status: 'inactive'` so the Owner explicitly opts each one in after wiring its inputs (channels, MCP servers, deploy targets, etc.).
+**Nothing is installed on a fresh DB** — `runSeed()` only syncs the on-disk catalog (`packages/api/src/marketplace/catalog/`) into `marketplace_agents`; the Owner installs each agent from `/agents/marketplace`, which also copies its handoff rules and checklists. SDLC catalog entries ship `status: 'active'`; autonomous scouts ship `inactive` so the Owner opts each one in after wiring its inputs (channels, MCP servers, deploy targets, etc.).
 
 ## Capability matrix
 
@@ -10,8 +10,8 @@ Eleven capability areas, mapped against the current state of the codebase (audit
 
 | Capability | State |
 |---|---|
-| Building software (engineering chain) | **Active** â€” PO Writer â†’ Spec Writer â†’ Coder â†’ QA Writer with paired reviewers |
-| Reviewing engineering work | **Active** â€” every active SDLC agent ships with a paired reviewer persona |
+| Building software (engineering chain) | **Catalog (install to activate)** â€” PO Writer â†’ PO Reviewer â†’ fan-out: Architect â†’ Architect Reviewer â†’ Coder â†’ Code Reviewer (dev) and QA Writer â†’ QA Reviewer (QA twin) |
+| Reviewing engineering work | **Catalog** â€” each performer has a separate paired reviewer agent (no in-agent reviewer persona) |
 | Autonomous regression testing | **Active** â€” QA Writer agent in the chain |
 | Market research | **Inactive (seeded)** â€” weekly Playwright MCP scrape â†’ weekly epic |
 | Regulatory awareness | **Inactive (seeded)** â€” weekly Legal Scout |
@@ -26,18 +26,26 @@ Eleven capability areas, mapped against the current state of the codebase (audit
 
 ## Current fleet
 
-### Active item-driven chain (4 agents + paired reviewers)
+### SDLC chain (10 catalog agents: 5 performers + 5 paired reviewers)
 
-Each of these has `role_id` pointing at a row in [`role-catalog.md`](role-catalog.md) and a paired reviewer persona; the chain advances via `agent_handoff_rules` on `on-pass`/`on-fail`/`on-needs-info` transitions.
+Each has `role_id` pointing at a row in [`role-catalog.md`](role-catalog.md); the chain advances via `agent_handoff_rules` on `on-pass` / `on-fail`, copied at install time from the catalog's `handoff_rules.json`. Spec Writer was removed — its job merged into Architect.
 
-| Agent | Role | On-pass handoff |
-|---|---|---|
-| `agent-po-writer` | `po` | â†’ `agent-spec-writer` (status: `ready`) |
-| `agent-spec-writer` | `spec-writer` | â†’ `agent-coder` (status: `ready`) |
-| `agent-coder` | `engineer` | â†’ `agent-qa-writer` (status: `ready`) |
-| `agent-qa-writer` | `qa` | â†’ `owner` (status: `done`) |
+| Agent | Role | CLI (catalog default) | On-pass handoff |
+|---|---|---|---|
+| `agent-po-writer` | `po` | claude | â†’ `agent-po-reviewer` (ready) |
+| `agent-po-reviewer` | `po` | claude | â†’ `owner` (in_review); fans children out via MCP: dev stories â†’ `agent-architect`, `[QA]` twins â†’ `agent-qa-writer` |
+| `agent-architect` | `architect` | claude | â†’ `agent-architect-reviewer` (ready) |
+| `agent-architect-reviewer` | `architect` | claude | â†’ `agent-coder` (ready) |
+| `agent-coder` | `engineer` | copilot | â†’ `agent-code-reviewer` (ready) |
+| `agent-code-reviewer` | `engineer` | copilot | â†’ `owner` (in_review); `raises_pr` |
+| `agent-qa-writer` | `qa` | claude | â†’ `agent-qa-reviewer` (ready) |
+| `agent-qa-reviewer` | `qa` | claude | â†’ `owner` (in_review); `raises_pr` |
+| `agent-automation` | `automation` | copilot | â†’ `agent-automation-reviewer` (ready); never auto-routed â€” Owner assigns after the dev PR merges |
+| `agent-automation-reviewer` | `automation` | copilot | â†’ `owner` (in_review); `raises_pr` |
 
-All four `on-fail` paths escalate to `owner` with status `waiting_for_info`.
+**On-fail (2026-09-14):** a reviewer rejection goes back to its writer with status `ready` (`agent-po-reviewer` -> `agent-po-writer`, `agent-architect-reviewer` -> `agent-architect`, `agent-code-reviewer` -> `agent-coder`, `agent-qa-reviewer` -> `agent-qa-writer`, `agent-automation-reviewer` -> `agent-automation`); migration `032` rewrites installed rows still on the old `owner`/`waiting_for_info` default. The generated `.atlas/handoff.md` makes the reviewer post its gap-list comment before reassigning, and keeps an Owner-only blocker path (assign null + `Waiting for Info` + comment) for problems the writer can't fix. Performers' on-fail still escalates to `owner` / `waiting_for_info`. Bounce loops are capped: rounds accumulate on hand-backs and `maybeAutoDispatch` parks the item with the Owner once `agents.max_rounds` is reached. A run that crashes always parks with the Owner, whatever its on-fail rule says. If a rule's target isn't installed or is inactive, the item parks with the Owner (`handoff_target_unavailable: <slug>`). Nothing reaches `done` automatically.
+
+**Run isolation:** item-driven claude- and ollama-dialect runs spawn with `--setting-sources project,local --strict-mcp-config --mcp-config <atlas only>`, so the Owner's `~/.claude` hooks, plugins, user CLAUDE.md and user MCP servers don't leak into agent runs. The worktree's `.claude/commands/atlas-*` still load, and only the Atlas MCP (`http://127.0.0.1:4500/mcp`) is available. Freedom-mode scouts (`agent-ai-news`, `agent-market-research`, `agent-regulations`, `agent-jira-to-epic`, …) are exempt and keep the Owner's config, because they rely on the Owner's Playwright plugin and claude.ai Atlassian connector. Copilot runs are not isolated. Copilot-default agents fail with `cli_not_installed` when `copilot` is not on PATH â€” switch their CLI + model on Agent Detail.
 
 ### Seeded-inactive autonomous agents (6)
 
@@ -52,24 +60,15 @@ All `requires_item: false`, `role_id: NULL`, `status: 'inactive'`. Owner enables
 | `agent-ai-readiness` | `ai-readiness` | manual |
 | `agent-knowledge-base` | `knowledge-base` | manual |
 
-### Seeded-inactive SDLC roles (6)
+### Type-only SDLC roles (5)
 
-These rows exist in the `roles` catalog with curated `default_prompt_md`, but no corresponding active agent ships in the chain. Each is one Owner decision away from activation (add handoff rule + flip the agent's status).
-
-| Role | Why disabled by default |
-|---|---|
-| `architect` | Architecture-doc handoff isn't wired upstream of Coder; one-off rather than every-story |
-| `tester` | Exploratory testing is human-paced; no dispatch trigger fits the auto-pipeline |
-| `automation` | CI/CD ownership belongs to the project â€” Owner decides what's in scope |
-| `devops` | Infra changes need explicit Owner approval; opt-in only |
-| `security` | Cross-cutting review; Owner decides when to slot it in |
-| `designer` | UX work is upstream of Stories; needs Epic-level trigger |
+`spec-writer`, `tester`, `devops`, `security`, `designer` exist in the `SdlcRole` union but have no `roles` row and no catalog agent (see [`role-catalog.md`](role-catalog.md)).
 
 ## Dispatch model
 
 Atlas runs two dispatch modes:
 
-- **Item-driven** â€” an agent's run is scoped to a specific item (`requires_item: true`). Handoff rules on `agent_handoff_rules` advance the item through the chain. The PO Writer â†’ Spec Writer â†’ Coder â†’ QA Writer chain works this way. Reviewer personas run as a second CLI invocation against the same item after the performer leg.
+- **Item-driven** â€” an agent's run is scoped to a specific item (`requires_item: true`). Handoff rules on `agent_handoff_rules` advance the item through the chain. The PO Writer â†’ PO Reviewer â†’ Architect / QA Writer â†’ â€¦ chain works this way; reviewers are separate agents. Since 2026-09-14 the scheduler dispatches item-driven agents on ready (within ~1 min of an item becoming Ready + assigned, capacity permitting) â€” cadence no longer delays handoffs.
 - **Freedom-mode** â€” `requires_item: false`. The agent runs on a clock-driven schedule (`cron_expr`) or manual trigger and produces new items (epics) rather than advancing existing ones. The 6 inactive autonomous agents work this way (any future autonomous agents follow the same shape).
 
 Full implementation details â€” runner null-item guards, prompt-builder freedom preamble, MCP tool availability matrix â€” live in [`freedom-agents.md`](freedom-agents.md).
@@ -93,7 +92,7 @@ The policy is a **seed-time curation signal, not a runtime guard.**
 - New autonomous agents ship with `status: 'inactive'` in the seed. Migration time is the only point this is enforced.
 - Once an agent exists in the DB, the Owner can flip `agents.status` freely (via the Agents page or `PATCH /api/agents/:id`); the seed never re-disables a runtime-enabled agent on a subsequent boot.
 - Each agent's prompt carries an "Edit before activating" block listing the placeholders Owner must fill in (endpoints, channels, project IDs, etc.) before the agent will produce useful output. Activating an unedited agent is harmless â€” it just produces empty / generic runs.
-- The Owner's vision is explicit: "keep only the engineering and engineering reviewing agents as active." The fleet's default state holds this â€” only the 4 chain agents (po-writer, spec-writer, coder, qa-writer) ship active; all 5 seeded autonomous agents + the 6 disabled SDLC roles ship inactive.
+- The Owner's vision is explicit: "keep only the engineering and engineering reviewing agents as active." The catalog holds this â€” the 10 SDLC chain agents ship `active`; the 6 autonomous agents ship `inactive`. Nothing is active until installed.
 
 ## Why a roadmap doc lives here
 

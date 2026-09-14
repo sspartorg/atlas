@@ -242,6 +242,28 @@ describe('NewIssueModal — initialValues pre-fill', () => {
     });
 });
 
+describe('NewIssueModal — unsaved draft guard', () => {
+    function fireUnload(): boolean {
+        const e = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(e);
+        return e.defaultPrevented;
+    }
+
+    it('blocks a browser unload once the draft differs from its initial values', async () => {
+        const { rerender } = renderWithProviders(
+            <NewIssueModal open onClose={vi.fn()} initialValues={{ title: 'Cloned' }} />,
+        );
+        const title = await screen.findByPlaceholderText('Short summary…');
+        expect(fireUnload()).toBe(false);
+
+        fireEvent.change(title, { target: { value: 'Cloned, then edited' } });
+        expect(fireUnload()).toBe(true);
+
+        rerender(<NewIssueModal open={false} onClose={vi.fn()} initialValues={{ title: 'Cloned' }} />);
+        expect(fireUnload()).toBe(false);
+    });
+});
+
 describe('NewIssueModal — sub_bug kind', () => {
     it('renders with sub_bug initialKind (exercises kindAccent sub_bug branch)', async () => {
         renderWithProviders(
@@ -811,22 +833,32 @@ describe('NewIssueModal — expected and actual field changes (bug fields)', () 
     });
 });
 
+describe('NewIssueModal — reporter label', () => {
+    it('shows the Owner name from settings, not a hardcoded name', async () => {
+        server.use(
+            http.get(`${BASE}/settings`, () =>
+                HttpResponse.json({ id: 1, owner_name: 'Ada Lovelace', onboarding_complete: 1 }),
+            ),
+        );
+        renderWithProviders(<NewIssueModal open onClose={vi.fn()} />);
+        expect(await screen.findByText('Ada Lovelace · Owner')).toBeInTheDocument();
+        expect(screen.queryByText(/sspart/)).not.toBeInTheDocument();
+    });
+});
+
 describe('NewIssueModal — reporter select onChange', () => {
     it('triggers reporter select onChange — exercises setReporterId("owner") branch', async () => {
         const fe = fireEvent;
         renderWithProviders(<NewIssueModal open onClose={vi.fn()} />);
         await waitFor(() => screen.getByText('New story'));
-        // Find the Reporter combobox by its displayed value "sspart · Owner"
         const comboboxes = screen.getAllByRole('combobox');
         const reporterSelect = comboboxes.find(c =>
-            (c as HTMLElement).textContent?.includes('sspart') ||
             (c as HTMLElement).textContent?.includes('Owner')
         );
         if (reporterSelect) {
             fe.mouseDown(reporterSelect);
-            // After opening, multiple elements with "sspart · Owner" may exist
-            // (one in the trigger, one in the listbox). Use queryAllByText.
-            const ownerOpts = screen.queryAllByText('sspart · Owner');
+            // After opening, the label exists in the trigger and the listbox.
+            const ownerOpts = screen.queryAllByText('Owner · Owner');
             // Click the last one — in MUI the option in the listbox comes last
             const ownerOpt = ownerOpts[ownerOpts.length - 1];
             if (ownerOpt) fe.click(ownerOpt);

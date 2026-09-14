@@ -8,6 +8,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import MenuItem from '@mui/material/MenuItem';
+import ListSubheader from '@mui/material/ListSubheader';
 import TextField from '@mui/material/TextField';
 import { useMutation } from '@tanstack/react-query';
 import type { IAgent, IssueType } from '@atlas/shared';
@@ -20,6 +21,7 @@ import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { PromptPreviewDialog } from './PromptPreviewDialog.js';
 import { ApiErrorAlert } from '../../components/ApiErrorAlert.js';
+import { CliUnavailableAlert } from '../../components/CliUnavailableAlert.js';
 
 interface Props {
     open: boolean;
@@ -45,6 +47,12 @@ const KIND_LABEL: Record<Kind, string> = {
     bug: 'Bug',
 };
 
+const KIND_PLURAL: Record<Kind, string> = {
+    epic: 'epics',
+    story: 'stories',
+    bug: 'bugs',
+};
+
 function isKind(t: IssueType): t is Kind {
     return t === 'epic' || t === 'story' || t === 'bug';
 }
@@ -54,14 +62,16 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
     const toast = useToast();
 
     const { data: projects = [] } = useProjects();
+    // PO-role agents operate on epics; every other role starts from a story.
+    const defaultKind: Kind = agent.role_id === 'po' ? 'epic' : 'story';
     const [projectId, setProjectId] = useState<string>('');
-    const [kind, setKind] = useState<Kind>('story');
+    const [kind, setKind] = useState<Kind>(defaultKind);
     const [issueId, setIssueId] = useState<string>('');
 
     useEffect(() => {
         if (!open) {
             setProjectId('');
-            setKind('story');
+            setKind(defaultKind);
             setIssueId('');
             return;
         }
@@ -74,11 +84,11 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
                 setKind(preselect.kind);
                 setIssueId(preselect.issueId);
             } else {
-                setKind('story');
+                setKind(defaultKind);
                 setIssueId('');
             }
         }
-    }, [open, preselect]);
+    }, [open, preselect, defaultKind]);
 
     useEffect(() => {
         if (!projectId && projects[0]) setProjectId(projects[0].id);
@@ -88,11 +98,17 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
     const { data: stories = [] } = useStories({ projectId: projectId || undefined });
     const { data: bugs = [] } = useBugs({ projectId: projectId || undefined });
 
-    const issues = useMemo(() => {
-        if (kind === 'epic') return epics.map((e) => ({ id: e.id, title: e.title }));
-        if (kind === 'story') return stories.map((s) => ({ id: s.id, title: s.title }));
-        return bugs.map((b) => ({ id: b.id, title: b.title }));
-    }, [kind, epics, stories, bugs]);
+    // This agent's own items first, so running it on another agent's item is
+    // a deliberate pick rather than the top of an unordered list.
+    const { issues, ownCount } = useMemo(() => {
+        const rows = kind === 'epic' ? epics : kind === 'story' ? stories : bugs;
+        const own = rows.filter((r) => r.assignee_agent_id === agent.id);
+        const rest = rows.filter((r) => r.assignee_agent_id !== agent.id);
+        return {
+            issues: [...own, ...rest].map((r) => ({ id: r.id, title: r.title })),
+            ownCount: own.length,
+        };
+    }, [kind, epics, stories, bugs, agent.id]);
 
     // (issueId clears in the onChange handlers below, not via an effect on
     // projectId/kind — the effect approach would wipe a preselect right after
@@ -185,6 +201,8 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
                     </Box>
                 )}
 
+                <CliUnavailableAlert cli={agent.cli} sx={{ mb: 2 }} />
+
                 {isFreedom ? null : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                     <TextField
@@ -260,11 +278,17 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
                             !projectId
                                 ? 'Pick a project first'
                                 : issues.length === 0
-                                  ? `No ${KIND_LABEL[kind].toLowerCase()}s in this project yet`
+                                  ? `No ${KIND_PLURAL[kind]} in this project yet`
                                   : undefined
                         }
                     >
-                        {issues.map((it) => (
+                        {issues.flatMap((it, i) => [
+                            ...(ownCount > 0 && i === 0
+                                ? [<ListSubheader key="own">Assigned to this agent</ListSubheader>]
+                                : []),
+                            ...(ownCount > 0 && i === ownCount
+                                ? [<ListSubheader key="rest">Other items</ListSubheader>]
+                                : []),
                             <MenuItem key={it.id} value={it.id}>
                                 <Box
                                     component="span"
@@ -278,8 +302,8 @@ export function RunNowDialog({ open, agent, onClose, preselect = null }: Props) 
                                     {it.id}
                                 </Box>
                                 {it.title}
-                            </MenuItem>
-                        ))}
+                            </MenuItem>,
+                        ])}
                     </TextField>
                 </Box>
                 )}

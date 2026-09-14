@@ -125,7 +125,7 @@ describe('AgentRunDetail page', () => {
                 output: 'hello-from-stream',
             }),
         );
-        expect(await screen.findByText('hello-from-stream')).toBeInTheDocument();
+        expect(await screen.findAllByText('hello-from-stream')).not.toHaveLength(0);
     });
 
     it('renders not-found message when run is missing', async () => {
@@ -342,7 +342,7 @@ describe('AgentRunDetail page', () => {
         expect(await screen.findByText('Error')).toBeInTheDocument();
     });
 
-    it('does not render the master-detail viewer while the run is in_progress', async () => {
+    it('parses live stream-json lines into the Timeline while the run is in_progress', async () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
@@ -358,9 +358,30 @@ describe('AgentRunDetail page', () => {
             ),
         );
         renderPage();
-        // The Tabs (Timeline / Raw text) only render for terminal states.
         await screen.findByText(/live · agent_output/i);
-        expect(screen.queryByRole('tab', { name: 'Timeline' })).not.toBeInTheDocument();
+        const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
+        expect(timelineTab).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByRole('tab', { name: 'Raw text' })).toBeInTheDocument();
+        const push = (window as Window & { __pushSse?: (e: object) => void }).__pushSse;
+        act(() =>
+            push?.({
+                type: 'agent_output',
+                runId: RUN_ID,
+                output: '{"type":"system","subtype":"init","model":"claude-opus-4-7"}',
+            }),
+        );
+        expect(await screen.findAllByText('system/init')).not.toHaveLength(0);
+        act(() =>
+            push?.({
+                type: 'agent_output',
+                runId: RUN_ID,
+                output: '{"type":"assistant","message":{"content":[{"type":"text","text":"Reading the file"}]}}',
+            }),
+        );
+        expect(await screen.findByText('assistant')).toBeInTheDocument();
+        expect(screen.queryByText(/"type":"assistant"/)).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('tab', { name: 'Raw text' }));
+        expect(await screen.findByText(/"type":"assistant"/)).toBeInTheDocument();
     });
 
     it('exercises issuePath for epic issue_type', async () => {
@@ -1615,7 +1636,7 @@ describe('AgentRunDetail page', () => {
 
     // ── agent?.accent_color ?? cerulean — when accent_color is null ───────────
 
-    it('QueueLiveLog accent falls back to cerulean when agent has no accent_color', async () => {
+    it('live dot accent falls back to cerulean when agent has no accent_color', async () => {
         // accent_color = null → agent?.accent_color ?? ATLAS_PALETTE.cerulean uses fallback
         server.use(
             ...defaultHandlers,

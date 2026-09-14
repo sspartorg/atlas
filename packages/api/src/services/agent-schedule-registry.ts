@@ -31,9 +31,11 @@ export type AgentScheduleInput = Pick<IAgent,
 };
 
 // Per-agent scheduled auto-dispatch — single clock-driven poller.
-// One setInterval ticks every minute, reads the DB, and dispatches agents
-// whose `next_run_at` slot has arrived AND have ready items AND have
-// capacity.
+// One setInterval ticks every minute, reads the DB, and dispatches:
+//   * item-driven agents (`requires_item`) whenever they have ready items
+//     AND capacity — dispatch on ready, no cadence wait;
+//   * freedom-mode agents whose `next_run_at` slot has arrived AND have
+//     capacity.
 //
 // Schedule presets (see `AgentSchedulePreset` in shared):
 //   - every_n_hours: cadence is `schedule_hours` hours. The next slot is
@@ -61,9 +63,10 @@ export type AgentScheduleInput = Pick<IAgent,
 //     agent stays "due" indefinitely — the poller just re-checks every
 //     minute until items arrive.
 //
-// Owner rule the design follows: **"I wait only when I worked."** An agent
-// that hasn't done anything for a long time and gets given work fires
-// right away; an agent that just fired waits its full cadence.
+// Owner rule for freedom-mode agents: **"I wait only when I worked."** An
+// agent that just fired waits its full cadence. Item-driven agents no longer
+// wait (2026-09-14 SDLC walkthrough: cadence-gated handoffs stalled the chain
+// for hours); for them `next_run_at` is informational only.
 //
 // Logging posture: silent on uninteresting ticks. The only lines that
 // print at debug level are state changes (dispatch, capacity-block). Empty
@@ -426,7 +429,8 @@ async function dispatchOneAgent(agent: IAgent, now: Date): Promise<void> {
  *
  *   1. Seed `next_run_at` for any active eligible agent that has none
  *      (one-time correction for agents that predate this scheduler).
- *   2. Find agents whose `next_run_at <= now` (minute precision).
+ *   2. Find item-driven agents (every tick) and freedom-mode agents whose
+ *      `next_run_at <= now` (minute precision).
  *   3. For each, run capacity → queue → dispatch.
  */
 export async function tickAgentScheduler(): Promise<void> {
@@ -513,12 +517,21 @@ export async function tickAgentScheduler(): Promise<void> {
         }
     }
 
+    // Dispatch on ready: item-driven agents are checked every tick so a
+    // Ready + assigned item starts within a minute instead of waiting up to
+    // the agent's cadence (a 3h PO Writer used to sit on a handoff for ~2h).
+    // Capacity still gates them in dispatchOneAgent. The cadence slot only
+    // gates freedom-mode agents, which create work on a clock.
     const due = (await db
         .selectFrom('agents')
         .selectAll()
         .where('status', '=', 'active')
-        .where('next_run_at', 'is not', null)
-        .where('next_run_at', '<=', nowIso)
+        .where((eb) =>
+            eb.or([
+                eb('requires_item', '=', true),
+                eb.and([eb('next_run_at', 'is not', null), eb('next_run_at', '<=', nowIso)]),
+            ]),
+        )
         .execute()) as unknown as IAgent[];
 
     // No per-tick header. dispatchOneAgent logs only on a real state

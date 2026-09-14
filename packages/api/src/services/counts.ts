@@ -259,17 +259,27 @@ export const countsService = {
     },
 
     async getAgentCategoryStats(): Promise<AgentStatsByCategory> {
-        const rows = await db
-            .selectFrom('agent_runs as r')
-            .innerJoin('agents as a', 'a.id', 'r.agent_id')
-            .select(({ fn }) => [
-                'a.category as category',
-                'r.status as status',
-                fn.countAll<string>().as('n'),
-            ])
-            .where('r.status', 'in', ['queued', 'in_progress'])
-            .groupBy(['a.category', 'r.status'])
-            .execute();
+        // queued mirrors the Queue sidenav badge (Ready + agent-assigned
+        // items awaiting dispatch) — counting `agent_runs.status='queued'`
+        // read 0 while the Queue page showed work waiting. running stays
+        // run-based: an in_progress run is the live signal.
+        const [queuedRows, runningRows] = await Promise.all([
+            db
+                .selectFrom('items as i')
+                .innerJoin('agents as a', 'a.id', 'i.assignee_agent_id')
+                .select(({ fn }) => ['a.category as category', fn.countAll<string>().as('n')])
+                .where('i.type', 'in', ['epic', 'story', 'bug'])
+                .where('i.status', '=', 'ready')
+                .groupBy('a.category')
+                .execute(),
+            db
+                .selectFrom('agent_runs as r')
+                .innerJoin('agents as a', 'a.id', 'r.agent_id')
+                .select(({ fn }) => ['a.category as category', fn.countAll<string>().as('n')])
+                .where('r.status', '=', 'in_progress')
+                .groupBy('a.category')
+                .execute(),
+        ]);
 
         const stats: AgentStatsByCategory = {
             'software-dev': { queued: 0, running: 0 },
@@ -277,17 +287,19 @@ export const countsService = {
             content: { queued: 0, running: 0 },
             design: { queued: 0, running: 0 },
         };
-        for (const row of rows) {
-            const cat = row.category as AgentCategoryKey;
-            // Unreachable from production: PG CHECK constraint on
-            // `agents.category` enforces the enum at the DB level, so
-            // any joined row's category is guaranteed to be a known key.
-            /* v8 ignore next */
-            if (!(cat in stats)) continue;
-            const n = Number(row.n);
-            if (row.status === 'queued') stats[cat].queued = n;
-            else if (row.status === 'in_progress') stats[cat].running = n;
-        }
+        const apply = (rows: { category: string; n: string }[], key: keyof CategoryStat) => {
+            for (const row of rows) {
+                const cat = row.category as AgentCategoryKey;
+                // Unreachable from production: PG CHECK constraint on
+                // `agents.category` enforces the enum at the DB level, so
+                // any joined row's category is guaranteed to be a known key.
+                /* v8 ignore next */
+                if (!(cat in stats)) continue;
+                stats[cat][key] = Number(row.n);
+            }
+        };
+        apply(queuedRows, 'queued');
+        apply(runningRows, 'running');
         return stats;
     },
 

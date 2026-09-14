@@ -133,7 +133,7 @@ export function KpiStrip({
                                 (terminalCostSummary30d?.cache_read_tokens ?? 0);
                             return (
                                 <>
-                                    <Bold>{runs}</Bold> run{runs === 1 ? '' : 's'} ·{' '}
+                                    <Bold>{runs}</Bold> completed run{runs === 1 ? '' : 's'} ·{' '}
                                     <Bold>{sessions}</Bold> session{sessions === 1 ? '' : 's'} ·{' '}
                                     <Bold>{formatTokenCount(totalTokens)}</Bold> tokens
                                 </>

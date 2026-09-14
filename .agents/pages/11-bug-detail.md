@@ -25,7 +25,7 @@ Standalone bug view (nested under an epic, not a story). Uses the unified `Issue
 - `EditableMarkdownCard` "Description" — Save → `useUpdateBug`.
 - `BugBodyCards` — renders the bug-specific section:
   - **Frequency** / **Failure scope** chips at the top are now editable `Select` dropdowns.
-  - `EditableMarkdownCard` for **Acceptance criteria** (renders as `<ul>`) and **Steps to reproduce** (renders as `<ol>`).
+  - `EditableMarkdownCard` for **Acceptance criteria** and **Steps to reproduce**, both rendered as markdown via `MarkdownPreview`.
   - Combined **Expected vs Actual** card with two stacked textareas in edit mode.
 
 **Right rail**
@@ -33,6 +33,11 @@ Standalone bug view (nested under an epic, not a story). Uses the unified `Issue
 - `ActivityLogCard` — read-only feed of status changes, reassignments, and field edits, beneath Details.
 
 Below the body, in the main column: `ConversationCard` for comments + compose.
+
+**Owner-reply hand-back + PR merge awareness** (shared components)
+- `ConversationCard` composer — when the item is `waiting_for_info` with no assignee and the most recent run on it (`useItemAgentRuns`) belongs to an active agent, helper text reads *"Replying hands this back to <Agent> and sets it Ready."* It mirrors the API's owner-reply auto-resume (`commentsService`), so posting really does reassign + re-queue.
+- **Pull Requests** rows (`RelatedItemsCard`) carry an **Open** / **Merged** / **Closed** chip from `pr_state`; no chip while the state is unknown (`null`/absent).
+- `DetailsRailCard` status picker → **Done** while any `pull_request` link isn't `merged`: first `POST /api/issues/:type/:id/external-links/refresh`; if still unmerged, a **Mark done anyway?** dialog (`ConfirmActionModal`) lists the PRs (`#ref title (state)`) and only **Mark done** transitions. Refresh failure falls back to the loaded links, so the dialog still guards.
 
 ## Why these affordances exist
 - **Frequency / Failure scope as editable dropdowns** — QA agents and the Owner discover these properties as reproduction evolves; promoting them above the body fields signals they're triage-critical, not optional. Dropdowns enforce the controlled vocabulary the status machine and reports rely on.
@@ -54,6 +59,7 @@ Below the body, in the main column: `ConversationCard` for comments + compose.
 - `PATCH /api/bugs/:id` (title, description, AC, steps, expected, actual, frequency, failure_scope, labels)
 - `PATCH /api/bugs/:id/status`, `PATCH /api/bugs/:id/assign`
 - `POST /api/bugs/:id/reset-rounds`, `DELETE /api/bugs/:id`
+- `POST /api/issues/bug/:id/external-links/refresh` — synchronous PR-state re-check before Done (via `useRefreshIssueExternalLinks`)
 
 ## Edge cases / quirks
 - Epic short id is constructed by string-replacing the bug's id prefix (same convention as Story Detail).

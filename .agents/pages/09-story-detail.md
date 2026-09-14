@@ -22,7 +22,7 @@ Single-story view. Uses the unified `IssueDetailShell` shared with Epic / Sub-ta
 
 **Body cards** (in order)
 - `EditableMarkdownCard` "Description" â€” Save â†’ `useUpdateStory`.
-- `EditableMarkdownCard` "Acceptance criteria" â€” body renders as `<ul>` via `renderBody`; Save â†’ `useUpdateStory({ acceptance_criteria })`.
+- `EditableMarkdownCard` "Acceptance criteria" — body renders through `MarkdownPreview` like Description (bold, code, lists); Save → `useUpdateStory({ acceptance_criteria })`.
 - **Sub-items** card â€” lists sub-tasks + sub-bugs (id, title, kind chip, status chip). Row click â†’ detail page. **Hidden entirely when empty** â€” the `+` menu under the title is the canonical add path.
 - `ConversationCard` â€” comments + compose box.
 
@@ -30,9 +30,14 @@ Single-story view. Uses the unified `IssueDetailShell` shared with Epic / Sub-ta
 - `DetailsRailCard` â€” Project (link), Epic parent (link, click navigates to epic), Status (`StatusPickerPopover`), Assignee (`AssigneePickerPopover`), Rounds (A04 â€” `X / Y` against the assignee's `max_rounds`; hidden when no assignee; clickable â†’ `ResetRoundsPopover` so Owner can wipe the counter and give the agent a fresh budget), Created, Last updated.
 - `ActivityLogCard` â€” read-only events feed (status changes, reassignments, field edits), under Details in the rail.
 
+**Owner-reply hand-back + PR merge awareness** (shared components)
+- `ConversationCard` composer — when the item is `waiting_for_info` with no assignee and the most recent run on it (`useItemAgentRuns`) belongs to an active agent, helper text reads *"Replying hands this back to <Agent> and sets it Ready."* It mirrors the API's owner-reply auto-resume (`commentsService`), so posting really does reassign + re-queue.
+- **Pull Requests** rows (`RelatedItemsCard`) carry an **Open** / **Merged** / **Closed** chip from `pr_state`; no chip while the state is unknown (`null`/absent).
+- `DetailsRailCard` status picker → **Done** while any `pull_request` link isn't `merged`: first `POST /api/issues/:type/:id/external-links/refresh`; if still unmerged, a **Mark done anyway?** dialog (`ConfirmActionModal`) lists the PRs (`#ref title (state)`) and only **Mark done** transitions. Refresh failure falls back to the loaded links, so the dialog still guards.
+
 ## Why these affordances exist
 - **Editable Description / Acceptance criteria as separate cards** â€” Description is Owner-authored intent; AC is the Spec Writer's testable contract. Two lifecycles, two save endpoints. (The legacy "Proposed Plan" card was retired by A03's revised design â€” agent narrative now flows through the comments thread.)
-- **Acceptance criteria as a list** â€” Sub-tasks and QA agents key off discrete criteria; rendering as `<ul>` enforces the bullet shape that downstream agents expect to parse.
+- **Acceptance criteria as markdown** — Agents write AC as markdown bullets (`- **Given** …`); rendering it as markdown shows the bullets without leaking raw `**` into the page.
 - **AddRelatedMenu (`+` under title)** â€” Jira-style adder. Sub-task / sub-bug creation lives behind the menu instead of an inline link so the affordance doesn't disappear when the sub-items table is hidden (which happens on an empty story).
 - **Hide-when-empty on Sub-items table** â€” A story with no sub-items shows only its description + AC; the table appears the moment the first child lands. Removes visual noise from freshly-spec'd stories.
 - **Epic parent link in rail** â€” Sub-tasks tunnel up through story â†’ epic to find their project; one click up the rail is faster than back-navigating through Issues.
@@ -55,6 +60,7 @@ Single-story view. Uses the unified `IssueDetailShell` shared with Epic / Sub-ta
 - `PATCH /api/stories/:id` (title, description, acceptance_criteria, labels)
 - `PATCH /api/stories/:id/status`, `PATCH /api/stories/:id/assign`
 - `POST /api/stories/:id/reset-rounds`, `DELETE /api/stories/:id`
+- `POST /api/issues/story/:id/external-links/refresh` — synchronous PR-state re-check before Done (via `useRefreshIssueExternalLinks`)
 
 ## Edge cases / quirks
 - Epic short ID is still derived by replacing `STR` with `EPC` in the seq id (matches the prior behaviour).

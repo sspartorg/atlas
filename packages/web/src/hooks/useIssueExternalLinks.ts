@@ -61,3 +61,13 @@ export function useDeleteIssueExternalLink(issueType: IssueType, issueId: string
         },
     });
 }
+
+export function useRefreshIssueExternalLinks(issueType: IssueType, issueId: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: () => api.issueExternalLinks.refresh(issueType, issueId),
+        onSuccess: () => {
+            invalidateExternalLinkCaches(qc, issueType, issueId);
+        },
+    });
+}

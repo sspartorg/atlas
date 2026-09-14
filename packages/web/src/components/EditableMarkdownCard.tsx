@@ -17,10 +17,6 @@ interface Props {
     /** Optional metadata rendered between the title bar and the body
      *  (e.g. "Written by · author · timestamp"). */
     meta?: ReactNode | undefined;
-    /** Optional custom read-mode renderer (e.g. render as ul/ol for
-     *  line-separated fields). Receives the trimmed value. If omitted,
-     *  the value renders as pre-wrap typography. */
-    renderBody?: ((value: string) => ReactNode) | undefined;
 }
 
 export function EditableMarkdownCard({
@@ -32,7 +28,6 @@ export function EditableMarkdownCard({
     saving = false,
     onSave,
     meta,
-    renderBody,
 }: Props) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(value ?? '');
@@ -169,11 +164,7 @@ export function EditableMarkdownCard({
                     </Box>
                 </Box>
             ) : body ? (
-                renderBody ? (
-                    renderBody(body)
-                ) : (
-                    <MarkdownPreview source={body} />
-                )
+                <MarkdownPreview source={body} />
             ) : (
                 <Typography
                     onClick={startEdit}

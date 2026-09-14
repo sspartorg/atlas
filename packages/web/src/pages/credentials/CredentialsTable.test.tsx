@@ -57,7 +57,19 @@ describe('CredentialsTable', () => {
         expect(screen.getByText('Active')).toBeInTheDocument();
     });
 
-    it('shows "expiring" status when expires_at is within 60 days (covers expiring branch)', () => {
+    it('never shows expiry for a GitHub App — its installation token re-mints hourly', () => {
+        renderWithProviders(
+            <CredentialsTable
+                rows={[makeCred({ kind: 'github_app', expires_at: new Date(Date.now() + 3600_000).toISOString() })]}
+                onEdit={vi.fn()}
+                onDelete={vi.fn()}
+            />,
+        );
+        expect(screen.queryByText(/Expires in/)).not.toBeInTheDocument();
+        expect(screen.getByText('Active')).toBeInTheDocument();
+    });
+
+    it('shows "expiring" status when expires_at is within 30 days (covers expiring branch)', () => {
         renderWithProviders(
             <CredentialsTable
                 rows={[makeCred({ expires_at: TEN_DAYS_FROM_NOW })]}

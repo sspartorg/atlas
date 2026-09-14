@@ -68,7 +68,7 @@ export const epicsService = {
         return row ? rowToEpic(row) : undefined;
     },
 
-    async create(data: CreateInput): Promise<IEpic> {
+    async create(data: CreateInput, actorAgentId: string | null = null): Promise<IEpic> {
         const assigneeId = data.assignee_agent_id ?? null;
         const row = await createItem({
             project_id: data.project_id,
@@ -99,14 +99,14 @@ export const epicsService = {
             item_id: epic.id,
             item_type: 'epic',
             event_type: 'created',
-            actor_agent_id: data.reporter_agent_id ?? null,
+            actor_agent_id: actorAgentId ?? data.reporter_agent_id ?? null,
             to_value: data.title,
         });
         broadcastSSE({ type: 'counts_changed' });
         return epic;
     },
 
-    async update(id: string, data: UpdateInput): Promise<IEpic> {
+    async update(id: string, data: UpdateInput, actorAgentId: string | null = null): Promise<IEpic> {
         const before = await this.get(id);
         if (!before) throw new Error('Epic not found');
         const keys = Object.keys(data).filter((k) => data[k as keyof UpdateInput] !== undefined);
@@ -118,6 +118,7 @@ export const epicsService = {
             before as unknown as Record<string, unknown>,
             data as unknown as Record<string, unknown>,
             ['title', 'description', 'priority', 'reporter'],
+            actorAgentId,
         );
         return (await this.get(id))!;
     },

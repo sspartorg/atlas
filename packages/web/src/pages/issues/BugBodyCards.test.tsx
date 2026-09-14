@@ -25,6 +25,20 @@ describe('BugBodyCards', () => {
         expect(screen.getByText('Expected vs Actual')).toBeInTheDocument();
     });
 
+    it('renders acceptance criteria and steps to reproduce as markdown', () => {
+        renderWithProviders(
+            <BugBodyCards
+                {...defaultProps}
+                acceptance_criteria={'- **Given** a crash'}
+                steps_to_reproduce={'1. Open `/queue`'}
+            />,
+        );
+        expect(screen.getByText('Given')).toBeInTheDocument();
+        expect(screen.getByText('/queue')).toBeInTheDocument();
+        expect(document.body.textContent).not.toContain('**Given**');
+        expect(document.body.textContent).not.toContain('`/queue`');
+    });
+
     it('shows the current frequency value', () => {
         renderWithProviders(<BugBodyCards {...defaultProps} frequency="always" />);
         expect(screen.getByDisplayValue('always')).toBeInTheDocument();

@@ -3,11 +3,18 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import AddRounded from '@mui/icons-material/AddRounded';
 import LinkOffRounded from '@mui/icons-material/LinkOffRounded';
 import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
 import { useNavigate } from 'react-router-dom';
-import type { IIssueLinkRow, IItemExternalLink, IssueType, IAgent } from '@atlas/shared';
+import type {
+    ExternalPrState,
+    IIssueLinkRow,
+    IItemExternalLink,
+    IssueType,
+    IAgent,
+} from '@atlas/shared';
 import {
     useIssueLinks,
     useDeleteIssueLink,
@@ -53,6 +60,12 @@ interface Props {
      */
     allowAddTestLink?: boolean | undefined;
 }
+
+const PR_STATE_CHIP: Record<ExternalPrState, { label: string; bg: string; fg: string }> = {
+    open: { label: 'Open', bg: ATLAS_PALETTE.successSoft, fg: ATLAS_PALETTE.successFg },
+    merged: { label: 'Merged', bg: ATLAS_PALETTE.accentSoft, fg: ATLAS_PALETTE.accentFg },
+    closed: { label: 'Closed', bg: ATLAS_PALETTE.dangerSoft, fg: ATLAS_PALETTE.dangerFg },
+};
 
 function routeFor(type: IssueType, id: string): string {
     if (type === 'epic') return `/epics/${id}`;
@@ -442,6 +455,19 @@ export function RelatedItemsCard({
                                 </Box>
                                 <OpenInNewRounded sx={{ fontSize: 14, flexShrink: 0 }} />
                             </Box>
+                            {l.pr_state && (
+                                <Chip
+                                    size="small"
+                                    label={PR_STATE_CHIP[l.pr_state].label}
+                                    sx={{
+                                        height: 20,
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        bgcolor: PR_STATE_CHIP[l.pr_state].bg,
+                                        color: PR_STATE_CHIP[l.pr_state].fg,
+                                    }}
+                                />
+                            )}
                             <IconButton
                                 size="small"
                                 aria-label="Remove PR link"

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { ITEM_TOOLS, registerItemTools } from './items.js';
@@ -119,7 +120,7 @@ describe('create_item', () => {
         await tools
             .get('create_item')!
             .handler({ issue_type: 'epic', payload: { project_id: 'p1', title: 'epic' } });
-        expect(createEpic).toHaveBeenCalledWith({ project_id: 'p1', title: 'epic' });
+        expect(createEpic).toHaveBeenCalledWith({ project_id: 'p1', title: 'epic' }, null);
     });
 
     it("issue_type='story' forwards to client.createStory", async () => {
@@ -129,7 +130,7 @@ describe('create_item', () => {
         await tools
             .get('create_item')!
             .handler({ issue_type: 'story', payload: { epic_id: 'E1', title: 'story' } });
-        expect(createStory).toHaveBeenCalledWith({ epic_id: 'E1', title: 'story' });
+        expect(createStory).toHaveBeenCalledWith({ epic_id: 'E1', title: 'story' }, null);
     });
 
     it("issue_type='sub_task' forwards to client.createSubTask and lifts sub_task_status alias to status", async () => {
@@ -144,7 +145,7 @@ describe('create_item', () => {
             story_id: 'S1',
             title: 't',
             status: 'todo',
-        });
+        }, null);
     });
 
     it("issue_type='sub_task' works without sub_task_status (no alias lift needed)", async () => {
@@ -155,7 +156,7 @@ describe('create_item', () => {
             issue_type: 'sub_task',
             payload: { story_id: 'S1', title: 'no status given' },
         });
-        expect(createSubTask).toHaveBeenCalledWith({ story_id: 'S1', title: 'no status given' });
+        expect(createSubTask).toHaveBeenCalledWith({ story_id: 'S1', title: 'no status given' }, null);
     });
 
     it("issue_type='sub_bug' forwards to client.createSubBug", async () => {
@@ -165,7 +166,7 @@ describe('create_item', () => {
         await tools
             .get('create_item')!
             .handler({ issue_type: 'sub_bug', payload: { story_id: 'S1', title: 'crash' } });
-        expect(createSubBug).toHaveBeenCalledWith({ story_id: 'S1', title: 'crash' });
+        expect(createSubBug).toHaveBeenCalledWith({ story_id: 'S1', title: 'crash' }, null);
     });
 
     it("issue_type='bug' forwards to client.createBug", async () => {
@@ -175,7 +176,19 @@ describe('create_item', () => {
         await tools
             .get('create_item')!
             .handler({ issue_type: 'bug', payload: { epic_id: 'E1', title: 'bug' } });
-        expect(createBug).toHaveBeenCalledWith({ epic_id: 'E1', title: 'bug' });
+        expect(createBug).toHaveBeenCalledWith({ epic_id: 'E1', title: 'bug' }, null);
+    });
+
+    it('forwards `agent_id` to the client so the API can attribute the create', async () => {
+        const { server, tools } = captureServer();
+        const createStory = vi.fn().mockResolvedValue({ id: 'S1' });
+        registerItemTools(server, makeFakeApiClient({ createStory }));
+        await tools.get('create_item')!.handler({
+            issue_type: 'story',
+            agent_id: 'agent-po-writer',
+            payload: { epic_id: 'E1', title: 'story' },
+        });
+        expect(createStory).toHaveBeenCalledWith({ epic_id: 'E1', title: 'story' }, 'agent-po-writer');
     });
 
     it("forwards `labels` on create through to the API client", async () => {
@@ -194,7 +207,7 @@ describe('create_item', () => {
             epic_id: 'E1',
             title: 'labelled story',
             labels: ['CER_Stories', 'backend'],
-        });
+        }, null);
     });
 });
 
@@ -225,10 +238,12 @@ describe('update_item', () => {
             action: 'patch_fields',
             patch: { title: 'new title', priority: 'high' },
         });
-        expect(updateItem).toHaveBeenCalledWith('story', 'ATL-2', {
-            title: 'new title',
-            priority: 'high',
-        });
+        expect(updateItem).toHaveBeenCalledWith(
+            'story',
+            'ATL-2',
+            { title: 'new title', priority: 'high' },
+            null,
+        );
         const parsed = parseToolResult<{ id: string }>(result);
         expect(parsed.id).toBe('ATL-2');
     });
@@ -243,9 +258,34 @@ describe('update_item', () => {
             action: 'patch_fields',
             patch: { labels: ['CER_Stories'] },
         });
-        expect(updateItem).toHaveBeenCalledWith('story', 'ATL-2', {
-            labels: ['CER_Stories'],
+        expect(updateItem).toHaveBeenCalledWith('story', 'ATL-2', { labels: ['CER_Stories'] }, null);
+    });
+
+    it("action='patch_fields' forwards agent_id so field edits are credited to the agent", async () => {
+        const { server, tools } = captureServer();
+        const updateItem = vi.fn().mockResolvedValue({ id: 'ATL-2' });
+        registerItemTools(server, makeFakeApiClient({ updateItem }));
+        await tools.get('update_item')!.handler({
+            issue_type: 'story',
+            id: 'ATL-2',
+            action: 'patch_fields',
+            patch: { title: 't' },
+            agent_id: 'agent-po-writer',
         });
+        expect(updateItem).toHaveBeenCalledWith('story', 'ATL-2', { title: 't' }, 'agent-po-writer');
+    });
+
+    it("action='patch_fields' schema accepts a canonical worktree_branch and rejects a malformed one", () => {
+        const entry = ITEM_TOOLS.find((t) => t.name === 'update_item');
+        const schema = z.object(entry!.inputSchema as z.ZodRawShape);
+        const base = { issue_type: 'story', id: 'SDB-2', action: 'patch_fields' };
+        expect(
+            schema.safeParse({ ...base, patch: { worktree_branch: 'atlas/dev/SDB-2' } }).success,
+        ).toBe(true);
+        expect(
+            schema.safeParse({ ...base, patch: { worktree_branch: 'feature/whatever' } }).success,
+        ).toBe(false);
+        expect(entry!.description).toContain('worktree_branch');
     });
 
     it("action='patch_fields' surfaces per-type Zod rejections from the API", async () => {
@@ -423,7 +463,31 @@ describe('update_item', () => {
             from_id: 'S1',
             to_id: 'S2',
             relation_type: 'depends_on',
+        }, null);
+    });
+
+    it("add_link / remove_link / add_external_link forward `agent_id` to the client", async () => {
+        const { server, tools } = captureServer();
+        const createItemLink = vi.fn().mockResolvedValue({ id: 1 });
+        const deleteItemLink = vi.fn().mockResolvedValue(undefined);
+        const createItemExternalLink = vi.fn().mockResolvedValue({ id: 2 });
+        registerItemTools(
+            server,
+            makeFakeApiClient({ createItemLink, deleteItemLink, createItemExternalLink }),
+        );
+        const update = tools.get('update_item')!.handler;
+        const base = { issue_type: 'story', id: 'S2', agent_id: 'agent-po-writer' };
+        await update({ ...base, action: 'add_link', to_id: 'S1', relation_type: 'tested_by' });
+        await update({ ...base, action: 'remove_link', link_id: 9 });
+        await update({
+            ...base,
+            action: 'add_external_link',
+            link_kind: 'pull_request',
+            url: 'https://github.com/o/r/pull/3',
         });
+        expect(createItemLink.mock.calls[0]![1]).toBe('agent-po-writer');
+        expect(deleteItemLink).toHaveBeenCalledWith(9, 'agent-po-writer');
+        expect(createItemExternalLink.mock.calls[0]![1]).toBe('agent-po-writer');
     });
 
     it("action='remove_link' deletes an item-link by link_id", async () => {
@@ -436,7 +500,7 @@ describe('update_item', () => {
             action: 'remove_link',
             link_id: 42,
         });
-        expect(deleteItemLink).toHaveBeenCalledWith(42);
+        expect(deleteItemLink).toHaveBeenCalledWith(42, null);
         expect(parseToolResult(result)).toEqual({ deleted: true, link_id: 42 });
     });
 
@@ -458,7 +522,7 @@ describe('update_item', () => {
             link_kind: 'pull_request',
             url: 'https://github.com/o/r/pull/3',
             title: 'feat: thing',
-        });
+        }, null);
     });
 
     it("action='remove_external_link' deletes an external-link by link_id", async () => {
@@ -638,7 +702,7 @@ describe('update_item', () => {
             issue_id: 'S1',
             link_kind: 'pull_request',
             url: 'https://github.com/o/r/pull/5',
-        });
+        }, null);
     });
 });
 

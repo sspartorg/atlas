@@ -5,6 +5,7 @@ import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { Sidenav } from './Sidenav.js';
 import { server } from '../test-setup.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
+import { DraftGuardProvider, useDraftGuard } from '../hooks/useDraftGuard.js';
 
 const navigateSpy = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -17,7 +18,33 @@ vi.mock('../hooks/useSidenavCounts.js', () => ({
     useSidenavCounts: () => countsMock(),
 }));
 
+function DirtyDraft() {
+    useDraftGuard(true);
+    return null;
+}
+
 describe('Sidenav', () => {
+    it('asks before navigating away from a dirty draft', async () => {
+        countsMock.mockReturnValue({});
+        navigateSpy.mockClear();
+        const onNavigate = vi.fn();
+        server.use(...defaultHandlers);
+        renderWithProviders(
+            <DraftGuardProvider>
+                <DirtyDraft />
+                <Sidenav onNavigate={onNavigate} />
+            </DraftGuardProvider>,
+        );
+        fireEvent.click(screen.getByTestId('nav-item-epics'));
+        expect(await screen.findByText('Discard draft?')).toBeInTheDocument();
+        expect(navigateSpy).not.toHaveBeenCalled();
+        expect(onNavigate).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+        expect(navigateSpy).toHaveBeenCalledWith('/epics');
+        expect(onNavigate).toHaveBeenCalledTimes(1);
+    });
+
     it('renders without crashing', () => {
         countsMock.mockReturnValue({});
         server.use(...defaultHandlers);

@@ -1,6 +1,6 @@
 [
   {
-    "label": "pnpm typecheck clean across affected packages",
+    "label": "Project typecheck and lint scripts clean (where declared)",
     "sort_order": 0,
     "required": true
   },
@@ -10,7 +10,7 @@
     "required": true
   },
   {
-    "label": "pnpm test clean across affected packages",
+    "label": "Project test suite clean",
     "sort_order": 2,
     "required": true
   },

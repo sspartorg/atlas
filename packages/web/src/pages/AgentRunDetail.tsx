@@ -12,7 +12,7 @@ import { useAgent, useAgentRun } from '../hooks/useAgents.js';
 import { ApiErrorAlert } from '../components/ApiErrorAlert.js';
 import { AtlasApiError } from '../api/api.js';
 import { useRunOutputTail } from '../hooks/useRunOutputTail.js';
-import { QueueLiveLog } from './queue/QueueLiveLog.js';
+import { LiveDot } from '../components/LiveDot.js';
 import { useAiEnabled } from '../hooks/useAiEnabled.js';
 import { isSimulatedRun } from '../utils/isSimulatedRun.js';
 import { SimulatedBadge } from '../components/SimulatedBadge.js';
@@ -148,6 +148,13 @@ export function AgentRunDetail() {
     // invalidates ['agent-run', runId] and `output_text` arrives, which the
     // master-detail viewer parses; the live log naturally goes quiet.
     const { lines: liveLines, isLive, hasReceivedFirstEvent } = useRunOutputTail(runId);
+    // ponytail: RunEventViewer re-parses the whole joined tail per SSE line
+    // (bounded by its 5k-line cap); switch to incremental parsing if long
+    // runs make the live Timeline lag.
+    const liveContent = useMemo(
+        () => (liveLines.length > 0 ? liveLines.join('\n') : null),
+        [liveLines]
+    );
     const queryClient = useQueryClient();
 
     const summary = useMemo(() => extractFinalResult(run?.output_text ?? null), [run?.output_text]);
@@ -326,6 +333,7 @@ export function AgentRunDetail() {
     }
 
     const statusPalette = runStatusPaletteEntry(run.status);
+    const isStreaming = run.status === 'queued' || run.status === 'in_progress';
     const statusLabel = RUN_STATUS_LABEL[run.status];
     const stickyBottom = isMobile
         ? `calc(${MOBILE_SHELL.bottomNavHeight}px + env(safe-area-inset-bottom))`
@@ -624,24 +632,28 @@ export function AgentRunDetail() {
                     </Alert>
                 )}
 
-            {/* Live tail — mounted while the run is still queued or
-                streaming. While queued, useRunOutputTail is already live
-                (it activates on runId) and the panel shows the "Waiting
-                for output…" empty state; when the runner picks the row
-                up and emits `agent_status: in_progress`, the cache
-                refresh from useSSE keeps the same panel mounted and
-                lines start filling in. The flicker the chunk's third AC
-                calls out is gone because the DOM doesn't swap on the
-                queued → in_progress flip. Once the run hits completed
-                /error, this hides and the master-detail viewer below
-                renders with parsed `output_text`. */}
-            {(run.status === 'queued' || run.status === 'in_progress') && (
-                <Box sx={{ mb: 1.5 }}>
-                    <QueueLiveLog
-                        lines={liveLines}
-                        isLive={isLive}
-                        accent={agent?.accent_color ?? ATLAS_PALETTE.cerulean}
-                    />
+            {/* Live header — queued/in_progress only. The event viewer below
+                stays mounted across queued → in_progress → completed, so the
+                Timeline fills from the SSE tail while live and swaps to the
+                persisted `output_text` once the run ends, without a DOM swap. */}
+            {isStreaming && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <Typography
+                        sx={{
+                            fontFamily: TYPOGRAPHY.fontFamilyMono,
+                            fontSize: 11,
+                            color: ATLAS_PALETTE.slate60,
+                        }}
+                    >
+                        {isLive ? 'live · agent_output' : 'final · no new lines'}
+                    </Typography>
+                    {isLive && (
+                        <LiveDot
+                            size={7}
+                            hex={agent.accent_color ?? ATLAS_PALETTE.cerulean}
+                            label="Live"
+                        />
+                    )}
                 </Box>
             )}
 
@@ -691,30 +703,20 @@ export function AgentRunDetail() {
                 </Box>
             )}
 
-            {/* Two-pane stream-json viewer (master-detail). Gated to
-                terminal states only — `output_text` is null until the
-                runner finishes the row, so rendering this block during
-                queued/in_progress just shows an empty placeholder under
-                the live log. Surfaces during completed/error only.
-                Left/top — section index: one row per parsed event with its
-                typed header (color-coded by kind) and a short preview.
-                Clicking a row selects that event. Selected row is
-                highlighted.
-                Right/bottom — log pane: shows ONLY the selected event's
-                pretty-printed JSON body so the Owner can focus on one
-                event at a time. Defaults to event #1 on landing. Non-JSON
-                lines (stderr, `gh copilot` plain text) render as text rows
-                in both panes.
-                Wrapped in a Tabs toggle: Timeline (this master-detail view)
-                or Raw text (the full output_text dump). Copilot text-mode
-                runs default to Raw text since their content is largely
-                plain text with a stderr trailer; Claude defaults to
-                Timeline since its NDJSON event cards are the primary signal. */}
-            {(run.status === 'completed' || run.status === 'error') && (
+            {/* Two-pane stream-json viewer (master-detail): section index of
+                parsed events on the left, the selected event's JSON on the
+                right; Timeline / Raw text tabs. Copilot text-mode runs
+                default to Raw text. While queued/in_progress it renders the
+                SSE tail (`useRunOutputTail`) through the same parser;
+                terminal runs render the persisted `output_text`. */}
+            {(isStreaming || run.status === 'completed' || run.status === 'error') && (
                 <RunEventViewer
-                    content={run.output_text ?? null}
+                    content={isStreaming ? liveContent : (run.output_text ?? null)}
                     source={agent.cli === 'copilot' ? 'copilot' : 'agent-stream-json'}
                     resetKey={runId}
+                    {...(isStreaming && {
+                        emptyPlaceholder: isLive ? 'Waiting for output…' : 'No output recorded.',
+                    })}
                 />
             )}
 

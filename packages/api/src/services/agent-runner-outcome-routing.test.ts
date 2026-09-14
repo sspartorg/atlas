@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideRunRouting } from './agent-runner-outcome-routing.js';
+import { decideRunRouting, shouldOpenPullRequest } from './agent-runner-outcome-routing.js';
 
 describe('decideRunRouting', () => {
     it('parks when no outcome block was found in the agent output', () => {
@@ -158,5 +158,40 @@ describe('decideRunRouting', () => {
             ],
         });
         expect(decision.kind).toBe('apply_on_pass');
+    });
+});
+
+describe('shouldOpenPullRequest', () => {
+    it('refuses when the agent parked the item via MCP (reviewer rejection)', () => {
+        expect(shouldOpenPullRequest({ itemStatus: 'waiting_for_info', outcome: null })).toBe(false);
+    });
+
+    it('refuses when the item is parked even if a stray done outcome was emitted', () => {
+        expect(
+            shouldOpenPullRequest({ itemStatus: 'waiting_for_info', outcome: { kind: 'done' } }),
+        ).toBe(false);
+    });
+
+    it('refuses on a rejected or asked_question outcome', () => {
+        expect(shouldOpenPullRequest({ itemStatus: 'in_progress', outcome: { kind: 'rejected' } })).toBe(false);
+        expect(
+            shouldOpenPullRequest({ itemStatus: 'in_progress', outcome: { kind: 'asked_question' } }),
+        ).toBe(false);
+    });
+
+    it('refuses when the agent neither signalled nor routed (orchestrator will park it)', () => {
+        expect(shouldOpenPullRequest({ itemStatus: 'in_progress', outcome: null })).toBe(false);
+    });
+
+    it('opens when the agent self-routed the item forward via MCP', () => {
+        expect(shouldOpenPullRequest({ itemStatus: 'in_review', outcome: null })).toBe(true);
+    });
+
+    it('opens on a done outcome the orchestrator is about to route', () => {
+        expect(shouldOpenPullRequest({ itemStatus: 'in_progress', outcome: { kind: 'done' } })).toBe(true);
+    });
+
+    it('opens for project-scope runs with no item', () => {
+        expect(shouldOpenPullRequest({ itemStatus: null, outcome: null })).toBe(true);
     });
 });

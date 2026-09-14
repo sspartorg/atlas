@@ -16,6 +16,7 @@ import { useProjects } from '../hooks/useProjects.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useToast } from '../hooks/useToast.js';
+import { useDraftGuard } from '../hooks/useDraftGuard.js';
 import { MOBILE_SHELL, ATLAS_PALETTE } from '../theme/tokens.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
@@ -88,11 +89,13 @@ export function EpicNew() {
     const [projectId, setProjectId] = useState(defaultProjectId);
     const [priority, setPriority] = useState<IssuePriority>('low');
     const [reporterId, setReporterId] = useState<string>('OWNER');
-    // No hardcoded PO-Writer default — any agent (or the Owner) can take the
-    // initial draft. The previous behavior was a UI default only; the API
-    // already accepts any assignee. Defaulting to OWNER means "I'll route it
-    // myself once it's drafted", which is the safer floor.
-    const [assigneeId, setAssigneeId] = useState<string>('OWNER');
+    // The PO Writer is the agent that breaks an epic down, so it is the default
+    // when installed and active; otherwise the Owner routes it. Derived rather
+    // than seeded into state because agents load after the first render.
+    const [assigneeChoice, setAssigneeChoice] = useState<string | null>(null);
+    const assigneeId =
+        assigneeChoice ??
+        (activeAgents.some((w) => w.id === 'agent-po-writer') ? 'agent-po-writer' : 'OWNER');
     const [submitAttempted, setSubmitAttempted] = useState(false);
     type FieldKey = 'title' | 'description' | 'project';
     const [touched, setTouched] = useState<Record<FieldKey, boolean>>({
@@ -101,6 +104,8 @@ export function EpicNew() {
         project: false,
     });
     const touch = (k: FieldKey) => setTouched((prev) => ({ ...prev, [k]: true }));
+
+    useDraftGuard(Boolean(title.trim() || description.trim()));
 
     const ownerName = settings?.owner_name ?? 'Owner';
     const projectMissing = projects.length === 0;
@@ -188,11 +193,11 @@ export function EpicNew() {
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
                     {(() => {
                         if (assigneeId === 'OWNER') {
-                            return `${ownerName} will route this once you submit · estimated 4 m to first plan`;
+                            return `${ownerName} will route this once you submit`;
                         }
                         const a = activeAgents.find((w) => w.id === assigneeId);
                         return a
-                            ? `${a.name} will pick this up once you submit · estimated 4 m to first plan`
+                            ? `${a.name} will pick this up once you submit`
                             : 'Pick an assignee to set up the handoff';
                     })()}
                 </Typography>
@@ -460,9 +465,10 @@ export function EpicNew() {
                         <AgentSelect
                             agents={activeAgents}
                             value={assigneeId}
-                            onChange={(v) => setAssigneeId(v || 'OWNER')}
+                            onChange={(v) => setAssigneeChoice(v || 'OWNER')}
                             ariaLabel="Assignee"
                             ownerName={ownerName}
+                            suggestedRole="po"
                             placeholder="Search by name or designation…"
                         />
                     </Box>

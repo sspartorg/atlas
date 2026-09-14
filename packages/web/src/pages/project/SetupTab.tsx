@@ -14,8 +14,7 @@ import { ATLAS_PALETTE } from '../../theme/tokens.js';
 // 2026-06-10 — Per-project setup scripts editor.
 //
 // Two free-text editors (`.sh` and `.ps1`) saved on the `projects` row.
-// Execution is a follow-up; this is the provisioning surface so Owner can
-// stage the scripts before the orchestrator wiring lands.
+// Executed by the agent runner (project-setup-runner) before spawning the CLI.
 
 const MONO = '"JetBrains Mono", monospace';
 
@@ -101,12 +100,11 @@ export function SetupTab({ projectId }: Props) {
                             lineHeight: 1.5,
                         }}
                     >
-                        Scripts the orchestrator will run when provisioning a fresh worktree —
+                        Runs in each agent run's fresh worktree before the agent CLI starts —
                         symlinks, env-file generation, system checks, anything project-specific.
-                        Edit either or both; leave blank if not needed.{' '}
-                        <Box component="span" sx={{ fontStyle: 'italic' }}>
-                            Execution wiring lands in a follow-up.
-                        </Box>
+                        The API host runs the PowerShell body on Windows and the shell body
+                        elsewhere; leave blank if not needed. A failing script ends the run as
+                        setup failed and the CLI never starts.
                     </Typography>
                 </Box>
                 <Button

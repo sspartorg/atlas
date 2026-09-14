@@ -63,6 +63,13 @@ describe('ProfileTab', () => {
         expect(screen.getByRole('button', { name: /Reset Workspace/i })).toBeInTheDocument();
     });
 
+    it('Reset copy names credentials and the notification channel — POST /settings/reset wipes both', async () => {
+        server.use(...settingsHandlers());
+        renderWithProviders(<ProfileTab />);
+        expect(await screen.findByText(/saved credentials/i)).toBeInTheDocument();
+        expect(screen.getByText(/external notification channel/i)).toBeInTheDocument();
+    });
+
     it('renders the credentials summary line when credentials exist', async () => {
         server.use(
             http.get(`${BASE}/settings`, () =>

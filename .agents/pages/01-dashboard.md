@@ -12,15 +12,16 @@ The post-onboarding home. Shows a greeting, KPI strip, "Awaiting you" worklist, 
 
 ## UI elements
 **Empty state (`pages/dashboard/DashboardEmptyState.tsx`)**
-- **Add your first project** card with **New Project** button (line 123-131) → opens `NewProjectModal`
-- **Credentials Alert** (lines 134-158) → click navigates to `/settings/credentials`
+- **Add your first project** card with **New Project** button → opens `NewProjectModal`. Copy promises GitHub URLs only — the API accepts `https://github.com/…` only.
+- **Credentials Alert** → "Add a Personal Access Token or GitHub App in **Settings → Credentials**"; click navigates to `/settings/credentials`. (SSH keys are a coming-soon stub, so they are not offered.)
+- **Agents Alert** — rendered only when `useAgents()` has loaded and returns zero agents: "No agents yet? Install them from **Agents → Marketplace**"; click navigates to `/agents/marketplace`.
 
 **Populated (`pages/dashboard/DashboardPopulated.tsx`)**
 - **Greeting block** — "Hi {ownerFirstName}" + awaiting count (line 29)
-- **KPI strip** — 5 KPI tiles (line 30)
+- **KPI strip** — 5 KPI tiles (line 30). The AI Cost tile caption reads "N completed runs · M sessions · T tokens" — the API sums only `completed` runs (and `closed` sessions) since the start of the month.
 - **Awaiting You panel** (line 38) — table of items that need Owner action; rows from `data?.awaiting`
 - **In Motion panel** (line 39) — current queue snapshot; rows from `data?.queue`
-- **Today's Pass section** (line 41) — KPI summary from `data?.kpis?.todaysPass`
+- **Today's Pass section** (line 41) — KPI summary from `data?.kpis?.todaysPass`; each row is `agent_name · issue_id`, the real item key (e.g. `SDB-4`). Until 2026-09-14 `TodaysPassCard` rebuilt a fake `STR-`/`EPC-`/`BUG-` prefix + id tail.
 
 The panels are read-only listings; clicking a row navigates to that issue's detail page.
 
@@ -36,6 +37,7 @@ The panels are read-only listings; clicking a row navigates to that issue's deta
 
 ## Hooks used
 - `useSettings()` — owner name + accent (`Dashboard.tsx:11`)
+- `useAgents()` — empty state only, to decide whether to show the Marketplace hint.
 - `useDashboard()` — KPI + awaiting + queue payload (`Dashboard.tsx:12`); staleTime 10s. Refreshed via SSE `counts_changed` / `run_queued` / `run_completed` events (no polling). Drives the empty/populated branch via `data.kpis?.projectCount`.
 
 (`DashboardPopulated` and `DashboardEmptyState` are pure presentational children — no additional data hooks on the page itself.)

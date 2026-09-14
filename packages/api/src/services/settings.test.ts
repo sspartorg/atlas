@@ -33,10 +33,41 @@ describe('settingsService', () => {
     });
 
     it('onboard sets owner + workspace and flips onboarding_complete', async () => {
-        const s = await settingsService.onboard('Alice', 'C:/work');
+        const ws = path.join(tmpKeyDir, 'work');
+        const s = await settingsService.onboard('Alice', ws);
         expect(s.owner_name).toBe('Alice');
-        expect(s.workspace_path).toBe('C:/work');
+        expect(s.workspace_path).toBe(ws);
         expect(s.onboarding_complete).toBe(1);
+    });
+
+    it('onboard creates the workspace folder (recursively) when it does not exist', async () => {
+        const ws = path.join(tmpKeyDir, 'missing', 'nested', 'workspace');
+        expect(fs.existsSync(ws)).toBe(false);
+        await settingsService.onboard('Alice', ws);
+        expect(fs.statSync(ws).isDirectory()).toBe(true);
+    });
+
+    it('onboard throws a 400 validation_error and persists nothing when the folder cannot be created', async () => {
+        const file = path.join(tmpKeyDir, 'a-file');
+        fs.writeFileSync(file, 'x');
+        const ws = path.join(file, 'sub');
+        await expect(settingsService.onboard('Alice', ws)).rejects.toMatchObject({
+            name: 'ApiError',
+            status: 400,
+            kind: 'validation_error',
+            message: expect.stringContaining(ws),
+        });
+        const s = await settingsService.get();
+        expect(s.onboarding_complete).toBe(0);
+        expect(s.owner_name).toBe('Owner');
+    });
+
+    it('onboard rejects a relative workspace path with a 400 validation_error', async () => {
+        await expect(settingsService.onboard('Alice', 'relative/work')).rejects.toMatchObject({
+            status: 400,
+            kind: 'validation_error',
+        });
+        expect(fs.existsSync(path.resolve('relative'))).toBe(false);
     });
 
     it('updateConstitution stores the markdown body', async () => {

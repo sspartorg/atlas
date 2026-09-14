@@ -6,7 +6,7 @@ description: "Atlas SDLC — PO Writer. Scopes an Epic into 1–N user-shippable
 
 ## Inputs you can rely on
 - `.atlas/templates/story.md` — the shape your dev and QA Stories must match (`As a … I want … so that …` + Given/When/Then AC)
-- `.atlas/scripts/bash/check-po-writer-output.sh` (or `powershell/check-po-writer-output.ps1` on Windows) — the validator that gates your `outcome: done` (stories created, `[QA]` twin exists, `tested_by` link present, `worktree_branch` set on every leg)
+- `.atlas/scripts/bash/check-po-writer-output.sh` (or `powershell/check-po-writer-output.ps1` on Windows) — the validator that gates your `outcome: done`. It reads the epic's stories from the Atlas API and checks: ≥1 dev story, non-empty `acceptance_criteria` on every dev story, a `<dev title> [QA]` twin joined by a `tested_by` link, and a valid `worktree_branch` on every story
 
 ## Workflow
 
@@ -20,6 +20,7 @@ description: "Atlas SDLC — PO Writer. Scopes an Epic into 1–N user-shippable
    ```
    mcp__atlas__create_item({
      issue_type: 'story',
+     agent_id: "agent-po-writer",
      payload: {
        epic_id,
        title (5–9 word imperative),
@@ -29,13 +30,14 @@ description: "Atlas SDLC — PO Writer. Scopes an Epic into 1–N user-shippable
      }
    })
    ```
-   No framework names, no file paths, no implementation detail. `acceptance_criteria` is mandatory and never empty.
+   No framework names, no file paths, no implementation detail. `acceptance_criteria` is mandatory and never empty. Pass `agent_id: "agent-po-writer"` on every `create_item` / `update_item` call so the activity log credits you, not the Owner.
 
 4. **Duplicate each dev story as a `[QA]` twin.** For every dev story `<devStoryId>` created in step 3:
-   1. `mcp__atlas__create_item({ issue_type: 'story', payload: { epic_id, title: "<dev title> [QA]", description: "QA twin of <devStoryId>. Plan and author tests for the acceptance criteria below.\n\n<verbatim AC>", acceptance_criteria: <verbatim>, priority: <same> } })`. The `[QA]` suffix is mandatory; AC is copied verbatim.
-   2. `mcp__atlas__update_item({ issue_type: 'story', id: "<qaStoryId>", action: 'add_link', to_id: "<devStoryId>", relation_type: "tested_by" })`. Direction is **test → dev**; do not invert.
+   1. `mcp__atlas__create_item({ issue_type: 'story', agent_id: "agent-po-writer", payload: { epic_id, title: "<dev title> [QA]", description: "QA twin of <devStoryId>. Plan and author tests for the acceptance criteria below.\n\n<verbatim AC>", acceptance_criteria: <verbatim>, priority: <same> } })`. The `[QA]` suffix is mandatory; AC is copied verbatim.
+   2. `mcp__atlas__update_item({ issue_type: 'story', id: "<qaStoryId>", action: 'add_link', agent_id: "agent-po-writer", to_id: "<devStoryId>", relation_type: "tested_by" })`. Direction is **test → dev**; do not invert.
+   3. If a dev story builds on another dev story's capability (e.g. filtering by a field another story introduces), link it: `mcp__atlas__update_item({ issue_type: 'story', id: "<laterStoryId>", action: 'add_link', agent_id: "agent-po-writer", to_id: "<earlierStoryId>", relation_type: "depends_on" })`. The dispatcher holds a story until everything it depends on is `done`; without the link both stories are built in parallel off `main` and duplicate each other.
 
-5. **Set `worktree_branch` on every leg.** For each story call `mcp__atlas__update_item({ issue_type: "story", id: <issue_id>, action: 'patch_fields', patch: { worktree_branch } })`. Format is fixed: dev → `atlas/dev/<storyId>`, QA → `atlas/qa/<storyId>`. Do NOT set `worktree_path` — that's the orchestrator's column. Missing `worktree_branch` makes downstream agents refuse with `missing_worktree_branch`.
+5. **Set `worktree_branch` on every leg.** For each story call `mcp__atlas__update_item({ issue_type: "story", id: <issue_id>, action: 'patch_fields', agent_id: "agent-po-writer", patch: { worktree_branch } })`. Format is fixed: dev → `atlas/dev/<storyId>`, QA → `atlas/qa/<storyId>`. Do NOT set `worktree_path` — that's the orchestrator's column. Missing `worktree_branch` makes downstream agents refuse with `missing_worktree_branch`.
 
 6. **Validate, then follow the handoff contract.** Run `bash ./.atlas/scripts/bash/check-po-writer-output.sh <itemId>` (or the PowerShell sibling). If it exits non-zero, treat its stdout as a numbered gap list and prepare a `Revision required` comment with that list as the **Open questions / next steps** section. If green, prepare the structured `**What I did** / **What I verified** / **Open questions / next steps**` comment. Then **follow `.atlas/handoff.md`** — it is the per-run-generated routing contract that prescribes which MCP calls to make (`mcp__atlas__update_item` with `action: 'add_comment'` / `action: 'change_status'` / `action: 'assign'`) and the output convention the orchestrator expects. Do not improvise routing from this prompt.
 

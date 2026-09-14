@@ -1,6 +1,9 @@
 import { db } from '../db/kysely-client.js';
 import { spawnAgentRun } from './agent-runner.js';
 import { DependenciesNotReadyError, type DependencyBlocker } from './dependency-guard.js';
+import { getRound } from './agent-rounds.js';
+import { eventsLog } from './events-log.js';
+import { broadcastSSE } from '../routes/events.js';
 import type { IAgent, IssueStatus, IssueType, RunStatus } from '@atlas/shared';
 
 export function shouldAutoDispatch(args: {
@@ -22,6 +25,7 @@ type DispatchSkipReason =
     | 'agent_inactive'
     | 'not_ready'
     | 'live_run_exists'
+    | 'max_rounds_reached'
     | 'deps_blocked';
 
 export type DispatchResult =
@@ -82,6 +86,17 @@ export async function maybeAutoDispatch(itemId: string): Promise<DispatchResult>
     const blocker = await findLiveRunOnItem(itemId);
     if (blocker) return { dispatched: false, reason: 'live_run_exists' };
 
+    // Loop guard. Rounds count completed CLI runs per (item, agent) and are
+    // only reset on forward progress (`resetRoundsUnlessBounceBack`), so a
+    // writer↔reviewer bounce climbs until this parks the item with the
+    // Owner. Manual `POST /api/run` is Owner-initiated and not capped; the
+    // detail rail's Reset rounds gives the agent a fresh budget.
+    const rounds = await getRound(itemId, agent.id);
+    if (rounds >= agent.max_rounds) {
+        await parkAtMaxRounds(itemId, item.type as IssueType, agent.id, `max_rounds_reached: ${agent.id} (${rounds}/${agent.max_rounds})`);
+        return { dispatched: false, reason: 'max_rounds_reached' };
+    }
+
     // B04 — the depends_on gate inside spawnAgentRun throws
     // DependenciesNotReadyError when any blocker is non-`done`. Catch it here
     // and surface as a typed skip reason so the scheduler tick can log + move
@@ -99,4 +114,33 @@ export async function maybeAutoDispatch(itemId: string): Promise<DispatchResult>
         }
         throw err;
     }
+}
+
+async function parkAtMaxRounds(itemId: string, itemType: IssueType, agentId: string, detail: string): Promise<void> {
+    await db
+        .updateTable('items')
+        .set({ assignee_agent_id: null, status: 'waiting_for_info' })
+        .where('id', '=', itemId)
+        .execute();
+    await eventsLog.record({
+        item_id: itemId,
+        item_type: itemType,
+        event_type: 'status_changed',
+        actor_agent_id: agentId,
+        field: 'status',
+        from_value: 'ready',
+        to_value: 'waiting_for_info',
+        detail,
+    });
+    await eventsLog.record({
+        item_id: itemId,
+        item_type: itemType,
+        event_type: 'assigned',
+        actor_agent_id: agentId,
+        field: 'assignee',
+        from_value: agentId,
+        to_value: null,
+        detail,
+    });
+    broadcastSSE({ type: 'counts_changed', issueType: itemType, issueId: itemId });
 }

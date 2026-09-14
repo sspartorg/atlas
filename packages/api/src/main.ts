@@ -14,6 +14,7 @@ import { runOutputRegistry } from './services/agent-runner.js';
 import knexConfig from './db/knex-config.js';
 import { bootStep } from './utils/boot-errors.js';
 import { startMcpHost, stopMcpHost, type IMcpHostHandle } from './plugins/mcp-host.js';
+import { apiPort } from './config.js';
 
 const isDev = process.env['NODE_ENV'] !== 'production';
 
@@ -341,7 +342,7 @@ async function main(): Promise<void> {
     //
     // Prefer API_PORT so dev/prod/E2E never fight over a shared PORT var.
     // Fall back to PORT for tools that only set the generic var.
-    const PORT = Number(process.env['API_PORT'] ?? process.env['PORT']) || 4001;
+    const PORT = apiPort();
     const HOST = '127.0.0.1';
 
     // Live posture safety net: whenever ATLAS_MCP_TOKEN is empty, the

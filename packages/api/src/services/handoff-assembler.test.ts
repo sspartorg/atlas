@@ -170,6 +170,67 @@ describe('assembleHandoff', () => {
         expect(body).toContain('unable to assign to "agent-ghost"');
     });
 
+    it('tells the agent to pass its own agent_id on every update_item call (rule + fallback + no-rule paths)', async () => {
+        // The in-process MCP host has no bound agent id, so without an explicit
+        // `agent_id` the writes are Owner-attributed and self-routing looks like
+        // a third-party reassign (duplicate "assigned" activity row).
+        await seedAgent('agent-withfb');
+        await db
+            .insertInto('agent_handoff_rules')
+            .values({ agent_id: 'agent-withfb', kind: 'on-pass', target_agent_id: 'agent-ghost', status: 'ready' })
+            .execute();
+        const body = readFileSync(
+            (await assembleHandoff({ worktreePath, agentId: 'agent-withfb' })).handoffPath,
+            'utf8',
+        );
+        const calls = body.match(/`mcp__atlas__update_item`/g) ?? [];
+        const credited = body.match(/agent_id: "agent-withfb"/g) ?? [];
+        // intro rule + 3 primary + 3 fallback (on-pass) + 3 park-with-Owner (on-fail, no rule).
+        expect(calls.length).toBe(10);
+        expect(credited.length).toBe(calls.length);
+    });
+
+    it('on-fail to an agent: gap-list comment comes before the reassign, plus an Owner-only blocker path', async () => {
+        await seedAgent('agent-reviewer');
+        await db
+            .insertInto('agent_handoff_rules')
+            .values({ agent_id: 'agent-reviewer', kind: 'on-fail', target_agent_id: 'agent-writer', status: 'ready' })
+            .execute();
+        const body = readFileSync(
+            (await assembleHandoff({ worktreePath, agentId: 'agent-reviewer' })).handoffPath,
+            'utf8',
+        );
+        const onFail = body.slice(body.indexOf('## When any required item fails'), body.indexOf('## Run output'));
+
+        const comment = onFail.indexOf("action: 'add_comment'");
+        const assignWriter = onFail.indexOf('assignee_agent_id: "agent-writer"');
+        expect(comment).toBeGreaterThan(-1);
+        expect(assignWriter).toBeGreaterThan(comment);
+        expect(onFail).toContain('gap list');
+        expect(onFail).toMatch(/BEFORE reassigning/);
+        expect(onFail).toContain('status EXACTLY: "Ready"');
+
+        const blocker = onFail.slice(onFail.indexOf('Owner-only blocker'));
+        expect(onFail).toContain('Owner-only blocker');
+        expect(blocker).toMatch(/assignee_agent_id:\s*null/);
+        expect(blocker).toContain('status EXACTLY: "Waiting for Info"');
+        expect(blocker).toContain("action: 'add_comment'");
+        expect(blocker).toContain('agent_id: "agent-reviewer"');
+    });
+
+    it('on-fail to the Owner renders no Owner-only blocker path (it already parks with the Owner)', async () => {
+        await seedAgent('agent-pilot2');
+        await db
+            .insertInto('agent_handoff_rules')
+            .values({ agent_id: 'agent-pilot2', kind: 'on-fail', target_agent_id: 'owner', status: 'waiting_for_info' })
+            .execute();
+        const body = readFileSync(
+            (await assembleHandoff({ worktreePath, agentId: 'agent-pilot2' })).handoffPath,
+            'utf8',
+        );
+        expect(body).not.toContain('Owner-only blocker');
+    });
+
     it('renders without checklist section when no required rows exist', async () => {
         await seedAgent('agent-bare');
         await db

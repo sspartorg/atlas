@@ -82,20 +82,6 @@ describe('EditableMarkdownCard', () => {
         expect(screen.queryByTestId('meta-slot')).not.toBeInTheDocument();
     });
 
-    it('uses renderBody when provided (renderBody truthy branch)', () => {
-        const renderBody = vi.fn((v: string) => <ul><li>{v}</li></ul>);
-        renderWithProviders(
-            <EditableMarkdownCard
-                title="Plan"
-                value="my-item"
-                onSave={vi.fn()}
-                renderBody={renderBody}
-            />,
-        );
-        expect(renderBody).toHaveBeenCalledWith('my-item');
-        expect(screen.getByText('my-item')).toBeInTheDocument();
-    });
-
     it('disables Save and Cancel when saving=true', async () => {
         const onSave = vi.fn();
         renderWithProviders(

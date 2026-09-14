@@ -57,10 +57,11 @@ interface ScriptCreateInput {
     sort_order?: number;
 }
 
-export function useGuardrailScripts() {
+export function useGuardrailScripts(opts: { enabled?: boolean } = {}) {
     return useQuery({
         queryKey: ['guardrail-scripts'],
         queryFn: () => api.guardrailScripts.list(),
+        enabled: opts.enabled ?? true,
     });
 }
 

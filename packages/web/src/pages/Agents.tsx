@@ -21,7 +21,13 @@ import { AgentCard, ModelSelect } from '../components/index.js';
 import { AccentColorPicker } from './settings/AccentColorPicker.js';
 import { useAgents, useUpdateAgent } from '../hooks/useAgents.js';
 import { useAgentFavorites } from '../hooks/useAgentFavorites.js';
+import { useQueueDepthByAgent } from '../hooks/useQueueDepthByAgent.js';
 import { useToast } from '../hooks/useToast.js';
+import {
+    cliUnavailableMessage,
+    findMissingCli,
+    useCliAvailability,
+} from '../hooks/useCliAvailability.js';
 import { api } from '../api/api.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { AgentListHeader } from './agents/AgentListHeader.js';
@@ -125,6 +131,12 @@ export function Agents() {
     });
     const [saving, setSaving] = useState(false);
 
+    const queueDepthByAgent = useQueueDepthByAgent();
+    const { data: cliAvailability } = useCliAvailability();
+    const cliWarningFor = (cli: AgentCli) => {
+        const missing = findMissingCli(cliAvailability, cli);
+        return missing ? cliUnavailableMessage(missing) : null;
+    };
     const runsByAgent = useMemo(() => {
         const map = new Map<string, IAgentRun[]>();
         for (const r of runsQuery.data ?? []) {
@@ -200,8 +212,8 @@ export function Agents() {
                 return new Date(lb).getTime() - new Date(la).getTime();
             }
             if (sort === 'queue-depth') {
-                const qa = getRuntimeStats(runsByAgent.get(a.id)).queueDepth;
-                const qb = getRuntimeStats(runsByAgent.get(b.id)).queueDepth;
+                const qa = queueDepthByAgent.get(a.id) ?? 0;
+                const qb = queueDepthByAgent.get(b.id) ?? 0;
                 if (qa === qb) return a.name.localeCompare(b.name);
                 return qb - qa;
             }
@@ -211,7 +223,7 @@ export function Agents() {
             return a.name.localeCompare(b.name);
         });
         return sorted;
-    }, [agents, filter, roleFilter, sort, favorites, runsByAgent]);
+    }, [agents, filter, roleFilter, sort, favorites, runsByAgent, queueDepthByAgent]);
 
     const grouped = useMemo(() => {
         if (sort !== 'category-role' || filter === 'favorites') return null;
@@ -414,12 +426,14 @@ export function Agents() {
                                 key={w.id}
                                 agent={w}
                                 runs={runsByAgent.get(w.id) ?? []}
+                                queueDepth={queueDepthByAgent.get(w.id) ?? 0}
                                 isFavorite={favorites.isFav(w.id)}
                                 onToggleFavorite={() => favorites.toggle(w.id)}
                                 onClick={() => navigate(`/agents/${w.id}`)}
                                 menuActions={handleCardMenu(w)}
                                 runtimeError={!!runsQuery.error}
                                 upgradeAvailable={upgradeByAgentId.get(w.id) === true}
+                                cliWarning={cliWarningFor(w.cli)}
                             />
                         ))}
                     </AgentCategorySection>
@@ -442,12 +456,14 @@ export function Agents() {
                             key={w.id}
                             agent={w}
                             runs={runsByAgent.get(w.id) ?? []}
+                            queueDepth={queueDepthByAgent.get(w.id) ?? 0}
                             isFavorite={favorites.isFav(w.id)}
                             onToggleFavorite={() => favorites.toggle(w.id)}
                             onClick={() => navigate(`/agents/${w.id}`)}
                             menuActions={handleCardMenu(w)}
                             runtimeError={!!runsQuery.error}
                             upgradeAvailable={upgradeByAgentId.get(w.id) === true}
+                            cliWarning={cliWarningFor(w.cli)}
                         />
                     ))}
                 </Box>

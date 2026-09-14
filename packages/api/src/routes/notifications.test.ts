@@ -20,6 +20,7 @@ vi.mock('../services/web-push.js', () => ({
 }));
 
 import { buildApp } from '../server.js';
+import { sendExternalNotification } from '../services/external-notifications.js';
 import { truncateAll, closeTestDb, testDb } from '../../tests/_pg-db.js';
 
 let app: FastifyInstance;
@@ -196,6 +197,26 @@ describe('POST /api/notifications/send-external', () => {
         });
         expect(res.statusCode).toBe(202);
         expect(JSON.parse(res.body)).toMatchObject({ ok: true });
+    });
+
+    it('reports whether anything was actually delivered', async () => {
+        vi.mocked(sendExternalNotification).mockResolvedValueOnce(true);
+        const sent = await app.inject({
+            method: 'POST',
+            url: '/api/notifications/send-external',
+            payload: { message: 'delivered' },
+        });
+        expect(JSON.parse(sent.body)).toEqual({ ok: true, sent: true });
+
+        // Quiet hours / toggle off / no transport all resolve false.
+        vi.mocked(sendExternalNotification).mockResolvedValueOnce(false);
+        const suppressed = await app.inject({
+            method: 'POST',
+            url: '/api/notifications/send-external',
+            payload: { message: 'suppressed' },
+        });
+        expect(suppressed.statusCode).toBe(202);
+        expect(JSON.parse(suppressed.body)).toEqual({ ok: true, sent: false });
     });
 
     it('returns 400 for missing message', async () => {

@@ -19,6 +19,9 @@ const MCP_HOST_PORT = 4500;
 const MCP_HOST_BIND = '127.0.0.1';
 const MCP_HOST_PATH = '/mcp';
 
+/** Where every local Claude client reaches the Atlas MCP (agent runs pass it via `--mcp-config`). */
+export const ATLAS_MCP_URL = `http://${MCP_HOST_BIND}:${MCP_HOST_PORT}${MCP_HOST_PATH}`;
+
 export interface IStartMcpHostOptions {
     apiBase: string;
     mcpToken: string;

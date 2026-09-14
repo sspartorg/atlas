@@ -24,7 +24,9 @@ import {
     type IComment,
     type IIssueEvent,
     type IssueType,
+    type IssueStatus,
     type IAgent,
+    type IAgentRun,
 } from '@atlas/shared';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
@@ -675,18 +677,39 @@ const headerSx = {
 // Comments + compose box. Lives in the main content column on detail
 // pages — it's the bi-directional surface where the Owner replies to
 // agent comments and posts new context.
+interface ConversationProps extends Props {
+    /** With `assigneeAgentId` + `runs`, drives the owner-reply hand-back hint. */
+    status?: IssueStatus;
+    assigneeAgentId?: string | null;
+    runs?: IAgentRun[] | undefined;
+}
+
 export function ConversationCard({
     issueType,
     issueId,
     activity: propActivity,
     agents: propAgents,
-}: Props) {
+    status,
+    assigneeAgentId,
+    runs,
+}: ConversationProps) {
     const { items, agentsById, ownerName, ownerAccent } = useActivityData(
         issueType,
         issueId,
         propActivity,
         propAgents,
     );
+    // Mirrors the API's owner-reply auto-resume (commentsService): a parked,
+    // unassigned item goes back to the agent of its latest run, if active.
+    const resumeAgent = useMemo(() => {
+        if (status !== 'waiting_for_info' || assigneeAgentId) return null;
+        const latest = (runs ?? []).reduce<IAgentRun | null>(
+            (acc, r) => (!acc || r.created_at > acc.created_at ? r : acc),
+            null,
+        );
+        const agent = latest ? agentsById.get(latest.agent_id) : undefined;
+        return agent?.status === 'active' ? agent : null;
+    }, [status, assigneeAgentId, runs, agentsById]);
     const createComment = useCreateComment();
     const qc = useQueryClient();
     const [draft, setDraft] = useState('');
@@ -764,6 +787,11 @@ export function ConversationCard({
                     placeholder="Comment on this item…"
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
+                    helperText={
+                        resumeAgent
+                            ? `Replying hands this back to ${resumeAgent.name} and sets it Ready.`
+                            : undefined
+                    }
                     slotProps={{
                         input: {
                             sx: {

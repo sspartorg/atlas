@@ -1,6 +1,8 @@
 import { Cron } from 'croner';
 import type { IAgent, IAgentRun, AgentCategory, AgentSchedulePreset } from '@atlas/shared';
 import { SDLC_ROLE_LABELS } from '@atlas/shared';
+import { ATLAS_PALETTE } from '../../theme/tokens.js';
+import type { AgentStatusLabel } from '../queue/queueViewModel.js';
 
 // 'cron' is a UI-only preset id; the persisted column stays `cron_expr`,
 // and `schedule_preset` keeps its four canonical values. The picker uses
@@ -382,9 +384,7 @@ export function getAgentView(agent: IAgent, now: Date = new Date()): AgentView {
 export { relativeTime } from '../../utils/time.js';
 
 export interface AgentRuntimeStats {
-    /** queued + in_progress. Kept as-is — the "queue N" caption shows it. */
-    queueDepth: number;
-    /** Runs actually in flight. Split out from queueDepth so the status
+    /** Runs actually in flight. Split out from queued runs so the status
      *  label can tell "running" from "waiting to run"; conflating them is
      *  what made AgentCard / AgentHero report the two states inverted. */
     runningCount: number;
@@ -407,7 +407,6 @@ export interface AgentRuntimeStats {
 export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRuntimeStats {
     if (!runs || runs.length === 0) {
         return {
-            queueDepth: 0,
             runningCount: 0,
             queuedCount: 0,
             lastRunErrored: false,
@@ -422,7 +421,6 @@ export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRu
     }
     const now = new Date();
     const cutoff = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    let queueDepth = 0;
     let runningCount = 0;
     let queuedCount = 0;
     let lastRunAt: string | null = null;
@@ -436,7 +434,6 @@ export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRu
     let cacheReadTokens = 0;
     let hasTokens = false;
     for (const r of runs) {
-        if (r.status === 'queued' || r.status === 'in_progress') queueDepth += 1;
         if (r.status === 'in_progress') runningCount += 1;
         if (r.status === 'queued') queuedCount += 1;
         const createdMs = new Date(r.created_at).getTime();
@@ -481,7 +478,6 @@ export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRu
     const lastRunErrored = terminal[0]?.status === 'error';
 
     return {
-        queueDepth,
         runningCount,
         queuedCount,
         lastRunErrored,
@@ -493,4 +489,13 @@ export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRu
         totalOutputTokens: hasTokens ? outputTokens : null,
         totalCacheReadTokens: hasTokens ? cacheReadTokens : null,
     };
+}
+
+// Mercury collapses brand-hue slots (`green`, `gold`) to neutral accent, so
+// the live-state indicator uses the functional success/warning/error slots.
+export function agentStatusColor(label: AgentStatusLabel): string {
+    if (label === 'Paused') return ATLAS_PALETTE.slate60;
+    if (label === 'Failed') return ATLAS_PALETTE.error;
+    if (label === 'Queued') return ATLAS_PALETTE.warning;
+    return ATLAS_PALETTE.success;
 }

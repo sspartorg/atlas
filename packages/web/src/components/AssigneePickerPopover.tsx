@@ -2,7 +2,8 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
-import type { IAgent } from '@atlas/shared';
+import ListSubheader from '@mui/material/ListSubheader';
+import type { IAgent, SdlcRole } from '@atlas/shared';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
@@ -15,6 +16,8 @@ interface Props {
     onClose: () => void;
     assigneeAgentId: string | null;
     onAssign: (agentId: string | null) => void;
+    /** Agents with this role_id are listed first under a "Suggested" header. */
+    suggestedRole?: SdlcRole | undefined;
 }
 
 function Initial({ name, color, size = 22 }: { name: string; color: string; size?: number }) {
@@ -27,6 +30,7 @@ export function AssigneePickerPopover({
     onClose,
     assigneeAgentId,
     onAssign,
+    suggestedRole,
 }: Props) {
     const { data: agents = [] } = useAgents();
     const { data: settings } = useSettings();
@@ -34,6 +38,48 @@ export function AssigneePickerPopover({
     const ownerAccent = settings?.accent_color ?? ATLAS_PALETTE.slate;
 
     const activeAgents = agents.filter((w: IAgent) => w.status === 'active');
+    const suggested = suggestedRole
+        ? activeAgents.filter((w) => w.role_id === suggestedRole)
+        : [];
+    const others = activeAgents.filter((w) => !suggested.includes(w));
+
+    const agentItem = (w: IAgent) => (
+        <MenuItem
+            key={w.id}
+            onClick={() => {
+                onAssign(w.id);
+                onClose();
+            }}
+            sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5 }}
+        >
+            <Initial name={w.name} color={w.accent_color} />
+            <Box sx={{ flex: 1 }}>
+                <Typography
+                    sx={{
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: w.accent_color,
+                        lineHeight: 1.3,
+                    }}
+                >
+                    {w.name}
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, lineHeight: 1.3 }}>
+                    AI · {agentSubtitle(w)}
+                </Typography>
+            </Box>
+            {assigneeAgentId === w.id && (
+                <Box
+                    component="span"
+                    className="material-symbols-rounded"
+                    sx={{ fontSize: 18, color: ATLAS_PALETTE.brandBlue }}
+                >
+                    check
+                </Box>
+            )}
+        </MenuItem>
+    );
+    const subheaderSx = { fontSize: 11, lineHeight: 2.5, color: ATLAS_PALETTE.slate60 };
 
     return (
         <Menu
@@ -55,6 +101,9 @@ export function AssigneePickerPopover({
                 },
             }}
         >
+            {suggested.length > 0 && <ListSubheader sx={subheaderSx}>Suggested</ListSubheader>}
+            {suggested.map(agentItem)}
+            {suggested.length > 0 && <ListSubheader sx={subheaderSx}>Everyone else</ListSubheader>}
             <MenuItem
                 onClick={() => {
                     onAssign(null);
@@ -98,44 +147,7 @@ export function AssigneePickerPopover({
                 )}
             </MenuItem>
 
-            {activeAgents.map((w) => (
-                <MenuItem
-                    key={w.id}
-                    onClick={() => {
-                        onAssign(w.id);
-                        onClose();
-                    }}
-                    sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5 }}
-                >
-                    <Initial name={w.name} color={w.accent_color} />
-                    <Box sx={{ flex: 1 }}>
-                        <Typography
-                            sx={{
-                                fontSize: 13,
-                                fontWeight: 500,
-                                color: w.accent_color,
-                                lineHeight: 1.3,
-                            }}
-                        >
-                            {w.name}
-                        </Typography>
-                        <Typography
-                            sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, lineHeight: 1.3 }}
-                        >
-                            AI · {agentSubtitle(w)}
-                        </Typography>
-                    </Box>
-                    {assigneeAgentId === w.id && (
-                        <Box
-                            component="span"
-                            className="material-symbols-rounded"
-                            sx={{ fontSize: 18, color: ATLAS_PALETTE.brandBlue }}
-                        >
-                            check
-                        </Box>
-                    )}
-                </MenuItem>
-            ))}
+            {others.map(agentItem)}
         </Menu>
     );
 }

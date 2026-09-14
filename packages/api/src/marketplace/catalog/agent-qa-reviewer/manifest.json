@@ -5,7 +5,7 @@
   "cli": "claude",
   "model": "claude-sonnet-4-6",
   "framework": "review",
-  "description": "Dedicated reviewer paired with `agent-qa-writer`. Counts sub-tasks per (criterion × applicable kind), enforces the five-kind coverage floor, and verifies the `tested_by` link. Routes via the terminal `atlas-outcome` block (done → Owner, rejected → Owner, asked_question → Owner).",
+  "description": "Dedicated reviewer paired with `agent-qa-writer`. Parses the QA test-plan CSV, enforces the per-criterion five-kind coverage floor, and verifies the `tested_by` link. Routes via the terminal `atlas-outcome` block (done → Owner with status `in_review` and the PR opened, rejected → QA Writer for revision, asked_question → Owner).",
   "designation": "Quality Assurance — Reviewer",
   "accent_color": "#8E44AD",
   "sort_order": 15,

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -15,6 +15,8 @@ import { useSetPageTitle } from '../components/shell/index.js';
 import { useToast } from '../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { AddFromMarketplaceModal } from './marketplace/AddFromMarketplaceModal.js';
+import { CliUnavailableAlert } from '../components/CliUnavailableAlert.js';
+import { useMarketplaceAgentFull, useMarketplaceCatalog } from '../hooks/useMarketplacePairing.js';
 
 const WEEKDAY_SHORT = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -96,20 +98,9 @@ export function MarketplaceAgentDetail() {
     const toast = useToast();
     useSetPageTitle('Marketplace agent');
 
-    const full = useQuery({
-        queryKey: ['marketplace', 'full', id],
-        queryFn: () => api.marketplace.get(id!),
-        enabled: !!id,
-    });
-
-    // Single list fetch (cached) — we look the row up by id client-side.
-    // The search endpoint does NOT match `q` against the catalog id, so we
-    // fetch the full list and filter in memory.
-    const summary = useQuery({
-        queryKey: ['marketplace', 'list', 'detail'],
-        queryFn: () => api.marketplace.list({ limit: 100 }),
-        staleTime: 30_000,
-    });
+    const full = useMarketplaceAgentFull(id);
+    // Single cached list fetch — we look the row up by id client-side.
+    const summary = useMarketplaceCatalog();
     const summaryRow = summary.data?.find((a) => a.id === id);
 
     const [addOpen, setAddOpen] = useState(false);
@@ -212,7 +203,7 @@ export function MarketplaceAgentDetail() {
                     columnGap: { xs: 2, sm: 4 },
                     rowGap: { xs: 2.5, sm: 0 },
                     alignItems: 'flex-start',
-                    mb: 5,
+                    mb: 3,
                 }}
             >
                 <Box
@@ -317,8 +308,10 @@ export function MarketplaceAgentDetail() {
                 </Box>
             </Box>
 
+            <CliUnavailableAlert cli={agent.cli} beforeInstall={!isInstalled} sx={{ mb: 3 }} />
+
             <Box
-                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' }, gap: 4 }}
+                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' }, gap: 4, mt: 5 }}
             >
                 <Box>
                     {agent.summary && (

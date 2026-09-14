@@ -4,7 +4,7 @@ import InputLabel from '@mui/material/InputLabel';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import Typography from '@mui/material/Typography';
-import type { AgentCli } from '@atlas/shared';
+import type { AgentCli, ICliModel } from '@atlas/shared';
 import { useCliModels } from '../hooks/useCliModels.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 
@@ -20,6 +20,13 @@ interface Props {
      *  (180px min-width, mono-font value), `dialog` matches the New-Agent
      *  modal field (form-control min-width 0, full width, normal padding). */
     size?: 'dense' | 'dialog' | undefined;
+}
+
+/** Registry order for one CLI; the first entry is that CLI's default model. */
+export function modelsForCli(all: ICliModel[], cli: AgentCli): ICliModel[] {
+    return all
+        .filter((m) => m.cli === cli)
+        .sort((a, b) => a.sort_order - b.sort_order || a.model_name.localeCompare(b.model_name));
 }
 
 const MENU_PROPS = {
@@ -40,13 +47,7 @@ export function ModelSelect({
 }: Props) {
     const { data: allModels = [] } = useCliModels();
 
-    const options = useMemo(
-        () =>
-            allModels
-                .filter((m) => m.cli === cli)
-                .sort((a, b) => a.sort_order - b.sort_order || a.model_name.localeCompare(b.model_name)),
-        [allModels, cli]
-    );
+    const options = useMemo(() => modelsForCli(allModels, cli), [allModels, cli]);
 
     const valueIsKnown = options.some((m) => m.model_name === value);
     const hasOptions = options.length > 0;

@@ -64,6 +64,7 @@ async function logFieldUpdatesImpl(
     before: Record<string, unknown>,
     data: Record<string, unknown>,
     allowedFields: LoggableField[],
+    actorAgentId: string | null = null,
 ): Promise<void> {
     const allowed = new Set<LoggableField>(allowedFields);
     for (const k of Object.keys(data)) {
@@ -78,6 +79,7 @@ async function logFieldUpdatesImpl(
             item_id: issueId,
             item_type: issueType,
             event_type: 'field_updated',
+            actor_agent_id: actorAgentId,
             field: mapped,
             from_value: fromVal == null ? null : String(fromVal),
             to_value: data[k] == null ? null : String(data[k]),

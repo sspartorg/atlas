@@ -5,7 +5,7 @@
   "cli": "copilot",
   "model": "claude-sonnet-4.6",
   "framework": "tdd-red-green-refactor",
-  "description": "Picks up the dev Story Architect spec'd, reuses Architect's worktree, runs the spec-kit lifecycle (clarify/plan/task/implement/verify/analyze) committing each phase, raises a PR with `gh pr create`, comments the PR URL on the story, then removes the local worktree (remote branch survives as the PR head).",
+  "description": "Picks up the dev Story Architect spec'd, reuses Architect's worktree, runs the spec-kit lifecycle (clarify/plan/task/implement/verify/analyze) committing each phase, then hands off to Code Reviewer; the orchestrator pushes the branch and the Code Reviewer run opens the PR.",
   "designation": "Engineer",
   "accent_color": "#22A06B",
   "sort_order": 3,

@@ -2070,4 +2070,35 @@ describe('OverviewTabContent', () => {
         // dirty===false because all fields match their ?? default values
         expect(screen.getByRole('button', { name: /Save role/i })).toBeDisabled();
     });
+
+    it('switching CLI auto-selects the new CLI registry default model and warns when it is not installed', async () => {
+        server.use(
+            http.get(`${BASE}/cli-models`, () =>
+                HttpResponse.json([
+                    { id: 'm1', cli: 'claude', model_name: 'claude-sonnet-4-6', note: null, sort_order: 2, created_at: '' },
+                    { id: 'm2', cli: 'claude', model_name: 'claude-opus-4-7', note: null, sort_order: 1, created_at: '' },
+                    { id: 'm3', cli: 'copilot', model_name: 'gpt-5', note: null, sort_order: 1, created_at: '' },
+                ]),
+            ),
+            http.get(`${BASE}/cli/availability`, () => HttpResponse.json([
+                    { cli: 'claude', binary: 'claude', available: true, version: '1.0.0' },
+                    { cli: 'copilot', binary: 'copilot', available: false, version: null },
+                    { cli: 'ollama', binary: 'claude', available: true, version: '1.0.0' },
+                ])),
+        );
+        renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
+        await waitFor(() => screen.getByText('No changes'));
+        const cliSelect = screen
+            .getAllByRole('combobox')
+            .find((c) => c.textContent === 'claude');
+        fireEvent.mouseDown(cliSelect!);
+        fireEvent.click(await screen.findByRole('option', { name: 'copilot' }));
+        await waitFor(() =>
+            expect(screen.getAllByRole('combobox').some((c) => c.textContent === 'gpt-5')).toBe(true),
+        );
+        expect(screen.queryByText(/not in registry/)).not.toBeInTheDocument();
+        expect(
+            await screen.findByText(/copilot is not installed on this machine/),
+        ).toBeInTheDocument();
+    });
 });

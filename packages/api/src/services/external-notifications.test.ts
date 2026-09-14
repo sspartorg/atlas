@@ -255,8 +255,12 @@ describe('sendExternalNotification — dispatch', () => {
 
     it('skips when active transport is not configured', async () => {
         mocks.telegramIsConfigured.mockReturnValue(false);
-        await sendExternalNotification('msg');
+        await expect(sendExternalNotification('msg')).resolves.toBe(false);
         expect(mocks.telegramSend).not.toHaveBeenCalled();
+    });
+
+    it('resolves true only when the transport actually sent', async () => {
+        await expect(sendExternalNotification('msg')).resolves.toBe(true);
     });
 });
 
@@ -265,6 +269,34 @@ describe('sendExternalForNotification — status flow', () => {
         const n = await notificationsService.create({ event_type: 'e', message: 'm' });
         await sendExternalForNotification(n.id, 'm');
         expect((await notificationsService.get(n.id))!.external_status).toBe('sent');
+    });
+
+    it('stays none (not sent) when the transport is not configured', async () => {
+        mocks.telegramIsConfigured.mockReturnValue(false);
+        const n = await notificationsService.create({ event_type: 'e', message: 'm' });
+        await sendExternalForNotification(n.id, 'm');
+        expect((await notificationsService.get(n.id))!.external_status).toBe('none');
+    });
+
+    it('stays none (not sent) when quiet hours suppress the send', async () => {
+        await settingsService.updateNotifications({
+            quiet_hours_enabled: 1,
+            quiet_hours_from: '00:00',
+            quiet_hours_to: '23:59',
+            quiet_hours_timezone: 'UTC',
+        });
+        const n = await notificationsService.create({ event_type: 'e', message: 'm' });
+        await sendExternalForNotification(n.id, 'm');
+        expect((await notificationsService.get(n.id))!.external_status).toBe('none');
+    });
+
+    it('stays none (not sent) when the event toggle is off', async () => {
+        await settingsService.updateNotifications({
+            external_notification_event_toggles: { 'agent.failed': false },
+        });
+        const n = await notificationsService.create({ event_type: 'e', message: 'm' });
+        await sendExternalForNotification(n.id, 'm', 'agent.failed');
+        expect((await notificationsService.get(n.id))!.external_status).toBe('none');
     });
 
     it('pending → failed and rethrows on transport error', async () => {

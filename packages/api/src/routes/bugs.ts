@@ -10,6 +10,7 @@ import {
 } from '@atlas/shared';
 import type { IssueStatus } from '@atlas/shared';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
+import { headerAgentId } from '../services/request-actor.js';
 
 export async function bugsRoutes(app: FastifyInstance) {
     app.get('/api/bugs', async (req, reply) => {
@@ -32,15 +33,17 @@ export async function bugsRoutes(app: FastifyInstance) {
     });
 
     app.post('/api/bugs', { preHandler: requireMcpToken }, async (req, reply) => {
-        const body = CreateBugSchema.parse(req.body);
-        return reply.status(201).send(await bugsService.create(body));
+        const actor = await headerAgentId(req.headers);
+        // The header agent is the default reporter; an explicit body value wins.
+        const body = CreateBugSchema.parse({ reporter_agent_id: actor, ...(req.body as object) });
+        return reply.status(201).send(await bugsService.create(body, actor));
     });
 
     app.patch('/api/bugs/:id', { preHandler: requireMcpToken }, async (req, reply) => {
         const { id } = req.params as { id: string };
         if (!(await bugsService.get(id))) return reply.status(404).send({ error: 'Bug not found' });
         const body = UpdateBugSchema.parse(req.body);
-        return reply.send(await bugsService.update(id, body));
+        return reply.send(await bugsService.update(id, body, await headerAgentId(req.headers)));
     });
 
     app.patch('/api/bugs/:id/status', { preHandler: requireMcpToken }, async (req, reply) => {

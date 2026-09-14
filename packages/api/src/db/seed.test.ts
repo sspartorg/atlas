@@ -1,6 +1,10 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { describe, expect, it, beforeEach } from 'vitest';
+import { execFile, execSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import { AGENT_SEEDS, GUARDRAIL_SCRIPT_SEEDS, HANDOFF_RULE_SEEDS, runSeed } from './seed.js';
 import { db } from './kysely-client.js';
 import { marketplaceService } from '../services/marketplace.js';
@@ -999,13 +1003,13 @@ describe('HANDOFF_RULE_SEEDS — self-contained agents route to Owner', () => {
 //   - Performer on-pass → paired reviewer with `ready`
 //   - Architect Reviewer on-pass → Coder with `ready` (mid-chain handoff)
 //   - All other reviewers on-pass → Owner with `in_review`
-//   - Every SDLC agent on-fail → Owner with `waiting_for_info`
+//   - Performer on-fail → Owner with `waiting_for_info`
+//   - Reviewer on-fail → its paired writer with `ready` (2026-09-14,
+//     migration 032 — a failed review goes back for revision, not to Owner)
 // The PO Reviewer fan-out (Architect + QA Writer) was retired; the
 // reviewer dispatches its epic's children from the prompt via Atlas MCP.
-// Reviewer→performer revision loops were also retired; the reviewer
-// uses MCP to reassign and the runner's mid-run-reassignment guard
-// (in agent-runner.ts) silently skips the on-pass rule when the agent
-// already routed the item.
+// The runner's mid-run-reassignment guard (in agent-runner.ts) silently
+// skips the handoff rule when the agent already routed the item.
 describe('HANDOFF_RULE_SEEDS — SDLC matrix (2026-05-31 realign)', () => {
     const SDLC_AGENTS = [
         'agent-po-writer',
@@ -1019,6 +1023,14 @@ describe('HANDOFF_RULE_SEEDS — SDLC matrix (2026-05-31 realign)', () => {
         'agent-automation',
         'agent-automation-reviewer',
     ] as const;
+
+    const REVIEWER_WRITER: Record<string, string> = {
+        'agent-po-reviewer': 'agent-po-writer',
+        'agent-architect-reviewer': 'agent-architect',
+        'agent-code-reviewer': 'agent-coder',
+        'agent-qa-reviewer': 'agent-qa-writer',
+        'agent-automation-reviewer': 'agent-automation',
+    };
 
     const EXPECTED_ON_PASS: Record<string, { target: string; status: string }> = {
         'agent-po-writer': { target: 'agent-po-reviewer', status: 'ready' },
@@ -1046,15 +1058,17 @@ describe('HANDOFF_RULE_SEEDS — SDLC matrix (2026-05-31 realign)', () => {
             });
         });
 
-        it(`${slug} has exactly one on-fail row routing to Owner / waiting_for_info`, () => {
+        const writer = REVIEWER_WRITER[slug];
+        it(`${slug} has exactly one on-fail row routing to ${writer ? `${writer} / ready` : 'Owner / waiting_for_info'}`, () => {
             const rules = HANDOFF_RULE_SEEDS.filter(
                 (r) => r.agent_id === slug && r.kind === 'on-fail',
             );
             expect(rules, `${slug} should have exactly one on-fail rule`).toHaveLength(1);
-            expect(rules[0]).toMatchObject({
-                target_agent_id: 'owner',
-                status: 'waiting_for_info',
-            });
+            expect(rules[0]).toMatchObject(
+                writer
+                    ? { target_agent_id: writer, status: 'ready' }
+                    : { target_agent_id: 'owner', status: 'waiting_for_info' },
+            );
         });
     }
 
@@ -1071,25 +1085,21 @@ describe('HANDOFF_RULE_SEEDS — SDLC matrix (2026-05-31 realign)', () => {
         }
     });
 
-    it('no SDLC reviewer routes on-fail back to its paired performer (revision loop is now prompt-driven)', () => {
-        const reviewerPairs: Array<[string, string]> = [
-            ['agent-po-reviewer', 'agent-po-writer'],
-            ['agent-architect-reviewer', 'agent-architect'],
-            ['agent-code-reviewer', 'agent-coder'],
-            ['agent-qa-reviewer', 'agent-qa-writer'],
-            ['agent-automation-reviewer', 'agent-automation'],
-        ];
-        for (const [reviewer, performer] of reviewerPairs) {
-            const stale = HANDOFF_RULE_SEEDS.find(
-                (r) =>
-                    r.agent_id === reviewer &&
-                    r.kind === 'on-fail' &&
-                    r.target_agent_id === performer,
-            );
-            expect(
-                stale,
-                `${reviewer} on-fail must not target ${performer} — migration 048 moved revisions out of handoffs`,
-            ).toBeUndefined();
+    it('every SDLC reviewer routes on-fail back to its paired writer with status ready', () => {
+        for (const [reviewer, writer] of Object.entries(REVIEWER_WRITER)) {
+            const rule = HANDOFF_RULE_SEEDS.find((r) => r.agent_id === reviewer && r.kind === 'on-fail');
+            expect(rule, `${reviewer} on-fail`).toMatchObject({ target_agent_id: writer, status: 'ready' });
+        }
+    });
+
+    it('seed on-fail rows match the marketplace catalog handoff_rules.json', () => {
+        for (const slug of SDLC_AGENTS) {
+            const catalog = JSON.parse(
+                readFileSync(resolve(__dirname, '..', 'marketplace', 'catalog', slug, 'handoff_rules.json'), 'utf8'),
+            ) as Array<{ target_agent_id: string; kind: string; status: string }>;
+            const seed = HANDOFF_RULE_SEEDS.find((r) => r.agent_id === slug && r.kind === 'on-fail');
+            const cat = catalog.find((r) => r.kind === 'on-fail');
+            expect(seed, slug).toMatchObject({ target_agent_id: cat?.target_agent_id, status: cat?.status });
         }
     });
 });
@@ -1216,6 +1226,194 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
                 ).toBeLessThan(128);
             }
         }
+    });
+
+    describe.skipIf(process.platform === 'win32')('coder-tests-green runs on non-pnpm projects', () => {
+        const seed = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === 'coder-tests-green');
+
+        function repoWith(files: Record<string, string>, changed: Record<string, string>): string {
+            const dir = mkdtempSync(join(tmpdir(), 'coder-gate-'));
+            const sh = (cmd: string) => execSync(cmd, { cwd: dir, stdio: 'pipe' });
+            sh('git init -q -b main && git config user.email t@t && git config user.name t');
+            for (const [p, body] of Object.entries(files)) writeFileSync(join(dir, p), body);
+            sh('git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD');
+            for (const [p, body] of Object.entries(changed)) writeFileSync(join(dir, p), body);
+            sh('git add -A && git commit -qm change');
+            writeFileSync(join(dir, 'gate.sh'), seed?.body_sh ?? '');
+            return dir;
+        }
+
+        function gateExit(dir: string): number {
+            try {
+                execSync('bash gate.sh X', { cwd: dir, stdio: 'pipe' });
+                return 0;
+            } catch (err) {
+                return (err as { status: number }).status;
+            }
+        }
+
+        it('passes a plain npm + JS project with a changed *.test.js and no typecheck/lint scripts', () => {
+            const dir = repoWith(
+                { 'package.json': '{"scripts":{"test":"node --test"}}' },
+                { 'a.test.js': 'x' },
+            );
+            expect(gateExit(dir)).toBe(0);
+        });
+
+        it('still fails when a declared typecheck script fails', () => {
+            const dir = repoWith(
+                { 'package.json': '{"scripts":{"typecheck":"exit 1"}}' },
+                { 'a.test.ts': 'x' },
+            );
+            expect(gateExit(dir)).toBe(1);
+        });
+
+        it('still fails when no test file changed', () => {
+            const dir = repoWith({ 'package.json': '{"scripts":{}}' }, { 'a.js': 'x' });
+            expect(gateExit(dir)).toBe(1);
+        });
+    });
+
+    // Async exec: the fake Atlas API below lives in THIS process, so a sync
+    // exec would block the event loop the server needs to answer curl.
+    async function runGate(
+        id: string,
+        cwd: string,
+        arg: string,
+        env: Record<string, string | undefined> = {},
+    ): Promise<{ code: number; out: string }> {
+        const body = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === id)?.body_sh ?? '';
+        writeFileSync(join(cwd, `${id}.sh`), body);
+        return new Promise((done) => {
+            execFile('bash', [`${id}.sh`, arg], { cwd, env: { ...process.env, ...env } }, (err, stdout) =>
+                done({ code: err ? ((err as { code?: number }).code ?? 1) : 0, out: stdout }),
+            );
+        });
+    }
+
+    describe.skipIf(process.platform === 'win32')('po-writer-output verifies the epic stories via the Atlas API', () => {
+        type Story = { id: string; title: string; acceptance_criteria: string; worktree_branch: string | null };
+        let stories: Story[] = [];
+        let links: Record<string, Array<{ relation_type: string; direction: string; item_id: string }>> = {};
+        let server: Server;
+        let apiUrl = '';
+        const cwd = mkdtempSync(join(tmpdir(), 'po-gate-'));
+
+        beforeAll(async () => {
+            server = createServer((req, res) => {
+                const epic = /^\/api\/epics\/ATL-1\/full$/.exec(req.url ?? '');
+                const link = /^\/api\/issues\/story\/([^/]+)\/links$/.exec(req.url ?? '');
+                if (!epic && !link) {
+                    res.statusCode = 404;
+                    return res.end('{}');
+                }
+                res.setHeader('content-type', 'application/json');
+                res.end(JSON.stringify(epic ? { epic: { id: 'ATL-1' }, stories } : (links[link![1]!] ?? [])));
+            });
+            await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+            apiUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+        });
+        afterAll(() => new Promise<void>((r) => server.close(() => r())));
+
+        beforeEach(() => {
+            stories = [
+                { id: 'ATL-2', title: 'Sign in', acceptance_criteria: '- Given x', worktree_branch: 'atlas/dev/ATL-2' },
+                { id: 'ATL-3', title: 'Sign in [QA]', acceptance_criteria: '- Given x', worktree_branch: 'atlas/qa/ATL-3' },
+            ];
+            // tested_by is created QA -> dev, so it is incoming on the dev story.
+            links = { 'ATL-2': [{ relation_type: 'tested_by', direction: 'incoming', item_id: 'ATL-3' }] };
+        });
+
+        it('passes a complete dev + [QA] twin set', async () => {
+            expect(await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl })).toEqual({ code: 0, out: '' });
+        });
+
+        it('fails with a clear gap when ATLAS_API_URL is unset', async () => {
+            const r = await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: undefined });
+            expect(r.code).toBe(1);
+            expect(r.out).toContain('ATLAS_API_URL is not set');
+        });
+
+        it('fails when the epic has no dev stories', async () => {
+            stories = [];
+            const r = await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl });
+            expect(r.code).toBe(1);
+            expect(r.out).toContain('no dev stories');
+        });
+
+        it('lists every gap: empty AC, bad branch, missing twin link, missing twin', async () => {
+            stories[0]!.acceptance_criteria = '  ';
+            stories[1]!.worktree_branch = null;
+            stories.push({ id: 'ATL-4', title: 'Sign out', acceptance_criteria: '- Given y', worktree_branch: 'atlas/dev/ATL-4' });
+            links = {};
+            const r = await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl });
+            expect(r.code).toBe(1);
+            expect(r.out).toMatch(/ATL-2 has empty acceptance_criteria/);
+            expect(r.out).toMatch(/ATL-3 worktree_branch/);
+            expect(r.out).toMatch(/ATL-2 has no tested_by link/);
+            expect(r.out).toMatch(/ATL-4 has no \[QA\] twin/);
+        });
+
+        it('accepts the tested_by link from either direction', async () => {
+            links = { 'ATL-2': [{ relation_type: 'tested_by', direction: 'outgoing', item_id: 'ATL-3' }] };
+            expect((await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl })).code).toBe(0);
+        });
+    });
+
+    describe.skipIf(process.platform === 'win32')('QA CSV gates use the Jira-importable schema', () => {
+        const HEADER = 'Summary,Description,Issue Type,Priority,Labels,Components';
+        const row = (summary: string, labels: string) =>
+            `"${summary}","## Steps\n1. Open, then submit\n\n## Expected\nIt works\n\nAC: ac-1",Test,normal,${labels},`;
+
+        function qaRepo(csv: string, changed: Record<string, string> = {}, touchCsvLast = true): string {
+            const dir = mkdtempSync(join(tmpdir(), 'qa-gate-'));
+            const sh = (cmd: string) => execSync(cmd, { cwd: dir, stdio: 'pipe' });
+            sh('git init -q -b main && git config user.email t@t && git config user.name t');
+            writeFileSync(join(dir, 'README.md'), 'x');
+            sh('git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD');
+            for (const [p, body] of Object.entries(changed)) writeFileSync(join(dir, p), body);
+            if (Object.keys(changed).length) sh('git add -A && git commit -qm tests');
+            mkdirSync(join(dir, 'tests', 'qa'), { recursive: true });
+            writeFileSync(join(dir, 'tests', 'qa', 'ATL-3.csv'), csv);
+            sh('git add -A && git commit -qm csv');
+            if (!touchCsvLast) {
+                writeFileSync(join(dir, 'other.txt'), 'y');
+                sh('git add -A && git commit -qm later');
+            }
+            return dir;
+        }
+
+        it('qa-writer-csv passes the Jira header + a multi-line quoted row committed at HEAD', async () => {
+            const dir = qaRepo(`${HEADER}\n${row('Sign in, valid creds', 'ac-1;automation-yes;kind-functional')}\n`);
+            expect(await runGate('qa-writer-csv', dir, 'ATL-3')).toEqual({ code: 0, out: '' });
+        });
+
+        it('qa-writer-csv rejects the retired test-id header, a header-only file, and a stale HEAD', async () => {
+            const old = await runGate('qa-writer-csv', qaRepo('test-id,criterion-id,kind,automation-yes-no,scenario,expected\nT1,AC1,f,yes,s,e\n'), 'ATL-3');
+            expect(old.code).toBe(1);
+            expect(old.out).toContain('header mismatch');
+            const empty = await runGate('qa-writer-csv', qaRepo(`${HEADER}\n\n`), 'ATL-3');
+            expect(empty.out).toContain('no test rows');
+            const stale = await runGate('qa-writer-csv', qaRepo(`${HEADER}\n${row('A', 'ac-1;automation-no;kind-edge')}\n`, {}, false), 'ATL-3');
+            expect(stale.out).toContain('HEAD commit does not touch');
+        });
+
+        it('check-automation-tests passes when every automation-yes Summary is in a changed test file', async () => {
+            const csv = `${HEADER}\n${row('Rejects bad password, shows error', 'ac-1;automation-yes;kind-edge')}\n${row('Manual visual check', 'ac-1;automation-no;kind-e2e')}\n`;
+            const ts = qaRepo(csv, { 'login.test.ts': "it('Rejects bad password, shows error', () => {});" });
+            expect(await runGate('check-automation-tests', ts, 'ATL-3')).toEqual({ code: 0, out: '' });
+            const py = qaRepo(csv, { 'test_login.py': 'def test_x():\n    """Rejects bad password, shows error"""' });
+            expect((await runGate('check-automation-tests', py, 'ATL-3')).code).toBe(0);
+        });
+
+        it('check-automation-tests fails for an uncovered automation-yes row and ignores automation-no rows', async () => {
+            const csv = `${HEADER}\n${row('Locks after five attempts', 'ac-2;automation-yes;kind-edge')}\n`;
+            const r = await runGate('check-automation-tests', qaRepo(csv, { 'a.test.js': "it('other', () => {});" }), 'ATL-3');
+            expect(r.code).toBe(1);
+            expect(r.out).toContain('Locks after five attempts');
+            const manualOnly = qaRepo(`${HEADER}\n${row('Manual only', 'ac-1;automation-no;kind-e2e')}\n`);
+            expect((await runGate('check-automation-tests', manualOnly, 'ATL-3')).code).toBe(0);
+        });
     });
 
     it('each script body is <= 80 lines (per the plan budget)', () => {

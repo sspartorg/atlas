@@ -247,7 +247,13 @@ export function QueueAgentCard({
                                     textOverflow: 'ellipsis',
                                 }}
                             >
-                                {isRunning ? 'running now' : view.nextPassDelta}
+                                {isRunning
+                                    ? 'running now'
+                                    : agent.requires_item
+                                      ? running.length >= agent.concurrent_runs
+                                          ? 'when a run finishes'
+                                          : 'within a minute'
+                                      : view.nextPassDelta}
                             </Typography>
                             <Typography
                                 sx={{

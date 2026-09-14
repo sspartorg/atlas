@@ -332,8 +332,8 @@ export function Onboarding() {
                                     lineHeight: 1.6,
                                 }}
                             >
-                                Two quick questions and you're in. Everything else is already
-                                configured.
+                                Two quick questions and you're in. You'll add credentials, a
+                                project and agents next.
                             </Typography>
 
                             <Box
@@ -521,7 +521,7 @@ export function Onboarding() {
                                             }}
                                         />
                                         We'll create this folder if it doesn't exist. You can change
-                                        it later in Settings → Environment.
+                                        it later in Settings → Profile.
                                     </Box>
                                 </Box>
                             </Box>

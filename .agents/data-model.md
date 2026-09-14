@@ -34,7 +34,7 @@ Not a table. Always one. The "Owner" is the human running the app. Stored in `se
 ### IAgent
 **Why this entity exists**: An agent is a reusable AI worker definition (CLI + model + prompt + tool grants + handoff routing). Modeling agents as a first-class entity rather than per-issue invocations lets the same prompt run across many issues, evolve its version history, and inherit consistent guardrails. The shared identity is also what makes assignee chips and handoff chains meaningful â€” every routing decision points at an agent_id.
 
-AI agent profiles. Seeded with 10 defaults (4 categories).
+AI agent profiles. **Not seeded** — a fresh DB has zero agents; each row is created by installing a marketplace catalog entry (`/agents/marketplace`, `POST /api/marketplace/agents/:id/install`), which also copies the entry's handoff rules and checklists. (Verified 2026-09-14.)
 
 Fields: `id, name, category, cli, model, framework, prompt_md, prompt_version, status, accent_color, sort_order, description, schedule_hours, concurrent_runs, glyph, last_run_at, next_run_at, created_at, updated_at`
 
@@ -50,14 +50,13 @@ Fields: `id, name, category, cli, model, framework, prompt_md, prompt_version, s
 - `glyph` is a Material Symbols icon name used on the card avatar + agent chips; editable via the Identity panel's "Replace glyph" picker. Empty falls back to a per-category default.
 - **Identity + lifecycle columns**:
   - `designation` â€” human-readable role label (e.g. "Product Owner", "Code Review Lead"). Shown next to the agent name in the Sidebar identity panel. With A08 it acts as an optional **per-agent display override** on top of `role_id`; empty falls back to the role's canonical label (then category).
-  - `role_id` â€” A08. FK into the SDLC role catalog (`roles.id`, `ON DELETE SET NULL`, indexed `idx_agents_role_id`). NULL on autonomous agents (Theme 09 / 09b: ai-news, market-research, regulations, jira-to-epic, ai-readiness) which sit outside the SDLC chain. The 10 SDLC agents are backfilled by migration 025 (PO Writer â†’ `po`, Spec Writer â†’ `spec-writer`, Coder â†’ `engineer`, QA Writer â†’ `qa`, Architect â†’ `architect`, Tester â†’ `tester`, Automation Engineer â†’ `automation`, DevOps Engineer â†’ `devops`, Security Reviewer â†’ `security`, Designer â†’ `designer`). See `role-catalog.md`.
-  - `max_rounds` â€” cap on TOTAL CLI invocations against `(item, agent)` (default 5). Under A04's per-CLI counting (2026-05-26), performer leg, reviewer leg, and re-spawned performer retry each consume one round; the `agent_round_counts` row UPSERTs from `agent-runner.completeRun` / `errorRun` AFTER the CLI's terminal status is written, so a failed-to-spawn run never counts. When the count reaches `max_rounds`, the runner escalates to Owner with `status: waiting_for_info` â€” both `agent-runner-routing.ts::decideReviewerOutcomeRouting` (on a reviewer-fail outcome) and the performer-side cap check in `agent-runner.completeRun` (before spawning the reviewer leg) gate the next CLI against this cap. The detail rail surfaces the live count as `Rounds: X / Y` against this value.
+  - `role_id` â€” A08. FK into the SDLC role catalog (`roles.id`, `ON DELETE SET NULL`, indexed `idx_agents_role_id`). NULL on autonomous agents (Theme 09 / 09b: ai-news, market-research, regulations, jira-to-epic, ai-readiness) which sit outside the SDLC chain. SDLC catalog entries carry their `role_id` (`po`, `architect`, `engineer`, `qa`, `automation`); there is no Spec Writer agent (its job merged into Architect).
+  - `max_rounds` â€” cap on TOTAL CLI invocations against `(item, agent)` (default 5). Under A04's per-CLI counting (2026-05-26), performer leg, reviewer leg, and re-spawned performer retry each consume one round; the `agent_round_counts` row UPSERTs from `agent-runner.completeRun` / `errorRun` AFTER the CLI's terminal status is written, so a failed-to-spawn run never counts. When the count reaches `max_rounds`, `agent-dispatcher.maybeAutoDispatch` refuses the next auto-dispatch and parks the item with the Owner (`waiting_for_info`, detail `max_rounds_reached: <agent> (n/max)`). This is the only enforcement point (2026-09-14): the older reviewer-outcome / performer-side cap checks no longer exist, and manual `POST /api/run` is uncapped. Rounds survive a bounce-back, meaning a hand-back to an agent that already has an `agent_runs` row on the item (`agent-rounds.ts::resetRoundsUnlessBounceBack`), and reset on forward progress, so writer↔reviewer loops reach the cap. The detail rail surfaces the live count as `Rounds: X / Y` against this value.
   - `requires_item` â€” when false, the scheduler dispatches the agent on its cadence even with an empty `ready`-items queue. Resulting `agent_runs` row has `item_id = null`; the prompt builder renders a freedom-run preamble.
-  - `reviewer_prompt_md` â€” markdown prompt for the agent's reviewer persona. When non-empty, the runner spawns a second CLI invocation after the performer leg completes; that CLI receives the performer's output + the issue context + this prompt, and ends by calling the `submit_review` MCP tool. Empty string = no reviewer persona; the runner falls back to the direct on-pass handoff path (used by autonomous + custom single-persona agents).
-  - `reviewer_prompt_version` â€” mirror of `prompt_version` for the reviewer-persona body. Bumps on every save to `reviewer_prompt_md`; the Prompt tab's reviewer history table is keyed on this. The two history streams (`agent_prompt_versions` rows keyed `(agent_id, kind, version)`) number independently â€” performer and reviewer can both sit at v3 without colliding.
+  - **Reviewers are separate agents** (2026-09-14 correction): `reviewer_prompt_md`, `reviewer_prompt_version` and the `submit_review` MCP tool no longer exist. Each performer has a paired reviewer agent (e.g. `agent-coder` → `agent-code-reviewer`) wired through `agent_handoff_rules`.
   - **Removed columns:** `kind` and `reviewer_agent_id` were Theme 06 paired-agent fields. Both were dropped by migration `019_drop_kind_reviewer_columns.ts` once the two-persona refactor replaced the paired-agent model with same-agent reviewer personas.
 
-**Related tables:** `agent_handoff_rules` (per-`(agent_id, kind)` on-pass / on-fail routing; `UNIQUE(agent_id, kind)`), `agent_memory` (one row per agent â€” procedural-memory markdown), `agent_prompt_versions` (append-only prompt history), and `agent_round_counts` (per `(item_id, performer_agent_id)` counter; under the two-persona model `performer_agent_id` is the agent's own id since the same agent owns both personas, and under A04 the `count` column increments once per CLI invocation against the pair â€” performer, reviewer, or retry â€” via `agent-rounds.ts::incrementRound`. Owner has an escape hatch: clicking the Rounds row on the detail rail opens a popover that calls `resetRoundsForIssue(itemId)` â€” wipes every counter row for the item and writes a `rounds_reset` event to `issue_events`, so the activity log records each manual reset alongside the assignee at the time).
+**Related tables:** `agent_handoff_rules` (per-`(agent_id, kind)` on-pass / on-fail routing; only a non-unique index `idx_agent_handoff_rules_agent_kind` — a second rule of the same kind is silently ignored because readers take the first row; `target_agent_id = 'owner'` means the Owner queue. Since 2026-09-14, the five SDLC reviewers' catalog on-fail rules target their writer with `ready`, and migration `032` rewrote installed rows still on the old `owner`/`waiting_for_info` default. A target that is not installed or is inactive falls back to Owner + `waiting_for_info` with event detail `handoff_target_unavailable: <slug>`), `agent_memory` (one row per agent â€” procedural-memory markdown), `agent_prompt_versions` (append-only prompt history), and `agent_round_counts` (per `(item_id, performer_agent_id)` counter; under the two-persona model `performer_agent_id` is the agent's own id since the same agent owns both personas, and under A04 the `count` column increments once per CLI invocation against the pair â€” performer, reviewer, or retry â€” via `agent-rounds.ts::incrementRound`. Owner has an escape hatch: clicking the Rounds row on the detail rail opens a popover that calls `resetRoundsForIssue(itemId)` â€” wipes every counter row for the item and writes a `rounds_reset` event to `issue_events`, so the activity log records each manual reset alongside the assignee at the time).
 
 ### IRole (A08 â€” SDLC role catalog)
 **Why this entity exists**: A canonical lookup table for the 10 SDLC roles an agent can play (PO, Spec Writer, Engineer, QA, Architect, Tester, Automation, DevOps, Security, Designer). Created in migration 025. Read by the Agents page Role filter chip and the AgentCard subtitle fallback; edited by the Owner via `PATCH /api/roles/:id` to update curated default prompts without touching any existing agent. The catalog *shape* is governed by the `SdlcRole` enum in `@atlas/shared` â€” runtime rows mirror that enum, they don't extend it.
@@ -160,17 +159,7 @@ Migration 011. Index: `idx_agents_kind_slug` on `agents(kind_slug)`.
 
 Prompts loaded from `packages/api/src/agents/prompts/<slug>.md` via `fs.readFileSync` at seed-module load. The prompt builder renders `{{ key }}` placeholders against `settings_json` so prompts can reference their config (`{{ topic }}`, `{{ competitors }}`, etc.); missing keys render as `(unset)`.
 
-**Seeded agents** (`packages/api/src/db/seed.ts`):
-1. PO Writer Â· software-dev Â· `#007AC9`
-2. Spec Writer Â· software-dev Â· `#00B4D8`
-3. Coder Â· software-dev Â· `#7C3AED`
-4. QA Writer Â· software-dev Â· `#059669`
-5. Digital Marketer Â· marketing Â· `#D97706`
-6. SEO Expert Â· marketing Â· `#DC2626`
-7. Tech Writer Â· content Â· `#0891B2`
-8. API Docs Writer Â· content Â· `#6D28D9`
-9. UI/UX Designer Â· design Â· `#DB2777`
-10. Wireframer Â· design Â· `#B45309`
+**Installable agents** come from `packages/api/src/marketplace/catalog/*/manifest.json` (synced into `marketplace_agents` on boot): 10 SDLC agents (PO Writer, PO Reviewer, Architect, Architect Reviewer, Coder, Code Reviewer, QA Writer, QA Reviewer, Automation Engineer, Automation Reviewer) + 6 autonomous agents. See `swarm-architecture.md` for the handoff graph. `AGENT_SEEDS` in `seed.ts` is only read by `scripts/extract-seeds-to-catalog.ts`.
 
 ### IProject
 **Why this entity exists**: Projects are the top-level work container â€” every issue tunnels through `project_id`. They're modeled as one cloned git repo because agents operate on code, and `git_path` is the working directory each spawned subprocess inherits. Holding `credential_id` here (vs. inferring per clone) lets the Owner rotate credentials without re-attaching them to every project.
@@ -205,7 +194,7 @@ A child of an Epic.
 Fields: `id, epic_id, title, description, status, assignee_agent_id, spec_md, pr_url, points, acceptance_criteria, created_at, updated_at`
 
 ### ISubTask
-**Why this entity exists**: Sub-tasks are the smallest unit of execution under a story â€” typically one focused commit or one tightly-scoped agent run. They use a simpler 4-state machine (ready â†” in_progress â†” blocked, then done) because they don't need spec/review phases (the parent story already owns those). Distinct from Story to keep the story-level spec single-authoritative; recursive stories would make AC and PR linkage ambiguous.
+**Why this entity exists**: Sub-tasks are the smallest unit of execution under a story â€” typically one focused commit or one tightly-scoped agent run. They share the unified 6-state issue status machine (below). Distinct from Story to keep the story-level spec single-authoritative; recursive stories would make AC and PR linkage ambiguous.
 
 A child of a Story. Shares the unified 6-state status machine with the other issue types.
 
@@ -237,6 +226,16 @@ Fields: `id, issue_type, issue_id, author, body, created_at` â€” `issue_typ
 Since 2026-09-12 `create()` resolves a missing `agent_id` from the item's live run (`agent_runs` where `status IN ('queued','in_progress')`), which migration `003_active_run_invariant.ts` constrains to at most one row per item via a partial UNIQUE index. `create()` mirrors the resolved id into the `comment_added` event's `actor_agent_id`, so the same fix stops the activity feed attributing agent actions to the Owner. Rows written before the fix are repaired by migration `031_backfill_agent_comment_attribution.ts`; a comment with no run covering its timestamp stays null and still renders as `"Agent"` - deliberately, since guessing would put a wrong name in an audit trail.
 
 `comments_agent_id_fkey` is `ON DELETE SET NULL`, so deleting an agent still erases its name from every comment it ever wrote. A denormalized `author_name` column is the only durable answer (`counts.ts` / `routes/analytics.ts` already denormalize `a.name as agent_name` for the dashboard); not shipped - it needs a migration + backfill of its own.
+
+**Owner reply resumes a parked item (2026-09-14).** When the Owner comments on an item that is `waiting_for_info` with no assignee (how an agent parks a question), `create()` hands it back in the same transaction to the agent of the item's most recent `agent_runs` row — if that agent still exists and is `active` — setting `assignee_agent_id` and `status='ready'` (`waiting_for_info → ready` is a status-machine edge). It writes `assigned` + `status_changed` events with `actor_agent_id=null` (Owner) and `detail='resumed_by_owner_reply'`, broadcasts `counts_changed`, and the scheduler's dispatch-on-ready starts the run. Agent comments never trigger it; an item that already has an assignee or another status is left alone.
+
+### IItemExternalLink
+Off-platform URL attached to an item (today only `link_kind='pull_request'`). Table `item_external_links` (migration 020), UNIQUE `(item_id, url)`, cascades on item delete.
+
+Fields: `id, item_id, link_kind, url, title, external_ref, created_at, created_by_run_id, pr_state`.
+
+- `pr_state` ∈ `'open' | 'merged' | 'closed' | null` (migration 033, CHECK constraint) — last GitHub state observed for a PR link; null until the first successful lookup, and forever on a project with no credential.
+- `pr_state_checked_at` (DB only, not on the wire) — stamped on every lookup attempt, success or failure. Reading the links (`GET …/external-links`, every `/full` envelope) refreshes PR links older than 5 min in the background; `POST /api/issues/:type/:id/external-links/refresh` refreshes synchronously.
 
 ### IIssueEvent (audit log)
 **Why this entity exists**: Status and assignment changes need an audit trail the UI can render alongside comments â€” otherwise the Owner sees "this is in_dev" but can't tell who moved it there or when. Structured fields (event_type, field, from_value, to_value) make events queryable and machine-renderable in a way that free-text comments can't be. Kept distinct from IComment so the activity feed can render status pills differently from quoted text.
@@ -299,11 +298,7 @@ Fields: `id, agent_id, issue_type, issue_id, project_id, status, started_at, end
 - **The live set is `queued` + `in_progress`**, which is what the partial unique index `agent_runs_one_live_per_item` (migration `003`) constrains to one row per `item_id`. `setup_failed` sits deliberately outside it so a retry isn't blocked (see migration `005`'s header).
 - **Promotion is guarded, not unconditional.** `spawnAgentRun` flips `queued → in_progress` from a 200ms `setTimeout`, and by the time that timer fires the row may have left the live set (Owner cancelled, `failOrphanedRuns` swept it, the item was deleted) with a replacement run already holding the slot. So the UPDATE carries `WHERE status = 'queued'` and checks `numUpdatedRows`: zero rows means the run is no longer ours to start, and the runner returns instead of spawning. Without the predicate the stale row re-entered the live set behind the replacement's back and raised 23505 as an unhandled rejection — the run silently never started and the reason lived only in the API log. Regression test: `services/agent-dispatcher.integration.test.ts`, which asserts both shapes against the real index.
 
-**Two-persona columns** (migration `016_two_persona.ts`):
-- `persona` â€” `'performer' | 'reviewer'`. Defaults to `'performer'` so every existing row is valid without backfill. The runner sets `'reviewer'` on the second CLI invocation it spawns for agents with a non-empty `reviewer_prompt_md`.
-- `parent_run_id` â€” self-referential FK on `agent_runs.id` (ON DELETE CASCADE). Links a reviewer run to its performer run, and a re-spawned performer run (round bounce) to the reviewer that triggered it. NULL on every standalone run. Partial index `idx_agent_runs_parent_run_id WHERE parent_run_id IS NOT NULL` keeps lookups cheap.
-- `review_outcome` â€” `'pass' | 'fail' | 'needs_info'` or NULL. Written only on reviewer-persona rows by the `submit_review` MCP tool before the CLI exits. NULL on a reviewer row = the CLI exited without calling the tool; the runner treats that as `'needs_info'` (safe default).
-- `review_reason` â€” optional free-text reason the reviewer attached to `review_outcome`. Surfaced in the activity log on `fail` / `needs_info`; piped into the next performer's prompt on `fail`.
+**Two-persona columns:** `persona`, `review_outcome` and `review_reason` were removed with the in-agent reviewer persona; only `parent_run_id` (self-FK, ON DELETE CASCADE) remains.
 
 ### ICliSession (Terminal v1+v2)
 **Why this entity exists**: The Terminal page hosts long-lived, interactive CLI sessions (Claude Code, GitHub Copilot CLI, or Claude Code-on-Ollama) inside Atlas so the Owner can drive a scoped worktree from the same UI as the rest of the app. Sessions are first-class rows — not ephemeral process handles — because we need cross-restart resume (`claude --resume <sid>` / `copilot --resume <sid>`), idle-notification deep links, per-(project, branch) uniqueness, and an audit trail of which branch went where. The PTY itself lives in-memory in `services/cli-session-host.ts`; the row carries everything else.
@@ -417,37 +412,22 @@ Each row has: `key, value, secret, restart_required, description`. The full set 
 
 Source: `packages/shared/src/status-machine/index.ts`. Use `getValidNextStatuses(entityType, currentStatus)` and `isValidTransition(entityType, from, to)`. **Never hardcode status lists in components or routes.**
 
-### Issue statuses (Story, Bug, SubBug, Epic â€” with omissions per type)
-
-Full progression (Story uses all 10):
+### Issue statuses (all item types — unified 6-state machine)
 
 ```
-draft â†’ ready_for_po â†’ in_review â†’ ready_for_spec â†’ in_spec â†’
-ready_for_dev â†’ in_dev â†’ in_code_review â†’ done
-                                  â”‚
-                                  â–¼  (any non-terminal state can go here)
-                            waiting_for_info  â”€â”€â–¶  back to previous status
+draft → ready → in_progress → in_review → done
+                   │   ▲           │
+                   ▼   │           ▼
+                 ready │      in_progress
+                       │
+ any non-done ─▶ waiting_for_info ─▶ ready | in_progress
 ```
 
-Per-type omissions:
-- **Epic**: skips `in_spec`, `in_dev` (it's at the level above implementation).
-- **Bug** / **SubBug**: skip `in_spec`.
-- **Story**: full progression.
-
-### SubTask statuses (4 states + bidirectional moves)
-
-```
-   ready  â”€â”€â”€â”€â”€â”€â”€â–¶ in_progress â”€â”€â”€â”€â”€â”€â–¶ done
-                       â–²   â”‚
-                       â”‚   â–¼
-                     blocked
-```
-
-`blocked` â†” `in_progress` (bidirectional). `done` is terminal.
+`FORWARD` in `packages/shared/src/status-machine/index.ts`: `draft→ready`, `ready→in_progress`, `in_progress→in_review|ready`, `waiting_for_info→ready|in_progress`, `in_review→done|in_progress`, `done` terminal; every non-`done` status may also move to `waiting_for_info`. The retired 10-state chain (`ready_for_po`, `in_spec`, `ready_for_dev`, …) and the 4-state sub-task machine no longer exist.
 
 ### `waiting_for_info` override
 
-From any non-terminal state on Story/Bug/Epic/SubBug, status can move to `waiting_for_info` (typically an agent pinging the Owner). From `waiting_for_info`, it returns to the previous status (the route handler stores the prior state).
+From any non-terminal state on Story/Bug/Epic/SubBug, status can move to `waiting_for_info` (typically an agent pinging the Owner). From `waiting_for_info` it moves to `ready` or `in_progress` (no prior-state memory).
 
 ### Transitions emitted by agent-runner
 
@@ -456,7 +436,7 @@ From any non-terminal state on Story/Bug/Epic/SubBug, status can move to `waitin
 | When | From | To | Why |
 |---|---|---|---|
 | Run spawn (in `spawnAgentRun`) | `ready` | `in_progress` | The queue and detail pages reflect that work is in flight. Only fires for `ready` so manual `Run now` on draft/in_review/done items doesn't get nudged. |
-| Run completion (in `completeRun` â†’ `advanceIssueStatus`) | `in_progress` | `in_review` | The agent finished its phase; first valid forward status from the state machine. |
+| Run completion (in `completeRun`) | `in_progress` | per routing | No auto-advance. The agent routes the item itself via MCP (`change_status` + `assign`, per `.atlas/handoff.md`); otherwise `decideRunRouting` applies the on-pass / on-fail handoff rule or parks it in `waiting_for_info` with the Owner. |
 | Run error (in `errorRun`) | `in_progress` | `waiting_for_info` | The escape hatch from `in_progress`. Surfaces the failure to the Owner in the Queue's "waiting on you" section instead of stranding the item. Only fires when the item is still `in_progress` so a human override isn't clobbered. |
 
 Auto-advancement also honours `assertNoOpenBlockers` from the depends-on graph: if the item has open blockers, the auto-advance is skipped (the run still completes, the item just stays put) and an `[blocked]` line streams via SSE.

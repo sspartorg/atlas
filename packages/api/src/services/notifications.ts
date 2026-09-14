@@ -1,4 +1,6 @@
+import type { ExpressionBuilder } from 'kysely';
 import { db } from '../db/kysely-client.js';
+import type { DB } from '../db/types.js';
 import { broadcastSSE } from '../routes/events.js';
 import { sendWebPushForNotification } from './web-push.js';
 import type {
@@ -60,6 +62,21 @@ function rowToNotification(row: Record<string, unknown>): INotification {
     };
 }
 
+// A completion `needs_you` is a snapshot of "item is waiting on you"; once
+// the item moves on it is stale and must drop out of the feed + badge.
+// Scoped to agent_completed: agent_error / terminal-idle prompts are not
+// derived from item status and must survive whatever state the item is in.
+function notStaleNeedsYou(
+    eb: ExpressionBuilder<DB & { n: DB['notifications']; i: DB['items'] }, 'n' | 'i'>,
+) {
+    return eb.or([
+        eb('n.kind', '!=', 'needs_you'),
+        eb('n.event_type', '!=', 'agent_completed'),
+        eb('i.id', 'is', null),
+        eb('i.status', 'in', ['waiting_for_info', 'in_review']),
+    ]);
+}
+
 function selectNotificationsWithItemType() {
     return db
         .selectFrom('notifications as n')
@@ -86,7 +103,7 @@ function selectNotificationsWithItemType() {
 
 export const notificationsService = {
     async list(filter: ListFilter = {}): Promise<INotification[]> {
-        let q = selectNotificationsWithItemType();
+        let q = selectNotificationsWithItemType().where(notStaleNeedsYou);
         if (filter.kind) q = q.where('n.kind', '=', filter.kind);
         if (filter.external_status) q = q.where('n.external_status', '=', filter.external_status);
         const rows = await q
@@ -222,9 +239,11 @@ export const notificationsService = {
 
     async countUnread(): Promise<number> {
         const r = await db
-            .selectFrom('notifications')
+            .selectFrom('notifications as n')
+            .leftJoin('items as i', 'i.id', 'n.item_id')
             .select(({ fn }) => fn.countAll<string>().as('n'))
-            .where('read_at', 'is', null)
+            .where('n.read_at', 'is', null)
+            .where(notStaleNeedsYou)
             .executeTakeFirst();
         // countAll() + executeTakeFirst() always returns exactly one row.
         /* v8 ignore next */

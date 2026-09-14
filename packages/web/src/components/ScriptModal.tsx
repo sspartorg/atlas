@@ -9,6 +9,7 @@ import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
 import Alert from '@mui/material/Alert';
 import Typography from '@mui/material/Typography';
+import Chip from '@mui/material/Chip';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import DeleteOutline from '@mui/icons-material/DeleteOutline';
 
@@ -37,6 +38,8 @@ export interface ScriptModalProps {
         body_ps1: string;
     }) => Promise<void> | void;
     onDelete?: (id: string) => Promise<void> | void;
+    /** Project scope: workspace scripts a same-slug project script would override (add mode only). */
+    slugSuggestions?: Array<{ id: string; name: string }>;
 }
 
 // Mirrors CreateGuardrailScriptSchema's slug regex. Kept here as a
@@ -44,7 +47,14 @@ export interface ScriptModalProps {
 // can preview the validation error inline before the round-trip.
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
-export function ScriptModal({ open, editing, onClose, onSubmit, onDelete }: ScriptModalProps) {
+export function ScriptModal({
+    open,
+    editing,
+    onClose,
+    onSubmit,
+    onDelete,
+    slugSuggestions,
+}: ScriptModalProps) {
     const [id, setId] = useState('');
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -159,6 +169,30 @@ export function ScriptModal({ open, editing, onClose, onSubmit, onDelete }: Scri
                             sx: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13 },
                         }}
                     />
+                    {!isEdit && slugSuggestions ? (
+                        <Box>
+                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+                                A project script with the same slug overrides the workspace script.
+                                {slugSuggestions.length > 0 ? ' Override one:' : ''}
+                            </Typography>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                {slugSuggestions.map((s) => (
+                                    <Chip
+                                        key={s.id}
+                                        label={s.id}
+                                        size="small"
+                                        variant={id === s.id ? 'filled' : 'outlined'}
+                                        disabled={submitting}
+                                        onClick={() => {
+                                            setId(s.id);
+                                            if (!name.trim()) setName(s.name);
+                                        }}
+                                        sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                                    />
+                                ))}
+                            </Box>
+                        </Box>
+                    ) : null}
                     <TextField
                         label="Name"
                         value={name}

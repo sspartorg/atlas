@@ -3,7 +3,8 @@ import { describe, expect, it, beforeEach, afterAll, vi } from 'vitest';
 vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
 
 import { notificationsService } from './notifications.js';
-import { closeTestDb, truncateAll } from '../../tests/_pg-db.js';
+import { closeTestDb, truncateAll, testDb } from '../../tests/_pg-db.js';
+import { insertItem, insertProject } from '../../tests/_items.js';
 
 beforeEach(async () => {
     await truncateAll();
@@ -223,6 +224,38 @@ describe('notificationsService', () => {
 
         it('markRead returns false for missing id', async () => {
             expect(await notificationsService.markRead(9999)).toBe(false);
+        });
+    });
+
+    describe('stale needs_you (item left waiting_for_info / in_review)', () => {
+        async function seed() {
+            await insertProject('p1');
+            const waiting = await insertItem({ type: 'epic', project_id: 'p1', status: 'waiting_for_info' });
+            const moved = await insertItem({ type: 'epic', project_id: 'p1', status: 'waiting_for_info' });
+            const mk = (issue_id: string | null, event_type = 'agent_completed') =>
+                notificationsService.create({ event_type, message: 'm', kind: 'needs_you', issue_id });
+            await mk(waiting);
+            await mk(moved);
+            await mk(null);
+            // agent errors / terminal idle are not item-state prompts — must not be hidden
+            await mk(moved, 'agent_error');
+            await notificationsService.create({ event_type: 'e', message: 'u', kind: 'update', issue_id: moved });
+            await testDb.updateTable('items').set({ status: 'in_progress' }).where('id', '=', moved).execute();
+            return { waiting, moved };
+        }
+
+        it('list hides agent_completed needs_you rows whose item is no longer awaiting the Owner', async () => {
+            const { waiting, moved } = await seed();
+            const rows = await notificationsService.list();
+            const needsYou = rows.filter((r) => r.kind === 'needs_you' && r.event_type === 'agent_completed');
+            expect(needsYou.map((r) => r.issue_id).sort()).toEqual([waiting, null].sort());
+            expect(rows.some((r) => r.event_type === 'agent_error' && r.issue_id === moved)).toBe(true);
+            expect(rows.some((r) => r.kind === 'update' && r.issue_id === moved)).toBe(true);
+        });
+
+        it('countUnread excludes the same stale rows', async () => {
+            await seed();
+            expect(await notificationsService.countUnread()).toBe(4);
         });
     });
 

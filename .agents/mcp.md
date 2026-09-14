@@ -114,7 +114,7 @@ The MCP layer now spans read + write, so workflows are no longer
 
 ### PO Writer expanding an epic
 `get_item { issue_type: 'epic', id }` â€” returns the epic + project + every
-child story / bug + comments + item_links + external_links + activity in one
+child story / bug + comments + related_links + external_links + activity in one
 round trip. The envelope is *always* the full payload â€” there is no partial
 get.
 
@@ -128,12 +128,14 @@ comment, `update_item { action: 'change_status', ... }` to move state,
 ### Owner-led item maintenance via Claude
 Every mutation is one `update_item` call with an `action` discriminator:
 - `action: 'patch_fields'` for description / priority / spec edits (per-type
-  Zod validation on the API route).
+  Zod validation on the API route). Stories also accept `worktree_branch`
+  (`atlas/<role>/<id>`) — added to the MCP patch schema 2026-09-14; PO
+  Writer's contract requires it and the `.strict()` schema used to reject it.
 - `action: 'change_status'` for status transitions (with optional `override`
   for Owner corrections).
 - `action: 'assign'` to reassign (active-agent guard on the API).
 - `action: 'add_link' / 'remove_link'` for `depends_on` / `relates_to` /
-  `tested_by` graph edits.
+  `tested_by` graph edits (optional `agent_id` credits the link event).
 - `action: 'add_external_link' / 'remove_external_link'` for off-platform
   refs (GitHub PR URLs today).
 - `delete_item` for outright removal (cascades per type).
@@ -235,6 +237,18 @@ prompt is the safety boundary, and the system constitution
 carries an explicit "Forbidden Atlas MCP tool calls" clause that forbids
 `crud_agent` with `op` in `{create, update, delete}` and any project /
 guardrail / global-settings mutation.
+
+**Attribution.** The in-process MCP host has no bound agent id, so a write
+is credited to an agent only when the call passes `agent_id`; the generated
+`.atlas/handoff.md` (`handoff-assembler.ts`) tells the agent to pass its own
+id on every `update_item` call. `create_item` (top-level `agent_id`) and
+`update_item` `patch_fields` / `add_link` / `remove_link` / `add_external_link` forward it as
+the `x-atlas-agent-id` header; the create routes credit it as the `created`
+event actor (and default `reporter_agent_id`), the item-link routes as the
+`link_created` / `link_deleted` actor on both endpoints. An id that is not a
+real agent is ignored (Owner attribution). Catalog prompts that create items
+or links (PO Writer, Jira Importer) pass their literal id. `patch_fields`
+field events still carry no actor.
 
 The `tool_catalog` table (read-only directory at `GET /api/tool-catalog`)
 still lists every Atlas MCP tool the server exposes. It's informational â€”

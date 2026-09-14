@@ -20,6 +20,30 @@ describe('RunNowDialog', () => {
         expect(await findByRole('button', { name: /Run now/i })).toBeInTheDocument();
     });
 
+    it('defaults Issue type to Epic for a PO agent and pluralises the empty state', async () => {
+        server.use(
+            http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject({ id: 'p1' })])),
+            http.get(`${BASE}/epics`, () => HttpResponse.json([])),
+            ...defaultHandlers,
+        );
+        renderWithProviders(
+            <RunNowDialog agent={makeAgent({ name: 'PO Writer', role_id: 'po' })} open onClose={() => {}} />
+        );
+        expect(await screen.findByText('No epics in this project yet')).toBeInTheDocument();
+    });
+
+    it('defaults Issue type to Story for non-PO agents with a correct plural', async () => {
+        server.use(
+            http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject({ id: 'p1' })])),
+            http.get(`${BASE}/stories`, () => HttpResponse.json([])),
+            ...defaultHandlers,
+        );
+        renderWithProviders(
+            <RunNowDialog agent={makeAgent({ name: 'Coder', role_id: 'engineer' })} open onClose={() => {}} />
+        );
+        expect(await screen.findByText('No stories in this project yet')).toBeInTheDocument();
+    });
+
     it('does not render when closed', () => {
         server.use(...defaultHandlers);
         const { queryByText } = renderWithProviders(
@@ -660,5 +684,58 @@ describe('RunNowDialog', () => {
         await waitFor(() =>
             expect(screen.getByRole('button', { name: /Starting…/i })).toBeInTheDocument(),
         );
+    });
+
+    it('warns when the agent CLI is not installed', async () => {
+        server.use(
+            http.get(`${BASE}/cli/availability`, () => HttpResponse.json([
+                    { cli: 'claude', binary: 'claude', available: true, version: '1.0.0' },
+                    { cli: 'copilot', binary: 'copilot', available: false, version: null },
+                    { cli: 'ollama', binary: 'claude', available: true, version: '1.0.0' },
+                ])),
+            ...defaultHandlers,
+        );
+        renderWithProviders(
+            <RunNowDialog agent={makeAgent({ cli: 'copilot' })} open onClose={() => {}} />
+        );
+        expect(
+            await screen.findByText(/copilot is not installed on this machine/),
+        ).toBeInTheDocument();
+    });
+
+    it('lists items assigned to this agent first, under their own heading', async () => {
+        server.use(
+            http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject({ id: 'p1' })])),
+            http.get(`${BASE}/stories`, () =>
+                HttpResponse.json([
+                    makeStory({ id: 'S-1', title: 'Other agent story', assignee_agent_id: 'agent-qa' }),
+                    makeStory({ id: 'S-2', title: 'Unassigned story', assignee_agent_id: null }),
+                    makeStory({ id: 'S-3', title: 'My story', assignee_agent_id: 'agent-coder' }),
+                ])
+            ),
+            ...defaultHandlers,
+        );
+        renderWithProviders(
+            <RunNowDialog
+                agent={makeAgent({ id: 'agent-coder', role_id: 'engineer' })}
+                open
+                onClose={() => {}}
+            />
+        );
+        // Project, Issue type, then the Story picker.
+        await waitFor(() =>
+            expect(screen.getAllByRole('combobox')[2]).not.toHaveAttribute('aria-disabled', 'true'),
+        );
+        const storySelect = screen.getAllByRole('combobox')[2]!;
+        fireEvent.mouseDown(storySelect);
+        const listbox = await screen.findByRole('listbox');
+        const texts = Array.from(listbox.querySelectorAll('li')).map((li) => li.textContent);
+        expect(texts).toEqual([
+            'Assigned to this agent',
+            'S-3My story',
+            'Other items',
+            'S-1Other agent story',
+            'S-2Unassigned story',
+        ]);
     });
 });

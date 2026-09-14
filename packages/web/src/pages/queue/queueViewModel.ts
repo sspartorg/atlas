@@ -115,6 +115,18 @@ export function buildQueueItems(args: {
     return out;
 }
 
+export function countQueueDepthByAgent(
+    items: readonly Pick<QueueItem, 'assignee_agent_id' | 'status'>[]
+): Map<string, number> {
+    const depth = new Map<string, number>();
+    for (const i of items) {
+        if (!i.assignee_agent_id) continue;
+        if (!isRunningStatus(i.status) && !isQueuedStatus(i.status)) continue;
+        depth.set(i.assignee_agent_id, (depth.get(i.assignee_agent_id) ?? 0) + 1);
+    }
+    return depth;
+}
+
 export interface AgentQueueSummary {
     agent: IAgent;
     running: QueueItem[]; // currently in-flight on this agent

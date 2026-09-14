@@ -27,22 +27,22 @@ The **SDLC role catalog** is the canonical list of roles an agent can play in At
 
 | `id` | Label | Seeded? | Default status | Notes |
 |---|---|---|---|---|
-| `po` | Product Owner | yes | active | PO Writer — Brainstorm-before-scope agent. Reviewer persona handles the brainstorm-exit shape. |
-| `spec-writer` | Specification Writer | **no** | active | Writes per-Story specs ahead of code. |
-| `engineer` | Engineer | yes | active | Coder. The reviewer persona is the canonical **Engineering-Reviewer** the spec calls out. |
-| `qa` | Quality Assurance | yes | active | QA Writer — owns the regression net. |
-| `architect` | Software Architect | yes | inactive | Architecture docs ahead of implementation. |
-| `tester` | Exploratory Tester | **no** | inactive | Manual + persona-driven exploration (distinct from QA's automation). |
-| `automation` | Automation Engineer | yes | inactive | CI/CD, build tooling, release automation. |
-| `devops` | DevOps Engineer | **no** | inactive | Infra-as-code, deploys, observability, secrets rotation. |
-| `security` | Security Review Lead | **no** | inactive | Cross-cutting security review. Escalates findings to Owner — no paired performer. |
-| `designer` | UX/Visual Designer | **no** | inactive | Mockups + component specs. |
+| `po` | Product Owner | yes | active | PO Writer — brainstorm-before-scope. Paired PO Reviewer agent fans stories out. |
+| `spec-writer` | Specification Writer | **no** | — | Type-only. Removed from the chain; Architect now authors the spec. |
+| `engineer` | Engineer | yes | active | Coder. Paired Code Reviewer agent (opens the PR). |
+| `qa` | Quality Assurance | yes | active | QA Writer — test-plan CSV per dev story. Paired QA Reviewer agent. |
+| `architect` | Software Architect | yes | active | Architect — authors `specs/<n>-<slug>/spec.md` ahead of Coder (absorbed Spec Writer). Paired Architect Reviewer agent. |
+| `tester` | Exploratory Tester | **no** | — | Type-only. |
+| `automation` | Automation Engineer | yes | active | Automates `[automation-yes]` QA cases after the dev PR merges; Owner assigns manually. Paired Automation Reviewer agent. |
+| `devops` | DevOps Engineer | **no** | — | Type-only. |
+| `security` | Security Review Lead | **no** | — | Type-only. |
+| `designer` | UX/Visual Designer | **no** | — | Type-only. |
 
 The slug `id` doubles as the canonical reference everywhere in the codebase — `SdlcRole` in `@atlas/shared`, the `agents.role_id` FK target, the URL param of `PATCH /api/roles/:id`. Adding a role means a migration + a shared-type bump; the runtime never invents roles on its own.
 
 ## Disable-by-default policy
 
-The catalog enforces the disable-by-default rule at **seed time only**. Migration 025 seeds the `roles.default_status` column according to the table above; the existing 10 SDLC agents (PO Writer, Spec Writer, Coder, QA Writer + the 6 inactive shells) keep the same `agents.status` they had pre-A08. New agents created via API/MCP that get assigned a role inherit no status from the catalog — they default to `'active'` like every other agent, and the Owner can flip them after creation.
+The catalog enforces the disable-by-default rule at **seed time only**. Migration 025 seeds the `roles.default_status` column according to the table above; agents are no longer seeded at all — the 10 SDLC agents (5 performers + 5 paired reviewers) come from the marketplace catalog and ship `active` on install. New agents created via API/MCP that get assigned a role inherit no status from the catalog — they default to `'active'` like every other agent, and the Owner can flip them after creation.
 
 The policy is a curation signal, not a runtime guard. The Owner can flip `agents.status` freely; A08 never re-disables a runtime-enabled agent.
 
@@ -57,7 +57,7 @@ The policy is a curation signal, not a runtime guard. The Owner can flip `agents
 | `description` | TEXT NOT NULL DEFAULT `''` | One-liner shown on the (future) Roles admin page. |
 | `default_prompt_md` | TEXT NOT NULL DEFAULT `''` | Curated performer prompt. Owner edits via `PATCH /api/roles/:id`. |
 | `default_reviewer_prompt_md` | TEXT NOT NULL DEFAULT `''` | Curated reviewer-persona prompt. Empty for roles with no paired reviewer (architect, tester, automation, devops, security, designer). |
-| `default_status` | TEXT NOT NULL DEFAULT `'inactive'` | CHECK: `'active'\|'inactive'`. Active for `po`, `spec-writer`, `engineer`, `qa`. |
+| `default_status` | TEXT NOT NULL DEFAULT `'inactive'` | CHECK: `'active'\|'inactive'`. All five seeded rows (`po`, `engineer`, `qa`, `architect`, `automation`) are `active` (verified 2026-09-14). |
 | `sort_order` | INTEGER NOT NULL DEFAULT 0 | UI ordering for the Role dropdown. |
 | `created_at`, `updated_at` | TIMESTAMPTZ | Auto-managed. |
 

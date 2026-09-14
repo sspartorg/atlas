@@ -109,32 +109,27 @@ test.describe('/terminal', () => {
         await expect(statusChip).toHaveText(/^active$/i, { timeout: 30_000 });
         await expect(xterm).toContainText(/resuming session/i, { timeout: 30_000 });
 
-        // STOP — open the modal. `ensureWorktreeGitignore` writes +
-        // stages a `.gitignore` on the freshly-provisioned worktree, so
-        // preflight returns one porcelain entry (`A  .gitignore`). The
-        // commit-message field is pre-filled with "Terminal session
-        // changes" so clicking confirm ships the commit, pushes the
-        // branch to the bare-repo fixture, and tears the worktree down.
+        // STOP — open the modal. `ensureWorktreeGitignore` now commits its
+        // `.gitignore` edit on its own (and provisioning pushes the branch), so
+        // a session that changed nothing preflights clean: no stageable paths,
+        // nothing ahead of origin, and the PR checkbox is disabled because
+        // there is nothing to open a PR from.
         await page.getByRole('button', { name: /^Stop$/ }).click();
         const stopDialog = page.getByRole('dialog');
         await expect(stopDialog).toBeVisible();
-        // Opt out of the PR. The fixture remote is a bare repo with no GitHub
-        // behind it, so `gh pr create` has nothing to talk to — unchecking
-        // keeps this assertion about commit + push + teardown, and exercises
-        // the bypass at the same time. It also pins the button label, which
-        // otherwise reads "Stop & open PR" whenever something is staged.
-        //
-        // Wait for ENABLED, not merely visible. The checkbox renders disabled
-        // while the stop preflight is in flight, so the old
-        // `if (await prBox.isEnabled())` probe read false, skipped the uncheck
-        // entirely, and left the confirm button reading "Stop & open PR" —
-        // which is why this assertion timed out looking for "Stop session".
-        const prBox = stopDialog.getByRole('checkbox', { name: /open a pull request/i });
-        await expect(prBox).toBeEnabled({ timeout: 30_000 });
-        await prBox.uncheck();
-        await expect(prBox).not.toBeChecked();
-        const confirm = stopDialog.getByRole('button', { name: /^Stop session$/ });
+        // The confirm button stays disabled while the stop preflight is in
+        // flight, so wait for it before reading the checkbox state — probing
+        // earlier read a transient disabled state. If the preflight did find
+        // something to ship, opt out of the PR: the fixture remote is a bare
+        // repo with no GitHub behind it.
+        const confirm = stopDialog.getByRole('button', { name: /^Stop( session| & open PR)$/ });
         await expect(confirm).toBeEnabled({ timeout: 30_000 });
+        const prBox = stopDialog.getByRole('checkbox', { name: /open a pull request/i });
+        if (await prBox.isEnabled()) {
+            await prBox.uncheck();
+        }
+        await expect(prBox).not.toBeChecked();
+        await expect(confirm).toHaveText(/^Stop session$/);
         await confirm.click();
 
         // When the stop API returns, the session row flips to `closed` and the

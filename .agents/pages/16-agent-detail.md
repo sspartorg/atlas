@@ -15,6 +15,9 @@ Edit an agent's configuration, prompt (performer + reviewer personas), handoff r
 - **Run now** → opens `RunNowDialog` (project / issue-type / issue pickers). Two actions:
   - **Run now** → `POST /api/run` → navigates to `/agents/:id/runs/:runId`.
   - **Preview prompt** → `POST /api/agents/:id/compile-prompt` → opens `PromptPreviewDialog` showing the exact markdown that would be piped to the CLI on Run; offers **Copy** + **Download .md** (filename `prompt-{agentSlug}-{issueType}-{issueId}-{YYYYMMDD-HHMMSS}.md`). No spawn, no DB write — for inspection before committing to a real run.
+- **Queue: N items** — ready + in-progress epics / stories / bugs assigned to this agent, the same count the Queue page shows (`useQueueDepthByAgent()` → `countQueueDepthByAgent()` in `pages/queue/queueViewModel.ts`, sharing the Queue page's `useEpics` / `useStories` / `useBugs` cache). Until 2026-09-14 it counted only `queued` / `in_progress` agent runs, so an agent with Ready items but no runs showed "Queue: 0 items".
+- **Status label + dot** — same `resolveAgentStatusLabel()` as the Agents card, fed `queuedCount + queueDepth` so Ready items with no run read **Queued**, not **Idle**. Colour from `agentStatusColor()`: a **Failed** label now has an `error` dot (it was green).
+- **CLI not installed** warning — `CliUnavailableAlert` (MUI `Alert severity="warning"`) spans the hero when `GET /api/cli/availability` says the agent's CLI binary is missing: "`<binary>` is not installed on this machine — runs will fail until it is, or switch the agent to `<available cli>`." Renders nothing while availability is loading/unknown.
 - **Pause/Resume** → `handlePauseToggle()` → `PATCH /agents/:id`
 - `AgentCardMenu` (more actions) — Duplicate (opens modal), Delete (mutation)
 
@@ -37,7 +40,8 @@ Tab switching is plain `useTabParam(tabSlug)`. (The legacy `LinearProgress` mid-
 
 ### Overview (`OverviewTab`)
 - **Edit description** → inline edit; Save calls `PATCH /agents/:id` with `{ description }`; the local toast confirms server persistence.
-- **CLI** dropdown — `claude` / `copilot` / `ollama` (full-width, matches Model)
+- **CLI** dropdown — `claude` / `copilot` / `ollama` (full-width, matches Model). Switching CLI auto-selects the new CLI's registry default (first `cli_models` row by `sort_order`, then name — `modelsForCli()` in `ModelSelect.tsx`); switching back restores the saved model. Walkthrough: copilot→claude used to leave "claude-sonnet-4.6 (not in registry)".
+- A `CliUnavailableAlert` sits at the top of **Configuration** for the *draft* CLI, so picking an uninstalled CLI warns before Save.
 - **Model** dropdown — backed by `cli_models`
 - **Schedule hours** — number input (0.5h step); shows "Next pass" delta on the same row (wraps on mobile)
 - **Concurrent runs** +/− (capped at `view.concurrentMax`)
@@ -48,13 +52,13 @@ Tab switching is plain `useTabParam(tabSlug)`. (The legacy `LinearProgress` mid-
 ### Prompt (`PromptTab`)
 - Guardrails-style **Edit / Split / Preview** view-mode toggle on the editor card. The editor pane is a plain `<textarea>` (mono font); the preview pane renders via the shared `MarkdownPreview` component. Header shows `Active prompt · v{n}` and the slugified file name; footer shows saved-status + line count + Save / Discard.
 - Save calls `PATCH /agents/:id` with `{ prompt_md }`. The service increments `prompt_version` and inserts a row into `agent_prompt_versions` in the same transaction.
-- **Reviewer prompt editor** (Two-persona model, second card) — same Edit / Split / Preview shape as the active prompt, bound to `agent.reviewer_prompt_md` / `agent.reviewer_prompt_version`. When non-empty, the runner spawns a second CLI invocation after the performer leg completes and routes the item per the reviewer's `submit_review` outcome (pass / fail / needs_info). Empty disables the reviewer leg — the runner falls back to the legacy direct on-pass handoff. Save calls `PATCH /agents/:id` with `{ reviewer_prompt_md }`; the server increments `reviewer_prompt_version` and inserts an `agent_prompt_versions` row with `kind='reviewer'`. Status label flips between "Reviewer persona active" / "disabled" based on whether the saved body is non-empty.
+- **No reviewer prompt editor.** The two-persona model (`reviewer_prompt_md`, `submit_review`) was removed; reviewers are separate agents (e.g. Code Reviewer) with their own Prompt tab. (2026-09-14 doc correction.)
 - **Two version history tables** — one per kind. `GET /agents/:id/prompt-versions?kind=performer` and `?kind=reviewer` (both default to performer when the param is omitted). Revert is `POST /agents/:id/prompt-versions/:version/revert?kind=...`; both fire through the shared `useRevertAgentPrompt` mutation hook.
 - **Version history table** below the editor reads from `GET /agents/:id/prompt-versions`. The list is scrollable (`max-height: 360px`); the page never expands beyond the card. Rows show version / created / edited-by / status / action.
 - **Revert** action per non-active row → `POST /agents/:id/prompt-versions/:version/revert`. The server appends a new active version whose body equals the source and whose `reverted_from` points back. The active row shows `current` (italic) instead of an action.
 
 ### Handoffs (`HandoffsTab`)
-Handoff prompt textarea + checklist (Add check / delete per row; deleting a row opens `ConfirmRemoveCheckDialog` — local-only change until Save). Two routing branches — **All checks passed** and **Any check failed** — each picks Assign-to agent + Set-status-to. The Assign-to picker lists every agent including the current one, so a self-cycling agent (e.g. a scheduled automation like `cer-weekly-automation`) can hand off back to itself. **Save handoffs** → `POST /agents/:id/handoff-rules`.
+Handoff prompt textarea + checklist (Add check / delete per row; deleting a row opens `ConfirmRemoveCheckDialog` — local-only change until Save). Two routing branches — **All checks passed** and **Any check failed** — each picks Assign-to agent + Set-status-to. The Owner option reads "Owner ({settings.owner_name})" via `useSettings()`. The Assign-to picker lists every agent including the current one, so a self-cycling agent (e.g. a scheduled automation like `cer-weekly-automation`) can hand off back to itself. **Save handoffs** → `POST /agents/:id/handoff-rules`. A rule whose target isn't an installed agent (e.g. a marketplace entry's `agent-code-reviewer`) renders as a disabled **`<slug> (not installed)`** option plus a warning line "Install `<slug>` or pick another agent — this route can't hand off until you do." (previously MUI logged `out-of-range value` and showed the raw slug).
 
 ### Test Run (`TestRunTab`)
 Live CLI connection test, not a real `agent_runs` row. **Run test** → `POST /api/agents/:id/dry-run` (route name kept for back-compat) with the optional extra-prompt line; the API spawns the agent's configured CLI (`agent.cli`) with `--print --model {agent.model}` and pipes a one-line ping prompt via stdin (`"Reply with the single word OK and nothing else."`). stdout/stderr stream into the dark terminal panel via the `dry_run_*` SSE events (filtered by `dryRunId`). On close the server emits a verdict line `[test] connection ok · 2.3s` (or `connection failed · exit=N · 2.3s`) as the final event output; the UI prints it in green/orange. **Stop** closes the SSE locally (server may still finish). **Copy log** copies the timestamped output. No DB writes, no constitution, no agent prompt, no handoffs, no MCP, no issue context — this only verifies the CLI binary, credentials, and model can complete an LLM round-trip.
@@ -78,7 +82,7 @@ Procedural-memory editor backed by the `agent_memory` table.
 
 ## Modals / drawers
 - `DuplicateAgentModal` — open/close at page level.
-- `RunNowDialog` — opens from the hero "Run now" button. Pickers (project → issue type → issue) → `POST /api/run` → navigates to the new run's detail page.
+- `RunNowDialog` — opens from the hero "Run now" button. Pickers (project → issue type → issue) → `POST /api/run` → navigates to the new run's detail page. Issue type defaults to **Epic** for `role_id === 'po'` agents (PO Writer / PO Reviewer), **Story** otherwise; the empty picker hint is "No epics / stories / bugs in this project yet". The issue picker lists items assigned to this agent first under **Assigned to this agent**, then **Other items** (no headers when none are assigned), so running on another agent's item is deliberate. Shows the same `CliUnavailableAlert` as the hero.
 - `EditAgentColorModal` — opens from the sidebar Color row. Wraps the shared `AccentColorPicker` and saves via `PATCH /agents/:id` with `{ accent_color }`.
 - `GlyphPickerModal` — opens from the sidebar Glyph row. 16-icon Material Symbols grid; saves via `PATCH /agents/:id` with `{ glyph }`.
 - `DeleteAgentModal` — opens from the ⋯ menu's Delete. Custom MUI Dialog (replaces the old `window.confirm`); calls `DELETE /agents/:id` on confirm.
@@ -87,6 +91,7 @@ Procedural-memory editor backed by the `agent_memory` table.
 - `useAgent(id)`, `useUpdateAgent`
 - `useAgentMemory(id)`, `useSetAgentMemory`, `useRegenerateAgentMemory` (Memory tab)
 - `useProjects`, `useEpics`, `useStories`, `useBugs` (RunNowDialog)
+- `useCliAvailability` / `useMissingCli` (hero, Configuration, RunNowDialog warnings), `useCliModels` (CLI switch → default model)
 - `useQuery(['runs', agentId])` and per-tab hooks
 
 ## API endpoints touched
@@ -94,6 +99,7 @@ Procedural-memory editor backed by the `agent_memory` table.
 - `GET /api/agents/:id/handoff-rules`, `POST /api/agents/:id/handoff-rules`
 - `GET /api/agents/:id/memory`, `PUT /api/agents/:id/memory`, `POST /api/agents/:id/memory/regenerate`
 - `GET /api/run?agent_id=…`, `POST /api/run` (Run now dialog)
+- `GET /api/cli/availability` (CLI not-installed warnings)
 - `POST /api/agents/:id/compile-prompt` (Run now dialog — Preview prompt button)
 - `POST /api/agents/:id/dry-run` (Test Run tab — live CLI smoke-test)
 - `POST /api/agents/:id/duplicate`, `DELETE /api/agents/:id`

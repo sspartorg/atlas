@@ -9,6 +9,7 @@ import { makeAgent } from '../../test-utils/factories.js';
 import { AgentHero } from './AgentHero.js';
 import { getAgentView, getRuntimeStats } from './agentViewModel.js';
 import type { AgentCardMenuActions } from './AgentCardMenu.js';
+import { ATLAS_PALETTE } from '../../theme/tokens.js';
 
 function makeStats() {
     return getRuntimeStats([]);
@@ -28,6 +29,7 @@ describe('AgentHero', () => {
                 agent={makeAgent({ name: 'My Coder' })}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -45,6 +47,7 @@ describe('AgentHero', () => {
                 agent={makeAgent({ status: 'inactive' })}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -62,6 +65,7 @@ describe('AgentHero', () => {
                 agent={makeAgent()}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={onRunNow}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -79,6 +83,7 @@ describe('AgentHero', () => {
                 agent={makeAgent()}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={onPauseToggle}
                 menuActions={noopMenuActions}
@@ -94,13 +99,14 @@ describe('AgentHero', () => {
             <AgentHero
                 agent={makeAgent()}
                 view={makeView()}
-                stats={{ ...makeStats(), queueDepth: 3, lastRunAt: null }}
+                stats={{ ...makeStats(), lastRunAt: null }}
+                queueDepth={3}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
             />,
         );
-        expect(await screen.findByText(/Queue:/i)).toBeInTheDocument();
+        expect(await screen.findByText(/Queue:/i)).toHaveTextContent('Queue: 3 items');
         expect(screen.getByText(/Last run:/i)).toBeInTheDocument();
     });
 
@@ -117,6 +123,7 @@ describe('AgentHero', () => {
                 agent={agent}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -144,6 +151,7 @@ describe('AgentHero', () => {
                 agent={agent}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -172,6 +180,7 @@ describe('AgentHero', () => {
                 agent={agent}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -198,6 +207,7 @@ describe('AgentHero', () => {
                 agent={agent}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -215,19 +225,55 @@ describe('AgentHero', () => {
         await waitFor(() => expect(screen.queryByText('Coder')).toBeInTheDocument());
     });
 
-    it('renders Queued statusLabel when stats.queueDepth > 0 on active agent (Queued branch)', async () => {
+    it('renders Queued statusLabel when stats.queuedCount > 0 on active agent (Queued branch)', async () => {
         server.use(...defaultHandlers);
         renderWithProviders(
             <AgentHero
                 agent={makeAgent({ status: 'active' })}
                 view={makeView()}
-                stats={{ ...makeStats(), queueDepth: 2, queuedCount: 2, lastRunAt: new Date().toISOString() }}
+                stats={{ ...makeStats(), queuedCount: 2, lastRunAt: new Date().toISOString() }}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
             />,
         );
         expect(await screen.findByText('Queued')).toBeInTheDocument();
+    });
+
+    it('renders Queued when item queue depth > 0 and nothing is running', async () => {
+        server.use(...defaultHandlers);
+        renderWithProviders(
+            <AgentHero
+                agent={makeAgent({ status: 'active' })}
+                view={makeView()}
+                stats={makeStats()}
+                queueDepth={1}
+                onRunNow={vi.fn()}
+                onPauseToggle={vi.fn()}
+                menuActions={noopMenuActions}
+            />,
+        );
+        expect(await screen.findByText('Queued')).toBeInTheDocument();
+        expect(screen.queryByText('Idle')).not.toBeInTheDocument();
+    });
+
+    it('colours the Failed state with the error slot so the dot is not green', async () => {
+        server.use(...defaultHandlers);
+        renderWithProviders(
+            <AgentHero
+                agent={makeAgent({ status: 'active' })}
+                view={makeView()}
+                stats={{ ...makeStats(), lastRunErrored: true }}
+                queueDepth={0}
+                onRunNow={vi.fn()}
+                onPauseToggle={vi.fn()}
+                menuActions={noopMenuActions}
+            />,
+        );
+        const label = await screen.findByText('Failed');
+        expect(label).toHaveStyle({ color: ATLAS_PALETTE.error });
+        expect(label.previousElementSibling).toHaveStyle({ background: ATLAS_PALETTE.error });
     });
 
     it('renders lastRunAt relative time when lastRunAt is set (truthy branch)', async () => {
@@ -237,7 +283,8 @@ describe('AgentHero', () => {
             <AgentHero
                 agent={makeAgent()}
                 view={makeView()}
-                stats={{ ...makeStats(), queueDepth: 0, lastRunAt: pastDate }}
+                stats={{ ...makeStats(), lastRunAt: pastDate }}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -254,6 +301,7 @@ describe('AgentHero', () => {
                 agent={makeAgent({ accent_color: 'notacolor' })}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -268,7 +316,8 @@ describe('AgentHero', () => {
             <AgentHero
                 agent={makeAgent({ status: 'active' })}
                 view={makeView()}
-                stats={{ ...makeStats(), queueDepth: 1, lastRunAt: null }}
+                stats={{ ...makeStats(), lastRunAt: null }}
+                queueDepth={1}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -294,6 +343,7 @@ describe('AgentHero', () => {
                 agent={makeAgent()}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -333,6 +383,7 @@ describe('AgentHero', () => {
                 agent={agent}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -367,6 +418,7 @@ describe('AgentHero', () => {
                 agent={agent}
                 view={makeView()}
                 stats={makeStats()}
+                queueDepth={0}
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
@@ -386,4 +438,33 @@ describe('AgentHero', () => {
         // After early return, component is back to non-editing mode
         await waitFor(() => expect(document.body).toBeTruthy());
     }, 15000);
+
+    it('warns in the hero when the agent CLI binary is not installed', async () => {
+        server.use(
+            http.get('http://localhost:3000/api/cli/availability', () =>
+                HttpResponse.json([
+                    { cli: 'claude', binary: 'claude', available: true, version: '1.0.0' },
+                    { cli: 'copilot', binary: 'copilot', available: false, version: null },
+                    { cli: 'ollama', binary: 'claude', available: true, version: '1.0.0' },
+                ]),
+            ),
+            ...defaultHandlers,
+        );
+        renderWithProviders(
+            <AgentHero
+                agent={makeAgent({ cli: 'copilot' })}
+                view={makeView()}
+                stats={makeStats()}
+                queueDepth={0}
+                onRunNow={vi.fn()}
+                onPauseToggle={vi.fn()}
+                menuActions={noopMenuActions}
+            />,
+        );
+        expect(
+            await screen.findByText(
+                'copilot is not installed on this machine — runs will fail until it is, or switch the agent to claude.',
+            ),
+        ).toBeInTheDocument();
+    });
 });

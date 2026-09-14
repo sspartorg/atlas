@@ -186,6 +186,8 @@ export function StoryDetail() {
                     <>
                         <DetailsRailCard
                             issueType="story"
+                            issueId={story.id}
+                            externalLinks={full?.external_links}
                             status={story.status}
                             onStatusPick={(next, override) =>
                                 void transition.mutateAsync({
@@ -265,25 +267,6 @@ export function StoryDetail() {
                             data: { acceptance_criteria: next },
                         })
                     }
-                    renderBody={(body) => {
-                        const lines = body.split('\n').filter((l) => l.trim().length > 0);
-                        return (
-                            <Box
-                                component="ul"
-                                sx={{
-                                    pl: 3,
-                                    m: 0,
-                                    color: ATLAS_PALETTE.slate80,
-                                    fontSize: 13.5,
-                                    lineHeight: 1.8,
-                                }}
-                            >
-                                {lines.map((line, i) => (
-                                    <li key={i}>{line.replace(/^[-*]\s*/, '')}</li>
-                                ))}
-                            </Box>
-                        );
-                    }}
                 />
 
                 <WorkItemTable
@@ -345,6 +328,9 @@ export function StoryDetail() {
                     issueId={story.id}
                     activity={full?.activity}
                     agents={agents}
+                    status={story.status}
+                    assigneeAgentId={story.assignee_agent_id}
+                    runs={itemRuns}
                 />
             </IssueDetailShell>
 
