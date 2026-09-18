@@ -56,23 +56,9 @@ jobs:
 
   api:
     name: api tests (postgres)
-    # Expensive (service container). Nightly + on demand only — see COST above.
+    # Expensive (Postgres). Nightly + on demand only — see COST above.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_DB: atlas_test
-          POSTGRES_USER: atlas
-          POSTGRES_PASSWORD: atlas
-        ports:
-          - 5500:5432
-        options: >-
-          --health-cmd "pg_isready -U atlas -d atlas_test"
-          --health-interval 2s
-          --health-timeout 3s
-          --health-retries 30
     env:
       TEST_DATABASE_URL: postgres://atlas:atlas@localhost:5500/atlas_test
     steps:
@@ -85,6 +71,13 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # docker-compose Postgres, not a `services:` container: migration 007
+      # needs `shared_preload_libraries=pg_stat_statements`, which a service
+      # container cannot set and docker-compose.yml already does.
+      - run: pnpm db:up
+      - run: pnpm db:wait
+        env:
+          DATABASE_URL: postgres://atlas:atlas@localhost:5500/atlas
       # `test`, not `test:coverage`, on purpose. The api coverage thresholds
       # (98/98/98/96) sit above the measured numbers — `.agents/testing.md`
       # records the gap — so gating on them would make this job red on day
@@ -117,6 +110,8 @@ jobs:
       # means CI brings the stack up exactly the way a developer does.
       - run: pnpm db:up
       - run: pnpm db:wait
+        env:
+          DATABASE_URL: postgres://atlas:atlas@localhost:5500/atlas
       - run: pnpm exec playwright install --with-deps chromium
       # The visual-snapshot specs are skipped by design (Linux-only baselines
       # are not committed — see e2e/visual/README.md), so this is the
