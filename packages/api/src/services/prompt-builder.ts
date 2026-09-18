@@ -1,6 +1,7 @@
 import { db } from '../db/kysely-client.js';
 import { commentsService } from './comments.js';
 import { itemLinks } from './item-links.js';
+import { DEFAULT_THREAD_TAIL_COMMENTS, takeRecentComments } from './context-budget.js';
 import { COMMIT_DISCIPLINE_PROMPT_SECTION, buildHumanAttributionSection } from './commit-discipline.js';
 
 // Theme 09 — render `{{ key }}` placeholders in an agent's prompt
@@ -44,12 +45,26 @@ import type {
 export interface IssueContext {
     title: string;
     description: string;
+    acceptance_criteria?: string | undefined;
     spec_md?: string | undefined;
-    epicTitle?: string | undefined;
-    epicDescription?: string | undefined;
     projectName?: string | undefined;
     comments: IComment[];
+    // A sub-task's parent Task. A step running on a sub-task works inside
+    // the Task's brief, and the Owner often answers on the Task, not on
+    // the sub-task — so its spec and latest discussion travel along.
+    task?:
+        | {
+              id: string;
+              title: string;
+              description: string;
+              acceptance_criteria?: string | undefined;
+              spec_md?: string | undefined;
+              comments: IComment[];
+          }
+        | undefined;
 }
+
+const orUndef = (v: string | null | undefined): string | undefined => v || undefined;
 
 export async function getIssueContext(issueType: IssueType, issueId: string): Promise<IssueContext | null> {
     // Always pull the comment thread in parallel — the owner's working
@@ -57,84 +72,109 @@ export async function getIssueContext(issueType: IssueType, issueId: string): Pr
     // are how the spec actually evolves. Agents need both.
     const commentsPromise = commentsService.list(issueType, issueId);
 
-    if (issueType === 'story') {
-        const row = await db
-            .selectFrom('items as s')
-            .leftJoin('items as e', 'e.id', 's.parent_id')
-            .leftJoin('projects as p', 'p.id', 's.project_id')
-            .select([
-                's.title as title',
-                's.description as description',
-                's.spec_md as spec_md',
-                'e.title as epic_title',
-                'e.description as epic_description',
-                'p.name as project_name',
-            ])
-            .where('s.id', '=', issueId)
-            .where('s.type', '=', 'story')
-            .executeTakeFirst();
-        if (!row) return null;
-        // reason: `items.project_id` is NOT NULL and FK-enforced
-        // (ON DELETE CASCADE), and the `items_check_parent` trigger
-        // requires every story to have a `parent_id` pointing at an
-        // existing epic — so the `e`/`p` leftJoins above can never
-        // actually miss, and the `?? undefined` fallbacks on
-        // epicTitle/epicDescription/projectName are unreachable
-        // defensively (see migrations/001_baseline.sql).
-        return {
-            title: row.title as string,
-            description: (row.description as string | null) ?? '',
-            spec_md: (row.spec_md as string | null) ?? undefined,
-            /* v8 ignore next */
-            epicTitle: (row.epic_title as string | null) ?? undefined,
-            /* v8 ignore next */
-            epicDescription: (row.epic_description as string | null) ?? undefined,
-            /* v8 ignore next */
-            projectName: (row.project_name as string | null) ?? undefined,
-            comments: await commentsPromise,
-        };
-    }
+    const row = await db
+        .selectFrom('items as i')
+        .leftJoin('projects as p', 'p.id', 'i.project_id')
+        .select([
+            'i.title as title',
+            'i.description as description',
+            'i.acceptance_criteria as acceptance_criteria',
+            'i.spec_md as spec_md',
+            'i.parent_id as parent_id',
+            'p.name as project_name',
+        ])
+        .where('i.id', '=', issueId)
+        .where('i.type', '=', issueType)
+        .executeTakeFirst();
+    if (!row) return null;
 
-    if (issueType === 'epic') {
-        const row = await db
-            .selectFrom('items as e')
-            .leftJoin('projects as p', 'p.id', 'e.project_id')
-            .select(['e.title as title', 'e.description as description', 'p.name as project_name'])
-            .where('e.id', '=', issueId)
-            .where('e.type', '=', 'epic')
-            .executeTakeFirst();
-        if (!row) return null;
-        return {
-            title: row.title as string,
-            description: (row.description as string | null) ?? '',
-            // reason: `items.project_id` is NOT NULL and FK-enforced
-            // (ON DELETE CASCADE), so the `p` leftJoin above can never
-            // actually miss for an existing epic row.
-            /* v8 ignore next */
-            projectName: (row.project_name as string | null) ?? undefined,
-            comments: await commentsPromise,
-        };
-    }
+    const ctx: IssueContext = {
+        title: row.title,
+        description: row.description ?? '',
+        acceptance_criteria: orUndef(row.acceptance_criteria),
+        // Sub-tasks carry no spec of their own; the Task's spec is theirs.
+        spec_md: issueType === 'task' ? orUndef(row.spec_md) : undefined,
+        // reason: `items.project_id` is NOT NULL and FK-enforced, so the
+        // `p` leftJoin can never actually miss.
+        /* v8 ignore next */
+        projectName: row.project_name ?? undefined,
+        comments: await commentsPromise,
+    };
 
-    if (issueType === 'bug') {
-        const row = await db
-            .selectFrom('items')
-            .select(['title', 'description'])
-            .where('id', '=', issueId)
-            .where('type', '=', 'bug')
-            .executeTakeFirst();
-        if (!row) return null;
-        return {
-            title: row.title as string,
-            description: (row.description as string | null) ?? '',
-            comments: await commentsPromise,
-        };
+    if (issueType === 'sub_task' && row.parent_id) {
+        const [task, taskComments] = await Promise.all([
+            db
+                .selectFrom('items')
+                .select(['id', 'title', 'description', 'acceptance_criteria', 'spec_md'])
+                .where('id', '=', row.parent_id)
+                .executeTakeFirst(),
+            commentsService.list('task', row.parent_id),
+        ]);
+        // reason: the `items_check_parent` trigger guarantees a sub-task's
+        // parent is an existing task.
+        /* v8 ignore next */
+        if (task) {
+            ctx.task = {
+                id: task.id,
+                title: task.title,
+                description: task.description ?? '',
+                acceptance_criteria: orUndef(task.acceptance_criteria),
+                spec_md: orUndef(task.spec_md),
+                comments: takeRecentComments(taskComments, DEFAULT_THREAD_TAIL_COMMENTS),
+            };
+        }
     }
-
-    return null;
+    return ctx;
 }
 
-export function formatComments(comments: IComment[]): string {
+// The `# Current Task` body shared by the inline prompt and
+// `.atlas/current-task.md` (current-task-writer.ts).
+export function renderIssueContext(issueType: IssueType, issueId: string, ctx: IssueContext): string[] {
+    const lines: string[] = [`**Issue type:** ${issueType}`, `**Issue ID:** ${issueId}`];
+    if (ctx.projectName) lines.push(`**Project:** ${ctx.projectName}`);
+    if (ctx.task) lines.push(`**Task:** ${ctx.task.title} (${ctx.task.id})`);
+
+    lines.push(
+        '',
+        `## Title`,
+        ctx.title,
+        '',
+        `## Description (starting point — may be vague / incomplete on purpose)`,
+        ctx.description || '_(none)_',
+    );
+    if (ctx.acceptance_criteria) {
+        lines.push('', `## Acceptance criteria`, ctx.acceptance_criteria);
+    }
+    if (ctx.spec_md) {
+        lines.push('', `## Existing Spec`, ctx.spec_md);
+    }
+    lines.push(
+        '',
+        `## Discussion (chronological — newer comments override older ones)`,
+        formatComments(ctx.comments),
+    );
+
+    if (ctx.task) {
+        const t = ctx.task;
+        lines.push(
+            '',
+            `## Parent Task — ${t.title} (${t.id})`,
+            '',
+            `### Task description`,
+            t.description || '_(none)_',
+        );
+        if (t.acceptance_criteria) lines.push('', `### Task acceptance criteria`, t.acceptance_criteria);
+        if (t.spec_md) lines.push('', `### Task spec`, t.spec_md);
+        lines.push(
+            '',
+            `### Task discussion (latest comments — the Owner often answers on the Task)`,
+            formatComments(t.comments),
+        );
+    }
+    return lines;
+}
+
+function formatComments(comments: IComment[]): string {
     if (comments.length === 0) return '_(no comments yet — the description above is the starting point.)_';
     return comments
         .map((c) => {
@@ -442,7 +482,7 @@ export function buildConstitutionMarkdown(
 // dispatch. depends_on shows outgoing-only (items
 // THIS task waits on); relates_to shows both directions because the
 // relation is undirected. tested_by shows both directions with role labels
-// (`Tests` on the QA twin, `Tested by` on the dev story) — dropping it made
+// (`Tests` on the QA twin, `Tested by` on the dev sub-task) — dropping it made
 // QA Writer conclude its twin link was missing.
 //
 // B04 — the `Depends on` subsection now also bakes in each dep's
@@ -463,7 +503,7 @@ export async function buildLinkedItemsSection(itemId: string): Promise<string> {
         (l) => l.relation_type === 'depends_on' && l.direction === 'incoming',
     );
     const relatesTo = links.filter((l) => l.relation_type === 'relates_to');
-    // tested_by points test → dev: outgoing on the QA twin, incoming on the dev story.
+    // tested_by points test → dev: outgoing on the QA twin, incoming on the dev sub-task.
     const tests = links.filter((l) => l.relation_type === 'tested_by' && l.direction === 'outgoing');
     const testedBy = links.filter((l) => l.relation_type === 'tested_by' && l.direction === 'incoming');
 
@@ -601,7 +641,7 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
     // Theme 09b — project-scope run path. Reached when the agent
     // operates on a project (not an item) — e.g., the AI-Readiness
     // Agent. Renders a project preamble (name + description +
-    // guardrails_md + epic list) so the agent has full PRD context
+    // guardrails_md + task list) so the agent has full PRD context
     // without an item to anchor to.
     if (!issueType && !issueId && projectId) {
         const project = await db
@@ -610,11 +650,11 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
             .where('id', '=', projectId)
             .executeTakeFirst();
         if (!project) throw new Error(`Project ${projectId} not found`);
-        const epics = await db
+        const tasks = await db
             .selectFrom('items')
             .select(['id', 'title', 'description', 'spec_md'])
             .where('project_id', '=', projectId)
-            .where('type', '=', 'epic')
+            .where('type', '=', 'task')
             .orderBy('created_at', 'asc')
             .execute();
 
@@ -658,9 +698,9 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
         if ((project.guardrails_md ?? '').trim()) {
             ctxLines.push('', `## Project guardrails`, project.guardrails_md.trim());
         }
-        if (epics.length > 0) {
-            ctxLines.push('', `## Epics under this project (additional PRD context)`);
-            for (const e of epics) {
+        if (tasks.length > 0) {
+            ctxLines.push('', `## Tasks under this project (additional PRD context)`);
+            for (const e of tasks) {
                 ctxLines.push('', `### ${e.title} (${e.id})`);
                 ctxLines.push((e.description ?? '').trim() || '_(no description)_');
                 if ((e.spec_md ?? '').trim()) {
@@ -674,7 +714,7 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
                 }
             }
         } else {
-            ctxLines.push('', `## Epics under this project`, '_(none yet)_');
+            ctxLines.push('', `## Tasks under this project`, '_(none yet)_');
         }
         sections.push(ctxLines.join('\n'));
         sections.push(
@@ -761,34 +801,7 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
     /* v8 ignore next */
     if (outcomeContract) sections.push(outcomeContract);
 
-    const contextLines: string[] = [
-        `# Current Task\n`,
-        `**Issue type:** ${issueType}`,
-        `**Issue ID:** ${issueId}`,
-    ];
-
-    if (ctx.projectName) contextLines.push(`**Project:** ${ctx.projectName}`);
-    if (ctx.epicTitle) contextLines.push(`**Epic:** ${ctx.epicTitle}`);
-    if (ctx.epicDescription) contextLines.push(`**Epic description:** ${ctx.epicDescription}`);
-
-    contextLines.push(
-        '',
-        `## Title`,
-        ctx.title,
-        '',
-        `## Description (starting point — may be vague / incomplete on purpose)`,
-        ctx.description || '_(none)_',
-    );
-
-    if (ctx.spec_md) {
-        contextLines.push('', `## Existing Spec`, ctx.spec_md);
-    }
-
-    contextLines.push(
-        '',
-        `## Discussion (chronological — newer comments override older ones)`,
-        formatComments(ctx.comments),
-    );
+    const contextLines: string[] = [`# Current Task\n`, ...renderIssueContext(issueType, issueId, ctx)];
 
     const linkedSection = await buildLinkedItemsSection(issueId);
     if (linkedSection) {

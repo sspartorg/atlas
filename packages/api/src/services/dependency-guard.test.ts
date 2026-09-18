@@ -21,14 +21,14 @@ afterAll(async () => {
 
 describe('assertDepsAllDoneForDispatch', () => {
     it('returns silently when item has no depends_on links', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         // No deps at all — should not throw
         await expect(assertDepsAllDoneForDispatch('ATL-1', 'agent-coder')).resolves.toBeUndefined();
     });
 
     it('returns silently when all depends_on targets are done', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Upstream', status: 'done' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Downstream', status: 'draft' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Upstream', status: 'done' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Downstream', status: 'draft' });
         await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
 
         // Upstream is done, so no blockers — should not throw
@@ -36,8 +36,8 @@ describe('assertDepsAllDoneForDispatch', () => {
     });
 
     it('throws DependenciesNotReadyError when one dep is not done', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Upstream', status: 'in_progress' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Downstream', status: 'draft' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Upstream', status: 'in_progress' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Downstream', status: 'draft' });
         await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
 
         await expect(
@@ -46,8 +46,8 @@ describe('assertDepsAllDoneForDispatch', () => {
     });
 
     it('DependenciesNotReadyError carries the blockers array', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Upstream', status: 'in_review' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Downstream', status: 'draft' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Upstream', status: 'in_review' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Downstream', status: 'draft' });
         await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
 
         let caught: DependenciesNotReadyError | undefined;
@@ -64,8 +64,8 @@ describe('assertDepsAllDoneForDispatch', () => {
     });
 
     it('records a dispatch_blocked event on the item when blocked', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Upstream', status: 'draft' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Downstream', status: 'draft' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Upstream', status: 'draft' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Downstream', status: 'draft' });
         await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
 
         try {
@@ -85,9 +85,9 @@ describe('assertDepsAllDoneForDispatch', () => {
     });
 
     it('handles multiple blockers — error message lists all', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Up1', status: 'draft' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Up2', status: 'in_progress' });
-        await insertItem({ id: 'ATL-3', type: 'epic', project_id: 'p1', title: 'Down', status: 'draft' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Up1', status: 'draft' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Up2', status: 'in_progress' });
+        await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'Down', status: 'draft' });
         await itemLinks.create('ATL-3', 'ATL-1', 'depends_on');
         await itemLinks.create('ATL-3', 'ATL-2', 'depends_on');
 
@@ -107,8 +107,8 @@ describe('assertDepsAllDoneForDispatch', () => {
 
 describe('assertNoOpenBlockers', () => {
     it('returns silently when transitioning to waiting_for_info regardless of blockers', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Upstream', status: 'in_progress' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Downstream', status: 'draft' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Upstream', status: 'in_progress' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Downstream', status: 'draft' });
         await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
 
         // waiting_for_info is always allowed
@@ -116,8 +116,8 @@ describe('assertNoOpenBlockers', () => {
     });
 
     it('returns silently when transitioning to draft (not a work-start status)', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Upstream', status: 'in_progress' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Downstream', status: 'draft' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Upstream', status: 'in_progress' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Downstream', status: 'draft' });
         await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
 
         // draft is not gated
@@ -125,8 +125,8 @@ describe('assertNoOpenBlockers', () => {
     });
 
     it('throws when transitioning to in_progress with open blockers', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Upstream', status: 'draft' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Downstream', status: 'draft' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Upstream', status: 'draft' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Downstream', status: 'draft' });
         await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
 
         const err = await assertNoOpenBlockers('ATL-2', 'in_progress').catch((e) => e) as Error & { code?: string };
@@ -135,16 +135,16 @@ describe('assertNoOpenBlockers', () => {
     });
 
     it('throws when transitioning to in_review with open blockers', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Upstream', status: 'draft' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Downstream', status: 'draft' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Upstream', status: 'draft' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Downstream', status: 'draft' });
         await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
 
         await expect(assertNoOpenBlockers('ATL-2', 'in_review')).rejects.toThrow(/Blocked by/);
     });
 
     it('passes when blockers are all done and transitioning to in_progress', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Upstream', status: 'done' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Downstream', status: 'draft' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Upstream', status: 'done' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Downstream', status: 'draft' });
         await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
 
         await expect(assertNoOpenBlockers('ATL-2', 'in_progress')).resolves.toBeUndefined();
@@ -153,14 +153,14 @@ describe('assertNoOpenBlockers', () => {
 
 describe('notifyDependentsUnblocked', () => {
     it('returns empty array when item has no dependents', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Leaf', status: 'done' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Leaf', status: 'done' });
         const unblocked = await notifyDependentsUnblocked('ATL-1');
         expect(unblocked).toEqual([]);
     });
 
     it('returns the dependent id and emits an unblocked event when last blocker resolves', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Upstream', status: 'done' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Downstream', status: 'ready' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Upstream', status: 'done' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Downstream', status: 'ready' });
         await itemLinks.create('ATL-2', 'ATL-1', 'depends_on');
 
         const unblocked = await notifyDependentsUnblocked('ATL-1');
@@ -177,9 +177,9 @@ describe('notifyDependentsUnblocked', () => {
     });
 
     it('does NOT emit unblocked when a second blocker is still open', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Up1 (done)', status: 'done' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Up2 (still open)', status: 'draft' });
-        await insertItem({ id: 'ATL-3', type: 'epic', project_id: 'p1', title: 'Downstream', status: 'draft' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Up1 (done)', status: 'done' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Up2 (still open)', status: 'draft' });
+        await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'Downstream', status: 'draft' });
         await itemLinks.create('ATL-3', 'ATL-1', 'depends_on');
         await itemLinks.create('ATL-3', 'ATL-2', 'depends_on');
 

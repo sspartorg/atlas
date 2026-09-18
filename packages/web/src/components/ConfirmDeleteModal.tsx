@@ -14,7 +14,7 @@ import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { FormHeading } from './FormHeading.js';
 
-type DeletableEntityKind = 'epic' | 'story' | 'sub_task' | 'sub_bug' | 'bug' | 'scratch_pad';
+type DeletableEntityKind = 'task' | 'sub_task' | 'scratch_pad';
 
 interface DeletableEntityLabel {
     singular: string;
@@ -25,14 +25,19 @@ interface DeletableEntityLabel {
     describeImpact: string;
 }
 
-const NESTED_IMPACT = 'and every nested sub-item, comment, and run history will be removed permanently. This cannot be undone.';
-
 const ENTITY_LABELS: Record<DeletableEntityKind, DeletableEntityLabel> = {
-    epic: { singular: 'Epic', lower: 'epic', describeImpact: NESTED_IMPACT },
-    story: { singular: 'Story', lower: 'story', describeImpact: NESTED_IMPACT },
-    sub_task: { singular: 'Sub-task', lower: 'sub-task', describeImpact: NESTED_IMPACT },
-    sub_bug: { singular: 'Sub-bug', lower: 'sub-bug', describeImpact: NESTED_IMPACT },
-    bug: { singular: 'Bug', lower: 'bug', describeImpact: NESTED_IMPACT },
+    task: {
+        singular: 'Task',
+        lower: 'task',
+        describeImpact:
+            'and every sub-task, comment, and run history will be removed permanently. This cannot be undone.',
+    },
+    sub_task: {
+        singular: 'Sub-task',
+        lower: 'sub-task',
+        describeImpact:
+            'and its comments and run history will be removed permanently. This cannot be undone.',
+    },
     scratch_pad: {
         singular: 'Scratch tile',
         lower: 'scratch tile',
@@ -43,7 +48,7 @@ const ENTITY_LABELS: Record<DeletableEntityKind, DeletableEntityLabel> = {
 interface Props {
     open: boolean;
     entityKind: DeletableEntityKind;
-    /** Displayed inside the confirm prompt — e.g. the epic's title or short id. */
+    /** Displayed inside the confirm prompt — e.g. the task's title or short id. */
     entityTitle: string;
     /** Awaited on confirm. Throws to surface an error in the modal. */
     onConfirm: () => Promise<void>;
@@ -186,9 +191,7 @@ interface IssueDeleteActionProps {
     /** Where to navigate after a successful delete. Falls back to history -1. */
     redirectTo?: string;
     /** Optional Clone menu item. When supplied, the kebab menu renders
-     *  **Clone item** above a divider, then Delete. The callback is
-     *  expected to open the parent's clone flow (typically NewIssueModal
-     *  pre-filled from the source). */
+     *  **Clone item** above a divider, then Delete. */
     onClone?: () => void;
 }
 

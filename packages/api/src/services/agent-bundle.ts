@@ -85,12 +85,17 @@ export class AgentBundleParseError extends Error {
     }
 }
 
-export async function packAgentBundle(bundle: AgentBundle): Promise<Buffer> {
-    const zip = new JSZip();
+/** Writes the bundle's files at `zip`'s root — pass `zip.folder(...)` to nest it. */
+export function writeAgentBundle(zip: JSZip, bundle: AgentBundle): void {
     zip.file('manifest.json', JSON.stringify(bundle.manifest, null, 2) + '\n');
     zip.file('prompt.md', bundle.prompt_md);
     zip.file('memory.md', bundle.memory_md);
     zip.file('checklists.json', JSON.stringify(bundle.checklists, null, 2) + '\n');
+}
+
+export async function packAgentBundle(bundle: AgentBundle): Promise<Buffer> {
+    const zip = new JSZip();
+    writeAgentBundle(zip, bundle);
     return await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 
@@ -114,7 +119,11 @@ export async function unpackAgentBundle(zipData: Buffer | Uint8Array): Promise<A
             `agent bundle is not a valid zip archive: ${(err as Error).message}`,
         );
     }
+    return await readAgentBundle(zip);
+}
 
+/** Reads the bundle's files from `zip`'s root — pass `zip.folder(...)` for a nested one. */
+export async function readAgentBundle(zip: JSZip): Promise<AgentBundle> {
     const manifestRaw = await readZipFile(zip, 'manifest.json', true);
     let manifestJson: unknown;
     try {
@@ -138,9 +147,13 @@ export async function unpackAgentBundle(zipData: Buffer | Uint8Array): Promise<A
     const memory_md = (await readZipFile(zip, 'memory.md', false)) ?? '';
 
     const checklistRaw = await readZipFile(zip, 'checklists.json', false);
-    const checklistParsed = checklistRaw
-        ? z.array(ChecklistSchema).safeParse(JSON.parse(checklistRaw))
-        : null;
+    let checklistJson: unknown = null;
+    try {
+        checklistJson = checklistRaw ? JSON.parse(checklistRaw) : null;
+    } catch (err) {
+        throw new AgentBundleParseError(`checklists.json is not valid JSON: ${(err as Error).message}`);
+    }
+    const checklistParsed = checklistRaw ? z.array(ChecklistSchema).safeParse(checklistJson) : null;
     if (checklistParsed && !checklistParsed.success) {
         throw new AgentBundleParseError(
             `checklists.json failed validation: ${checklistParsed.error.message}`,

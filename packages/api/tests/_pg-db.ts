@@ -59,6 +59,8 @@ export async function closeTestDb(): Promise<void> {
 const TRUNCATE_TABLES = [
     // ADR 0014 — listed explicitly for the same reason as cli_sessions.
     'workflow_runs',
+    // Migration 041 — Marketplace entries published from workflows.
+    'published_workflows',
     'workflows',
     // 2026-06-22 — Terminal v1. FK → projects.id with ON DELETE CASCADE,
     // but listed explicitly so tests that only touch cli_sessions still

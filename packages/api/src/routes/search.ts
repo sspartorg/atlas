@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { searchItems } from '../services/items.js';
+import { ISSUE_TYPES } from '@atlas/shared';
 import type { IssueStatus } from '@atlas/shared';
 import type { ItemType } from '../db/types.js';
 
-const VALID_TYPES = new Set<ItemType>(['epic', 'story', 'sub_task', 'sub_bug', 'bug']);
+const VALID_TYPES = new Set<ItemType>(ISSUE_TYPES);
 const VALID_STATUSES = new Set<IssueStatus>([
     'draft',
     'ready',

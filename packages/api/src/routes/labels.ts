@@ -9,8 +9,8 @@ import { db } from '../db/kysely-client.js';
 // GIN index from migration 083 lets PG pick the matching rows quickly.
 //
 // Read-only; no `requireMcpToken` — the web client calls this directly
-// to populate autocompletes, matching how other read routes (epics,
-// stories, search) are exposed.
+// to populate autocompletes, matching how other read routes (tasks,
+// sub-tasks, search) are exposed.
 
 export async function labelsRoutes(app: FastifyInstance): Promise<void> {
     app.get('/api/labels', async (req, reply) => {

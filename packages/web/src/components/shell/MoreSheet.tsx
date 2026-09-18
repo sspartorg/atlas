@@ -28,7 +28,7 @@ interface MoreItem {
 // order as the sidenav; icons match the sidenav so the same affordance shows
 // in both surfaces.
 const ITEMS: MoreItem[] = [
-    // Workspace (skipping Dashboard / Epics / Issues / Queue — those are
+    // Workspace (skipping Dashboard / Tasks / Queue — those are
     // top-level BottomNav tabs).
     { key: 'scratch-pad', label: 'Scratch Pad', icon: 'sticky_note_2', path: '/scratch-pad' },
     { key: 'projects', label: 'Projects', icon: 'folder_open', path: '/projects' },

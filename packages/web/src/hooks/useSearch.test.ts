@@ -26,7 +26,7 @@ describe('useSearch', () => {
     it('fires a request and returns hits for a 2+ char query', async () => {
         const sample = [
             {
-                issue_type: 'story',
+                issue_type: 'task',
                 issue_id: 'S-1',
                 title: 'foo bar',
                 description: '',
@@ -61,7 +61,7 @@ describe('useSearch', () => {
         renderHook(
             () =>
                 useSearch({
-                    type: ['story', 'bug'],
+                    type: ['task', 'sub_task'],
                     project_id: ['p1'],
                     status: 'ready',
                     updated: 'last_7_days',
@@ -69,7 +69,7 @@ describe('useSearch', () => {
             { wrapper: makeWrapper() },
         );
         await waitFor(() => expect(captured).not.toBe(''));
-        expect(captured).toContain('type=story%2Cbug');
+        expect(captured).toContain('type=task%2Csub_task');
         expect(captured).toContain('project_id=p1');
         expect(captured).toContain('status=ready');
         expect(captured).toContain('updated=last_7_days');

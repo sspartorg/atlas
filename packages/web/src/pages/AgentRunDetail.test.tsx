@@ -32,11 +32,11 @@ function makeRun(over: Partial<{
     return {
         id: RUN_ID,
         agent_id: 'agent-coder',
-        issue_type: 'story' as const,
+        issue_type: 'sub_task' as const,
         issue_id: 'ATL-2',
         status: 'completed' as const,
         output_text:
-            '14:22:08 INFO Run started — prompt v1 — model=opus-4.1\n14:22:11 INFO Input received: epic/ATL-1 (12.4 kB)\n14:31:02 DRAFT STR-D62 drafted (ac=4) — partial refund eligibility',
+            '14:22:08 INFO Run started — prompt v1 — model=opus-4.1\n14:22:11 INFO Input received: task/ATL-1 (12.4 kB)\n14:31:02 DRAFT STR-D62 drafted (ac=4) — partial refund eligibility',
         started_at: '2026-05-16T14:22:00.000Z',
         completed_at: '2026-05-16T14:36:00.000Z',
         created_at: '2026-05-16T14:22:00.000Z',
@@ -404,57 +404,20 @@ describe('AgentRunDetail page', () => {
         expect(await screen.findByText(/"type":"assistant"/)).toBeInTheDocument();
     });
 
-    it('exercises issuePath for epic issue_type', async () => {
+    it.each([
+        ['task', 'ATL-T1', '/tasks/ATL-T1'],
+        ['sub_task', 'ATL-ST1', '/sub-tasks/ATL-ST1'],
+    ] as const)('links a %s run to its item page', async (issueType, issueId, path) => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ issue_type: 'epic', issue_id: 'ATL-E1' })),
+                HttpResponse.json(makeRun({ issue_type: issueType, issue_id: issueId })),
             ),
         );
         renderPage();
         await screen.findByText('Completed');
-        // The issue type/id should be rendered
-        expect(screen.getByText(/epic.*ATL-E1|ATL-E1/)).toBeInTheDocument();
-    });
-
-    it('exercises issuePath for bug issue_type', async () => {
-        server.use(
-            ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ issue_type: 'bug', issue_id: 'ATL-B1' })),
-            ),
-        );
-        renderPage();
-        await screen.findByText('Completed');
-        expect(screen.getByText(/bug.*ATL-B1|ATL-B1/)).toBeInTheDocument();
-    });
-
-    it('exercises issuePath for sub_task issue_type', async () => {
-        server.use(
-            ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ issue_type: 'sub_task', issue_id: 'ATL-ST1' })),
-            ),
-        );
-        renderPage();
-        await screen.findByText('Completed');
-        expect(screen.getByText(/sub_task.*ATL-ST1|ATL-ST1/)).toBeInTheDocument();
-    });
-
-    it('exercises issuePath for sub_bug issue_type', async () => {
-        server.use(
-            ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ issue_type: 'sub_bug', issue_id: 'ATL-SB1' })),
-            ),
-        );
-        renderPage();
-        await screen.findByText('Completed');
-        expect(screen.getByText(/sub_bug.*ATL-SB1|ATL-SB1/)).toBeInTheDocument();
+        expect(screen.getByText(new RegExp(issueId)).closest('a')).toHaveAttribute('href', path);
     });
 
     it('exercises durationLabel when started_at is null (queued state)', async () => {

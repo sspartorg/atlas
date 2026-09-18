@@ -12,16 +12,14 @@ import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { FilterPill } from '../../components/filterPrimitives.js';
 import { InitialAvatar } from '../../components/InitialAvatar.js';
 import { relativeShort } from './timeFormat.js';
+import { itemPath } from '../../utils/itemPath.js';
 
 const MONO = '"JetBrains Mono", monospace';
 type Filter = 'all' | NotificationKind;
 
 const TYPE_LABEL: Record<string, string> = {
-    epic: 'epic',
-    story: 'story',
-    bug: 'bug',
+    task: 'task',
     sub_task: 'sub-task',
-    sub_bug: 'sub-bug',
 };
 
 interface Props {
@@ -59,23 +57,14 @@ export function InAppFeedTabContent({ allRows, agents }: Props) {
             navigate(row.link_url);
             return;
         }
-        const id = row.issue_id;
-        if (id && row.issue_type === 'epic') {
-            navigate(`/epics/${id}`);
-        } else if (id && row.issue_type === 'story') {
-            navigate(`/issues/stories/${id}`);
-        } else if (id && row.issue_type === 'bug') {
-            navigate(`/issues/bugs/${id}`);
-        } else if (id && row.issue_type === 'sub_task') {
-            navigate(`/issues/sub-tasks/${id}`);
-        } else if (id && row.issue_type === 'sub_bug') {
-            navigate(`/issues/sub-bugs/${id}`);
+        if (row.issue_id && row.issue_type) {
+            navigate(itemPath(row.issue_type, row.issue_id));
         } else if (row.project_id) {
             navigate(`/projects/${row.project_id}`);
         } else if (row.event_type === 'reminder') {
             navigate('/reminders');
         } else {
-            navigate('/issues');
+            navigate('/tasks');
         }
     }
 

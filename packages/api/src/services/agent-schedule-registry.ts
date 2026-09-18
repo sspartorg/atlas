@@ -1,6 +1,7 @@
 import { db } from '../db/kysely-client.js';
 import { remindersService } from './reminders.js';
 import { refreshExpiring as refreshExpiringAppTokens } from './github-app-tokens.js';
+import { externalLinks } from './external-links.js';
 import { onStepFinished, reconcileWorkflowRuns, tickWorkflowDispatch } from './workflow-engine.js';
 
 // Single clock-driven poller. One setInterval ticks every minute and runs,
@@ -67,6 +68,12 @@ export async function tickAgentScheduler(): Promise<void> {
         if (parked > 0) schedLog(`[workflow-reconcile] parked ${parked} orphaned workflow run(s)`);
     } catch (err) {
         schedLog(`[workflow-reconcile] tick failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    try {
+        await externalLinks.syncReviewedTaskPrs();
+    } catch (err) {
+        schedLog(`[pr-state] tick failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     try {

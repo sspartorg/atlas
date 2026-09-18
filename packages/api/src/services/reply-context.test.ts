@@ -24,16 +24,16 @@ afterAll(async () => {
 describe('assembleReplyContext', () => {
     it('returns null for a missing item', async () => {
         await seedFullTree();
-        expect(await assembleReplyContext('story', 'nope-404')).toBeNull();
+        expect(await assembleReplyContext('sub_task', 'nope-404')).toBeNull();
     });
 
-    it('returns item core + project + empty thread for a fresh story', async () => {
+    it('returns item core + project + empty thread for a fresh sub-task', async () => {
         await seedFullTree();
-        const ctx = (await assembleReplyContext('story', 'ATL-2'))!;
+        const ctx = (await assembleReplyContext('sub_task', 'ATL-2'))!;
         expect(ctx).not.toBeNull();
-        expect(ctx.item.kind).toBe('story');
+        expect(ctx.item.kind).toBe('sub_task');
         expect(ctx.item.id).toBe('ATL-2');
-        expect(ctx.item.title).toBe('Story One');
+        expect(ctx.item.title).toBe('Sub-task One');
         expect(ctx.project!.id).toBe('p1');
         expect(ctx.thread.comments).toHaveLength(0);
         expect(ctx.thread.total_count).toBe(0);
@@ -50,12 +50,12 @@ describe('assembleReplyContext', () => {
             await commentsService.create({
                 author: 'owner',
                 agent_id: null,
-                issue_type: 'story',
+                issue_type: 'sub_task',
                 issue_id: 'ATL-2',
                 body: `comment ${i + 1}`,
             });
         }
-        const ctx = (await assembleReplyContext('story', 'ATL-2'))!;
+        const ctx = (await assembleReplyContext('sub_task', 'ATL-2'))!;
         expect(ctx.thread.total_count).toBe(N);
         expect(ctx.thread.elided_count).toBe(0);
         expect(ctx.thread.comments).toHaveLength(N);
@@ -68,12 +68,12 @@ describe('assembleReplyContext', () => {
             await commentsService.create({
                 author: 'owner',
                 agent_id: null,
-                issue_type: 'story',
+                issue_type: 'sub_task',
                 issue_id: 'ATL-2',
                 body: `c${i + 1}`,
             });
         }
-        const ctx = (await assembleReplyContext('story', 'ATL-2'))!;
+        const ctx = (await assembleReplyContext('sub_task', 'ATL-2'))!;
         expect(ctx.thread.total_count).toBe(total);
         expect(ctx.thread.elided_count).toBe(7);
         expect(ctx.thread.comments).toHaveLength(
@@ -95,25 +95,25 @@ describe('assembleReplyContext', () => {
         await insertProject('p1');
         await insertItem({
             id: 'ATL-101',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
-            title: 'Epic',
+            title: 'Task',
         });
         await insertItem({
             id: 'ATL-102',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-101',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Caller',
             description: 'caller description',
         });
         await insertItem({
             id: 'ATL-103',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-101',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Dependency',
             description: 'dep description',
             acceptance_criteria: 'AC of dep',
@@ -125,13 +125,13 @@ describe('assembleReplyContext', () => {
             await commentsService.create({
                 author: 'owner',
                 agent_id: null,
-                issue_type: 'story',
+                issue_type: 'sub_task',
                 issue_id: 'ATL-103',
                 body: `dep-c${i + 1}`,
             });
         }
 
-        const ctx = (await assembleReplyContext('story', 'ATL-102'))!;
+        const ctx = (await assembleReplyContext('sub_task', 'ATL-102'))!;
         expect(ctx.linked_items).toHaveLength(1);
         const li = ctx.linked_items[0]!;
         expect(li.relation_type).toBe('depends_on');
@@ -145,22 +145,22 @@ describe('assembleReplyContext', () => {
 
     it('keeps relates_to linked items shallow (no description, no recent_comments)', async () => {
         await insertProject('p1');
-        await insertItem({ id: 'ATL-201', type: 'epic', project_id: 'p1', title: 'Epic' });
+        await insertItem({ id: 'ATL-201', type: 'task', project_id: 'p1', title: 'Task' });
         await insertItem({
             id: 'ATL-202',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-201',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'A',
             description: 'a desc',
         });
         await insertItem({
             id: 'ATL-203',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-201',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'B',
             description: 'b desc',
             acceptance_criteria: 'AC b',
@@ -170,12 +170,12 @@ describe('assembleReplyContext', () => {
         await commentsService.create({
             author: 'owner',
             agent_id: null,
-            issue_type: 'story',
+            issue_type: 'sub_task',
             issue_id: 'ATL-203',
             body: 'should-not-leak',
         });
 
-        const ctx = (await assembleReplyContext('story', 'ATL-202'))!;
+        const ctx = (await assembleReplyContext('sub_task', 'ATL-202'))!;
         expect(ctx.linked_items).toHaveLength(1);
         const li = ctx.linked_items[0]!;
         expect(li.relation_type).toBe('relates_to');
@@ -186,22 +186,22 @@ describe('assembleReplyContext', () => {
 
     it('exposes incoming depends_on as direction="incoming"', async () => {
         await insertProject('p1');
-        await insertItem({ id: 'ATL-301', type: 'epic', project_id: 'p1', title: 'Epic' });
+        await insertItem({ id: 'ATL-301', type: 'task', project_id: 'p1', title: 'Task' });
         await insertItem({
             id: 'ATL-302',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-301',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Upstream',
             description: 'I block another item',
         });
         await insertItem({
             id: 'ATL-303',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-301',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Downstream',
             description: 'I depend on Upstream',
             acceptance_criteria: 'AC down',
@@ -209,7 +209,7 @@ describe('assembleReplyContext', () => {
         // Downstream depends_on Upstream → upstream sees the link as incoming
         await itemLinks.create('ATL-303', 'ATL-302', 'depends_on');
 
-        const ctx = (await assembleReplyContext('story', 'ATL-302'))!;
+        const ctx = (await assembleReplyContext('sub_task', 'ATL-302'))!;
         expect(ctx.linked_items).toHaveLength(1);
         const li = ctx.linked_items[0]!;
         expect(li.relation_type).toBe('depends_on');
@@ -227,12 +227,12 @@ describe('assembleReplyContext', () => {
             await commentsService.create({
                 author: 'owner',
                 agent_id: null,
-                issue_type: 'story',
+                issue_type: 'sub_task',
                 issue_id: 'ATL-2',
                 body: `c${i + 1}`,
             });
         }
-        const ctx = (await assembleReplyContext('story', 'ATL-2', {
+        const ctx = (await assembleReplyContext('sub_task', 'ATL-2', {
             head_comments: 1,
             tail_comments: 2,
             budget_cap: 999,
@@ -244,35 +244,30 @@ describe('assembleReplyContext', () => {
 
     it('works for every issue type', async () => {
         await seedFullTree();
-        expect((await assembleReplyContext('epic', 'ATL-1'))!.item.kind).toBe('epic');
-        expect((await assembleReplyContext('story', 'ATL-2'))!.item.kind).toBe('story');
-        expect((await assembleReplyContext('sub_task', 'ATL-3'))!.item.kind).toBe('sub_task');
-        expect((await assembleReplyContext('sub_bug', 'ATL-4'))!.item.kind).toBe('sub_bug');
-        expect((await assembleReplyContext('bug', 'ATL-5'))!.item.kind).toBe('bug');
+        expect((await assembleReplyContext('task', 'ATL-1'))!.item.kind).toBe('task');
+        expect((await assembleReplyContext('sub_task', 'ATL-2'))!.item.kind).toBe('sub_task');
     });
 
     it('returns null for every issue type when the id is missing', async () => {
-        expect(await assembleReplyContext('epic', 'nope')).toBeNull();
+        expect(await assembleReplyContext('task', 'nope')).toBeNull();
         expect(await assembleReplyContext('sub_task', 'nope')).toBeNull();
-        expect(await assembleReplyContext('sub_bug', 'nope')).toBeNull();
-        expect(await assembleReplyContext('bug', 'nope')).toBeNull();
     });
 
-    it('maps empty description to null via the || null arm (story with empty description)', async () => {
-        // Exercises the `r.story.description || null` false arm when description is '' (empty string).
+    it('maps empty description to null via the || null arm (sub-task with empty description)', async () => {
+        // Exercises the `r.item.description || null` false arm when description is '' (empty string).
         // The item must exist but have an empty description so the `|| null` converts to null.
         await insertProject('p1');
-        await insertItem({ id: 'ATL-401', type: 'epic', project_id: 'p1', title: 'Epic' });
+        await insertItem({ id: 'ATL-401', type: 'task', project_id: 'p1', title: 'Task' });
         await insertItem({
             id: 'ATL-402',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-401',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Empty Desc Story',
             description: '',   // <-- empty string → || null → summary: null
         });
-        const ctx = (await assembleReplyContext('story', 'ATL-402'))!;
+        const ctx = (await assembleReplyContext('sub_task', 'ATL-402'))!;
         expect(ctx.item.summary).toBeNull();
     });
 
@@ -280,28 +275,28 @@ describe('assembleReplyContext', () => {
         // Exercises `row?.description || null` when the linked item has an empty description.
         // This is the false arm of the linked-item description fetch in assembleReplyContext.
         await insertProject('p1');
-        await insertItem({ id: 'ATL-501', type: 'epic', project_id: 'p1', title: 'Epic' });
+        await insertItem({ id: 'ATL-501', type: 'task', project_id: 'p1', title: 'Task' });
         await insertItem({
             id: 'ATL-502',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-501',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Caller',
         });
         await insertItem({
             id: 'ATL-503',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-501',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Dep',
             description: '',               // empty string → || null
             acceptance_criteria: '',       // empty string → || null
         });
         await itemLinks.create('ATL-502', 'ATL-503', 'depends_on');
 
-        const ctx = (await assembleReplyContext('story', 'ATL-502'))!;
+        const ctx = (await assembleReplyContext('sub_task', 'ATL-502'))!;
         const li = ctx.linked_items[0]!;
         expect(li.description).toBeNull();
         expect(li.acceptance_criteria).toBeNull();
@@ -315,14 +310,14 @@ describe('assembleReplyContext', () => {
         const { eventsLog } = await import('./events-log.js');
         await eventsLog.record({
             item_id: 'ATL-2',
-            item_type: 'story',
+            item_type: 'sub_task',
             event_type: 'status_changed',
             actor_agent_id: null,
             detail: 'moved from ready to in_progress',
             from_value: 'ready',
             to_value: 'in_progress',
         });
-        const ctx = (await assembleReplyContext('story', 'ATL-2'))!;
+        const ctx = (await assembleReplyContext('sub_task', 'ATL-2'))!;
         expect(ctx.activity_highlights.length).toBeGreaterThan(0);
         // event-kind row contributes to token estimate.
         expect(ctx.token_estimate).toBeGreaterThan(0);

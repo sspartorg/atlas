@@ -1,12 +1,12 @@
 # Data Model
 
-> **2026-05 â€” Postgres migration in progress.** The DB engine is now Postgres 16 (docker compose service `atlas-postgres`, host port 5500 â†’ container port 5432). Schema is a single Knex migration: `packages/api/src/db/migrations/001_baseline.ts`. The five per-type issue tables (`epics`, `stories`, `sub_tasks`, `sub_bugs`, `bugs`) have been **unified into a single `items` table with a `type` discriminator** and a polymorphic `parent_id`/`parent_type` pair. The legacy polymorphic side tables (`comments`, `issue_events`, `agent_runs`, `notifications`) now use a single `item_id` FK to `items` with `ON DELETE CASCADE`. The link table is renamed `item_links` and carries a `relation_type` column (`relates_to` or `depends_on`). The entity descriptions below still document the per-type API contract (which is preserved at the route layer), but the storage shape is unified.
+> **2026-05 â€” Postgres migration in progress.** The DB engine is now Postgres 16 (docker compose service `atlas-postgres`, host port 5500 â†’ container port 5432). Schema is a single Knex migration: `packages/api/src/db/migrations/001_baseline.ts`. Items live in a **single `items` table with a `type` discriminator** and a `parent_id`/`parent_type` pair. Since migration 037 (ADR 0015, `docs/adr/0015-one-task-one-pr.md`) there are exactly two kinds: `task` (top level) and `sub_task` (a Task's child); epics became Tasks and stories / bugs / sub-bugs became sub-tasks. The legacy polymorphic side tables (`comments`, `issue_events`, `agent_runs`, `notifications`) now use a single `item_id` FK to `items` with `ON DELETE CASCADE`. The link table is renamed `item_links` and carries a `relation_type` column (`relates_to` or `depends_on`). The entity descriptions below document the per-kind API contract (`/api/tasks`, `/api/sub-tasks`); the storage shape is unified.
 
-**2026-05-19 â€” `priority` lives on every item type.** The `items.priority` column was always present in the DB; the IStory / IBug / ISubTask / ISubBug interfaces and Create/Update schemas now expose it (previously only Epic did). `createItem` no longer hardcodes priority to null for non-epic types. The default on creation is `'normal'`. The detail-page right rail's `<DetailsRailCard>` renders a priority chip for all five types, wired to the same per-type update mutation that handles description / status changes.
+**`priority` lives on both item kinds** (`low | normal | high | urgent`, default `'normal'`); the detail-page right rail's `<DetailsRailCard>` renders a priority chip wired to the kind's update mutation.
 
 **2026-05-19 â€” `depends_on` UI is live.** `item_links.relation_type` partitions into "Blocked by" (depends_on) and "Relates to" (relates_to) sections on every item detail page (`<RelatedItemsCard>`). The server enforces blocker semantics in `services/dependency-guard.ts` â€” transitions into `in_progress` / `in_review` fail with "blocked by" errors until upstream items complete.
 
-Authoritative types live in `packages/shared/src/types/index.ts` (`IEpic`, `IStory`, etc.) plus the new `packages/shared/src/items/types.ts` (`IItem`, `IItemLink`, `ItemRelation`). Constants and label maps in `packages/shared/src/constants/index.ts`. Status transitions in `packages/shared/src/status-machine/index.ts`; depends-on enforcement helper in `packages/shared/src/status-machine/blockers.ts` (`assertCanStart`). Zod validators in `packages/shared/src/schemas/index.ts`. Migrations in `packages/api/src/db/migrations/001_baseline.ts`.
+Authoritative types live in `packages/shared/src/types/index.ts` (`ITask`, `ITaskListItem`, `ISubTask`, `ITaskFullResponse`, `ISubTaskFullResponse`, `IIssueTreeNode` / `IIssueTreeResponse`) plus the new `packages/shared/src/items/types.ts` (`IItem`, `IItemLink`, `ItemRelation`). Constants and label maps in `packages/shared/src/constants/index.ts`. Status transitions in `packages/shared/src/status-machine/index.ts`; depends-on enforcement helper in `packages/shared/src/status-machine/blockers.ts` (`assertCanStart`). Zod validators in `packages/shared/src/schemas/index.ts`. Migrations in `packages/api/src/db/migrations/001_baseline.ts`.
 
 **Naming rule:** API responses use snake_case (matching DB columns). TypeScript interfaces use snake_case field names too â€” there's no transformation layer. `IProject`, `IAgent` (`I` prefix), TypeScript types use PascalCase.
 
@@ -15,7 +15,7 @@ Authoritative types live in `packages/shared/src/types/index.ts` (`IEpic`, `ISto
 Items can be linked via `item_links(from_id, to_id, relation_type)`:
 - **`relates_to`** â€” semantically undirected. The service normalizes pairs so `(A,B)` and `(B,A)` collapse onto one row. Surfaces a "Relates to" section on the detail page.
 - **`depends_on`** â€” strictly directed. `from depends_on to` means "from is blocked by to". Cycle detection (recursive CTE) rejects edges that would close a `depends_on` cycle. While any blocker isn't `done`, the dependency-guard refuses transitions out of `ready`/`draft` to `in_progress`/`in_review` (escalations to `waiting_for_info` are still allowed). When the last blocker resolves, `notifyDependentsUnblocked(itemId)` emits an `unblocked` issue_event on every dependent.
-- **B04 — depends_on is also hard-gated at workflow start.** `workflow-engine.startWorkflowRun` calls `assertDepsAllDoneForDispatch(itemId, firstAgentId)` once, before inserting the `workflow_runs` row. If any `depends_on` target is non-`done` (including `in_review` — `done` is the only terminal status; there is no `closed`), it throws `DependenciesNotReadyError` and records a `dispatch_blocked` issue_event on the item. `POST /api/workflows/:id/runs` surfaces it as `409 {details:{blockers}}`; the dispatch tick logs and skips. Steps inside a running workflow are not re-gated, and engine status writes (`in_progress`, `in_review`, `done`) bypass `assertNoOpenBlockers`. Companion change in `services/prompt-builder.ts`: the `## Related items → ### Depends on` section bakes each dep's description + acceptance_criteria into the prompt up-front so the agent doesn't need to MCP-fetch the dep mid-run.
+- **B04 — depends_on is also hard-gated at workflow start.** `workflow-engine.startWorkflowRun` calls `assertDepsAllDoneForDispatch(itemId, firstAgentId)` once, before inserting a top-level `workflow_runs` row (a sub-task's child run skips it; its Task run's Sub-tasks step picks the order). If any `depends_on` target is non-`done` (including `in_review` — `done` is the only terminal status; there is no `closed`), it throws `DependenciesNotReadyError` and records a `dispatch_blocked` issue_event on the item. `POST /api/workflows/:id/runs` surfaces it as `409 {details:{blockers}}`; the dispatch tick logs and skips. Steps inside a running workflow are not re-gated, and engine status writes (`in_progress`, `in_review`, `done`) bypass `assertNoOpenBlockers`. Companion change in `services/prompt-builder.ts`: the `## Related items → ### Depends on` section bakes each dep's description + acceptance_criteria into the prompt up-front so the agent doesn't need to MCP-fetch the dep mid-run.
 
 **B05 â€” who creates links, and how.** Link creation has two paths and **no runner-side auto-link**:
 
@@ -161,56 +161,40 @@ Fields: `id, name, git_path, git_url, credential_id, default_branch, clone_statu
 - `credential_id` FK to `credentials.id`; nullable for public repos
 - `guardrails_md` is free-form markdown (project guardrails are a separate table â€” see below)
 
-### IEpic
-**Why this entity exists**: Epics are the unit at which the Owner decides whether work is worth doing. They sit above implementation (no `in_spec`/`in_dev` states) because their job is intent + scope, not delivery. Distinct from Story because epics decompose into multiple stories; collapsing the two would force every "should we do this" decision down to per-story granularity, drowning the Owner in approvals.
+### ITask (ADR 0015)
+**Why this entity exists**: The Task is the unit the Owner schedules and verifies. One Task = one workflow run = one branch = one PR (or one push to the default branch): its workflow does everything the Task needs, including creating and working its sub-tasks, and the Owner verifies the one result. It replaced the epic (migration 037).
 
-Top-level work unit, scoped to a project.
+Top-level item, scoped to a project. `items.type = 'task'`, no parent.
 
-Fields: `id, project_id, title, description, status, assignee_agent_id, reporter_agent_id, priority, created_at, updated_at`
+Fields (`ITask`): `id, project_id, title, description, status, assignee_agent_id, workflow_id, reporter_agent_id, priority, acceptance_criteria, spec_md, pr_url, labels, worktree_branch, worktree_path, created_at, updated_at`. `ITaskListItem` adds `sub_task_count`.
 
-- `priority` âˆˆ `low | normal | high | urgent`
-- `assignee_agent_id` / `reporter_agent_id` are nullable (null = Owner)
+- `workflow_id` (FK → `workflows`, SET NULL; migration 035) — the Task workflow it is queued for (`PUT /api/items/:id/workflow`, Tasks only).
+- `spec_md` — the Architect step's spec for the whole Task; `pr_url` — the one PR its run opened (also an `item_external_links` row).
+- `worktree_branch` — the run branch (`atlas/wf/<taskId>` unless the Owner points it at a valid existing branch); `worktree_path` stays null for workflow runs (the path lives on `workflow_runs`).
+- `id` is `<project issue_key_prefix>-<seq>` (e.g. `SDB-12`), shared counter with sub-tasks.
+- Closing (`→ done`) is refused with 422 while any sub-task isn't `done`, unless overridden (`assertChildrenDone`, `routes/tasks.ts`).
 
-> **A03 â€” proposed-plan retired.** The `proposed_plan_md` / `proposed_plan_author_id` / `proposed_plan_updated_at` trio that previously lived on every issue type was dropped by migration `021_drop_proposed_plan_columns.ts`. Agent narrative now flows through the comments thread: `agent-runner` posts one system-generated comment per agent persona at the end of each run (one for the performer leg, one for the reviewer leg of the same agent). The `PATCH /api/{kind}/:id/plan` endpoints + the `setProposedPlan` MCP tool are gone.
+> **All items carry a nullable `reporter_agent_id`** referencing `agents.id`. Agent-created items stamp the creating agent (the `x-atlas-agent-id` header / MCP `agent_id`); UI-created items stamp `null`, rendered as Owner. Agent narrative flows through the comments thread (the `proposed_plan_md` trio was dropped by migration 021).
 
-> **All issue types carry a nullable `reporter_agent_id`** referencing `agents.id`. Auto-created sub-items stamp the creating agent as reporter; UI-created items stamp `null`, which the detail-page rail and Issues list render as Owner.
+### ISubTask (ADR 0015)
+**Why this entity exists**: A piece of its Task's work — typically one end-to-end capability (PO Writer's `dev` sub-tasks) or the tests for one (`[QA]` twins labelled `qa`), or an Owner-written item such as one bug fix in a batch. Sub-tasks are never queued for a workflow of their own: the Task's run works them one at a time through its Sub-tasks steps, on the Task's branch.
 
-> **All issue types also carry `workflow_id` and `created_by_workflow_run_id`** (migration 035, ADR 0014). `workflow_id` (FK → `workflows`, SET NULL) is the workflow the item is queued for; `created_by_workflow_run_id` (FK → `workflow_runs`, SET NULL) is the run that created it.
+`items.type = 'sub_task'`, `parent_id` = a Task (trigger `items_check_parent`).
 
-### IStory
-**Why this entity exists**: Stories are the unit of implementation â€” one PR per story is the target. They carry `spec_md` + `acceptance_criteria` + `pr_url` because those are what a Coder agent needs to start and what a QA agent needs to verify. Distinct from Epic because epics span multiple stories; distinct from SubTask because stories cross the full state machine including the spec/review phases that sub-tasks skip.
+Fields (`ISubTask`): `id, task_id, title, description, status, assignee_agent_id, reporter_agent_id, priority, acceptance_criteria, started_at, labels, created_at, updated_at`. No `workflow_id`, spec, PR or worktree fields on the wire (migration 037 cleared `workflow_id` on sub-tasks).
 
-A child of an Epic.
+- `labels` choose the Sub-tasks step that runs the sub-task: a step with a `label` takes sub-tasks carrying it; an unlabelled step takes those no labelled step claims.
+- Open = status neither `in_review` nor `done`. A sub-task's run ends it at `in_review`; the Owner closes it after verifying the branch, and re-running the Task redoes only open sub-tasks.
+- `started_at` is stamped on the first `in_progress` transition through the API.
 
-Fields: `id, epic_id, title, description, status, assignee_agent_id, spec_md, pr_url, points, acceptance_criteria, created_at, updated_at`
-
-### ISubTask
-**Why this entity exists**: Sub-tasks are the smallest unit of execution under a story â€” typically one focused commit or one tightly-scoped agent run. They share the unified 6-state issue status machine (below). Distinct from Story to keep the story-level spec single-authoritative; recursive stories would make AC and PR linkage ambiguous.
-
-A child of a Story. Shares the unified 6-state status machine with the other issue types.
-
-Fields: `id, story_id, title, description, status, assignee_agent_id, acceptance_criteria, started_at, created_at, updated_at`
-
-### ISubBug
-**Why this entity exists**: Defects discovered mid-implementation belong with the story that surfaced them â€” losing that link makes the defect look like a top-level bug and orphans the repro context. Modeled as a sibling of SubTask under the same Story so the parent's "sub-items" card can render both kinds. Distinct from Bug because Bugs are reported standalone (no implementation work in progress); SubBugs always have an implementation context.
-
-A child of a Story (defect found while working on it).
-
-Fields: same shape as ISubTask plus bug-specific fields (`steps_to_reproduce`, `expected`, `actual`, `frequency`, `failure_scope`) and detection metadata (`detected_at`, `occurrence_count`, `occurrence_total`).
-
-### IBug
-**Why this entity exists**: Standalone defects are reported against an epic before (or independently of) any story implementation begins â€” e.g., "production is breaking, file a bug under this epic". Nesting under epic rather than story preserves the ability to file bugs against epics that haven't decomposed into stories yet. Same body shape as SubBug because triage data (repro, expected, actual, frequency) is identical; only the parent FK differs.
-
-A standalone bug, child of an Epic (`epic_id` FK).
-
-Fields: same bug-body shape as `ISubBug` plus `epic_id` instead of `story_id`.
+> **Removed by migration 037:** item kinds `epic`, `story`, `bug`, `sub_bug` (converted, see `api-surface.md` migrations), the bug-only columns (`steps_to_reproduce`, `expected`, `actual` — folded into the description as `### …` sections first — and `frequency`, `failure_scope`, `detected_at`, `occurrence_count`, `occurrence_total`), `items.created_by_workflow_run_id`, and the `item_type` enum (`type` / `parent_type` are text + CHECK). The `points` column still exists in the DB but is on neither interface.
 
 ### IComment
 **Why this entity exists**: Discussion threads on issues are polymorphic by design â€” the same conversation table works for every issue type so the unified `IssueDetailShell` can render a comment thread without per-type branches. Distinct from IIssueEvent because comments are free-form human/agent prose, whereas events are structured state transitions. Both feed the merged activity stream so the Owner reads one timeline.
 
 Threaded comments on any issue.
 
-Fields: `id, issue_type, issue_id, author, body, created_at` â€” `issue_type` âˆˆ `epic | story | sub_task | sub_bug | bug` and `author` âˆˆ `'owner' | 'agent'` (`agent` rows include `agent_id`).
+Fields: `id, issue_type, issue_id, author, body, created_at` — `issue_type` ∈ `task | sub_task` and `author` ∈ `'owner' | 'agent'` (`agent` rows include `agent_id`).
 
 **Agent attribution is resolved at write time, not read time.** There is no denormalized author name: the UI looks `agent_id` up in the agents list (`ActivityCard.tsx`) and falls back to the literal string `"Agent"` when it is null. Three writers reach `commentsService.create` - `POST /api/comments`, `POST /api/issues/:type/:id/reply`, and the MCP `update_item({action:'add_comment'})` - and only the middle one enforces `agent_id` (`ReplyToItemSchema` refines it; `CreateCommentSchema` defaults it to null). The MCP path has no bound identity at all: `resolveAgentId` reads `ATLAS_AGENT_ID`, which nothing sets and nothing usefully can, because `plugins/mcp-host.ts` serves one in-process MCP on a shared loopback port for every agent (`boundAgentId: ''`) - so identity came down to an optional tool argument the model often omitted.
 
@@ -218,7 +202,7 @@ Since 2026-09-12 `create()` resolves a missing `agent_id` from the item's live r
 
 `comments_agent_id_fkey` is `ON DELETE SET NULL`, so deleting an agent still erases its name from every comment it ever wrote. A denormalized `author_name` column is the only durable answer (`counts.ts` / `routes/analytics.ts` already denormalize `a.name as agent_name` for the dashboard); not shipped - it needs a migration + backfill of its own.
 
-**Owner reply resumes a parked workflow run (ADR 0014).** When the Owner comments on an item whose workflow run is `waiting_for_owner`, `create()` claims the run inside the comment's transaction (run → `running`, item → `in_progress`, `status_changed` event with `detail='resumed_by_owner_reply'`), broadcasts `counts_changed` after commit, and calls `workflow-engine.continueResumedRun` in the background: a run parked on an Owner node follows its pass connection; a run parked on an agent node re-runs that step with `loop_count` reset. Agent comments never trigger it; an item without a parked run is left alone.
+**Owner reply resumes a parked workflow run (ADR 0014).** When the Owner comments on an item whose workflow run is `waiting_for_owner`, `create()` claims the run inside the comment's transaction (run → `running`, item → `in_progress`, `status_changed` event with `detail='resumed_by_owner_reply'`), broadcasts `counts_changed` after commit, and calls `workflow-engine.continueResumedRun` in the background: a run parked on an Owner node follows its pass connection; a run parked on an agent node re-runs that step with `loop_count` reset. With Sub-tasks steps (ADR 0015) a parked sub-task parks both runs: a reply on the sub-task resumes its child run and flips the Task run back to `running`; a reply on the Task resumes the Task run, which resumes the waiting child. Agent comments never trigger it; an item without a parked run is left alone.
 
 ### IItemExternalLink
 Off-platform URL attached to an item (today only `link_kind='pull_request'`). Table `item_external_links` (migration 020), UNIQUE `(item_id, url)`, cascades on item delete.
@@ -236,7 +220,7 @@ Persistent audit record for any non-comment activity on an issue. Backed by the 
 Fields: `id, issue_type, issue_id, event_type, actor_agent_id, field, from_value, to_value, detail, created_at`
 
 - `event_type` âˆˆ `'created' | 'status_changed' | 'assigned' | 'field_updated' | 'comment_added' | 'link_created' | 'link_deleted' | 'deleted' | 'unblocked'`
-- `field` âˆˆ `'status' | 'assignee' | 'title' | 'description' | 'reporter' | 'spec_md' | 'pr_url' | 'points' | 'acceptance_criteria' | 'priority' | 'steps_to_reproduce' | 'expected' | 'actual' | 'frequency' | 'failure_scope' | 'link'` or `NULL` for `created` / `deleted`
+- `field` ∈ `'status' | 'assignee' | 'title' | 'description' | 'reporter' | 'spec_md' | 'pr_url' | 'acceptance_criteria' | 'priority' | 'link' | 'external_link' | 'git_push' | 'repo_exec'` or `NULL` for `created` / `deleted`. `IssueEventField` still lists the retired `points` and bug-field names (`steps_to_reproduce`, `expected`, `actual`, `frequency`, `failure_scope`) for old rows; nothing writes them since ADR 0015 (`events-log.ts` `DATA_KEY_TO_FIELD`)
 - `actor_agent_id` is `NULL` when the Owner (or the API) was the actor
 - `link_created` / `link_deleted` events are emitted on BOTH endpoints of the link (so each item's activity tab shows the change). `to_value` holds the other item's id; `detail` encodes direction + relation_type like `depends_on â†’ ATL-3` (outgoing) or `depends_on â† ATL-2` (incoming).
 - `deleted` is emitted by each entity service's `delete()` immediately before the underlying item row is removed. The event row survives the cascade because `issue_events.item_id` has no FK; the deleted item's history stays queryable.
@@ -272,15 +256,15 @@ Fields: `id, kind, issue_type, issue_id, message, event_type, agent_id, external
 - `event_type` âˆˆ external notification event keys (see below)
 
 ### IAgentRun
-**Why this entity exists**: Every agent invocation produces an auditable run row â€” without it, the Owner can't tell why an epic transitioned (which agent, what version of the prompt, when it succeeded/failed). The Queue page, dashboard "in motion" panel, and per-agent Runs tab all consume the same row shape. Cancellation as an explicit terminal state (vs. delete) preserves history for runs that were intentionally aborted.
+**Why this entity exists**: Every agent invocation produces an auditable run row — without it, the Owner can't tell why an item transitioned (which agent, what version of the prompt, when it succeeded/failed). The Queue page, dashboard "in motion" panel, and per-agent Runs tab all consume the same row shape. Cancellation as an explicit terminal state (vs. delete) preserves history for runs that were intentionally aborted.
 
 A spawned subprocess invocation.
 
 Fields: `id, agent_id, issue_type, issue_id, project_id, status, started_at, ended_at, error, output_summary, created_at`
 
 **Three lifecycle shapes** (ADR 0014):
-- **Workflow step on an item** (dominant) — `item_id` + `workflow_run_id` + `node_id` set, `project_id` null. Spawned by the engine in the workflow run's shared worktree.
-- **Workflow step at project level** — `item_id` null, `project_id` + `workflow_run_id` set. Runs an `input_kind='none'` workflow (AI Readiness scaffold, knowledge base, scheduled scouts); the prompt-builder renders `# Project Context` (or `# Project-level Run` for a project-less workflow). Items the agent creates are stamped `created_by_workflow_run_id`.
+- **Workflow step on an item** (dominant) — `item_id` + `workflow_run_id` + `node_id` set, `project_id` null. Spawned by the engine in the workflow run's shared worktree. A step of a sub-task's child run has the sub-task as `item_id` and the child run as `workflow_run_id`.
+- **Workflow step at project level** — `item_id` null, `project_id` + `workflow_run_id` set. Runs an `input_kind='none'` workflow (AI Readiness scaffold, knowledge base, scheduled scouts); the prompt-builder renders `# Project Context` (or `# Project-level Run` for a project-less workflow). Items the agent creates are left as created — nothing routes them.
 - **Ad-hoc** — `workflow_run_id` and `item_id` null, `project_id` optional. `POST /api/run` from the Run-now dialog; runs in a temp dir and never routes. Rows with `item_id` set and no `workflow_run_id` are pre-ADR-0014 history.
 
 `project_id` has no FK so historical rows survive `DELETE FROM projects`. A partial index (`idx_agent_runs_project_id WHERE project_id IS NOT NULL`) keeps lookups cheap when most rows are item-attached.
@@ -291,7 +275,7 @@ Fields: `id, agent_id, issue_type, issue_id, project_id, status, started_at, end
 
 **Two-persona columns:** `persona`, `review_outcome` and `review_reason` were removed with the in-agent reviewer persona; only `parent_run_id` (self-FK, ON DELETE CASCADE) remains.
 
-**Workflow + config snapshot columns (migration 035):** `workflow_run_id` (FK → `workflow_runs`, ON DELETE SET NULL) and `node_id` tie a run to a workflow step. `cli`, `model`, `effort`, `prompt_version` record the agent config the run spawned with. `spawnAgentRun` writes them on both write paths. `IAgentRun` exposes `workflow_run_id` + `node_id` (`GET /api/run/:id`, `GET /api/run`, `GET /api/agents/:id/runs`); `cli` / `model` reach the web through `IWorkflowRunStep`, and `effort` / `prompt_version` are DB-only.
+**Workflow + config snapshot columns (migration 035):** `workflow_run_id` (FK → `workflow_runs`, ON DELETE SET NULL) and `node_id` tie a run to a workflow step. `cli`, `model`, `effort`, `prompt_version` record the agent config the run spawned with. `spawnAgentRun` writes them on both write paths. `IAgentRun` exposes `workflow_run_id` + `node_id` (`GET /api/run/:id`, `GET /api/run`, `GET /api/agents/:id/runs`); `cli` / `model` / `effort` reach the web through `IWorkflowRunStep`; `prompt_version` is DB-only.
 
 **Outcome columns** (`outcome_kind`, `outcome_summary`, `outcome_reason`, `outcome_checklist`) are persisted by `completeRun` for every run shape; the engine routes on them.
 
@@ -342,29 +326,35 @@ Per-CLI model registry; controls what shows up in the Add Agent dialog and per-a
 Fields: `id, cli, model_name, note, created_at`
 
 ### IWorkflow (ADR 0014)
-**Why this entity exists**: Orchestration moved off agents. A workflow is the Owner-designed graph that decides which agents run, in what order, and how the work is delivered (worktree, push, PR, child workflow). Agents stay reusable across many workflows because they carry no routing or schedule state. Types, Zod schemas and the validator live in `packages/shared/src/workflows/index.ts`.
+**Why this entity exists**: Orchestration moved off agents. A workflow is the Owner-designed graph that decides which agents run, in what order, how a Task's sub-tasks are worked, and how the work is delivered (worktree, push, PR, push to default). Agents stay reusable across many workflows because they carry no routing or schedule state. Types, Zod schemas and the validator live in `packages/shared/src/workflows/index.ts`.
 
-Fields: `id, project_id, name, description, status, graph, input_kind, trigger, use_worktree, push_code, raises_pr, max_loops, schedule_preset, schedule_time_of_day, schedule_weekday, cron_expr, next_run_at, last_run_at, created_at, updated_at`
+Fields: `id, project_id, name, description, status, graph, input_kind, trigger, use_worktree, push_code, raises_pr, push_to_default, max_loops, max_parallel_runs, schedule_preset, schedule_time_of_day, schedule_weekday, cron_expr, next_run_at, last_run_at, created_at, updated_at`
 
-- `graph` JSONB: `{ nodes: [{id, type: start|agent|owner|end, agent_id?, child_workflow_id?, test_child_workflow_id?, position}], edges: [{id, source, target, kind: pass|fail}] }` (≤100 nodes, ≤300 edges). `validateWorkflowGraph` rules: unique node ids; exactly one Start with nothing connecting into it; at least one End with no outgoing edges; edges point at existing nodes; `agent_id` only (and required) on agent nodes; `child_workflow_id` / `test_child_workflow_id` only on End; every non-End node has exactly one pass edge; only agent nodes have a fail edge (at most one); every node reachable from Start; pass edges acyclic (loops only through fail edges, so `loop_count` bounds them). Saving also checks every `agent_id` exists.
-- `input_kind` ∈ `item | none`. `item`: one run per item queued via `items.workflow_id`. `none`: a project-level run.
-- `trigger` ∈ `manual | schedule | item_ready`. `item_ready`: the dispatch tick starts the oldest `ready` queued item whenever no run of this workflow is `running`. `schedule`: fires on `cron_expr` (materialised from `schedule_preset` ∈ `hourly | every_4h | daily | weekly | custom` + `schedule_time_of_day` + `schedule_weekday`, same `materializeCron` as `IProjectSchedule`, evaluated in `settings.quiet_hours_timezone`).
-- `use_worktree` / `push_code` / `raises_pr` (defaults true) — End delivery. `max_loops` 1–20, default 3: fail-edge traversals allowed before the run parks.
+- `graph` JSONB: `{ nodes: [{id, type: start|agent|owner|subtasks|end, agent_id?, sub_workflow_id?, label?, position}], edges: [{id, source, target, kind: pass|fail}] }` (≤100 nodes, ≤300 edges). `validateWorkflowGraph(graph, inputKind?)` rules: unique node ids; exactly one Start with nothing connecting into it; at least one End with no outgoing edges; edges point at existing nodes; `agent_id` only (and required) on agent nodes; `sub_workflow_id` (required) and `label` (optional, ≤40 chars) only on **Sub-tasks** nodes, and Sub-tasks nodes only when `inputKind = 'item'` (so a sub-workflow can't nest another — one level deep); every non-End node has exactly one pass edge; only agent nodes have a fail edge (at most one); every node reachable from Start; pass edges acyclic (loops only through fail edges, so `loop_count` bounds them). Saving also checks every `agent_id` exists and every `sub_workflow_id` is an `input_kind='sub_task'` workflow of the same project.
+- `input_kind` ∈ `item | none | sub_task` (migration 038 added `sub_task`). `item` — a **Task workflow**: one run per Task queued via `items.workflow_id`. `none` — a project-level run. `sub_task` — a **sub-workflow**: runs only as a child of a Task run's Sub-tasks step, on one sub-task, in the Task's worktree; must be `trigger='manual'`, is never dispatched, and its End never delivers.
+- `trigger` ∈ `manual | schedule | item_ready`. `item_ready`: the dispatch tick starts the oldest `ready` queued Tasks while the workflow has fewer than `max_parallel_runs` top-level runs `running`. `schedule`: fires on `cron_expr` (materialised from `schedule_preset` ∈ `hourly | every_4h | daily | weekly | custom` + `schedule_time_of_day` + `schedule_weekday`, same `materializeCron` as `IProjectSchedule`, evaluated in `settings.quiet_hours_timezone`).
+- `use_worktree` / `push_code` / `raises_pr` (defaults true; `raises_pr` defaults to `!push_to_default`) — End delivery. `push_to_default` (migration 038, default false) — End pushes `HEAD` straight to the project's default branch and opens no PR; requires `push_code` on and `raises_pr` off. The builder offers four combinations: Push + PR, Push branch, Push to the default branch, Keep local. End removes the worktree and deletes the run branch only after a successful push; with push off ("keep local") both stay on disk.
+- `max_loops` 1–20, default 3: fail-edge traversals — and End-gate returns to a Sub-tasks step — allowed before the run parks.
+- `max_parallel_runs` 1–10, default 1 (migration 038): how many Task runs of this workflow run at once, each in its own worktree. Sub-tasks inside one Task always run one at a time.
 - `project_id` (FK CASCADE) may be null only when `input_kind = 'none'` and `use_worktree = false` (`workflows_project_required_check`).
-- **Templates** (`IWorkflowTemplate`, `packages/api/src/marketplace/workflows/*.json`): `dev`, `planning`, `qa`, `ai-readiness`. Agent nodes reference catalog agent ids; an End may name a child as `template:<id>`, resolved at create time.
+- **Templates** (`IWorkflowTemplate`, `packages/api/src/marketplace/workflows/*.json`): `delivery` (Task), `build` and `test` (sub-workflows), `ai-readiness` (project run). Agent nodes reference catalog agent ids; a Sub-tasks node may name its sub-workflow as `template:<id>`, resolved (and created when missing) at create time. See `swarm-architecture.md`.
 
 ### IWorkflowRun (ADR 0014)
-**Why this entity exists**: One execution of a workflow over one item (or the project). It owns the worktree and branch for its whole life, so consecutive agent steps share state with no push or re-provision between them, and it holds the item while no step is live.
+**Why this entity exists**: One execution of a workflow over one item (or the project). A top-level run owns the worktree and branch for its whole life, so consecutive agent steps — and every sub-task's child run — share state with no push or re-provision between them, and it holds the item while no step is live.
 
-Fields: `id, workflow_id, item_id, project_id, status, graph_snapshot, current_node_id, parked_node_id, park_reason, loop_count, branch, worktree_path, setup_done, pr_url, started_at, updated_at, finished_at`
+Fields: `id, workflow_id, item_id, project_id, status, graph_snapshot, parent_workflow_run_id, parent_node_id, current_node_id, parked_node_id, park_reason, loop_count, gate_rounds, branch, worktree_path, setup_done, pr_url, started_at, updated_at, finished_at`
 
 - `status` ∈ `running | waiting_for_owner | completed | cancelled | error`. `running` → `waiting_for_owner` (park) → `running` (Owner reply or resume) → `completed` (End) / `cancelled` (stop). The engine never writes `error`; a failed step parks instead.
 - `graph_snapshot` is the graph frozen at start; later edits to the workflow don't affect a live run.
-- `branch` = the item's valid `worktree_branch` ?? `atlas/wf/<itemId>`, or `atlas/wf/<runId8>` for project-level runs; null when `!use_worktree`. `worktree_path` lives only here, never on `items.worktree_path`, so the orphan reaper can't push or delete it.
+- `branch` = the item's valid `worktree_branch` ?? `atlas/wf/<itemId>`, or `atlas/wf/<runId8>` for project-level runs; null when `!use_worktree`. A child run copies its parent's `branch`, `worktree_path` and `setup_done`. `worktree_path` lives only here, never on `items.worktree_path`, so the orphan reaper can't push or delete it.
 - `setup_done` flips after the first completed step so later steps skip the project setup script.
-- `workflow_runs_one_live_per_item` allows one `running` or `waiting_for_owner` run per item. It covers the gaps between steps and the End push, where no `agent_runs` row is live. Only `running` locks item status / assignee writes (`workflow-lock.ts`); only `running` blocks the workflow's queue.
+- `workflow_runs_one_live_per_item` allows one `running` or `waiting_for_owner` run per item. It covers the gaps between steps and the End push, where no `agent_runs` row is live. Only `running` locks item status / assignee writes (`workflow-lock.ts`); only `running` top-level runs count against `max_parallel_runs`.
+- **Child runs (ADR 0015, migration 038):** `parent_workflow_run_id` (FK → `workflow_runs`, ON DELETE CASCADE) + `parent_node_id` mark a sub-task's run, started by the parent Task run's Sub-tasks node. At most one child is live per Task run (sub-tasks run one at a time). A child's End commits leftovers and sets the sub-task `in_review` — it never pushes; a parked child parks the parent at the Sub-tasks node; stopping either cancels the Task run and its live children. `GET /api/workflow-runs/:id` returns them as `children`.
 - Each step is an ordinary `agent_runs` row with `workflow_run_id` + `node_id` set.
-- `items.created_by_workflow_run_id` is stamped when a step's agent creates an item (matched by `reporter_agent_id` against the agent's live step); End routes those items, plus children of the run's item created since `started_at`, to `child.workflow_id ?? End.child_workflow_id` as `ready` — `End.test_child_workflow_id` instead for a child with an outgoing `tested_by` link.
+- **End gate (Task runs with Sub-tasks steps):** the run completes only when every sub-task is `in_review` or `done`. A still-open sub-task that a Sub-tasks node claims sends the run back to that node (counted against `max_loops`); one no node claims parks the run at End. End-node child routing (`child_workflow_id`, `test_child_workflow_id`, `routeChildren`) was removed by ADR 0015.
+
+### IPublishedWorkflow (migration 041)
+A workflow the Owner published to the Marketplace (builder **Publish**). Table `published_workflows`: `id, name, description, source_workflow_id (UNIQUE, FK → workflows, SET NULL), bundle (bytea — the export zip), published_at, updated_at`. One entry per source workflow; publishing again replaces it. The API reads `input_kind, trigger, push_code, raises_pr, push_to_default, agent_ids` from the bundle; `IPublishedWorkflowDetail` adds `graph` + `sub_workflows {ref, name}`. Not tied to a project — "Use in a project" imports the bundle into one.
 
 ### IProjectSchedule
 **Why this entity exists**: Different repos have different staleness tolerances (a documentation repo can fetch daily; a hot product repo wants every 15 minutes). Modeling schedules per-project rather than globally lets each repo carry its own cadence. The dirty / idle / agents guards live here because skipping a fetch is more situational than skipping a project â€” the policy needs to read the repo's live state at fire time.
@@ -383,47 +373,28 @@ Each row has: `key, value, secret, restart_required, description`. The full set 
 ## Relationships
 
 ```
-            â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-            â”‚ Settings â”‚  (single row, owner profile)
-            â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+Settings (single row, owner profile)
 
-   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â” 1     n â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-   â”‚  Credential  â”‚â”€â”€â”€â”€â”€â”€â”€â”€â”€â”‚   Project   â”‚
-   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜         â””â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”˜
-                                  â”‚ 1
-                       â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-                       â”‚ n        â”‚ n        â”‚ n               â”‚ n
-                  â”Œâ”€â”€â”€â”€â–¼â”€â”€â”€â” â”Œâ”€â”€â”€â”€â–¼â”€â”€â”€â”  â”Œâ”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”
-                  â”‚  Epic  â”‚ â”‚  Bug   â”‚  â”‚ Project- â”‚  â”‚   Project-   â”‚
-                  â””â”€â”€â”€â”€â”¬â”€â”€â”€â”˜ â””â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â”‚ Schedule â”‚  â”‚  Guardrail   â”‚
-                       â”‚ 1                â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                       â”‚ n
-                  â”Œâ”€â”€â”€â”€â–¼â”€â”€â”€â”€â”
-                  â”‚  Story  â”‚
-                  â””â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”˜
-                       â”‚ 1
-              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”
-              â”‚ n      â”‚ n
-        â”Œâ”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â” â”Œâ”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”
-        â”‚ SubTask  â”‚ â”‚ SubBug   â”‚
-        â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜ â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+Credential 1 --- n Project
+Project 1 --- n Task (items.type='task', no parent)
+                  Task 1 --- n Sub-task (items.type='sub_task', parent_id = Task)
+Project 1 --- n ProjectSchedule / ProjectGuardrail
 
+Workflow 1 --- n WorkflowRun 1 --- n AgentRun n --- 1 Agent
+   |  graph.nodes[agent].agent_id ----------------> Agent     (no FK; delete guard)
+   |  graph.nodes[subtasks].sub_workflow_id ------> Workflow  (input_kind='sub_task'; delete guard)
+   n
+Project (FK CASCADE; nullable for no-item, no-worktree workflows)
 
-   Workflow 1 --- n WorkflowRun 1 --- n AgentRun n --- 1 Agent
-      |  graph.nodes[].agent_id -----------------------> Agent (no FK; delete guard)
-      |  graph.nodes[End].child_workflow_id ----------> Workflow
-      n
-   Project (FK CASCADE; nullable for no-item, no-worktree workflows)
+Task.workflow_id -------------------> Workflow     (queued for; Tasks only)
+WorkflowRun.item_id ----------------> Task | Sub-task (one live run per item)
+WorkflowRun.parent_workflow_run_id -> WorkflowRun  (a sub-task's run -> its Task run; CASCADE)
+AgentRun.item_id -------------------> Task | Sub-task
+Agent 1 --- n AgentChecklist / AgentPromptVersion; 1 --- 1 AgentMemory
 
-   Item.workflow_id --------------> Workflow     (queued for)
-   Item.created_by_workflow_run_id -> WorkflowRun (created during)
-   WorkflowRun.item_id -----------> Item          (one live run per item)
-   AgentRun.item_id --------------> Item
-   Agent 1 --- n AgentChecklist / AgentPromptVersion; 1 --- 1 AgentMemory
-
-   Comments  â”€â”€â”€â”€â”€ polymorphic by (issue_type, issue_id)
-   Notifications  â”€â”€â”€â”€â”€ polymorphic by (issue_type, issue_id)
-   Guardrails (global) â”€â”€â”€â”€â”€ workspace-wide, not project-linked
+Comments       polymorphic by (issue_type, issue_id)
+Notifications  polymorphic by (issue_type, issue_id)
+Guardrails (global) workspace-wide, not project-linked
 ```
 
 ---
@@ -432,7 +403,7 @@ Each row has: `key, value, secret, restart_required, description`. The full set 
 
 Source: `packages/shared/src/status-machine/index.ts`. Use `getValidNextStatuses(entityType, currentStatus)` and `isValidTransition(entityType, from, to)`. **Never hardcode status lists in components or routes.**
 
-### Issue statuses (all item types — unified 6-state machine)
+### Issue statuses (Tasks and sub-tasks — unified 6-state machine)
 
 ```
 draft → ready → in_progress → in_review → done
@@ -447,7 +418,7 @@ draft → ready → in_progress → in_review → done
 
 ### `waiting_for_info` override
 
-From any non-terminal state on Story/Bug/Epic/SubBug, status can move to `waiting_for_info` (typically a workflow run parking with the Owner). From `waiting_for_info` it moves to `ready` or `in_progress` (no prior-state memory).
+From any non-terminal state on a Task or sub-task, status can move to `waiting_for_info` (typically a workflow run parking with the Owner). From `waiting_for_info` it moves to `ready` or `in_progress` (no prior-state memory).
 
 ### Transitions written by the workflow engine
 
@@ -455,19 +426,20 @@ From any non-terminal state on Story/Bug/Epic/SubBug, status can move to `waitin
 
 | When | To | Assignee | Event `detail` |
 |---|---|---|---|
-| Run start (`startWorkflowRun`) | `in_progress` | unchanged | `workflow_run_started: <name>` |
+| Run start (`startWorkflowRun`; a Sub-tasks step starting a child run moves that sub-task the same way) | `in_progress` | unchanged | `workflow_run_started: <name>` |
 | Each agent step spawns (`spawnNode`) | unchanged | the node's agent | — |
-| Park (question, missing outcome, no pass/fail edge, loop limit, Owner node, step error / setup failure, missing agent, worktree failure, reconcile) | `waiting_for_info` | null | `workflow_parked: <reason>` |
-| Owner reply claims the parked run (`comments.ts`) / `POST /api/workflow-runs/:id/resume` | `in_progress` | unchanged | `resumed_by_owner_reply` / `workflow_resumed` |
-| End (`finishRun`) | `in_review` when a PR opened, else `done` | null | `workflow_completed: <name>` |
-| Stop (`cancelWorkflowRun`) | `waiting_for_info` | null | `workflow_run_cancelled` |
-| End routes a child item (`routeChildren`) | `ready` (+ `workflow_id`) | unchanged | `queued_for_workflow: <workflowId>` |
+| Park (question, missing outcome, no pass/fail edge, loop limit, Owner node, step error / setup failure, missing agent, worktree failure, reconcile, End gate with an unclaimed open sub-task) | `waiting_for_info` | null | `workflow_parked: <reason>` |
+| A sub-task's child run parks (`waitOnChild`) | Task → `waiting_for_info` | null | `workflow_parked: Sub-task <id> is waiting for you: …` |
+| Owner reply claims the parked run (`comments.ts`) / `POST /api/workflow-runs/:id/resume` (a resumed child also moves its Task, and a resumed Task its waiting sub-task) | `in_progress` | unchanged | `resumed_by_owner_reply` / `workflow_resumed` |
+| A sub-task's child run reaches End (`finishChildRun`) | sub-task → `in_review` | null | `workflow_completed: <sub-workflow>` |
+| End (`finishRun`, after the End gate) | `in_review` when a PR opened or any sub-task isn't `done`, else `done` | null | `workflow_completed: <name>` |
+| Stop (`cancelWorkflowRun`) | Task and the live child's sub-task → `waiting_for_info` | null | `workflow_run_cancelled` |
 
 While a workflow run is `running`, `PATCH …/status` and `…/assign` on its item return 409 (`workflow-lock.ts`). A parked run doesn't lock, so the Owner can move a `waiting_for_info` item by hand.
 
 ### Workflow dispatch
 
-No agent auto-dispatch exists. `tickWorkflowDispatch` (one-minute tick in `agent-schedule-registry.ts`, plus a kick at every End / stop) starts runs for active `item_ready` workflows (oldest `ready` item with that `workflow_id`, only while the workflow has no `running` run) and `schedule` workflows (when `next_run_at` is due). Setting an item `ready` without a `workflow_id` starts nothing. Within a run, steps chain immediately on `onStepFinished` with no tick wait. See `api-surface.md` (`services/agent-schedule-registry.ts`).
+No agent auto-dispatch exists. `tickWorkflowDispatch` (one-minute tick in `agent-schedule-registry.ts`, plus a kick at every End / stop) starts runs for active `item_ready` workflows (the oldest `ready` Tasks with that `workflow_id`, up to `max_parallel_runs` running top-level runs) and `schedule` workflows (when `next_run_at` is due). Setting a Task `ready` without a `workflow_id` starts nothing; sub-tasks are never dispatched — their runs start from the Task run's Sub-tasks steps. Within a run, steps and sub-task runs chain immediately with no tick wait. See `api-surface.md` (`services/agent-schedule-registry.ts`).
 
 ---
 

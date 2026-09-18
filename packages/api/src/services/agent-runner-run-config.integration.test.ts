@@ -13,13 +13,13 @@ beforeEach(async () => {
     await insertProject('p1', 'ATL');
     await insertAgent({ id: 'agent-coder', status: 'active', model: 'claude-sonnet-4-6', prompt_version: 4 });
     await testDb.updateTable('agents').set({ effort: 'high' }).where('id', '=', 'agent-coder').execute();
-    await insertItem({ id: 'ATL-100', type: 'epic', project_id: 'p1', title: 'Parent epic' });
+    await insertItem({ id: 'ATL-100', type: 'task', project_id: 'p1', title: 'Parent epic' });
     await insertItem({
         id: 'ATL-2',
-        type: 'story',
+        type: 'sub_task',
         project_id: 'p1',
         parent_id: 'ATL-100',
-        parent_type: 'epic',
+        parent_type: 'task',
         title: 'Story',
         status: 'ready',
         assignee_agent_id: 'agent-coder',
@@ -38,7 +38,7 @@ const EXPECTED = { cli: 'claude', model: 'claude-sonnet-4-6', effort: 'high', pr
 
 describe('spawnAgentRun — agent config snapshot', () => {
     it('records cli, model, effort and prompt_version on the inserted run', async () => {
-        const runId = await spawnAgentRun({ agentId: 'agent-coder', issueType: 'story', issueId: 'ATL-2' });
+        const runId = await spawnAgentRun({ agentId: 'agent-coder', issueType: 'sub_task', issueId: 'ATL-2' });
 
         const row = await testDb
             .selectFrom('agent_runs')
@@ -54,7 +54,7 @@ describe('spawnAgentRun — agent config snapshot', () => {
             .values({ id: 'run-pre', agent_id: 'agent-coder', item_id: 'ATL-2', status: 'queued', prompt_snapshot: null })
             .execute();
 
-        await spawnAgentRun({ agentId: 'agent-coder', issueType: 'story', issueId: 'ATL-2', existingRunId: 'run-pre' });
+        await spawnAgentRun({ agentId: 'agent-coder', issueType: 'sub_task', issueId: 'ATL-2', existingRunId: 'run-pre' });
 
         const row = await testDb
             .selectFrom('agent_runs')

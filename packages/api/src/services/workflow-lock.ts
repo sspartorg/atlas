@@ -7,7 +7,7 @@ import { db } from '../db/kysely-client.js';
 // continue would fight the engine (and a manual UI change would strand the
 // run). Stopping the run is the way to take the item back. A parked run
 // (`waiting_for_owner`) does not lock the item.
-const ITEM_ROUTING_URL = /^\/api\/(?:epics|stories|bugs|sub-tasks|sub-bugs)\/([^/?]+)\/(?:status|assign)(?:\?|$)/;
+const ITEM_ROUTING_URL = /^\/api\/(?:tasks|sub-tasks)\/([^/?]+)\/(?:status|assign)(?:\?|$)/;
 
 async function runningWorkflowRunOnItem(itemId: string): Promise<string | null> {
     const row = await db

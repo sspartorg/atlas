@@ -9,24 +9,19 @@ import {
     UpdateRoleSchema,
     MemoryRegenerationTriggerSchema,
     UpdateAgentSchema,
-    BugFailureScopeSchema,
-    BugFrequencySchema,
     CloneProjectSchema,
     ConnectExistingProjectSchema,
     CreateAgentSchema,
-    CreateBugSchema,
     CreateCliModelSchema,
     CreateCommentSchema,
     CreateCredentialSchema,
-    CreateEpicSchema,
     CreateGuardrailRuleSchema,
     CreateGuardrailScriptSchema,
     CreateIssueLinkSchema,
     CreateProjectGuardrailSchema,
     CreateProjectSchema,
-    CreateStorySchema,
-    CreateSubBugSchema,
     CreateSubTaskSchema,
+    CreateTaskSchema,
     CredentialHostSchema,
     CredentialKindSchema,
     DeleteProjectSchema,
@@ -48,7 +43,6 @@ import {
     NotificationDeliveryStatusSchema,
     ToggleProjectGuardrailSchema,
     TransitionStatusSchema,
-    UpdateBugSchema,
     UpdateCliModelSchema,
     UpdateCredentialSchema,
     UpdateEnvSchema,
@@ -58,9 +52,8 @@ import {
     UpdateProfileSchema,
     UpdateProjectGuardrailSchema,
     UpdateProjectSchema,
-    UpdateStorySchema,
-    UpdateSubBugSchema,
     UpdateSubTaskSchema,
+    UpdateTaskSchema,
     UpdateReminderSchema,
     UpdateScratchPadSchema,
     ReplyToItemSchema,
@@ -76,13 +69,11 @@ describe('enum schemas', () => {
         ['AgentCliSchema', AgentCliSchema, 'claude', 'gpt'],
         ['AgentStatusSchema', AgentStatusSchema, 'active', 'paused'],
         ['AgentCategorySchema', AgentCategorySchema, 'software-dev', 'finance'],
-        ['IssueTypeSchema', IssueTypeSchema, 'story', 'task'],
+        ['IssueTypeSchema', IssueTypeSchema, 'task', 'story'],
         ['RunStatusSchema', RunStatusSchema, 'queued', 'pending'],
         ['IssueStatusSchema', IssueStatusSchema, 'draft', 'archived'],
         ['SubTaskStatusSchema', SubTaskStatusSchema, 'ready', 'archived'],
         ['IssuePrioritySchema', IssuePrioritySchema, 'normal', 'p0'],
-        ['BugFrequencySchema', BugFrequencySchema, 'always', 'every-time'],
-        ['BugFailureScopeSchema', BugFailureScopeSchema, 'cosmetic', 'visual'],
         ['CredentialHostSchema', CredentialHostSchema, 'github', 'gitlab'],
         ['CredentialKindSchema', CredentialKindSchema, 'pat', 'ssh'],
         ['GuardrailCategorySchema', GuardrailCategorySchema, 'file_system', 'auth'],
@@ -262,64 +253,51 @@ describe('CreateProjectSchema / UpdateProjectSchema', () => {
 });
 
 describe('Create* issue schemas', () => {
-    it('CreateEpicSchema applies defaults', () => {
-        const out = CreateEpicSchema.parse({ project_id: 'p1', title: 'E1' });
+    it('CreateTaskSchema applies defaults', () => {
+        const out = CreateTaskSchema.parse({ project_id: 'p1', title: 'T1' });
         expect(out.priority).toBe('normal');
         expect(out.reporter_agent_id).toBeNull();
         expect(out.assignee_agent_id).toBeNull();
         expect(out.description).toBe('');
-    });
-
-    it('CreateEpicSchema rejects empty title', () => {
-        expect(
-            CreateEpicSchema.safeParse({ project_id: 'p1', title: '' }).success
-        ).toBe(false);
-    });
-
-    it('CreateStorySchema accepts minimal input', () => {
-        const out = CreateStorySchema.parse({ epic_id: 'e1', title: 'S1' });
         expect(out.acceptance_criteria).toBe('');
     });
 
+    it('CreateTaskSchema rejects empty title', () => {
+        expect(
+            CreateTaskSchema.safeParse({ project_id: 'p1', title: '' }).success
+        ).toBe(false);
+    });
+
     it('CreateSubTaskSchema accepts minimal input', () => {
-        const out = CreateSubTaskSchema.parse({ story_id: 's1', title: 'T1' });
+        const out = CreateSubTaskSchema.parse({ task_id: 't1', title: 'S1' });
         expect(out.description).toBe('');
+        expect(out.labels).toEqual([]);
     });
 
-    it('CreateSubBugSchema fills bug-field defaults', () => {
-        const out = CreateSubBugSchema.parse({ story_id: 's1', title: 'SB1' });
-        expect(out.frequency).toBe('sometimes');
-        expect(out.failure_scope).toBe('cosmetic');
-    });
-
-    it('CreateBugSchema fills bug-field defaults', () => {
-        const out = CreateBugSchema.parse({ epic_id: 'e1', title: 'B1' });
-        expect(out.frequency).toBe('sometimes');
-        expect(out.failure_scope).toBe('cosmetic');
+    it('CreateSubTaskSchema requires task_id', () => {
+        expect(CreateSubTaskSchema.safeParse({ title: 'S1' }).success).toBe(false);
     });
 });
 
 describe('Update* issue schemas (strict + partial)', () => {
-    it('UpdateStorySchema accepts partial input', () => {
-        expect(UpdateStorySchema.parse({ title: 'changed' }).title).toBe('changed');
+    it('UpdateTaskSchema accepts partial input', () => {
+        expect(UpdateTaskSchema.parse({ title: 'changed' }).title).toBe('changed');
     });
 
-    it('UpdateStorySchema rejects unknown fields', () => {
+    it('UpdateTaskSchema rejects unknown fields', () => {
         expect(
-            UpdateStorySchema.safeParse({ injected: 'no' }).success
+            UpdateTaskSchema.safeParse({ injected: 'no' }).success
         ).toBe(false);
     });
 
-    // T2 — PO Writer's `worktree_branch` patch must round-trip through
-    // the schema; the regex matches the dev/QA convention.
-    it('UpdateStorySchema accepts a valid worktree_branch', () => {
-        const out = UpdateStorySchema.parse({ worktree_branch: 'atlas/dev/ATL-12' });
-        expect(out.worktree_branch).toBe('atlas/dev/ATL-12');
+    it('UpdateTaskSchema accepts a valid worktree_branch', () => {
+        const out = UpdateTaskSchema.parse({ worktree_branch: 'atlas/wf/ATL-12' });
+        expect(out.worktree_branch).toBe('atlas/wf/ATL-12');
     });
 
-    it('UpdateStorySchema rejects a non-conforming worktree_branch', () => {
+    it('UpdateTaskSchema rejects a non-conforming worktree_branch', () => {
         expect(
-            UpdateStorySchema.safeParse({ worktree_branch: 'feature/foo' }).success,
+            UpdateTaskSchema.safeParse({ worktree_branch: 'feature/foo' }).success,
         ).toBe(false);
     });
 
@@ -327,30 +305,24 @@ describe('Update* issue schemas (strict + partial)', () => {
         expect(UpdateSubTaskSchema.parse({})).toEqual({});
     });
 
-    it('UpdateSubBugSchema honours bug-field updates', () => {
-        const out = UpdateSubBugSchema.parse({ frequency: 'always' });
-        expect(out.frequency).toBe('always');
+    it('UpdateSubTaskSchema rejects unknown fields', () => {
+        expect(UpdateSubTaskSchema.safeParse({ frequency: 'always' }).success).toBe(false);
     });
-
-    it('UpdateBugSchema rejects unknown fields', () => {
-        expect(UpdateBugSchema.safeParse({ injected: 'no' }).success).toBe(false);
-    });
-
 });
 
 describe('comment / link / onboarding / assign / transition', () => {
     it('CreateIssueLinkSchema requires to_type and to_id', () => {
-        const out = CreateIssueLinkSchema.parse({ to_type: 'story', to_id: 's1' });
+        const out = CreateIssueLinkSchema.parse({ to_type: 'sub_task', to_id: 's1' });
         expect(out.to_id).toBe('s1');
         expect(
-            CreateIssueLinkSchema.safeParse({ to_type: 'story', to_id: '' }).success
+            CreateIssueLinkSchema.safeParse({ to_type: 'sub_task', to_id: '' }).success
         ).toBe(false);
     });
 
     it('CreateCommentSchema accepts owner author with no agent_id', () => {
         const out = CreateCommentSchema.parse({
             author: 'owner',
-            issue_type: 'story',
+            issue_type: 'sub_task',
             issue_id: 's1',
             body: 'looks good',
         });
@@ -362,7 +334,7 @@ describe('comment / link / onboarding / assign / transition', () => {
         expect(
             CreateCommentSchema.safeParse({
                 author: 'owner',
-                issue_type: 'story',
+                issue_type: 'sub_task',
                 issue_id: 's1',
                 body: '',
             }).success
@@ -919,7 +891,7 @@ describe('CreateIssueLinkSchema relation_type', () => {
     it('accepts tested_by alongside relates_to and depends_on', () => {
         for (const rel of ['relates_to', 'depends_on', 'tested_by'] as const) {
             const out = CreateIssueLinkSchema.parse({
-                to_type: 'story',
+                to_type: 'sub_task',
                 to_id: 's1',
                 relation_type: rel,
             });
@@ -930,7 +902,7 @@ describe('CreateIssueLinkSchema relation_type', () => {
     it('rejects unknown relation_type values', () => {
         expect(
             CreateIssueLinkSchema.safeParse({
-                to_type: 'story',
+                to_type: 'sub_task',
                 to_id: 's1',
                 relation_type: 'mentions',
             }).success,

@@ -25,8 +25,6 @@ function Bold({ children }: { children: React.ReactNode }) {
     );
 }
 
-const NBSP = ' ';
-
 export function KpiStrip({
     awaitingCount,
     projectCount,
@@ -34,10 +32,9 @@ export function KpiStrip({
     costSummary30d,
     terminalCostSummary30d,
 }: IKpiStripProps) {
-    const dev = stats?.['software-dev'] ?? { queued: 0, running: 0 };
-    const mkt = stats?.['marketing'] ?? { queued: 0, running: 0 };
-    const ct = stats?.['content'] ?? { queued: 0, running: 0 };
-    const dsg = stats?.['design'] ?? { queued: 0, running: 0 };
+    const devRunning = stats?.['software-dev']?.running ?? 0;
+    const mktRunning = stats?.['marketing']?.running ?? 0;
+    const cdRunning = (stats?.['content']?.running ?? 0) + (stats?.['design']?.running ?? 0);
 
     // Per-category accent rules — Mercury collapsed brand hues, so we draw
     // from the retained polychrome LABEL_COLORS palette for category cues.
@@ -47,26 +44,11 @@ export function KpiStrip({
     const cdColor = useLabelColor('indigo');
     const costColor = useLabelColor('sky');
 
-    const contentDesign = {
-        queued: ct.queued + dsg.queued,
-        running: ct.running + dsg.running,
-    };
-
     const projectsWord = projectCount === 1 ? 'project' : 'projects';
 
-    const queuedRunningValue = (q: number, r: number) => (
-        <>
-            {q}
-            {NBSP}/{NBSP}
-            {r}
-        </>
-    );
-
-    const queuedRunningCaption = (q: number, r: number) => (
-        <>
-            <Bold>{q}</Bold> queued · <Bold>{r}</Bold> running
-        </>
-    );
+    // Agents have no queue of their own — Tasks queue for workflows (the
+    // Queue page) — so an agent tile reports only its live runs.
+    const runningCaption = (r: number) => `live run${r === 1 ? '' : 's'} now`;
 
     return (
         <Box
@@ -93,20 +75,20 @@ export function KpiStrip({
             <KpiTile
                 label="Software dev agents"
                 dotColor={devColor.border}
-                value={queuedRunningValue(dev.queued, dev.running)}
-                caption={queuedRunningCaption(dev.queued, dev.running)}
+                value={devRunning}
+                caption={runningCaption(devRunning)}
             />
             <KpiTile
                 label="Marketing agents"
                 dotColor={mktColor.border}
-                value={queuedRunningValue(mkt.queued, mkt.running)}
-                caption={queuedRunningCaption(mkt.queued, mkt.running)}
+                value={mktRunning}
+                caption={runningCaption(mktRunning)}
             />
             <KpiTile
                 label="Content + Design agents"
                 dotColor={cdColor.border}
-                value={queuedRunningValue(contentDesign.queued, contentDesign.running)}
-                caption={queuedRunningCaption(contentDesign.queued, contentDesign.running)}
+                value={cdRunning}
+                caption={runningCaption(cdRunning)}
             />
             <KpiTile
                 label={`AI Cost (${new Date().toLocaleString('default', { month: 'long' })})`}

@@ -166,7 +166,7 @@ export async function runRoutes(app: FastifyInstance) {
         }
 
         const enriched = { ...row, output_text: sliced };
-        return reply.send(asAgentRun(enriched as never, (row.item_type as IssueType) ?? 'story'));
+        return reply.send(asAgentRun(enriched as never, (row.item_type as IssueType) ?? 'task'));
     });
 
     // P9 — Delete-a-run + item unstick. When a run is left hung (CLI
@@ -385,15 +385,15 @@ export async function runRoutes(app: FastifyInstance) {
         if (agent_id) q = q.where('r.agent_id', '=', agent_id);
         if (issue_type) q = q.where('i.type', '=', issue_type as IssueType);
         // Filter by project via the existing items join — picks up runs
-        // against any item in the project regardless of level (epic /
-        // story / bug / sub-task / sub-bug), so the Project History tab
+        // against any item in the project regardless of level (task /
+        // sub-task), so the Project History tab
         // sees the full chronology without the client having to enumerate
         // every child id.
         if (project_id) q = q.where('i.project_id', '=', project_id);
         const rows = await q.orderBy('r.created_at', 'desc').limit(n).execute();
         /* v8 ignore next */
         return reply.send(
-            rows.map((r) => asAgentRun(r as never, (r.item_type as IssueType) ?? 'story'))
+            rows.map((r) => asAgentRun(r as never, (r.item_type as IssueType) ?? 'task'))
         );
     });
 

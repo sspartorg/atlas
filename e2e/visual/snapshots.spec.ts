@@ -22,9 +22,9 @@ import { goto } from '../helpers/nav.js';
 // regression beyond the maxDiffPixelRatio / threshold in
 // playwright.config.ts.
 //
-// Detail-route IDs: ETM-1 is the seeded epic in `e2e-terminal-project`
-// (see `e2e/fixtures/run-seed.ts`). No story / sub-task / bug / sub-bug
-// is seeded, so detail snapshots that need those skip rather than create
+// Detail-route IDs: ETM-1 is the seeded Task in `e2e-terminal-project` and
+// ETM-2 its seeded sub-task (see `e2e/fixtures/run-seed.ts`). Detail
+// snapshots use only seeded items rather than create
 // transient data (created-then-deleted items would invalidate the
 // baseline on every run as IDs shift).
 //
@@ -34,8 +34,8 @@ import { goto } from '../helpers/nav.js';
 const TOP_LEVEL_ROUTES = [
     '/',
     '/projects',
-    '/epics',
-    '/issues',
+    '/tasks',
+    '/workflows',
     '/agents',
     '/agents/marketplace',
     '/agents/mcp-tools',
@@ -54,11 +54,12 @@ const TOP_LEVEL_ROUTES = [
 
 const DETAIL_ROUTES = [
     '/projects/e2e-terminal-project',
-    '/projects/e2e-terminal-project?tab=epics',
+    '/projects/e2e-terminal-project?tab=tasks',
     '/projects/e2e-terminal-project?tab=guardrails',
-    '/epics/ETM-1',
+    '/tasks/ETM-1',
+    '/sub-tasks/ETM-2',
     '/analytics/project/e2e-terminal-project',
-    '/analytics/epic/ETM-1',
+    '/analytics/task/ETM-1',
 ];
 
 const THEMES = ['light', 'dark'] as const;

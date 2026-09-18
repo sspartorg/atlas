@@ -7,7 +7,7 @@ import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import * as apiModule from '../api/api.js';
 import { Projects } from './Projects.js';
 import { Toast } from '../components/Toast.js';
-import { makeProject, makeAgent, makeEpicListItem, makeStory } from '../test-utils/factories.js';
+import { makeProject, makeAgent, makeTaskListItem } from '../test-utils/factories.js';
 
 // Mutable flag so individual tests can force the mobile card-view fallback
 // branch (`view === 'cards' || isMobileLayout`) independently of `view`.
@@ -30,8 +30,8 @@ function baseHandlers(projects = [makeProject()]) {
         ),
         http.get(`${BASE}/projects`, () => HttpResponse.json(projects)),
         http.get(`${BASE}/agents`, () => HttpResponse.json([makeAgent()])),
-        http.get(`${BASE}/epics`, () =>
-            HttpResponse.json([makeEpicListItem({ project_id: 'p1' })]),
+        http.get(`${BASE}/tasks`, () =>
+            HttpResponse.json([makeTaskListItem({ project_id: 'p1' })]),
         ),
         ...defaultHandlers,
     ];
@@ -289,16 +289,16 @@ describe('Projects page', () => {
         }
     });
 
-    it('renders with epics assigned to agents (exercises categoriesByProject useMemo)', async () => {
+    it('renders with tasks assigned to agents (exercises categoriesByProject useMemo)', async () => {
         const agent = makeAgent({ id: 'a1', category: 'software-dev' });
-        const epic = makeEpicListItem({ project_id: 'p1', assignee_agent_id: 'a1' });
+        const task = makeTaskListItem({ project_id: 'p1', assignee_agent_id: 'a1' });
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
                 HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 }),
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([agent])),
-            http.get(`${BASE}/epics`, () => HttpResponse.json([epic])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([task])),
             ...defaultHandlers,
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
@@ -328,22 +328,22 @@ describe('Projects page', () => {
         await waitFor(() => {}, { timeout: 500 });
     });
 
-    it('exercises storyCountByProject useMemo with real stories', async () => {
-        const story = makeStory({ epic_id: 'epic-1' });
-        const epicItem = makeEpicListItem({ id: 'epic-1', project_id: 'p1' });
+    it('sums sub_task_count across tasks for the sub-task totals', async () => {
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
                 HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 }),
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
-            http.get(`${BASE}/epics`, () => HttpResponse.json([epicItem])),
-            http.get(`${BASE}/stories`, () => HttpResponse.json([story])),
+            http.get(`${BASE}/tasks`, () =>
+                HttpResponse.json([
+                    makeTaskListItem({ id: 't1', project_id: 'p1', sub_task_count: 2 }),
+                    makeTaskListItem({ id: 't2', project_id: 'p1', sub_task_count: 1 }),
+                ]),
+            ),
             ...defaultHandlers,
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        // The card renders story count — if this doesn't throw, the useMemo ran
-        expect(screen.getByText('Atlas')).toBeInTheDocument();
+        expect(await screen.findByText(/2 tasks · 3 sub-tasks/)).toBeInTheDocument();
     });
 
     it('exercises the rows-per-page change (setLimit + setPage)', async () => {
@@ -507,19 +507,19 @@ describe('Projects page', () => {
     }, 30000);
 
     it('shows empty-filter message in card view when no projects match the filter', async () => {
-        // Project has no epics so categoriesByProject is empty → software-dev filter yields 0 projects
+        // Project has no tasks so categoriesByProject is empty → software-dev filter yields 0 projects
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
                 HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 }),
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-            http.get(`${BASE}/epics`, () => HttpResponse.json([])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             ...defaultHandlers,
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('Atlas');
-        // Click "Software dev queue" chip — project has no matching epics so filteredProjects is empty
+        // Click "Software dev queue" chip — project has no matching tasks so filteredProjects is empty
         fireEvent.click(screen.getByText('Software dev queue'));
         await waitFor(() =>
             expect(screen.getByText(/no projects match this filter/i)).toBeInTheDocument(),
@@ -573,7 +573,7 @@ describe('Projects page', () => {
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([p1])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([makeAgent()])),
-            http.get(`${BASE}/epics`, () => HttpResponse.json([])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             ...defaultHandlers,
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
@@ -613,18 +613,18 @@ describe('Projects page', () => {
     }, 30000);
 
     it('renders filter chips correctly for categoriesByProject matches and non-matches', async () => {
-        // Two projects: p1 has software-dev epic, p2 has no epics
+        // Two projects: p1 has software-dev task, p2 has no tasks
         const p1 = makeProject({ id: 'p1', name: 'SW Project' });
         const p2 = makeProject({ id: 'p2', name: 'Empty Project' });
         const agent = makeAgent({ id: 'a1', category: 'software-dev' });
-        const epic = makeEpicListItem({ project_id: 'p1', assignee_agent_id: 'a1' });
+        const task = makeTaskListItem({ project_id: 'p1', assignee_agent_id: 'a1' });
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
                 HttpResponse.json({ rows: [p1, p2], total: 2, page: 1, limit: 20 }),
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([p1, p2])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([agent])),
-            http.get(`${BASE}/epics`, () => HttpResponse.json([epic])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([task])),
             ...defaultHandlers,
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
@@ -653,7 +653,7 @@ describe('Projects page', () => {
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([p])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-            http.get(`${BASE}/epics`, () => HttpResponse.json([])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             ...defaultHandlers,
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
@@ -723,36 +723,17 @@ describe('Projects page', () => {
 
     // ── NEW COVERAGE TESTS ──────────────────────────────────────────────────
 
-    it('L108: agentCategoryById miss — epic assignee_agent_id not in agents list', async () => {
-        // Epic has assignee_agent_id 'unknown-agent' which is not in the agents array.
+    it('L108: agentCategoryById miss — task assignee_agent_id not in agents list', async () => {
+        // Task has assignee_agent_id 'unknown-agent' which is not in the agents array.
         // This exercises the `if (!category) return` branch at L108.
-        const epic = makeEpicListItem({ project_id: 'p1', assignee_agent_id: 'unknown-agent' });
+        const task = makeTaskListItem({ project_id: 'p1', assignee_agent_id: 'unknown-agent' });
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
                 HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 }),
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])), // no agents → category lookup misses
-            http.get(`${BASE}/epics`, () => HttpResponse.json([epic])),
-            ...defaultHandlers,
-        );
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        expect(screen.getByText('Atlas')).toBeInTheDocument();
-    });
-
-    it('L130: storyCountByProject — story with orphaned epic_id exercises the `if (!projectId) return` branch', async () => {
-        // Story has epic_id 'no-such-epic' which is not in any epic's id list.
-        // This hits the `if (!projectId) return` guard at L130.
-        const orphanStory = makeStory({ epic_id: 'no-such-epic' });
-        server.use(
-            http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 }),
-            ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([makeAgent()])),
-            http.get(`${BASE}/epics`, () => HttpResponse.json([])),
-            http.get(`${BASE}/stories`, () => HttpResponse.json([orphanStory])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([task])),
             ...defaultHandlers,
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
@@ -771,7 +752,7 @@ describe('Projects page', () => {
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([noUrl])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-            http.get(`${BASE}/epics`, () => HttpResponse.json([])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             ...defaultHandlers,
         );
         Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
@@ -828,7 +809,7 @@ describe('Projects page', () => {
             // full list used for projectById also returns p99 initially
             http.get(`${BASE}/projects`, () => HttpResponse.json([tableProject])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-            http.get(`${BASE}/epics`, () => HttpResponse.json([])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             ...defaultHandlers,
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
@@ -946,7 +927,7 @@ describe('Projects page', () => {
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([p])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-            http.get(`${BASE}/epics`, () => HttpResponse.json([])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             ...defaultHandlers,
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
@@ -984,7 +965,7 @@ describe('Projects page', () => {
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-            http.get(`${BASE}/epics`, () => HttpResponse.json([])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             ...defaultHandlers,
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
@@ -1059,7 +1040,7 @@ describe('Projects page', () => {
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([rawProject])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-            http.get(`${BASE}/epics`, () => HttpResponse.json([])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             ...defaultHandlers,
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
@@ -1113,7 +1094,7 @@ describe('Projects page', () => {
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([rawProject])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-            http.get(`${BASE}/epics`, () => HttpResponse.json([])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             ...defaultHandlers,
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });

@@ -17,7 +17,6 @@ import { ATLAS_PALETTE } from '../../theme/tokens.js';
 interface ReadyItem {
     id: string;
     title: string;
-    kind: string;
     queued: boolean;
 }
 
@@ -31,14 +30,9 @@ export function RunWorkflowDialog({ workflow, onClose }: { workflow: IWorkflow; 
     // would pick up on its own.
     const items = useMemo<ReadyItem[]>(() => {
         if (!tree) return [];
-        const rows = [
-            ...tree.epics.map((e) => ({ ...e, kind: 'Epic' })),
-            ...tree.stories.map((s) => ({ ...s, kind: 'Story' })),
-            ...tree.bugs.map((b) => ({ ...b, kind: 'Bug' })),
-        ];
-        return rows
+        return tree.tasks
             .filter((r) => r.status === 'ready')
-            .map((r) => ({ id: r.id, title: r.title, kind: r.kind, queued: r.workflow_id === workflow.id }))
+            .map((r) => ({ id: r.id, title: r.title, queued: r.workflow_id === workflow.id }))
             .sort((a, b) => Number(b.queued) - Number(a.queued));
     }, [tree, workflow.id]);
 
@@ -54,7 +48,7 @@ export function RunWorkflowDialog({ workflow, onClose }: { workflow: IWorkflow; 
             <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: '8px !important' }}>
                 <TextField
                     select
-                    label="Ready item"
+                    label="Ready task"
                     value={itemId}
                     onChange={(e) => setItemId(e.target.value)}
                     disabled={isLoading}
@@ -62,14 +56,14 @@ export function RunWorkflowDialog({ workflow, onClose }: { workflow: IWorkflow; 
                 >
                     {items.map((i) => (
                         <MenuItem key={i.id} value={i.id}>
-                            {i.kind} · {i.id} — {i.title}
+                            {i.id} — {i.title}
                             {i.queued ? ' (queued here)' : ''}
                         </MenuItem>
                     ))}
                 </TextField>
                 {!isLoading && items.length === 0 && (
                     <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                        No ready items in this project. Move an item to Ready to run it here.
+                        No ready tasks in this project. Move a task to Ready to run it here.
                     </Typography>
                 )}
                 {start.error && <Alert severity="error">{start.error.message}</Alert>}

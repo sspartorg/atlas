@@ -7,8 +7,8 @@ import { insertProject, insertItem } from '../../tests/_items.js';
 beforeEach(async () => {
     await truncateAll();
     await insertProject('p1', 'ATL');
-    await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Upstream' });
-    await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Downstream' });
+    await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Upstream' });
+    await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Downstream' });
 });
 
 afterAll(async () => {
@@ -194,7 +194,7 @@ describe('itemLinks.list — outgoing + incoming combined view', () => {
     });
 
     it('returns both outgoing and incoming links when item is in the middle', async () => {
-        await insertItem({ id: 'ATL-3', type: 'epic', project_id: 'p1', title: 'Third' });
+        await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'Third' });
         await itemLinks.create('ATL-2', 'ATL-1', 'depends_on'); // ATL-2 depends on ATL-1
         await itemLinks.create('ATL-3', 'ATL-2', 'depends_on'); // ATL-3 depends on ATL-2
 

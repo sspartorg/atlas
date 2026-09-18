@@ -1,14 +1,11 @@
 import type {
     IAgent,
-    IBug,
     IComment,
-    IEpic,
-    IEpicListItem,
     INotification,
     IProject,
-    IStory,
-    ISubBug,
     ISubTask,
+    ITask,
+    ITaskListItem,
 } from '@atlas/shared';
 
 // Hand-rolled factories with deterministic defaults. Mirrors the api-side
@@ -68,43 +65,20 @@ export function makeAgent(overrides: Partial<IAgent> = {}): IAgent {
     };
 }
 
-export function makeEpic(overrides: Partial<IEpic> = {}): IEpic {
+export function makeTask(overrides: Partial<ITask> = {}): ITask {
     return {
         id: 'ATL-1',
         project_id: 'p1',
-        title: 'Epic One',
+        title: 'Task One',
         description: '',
         status: 'draft',
         assignee_agent_id: null,
         workflow_id: null,
         reporter_agent_id: null,
         priority: 'normal',
-        labels: [],
-        created_at: ISO,
-        updated_at: ISO,
-        ...overrides,
-    };
-}
-
-export function makeEpicListItem(overrides: Partial<IEpicListItem> = {}): IEpicListItem {
-    return { ...makeEpic(), story_count: 0, ...overrides };
-}
-
-export function makeStory(overrides: Partial<IStory> = {}): IStory {
-    return {
-        id: 'ATL-2',
-        epic_id: 'ATL-1',
-        title: 'Story One',
-        description: '',
-        status: 'draft',
-        assignee_agent_id: null,
-        workflow_id: null,
-        reporter_agent_id: null,
-        priority: 'normal',
+        acceptance_criteria: '',
         spec_md: null,
         pr_url: null,
-        points: 0,
-        acceptance_criteria: '',
         labels: [],
         worktree_branch: null,
         worktree_path: null,
@@ -112,82 +86,25 @@ export function makeStory(overrides: Partial<IStory> = {}): IStory {
         updated_at: ISO,
         ...overrides,
     };
+}
+
+export function makeTaskListItem(overrides: Partial<ITaskListItem> = {}): ITaskListItem {
+    return { ...makeTask(), sub_task_count: 0, ...overrides };
 }
 
 export function makeSubTask(overrides: Partial<ISubTask> = {}): ISubTask {
     return {
         id: 'ATL-3',
-        story_id: 'ATL-2',
+        task_id: 'ATL-1',
         title: 'Sub-task One',
         description: '',
         status: 'draft',
         assignee_agent_id: null,
-        workflow_id: null,
         reporter_agent_id: null,
         priority: 'normal',
         acceptance_criteria: '',
         labels: [],
         started_at: null,
-        worktree_branch: null,
-        worktree_path: null,
-        created_at: ISO,
-        updated_at: ISO,
-        ...overrides,
-    };
-}
-
-export function makeSubBug(overrides: Partial<ISubBug> = {}): ISubBug {
-    return {
-        id: 'ATL-4',
-        story_id: 'ATL-2',
-        title: 'Sub-bug One',
-        description: '',
-        status: 'draft',
-        assignee_agent_id: null,
-        workflow_id: null,
-        reporter_agent_id: null,
-        priority: 'normal',
-        acceptance_criteria: '',
-        labels: [],
-        steps_to_reproduce: '',
-        expected: '',
-        actual: '',
-        frequency: 'sometimes',
-        failure_scope: 'cosmetic',
-        detected_at: null,
-        occurrence_count: 1,
-        occurrence_total: 1,
-        worktree_branch: null,
-        worktree_path: null,
-        created_at: ISO,
-        updated_at: ISO,
-        ...overrides,
-    };
-}
-
-export function makeBug(overrides: Partial<IBug> = {}): IBug {
-    return {
-        id: 'ATL-5',
-        epic_id: 'ATL-1',
-        title: 'Bug One',
-        description: '',
-        status: 'draft',
-        assignee_agent_id: null,
-        workflow_id: null,
-        reporter_agent_id: null,
-        priority: 'normal',
-        acceptance_criteria: '',
-        labels: [],
-        steps_to_reproduce: '',
-        expected: '',
-        actual: '',
-        frequency: 'sometimes',
-        failure_scope: 'cosmetic',
-        detected_at: null,
-        occurrence_count: 1,
-        occurrence_total: 1,
-        worktree_branch: null,
-        worktree_path: null,
         created_at: ISO,
         updated_at: ISO,
         ...overrides,
@@ -199,8 +116,8 @@ export function makeComment(overrides: Partial<IComment> = {}): IComment {
         id: 1,
         author: 'owner',
         agent_id: null,
-        issue_type: 'story',
-        issue_id: 'ATL-2',
+        issue_type: 'task',
+        issue_id: 'ATL-1',
         body: 'looks good',
         edited_at: null,
         created_at: ISO,
@@ -212,9 +129,9 @@ export function makeNotification(overrides: Partial<INotification> = {}): INotif
     return {
         id: 1,
         event_type: 'item.status_changed:in_review',
-        message: 'Story ATL-2 moved to In Review',
-        issue_type: 'story',
-        issue_id: 'ATL-2',
+        message: 'Task ATL-1 moved to In Review',
+        issue_type: 'task',
+        issue_id: 'ATL-1',
         project_id: 'p1',
         sent_external: 0,
         kind: 'needs_you',

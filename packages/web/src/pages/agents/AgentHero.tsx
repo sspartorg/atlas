@@ -11,11 +11,11 @@ import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { AgentCardMenu, type AgentCardMenuActions } from './AgentCardMenu.js';
 import { LiveDot } from '../../components/LiveDot.js';
 import { CliUnavailableAlert } from '../../components/CliUnavailableAlert.js';
-import { resolveAgentStatusLabel } from '../queue/queueViewModel.js';
 import {
     agentStatusColor,
     agentSubtitle,
     relativeTime,
+    resolveAgentStatusLabel,
     type AgentView,
     type AgentRuntimeStats,
 } from './agentViewModel.js';

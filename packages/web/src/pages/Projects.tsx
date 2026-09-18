@@ -13,8 +13,7 @@ import InputLabel from '@mui/material/InputLabel';
 import AddRounded from '@mui/icons-material/AddRounded';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { useProjects, useProjectsPaged } from '../hooks/useProjects.js';
-import { useEpics } from '../hooks/useEpics.js';
-import { useStories } from '../hooks/useStories.js';
+import { useTasks } from '../hooks/useTasks.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useToast } from '../hooks/useToast.js';
@@ -64,8 +63,7 @@ export function Projects() {
     // know whether ANY project exists across pages, not just the visible one.
     const { data: allProjectsForEmpty = [] } = useProjects();
 
-    const { data: allEpics = [] } = useEpics();
-    const { data: allStories = [] } = useStories();
+    const { data: allTasks = [] } = useTasks();
     const { data: agents = [] } = useAgents();
     const { data: settings } = useSettings();
 
@@ -91,47 +89,44 @@ export function Projects() {
         return map;
     }, [sortedProjects]);
 
-    // Map agent.id → agent.category for joining via epics.
+    // Map agent.id → agent.category for joining via tasks.
     const agentCategoryById = useMemo(() => {
         const map = new Map<string, AgentCategory>();
         agents.forEach((w) => map.set(w.id, w.category));
         return map;
     }, [agents]);
 
-    // For each project, collect the set of agent categories that have epic assignments.
+    // For each project, collect the set of agent categories that have task assignments.
     // Best-effort: project owner relationship lands later; this proxies "queue" by category.
     const categoriesByProject = useMemo(() => {
         const map = new Map<string, Set<AgentCategory>>();
-        allEpics.forEach((epic) => {
-            if (!epic.assignee_agent_id) return;
-            const category = agentCategoryById.get(epic.assignee_agent_id);
+        allTasks.forEach((task) => {
+            if (!task.assignee_agent_id) return;
+            const category = agentCategoryById.get(task.assignee_agent_id);
             if (!category) return;
-            let set = map.get(epic.project_id);
+            let set = map.get(task.project_id);
             if (!set) {
                 set = new Set();
-                map.set(epic.project_id, set);
+                map.set(task.project_id, set);
             }
             set.add(category);
         });
         return map;
-    }, [allEpics, agentCategoryById]);
+    }, [allTasks, agentCategoryById]);
 
-    const epicCountByProject = useMemo(() => {
+    const taskCountByProject = useMemo(() => {
         const map = new Map<string, number>();
-        allEpics.forEach((e) => map.set(e.project_id, (map.get(e.project_id) ?? 0) + 1));
+        allTasks.forEach((t) => map.set(t.project_id, (map.get(t.project_id) ?? 0) + 1));
         return map;
-    }, [allEpics]);
+    }, [allTasks]);
 
-    const storyCountByProject = useMemo(() => {
-        const epicToProject = new Map(allEpics.map((e) => [e.id, e.project_id]));
+    const subTaskCountByProject = useMemo(() => {
         const map = new Map<string, number>();
-        allStories.forEach((s) => {
-            const projectId = epicToProject.get(s.epic_id);
-            if (!projectId) return;
-            map.set(projectId, (map.get(projectId) ?? 0) + 1);
-        });
+        allTasks.forEach((t) =>
+            map.set(t.project_id, (map.get(t.project_id) ?? 0) + t.sub_task_count),
+        );
         return map;
-    }, [allEpics, allStories]);
+    }, [allTasks]);
 
     // Filter logic.
     function matchesFilter(projectId: string): boolean {
@@ -160,8 +155,8 @@ export function Projects() {
         };
     }, [sortedProjects, categoriesByProject]);
 
-    const totalEpics = allEpics.length;
-    const totalStories = allStories.length;
+    const totalTasks = allTasks.length;
+    const totalSubTasks = allTasks.reduce((n, t) => n + t.sub_task_count, 0);
 
     // All hooks must be called above any conditional early return — React keys
     // hook state by call order, so a useMemo introduced after `if (isPending) return`
@@ -183,12 +178,12 @@ export function Projects() {
                 gitPath: p.git_url
                     ? p.git_url.replace(/^https?:\/\//, '').replace(/\.git\/?$/, '')
                     : '',
-                epics: epicCountByProject.get(p.id) ?? 0,
-                stories: storyCountByProject.get(p.id) ?? 0,
+                tasks: taskCountByProject.get(p.id) ?? 0,
+                subTasks: subTaskCountByProject.get(p.id) ?? 0,
                 lastActivity: relativeTime(p.updated_at),
                 updatedAt: p.updated_at,
             })),
-        [filteredProjects, displayIdById, epicCountByProject, storyCountByProject],
+        [filteredProjects, displayIdById, taskCountByProject, subTaskCountByProject],
     );
 
     // Loading: don't fall through to the empty state while data is undefined.
@@ -308,8 +303,8 @@ export function Projects() {
                                 }}
                             >
                                 {totalProjects} {totalProjects === 1 ? 'project' : 'projects'} ·{' '}
-                                {totalEpics} {totalEpics === 1 ? 'epic' : 'epics'} ·{' '}
-                                {totalStories} {totalStories === 1 ? 'story' : 'stories'}
+                                {totalTasks} {totalTasks === 1 ? 'task' : 'tasks'} ·{' '}
+                                {totalSubTasks} {totalSubTasks === 1 ? 'sub-task' : 'sub-tasks'}
                             </Typography>
                         </Box>
                         <Box
@@ -374,8 +369,8 @@ export function Projects() {
                                             <ProjectCard
                                                 project={p}
                                                 displayId={displayIdById.get(p.id) ?? ''}
-                                                epicCount={epicCountByProject.get(p.id) ?? 0}
-                                                storyCount={storyCountByProject.get(p.id) ?? 0}
+                                                taskCount={taskCountByProject.get(p.id) ?? 0}
+                                                subTaskCount={subTaskCountByProject.get(p.id) ?? 0}
                                                 scheduleInfo={scheduleMap.get(p.id)}
                                                 onOpen={() => void handleOpen(p)}
                                                 onCopyUrl={() => void handleCopyUrl(p)}

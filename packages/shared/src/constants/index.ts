@@ -24,13 +24,11 @@ export const ISSUE_STATUSES: IssueStatus[] = [
 // Sub-tasks share the unified set; this alias is kept for back-compat.
 export const SUB_TASK_STATUSES: SubTaskStatus[] = ISSUE_STATUSES;
 
-export const ISSUE_TYPES: IssueType[] = ['epic', 'story', 'sub_task', 'sub_bug', 'bug'];
+export const ISSUE_TYPES: IssueType[] = ['task', 'sub_task'];
 
-// Top-level issue types that a agent run can target. Sub-tasks and sub-bugs
-// are always driven through their parent story, never run directly.
-export const RUNNABLE_ISSUE_TYPES: IssueType[] = ISSUE_TYPES.filter(
-    (t) => t !== 'sub_task' && t !== 'sub_bug'
-);
+// Issue types an agent run can target. A sub-task runs inside its Task's
+// workflow run (ADR 0015), so both kinds are runnable.
+export const RUNNABLE_ISSUE_TYPES: IssueType[] = ISSUE_TYPES;
 
 export const AGENT_CATEGORIES: AgentCategory[] = [
     'software-dev',

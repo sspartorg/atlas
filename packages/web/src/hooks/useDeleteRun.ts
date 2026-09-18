@@ -12,7 +12,7 @@ import { api } from '../api/api.js';
 //   ['projects', ?, 'agent-runs']        — Project History tab
 //   ['runs']                             — any future global run view
 //   ['agents']                           — sidenav counts / activity
-//   ['epics' / 'stories' / 'bugs' …]     — broad invalidate, the
+//   ['tasks' / 'sub-tasks']              — broad invalidate, the
 //      affected item is unknown to the caller (DELETE returns 204)
 //      so we pull on every item kind. Cheap — TanStack only refetches
 //      mounted queries.
@@ -25,11 +25,8 @@ export function useDeleteRun(agentId: string) {
             void qc.invalidateQueries({ queryKey: ['runs'] });
             void qc.invalidateQueries({ queryKey: ['agents'] });
             void qc.invalidateQueries({ queryKey: ['projects'] });
-            void qc.invalidateQueries({ queryKey: ['epics'] });
-            void qc.invalidateQueries({ queryKey: ['stories'] });
-            void qc.invalidateQueries({ queryKey: ['bugs'] });
+            void qc.invalidateQueries({ queryKey: ['tasks'] });
             void qc.invalidateQueries({ queryKey: ['sub-tasks'] });
-            void qc.invalidateQueries({ queryKey: ['sub-bugs'] });
             // Follow-up audit: the run-detail query (['agent-run', runId])
             // and any item-scoped agent-runs list (['items', itemId,
             // 'agent-runs']) previously kept the deleted row in the cache

@@ -1,6 +1,6 @@
 // P16 — Shared error handler for status PATCH calls.
 //
-// Per-kind hooks (`useTransitionStory`, `useTransitionEpic`, etc.) all hit
+// Per-kind status calls (`useTransitionTask`, sub-task transitions) hit
 // `/api/<kind>/:id/status`, which can now return HTTP 422 with
 // `{ kind: 'conflict', details: { parent_id, open_children } }` when the
 // caller tries to close a parent that still has open children
@@ -44,6 +44,16 @@ function isClosureBlocked(err: unknown): err is AtlasApiError {
         err.details !== null &&
         Array.isArray((err.details as ClosureBlockedDetails).open_children)
     );
+}
+
+/**
+ * How many children block a parent close only because they are in review
+ * (0 when any blocker is still open, or the error is something else).
+ */
+export function reviewedChildrenBlocking(err: unknown): number {
+    if (!isClosureBlocked(err)) return 0;
+    const open = (err.details as ClosureBlockedDetails).open_children ?? [];
+    return open.length > 0 && open.every((c) => c.status === 'in_review') ? open.length : 0;
 }
 
 /**

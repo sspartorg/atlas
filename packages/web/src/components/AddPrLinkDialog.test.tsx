@@ -13,7 +13,7 @@ describe('AddPrLinkDialog', () => {
             <AddPrLinkDialog
                 open={false}
                 onClose={vi.fn()}
-                issueType="story"
+                issueType="task"
                 issueId="S1"
             />,
         );
@@ -26,7 +26,7 @@ describe('AddPrLinkDialog', () => {
             <AddPrLinkDialog
                 open
                 onClose={vi.fn()}
-                issueType="story"
+                issueType="task"
                 issueId="S1"
             />,
         );
@@ -39,7 +39,7 @@ describe('AddPrLinkDialog', () => {
         const calls: string[] = [];
         server.use(
             ...defaultHandlers,
-            http.post('http://localhost:3000/api/issues/story/S1/external-links', () => {
+            http.post('http://localhost:3000/api/issues/task/S1/external-links', () => {
                 calls.push('hit');
                 return HttpResponse.json({ id: 1 });
             }),
@@ -48,7 +48,7 @@ describe('AddPrLinkDialog', () => {
             <AddPrLinkDialog
                 open
                 onClose={vi.fn()}
-                issueType="story"
+                issueType="task"
                 issueId="S1"
             />,
         );
@@ -64,7 +64,7 @@ describe('AddPrLinkDialog', () => {
         let body: { url?: string; link_kind?: string } = {};
         server.use(
             ...defaultHandlers,
-            http.post('http://localhost:3000/api/issues/story/S1/external-links', async ({ request }) => {
+            http.post('http://localhost:3000/api/issues/task/S1/external-links', async ({ request }) => {
                 body = (await request.json()) as typeof body;
                 return HttpResponse.json({
                     id: 7,
@@ -79,7 +79,7 @@ describe('AddPrLinkDialog', () => {
             }),
         );
         renderWithProviders(
-            <AddPrLinkDialog open onClose={onClose} issueType="story" issueId="S1" />,
+            <AddPrLinkDialog open onClose={onClose} issueType="task" issueId="S1" />,
         );
         fireEvent.change(screen.getByLabelText('GitHub PR URL'), {
             target: { value: 'https://github.com/foo/bar/pull/42' },
@@ -94,7 +94,7 @@ describe('AddPrLinkDialog', () => {
         const onClose = vi.fn();
         server.use(
             ...defaultHandlers,
-            http.post('http://localhost:3000/api/issues/story/S1/external-links', () =>
+            http.post('http://localhost:3000/api/issues/task/S1/external-links', () =>
                 HttpResponse.json({
                     id: 9,
                     item_id: 'S1',
@@ -108,7 +108,7 @@ describe('AddPrLinkDialog', () => {
             ),
         );
         renderWithProviders(
-            <AddPrLinkDialog open onClose={onClose} issueType="story" issueId="S1" />,
+            <AddPrLinkDialog open onClose={onClose} issueType="task" issueId="S1" />,
         );
         const input = screen.getByLabelText('GitHub PR URL');
         fireEvent.change(input, { target: { value: 'https://github.com/foo/bar/pull/9' } });
@@ -121,13 +121,13 @@ describe('AddPrLinkDialog', () => {
         const calls: string[] = [];
         server.use(
             ...defaultHandlers,
-            http.post('http://localhost:3000/api/issues/story/S1/external-links', () => {
+            http.post('http://localhost:3000/api/issues/task/S1/external-links', () => {
                 calls.push('hit');
                 return HttpResponse.json({});
             }),
         );
         renderWithProviders(
-            <AddPrLinkDialog open onClose={onClose} issueType="story" issueId="S1" />,
+            <AddPrLinkDialog open onClose={onClose} issueType="task" issueId="S1" />,
         );
         fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));
         expect(onClose).toHaveBeenCalled();
@@ -137,7 +137,7 @@ describe('AddPrLinkDialog', () => {
     it('error is cleared when the URL input changes after a validation error', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
-            <AddPrLinkDialog open onClose={vi.fn()} issueType="story" issueId="S1" />,
+            <AddPrLinkDialog open onClose={vi.fn()} issueType="task" issueId="S1" />,
         );
         const input = screen.getByLabelText('GitHub PR URL');
         // Trigger a validation error first
@@ -153,12 +153,12 @@ describe('AddPrLinkDialog', () => {
     it('API error from the server is shown inline', async () => {
         server.use(
             ...defaultHandlers,
-            http.post('http://localhost:3000/api/issues/story/S1/external-links', () =>
+            http.post('http://localhost:3000/api/issues/task/S1/external-links', () =>
                 HttpResponse.json({ message: 'Duplicate PR link' }, { status: 422 }),
             ),
         );
         renderWithProviders(
-            <AddPrLinkDialog open onClose={vi.fn()} issueType="story" issueId="S1" />,
+            <AddPrLinkDialog open onClose={vi.fn()} issueType="task" issueId="S1" />,
         );
         fireEvent.change(screen.getByLabelText('GitHub PR URL'), {
             target: { value: 'https://github.com/foo/bar/pull/42' },
@@ -173,7 +173,7 @@ describe('AddPrLinkDialog', () => {
         const onClose = vi.fn();
         server.use(...defaultHandlers);
         renderWithProviders(
-            <AddPrLinkDialog open onClose={onClose} issueType="story" issueId="S1" />,
+            <AddPrLinkDialog open onClose={onClose} issueType="task" issueId="S1" />,
         );
         fireEvent.click(screen.getByRole('button', { name: /Close add PR link dialog/i }));
         expect(onClose).toHaveBeenCalled();
@@ -185,7 +185,7 @@ describe('AddPrLinkDialog', () => {
         const requestStarted = new Promise<void>((r) => { resolveRequest = r; });
         server.use(
             ...defaultHandlers,
-            http.post('http://localhost:3000/api/issues/story/S1/external-links', async () => {
+            http.post('http://localhost:3000/api/issues/task/S1/external-links', async () => {
                 resolveRequest();
                 // Never resolve — keeps isPending=true
                 await new Promise(() => { /* hang */ });
@@ -193,7 +193,7 @@ describe('AddPrLinkDialog', () => {
             }),
         );
         renderWithProviders(
-            <AddPrLinkDialog open onClose={vi.fn()} issueType="story" issueId="S1" />,
+            <AddPrLinkDialog open onClose={vi.fn()} issueType="task" issueId="S1" />,
         );
         fireEvent.change(screen.getByLabelText('GitHub PR URL'), {
             target: { value: 'https://github.com/owner/repo/pull/1' },

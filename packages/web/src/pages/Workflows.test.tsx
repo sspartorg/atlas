@@ -47,7 +47,7 @@ describe('Workflows page', () => {
         const dev = (await screen.findByText('Development')).closest('[role="button"]') as HTMLElement;
         expect(within(dev).getByText('Active')).toBeInTheDocument();
         expect(within(dev).getByText('On item ready')).toBeInTheDocument();
-        expect(within(dev).getByText('Per item')).toBeInTheDocument();
+        expect(within(dev).getByText('Per Task')).toBeInTheDocument();
         await waitFor(() => expect(within(dev).getByText(/Atlas/)).toBeInTheDocument());
         const planning = screen.getByText('Planning').closest('[role="button"]') as HTMLElement;
         expect(within(planning).getByText('Inactive')).toBeInTheDocument();

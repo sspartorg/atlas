@@ -126,4 +126,30 @@ describe('WorkflowBuilder', () => {
         expect(within(errors).getByText('Agent agent-reviewer does not exist')).toBeInTheDocument();
         expect(screen.getByTestId('wf-node-review')).toHaveAttribute('data-invalid', 'true');
     });
+
+    it('offers a Sub-tasks step on Task workflows and points it at a sub-workflow', async () => {
+        const user = userEvent.setup();
+        const wf = makeWorkflow();
+        const build = makeWorkflow({ id: 'wf-build', name: 'Build sub-task', input_kind: 'sub_task', trigger: 'manual' });
+        mount(wf);
+        server.use(http.get(`${BASE}/workflows`, () => HttpResponse.json([wf, build])));
+        await screen.findByTestId('workflow-canvas');
+        await user.click(await screen.findByRole('button', { name: 'Add Sub-tasks' }));
+
+        expect(await screen.findByRole('heading', { name: 'Sub-tasks step' })).toBeInTheDocument();
+        await user.click(screen.getByLabelText('Sub-workflow'));
+        await user.click(await screen.findByRole('option', { name: 'Build sub-task' }));
+        const canvas = screen.getByTestId('workflow-canvas');
+        expect(await within(canvas).findByText('Build sub-task')).toBeInTheDocument();
+        expect(within(canvas).getByText('All other sub-tasks')).toBeInTheDocument();
+    });
+
+    it('hides the Sub-tasks step and the trigger on a sub-task workflow', async () => {
+        mount(makeWorkflow({ input_kind: 'sub_task', trigger: 'manual' }));
+        await screen.findByTestId('workflow-canvas');
+        expect(await screen.findByRole('button', { name: 'Add Owner' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Add Sub-tasks' })).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Trigger')).not.toBeInTheDocument();
+        expect(within(screen.getByTestId('workflow-canvas')).getByText('Back to the Task')).toBeInTheDocument();
+    });
 });

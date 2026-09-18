@@ -46,38 +46,39 @@ describe('writeCurrentTask', () => {
     it('writes .atlas/current-task.md with the expected core sections', async () => {
         await insertItem({
             id: 'ATL-10',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
-            title: 'Cool Epic',
-            description: 'Epic-level description.',
+            title: 'Cool Task',
+            description: 'Task-level description.',
+            spec_md: 'Task spec.',
         });
         await insertItem({
             id: 'ATL-11',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-10',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Implement widget',
             description: 'Widget description.',
         });
 
         await commentsService.create({
             author: 'owner',
-            issue_type: 'story',
+            issue_type: 'sub_task',
             issue_id: 'ATL-11',
             body: 'first owner clarification',
         });
         await commentsService.create({
             author: 'agent',
             agent_id: 'agent-coder',
-            issue_type: 'story',
+            issue_type: 'sub_task',
             issue_id: 'ATL-11',
             body: 'agent ack',
         });
 
         const result = await writeCurrentTask({
             worktreePath,
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-11',
         });
 
@@ -86,11 +87,12 @@ describe('writeCurrentTask', () => {
 
         const body = readFileSync(result.currentTaskPath, 'utf8');
         expect(body).toContain('# Current Task');
-        expect(body).toContain('**Issue type:** story');
+        expect(body).toContain('**Issue type:** sub_task');
         expect(body).toContain('**Issue ID:** ATL-11');
         expect(body).toContain('**Project:** Project p1');
-        expect(body).toContain('**Epic:** Cool Epic');
-        expect(body).toContain('**Epic description:** Epic-level description.');
+        expect(body).toContain('**Task:** Cool Task (ATL-10)');
+        expect(body).toContain('### Task description\nTask-level description.');
+        expect(body).toContain('### Task spec\nTask spec.');
         expect(body).toContain('## Title');
         expect(body).toContain('Implement widget');
         expect(body).toContain('## Description');
@@ -100,27 +102,19 @@ describe('writeCurrentTask', () => {
         expect(body).toContain('agent ack');
     });
 
-    it('renders the Existing Spec section when spec_md is populated', async () => {
-        await insertItem({
-            id: 'ATL-19',
-            type: 'epic',
-            project_id: 'p1',
-            title: 'Parent epic',
-        });
+    it('renders the Existing Spec section when a task has spec_md', async () => {
         await insertItem({
             id: 'ATL-20',
-            type: 'story',
+            type: 'task',
             project_id: 'p1',
-            parent_id: 'ATL-19',
-            parent_type: 'epic',
-            title: 'Spec-bearing story',
+            title: 'Spec-bearing task',
             description: 'Stub description.',
             spec_md: '# Spec\n\nThis is the design doc.',
         });
 
         await writeCurrentTask({
             worktreePath,
-            issueType: 'story',
+            issueType: 'task',
             issueId: 'ATL-20',
         });
 
@@ -135,24 +129,24 @@ describe('writeCurrentTask', () => {
     it('does not crash when the comment thread is empty', async () => {
         await insertItem({
             id: 'ATL-29',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
-            title: 'Parent epic 2',
+            title: 'Parent task 2',
         });
         await insertItem({
             id: 'ATL-30',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-29',
-            parent_type: 'epic',
-            title: 'No-discussion story',
+            parent_type: 'task',
+            title: 'No-discussion sub-task',
             description: 'Just the seed.',
         });
 
         await expect(
             writeCurrentTask({
                 worktreePath,
-                issueType: 'story',
+                issueType: 'sub_task',
                 issueId: 'ATL-30',
             }),
         ).resolves.toBeDefined();
@@ -169,35 +163,35 @@ describe('writeCurrentTask', () => {
     it('renders the Related items section when depends_on / relates_to rows exist', async () => {
         await insertItem({
             id: 'ATL-39',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
-            title: 'Parent epic 3',
+            title: 'Parent task 3',
         });
         await insertItem({
             id: 'ATL-40',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-39',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Upstream dep',
             description: 'I block ATL-41.',
             acceptance_criteria: '- Must do thing',
         });
         await insertItem({
             id: 'ATL-41',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-39',
-            parent_type: 'epic',
-            title: 'The story',
+            parent_type: 'task',
+            title: 'The sub-task',
             description: 'depends on ATL-40',
         });
         await insertItem({
             id: 'ATL-42',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-39',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Sibling note',
             description: 'related but not blocking',
         });
@@ -206,7 +200,7 @@ describe('writeCurrentTask', () => {
 
         await writeCurrentTask({
             worktreePath,
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-41',
         });
 
@@ -230,37 +224,37 @@ describe('writeCurrentTask', () => {
 
         await insertItem({
             id: 'ATL-49',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
-            title: 'Parent epic 4',
+            title: 'Parent task 4',
         });
         await insertItem({
             id: 'ATL-50',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-49',
-            parent_type: 'epic',
-            title: 'Fresh story',
+            parent_type: 'task',
+            title: 'Fresh sub-task',
             description: 'fresh body',
         });
 
         await writeCurrentTask({
             worktreePath,
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-50',
         });
 
         const body = readFileSync(stalePath, 'utf8');
         expect(body).not.toContain('STALE CONTENT FROM PRIOR RUN');
         expect(body).toContain('# Current Task');
-        expect(body).toContain('Fresh story');
+        expect(body).toContain('Fresh sub-task');
     });
 
     it('throws when the item is not found', async () => {
         await expect(
             writeCurrentTask({
                 worktreePath,
-                issueType: 'story',
+                issueType: 'sub_task',
                 issueId: 'ATL-DOES-NOT-EXIST',
             }),
         ).rejects.toThrow(/not found/i);

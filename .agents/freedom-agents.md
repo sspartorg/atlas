@@ -8,7 +8,7 @@
 
 | Trigger | How |
 |---|---|
-| Schedule | `workflows.trigger = 'schedule'`. `schedule_preset` (`hourly` / `every_4h` / `daily` / `weekly` / `custom`) + `schedule_time_of_day` + `schedule_weekday` (or a custom `cron_expr`) materialise to `cron_expr` + `next_run_at`. `tickWorkflowDispatch` starts one run when due, only if the workflow has no `running` run. |
+| Schedule | `workflows.trigger = 'schedule'`. `schedule_preset` (`hourly` / `every_4h` / `daily` / `weekly` / `custom`) + `schedule_time_of_day` + `schedule_weekday` (or a custom `cron_expr`) materialise to `cron_expr` + `next_run_at`. `tickWorkflowDispatch` starts one run when due, only while the workflow has fewer than `max_parallel_runs` (default 1) running runs. |
 | Manual | `POST /api/workflows/:id/runs` with no `item_id` (an `item_id` → 400). |
 | "Generate AI scaffold" | `POST /api/projects/:id/generate-ai-scaffold` creates the project's AI Readiness workflow from the `ai-readiness` template if missing, then starts it. |
 | Ad-hoc test | `POST /api/run { agent_id, project_id? }` (Run-now dialog). Not a workflow: temp dir, no worktree, no routing, no push. |
@@ -21,7 +21,7 @@
 
 `spawnAgentRun({ agentId, projectId, workflowRun })` with no item. `buildPrompt` (`services/prompt-builder.ts`) has two no-item branches:
 
-- **With a project** — constitution, `# Your Role` (`prompt_md` with `{{ key }}` placeholders filled from `settings_json`), outcome contract, `# Project Context` (id, name, repo path, description, guardrails, every epic + `spec_md`), `# Working Protocol`, commit discipline, output instructions, self-memory.
+- **With a project** — constitution, `# Your Role` (`prompt_md` with `{{ key }}` placeholders filled from `settings_json`), outcome contract, `# Project Context` (id, name, repo path, description, guardrails, every Task + `spec_md`), `# Working Protocol`, commit discipline, output instructions, self-memory.
 - **Without a project** — constitution, `# Your Role`, outcome contract, `# Project-level Run` (no item attached; side effects via MCP are at the agent's discretion), output instructions, self-memory.
 
 The CLI never sees that built prompt directly — it is the audit `prompt_snapshot`. What the CLI reads is staged on disk by `stageCliWorktree(... includeOutcome)`: `.atlas/constitution.md`, `.atlas/outcome.md` (how to report the result), `.atlas/self-memory.md`, and the `.claude/commands/atlas-<agent>.md` / `.github/prompts/atlas-<agent>.prompt.md` body, whose preamble (`preamble-assembler.ts`) says: do your job, commit, end with the `atlas-outcome` block, never assign, change status, push or open PRs. `.atlas/current-task.md` is absent.
@@ -35,14 +35,14 @@ Isolation: no-item runs skip `claudeIsolationArgs`, so they keep the Owner's use
 - `completeRun` persists the parsed outcome (`outcome_*` columns) for every run shape, then reports to `workflow-engine.onStepFinished`. Pass / fail / park work exactly as for item runs.
 - A park on a project-level run has no item to comment on: the Owner gets a `needs_you` notification (`agent.run_finished_no_item` external key) and resumes with `POST /api/workflow-runs/:id/resume`.
 - **End** pushes and opens a PR when the workflow says so (`[<workflow name>] <project name>` title), cleans up the worktree, and sends one `update` notification.
-- **Items the agent creates** (Jira import, market research epics) are stamped `items.created_by_workflow_run_id` by `createItem` — matched through the reporter agent's live workflow step, so the agent must pass its `agent_id` to `create_item`. End sets them `ready` with `workflow_id = child.workflow_id ?? End.child_workflow_id`; with no child workflow they are left as created.
+- **Items the agent creates** (Jira import, market research, regulations — all `create_item { issue_type: 'task' }`) are left as created, normally `draft`. Nothing routes them: End-node child routing and `items.created_by_workflow_run_id` were removed by ADR 0015 / migration 037. The Owner reviews them and queues the ones worth doing for a Task workflow. Passing `agent_id` to `create_item` still credits the agent as reporter.
 - Ad-hoc `POST /api/run` runs notify the Owner directly (`agent_completed_no_item` / `agent_error_no_item`); workflow steps don't notify per step.
 
 ---
 
 ## MCP tools from a no-item run
 
-All 13 consolidated tools (`mcp.md`) are available. Tools that need an item id (`get_item`, `update_item`, `delete_item`) work once the agent has one, e.g. from `search_item`. `create_item` covers every type including `epic` (parent `project_id`). `update_item` `change_status` / `assign` return 409 only while a `running` workflow run holds that item.
+All 13 consolidated tools (`mcp.md`) are available. Tools that need an item id (`get_item`, `update_item`, `delete_item`) work once the agent has one, e.g. from `search_item`. `create_item` covers both kinds: `task` (parent `project_id`) and `sub_task` (parent `task_id`). `update_item` `change_status` / `assign` return 409 only while a `running` workflow run holds that item.
 
 ---
 
@@ -53,7 +53,7 @@ All 13 consolidated tools (`mcp.md`) are available. Tools that need an item id (
 | `agent-ai-news` | AI News Scout | daily scheduled workflow, no project; digest to the external channel |
 | `agent-market-research` | Competitive Analyst | weekly; competitors from `settings_json.competitors` |
 | `agent-regulations` | Legal Scout | weekly; sources from `settings_json.sources` |
-| `agent-jira-to-epic` | Jira Importer | every 4h; proposes epics from Jira (dry-run by default) |
+| `agent-jira-to-epic` | Jira Importer | every 4h; imports your Jira items as draft Tasks (dry-run by default) |
 | `agent-ai-readiness` | AI-Readiness Agent | `ai-readiness` template; scaffold files + spec-kit bootstrap, PR from End |
 | `agent-knowledge-base` | Knowledge Base Curator | manual project workflow; curates a `skills/` folder via PR |
 

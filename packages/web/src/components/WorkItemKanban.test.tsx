@@ -7,7 +7,7 @@ import { makeAgent } from '../test-utils/factories.js';
 function makeItem(over: Partial<KanbanItem> = {}): KanbanItem {
     return {
         id: 'ATL-1',
-        kind: 'story',
+        kind: 'task',
         shortId: 'ATL-1',
         title: 'Build login form',
         status: 'draft',

@@ -7,7 +7,7 @@ import { WorkItemTable, type WorkItemTableRow } from './WorkItemTable.js';
 function makeRow(overrides: Partial<WorkItemTableRow> = {}): WorkItemTableRow {
     return {
         id: 'S1',
-        kind: 'story',
+        kind: 'task',
         shortId: 'S1',
         title: 'Hello',
         status: 'ready',
@@ -72,10 +72,25 @@ describe('WorkItemTable', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
-                title="Stories"
+                title="Sub-tasks"
             />,
         );
-        expect(screen.getByText('Stories')).toBeInTheDocument();
+        expect(screen.getByText('Sub-tasks')).toBeInTheDocument();
+    });
+
+    it('renders a chip per row label', () => {
+        renderWithProviders(
+            <WorkItemTable
+                rows={[makeRow({ labels: ['dev', 'qa'] })]}
+                agentsById={new Map()}
+                ownerName="Bob"
+                ownerAccent="#0A0A0A"
+                onRowClick={vi.fn()}
+                formatRelative={() => 'just now'}
+            />,
+        );
+        expect(screen.getByText('dev')).toBeInTheDocument();
+        expect(screen.getByText('qa')).toBeInTheDocument();
     });
 
     it('renders headerRight slot inside the title bar', () => {
@@ -87,7 +102,7 @@ describe('WorkItemTable', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
-                title="Stories"
+                title="Sub-tasks"
                 headerRight={<button>Add</button>}
             />,
         );
@@ -240,7 +255,7 @@ describe('WorkItemTable', () => {
         }));
         renderWithProviders(
             <WorkItemTable
-                rows={[makeRow({ title: 'Mobile Story' })]}
+                rows={[makeRow({ title: 'Mobile Task' })]}
                 agentsById={new Map()}
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
@@ -249,7 +264,7 @@ describe('WorkItemTable', () => {
             />,
         );
         // MobileWorkItemList renders rows in a card format — title still present
-        expect(document.body.textContent).toContain('Mobile Story');
+        expect(document.body.textContent).toContain('Mobile Task');
         window.matchMedia = origMatchMedia;
     });
 
@@ -404,7 +419,7 @@ describe('WorkItemTable', () => {
             />,
         );
         // Plain (non-sortable) headers still render their label text.
-        expect(screen.getByText('Issue')).toBeInTheDocument();
+        expect(screen.getByText('Item')).toBeInTheDocument();
         expect(screen.getByText('Status')).toBeInTheDocument();
         expect(screen.getByText('Updated')).toBeInTheDocument();
     });

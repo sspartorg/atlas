@@ -1,6 +1,6 @@
 # Swarm architecture
 
-The **autonomous SDLC swarm** is Atlas's long-term fleet vision: one agent per phase of the software lifecycle plus the product-lifecycle adjacencies — discovery, build, review, ship, monitor, learn. This doc captures the strategic shape of that fleet. How agents are chained is a **workflow** concern (ADR 0014, `docs/adr/0014-workflows-replace-agent-handoffs.md`); for how a project-level run is wired, see [`freedom-agents.md`](freedom-agents.md). For the canonical role list, see [`role-catalog.md`](role-catalog.md).
+The **autonomous SDLC swarm** is Atlas's long-term fleet vision: one agent per phase of the software lifecycle plus the product-lifecycle adjacencies — discovery, build, review, ship, monitor, learn. This doc captures the strategic shape of that fleet. How agents are chained is a **workflow** concern (ADR 0014, `docs/adr/0014-workflows-replace-agent-handoffs.md`; one Task = one branch = one PR, ADR 0015 `docs/adr/0015-one-task-one-pr.md`); for how a project-level run is wired, see [`freedom-agents.md`](freedom-agents.md). For the canonical role list, see [`role-catalog.md`](role-catalog.md).
 
 **Nothing is installed on a fresh DB** — `runSeed()` only syncs the on-disk catalog (`packages/api/src/marketplace/catalog/`) into `marketplace_agents`. The Owner installs agents from `/agents/marketplace` (copies prompt + checklists), or creates a workflow from a starter template, which installs the agents its graph needs. SDLC catalog entries ship `status: 'active'`; autonomous scouts ship `inactive` so the Owner opts each one in after wiring its inputs (channels, MCP servers, deploy targets, etc.).
 
@@ -8,10 +8,10 @@ The **autonomous SDLC swarm** is Atlas's long-term fleet vision: one agent per p
 
 | Capability | State |
 |---|---|
-| Building software (engineering chain) | **Template** — `planning` workflow (PO Writer ⇄ PO Reviewer, stories → `dev`) and `dev` workflow (Architect ⇄ Architect Reviewer → Coder ⇄ Code Reviewer, one PR) |
+| Building software (engineering chain) | **Template** — `delivery` workflow on a Task (PO Writer ⇄ PO Reviewer → Architect ⇄ Architect Reviewer → Sub-tasks: `build` → Sub-tasks: `test`, one branch and one PR) |
 | Reviewing engineering work | **Template** — each performer has a separate paired reviewer agent; a reviewer's fail connection loops back to its writer |
-| Autonomous regression testing | **Template** — `qa` workflow (QA Writer ⇄ QA Reviewer → Automation ⇄ Automation Reviewer, one PR) |
-| Market research | **Catalog, inactive** — Playwright MCP scrape → epic; needs a scheduled no-item workflow |
+| Autonomous regression testing | **Template** — `test` sub-workflow (QA Writer ⇄ QA Reviewer → Automation ⇄ Automation Reviewer) runs every `qa` sub-task inside the Task's `delivery` run, after the dev sub-tasks are built on the same branch |
+| Market research | **Catalog, inactive** — Playwright MCP scrape → draft Task; needs a scheduled no-item workflow |
 | Regulatory awareness | **Catalog, inactive** — Legal Scout; needs a scheduled no-item workflow |
 | Daily AI-news ingest | **Catalog, inactive** — external notification digest; needs a scheduled no-item workflow |
 | External work ingest (Jira) | **Catalog, inactive** — Atlassian MCP poll, dedup via `Source: <KEY>`; needs a scheduled no-item workflow |
@@ -30,31 +30,29 @@ Each has `role_id` pointing at a row in [`role-catalog.md`](role-catalog.md). Ag
 
 | Agent | Role | CLI (catalog default) | Starter workflow node |
 |---|---|---|---|
-| `agent-po-writer` | `po` | claude | `planning` (fail → Owner node → back to PO Writer) |
-| `agent-po-reviewer` | `po` | claude | `planning` (fail → PO Writer). Checks stories + `[QA]` twins; does not assign them |
-| `agent-architect` | `architect` | claude | `dev` |
-| `agent-architect-reviewer` | `architect` | claude | `dev` (fail → Architect) |
-| `agent-coder` | `engineer` | copilot | `dev` |
-| `agent-code-reviewer` | `engineer` | copilot | `dev` (fail → Coder) |
-| `agent-qa-writer` | `qa` | claude | `qa` |
-| `agent-qa-reviewer` | `qa` | claude | `qa` (fail → QA Writer) |
-| `agent-automation` | `automation` | copilot | `qa` |
-| `agent-automation-reviewer` | `automation` | copilot | `qa` (fail → Automation) |
+| `agent-po-writer` | `po` | claude | `delivery` (fail → Owner node → back to PO Writer). Splits the Task into `dev`-labelled sub-tasks, each with a `[QA]` twin labelled `qa` and linked `tested_by` |
+| `agent-po-reviewer` | `po` | claude | `delivery` (fail → PO Writer). Checks the sub-tasks + `[QA]` twins; does not assign them |
+| `agent-architect` | `architect` | claude | `delivery`. One spec for the whole Task (`specs/<n>-<slug>/spec.md`, persisted to the Task's `spec_md`), with a file-level change group per `dev` sub-task |
+| `agent-architect-reviewer` | `architect` | claude | `delivery` (fail → Architect) |
+| `agent-coder` | `engineer` | copilot | `build` — implements one dev sub-task (its spec group, else its acceptance criteria) |
+| `agent-code-reviewer` | `engineer` | copilot | `build` (fail → Coder) — reviews that sub-task's commits and re-runs the test gate |
+| `agent-qa-writer` | `qa` | claude | `test` — test-plan CSV `tests/qa/<qaSubTaskId>.csv` for one `[QA]` sub-task |
+| `agent-qa-reviewer` | `qa` | claude | `test` (fail → QA Writer) |
+| `agent-automation` | `automation` | copilot | `test` — automates the `automation-yes` rows on the Task's branch (no waiting on a merged dev PR) |
+| `agent-automation-reviewer` | `automation` | copilot | `test` (fail → Automation) |
 
 ### Starter workflows (`packages/api/src/marketplace/workflows/*.json`)
 
 | Template | Input / trigger | Graph | Delivery |
 |---|---|---|---|
-| `planning` ("Planning") | item / `item_ready` | PO Writer → PO Reviewer → End; PO Writer fail → Owner → PO Writer; PO Reviewer fail → PO Writer | worktree, no push, no PR. End `child_workflow_id: template:dev` queues the dev stories created during the run for the project's Development workflow and `test_child_workflow_id: template:qa` queues their `[QA]` twins for Quality (both created from their templates when the project lacks them) |
-| `dev` ("Development") | item / `item_ready` | Architect → Architect Reviewer → Coder → Code Reviewer → End; reviewer fails loop back | push + one PR; item → `in_review` |
-| `qa` ("Quality") | item / `item_ready` | QA Writer → QA Reviewer → Automation → Automation Reviewer → End; reviewer fails loop back | push + one PR |
+| `delivery` ("Delivery") | Task (`item`) / `item_ready` | PO Writer → PO Reviewer → Architect → Architect Reviewer → **Sub-tasks** (`template:build`, no label) → **Sub-tasks** (`template:test`, label `qa`) → End; PO Writer fail → Owner → PO Writer; each reviewer fail → its writer | worktree, push + one PR per Task; the PR body lists every sub-task. Creating it also creates the project's Build / Test sub-task workflows when missing |
+| `build` ("Build sub-task") | `sub_task` / `manual` | Coder → Code Reviewer → End; reviewer fail → Coder | none of its own — the sub-task goes to `in_review` and the Task run continues |
+| `test` ("Test sub-task") | `sub_task` / `manual` | QA Writer → QA Reviewer → Automation → Automation Reviewer → End; reviewer fails loop back | none of its own |
 | `ai-readiness` ("AI Readiness") | none / `manual` | AI Readiness → End | push + one PR |
 
-**Routing rules (engine):** a fail connection increments `loop_count`; past `max_loops` (default 3) the run parks with the Owner. `asked_question`, a missing outcome block, a step error or a missing/inactive agent also park. A parked run holds its worktree; the Owner's comment on the item re-runs the asking step. Nothing reaches `done` automatically when a PR opens — the item goes to `in_review`.
+**Routing rules (engine):** a fail connection increments `loop_count`; past `max_loops` (default 3) the run parks with the Owner. `asked_question`, a missing outcome block, a step error or a missing/inactive agent also park. A parked run holds its worktree; the Owner's comment on the item re-runs the asking step. A parked sub-task holds its Task run too; replying on either resumes both. Nothing reaches `done` automatically: finished sub-tasks go to `in_review`, and the Task goes to `in_review` when its PR opens.
 
-**`[QA]` twins:** PO Writer links each twin to its dev story with `tested_by` (twin → dev). `planning`'s End sends children with that outgoing link to `test_child_workflow_id` (Quality) and the rest to `child_workflow_id` (Development). Automation parks on `waiting_on_dev_pr_merge` until the dev PR is merged; merge it and reply on the twin to continue.
-
-**Run isolation:** item runs on the claude / ollama dialect spawn with `--setting-sources project,local --strict-mcp-config --mcp-config <atlas only>`, so the Owner's `~/.claude` hooks, plugins, user CLAUDE.md and user MCP servers don't leak into agent runs; only the Atlas MCP (`http://127.0.0.1:4500/mcp`) is available. Runs with no item keep the Owner's config, because scouts rely on the Owner's Playwright plugin and claude.ai Atlassian connector. Copilot runs are not isolated. Copilot-default agents fail with `cli_not_installed` when `copilot` is not on PATH — switch their CLI + model on Agent Detail.
+**Sub-task order:** `delivery`'s first Sub-tasks step (no label) builds every sub-task not labelled `qa`, oldest first; the second tests every `qa` sub-task, so each `[QA]` twin runs after all the code is built on the branch. A sub-task created mid-run (e.g. a fix a reviewer asked for) is picked up by its step, or the End gate sends the run back to that step.
 
 ### Autonomous catalog agents (6, inactive)
 
@@ -77,8 +75,8 @@ All `role_id: NULL`, `status: 'inactive'`. Owner enables by editing the prompt's
 
 One mode: **workflows**. A workflow run executes its agent nodes back-to-back in one worktree and delivers one push + one PR at End.
 
-- **Item workflows** (`input_kind='item'`) — the Owner (or a parent workflow's End) queues an item with `items.workflow_id`; `trigger='item_ready'` starts the oldest `ready` item whenever the workflow has no `running` run. Steps chain immediately, with no scheduler wait.
-- **Project-level workflows** (`input_kind='none'`) — `trigger='schedule'` (cron) or `manual`. Items the agent creates are routed to the End node's child workflow.
+- **Task workflows** (`input_kind='item'`) — the Owner queues a Task with `items.workflow_id`; `trigger='item_ready'` starts the oldest `ready` Tasks, up to `max_parallel_runs` at once, each on its own branch. Steps chain immediately, with no scheduler wait. Sub-tasks run one at a time inside the Task's run via Sub-tasks steps and their **sub-workflows** (`input_kind='sub_task'`).
+- **Project-level workflows** (`input_kind='none'`) — `trigger='schedule'` (cron) or `manual`. Tasks the agent creates stay as created (`draft`) until the Owner queues them.
 
 Agents escalate only by parking the workflow run with the Owner; they never assign items or change status (the API returns 409 while a run is working the item). Runtime details: [`architecture.md`](architecture.md) (Workflow runs) and [`freedom-agents.md`](freedom-agents.md).
 
@@ -88,9 +86,9 @@ The fleet was audited against the Owner's vision; the Knowledge Base agent lande
 
 **Deferred — pre-product:**
 
-- Prod deploy agent — event-driven post-PR-merge deploy + verify; produces incident epics on failure. Needs a live product to deploy. Revisit when one ships.
-- Live-system monitoring agent — scheduled metrics-endpoint poll + SLO comparison; produces alert epics on breach. Needs a live product to monitor.
-- User feedback ingest agent — hourly poll of Slack / email / support channels; produces actionable epics per real complaint. Needs a product whose users have feedback channels.
+- Prod deploy agent — event-driven post-PR-merge deploy + verify; produces incident Tasks on failure. Needs a live product to deploy. Revisit when one ships.
+- Live-system monitoring agent — scheduled metrics-endpoint poll + SLO comparison; produces alert Tasks on breach. Needs a live product to monitor.
+- User feedback ingest agent — hourly poll of Slack / email / support channels; produces actionable Tasks per real complaint. Needs a product whose users have feedback channels.
 
 When any of the three gets unblocked by a product shipping, update this section.
 

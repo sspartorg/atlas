@@ -10,7 +10,7 @@ const makeItem = (overrides: Partial<TodaysPassItem> = {}): TodaysPassItem => ({
     agent_name: 'Coder',
     agent_category: 'software-dev',
     agent_accent_color: '#0A0A0A',
-    issue_type: 'story',
+    issue_type: 'sub_task',
     issue_id: 'CER-12',
     completed_at: '2026-05-16T00:00:00.000Z',
     ...overrides,
@@ -23,9 +23,8 @@ describe('TodaysPassCard', () => {
     });
 
     it.each([
-        ['story', 'SDB-4'],
-        ['epic', 'ATL-99'],
-        ['bug', 'BUG-42'],
+        ['sub_task', 'SDB-4'],
+        ['task', 'ATL-99'],
     ] as const)('renders the real %s id %s', (issue_type, issue_id) => {
         renderWithProviders(
             <TodaysPassCard

@@ -7,11 +7,8 @@ import type { IssueType } from '@atlas/shared';
 // BOTH or the new row won't show up until staleTime expires. Mirrors the
 // useIssueLinks invalidation pattern.
 const FULL_KEY: Record<IssueType, readonly [string, 'full']> = {
-    epic: ['epics', 'full'],
-    story: ['stories', 'full'],
-    bug: ['bugs', 'full'],
+    task: ['tasks', 'full'],
     sub_task: ['sub-tasks', 'full'],
-    sub_bug: ['sub-bugs', 'full'],
 };
 
 function invalidateExternalLinkCaches(

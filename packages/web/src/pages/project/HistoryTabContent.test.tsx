@@ -14,7 +14,7 @@ const makeRun = (overrides: Record<string, unknown> = {}) => ({
     agent_id: 'agent-coder',
     project_id: 'p1',
     issue_id: 'ATL-1',
-    issue_type: 'epic',
+    issue_type: 'task',
     status: 'completed',
     total_cost_usd: null,
     input_tokens: 100,
@@ -44,9 +44,9 @@ describe('HistoryTabContent', () => {
         });
     });
 
-    it('renders one row per run when runs exist (epic type)', async () => {
+    it('renders one row per run when runs exist (task type)', async () => {
         server.use(
-            http.get(`${BASE}/run`, () => HttpResponse.json([makeRun({ issue_type: 'epic' })])),
+            http.get(`${BASE}/run`, () => HttpResponse.json([makeRun({ issue_type: 'task' })])),
             http.get(`${BASE}/agents`, () =>
                 HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'Coder' })]),
             ),
@@ -84,22 +84,7 @@ describe('HistoryTabContent', () => {
         });
     });
 
-    it('renders story type run (covers issueRoute story branch)', async () => {
-        server.use(
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ issue_type: 'story', issue_id: 'ATL-S1' })]),
-            ),
-            http.get(`${BASE}/agents`, () =>
-                HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'StoryCoder' })]),
-            ),
-        );
-        renderWithProviders(<HistoryTabContent projectId="p1" />);
-        await waitFor(() => {
-            expect(screen.getByText('ATL-S1')).toBeInTheDocument();
-        });
-    });
-
-    it('renders sub_task type run (covers issueRoute sub_task branch)', async () => {
+    it('links a sub_task run to its sub-task page', async () => {
         server.use(
             http.get(`${BASE}/run`, () =>
                 HttpResponse.json([makeRun({ issue_type: 'sub_task', issue_id: 'ATL-ST1' })]),
@@ -110,32 +95,7 @@ describe('HistoryTabContent', () => {
         await waitFor(() => {
             expect(screen.getByText('ATL-ST1')).toBeInTheDocument();
         });
-    });
-
-    it('renders sub_bug type run (covers issueRoute sub_bug branch)', async () => {
-        server.use(
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ issue_type: 'sub_bug', issue_id: 'ATL-SB1' })]),
-            ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-        );
-        renderWithProviders(<HistoryTabContent projectId="p1" />);
-        await waitFor(() => {
-            expect(screen.getByText('ATL-SB1')).toBeInTheDocument();
-        });
-    });
-
-    it('renders bug type run (covers issueRoute default/bug branch)', async () => {
-        server.use(
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ issue_type: 'bug', issue_id: 'ATL-B1' })]),
-            ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-        );
-        renderWithProviders(<HistoryTabContent projectId="p1" />);
-        await waitFor(() => {
-            expect(screen.getByText('ATL-B1')).toBeInTheDocument();
-        });
+        expect(screen.getByText('ATL-ST1').closest('a')).toHaveAttribute('href', '/sub-tasks/ATL-ST1');
     });
 
     it('shows run status label (Completed)', async () => {

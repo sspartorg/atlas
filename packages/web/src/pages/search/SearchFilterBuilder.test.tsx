@@ -32,7 +32,7 @@ describe('SearchFilterBuilder', () => {
             <SearchFilterBuilder
                 filters={{
                     ...EMPTY_FILTERS,
-                    types: ['story', 'bug'],
+                    types: ['task', 'sub_task'],
                     projectIds: ['p1'],
                     updated: 'today',
                     status: 'in_progress',
@@ -98,16 +98,16 @@ describe('SearchFilterBuilder', () => {
         );
         openAddMenu();
         fireEvent.click(screen.getByRole('menuitem', { name: 'Type' }));
-        // The type submenu renders 6 menuitems; click "Story".
-        const storyItem = screen.getByRole('menuitem', { name: /Story/i });
-        fireEvent.click(storyItem);
+        // The type submenu renders one menuitem per type; click "Task".
+        const taskItem = screen.getByRole('menuitem', { name: /^Task/ });
+        fireEvent.click(taskItem);
         expect(setFilters).toHaveBeenCalledWith(
-            expect.objectContaining({ types: ['story'] }),
+            expect.objectContaining({ types: ['task'] }),
         );
-        // Re-render with the story already selected; clicking it again removes it.
+        // Re-render with the task already selected; clicking it again removes it.
         rerender(
             <SearchFilterBuilder
-                filters={{ ...EMPTY_FILTERS, types: ['story'] }}
+                filters={{ ...EMPTY_FILTERS, types: ['task'] }}
                 setFilters={setFilters}
                 projects={[]}
                 resultCount={0}
@@ -116,8 +116,8 @@ describe('SearchFilterBuilder', () => {
         );
         // Re-open the menu and verify clicking the chip opens the picker on it.
         fireEvent.click(screen.getByText('Type:'));
-        const storyItem2 = screen.getByRole('menuitem', { name: /Story/i });
-        fireEvent.click(storyItem2);
+        const taskItem2 = screen.getByRole('menuitem', { name: /^Task/ });
+        fireEvent.click(taskItem2);
         expect(setFilters).toHaveBeenLastCalledWith(
             expect.objectContaining({ types: [] }),
         );
@@ -293,7 +293,7 @@ describe('SearchFilterBuilder', () => {
         const setFilters = vi.fn();
         const filters: FilterState = {
             ...EMPTY_FILTERS,
-            types: ['story'],
+            types: ['task'],
             projectIds: ['p1'],
             updated: 'today',
             status: 'in_progress',
@@ -328,7 +328,7 @@ describe('SearchFilterBuilder', () => {
         const setFilters = vi.fn();
         const { container } = renderWithProviders(
             <SearchFilterBuilder
-                filters={{ ...EMPTY_FILTERS, types: ['story'] }}
+                filters={{ ...EMPTY_FILTERS, types: ['task'] }}
                 setFilters={setFilters}
                 projects={[]}
                 resultCount={0}
@@ -348,7 +348,7 @@ describe('SearchFilterBuilder', () => {
     it('opens a pill picker by pressing Enter on the pill button (keyboard branch)', () => {
         renderWithProviders(
             <SearchFilterBuilder
-                filters={{ ...EMPTY_FILTERS, types: ['story'] }}
+                filters={{ ...EMPTY_FILTERS, types: ['task'] }}
                 setFilters={vi.fn()}
                 projects={[]}
                 resultCount={0}
@@ -368,7 +368,7 @@ describe('SearchFilterBuilder', () => {
     it('opens a pill picker by pressing Space on the pill button (L315 Space branch)', () => {
         renderWithProviders(
             <SearchFilterBuilder
-                filters={{ ...EMPTY_FILTERS, types: ['story'] }}
+                filters={{ ...EMPTY_FILTERS, types: ['task'] }}
                 setFilters={vi.fn()}
                 projects={[]}
                 resultCount={0}
@@ -450,7 +450,7 @@ describe('SearchFilterBuilder', () => {
         // We verify the picker actually opens (type menu appears) when Space is pressed.
         renderWithProviders(
             <SearchFilterBuilder
-                filters={{ ...EMPTY_FILTERS, types: ['story'] }}
+                filters={{ ...EMPTY_FILTERS, types: ['task'] }}
                 setFilters={vi.fn()}
                 projects={[]}
                 resultCount={0}
@@ -467,8 +467,8 @@ describe('SearchFilterBuilder', () => {
             fireEvent.keyDown(typePill, { key: ' ' });
         }
         // The Space key fires p.onClick which calls openAdd → sets editingPill to 'type'
-        // The type picker menu should now be open (contains "Story" menuitem)
-        expect(screen.getByRole('menuitem', { name: /Story/i })).toBeInTheDocument();
+        // The type picker menu should now be open (contains "Task" menuitem)
+        expect(screen.getByRole('menuitem', { name: /^Task/ })).toBeInTheDocument();
     });
 
     it('non-Enter key on Add Filter button is a no-op (L353 else branch)', () => {

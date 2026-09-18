@@ -27,9 +27,9 @@ describe('InAppFeedTabContent', () => {
         const rows = [
             makeNotification({
                 id: 1,
-                message: 'Story ATL-2 moved to In Review',
+                message: 'Sub-task ATL-2 moved to In Review',
                 kind: 'needs_you',
-                issue_type: 'story',
+                issue_type: 'sub_task',
                 issue_id: 'ATL-2',
                 agent_id: 'agent-coder',
             }),
@@ -41,7 +41,7 @@ describe('InAppFeedTabContent', () => {
             }),
         ];
         renderWithProviders(<InAppFeedTabContent allRows={rows} agents={agents} />);
-        expect(screen.getByText(/Story ATL-2 moved/)).toBeInTheDocument();
+        expect(screen.getByText(/Sub-task ATL-2 moved/)).toBeInTheDocument();
         expect(screen.getByText('System ping')).toBeInTheDocument();
     });
 
@@ -82,15 +82,15 @@ describe('InAppFeedTabContent', () => {
         const rows = [
             makeNotification({
                 id: 1,
-                message: 'Story link click',
+                message: 'Task link click',
                 kind: 'update',
-                issue_type: 'story',
+                issue_type: 'task',
                 issue_id: 'ATL-99',
                 read_at: null,
             }),
         ];
         renderWithProviders(<InAppFeedTabContent allRows={rows} agents={[]} />);
-        const row = screen.getByText(/Story link click/);
+        const row = screen.getByText(/Task link click/);
         fireEvent.click(row);
         // markRead may or may not have fired (race with React), but click ran.
         expect(row).toBeInTheDocument();
@@ -98,23 +98,28 @@ describe('InAppFeedTabContent', () => {
         void markRead;
     });
 
-    it('navigates by each supported issue_type without crashing', () => {
-        const issueTypes = ['epic', 'story', 'bug', 'sub_task', 'sub_bug'] as const;
-        const rows = issueTypes.map((t, i) =>
+    it.each([
+        ['task', '/tasks/id-task'],
+        ['sub_task', '/sub-tasks/id-sub_task'],
+    ] as const)('routes a %s notification to its detail page', (t, path) => {
+        const rows = [
             makeNotification({
-                id: i + 100,
+                id: 100,
                 kind: 'update',
                 issue_type: t,
                 issue_id: `id-${t}`,
                 message: `Click ${t}`,
                 read_at: '2026-01-01T00:00:00Z',
             }),
+        ];
+        renderWithProviders(
+            <>
+                <InAppFeedTabContent allRows={rows} agents={[]} />
+                <LocationDisplay />
+            </>,
         );
-        renderWithProviders(<InAppFeedTabContent allRows={rows} agents={[]} />);
-        for (const t of issueTypes) {
-            const el = screen.getByText(`Click ${t}`);
-            fireEvent.click(el);
-        }
+        fireEvent.click(screen.getByText(`Click ${t}`));
+        expect(screen.getByTestId('location').textContent).toBe(path);
     });
 
     it('navigates to /projects/<id> when no issue_id but project_id is set', () => {
@@ -133,7 +138,7 @@ describe('InAppFeedTabContent', () => {
         fireEvent.click(el);
     });
 
-    it('falls back to /issues when nothing else matches', () => {
+    it('falls back to /tasks when nothing else matches', () => {
         const rows = [
             makeNotification({
                 id: 201,
@@ -151,14 +156,14 @@ describe('InAppFeedTabContent', () => {
             </>,
         );
         fireEvent.click(screen.getByText('Lonely system message'));
-        expect(screen.getByTestId('location').textContent).toBe('/issues');
+        expect(screen.getByTestId('location').textContent).toBe('/tasks');
     });
 
-    it('routes reminder notifications to /reminders, not /issues', () => {
+    it('routes reminder notifications to /reminders, not /tasks', () => {
         // Reminder rows ship with event_type='reminder', issue_id=null, and
         // project_id=null (see api/src/services/reminders.ts#fireOne). Without
         // a dedicated branch in openNotification(), they fall through to the
-        // /issues catch-all — exactly what the user reported.
+        // /tasks catch-all.
         const rows = [
             makeNotification({
                 id: 300,
@@ -221,7 +226,7 @@ describe('InAppFeedTabContent', () => {
                 id: 500,
                 message: 'Already read message',
                 kind: 'update',
-                issue_type: 'story',
+                issue_type: 'sub_task',
                 issue_id: 'ATL-50',
                 read_at: '2026-01-01T12:00:00Z',
             }),

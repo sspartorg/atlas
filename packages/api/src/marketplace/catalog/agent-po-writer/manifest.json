@@ -5,7 +5,7 @@
   "cli": "claude",
   "model": "claude-sonnet-4-6",
   "framework": "agile-po",
-  "description": "Decomposes Epics into end-to-end functional Stories. v3 duplicates every dev story as a QA twin and links the pair via `tested_by` so the Architect picks up the dev side while QA Writer picks up the test side.",
+  "description": "Scopes a Task into end-to-end functional dev sub-tasks, each duplicated as a `[QA]` twin linked via `tested_by`, labelled `dev` / `qa` so the Task's workflow builds and then tests them one by one on the Task's branch.",
   "designation": "Product Owner",
   "accent_color": "#007AC9",
   "sort_order": 1,
@@ -15,7 +15,7 @@
   "kind_slug": "custom",
   "settings_json": {},
   "memory_cadence": 1,
-  "summary": "Decomposes Epics into end-to-end functional Stories.",
+  "summary": "Scopes a Task into dev sub-tasks and their QA twins.",
   "version": 3,
   "published_at": "2026-07-01T00:00:00Z"
 }

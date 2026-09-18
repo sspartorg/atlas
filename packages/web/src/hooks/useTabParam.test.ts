@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { makeWrapper } from '../test-utils/renderWithProviders.js';
 import { useTabParam } from './useTabParam.js';
 
-const TABS = ['overview', 'epics', 'guardrails'] as const;
+const TABS = ['overview', 'tasks', 'guardrails'] as const;
 type Tab = (typeof TABS)[number];
 
 function useHookWithLocation() {
@@ -60,8 +60,8 @@ describe('useTabParam', () => {
         const { result } = renderHook(() => useHookWithLocation(), {
             wrapper: makeWrapper(['/?foo=bar']),
         });
-        act(() => result.current.setTab('epics'));
-        expect(result.current.search).toBe('?foo=bar&tab=epics');
+        act(() => result.current.setTab('tasks'));
+        expect(result.current.search).toBe('?foo=bar&tab=tasks');
     });
 
     it('setTab identity is stable across renders so memo bailout still works', () => {

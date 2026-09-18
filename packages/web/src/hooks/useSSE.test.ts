@@ -34,7 +34,7 @@ describe('useSSE', () => {
                 return HttpResponse.json({
                     id: 'R1',
                     agent_id: 'A1',
-                    issue_type: 'story',
+                    issue_type: 'task',
                     issue_id: 'ATL-1',
                     status: calls === 1 ? 'queued' : 'in_progress',
                     output_text: null,
@@ -186,7 +186,7 @@ describe('useSSE', () => {
     });
 
     // ── counts_changed ─────────────────────────────────────────────────────
-    it('counts_changed invalidates sidenav-counts, dashboard, epics, stories, bugs, issues, agents, projects', async () => {
+    it('counts_changed invalidates sidenav-counts, dashboard, tasks, sub-tasks, issues, agents, projects', async () => {
         const { result } = renderHook(() => useSSEWithSpy(), { wrapper: makeWrapper() });
         const spy = result.current;
 
@@ -199,9 +199,8 @@ describe('useSSE', () => {
         );
         expect(keys).toContainEqual(['sidenav-counts']);
         expect(keys).toContainEqual(['dashboard']);
-        expect(keys).toContainEqual(['epics']);
-        expect(keys).toContainEqual(['stories']);
-        expect(keys).toContainEqual(['bugs']);
+        expect(keys).toContainEqual(['tasks']);
+        expect(keys).toContainEqual(['sub-tasks']);
         expect(keys).toContainEqual(['issues']);
         // 2026-09-12 — this event reports the `agents` and `projects` badge
         // counts too, and neither list was invalidated. A marketplace install
@@ -210,6 +209,19 @@ describe('useSSE', () => {
         // like "the agent was never added".
         expect(keys).toContainEqual(['agents']);
         expect(keys).toContainEqual(['projects']);
+        expect(keys).toContainEqual(['workflow-queue']);
+    });
+
+    it('workflow_run_updated invalidates the workflow queue', async () => {
+        const { result } = renderHook(() => useSSEWithSpy(), { wrapper: makeWrapper() });
+        const spy = result.current;
+
+        act(() => pushSse({ type: 'workflow_run_updated', workflowId: 'wf-1', workflowRunId: 'wfr-1' }));
+
+        await waitFor(() => expect(spy).toHaveBeenCalled());
+        const keys = spy.mock.calls.map((c) => (c[0] as { queryKey?: unknown[] } | undefined)?.queryKey);
+        expect(keys).toContainEqual(['workflow-queue']);
+        expect(keys).toContainEqual(['workflow-run', 'wfr-1']);
     });
 
     // ── notification_created ───────────────────────────────────────────────

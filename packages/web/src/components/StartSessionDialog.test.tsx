@@ -70,7 +70,7 @@ beforeEach(() => {
         http.get(`${BASE}/projects`, () => HttpResponse.json(PROJECTS)),
         http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
         http.get(`${BASE}/issues/tree`, () =>
-            HttpResponse.json({ tree: [], projects: [], agents: [], epics: [], stories: [], bugs: [] }),
+            HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] }),
         ),
         http.get(`${BASE}/settings`, () =>
             HttpResponse.json({ id: 1, owner_name: 'Owner', onboarding_complete: 1 }),
@@ -430,30 +430,33 @@ describe('StartSessionDialog — optional fields in request body', () => {
 });
 
 describe('StartSessionDialog — buildItemOptions via Autocomplete', () => {
-    it('shows epic and story items in the item picker when project has issues', async () => {
-        server.use(
-            http.get(`${BASE}/issues/tree`, () =>
-                HttpResponse.json({
-                    tree: [],
+    it('offers the project\'s tasks and sub-tasks, grouped', async () => {
+        server.use(http.get(`${BASE}/issues/tree`, () => HttpResponse.json({
+                    tree: [
+                        {
+                            id: 'T1',
+                            kind: 'task',
+                            title: 'Big Task',
+                            task_id: null,
+                            children: [
+                                { id: 'ST-1', kind: 'sub_task', title: 'Small Sub-task', task_id: 'T1', children: [] },
+                            ],
+                        },
+                    ],
                     projects: [{ id: 'p1', name: 'Alpha' }],
                     agents: [],
-                    epics: [{ id: 'E1', title: 'Big Epic', project_id: 'p1', status: 'open', created_at: '', updated_at: '' }],
-                    stories: [{ id: 'S1', title: 'User story', project_id: 'p1', epic_id: null, status: 'open', created_at: '', updated_at: '' }],
-                    bugs: [],
-                }),
-            ),
-        );
+                    tasks: [{ id: 'T1', title: 'Big Task', project_id: 'p1', status: 'ready', created_at: '', updated_at: '' }],
+                })));
         renderDialog({ defaultProjectId: 'p1' });
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /start session/i })).not.toBeDisabled();
         });
         const itemInput = screen.getByPlaceholderText(/search by id or title/i);
-        fireEvent.click(itemInput);
-        await waitFor(() => {
-            expect(
-                screen.queryByText(/E1/) ?? screen.queryByText(/S1/) ?? document.body,
-            ).toBeTruthy();
-        });
+        fireEvent.change(itemInput, { target: { value: 'T' } });
+        expect(await screen.findByText('T1 — Big Task')).toBeInTheDocument();
+        expect(screen.getByText('ST-1 — Small Sub-task')).toBeInTheDocument();
+        expect(screen.getByText('Tasks')).toBeInTheDocument();
+        expect(screen.getByText('Sub-tasks')).toBeInTheDocument();
     });
 });
 
@@ -547,37 +550,6 @@ describe('StartSessionDialog — model select', () => {
     });
 });
 
-describe('StartSessionDialog — buildItemOptions includes bugs', () => {
-    it('shows bug items in the item picker when issues/tree returns bugs', async () => {
-        server.use(
-            http.get(`${BASE}/issues/tree`, () =>
-                HttpResponse.json({
-                    tree: [],
-                    projects: [{ id: 'p1', name: 'Alpha' }],
-                    agents: [],
-                    epics: [],
-                    stories: [],
-                    bugs: [{ id: 'BUG-1', title: 'Critical Bug', project_id: 'p1', status: 'open', created_at: '', updated_at: '' }],
-                }),
-            ),
-        );
-        renderDialog({ defaultProjectId: 'p1' });
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /start session/i })).not.toBeDisabled();
-        });
-        const itemInput = screen.getByPlaceholderText(/search by id or title/i);
-        fireEvent.click(itemInput);
-        // Type to trigger filtering — the bug should appear in the list
-        fireEvent.change(itemInput, { target: { value: 'BUG' } });
-        await waitFor(() => {
-            // BUG-1 should appear in the dropdown options
-            expect(
-                screen.queryByText(/BUG-1/) ?? document.body,
-            ).toBeTruthy();
-        });
-    });
-});
-
 describe('StartSessionDialog — Autocomplete item selection', () => {
     it('includes item_id in request body when an item is selected from the Autocomplete', async () => {
         let _capturedBody: Record<string, unknown> | null = null;
@@ -587,9 +559,7 @@ describe('StartSessionDialog — Autocomplete item selection', () => {
                     tree: [],
                     projects: [{ id: 'p1', name: 'Alpha' }],
                     agents: [],
-                    epics: [{ id: 'E-42', title: 'Mega Epic', project_id: 'p1', status: 'open', created_at: '', updated_at: '' }],
-                    stories: [],
-                    bugs: [],
+                    tasks: [{ id: 'E-42', title: 'Mega Task', project_id: 'p1', status: 'ready', created_at: '', updated_at: '' }],
                 }),
             ),
             http.post(`${BASE}/cli/sessions`, async ({ request }) => {
@@ -619,13 +589,13 @@ describe('StartSessionDialog — Autocomplete item selection', () => {
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /start session/i })).not.toBeDisabled();
         });
-        // Open the Autocomplete and type to find the epic
+        // Open the Autocomplete and type to find the task
         const itemInput = screen.getByPlaceholderText(/search by id or title/i);
         fireEvent.click(itemInput);
         fireEvent.change(itemInput, { target: { value: 'E-42' } });
         await waitFor(() => {
             // The Autocomplete option should appear
-            const option = screen.queryByText(/E-42 — Mega Epic/);
+            const option = screen.queryByText(/E-42 — Mega Task/);
             if (option) fireEvent.click(option);
         });
         // Submit the form

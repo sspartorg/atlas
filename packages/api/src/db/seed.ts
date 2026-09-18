@@ -1,7 +1,6 @@
 import { db } from './kysely-client.js';
 import { loadCatalog, type CatalogEntry } from '../marketplace/catalog-loader.js';
 import { sourcesFor, type RegulationSource } from '../agents/sources/regulations-matrix.js';
-import { WORKTREE_BRANCH_RE_SOURCE } from '@atlas/shared';
 
 // Theme 09 — defensive boot check that the regulations matrix has
 // at least one source per project_type × region we ship. Catches
@@ -107,7 +106,7 @@ async function syncMarketplaceCatalog(): Promise<CatalogEntry[]> {
 }
 
 // Phase 2 of the /commands framework redesign — five artifact templates
-// (`spec`, `plan`, `tasks`, `story`, `qa-plan`) seeded into the
+// (`spec`, `plan`, `tasks`, `sub-task`, `qa-plan`) seeded into the
 // `agent_templates` table. The templates-assembler writes each row to
 // `<worktree>/.atlas/templates/<filename>` per run so the slash-command
 // bodies can reference a stable shape. Owner edits via direct DB writes
@@ -125,7 +124,7 @@ interface AgentTemplateSeed {
 
 const SPEC_TEMPLATE_MD = `# Spec
 
-> Architect-grade spec for this story. Every section below MUST have
+> Architect-grade spec for this Task. Every section below MUST have
 > substantive content before review — empty sections fail.
 
 ## Feasibility
@@ -142,11 +141,11 @@ const SPEC_TEMPLATE_MD = `# Spec
 
 ## File-level change list
 
-<For every file Coder will create, edit, or delete, one line: \`<path>\` — \`<what changes>\`.>
+<One \`### <sub-task id> — <title>\` group per dev sub-task, in build order. Under each, for every file that sub-task's Coder will create, edit, or delete, one line: \`<path>\` — \`<what changes>\`.>
 
 ## Test scenarios
 
-<Given / When / Then bullets, one per acceptance criterion, mapped to the story's existing acceptance criteria.>
+<Given / When / Then bullets, one per acceptance criterion, mapped to the sub-tasks' existing acceptance criteria.>
 
 ## Performance + security notes
 
@@ -202,7 +201,7 @@ const TASKS_TEMPLATE_MD = `# Tasks
   - Verify: \`pnpm --filter @atlas/api test <test-file>\`
 `;
 
-const STORY_TEMPLATE_MD = `# Story
+const SUB_TASK_TEMPLATE_MD = `# Sub-task
 
 ## User story
 
@@ -254,10 +253,10 @@ const AGENT_TEMPLATE_SEEDS: AgentTemplateSeed[] = [
         body_md: TASKS_TEMPLATE_MD,
     },
     {
-        id: 'story',
-        filename: 'story.md',
-        description: 'PO Writer story template',
-        body_md: STORY_TEMPLATE_MD,
+        id: 'sub-task',
+        filename: 'sub-task.md',
+        description: 'PO Writer sub-task template',
+        body_md: SUB_TASK_TEMPLATE_MD,
     },
     {
         id: 'qa-plan',
@@ -351,42 +350,42 @@ exit 1
         id: 'po-writer-output',
         name: 'PO Writer output check',
         description:
-            "Reads the epic's stories from the Atlas API ($ATLAS_API_URL) and verifies the PO Writer contract: at least one dev story, non-empty acceptance_criteria on every dev story, a `<dev title> [QA]` twin joined to it by a tested_by link (either direction), and a valid worktree_branch on every story.",
+            "Reads the Task's sub-tasks from the Atlas API ($ATLAS_API_URL) and verifies the PO Writer contract: at least one dev sub-task, every dev sub-task labelled `dev` with non-empty acceptance_criteria, and a `<dev title> [QA]` twin labelled `qa` joined to it by a tested_by link (either direction).",
         sort_order: 101,
         body_sh: `#!/usr/bin/env bash
-# PO Writer output gate. $1 is the epic id. Reads the epic's stories from the
+# PO Writer output gate. $1 is the Task id. Reads the Task's sub-tasks from the
 # Atlas API at $ATLAS_API_URL (set on every agent run's env).
 set -u
-epic="\${1:-}"
+task="\${1:-}"
 fail() { printf "po-writer-output:\\n1. %s\\n" "$1"; exit 1; }
-[ -n "$epic" ] || fail 'epic id ($1) missing'
-[ -n "\${ATLAS_API_URL:-}" ] || fail "ATLAS_API_URL is not set -- cannot read the epic's stories from the Atlas API"
+[ -n "$task" ] || fail 'task id ($1) missing'
+[ -n "\${ATLAS_API_URL:-}" ] || fail "ATLAS_API_URL is not set -- cannot read the Task's sub-tasks from the Atlas API"
 api="\${ATLAS_API_URL%/}"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-curl -fsS "$api/api/epics/$epic/full" -o "$tmp/epic.json" 2>/dev/null || fail "GET $api/api/epics/$epic/full failed"
-ids="$(node -e 'for (const s of require(process.argv[1]).stories || []) console.log(s.id)' "$tmp/epic.json" 2>/dev/null)"
+curl -fsS "$api/api/tasks/$task/full" -o "$tmp/task.json" 2>/dev/null || fail "GET $api/api/tasks/$task/full failed"
+ids="$(node -e 'for (const s of require(process.argv[1]).sub_tasks || []) console.log(s.id)' "$tmp/task.json" 2>/dev/null)"
 for id in $ids; do
-    curl -fsS "$api/api/issues/story/$id/links" -o "$tmp/links-$id.json" 2>/dev/null || echo '[]' > "$tmp/links-$id.json"
+    curl -fsS "$api/api/issues/sub_task/$id/links" -o "$tmp/links-$id.json" 2>/dev/null || echo '[]' > "$tmp/links-$id.json"
 done
 node -e '
 const dir = process.argv[1];
-const stories = require(dir + "/epic.json").stories || [];
-const branchRe = new RegExp("${WORKTREE_BRANCH_RE_SOURCE}");
+const subs = require(dir + "/task.json").sub_tasks || [];
+const has = (s, l) => (s.labels || []).includes(l);
+const isQa = (s) => s.title.trimEnd().endsWith("[QA]");
 const gaps = [];
-const dev = stories.filter((s) => !s.title.trimEnd().endsWith("[QA]"));
-if (dev.length === 0) gaps.push("no dev stories (titles not ending [QA]) under the epic");
-for (const s of stories) {
-    if (!branchRe.test(s.worktree_branch || "")) gaps.push(s.id + " worktree_branch missing or malformed: " + s.worktree_branch);
-}
+const dev = subs.filter((s) => !isQa(s));
+if (dev.length === 0) gaps.push("no dev sub-tasks (titles not ending [QA]) under the task");
 for (const d of dev) {
+    if (!has(d, "dev")) gaps.push(d.id + " is missing the dev label");
     if (!(d.acceptance_criteria || "").trim()) gaps.push(d.id + " has empty acceptance_criteria");
     const twinTitle = d.title + " [QA]";
-    const qa = stories.find((s) => s.title === twinTitle);
+    const qa = subs.find((s) => s.title === twinTitle);
     if (!qa) {
         gaps.push(d.id + " has no [QA] twin titled " + JSON.stringify(twinTitle));
         continue;
     }
+    if (!has(qa, "qa")) gaps.push(qa.id + " is missing the qa label");
     const links = require(dir + "/links-" + d.id + ".json");
     if (!links.some((l) => l.relation_type === "tested_by" && l.item_id === qa.id)) {
         gaps.push(d.id + " has no tested_by link to its [QA] twin " + qa.id);
@@ -398,34 +397,32 @@ gaps.forEach((g, i) => console.log(i + 1 + ". " + g));
 process.exit(1);
 ' "$tmp"
 `,
-        body_ps1: `# PO Writer output gate. $args[0] is the epic id. Reads the epic's stories
+        body_ps1: `# PO Writer output gate. $args[0] is the Task id. Reads the Task's sub-tasks
 # from the Atlas API at $env:ATLAS_API_URL (see body_sh for the contract).
 $ErrorActionPreference = 'Continue'
-$epic = if ($args.Count -gt 0) { $args[0] } else { '' }
+$task = if ($args.Count -gt 0) { $args[0] } else { '' }
 function Fail([string]$msg) { Write-Output 'po-writer-output:'; Write-Output ('1. ' + $msg); exit 1 }
-if ([string]::IsNullOrWhiteSpace($epic)) { Fail 'epic id ($args[0]) missing' }
-if ([string]::IsNullOrWhiteSpace($env:ATLAS_API_URL)) { Fail "ATLAS_API_URL is not set -- cannot read the epic's stories from the Atlas API" }
+if ([string]::IsNullOrWhiteSpace($task)) { Fail 'task id ($args[0]) missing' }
+if ([string]::IsNullOrWhiteSpace($env:ATLAS_API_URL)) { Fail "ATLAS_API_URL is not set -- cannot read the Task's sub-tasks from the Atlas API" }
 $api = $env:ATLAS_API_URL.TrimEnd('/')
-try { $full = Invoke-RestMethod -Uri "$api/api/epics/$epic/full" -ErrorAction Stop } catch { Fail "GET $api/api/epics/$epic/full failed" }
-$stories = @()
-if ($full.stories) { $stories = @($full.stories) }
-$re = '${WORKTREE_BRANCH_RE_SOURCE}'
+try { $full = Invoke-RestMethod -Uri "$api/api/tasks/$task/full" -ErrorAction Stop } catch { Fail "GET $api/api/tasks/$task/full failed" }
+$subs = @()
+if ($full.sub_tasks) { $subs = @($full.sub_tasks) }
 $gaps = New-Object System.Collections.ArrayList
 $dev = @()
-foreach ($s in $stories) { if (-not "$($s.title)".TrimEnd().EndsWith('[QA]')) { $dev += $s } }
-if ($dev.Count -eq 0) { [void]$gaps.Add('no dev stories (titles not ending [QA]) under the epic') }
-foreach ($s in $stories) {
-    if (-not ("$($s.worktree_branch)" -cmatch $re)) { [void]$gaps.Add("$($s.id) worktree_branch missing or malformed: $($s.worktree_branch)") }
-}
+foreach ($s in $subs) { if (-not "$($s.title)".TrimEnd().EndsWith('[QA]')) { $dev += $s } }
+if ($dev.Count -eq 0) { [void]$gaps.Add('no dev sub-tasks (titles not ending [QA]) under the task') }
 foreach ($d in $dev) {
+    if (-not (@($d.labels) -contains 'dev')) { [void]$gaps.Add("$($d.id) is missing the dev label") }
     if ([string]::IsNullOrWhiteSpace($d.acceptance_criteria)) { [void]$gaps.Add("$($d.id) has empty acceptance_criteria") }
     $twinTitle = "$($d.title) [QA]"
     $qa = $null
-    foreach ($s in $stories) { if ($s.title -ceq $twinTitle) { $qa = $s } }
+    foreach ($s in $subs) { if ($s.title -ceq $twinTitle) { $qa = $s } }
     if ($null -eq $qa) { [void]$gaps.Add("$($d.id) has no [QA] twin titled '$twinTitle'"); continue }
+    if (-not (@($qa.labels) -contains 'qa')) { [void]$gaps.Add("$($qa.id) is missing the qa label") }
     $linked = $false
     try {
-        foreach ($l in (Invoke-RestMethod -Uri "$api/api/issues/story/$($d.id)/links" -ErrorAction Stop)) {
+        foreach ($l in (Invoke-RestMethod -Uri "$api/api/issues/sub_task/$($d.id)/links" -ErrorAction Stop)) {
             if ($l.relation_type -eq 'tested_by' -and $l.item_id -eq $qa.id) { $linked = $true }
         }
     } catch { }
@@ -587,20 +584,20 @@ exit 1
         id: 'qa-writer-csv',
         name: 'QA Writer test-plan CSV',
         description:
-            'QA Writer gate: tests/qa/<storyId>.csv must exist, carry the Jira-importable header `Summary,Description,Issue Type,Priority,Labels,Components`, contain at least one body row, and be touched by the HEAD commit.',
+            'QA Writer gate: tests/qa/<itemId>.csv must exist, carry the Jira-importable header `Summary,Description,Issue Type,Priority,Labels,Components`, contain at least one body row, and be touched by the HEAD commit.',
         sort_order: 104,
         body_sh: `#!/usr/bin/env bash
-# QA Writer gate. $1 is the story id.
+# QA Writer gate. $1 is the QA sub-task id.
 set -u
-story="\${1:-}"
+item="\${1:-}"
 expected_header="Summary,Description,Issue Type,Priority,Labels,Components"
 gaps=""
 n=0
-if [ -z "$story" ]; then
-    printf "qa-writer-csv:\\n1. story id (\\$1) missing\\n"
+if [ -z "$item" ]; then
+    printf "qa-writer-csv:\\n1. item id (\\$1) missing\\n"
     exit 1
 fi
-csv="tests/qa/\${story}.csv"
+csv="tests/qa/\${item}.csv"
 if [ ! -f "$csv" ]; then
     printf "qa-writer-csv:\\n1. %s missing\\n" "$csv"
     exit 1
@@ -633,17 +630,17 @@ if [ -z "$gaps" ]; then exit 0; fi
 printf "qa-writer-csv (%s):\\n%s" "$csv" "$gaps"
 exit 1
 `,
-        body_ps1: `# QA Writer gate. $args[0] is the story id.
+        body_ps1: `# QA Writer gate. $args[0] is the QA sub-task id.
 $ErrorActionPreference = 'Continue'
-$story = if ($args.Count -gt 0) { $args[0] } else { '' }
+$item = if ($args.Count -gt 0) { $args[0] } else { '' }
 $expected = 'Summary,Description,Issue Type,Priority,Labels,Components'
 $gaps = New-Object System.Collections.ArrayList
-if ([string]::IsNullOrWhiteSpace($story)) {
+if ([string]::IsNullOrWhiteSpace($item)) {
     Write-Output 'qa-writer-csv:'
-    Write-Output '1. story id ($args[0]) missing'
+    Write-Output '1. item id ($args[0]) missing'
     exit 1
 }
-$csv = "tests/qa/$story.csv"
+$csv = "tests/qa/$item.csv"
 if (-not (Test-Path -LiteralPath $csv -PathType Leaf)) {
     Write-Output 'qa-writer-csv:'
     Write-Output ("1. {0} missing" -f $csv)
@@ -681,17 +678,17 @@ exit 1
         id: 'check-automation-tests',
         name: 'Automation Engineer test coverage (CSV automation-yes rows)',
         description:
-            'Automation Engineer gate: tests/qa/<storyId>.csv must exist; for every row whose Labels carry `automation-yes`, a test file added or modified between merge-base and HEAD (*.test|spec.{js,ts,jsx,tsx,mjs,cjs}, *_test.go, test_*.py) must contain the row Summary. The CSV is parsed RFC-4180 (quoted cells may hold commas and newlines).',
+            'Automation Engineer gate: tests/qa/<itemId>.csv must exist; for every row whose Labels carry `automation-yes`, a test file added or modified between merge-base and HEAD (*.test|spec.{js,ts,jsx,tsx,mjs,cjs}, *_test.go, test_*.py) must contain the row Summary. The CSV is parsed RFC-4180 (quoted cells may hold commas and newlines).',
         sort_order: 105,
         body_sh: `#!/usr/bin/env bash
-# Automation Engineer gate. $1 is the story id.
+# Automation Engineer gate. $1 is the QA sub-task id.
 set -u
-story="\${1:-}"
-if [ -z "$story" ]; then
-    printf "check-automation-tests:\\n1. story id (\\$1) missing\\n"
+item="\${1:-}"
+if [ -z "$item" ]; then
+    printf "check-automation-tests:\\n1. item id (\\$1) missing\\n"
     exit 1
 fi
-csv="tests/qa/\${story}.csv"
+csv="tests/qa/\${item}.csv"
 if [ ! -f "$csv" ]; then
     printf "check-automation-tests:\\n1. %s missing\\n" "$csv"
     exit 1
@@ -736,15 +733,15 @@ gaps.forEach((g, i) => console.log(i + 1 + ". " + g));
 process.exit(1);
 ' "$csv"
 `,
-        body_ps1: `# Automation Engineer gate. $args[0] is the story id.
+        body_ps1: `# Automation Engineer gate. $args[0] is the QA sub-task id.
 $ErrorActionPreference = 'Continue'
-$story = if ($args.Count -gt 0) { $args[0] } else { '' }
-if ([string]::IsNullOrWhiteSpace($story)) {
+$item = if ($args.Count -gt 0) { $args[0] } else { '' }
+if ([string]::IsNullOrWhiteSpace($item)) {
     Write-Output 'check-automation-tests:'
-    Write-Output '1. story id ($args[0]) missing'
+    Write-Output '1. item id ($args[0]) missing'
     exit 1
 }
-$csv = "tests/qa/$story.csv"
+$csv = "tests/qa/$item.csv"
 if (-not (Test-Path -LiteralPath $csv -PathType Leaf)) {
     Write-Output 'check-automation-tests:'
     Write-Output ("1. {0} missing" -f $csv)
@@ -861,6 +858,9 @@ async function seedGuardrailScripts(): Promise<void> {
 
 async function seedAgentTemplates(): Promise<void> {
     const now = new Date().toISOString();
+    // ADR 0015 renamed the PO Writer template; drop the old row so worktrees
+    // stop getting a stale `story.md`.
+    await db.deleteFrom('agent_templates').where('id', '=', 'story').execute();
     for (const tpl of AGENT_TEMPLATE_SEEDS) {
         await db
             .insertInto('agent_templates')

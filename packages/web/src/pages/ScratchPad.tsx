@@ -51,10 +51,10 @@ export function ScratchPad() {
     }
 
     return (
-        // Match Epics.tsx: `py: 4` (was `py: 12`, ~3x too much vertical
+        // Match Tasks.tsx: `py: 4` (was `py: 12`, ~3x too much vertical
         // padding); the desktop "New tile" button hides on mobile (xs) and
         // `<PageFab>` self-renders as a bottom-right FAB only on mobile,
-        // exactly like the Epics page.
+        // exactly like the Tasks page.
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
             <Box
                 sx={{
@@ -81,7 +81,7 @@ export function ScratchPad() {
                     </Typography>
                     <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 2 }}>
                         Free-form markdown tiles. Use them for half-formed thoughts before
-                        they become an Epic or a Story.
+                        they become a Task.
                     </Typography>
                 </Box>
                 <Box sx={{ display: { xs: 'none', md: 'flex' } }}>

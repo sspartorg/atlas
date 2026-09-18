@@ -15,7 +15,7 @@ const makeComment = (overrides = {}) => makeCommentFactory({ issue_id: 'S1', ...
 
 const makeEvent = (overrides: Partial<IIssueEvent> = {}): IIssueEvent => ({
     id: 10,
-    issue_type: 'story',
+    issue_type: 'task',
     issue_id: 'S1',
     event_type: 'created',
     actor_agent_id: null,
@@ -31,12 +31,12 @@ describe('ActivityCard', () => {
     it('mounts with no activity rows', () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () =>
+            http.get(`${BASE}/issues/task/S1/activity`, () =>
                 HttpResponse.json([]),
             ),
         );
         const { container } = renderWithProviders(
-            <ActivityCard issueType="story" issueId="S1" />,
+            <ActivityCard issueType="task" issueId="S1" />,
         );
         expect(container.firstChild).toBeInTheDocument();
     });
@@ -44,7 +44,7 @@ describe('ActivityCard', () => {
     it("renders a 'dispatch_blocked' event with agent name + blocker detail (B04)", async () => {
         const event: IIssueEvent = {
             id: 1,
-            issue_type: 'story',
+            issue_type: 'task',
             issue_id: 'S1',
             event_type: 'dispatch_blocked',
             actor_agent_id: 'agent-coder',
@@ -58,11 +58,11 @@ describe('ActivityCard', () => {
         server.use(
             ...defaultHandlers,
             handlers.listAgents([makeAgent({ id: 'agent-coder', name: 'Coder' })]),
-            http.get(`${BASE}/issues/story/S1/activity`, () =>
+            http.get(`${BASE}/issues/task/S1/activity`, () =>
                 HttpResponse.json(activity),
             ),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
 
         expect(await screen.findByText(/Dispatch blocked for/)).toBeInTheDocument();
         expect(
@@ -73,7 +73,7 @@ describe('ActivityCard', () => {
     it("renders a 'field_updated' event with a human-friendly field label (B11)", async () => {
         const event: IIssueEvent = {
             id: 2,
-            issue_type: 'story',
+            issue_type: 'task',
             issue_id: 'S1',
             event_type: 'field_updated',
             actor_agent_id: null,
@@ -86,11 +86,11 @@ describe('ActivityCard', () => {
         const activity: IActivityItem[] = [{ kind: 'event', data: event }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () =>
+            http.get(`${BASE}/issues/task/S1/activity`, () =>
                 HttpResponse.json(activity),
             ),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
 
         expect(await screen.findByText('acceptance criteria')).toBeInTheDocument();
         expect(screen.queryByText('acceptance_criteria')).not.toBeInTheDocument();
@@ -99,7 +99,7 @@ describe('ActivityCard', () => {
     it("renders 'field_updated' before → after when both values are set (B11)", async () => {
         const event: IIssueEvent = {
             id: 3,
-            issue_type: 'story',
+            issue_type: 'task',
             issue_id: 'S1',
             event_type: 'field_updated',
             actor_agent_id: null,
@@ -112,11 +112,11 @@ describe('ActivityCard', () => {
         const activity: IActivityItem[] = [{ kind: 'event', data: event }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () =>
+            http.get(`${BASE}/issues/task/S1/activity`, () =>
                 HttpResponse.json(activity),
             ),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
 
         expect(await screen.findByText('priority')).toBeInTheDocument();
         expect(screen.getByText('normal')).toBeInTheDocument();
@@ -128,7 +128,7 @@ describe('ActivityCard', () => {
         const longAfter = 'b'.repeat(100);
         const event: IIssueEvent = {
             id: 4,
-            issue_type: 'story',
+            issue_type: 'task',
             issue_id: 'S1',
             event_type: 'field_updated',
             actor_agent_id: null,
@@ -141,11 +141,11 @@ describe('ActivityCard', () => {
         const activity: IActivityItem[] = [{ kind: 'event', data: event }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () =>
+            http.get(`${BASE}/issues/task/S1/activity`, () =>
                 HttpResponse.json(activity),
             ),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
 
         await screen.findByText('description');
         expect(screen.queryByText(longBefore)).not.toBeInTheDocument();
@@ -162,9 +162,9 @@ describe('ActivityCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/moved status/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -182,9 +182,9 @@ describe('ActivityCard', () => {
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(document.body).toBeTruthy());
     });
 
@@ -194,9 +194,9 @@ describe('ActivityCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/added a comment/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -210,9 +210,9 @@ describe('ActivityCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/linked/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -225,9 +225,9 @@ describe('ActivityCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/removed link/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -243,9 +243,9 @@ describe('ActivityCard', () => {
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/reset rounds/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -257,9 +257,9 @@ describe('ActivityCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/deleted this item/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -271,9 +271,9 @@ describe('ActivityCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/created the item/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -291,7 +291,7 @@ describe('ConversationCard', () => {
             server.use(...defaultHandlers);
             return renderWithProviders(
                 <ConversationCard
-                    issueType="story"
+                    issueType="task"
                     issueId="S1"
                     activity={[]}
                     agents={[coder]}
@@ -323,9 +323,9 @@ describe('ConversationCard', () => {
     it('renders with no comments and shows empty state', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json([])),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([])),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/No comments yet/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -334,10 +334,10 @@ describe('ConversationCard', () => {
     it('exercises submit by typing in the draft field and clicking Post', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json([])),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([])),
             http.post(`${BASE}/comments`, () => HttpResponse.json(makeComment({ id: 99 }))),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.queryByPlaceholderText(/Comment on this item/i) ?? document.body).toBeTruthy(), { timeout: 3000 });
         const textarea = screen.queryByPlaceholderText(/Comment on this item/i);
         if (textarea) {
@@ -354,9 +354,9 @@ describe('ConversationCard', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('Owner says hi') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -369,9 +369,9 @@ describe('ConversationCard', () => {
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('Agent says hello') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -382,9 +382,9 @@ describe('ConversationCard', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('Editable comment') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -405,9 +405,9 @@ describe('ConversationCard', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('Cancel test') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -427,10 +427,10 @@ describe('ConversationCard', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
             http.delete(`${BASE}/comments/5`, () => HttpResponse.json({})),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('Delete me') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -454,9 +454,9 @@ describe('ConversationCard', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('edited') ?? screen.queryByText('Edited comment') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -468,9 +468,9 @@ describe('ActivityLogCard', () => {
     it('renders with no events and shows empty state', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json([])),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([])),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/No activity yet/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -482,7 +482,7 @@ describe('ActivityLogCard', () => {
         ];
         server.use(...defaultHandlers);
         const { container } = renderWithProviders(
-            <ActivityLogCard issueType="story" issueId="S1" activity={activity} />,
+            <ActivityLogCard issueType="task" issueId="S1" activity={activity} />,
         );
         expect(container.firstChild).toBeInTheDocument();
     });
@@ -496,9 +496,9 @@ describe('ActivityLogCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(document.body).toBeTruthy());
     });
 
@@ -510,9 +510,9 @@ describe('ActivityLogCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/moved status/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -526,9 +526,9 @@ describe('ActivityLogCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(document.body).toBeTruthy(), { timeout: 3000 });
     });
 
@@ -541,9 +541,9 @@ describe('ActivityLogCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/a field/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -558,9 +558,9 @@ describe('ActivityLogCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/custom unknown field/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -575,9 +575,9 @@ describe('ActivityLogCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('title') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -592,9 +592,9 @@ describe('ActivityLogCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/new title/) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -609,9 +609,9 @@ describe('ActivityLogCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             // "spec" is the FIELD_LABELS entry for spec_md
             expect(screen.queryByText('spec') ?? document.body).toBeTruthy();
@@ -626,9 +626,9 @@ describe('ActivityLogCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('ATL-7') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -642,9 +642,9 @@ describe('ActivityLogCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/another item/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -658,9 +658,9 @@ describe('ActivityLogCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('ATL-9') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -676,9 +676,9 @@ describe('ActivityLogCard', () => {
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/reset rounds/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -692,9 +692,9 @@ describe('ActivityLogCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/the assigned agent/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -710,9 +710,9 @@ describe('ActivityLogCard', () => {
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ActivityLogCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText(/Dispatch blocked for/i) ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -726,10 +726,10 @@ describe('ActivityLogCard', () => {
         }) }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
         renderWithProviders(
-            <ActivityLogCard issueType="story" issueId="S1" agents={[agent]} />,
+            <ActivityLogCard issueType="task" issueId="S1" agents={[agent]} />,
         );
         await waitFor(() => {
             expect(screen.queryByText(/created the item/i) ?? document.body).toBeTruthy();
@@ -741,9 +741,9 @@ describe('ConversationCard — additional comment branches', () => {
     it('renders empty-state text exactly for zero comments', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json([])),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([])),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(
                 screen.queryByText(/No comments yet — your replies and any agent notes will appear here\./i) ??
@@ -758,9 +758,9 @@ describe('ConversationCard — additional comment branches', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('Hello from unknown agent') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -771,9 +771,9 @@ describe('ConversationCard — additional comment branches', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         expect(await screen.findByText('Workflow')).toBeInTheDocument();
     });
 
@@ -784,9 +784,9 @@ describe('ConversationCard — additional comment branches', () => {
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('## Agent markdown') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -817,9 +817,9 @@ describe('ConversationCard — additional comment branches', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('Unchanged body') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -842,10 +842,10 @@ describe('ConversationCard — additional comment branches', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
             http.patch(`${BASE}/comments/13`, () => HttpResponse.json({ ...comment, body: 'Updated text' })),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('Original text') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -871,9 +871,9 @@ describe('ConversationCard — additional comment branches', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.queryByText('Keep me') ?? document.body).toBeTruthy();
         }, { timeout: 3000 });
@@ -899,7 +899,7 @@ describe('ConversationCard — additional comment branches', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
             <ConversationCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[agent]}
@@ -923,7 +923,7 @@ describe('ActivityLogCard — EventRow branch coverage', () => {
         server.use(...defaultHandlers);
         // Pass agents=[] directly so agentsById is empty — no fetch involved
         renderWithProviders(
-            <ActivityLogCard issueType="story" issueId="S1" activity={activity} agents={[]} />,
+            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />,
         );
         // from_value truthy, agent not found → fromName = 'unknown'
         await waitFor(() => expect(screen.getByText(/reassigned from/i)).toBeInTheDocument(), { timeout: 3000 });
@@ -939,7 +939,7 @@ describe('ActivityLogCard — EventRow branch coverage', () => {
         }) }];
         server.use(...defaultHandlers);
         renderWithProviders(
-            <ActivityLogCard issueType="story" issueId="S1" activity={activity} agents={[]} />,
+            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />,
         );
         await screen.findByText(/reassigned from/i);
         // to_value truthy, agent not found → toName = 'unknown'
@@ -953,7 +953,7 @@ describe('ActivityLogCard — EventRow branch coverage', () => {
         }) }];
         server.use(...defaultHandlers);
         renderWithProviders(
-            <ActivityLogCard issueType="story" issueId="S1" activity={activity} agents={[]} />,
+            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />,
         );
         await screen.findByText(/created the item/i);
         // When actor_agent_id agent is not found, actorName = ownerName = 'Owner'
@@ -970,9 +970,9 @@ describe('CommentRow — strong interaction tests', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         // Comment text must appear
         await screen.findByText('Strong cancel test');
         // Edit button is in DOM (opacity:0 but still findable)
@@ -991,9 +991,9 @@ describe('CommentRow — strong interaction tests', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Unchanged save test');
         const editBtn = await screen.findByRole('button', { name: /Edit comment/i });
         fireEvent.click(editBtn);
@@ -1010,10 +1010,10 @@ describe('CommentRow — strong interaction tests', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
             http.patch(`${BASE}/comments/52`, () => HttpResponse.json({ ...comment, body: 'Edited body' })),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Original body');
         const editBtn = await screen.findByRole('button', { name: /Edit comment/i });
         fireEvent.click(editBtn);
@@ -1037,10 +1037,10 @@ describe('CommentRow — strong interaction tests', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
             http.delete(`${BASE}/comments/53`, () => HttpResponse.json({})),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Delete confirm test');
         const deleteBtn = await screen.findByRole('button', { name: /Delete comment/i });
         fireEvent.click(deleteBtn);
@@ -1060,9 +1060,9 @@ describe('CommentRow — strong interaction tests', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Dialog cancel test');
         const deleteBtn = await screen.findByRole('button', { name: /Delete comment/i });
         fireEvent.click(deleteBtn);
@@ -1084,9 +1084,9 @@ describe('CommentRow — strong interaction tests', () => {
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         // Wait for comment to render (agent markdown shows as h2 via MarkdownPreview)
         await screen.findByRole('button', { name: /Edit comment/i });
         fireEvent.click(screen.getByRole('button', { name: /Edit comment/i }));
@@ -1104,9 +1104,9 @@ describe('CommentRow — strong interaction tests', () => {
     it('ConversationCard: submitting empty draft returns early (line 696 !body guard)', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json([])),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([])),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         // Placeholder is "Comment on this item…"
         await waitFor(() =>
             expect(screen.getByPlaceholderText(/Comment on this item/i)).toBeInTheDocument(),
@@ -1128,11 +1128,11 @@ describe('CommentRow — strong interaction tests', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () =>
+            http.get(`${BASE}/issues/task/S1/activity`, () =>
                 HttpResponse.json([{ kind: 'event', data: event }]),
             ),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => {
             expect(screen.getByText('custom_status_A')).toBeInTheDocument();
         });
@@ -1147,11 +1147,11 @@ describe('CommentRow — strong interaction tests', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () =>
+            http.get(`${BASE}/issues/task/S1/activity`, () =>
                 HttpResponse.json([{ kind: 'event', data: event }]),
             ),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() =>
             expect(screen.getAllByText('—').length).toBeGreaterThan(0),
         );
@@ -1164,11 +1164,11 @@ describe('CommentRow — strong interaction tests', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () =>
+            http.get(`${BASE}/issues/task/S1/activity`, () =>
                 HttpResponse.json([{ kind: 'event', data: event }]),
             ),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() =>
             expect(screen.getByText('another item')).toBeInTheDocument(),
         );
@@ -1181,11 +1181,11 @@ describe('CommentRow — strong interaction tests', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () =>
+            http.get(`${BASE}/issues/task/S1/activity`, () =>
                 HttpResponse.json([{ kind: 'event', data: event }]),
             ),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() =>
             expect(screen.getByText('another item')).toBeInTheDocument(),
         );
@@ -1202,11 +1202,11 @@ describe('CommentRow — strong interaction tests', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () =>
+            http.get(`${BASE}/issues/task/S1/activity`, () =>
                 HttpResponse.json([{ kind: 'event', data: event }]),
             ),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() =>
             expect(screen.getAllByText('unknown').length).toBeGreaterThanOrEqual(2),
         );
@@ -1222,11 +1222,11 @@ describe('CommentRow — strong interaction tests', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () =>
+            http.get(`${BASE}/issues/task/S1/activity`, () =>
                 HttpResponse.json([{ kind: 'event', data: event }]),
             ),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() =>
             expect(screen.getByText(/custom unknown field/i)).toBeInTheDocument(),
         );
@@ -1239,9 +1239,9 @@ describe('CommentRow — strong interaction tests', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Original body');
         fireEvent.click(screen.getByRole('button', { name: /Edit comment/i }));
         await screen.findByRole('button', { name: /^Save$/i });
@@ -1267,9 +1267,9 @@ describe('CommentRow — strong interaction tests', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Same body');
         fireEvent.click(screen.getByRole('button', { name: /Edit comment/i }));
         await screen.findByRole('button', { name: /^Save$/i });
@@ -1296,7 +1296,7 @@ describe('ActivityLogCard — actor NOT in agentsById (null ?? fallback paths)',
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[]} // empty — actor lookup misses
@@ -1320,7 +1320,7 @@ describe('ActivityLogCard — actor NOT in agentsById (null ?? fallback paths)',
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[]} // empty — both lookups miss
@@ -1344,7 +1344,7 @@ describe('ActivityLogCard — actor NOT in agentsById (null ?? fallback paths)',
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[]}
@@ -1369,7 +1369,7 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[knownAgent]}
@@ -1395,7 +1395,7 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[fromAgent, toAgent]}
@@ -1421,7 +1421,7 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[resetAgent]}
@@ -1443,7 +1443,7 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[]} // empty — actor lookup misses
@@ -1467,7 +1467,7 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[]} // empty — both lookups miss → ?? 'unknown'
@@ -1490,7 +1490,7 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[]}
@@ -1505,9 +1505,9 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
         // submit() returns early when body is empty, covering the `if (!body) return` at L696.
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json([])),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([])),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         // Wait for the compose box to render
         await waitFor(() =>
             expect(document.querySelector('textarea')).toBeInTheDocument(),

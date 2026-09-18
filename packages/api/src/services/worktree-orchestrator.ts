@@ -1085,6 +1085,14 @@ async function openPullRequestInner(opts: {
                     { cwd: worktreePath, env, timeout: 60_000 },
                 );
                 const url = (view.stdout ?? '').trim();
+                // A run that continues a Task after review pushes onto the
+                // same PR; refresh its description so the list of what it
+                // contains stays true. Best-effort — the push already landed.
+                if (url) {
+                    await exec('gh', ['pr', 'edit', url, '--body', humanBody], { cwd: worktreePath, env, timeout: 60_000 }).catch(
+                        () => undefined,
+                    );
+                }
                 return { opened: false, url: url || null, alreadyExists: true };
             } catch (viewErr) {
                 const v = viewErr as NodeJS.ErrnoException & { stderr?: string };

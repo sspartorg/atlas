@@ -54,7 +54,7 @@ beforeEach(async () => {
     await truncateAll();
     await insertProject('p1', 'ATL');
     await insertAgent({ id: 'agent-coder' });
-    await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+    await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
 });
 
 afterAll(async () => {
@@ -63,7 +63,7 @@ afterAll(async () => {
 
 describe('historyPruneService.pruneBefore', () => {
     it('no-op returns zeros when the item has no rows (writes only the audit event)', async () => {
-        const result = await historyPruneService.pruneBefore('ATL-1', 'epic', T_CUTOFF, 'agent-coder');
+        const result = await historyPruneService.pruneBefore('ATL-1', 'task', T_CUTOFF, 'agent-coder');
         expect(result).toEqual({ comments_deleted: 0, events_deleted: 0, owner_comments_preserved: 0 });
         // The audit event is still written (visible after the transaction
         // commits) so the destructive call is always traceable.
@@ -84,7 +84,7 @@ describe('historyPruneService.pruneBefore', () => {
         await seedComment({ itemId: 'ATL-1', author: 'owner', createdAt: T_CUTOFF }); // boundary — preserved
         await seedComment({ itemId: 'ATL-1', author: 'agent', agentId: 'agent-coder', createdAt: T_NEW });
 
-        const result = await historyPruneService.pruneBefore('ATL-1', 'epic', T_CUTOFF, 'agent-coder');
+        const result = await historyPruneService.pruneBefore('ATL-1', 'task', T_CUTOFF, 'agent-coder');
         expect(result.comments_deleted).toBe(1);
 
         const remaining = await testDb
@@ -101,7 +101,7 @@ describe('historyPruneService.pruneBefore', () => {
         await seedEvent({ itemId: 'ATL-1', eventType: 'status_changed', actorAgentId: 'agent-coder', createdAt: T_CUTOFF });
         await seedEvent({ itemId: 'ATL-1', eventType: 'assigned', actorAgentId: null, createdAt: T_NEW });
 
-        const result = await historyPruneService.pruneBefore('ATL-1', 'epic', T_CUTOFF, 'agent-coder');
+        const result = await historyPruneService.pruneBefore('ATL-1', 'task', T_CUTOFF, 'agent-coder');
         expect(result.events_deleted).toBe(1);
 
         // The audit `history_pruned` event is appended at commit time so
@@ -128,7 +128,7 @@ describe('historyPruneService.pruneBefore', () => {
         await seedEvent({ itemId: 'ATL-1', eventType: 'status_changed', actorAgentId: null, createdAt: T_OLD });
         await seedEvent({ itemId: 'ATL-1', eventType: 'comment_added', actorAgentId: null, createdAt: T_NEW });
 
-        const result = await historyPruneService.pruneBefore('ATL-1', 'epic', T_CUTOFF, 'agent-coder');
+        const result = await historyPruneService.pruneBefore('ATL-1', 'task', T_CUTOFF, 'agent-coder');
         expect(result).toEqual({ comments_deleted: 2, events_deleted: 3, owner_comments_preserved: 0 });
 
         const cCount = await sql<{ n: string }>`SELECT COUNT(*)::text AS n FROM comments WHERE item_id = 'ATL-1'`.execute(testDb);
@@ -149,7 +149,7 @@ describe('historyPruneService.pruneBefore', () => {
         await seedEvent({ itemId: 'ATL-1', eventType: 'created', actorAgentId: null, createdAt: T_OLD });
         await seedEvent({ itemId: 'ATL-1', eventType: 'status_changed', actorAgentId: 'agent-coder', createdAt: T_OLD });
 
-        const result = await historyPruneService.pruneBefore('ATL-1', 'epic', T_CUTOFF, 'agent-coder');
+        const result = await historyPruneService.pruneBefore('ATL-1', 'task', T_CUTOFF, 'agent-coder');
         expect(result).toEqual({
             comments_deleted: 1,
             events_deleted: 2,
@@ -177,13 +177,13 @@ describe('historyPruneService.pruneBefore', () => {
     });
 
     it('scoped to the target item — rows on other items are untouched', async () => {
-        await insertItem({ id: 'ATL-2', type: 'story', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'epic', title: 'S' });
+        await insertItem({ id: 'ATL-2', type: 'sub_task', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'task', title: 'S' });
         await seedComment({ itemId: 'ATL-1', author: 'agent', agentId: 'agent-coder', createdAt: T_OLD });
         await seedComment({ itemId: 'ATL-2', author: 'agent', agentId: 'agent-coder', createdAt: T_OLD });
         await seedEvent({ itemId: 'ATL-1', eventType: 'created', actorAgentId: null, createdAt: T_OLD });
         await seedEvent({ itemId: 'ATL-2', eventType: 'created', actorAgentId: null, createdAt: T_OLD });
 
-        const result = await historyPruneService.pruneBefore('ATL-1', 'epic', T_CUTOFF, 'agent-coder');
+        const result = await historyPruneService.pruneBefore('ATL-1', 'task', T_CUTOFF, 'agent-coder');
         expect(result).toEqual({ comments_deleted: 1, events_deleted: 1, owner_comments_preserved: 0 });
 
         const cOther = await testDb.selectFrom('comments').selectAll().where('item_id', '=', 'ATL-2').execute();
@@ -201,7 +201,7 @@ describe('historyPruneService.pruneBefore', () => {
         await seedComment({ itemId: 'ATL-1', author: 'agent', agentId: 'agent-coder', createdAt: T_OLD });
         await seedEvent({ itemId: 'ATL-1', eventType: 'created', actorAgentId: null, createdAt: T_OLD });
 
-        const result = await historyPruneService.pruneBefore('ATL-1', 'epic', T_CUTOFF, 'agent-coder');
+        const result = await historyPruneService.pruneBefore('ATL-1', 'task', T_CUTOFF, 'agent-coder');
         expect(result).toEqual({ comments_deleted: 1, events_deleted: 1, owner_comments_preserved: 0 });
 
         const cCount = await sql<{ n: string }>`SELECT COUNT(*)::text AS n FROM comments WHERE item_id = 'ATL-1'`.execute(testDb);

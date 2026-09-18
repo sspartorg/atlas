@@ -40,13 +40,13 @@ describe('SearchEmptyState', () => {
         renderWithProviders(
             <SearchEmptyState
                 filters={EMPTY_FILTERS}
-                queryText="type = story"
+                queryText="type = task"
                 onDropStatus={vi.fn()}
                 onDropProject={vi.fn()}
                 onCreateType={vi.fn()}
             />,
         );
-        expect(screen.getByText('type = story')).toBeInTheDocument();
+        expect(screen.getByText('type = task')).toBeInTheDocument();
     });
 
     it('createLabel is "Sub-task" when first type is sub_task', () => {
@@ -63,18 +63,17 @@ describe('SearchEmptyState', () => {
         expect(screen.getByRole('button', { name: /Create a Sub-task/ })).toBeInTheDocument();
     });
 
-    it('createLabel uses capitalized type name for story (else branch)', () => {
+    it('createLabel defaults to "Task" when no type is filtered', () => {
         renderWithProviders(
             <SearchEmptyState
-                filters={{ ...EMPTY_FILTERS, types: ['story'] }}
+                filters={EMPTY_FILTERS}
                 queryText={null}
                 onDropStatus={vi.fn()}
                 onDropProject={vi.fn()}
                 onCreateType={vi.fn()}
             />,
         );
-        // "story" -> createLabel = "Story" (capitalize first char)
-        expect(screen.getByRole('button', { name: /Create a Story/ })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Create a Task/ })).toBeInTheDocument();
     });
 
     it('fires onDropStatus when Drop status button is clicked', () => {

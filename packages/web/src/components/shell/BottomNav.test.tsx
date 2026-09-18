@@ -19,13 +19,12 @@ describe('BottomNav', () => {
         }
     });
 
-    it('renders all 5 nav tabs with correct labels', () => {
+    it('renders all 4 nav tabs with correct labels', () => {
         renderWithProviders(<BottomNav onOpenMore={vi.fn()} />, {
             initialEntries: ['/'],
         });
         expect(screen.getByText('Home')).toBeInTheDocument();
-        expect(screen.getByText('Epics')).toBeInTheDocument();
-        expect(screen.getByText('Issues')).toBeInTheDocument();
+        expect(screen.getByText('Tasks')).toBeInTheDocument();
         expect(screen.getByText('Queue')).toBeInTheDocument();
         expect(screen.getByText('More')).toBeInTheDocument();
     });
@@ -33,7 +32,7 @@ describe('BottomNav', () => {
     it('clicking Home tab navigates to / (onClick path branch)', async () => {
         const onOpenMore = vi.fn();
         renderWithProviders(<BottomNav onOpenMore={onOpenMore} />, {
-            initialEntries: ['/epics'],
+            initialEntries: ['/tasks'],
         });
         const homeBtn = screen.getAllByRole('button').find((b) => /Home/i.test(b.textContent ?? ''));
         expect(homeBtn).toBeDefined();
@@ -44,28 +43,15 @@ describe('BottomNav', () => {
         }
     });
 
-    it('clicking Epics tab navigates (onClick non-more with path)', async () => {
+    it('clicking Tasks tab navigates (onClick non-more with path)', async () => {
         const onOpenMore = vi.fn();
         renderWithProviders(<BottomNav onOpenMore={onOpenMore} />, {
             initialEntries: ['/'],
         });
-        const epicsBtn = screen.getAllByRole('button').find((b) => /Epics/i.test(b.textContent ?? ''));
-        expect(epicsBtn).toBeDefined();
-        if (epicsBtn) {
-            await userEvent.click(epicsBtn);
-            expect(onOpenMore).not.toHaveBeenCalled();
-        }
-    });
-
-    it('clicking Issues tab navigates (onClick non-more with path)', async () => {
-        const onOpenMore = vi.fn();
-        renderWithProviders(<BottomNav onOpenMore={onOpenMore} />, {
-            initialEntries: ['/'],
-        });
-        const issuesBtn = screen.getAllByRole('button').find((b) => /Issues/i.test(b.textContent ?? ''));
-        expect(issuesBtn).toBeDefined();
-        if (issuesBtn) {
-            await userEvent.click(issuesBtn);
+        const tasksBtn = screen.getAllByRole('button').find((b) => /Tasks/i.test(b.textContent ?? ''));
+        expect(tasksBtn).toBeDefined();
+        if (tasksBtn) {
+            await userEvent.click(tasksBtn);
             expect(onOpenMore).not.toHaveBeenCalled();
         }
     });
@@ -83,26 +69,18 @@ describe('BottomNav', () => {
         }
     });
 
-    it('Epics tab is active when pathname is /epics (matches exact)', () => {
+    it('Tasks tab is active when pathname is /tasks (matches exact)', () => {
         renderWithProviders(<BottomNav onOpenMore={vi.fn()} />, {
-            initialEntries: ['/epics'],
+            initialEntries: ['/tasks'],
         });
-        // The Epics tab should be visually selected; the MUI value should be 'epics'
-        expect(screen.getByText('Epics')).toBeInTheDocument();
+        expect(screen.getByText('Tasks')).toBeInTheDocument();
     });
 
-    it('Epics tab is active when pathname starts with /epics/ (matches sub-path)', () => {
+    it('Tasks tab is active on a task or sub-task detail page', () => {
         renderWithProviders(<BottomNav onOpenMore={vi.fn()} />, {
-            initialEntries: ['/epics/ATL-1'],
+            initialEntries: ['/sub-tasks/ATL-2'],
         });
-        expect(screen.getByText('Epics')).toBeInTheDocument();
-    });
-
-    it('Issues tab is active when pathname starts with /issues/ (matches sub-path)', () => {
-        renderWithProviders(<BottomNav onOpenMore={vi.fn()} />, {
-            initialEntries: ['/issues/ATL-2'],
-        });
-        expect(screen.getByText('Issues')).toBeInTheDocument();
+        expect(screen.getByText('Tasks')).toBeInTheDocument();
     });
 
     it('Queue tab is active when pathname is /queue', () => {
@@ -116,7 +94,7 @@ describe('BottomNav', () => {
         renderWithProviders(<BottomNav onOpenMore={vi.fn()} />, {
             initialEntries: ['/settings'],
         });
-        // All five tabs still render even when none is active
+        // All tabs still render even when none is active
         expect(screen.getByText('Home')).toBeInTheDocument();
         expect(screen.getByText('More')).toBeInTheDocument();
     });
@@ -135,14 +113,14 @@ describe('BottomNav', () => {
         }
     });
 
-    it('onPointerEnter on Epics tab calls prefetchRoute', () => {
+    it('onPointerEnter on Tasks tab calls prefetchRoute', () => {
         renderWithProviders(<BottomNav onOpenMore={vi.fn()} />, {
             initialEntries: ['/'],
         });
-        const epicsBtn = screen.getAllByRole('button').find((b) => /Epics/i.test(b.textContent ?? ''));
-        if (epicsBtn) {
-            fireEvent.pointerEnter(epicsBtn);
-            expect(epicsBtn).toBeInTheDocument();
+        const tasksBtn = screen.getAllByRole('button').find((b) => /Tasks/i.test(b.textContent ?? ''));
+        if (tasksBtn) {
+            fireEvent.pointerEnter(tasksBtn);
+            expect(tasksBtn).toBeInTheDocument();
         }
     });
 

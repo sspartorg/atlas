@@ -15,24 +15,45 @@ function summary(overrides: Partial<IWorkflowRunSummary> = {}): IWorkflowRunSumm
     return { ...run, ...overrides };
 }
 
-function mount(opts: { workflowId: string | null; runs: IWorkflowRunSummary[] }) {
+// A Task workflow whose Sub-tasks step builds each sub-task.
+const delivery = makeWorkflow({
+    id: 'wf-delivery',
+    name: 'Delivery',
+    graph: {
+        nodes: [
+            { id: 'start', type: 'start', position: { x: 0, y: 0 } },
+            { id: 'build', type: 'subtasks', sub_workflow_id: 'wf-build', position: { x: 0, y: 130 } },
+            { id: 'end', type: 'end', position: { x: 0, y: 260 } },
+        ],
+        edges: [
+            { id: 'e1', source: 'start', target: 'build', kind: 'pass' },
+            { id: 'e2', source: 'build', target: 'end', kind: 'pass' },
+        ],
+    },
+});
+
+function mount(opts: { workflowId: string | null; runs: IWorkflowRunSummary[]; subTaskStatuses?: string[] }) {
     server.use(
-        http.get(`${BASE}/stories/ATL-7/full`, () =>
-            HttpResponse.json({ story: { id: 'ATL-7', workflow_id: opts.workflowId } }),
+        http.get(`${BASE}/tasks/ATL-7/full`, () =>
+            HttpResponse.json({
+                task: { id: 'ATL-7', workflow_id: opts.workflowId },
+                sub_tasks: (opts.subTaskStatuses ?? []).map((status, i) => ({ id: `ATL-${10 + i}`, status })),
+            }),
         ),
         http.get(`${BASE}/workflows`, () =>
             HttpResponse.json([
                 makeWorkflow(),
                 makeWorkflow({ id: 'wf-scan', name: 'Stack scan', input_kind: 'none' }),
+                delivery,
             ]),
         ),
         http.get(`${BASE}/items/ATL-7/workflow-runs`, () => HttpResponse.json(opts.runs)),
     );
-    return renderWithProviders(<ItemWorkflowPanel issueType="story" itemId="ATL-7" projectId="p1" />);
+    return renderWithProviders(<ItemWorkflowPanel itemId="ATL-7" projectId="p1" />);
 }
 
 describe('ItemWorkflowPanel', () => {
-    it('assigns the item to one of the project’s item workflows', async () => {
+    it('assigns the task to one of the project’s item workflows', async () => {
         const user = userEvent.setup();
         let sent: unknown = null;
         mount({ workflowId: null, runs: [] });
@@ -69,5 +90,33 @@ describe('ItemWorkflowPanel', () => {
         );
         await user.click(await screen.findByRole('button', { name: 'Start now' }));
         await waitFor(() => expect(sent).toEqual({ item_id: 'ATL-7' }));
+    });
+
+    it('continues a reviewed Task with its open sub-tasks when its workflow has a Sub-tasks step', async () => {
+        const user = userEvent.setup();
+        let sent: unknown = null;
+        mount({
+            workflowId: 'wf-delivery',
+            runs: [summary({ status: 'completed', workflow_id: 'wf-delivery' })],
+            subTaskStatuses: ['in_review', 'ready'],
+        });
+        server.use(
+            http.post(`${BASE}/workflows/wf-delivery/runs`, async ({ request }) => {
+                sent = await request.json();
+                return HttpResponse.json({ run_id: 'wfr-3' }, { status: 202 });
+            }),
+        );
+        await user.click(await screen.findByRole('button', { name: 'Continue · 1 open' }));
+        await waitFor(() => expect(sent).toEqual({ item_id: 'ATL-7', from_subtasks: true }));
+    });
+
+    it('offers no Continue when every sub-task is in review or done', async () => {
+        mount({
+            workflowId: 'wf-delivery',
+            runs: [summary({ status: 'completed', workflow_id: 'wf-delivery' })],
+            subTaskStatuses: ['in_review', 'done'],
+        });
+        expect(await screen.findByRole('button', { name: 'Start now' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Continue/ })).not.toBeInTheDocument();
     });
 });

@@ -62,7 +62,7 @@ export const ProjectRightRail = memo(function ProjectRightRail({
                 <InfoRow label="Specs accepted first try">
                     <MonoValue>—</MonoValue>
                 </InfoRow>
-                <InfoRow label="Avg cycle (epic → PR)">
+                <InfoRow label="Avg cycle (task → PR)">
                     <MonoValue>—</MonoValue>
                 </InfoRow>
                 <InfoRow label="Items escalated to you">

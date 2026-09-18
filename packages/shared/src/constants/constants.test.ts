@@ -55,11 +55,11 @@ describe('issue status enums', () => {
 
 describe('issue type enums', () => {
     it('ISSUE_TYPES enumerates all five entity kinds', () => {
-        expect(ISSUE_TYPES).toEqual(['epic', 'story', 'sub_task', 'sub_bug', 'bug']);
+        expect(ISSUE_TYPES).toEqual(['task', 'sub_task']);
     });
 
-    it('RUNNABLE_ISSUE_TYPES excludes sub_task and sub_bug', () => {
-        expect(RUNNABLE_ISSUE_TYPES).toEqual(['epic', 'story', 'bug']);
+    it('RUNNABLE_ISSUE_TYPES covers tasks and sub-tasks', () => {
+        expect(RUNNABLE_ISSUE_TYPES).toEqual(['task', 'sub_task']);
     });
 
     it('RUNNABLE_ISSUE_TYPES is a subset of ISSUE_TYPES', () => {

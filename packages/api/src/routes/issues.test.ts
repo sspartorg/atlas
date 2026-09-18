@@ -39,15 +39,12 @@ describe('GET /api/issues/tree', () => {
             projects: unknown[];
             agents: unknown[];
             tree: unknown[];
-            epics: unknown[];
-            stories: unknown[];
-            bugs: unknown[];
+            tasks: unknown[];
         };
-        expect(Array.isArray(body.tree)).toBe(true);
+        expect(body.tree).toEqual([]);
         expect(Array.isArray(body.projects)).toBe(true);
-        expect(Array.isArray(body.epics)).toBe(true);
-        expect(Array.isArray(body.stories)).toBe(true);
-        expect(Array.isArray(body.bugs)).toBe(true);
+        expect(body.tasks).toEqual([]);
+        expect(body).not.toHaveProperty('epics');
     });
 
     it('returns 200 filtered by project_id query param', async () => {

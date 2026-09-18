@@ -4,11 +4,11 @@
 // envelope.
 //
 // Phase 4 of the /commands framework redesign. The body shape is the
-// same one `prompt-builder.ts:buildPrompt` currently inlines as the
-// `# Current Task` section (lines 674-708). This service just splits it
-// out to disk — the helpers (`getIssueContext`, `formatComments`,
-// `buildLinkedItemsSection`) are reused verbatim from prompt-builder
-// so we have a single source of truth.
+// same one `prompt-builder.ts:buildPrompt` inlines as the `# Current
+// Task` section. This service just splits it out to disk — the helpers
+// (`getIssueContext`, `renderIssueContext`, `buildLinkedItemsSection`)
+// are reused verbatim from prompt-builder so we have a single source of
+// truth.
 //
 // Wipe + rewrite per run, matching the constitution-assembler pattern:
 // `mkdirSync({ recursive: true })` for the `.atlas/` parent, then
@@ -19,14 +19,14 @@ import { join } from 'node:path';
 import type { IssueType } from '@atlas/shared';
 import {
     buildLinkedItemsSection,
-    formatComments,
     getIssueContext,
+    renderIssueContext,
 } from './prompt-builder.js';
 
 export interface WriteCurrentTaskInput {
     /** Absolute path to the worktree root. The .atlas/ tree is written here. */
     worktreePath: string;
-    /** Item kind — `story`, `epic`, `bug`. Required together with `issueId`;
+    /** Item kind — `task` or `sub_task`. Required together with `issueId`;
      *  omit BOTH for prompt-only writes (e.g. ad-hoc terminal sessions). */
     issueType?: IssueType;
     /** Item id (e.g. `ATL-12`). Pairs with `issueType`. */
@@ -73,32 +73,7 @@ export async function writeCurrentTask(
         if (!ctx) {
             throw new Error(`Issue ${input.issueType}/${input.issueId} not found`);
         }
-        contextLines.push(
-            `**Issue type:** ${input.issueType}`,
-            `**Issue ID:** ${input.issueId}`,
-        );
-        if (ctx.projectName) contextLines.push(`**Project:** ${ctx.projectName}`);
-        if (ctx.epicTitle) contextLines.push(`**Epic:** ${ctx.epicTitle}`);
-        if (ctx.epicDescription) contextLines.push(`**Epic description:** ${ctx.epicDescription}`);
-
-        contextLines.push(
-            '',
-            `## Title`,
-            ctx.title,
-            '',
-            `## Description (starting point — may be vague / incomplete on purpose)`,
-            ctx.description || '_(none)_',
-        );
-
-        if (ctx.spec_md) {
-            contextLines.push('', `## Existing Spec`, ctx.spec_md);
-        }
-
-        contextLines.push(
-            '',
-            `## Discussion (chronological — newer comments override older ones)`,
-            formatComments(ctx.comments),
-        );
+        contextLines.push(...renderIssueContext(input.issueType!, input.issueId!, ctx));
 
         const linkedSection = await buildLinkedItemsSection(input.issueId!);
         if (linkedSection) {

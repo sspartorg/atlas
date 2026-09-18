@@ -13,7 +13,7 @@ beforeEach(async () => {
     await truncateAll();
     await insertProject('p1', 'ATL');
     await insertAgent({ id: 'agent-coder' });
-    await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+    await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
 });
 
 afterAll(async () => {
@@ -22,13 +22,13 @@ afterAll(async () => {
 
 describe('commentsService', () => {
     it('list returns empty array when no comments', async () => {
-        expect(await commentsService.list('epic', 'ATL-1')).toEqual([]);
+        expect(await commentsService.list('task', 'ATL-1')).toEqual([]);
     });
 
     it('create inserts an owner comment and returns the full row', async () => {
         const row = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'looks ok',
         });
@@ -42,7 +42,7 @@ describe('commentsService', () => {
         const row = await commentsService.create({
             author: 'agent',
             agent_id: 'agent-coder',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'starting',
         });
@@ -54,32 +54,32 @@ describe('commentsService', () => {
         // Seed a second item the second-issue comment can point at.
         await insertItem({
             id: 'ATL-2',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'S',
         });
         await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'first',
         });
         await commentsService.create({
             author: 'agent',
             agent_id: 'agent-coder',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'second',
         });
         await commentsService.create({
             author: 'owner',
-            issue_type: 'story',
+            issue_type: 'sub_task',
             issue_id: 'ATL-2',
             body: 'other',
         });
-        const list = await commentsService.list('epic', 'ATL-1');
+        const list = await commentsService.list('task', 'ATL-1');
         expect(list).toHaveLength(2);
         expect(list[0]!.body).toBe('first');
         expect(list[1]!.body).toBe('second');
@@ -89,7 +89,7 @@ describe('commentsService', () => {
         await expect(
             commentsService.create({
                 author: 'invalid' as unknown as 'owner',
-                issue_type: 'epic',
+                issue_type: 'task',
                 issue_id: 'ATL-1',
                 body: 'x',
             }),
@@ -104,13 +104,13 @@ describe('commentsService', () => {
             issue_id: 'ATL-1',
             body: 'fall back to lookup',
         });
-        expect(row.issue_type).toBe('epic');
+        expect(row.issue_type).toBe('task');
     });
 
     it('create defaults issue_type to "story" when both omitted and the item is unknown', async () => {
         // Manually insert a comment row whose item_id has no matching items row.
         // We can't go through create() because the FK fires first — so this
-        // path is unreachable from production code; the fallback ?? 'story' is
+        // path is unreachable from production code; the fallback ?? 'task' is
         // a defensive guard. Skip rather than force a contrived setup.
         expect(true).toBe(true);
     });
@@ -123,7 +123,7 @@ describe('commentsService', () => {
     it('update stamps edited_at and ignores deleted rows', async () => {
         const created = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'orig',
         });
@@ -140,7 +140,7 @@ describe('commentsService', () => {
         const created = await commentsService.create({
             author: 'agent',
             agent_id: 'agent-coder',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'will be deleted',
         });
@@ -148,7 +148,7 @@ describe('commentsService', () => {
         expect(first?.id).toBe(created.id);
         expect(first?.author).toBe('agent');
         expect(first?.agent_id).toBe('agent-coder');
-        expect(first?.issue_type).toBe('epic');
+        expect(first?.issue_type).toBe('task');
 
         // Second softDelete sees deleted_at IS NOT NULL → null.
         expect(await commentsService.softDelete(created.id)).toBeNull();
@@ -159,7 +159,7 @@ describe('commentsService', () => {
     it('getRaw returns the row regardless of deleted_at and null when missing', async () => {
         const created = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'raw',
         });
@@ -178,18 +178,18 @@ describe('commentsService', () => {
     it('list hides soft-deleted comments', async () => {
         const a = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'keep me',
         });
         const b = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'goodbye',
         });
         await commentsService.softDelete(b.id);
-        const list = await commentsService.list('epic', 'ATL-1');
+        const list = await commentsService.list('task', 'ATL-1');
         expect(list.map((c) => c.id)).toEqual([a.id]);
     });
 });
@@ -202,10 +202,10 @@ describe('commentsService.create — Owner reply resumes a parked workflow run',
         vi.mocked(continueResumedRun).mockClear();
         await insertItem({
             id: 'ATL-9',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Parked',
             status: 'waiting_for_info',
         });
@@ -246,7 +246,7 @@ describe('commentsService.create — Owner reply resumes a parked workflow run',
         commentsService.create({
             author,
             ...(author === 'agent' ? { agent_id: 'agent-coder' } : {}),
-            issue_type: 'story',
+            issue_type: 'sub_task',
             issue_id: 'ATL-9',
             body: 'here is the answer',
         });
@@ -257,7 +257,7 @@ describe('commentsService.create — Owner reply resumes a parked workflow run',
         expect(await resumeEvents()).toEqual([
             { event_type: 'status_changed', actor_agent_id: null, from_value: 'waiting_for_info', to_value: 'in_progress' },
         ]);
-        expect(broadcastSSE).toHaveBeenCalledWith({ type: 'counts_changed', issueType: 'story', issueId: 'ATL-9' });
+        expect(broadcastSSE).toHaveBeenCalledWith({ type: 'counts_changed', issueType: 'sub_task', issueId: 'ATL-9' });
         await vi.waitFor(() => expect(continueResumedRun).toHaveBeenCalledWith(RUN_ID));
     });
 

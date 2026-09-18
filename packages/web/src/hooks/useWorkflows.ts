@@ -50,6 +50,68 @@ export function useCreateWorkflowFromTemplate() {
     });
 }
 
+export function useImportWorkflow() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ file, projectId }: { file: File; projectId: string }) =>
+            api.workflows.importZip(file, projectId),
+        onSuccess: () => {
+            void qc.invalidateQueries({ queryKey: ['workflows'] });
+            // A bundle can install agents.
+            void qc.invalidateQueries({ queryKey: ['agents'] });
+            void qc.invalidateQueries({ queryKey: ['marketplace'] });
+        },
+    });
+}
+
+// Published workflows live under ['workflows', 'published'] so the
+// ['workflows'] prefix invalidations above refresh them too.
+
+export function usePublishedWorkflows(opts: { enabled?: boolean } = {}) {
+    return useQuery({
+        queryKey: ['workflows', 'published', 'list'],
+        queryFn: () => api.publishedWorkflows.list(),
+        enabled: opts.enabled ?? true,
+    });
+}
+
+export function usePublishedWorkflow(id: string) {
+    return useQuery({
+        queryKey: ['workflows', 'published', 'detail', id],
+        queryFn: () => api.publishedWorkflows.get(id),
+        enabled: Boolean(id),
+    });
+}
+
+export function usePublishWorkflow() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => api.workflows.publish(id),
+        onSuccess: () => void qc.invalidateQueries({ queryKey: ['workflows', 'published'] }),
+    });
+}
+
+export function useImportPublishedWorkflow() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, projectId }: { id: string; projectId: string }) => api.publishedWorkflows.use(id, projectId),
+        onSuccess: () => {
+            void qc.invalidateQueries({ queryKey: ['workflows'] });
+            // The bundle can install agents.
+            void qc.invalidateQueries({ queryKey: ['agents'] });
+            void qc.invalidateQueries({ queryKey: ['marketplace'] });
+        },
+    });
+}
+
+export function useUnpublishWorkflow() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => api.publishedWorkflows.unpublish(id),
+        onSuccess: () => void qc.invalidateQueries({ queryKey: ['workflows', 'published'] }),
+    });
+}
+
 export function useUpdateWorkflow() {
     const qc = useQueryClient();
     return useMutation({
@@ -97,8 +159,8 @@ export function useItemWorkflowRuns(itemId: string) {
 export function useStartWorkflowRun() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ workflowId, itemId }: { workflowId: string; itemId?: string }) =>
-            api.workflows.startRun(workflowId, itemId),
+        mutationFn: ({ workflowId, itemId, fromSubtasks }: { workflowId: string; itemId?: string; fromSubtasks?: boolean }) =>
+            api.workflows.startRun(workflowId, itemId, fromSubtasks ? { fromSubtasks } : {}),
         onSuccess: (_res, { workflowId, itemId }) => {
             void qc.invalidateQueries({ queryKey: ['workflow-runs', workflowId] });
             if (itemId) void qc.invalidateQueries({ queryKey: ['item-workflow-runs', itemId] });
@@ -134,9 +196,8 @@ export function useSetItemWorkflow() {
         mutationFn: ({ itemId, workflowId }: { itemId: string; workflowId: string | null }) =>
             api.workflows.setItemWorkflow(itemId, workflowId),
         onSuccess: (_res, { itemId }) => {
-            // The item row lives under its kind's key; refresh every kind
-            // rather than threading the type through.
-            for (const key of ['epics', 'stories', 'bugs', 'sub-tasks', 'sub-bugs', 'issues']) {
+            // Only Tasks carry a workflow; the tree mirrors the row.
+            for (const key of ['tasks', 'issues']) {
                 void qc.invalidateQueries({ queryKey: [key] });
             }
             void qc.invalidateQueries({ queryKey: ['item-workflow-runs', itemId] });

@@ -7,7 +7,7 @@ import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import Link from '@mui/material/Link';
 import CircularProgress from '@mui/material/CircularProgress';
-import type { IWorkflowRunDetail, IWorkflowRunStep } from '@atlas/shared';
+import type { IWorkflowRunDetail, IWorkflowRunStep, IWorkflowRunSummary } from '@atlas/shared';
 import {
     useResumeWorkflowRun,
     useStopWorkflowRun,
@@ -70,7 +70,7 @@ function StepRow({ step, onOpen }: { step: IWorkflowRunStep; onOpen: () => void 
                     <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate70, mt: 1 }}>{note}</Typography>
                 )}
                 <Typography sx={{ fontSize: 11, fontFamily: TYPOGRAPHY.fontFamilyMono, color: ATLAS_PALETTE.slate60, mt: 1 }}>
-                    {[step.cli, step.model].filter(Boolean).join(' · ')}
+                    {[step.cli, step.model, step.effort && `${step.effort} effort`].filter(Boolean).join(' · ')}
                 </Typography>
             </Box>
             <Box sx={{ textAlign: 'right' }}>
@@ -81,6 +81,43 @@ function StepRow({ step, onOpen }: { step: IWorkflowRunStep; onOpen: () => void 
                     {formatCostUsd(step.total_cost_usd)}
                 </Typography>
             </Box>
+        </Box>
+    );
+}
+
+/** One sub-task's run inside a Task run; opens that run's own view. */
+function ChildRow({ child, onOpen }: { child: IWorkflowRunSummary; onOpen: () => void }) {
+    return (
+        <Box
+            role="button"
+            tabIndex={0}
+            onClick={onOpen}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') onOpen();
+            }}
+            data-testid={`wf-child-${child.id}`}
+            sx={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1fr) auto',
+                gap: 3,
+                px: 4,
+                py: 2.5,
+                cursor: 'pointer',
+                borderTop: `1px solid ${ATLAS_PALETTE.slate06}`,
+                '&:hover': { background: ATLAS_PALETTE.cloud },
+            }}
+        >
+            <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontSize: 11, fontFamily: TYPOGRAPHY.fontFamilyMono, color: ATLAS_PALETTE.slate60 }}>
+                    {child.item_id}
+                </Typography>
+                <Typography
+                    sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                >
+                    {child.item_title ?? 'Sub-task'}
+                </Typography>
+            </Box>
+            <WorkflowRunStatusChip status={child.status} />
         </Box>
     );
 }
@@ -152,7 +189,6 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
     );
     const itemPath = run.item_id ? itemPathIn(tree, run.item_id) : null;
     const live = run.status === 'running' || run.status === 'waiting_for_owner';
-    const totalCost = run.steps.reduce((sum, s) => sum + (s.total_cost_usd ?? 0), 0);
 
     const act = (m: typeof stop, verb: string) =>
         m.mutate(run.id, {
@@ -171,6 +207,19 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
                         <Link component={RouterLink} to={`/workflows/${run.workflow_id}?tab=runs`} underline="hover" color="inherit">
                             {run.workflow_name}
                         </Link>
+                        {run.parent_workflow_run_id && (
+                            <>
+                                {' · '}
+                                {/* The run page reads only :runId, so any workflow id in the path resolves. */}
+                                <Link
+                                    component={RouterLink}
+                                    to={`/workflows/${run.workflow_id}/runs/${run.parent_workflow_run_id}`}
+                                    underline="hover"
+                                >
+                                    part of the Task run
+                                </Link>
+                            </>
+                        )}
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
                         <Typography variant="h2" sx={{ color: ATLAS_PALETTE.slate }}>
@@ -194,7 +243,7 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
                         </Box>
                         {' · '}
                         <Box component="span" sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono }}>
-                            {durationLabel(run.started_at, run.finished_at)} · {formatCostUsd(totalCost)}
+                            {durationLabel(run.started_at, run.finished_at)} · {formatCostUsd(run.total_cost_usd)}
                             {run.loop_count > 0 ? ` · ${run.loop_count} loop${run.loop_count === 1 ? '' : 's'}` : ''}
                         </Box>
                         {run.branch && (
@@ -262,17 +311,32 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
                         maxHeight: { lg: 'calc(100vh - 280px)' },
                     }}
                 >
-                    <Typography variant="overline" sx={{ display: 'block', px: 4, pt: 3, color: ATLAS_PALETTE.slate60 }}>
-                        Steps · {run.steps.length}
-                    </Typography>
-                    {run.steps.length === 0 ? (
-                        <Typography sx={{ px: 4, py: 3, fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                            No steps have started yet.
+                    {/* A Task run whose work so far is all in its sub-tasks has no steps of its own to list. */}
+                    {(run.steps.length > 0 || run.children.length === 0) && (
+                        <Typography variant="overline" sx={{ display: 'block', px: 4, pt: 3, color: ATLAS_PALETTE.slate60 }}>
+                            Steps · {run.steps.length}
                         </Typography>
+                    )}
+                    {run.steps.length === 0 ? (
+                        run.children.length === 0 && (
+                            <Typography sx={{ px: 4, py: 3, fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
+                                No steps have started yet.
+                            </Typography>
+                        )
                     ) : (
                         run.steps.map((s) => (
                             <StepRow key={s.id} step={s} onOpen={() => navigate(`/agents/${s.agent_id}/runs/${s.id}`)} />
                         ))
+                    )}
+                    {run.children.length > 0 && (
+                        <>
+                            <Typography variant="overline" sx={{ display: 'block', px: 4, pt: 3, color: ATLAS_PALETTE.slate60 }}>
+                                Sub-tasks · {run.children.filter((c) => c.status === 'completed').length} of {run.children.length} done
+                            </Typography>
+                            {run.children.map((c) => (
+                                <ChildRow key={c.id} child={c} onOpen={() => navigate(`/workflows/${c.workflow_id}/runs/${c.id}`)} />
+                            ))}
+                        </>
                     )}
                 </Box>
             </Box>

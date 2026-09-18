@@ -2,17 +2,7 @@ import { sql } from 'kysely';
 import { db } from '../db/kysely-client.js';
 import type { EventsLogExecutor } from './events-log.js';
 import type { ItemType } from '../db/types.js';
-import type {
-    IEpic,
-    IStory,
-    ISubTask,
-    ISubBug,
-    IBug,
-    IssueStatus,
-    IssuePriority,
-    BugFrequency,
-    BugFailureScope,
-} from '@atlas/shared';
+import type { ITask, ISubTask, IssueStatus, IssuePriority } from '@atlas/shared';
 
 // ----------------------------------------------------------------------------
 // Row shapes
@@ -35,17 +25,8 @@ export interface IItemRow {
     pr_url: string | null;
     points: number | null;
     acceptance_criteria: string | null;
-    steps_to_reproduce: string | null;
-    expected: string | null;
-    actual: string | null;
-    frequency: BugFrequency | null;
-    failure_scope: BugFailureScope | null;
-    detected_at: string | null;
-    occurrence_count: number | null;
-    occurrence_total: number | null;
     started_at: string | null;
-    // T2 — git worktree association. See ItemsTable in db/types.ts for the
-    // full story. Nullable: legacy items + non-coding kinds carry NULL.
+    // Null until a workflow run provisions a checkout for the item.
     worktree_branch: string | null;
     worktree_path: string | null;
     // Task 1 — free-form labels for filtering. DB default `[]`; never null.
@@ -61,8 +42,8 @@ export interface IItemRow {
 
 const NN = (v: string | null | undefined): string => v ?? '';
 
-export function rowToEpic(r: IItemRow): IEpic {
-    if (r.type !== 'epic') throw new Error(`rowToEpic: expected epic, got ${r.type}`);
+export function rowToTask(r: IItemRow): ITask {
+    if (r.type !== 'task') throw new Error(`rowToTask: expected task, got ${r.type}`);
     return {
         id: r.id,
         project_id: r.project_id,
@@ -73,39 +54,14 @@ export function rowToEpic(r: IItemRow): IEpic {
         workflow_id: r.workflow_id ?? null,
         reporter_agent_id: r.reporter_agent_id,
         priority: r.priority ?? 'normal',
-        // DB column default is `[]`; never null in practice.
-        /* v8 ignore next */
-        labels: r.labels ?? [],
-        created_at: r.created_at,
-        updated_at: r.updated_at,
-    };
-}
-
-export function rowToStory(r: IItemRow): IStory {
-    if (r.type !== 'story') throw new Error(`rowToStory: expected story, got ${r.type}`);
-    return {
-        id: r.id,
-        // FK trigger guarantees parent exists; `?? ''` is a defensive fallback.
-        /* v8 ignore next */
-        epic_id: r.parent_id ?? '',
-        title: r.title,
-        description: NN(r.description),
-        status: r.status,
-        assignee_agent_id: r.assignee_agent_id,
-        workflow_id: r.workflow_id ?? null,
-        reporter_agent_id: r.reporter_agent_id,
-        priority: r.priority ?? 'normal',
+        acceptance_criteria: NN(r.acceptance_criteria),
         spec_md: r.spec_md,
         pr_url: r.pr_url,
-        // `points` column allows NULL in DB but the UI defaults to 0 on create.
-        /* v8 ignore next */
-        points: r.points ?? 0,
-        acceptance_criteria: NN(r.acceptance_criteria),
-        worktree_branch: r.worktree_branch,
-        worktree_path: r.worktree_path,
         // DB column default is `[]`; never null in practice.
         /* v8 ignore next */
         labels: r.labels ?? [],
+        worktree_branch: r.worktree_branch,
+        worktree_path: r.worktree_path,
         created_at: r.created_at,
         updated_at: r.updated_at,
     };
@@ -115,89 +71,17 @@ export function rowToSubTask(r: IItemRow): ISubTask {
     if (r.type !== 'sub_task') throw new Error(`rowToSubTask: expected sub_task, got ${r.type}`);
     return {
         id: r.id,
+        // FK trigger guarantees parent exists; `?? ''` is a defensive fallback.
         /* v8 ignore next */
-        story_id: r.parent_id ?? '',
+        task_id: r.parent_id ?? '',
         title: r.title,
         description: NN(r.description),
         status: r.status,
         assignee_agent_id: r.assignee_agent_id,
-        workflow_id: r.workflow_id ?? null,
         reporter_agent_id: r.reporter_agent_id,
         priority: r.priority ?? 'normal',
         acceptance_criteria: NN(r.acceptance_criteria),
         started_at: r.started_at,
-        worktree_branch: r.worktree_branch,
-        worktree_path: r.worktree_path,
-        /* v8 ignore next */
-        labels: r.labels ?? [],
-        created_at: r.created_at,
-        updated_at: r.updated_at,
-    };
-}
-
-export function rowToSubBug(r: IItemRow): ISubBug {
-    if (r.type !== 'sub_bug') throw new Error(`rowToSubBug: expected sub_bug, got ${r.type}`);
-    return {
-        id: r.id,
-        /* v8 ignore next */
-        story_id: r.parent_id ?? '',
-        title: r.title,
-        description: NN(r.description),
-        status: r.status,
-        assignee_agent_id: r.assignee_agent_id,
-        workflow_id: r.workflow_id ?? null,
-        reporter_agent_id: r.reporter_agent_id,
-        priority: r.priority ?? 'normal',
-        acceptance_criteria: NN(r.acceptance_criteria),
-        steps_to_reproduce: NN(r.steps_to_reproduce),
-        expected: NN(r.expected),
-        actual: NN(r.actual),
-        /* v8 ignore next */
-        frequency: r.frequency ?? 'sometimes',
-        /* v8 ignore next */
-        failure_scope: r.failure_scope ?? 'cosmetic',
-        detected_at: r.detected_at,
-        /* v8 ignore next */
-        occurrence_count: r.occurrence_count ?? 1,
-        /* v8 ignore next */
-        occurrence_total: r.occurrence_total ?? 1,
-        worktree_branch: r.worktree_branch,
-        worktree_path: r.worktree_path,
-        /* v8 ignore next */
-        labels: r.labels ?? [],
-        created_at: r.created_at,
-        updated_at: r.updated_at,
-    };
-}
-
-export function rowToBug(r: IItemRow): IBug {
-    if (r.type !== 'bug') throw new Error(`rowToBug: expected bug, got ${r.type}`);
-    return {
-        id: r.id,
-        /* v8 ignore next */
-        epic_id: r.parent_id ?? '',
-        title: r.title,
-        description: NN(r.description),
-        status: r.status,
-        assignee_agent_id: r.assignee_agent_id,
-        workflow_id: r.workflow_id ?? null,
-        reporter_agent_id: r.reporter_agent_id,
-        priority: r.priority ?? 'normal',
-        acceptance_criteria: NN(r.acceptance_criteria),
-        steps_to_reproduce: NN(r.steps_to_reproduce),
-        expected: NN(r.expected),
-        actual: NN(r.actual),
-        /* v8 ignore next */
-        frequency: r.frequency ?? 'sometimes',
-        /* v8 ignore next */
-        failure_scope: r.failure_scope ?? 'cosmetic',
-        detected_at: r.detected_at,
-        /* v8 ignore next */
-        occurrence_count: r.occurrence_count ?? 1,
-        /* v8 ignore next */
-        occurrence_total: r.occurrence_total ?? 1,
-        worktree_branch: r.worktree_branch,
-        worktree_path: r.worktree_path,
         /* v8 ignore next */
         labels: r.labels ?? [],
         created_at: r.created_at,
@@ -218,24 +102,10 @@ export interface CreateItemInput {
     status?: IssueStatus | undefined;
     assignee_agent_id?: string | null | undefined;
     reporter_agent_id?: string | null | undefined;
-
-    // Epic
     priority?: IssuePriority | undefined;
-
-    // Story
     spec_md?: string | null | undefined;
     pr_url?: string | null | undefined;
-    points?: number | undefined;
-
-    // Story / SubTask / SubBug
     acceptance_criteria?: string | undefined;
-
-    // Bug / SubBug
-    steps_to_reproduce?: string | undefined;
-    expected?: string | undefined;
-    actual?: string | undefined;
-    frequency?: BugFrequency | undefined;
-    failure_scope?: BugFailureScope | undefined;
 
     // Task 1 — free-form labels for filtering.
     labels?: string[] | undefined;
@@ -274,19 +144,6 @@ export async function createItem(input: CreateItemInput): Promise<IItemRow> {
         if (!projRow) throw new Error(`Project ${projectId} not found`);
         const id = `${projRow.issue_key_prefix}-${counterRow.last_seq}`;
 
-        // ADR 0014 — an item an agent creates during a workflow step belongs
-        // to that workflow run; its End step queues it for the child workflow.
-        const createdByRun = input.reporter_agent_id
-            ? await trx
-                  .selectFrom('agent_runs')
-                  .select('workflow_run_id')
-                  .where('agent_id', '=', input.reporter_agent_id)
-                  .where('status', 'in', ['queued', 'in_progress'])
-                  .where('workflow_run_id', 'is not', null)
-                  .orderBy('created_at', 'desc')
-                  .executeTakeFirst()
-            : undefined;
-
         const inserted = await trx
             .insertInto('items')
             .values({
@@ -302,18 +159,11 @@ export async function createItem(input: CreateItemInput): Promise<IItemRow> {
                 priority: input.priority ?? 'normal',
                 spec_md: input.spec_md ?? null,
                 pr_url: input.pr_url ?? null,
-                points: input.points ?? null,
                 acceptance_criteria: input.acceptance_criteria ?? null,
-                steps_to_reproduce: input.steps_to_reproduce ?? null,
-                expected: input.expected ?? null,
-                actual: input.actual ?? null,
-                frequency: input.frequency ?? null,
-                failure_scope: input.failure_scope ?? null,
                 // Task 1 — pg's default array→param encoding produces
                 // Postgres array syntax (`{a,b}`), not JSONB. Stringify
                 // explicitly so PG accepts it as a JSONB value.
                 labels: JSON.stringify(input.labels ?? []) as never,
-                created_by_workflow_run_id: createdByRun?.workflow_run_id ?? null,
             })
             .returningAll()
             .executeTakeFirstOrThrow();
@@ -349,14 +199,7 @@ export interface PatchFields {
     priority?: IssuePriority | undefined;
     spec_md?: string | null | undefined;
     pr_url?: string | null | undefined;
-    points?: number | undefined;
     acceptance_criteria?: string | undefined;
-    steps_to_reproduce?: string | undefined;
-    expected?: string | undefined;
-    actual?: string | undefined;
-    frequency?: BugFrequency | undefined;
-    failure_scope?: BugFailureScope | undefined;
-    // T2 — worktree association fields, see IItemRow above.
     worktree_branch?: string | null | undefined;
     worktree_path?: string | null | undefined;
     // Task 1 — labels.
@@ -413,7 +256,7 @@ export interface SearchHit {
 // the same filter knobs the client previously applied in-memory, so the
 // frontend can drop its corpus build and just render whatever comes back.
 //
-// `q` is optional: a filter-only request (e.g. `type=bug&status=ready`)
+// `q` is optional: a filter-only request (e.g. `type=sub_task&status=ready`)
 // is valid and skips the FTS expression entirely. When q is present,
 // results are ranked by `ts_rank`; otherwise they're sorted by
 // updated_at DESC so the page stays useful as a browse view.

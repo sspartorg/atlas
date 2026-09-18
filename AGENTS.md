@@ -106,10 +106,12 @@ For full MUI/data-fetching/status-display patterns, see `packages/web/AGENTS.md`
 - All UI is in first-person singular ("Your projects", not "Team projects")
 
 ### Workflows own routing
+- Two item kinds: a **Task** (top level) and its **Sub-tasks**. There are no epics, stories or bugs
 - Workflows escalate ONLY to the Owner: a workflow run parks (item → `waiting_for_info`) and resumes on the Owner's reply
-- Items are queued for workflows (`items.workflow_id`); agents never route items — no agent assigns, changes status, pushes or opens PRs. Every agent ends with an `atlas-outcome` block and the workflow graph decides the next step
+- Tasks are queued for workflows (`items.workflow_id`); sub-tasks never are. A Task's sub-tasks run inside the Task's run through its **Sub-tasks** steps: one at a time, each through a sub-workflow, on the Task's branch and worktree. One Task = one branch = one PR (or one push to the default branch)
+- Agents never route items — no agent assigns, changes status, pushes or opens PRs. Every agent ends with an `atlas-outcome` block and the workflow graph decides the next step
 - While a workflow run is working an item, the API rejects status / assign PATCHes with 409 (`services/workflow-lock.ts`) — stop the run to take the item back
-- Design: `docs/adr/0014-workflows-replace-agent-handoffs.md`
+- Design: `docs/adr/0014-workflows-replace-agent-handoffs.md`, `docs/adr/0015-one-task-one-pr.md` (Tasks, Sub-tasks steps, one PR per Task)
 
 ### Status transitions
 - The UI must HIDE invalid transitions (not grey them out, not show them at all)
@@ -126,7 +128,7 @@ For full MUI/data-fetching/status-display patterns, see `packages/web/AGENTS.md`
 ## Agents & Seed Data
 - No agents are seeded. Agent definitions live in the marketplace catalog (`packages/api/src/marketplace/catalog/<id>/`: `manifest.json`, `prompt.md`, `checklists.json`); `db/seed.ts` only syncs it into `marketplace_agents`, and the Owner installs from there — never hardcode agent info in components
 - 16 catalog agents (10 SDLC performers + reviewers, 6 autonomous) with categories: `software-dev` | `marketing` | `content` | `design`
-- Starter workflow templates (`dev`, `planning`, `qa`, `ai-readiness`) live in `packages/api/src/marketplace/workflows/*.json`; creating a workflow from one installs the agents it references. Agents carry no schedule, routing or git flags — workflows do
+- Starter workflow templates (`delivery`, `build`, `test`, `ai-readiness`) live in `packages/api/src/marketplace/workflows/*.json`; `build` and `test` are sub-workflows that `delivery`'s Sub-tasks steps run. Creating a workflow from a template installs the agents it references (and creates the sub-workflows it names). Agents carry no schedule, routing or git flags — workflows do
 - Each agent has an `accent_color` from the Atlas palette — use it for agent chips and avatars
 - CLI values: `claude` | `copilot` | `ollama` — these map to real CLI tools wired in Phase 5. `ollama` is not a separate binary: it runs Claude Code against Ollama's Anthropic-compatible API. Branch on `CLI_DIALECT` from `@atlas/shared`, never on the raw `cli` value
 

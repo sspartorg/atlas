@@ -90,7 +90,7 @@ export function FilterPill({
 
 // ── Dropdown chip ─────────────────────────────────────────────────────────
 
-export interface DropdownOption<T extends string | null = string | null> {
+interface DropdownOption<T extends string | null = string | null> {
     value: T;
     label: string;
 }

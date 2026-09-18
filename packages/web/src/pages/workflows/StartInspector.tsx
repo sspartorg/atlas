@@ -74,68 +74,87 @@ export function StartInspector({ workflow: wf, projects, onChange }: Props) {
                             title={INPUT_KIND_LABEL[k]}
                             sub={INPUT_KIND_HINT[k]}
                             selected={wf.input_kind === k}
-                            onClick={() => onChange({ input_kind: k })}
+                            // A sub-workflow only ever starts from a Task run's
+                            // Sub-tasks step, so it has no trigger of its own.
+                            onClick={() => onChange(k === 'sub_task' ? { input_kind: k, trigger: 'manual' } : { input_kind: k })}
                         />
                     ))}
                 </Box>
             </Box>
 
-            <Box>
-                <TextField
-                    select
-                    label="Trigger"
-                    size="small"
-                    value={wf.trigger}
-                    onChange={(e) => {
-                        const trigger = e.target.value as IWorkflow['trigger'];
-                        // The API rejects a schedule trigger without a preset.
-                        onChange(
-                            trigger === 'schedule' && !wf.schedule_preset
-                                ? { trigger, schedule_preset: 'daily', schedule_time_of_day: '09:00' }
-                                : { trigger },
-                        );
-                    }}
-                    fullWidth
-                    sx={{ mb: wf.trigger === 'schedule' ? 3 : 0 }}
-                >
-                    {WORKFLOW_TRIGGERS.map((t) => (
-                        <MenuItem key={t} value={t}>
-                            {TRIGGER_LABEL[t]}
-                        </MenuItem>
-                    ))}
-                </TextField>
-                {wf.trigger === 'schedule' && (
-                    <>
-                        <SchedulePresetFields
-                            columns={2}
-                            value={{
-                                preset: wf.schedule_preset,
-                                weekday: wf.schedule_weekday,
-                                cronExpression: wf.cron_expr ?? '',
-                            }}
-                            onChange={(patch) =>
-                                onChange({
-                                    ...(patch.preset ? { schedule_preset: patch.preset } : {}),
-                                    ...(patch.weekday !== undefined ? { schedule_weekday: patch.weekday } : {}),
-                                    ...(patch.cronExpression !== undefined
-                                        ? { cron_expr: patch.cronExpression || null }
-                                        : {}),
-                                })
-                            }
-                        />
-                        {needsTime && (
-                            <TextField
-                                label="Time of day"
-                                type="time"
-                                size="small"
-                                value={wf.schedule_time_of_day ?? '09:00'}
-                                onChange={(e) => onChange({ schedule_time_of_day: e.target.value || null })}
-                                fullWidth
+            {wf.input_kind !== 'sub_task' && (
+                <Box>
+                    <TextField
+                        select
+                        label="Trigger"
+                        size="small"
+                        value={wf.trigger}
+                        onChange={(e) => {
+                            const trigger = e.target.value as IWorkflow['trigger'];
+                            // The API rejects a schedule trigger without a preset.
+                            onChange(
+                                trigger === 'schedule' && !wf.schedule_preset
+                                    ? { trigger, schedule_preset: 'daily', schedule_time_of_day: '09:00' }
+                                    : { trigger },
+                            );
+                        }}
+                        fullWidth
+                        sx={{ mb: wf.trigger === 'schedule' ? 3 : 0 }}
+                    >
+                        {WORKFLOW_TRIGGERS.map((t) => (
+                            <MenuItem key={t} value={t}>
+                                {TRIGGER_LABEL[t]}
+                            </MenuItem>
+                        ))}
+                    </TextField>
+                    {wf.trigger === 'schedule' && (
+                        <>
+                            <SchedulePresetFields
+                                columns={2}
+                                value={{
+                                    preset: wf.schedule_preset,
+                                    weekday: wf.schedule_weekday,
+                                    cronExpression: wf.cron_expr ?? '',
+                                }}
+                                onChange={(patch) =>
+                                    onChange({
+                                        ...(patch.preset ? { schedule_preset: patch.preset } : {}),
+                                        ...(patch.weekday !== undefined ? { schedule_weekday: patch.weekday } : {}),
+                                        ...(patch.cronExpression !== undefined
+                                            ? { cron_expr: patch.cronExpression || null }
+                                            : {}),
+                                    })
+                                }
                             />
-                        )}
-                    </>
-                )}
-            </Box>
+                            {needsTime && (
+                                <TextField
+                                    label="Time of day"
+                                    type="time"
+                                    size="small"
+                                    value={wf.schedule_time_of_day ?? '09:00'}
+                                    onChange={(e) => onChange({ schedule_time_of_day: e.target.value || null })}
+                                    fullWidth
+                                />
+                            )}
+                        </>
+                    )}
+                </Box>
+            )}
+
+            {wf.input_kind === 'item' && (
+                <TextField
+                    label="Tasks in parallel"
+                    type="number"
+                    size="small"
+                    value={wf.max_parallel_runs}
+                    onChange={(e) =>
+                        onChange({ max_parallel_runs: Math.min(10, Math.max(1, Math.round(Number(e.target.value) || 1))) })
+                    }
+                    helperText="Each Task runs on its own branch; its sub-tasks always run one at a time"
+                    slotProps={{ htmlInput: { min: 1, max: 10 } }}
+                    fullWidth
+                />
+            )}
 
             <TextField
                 label="Max loops"

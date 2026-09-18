@@ -1,8 +1,10 @@
 import { sql } from 'kysely';
+import { ISSUE_TYPES } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
+import type { ItemType } from '../db/types.js';
 
 // Per-item cost rollup over the `items.parent_id` tree. The analytics
-// drill-down (project → epic → child item) is the only consumer. Two
+// drill-down (project → task → sub-task) is the only consumer. Two
 // functions live here because the UI needs them at different cadences:
 //
 //   • `costRollupForRoot` — aggregate-only summary (totals + byKind),
@@ -18,8 +20,6 @@ import { db } from '../db/kysely-client.js';
 // downward starting at `rootItemId`; the leaf query LEFT JOINs
 // `agent_runs` filtered to `status = 'completed'` so failed / cancelled
 // / in-flight runs don't inflate the rollup.
-
-export type ItemType = 'epic' | 'story' | 'bug' | 'sub_task' | 'sub_bug';
 
 interface CostTotals {
     total_cost_usd: number;
@@ -74,13 +74,7 @@ export interface CostRowsResult {
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 25;
-const ITEM_TYPES: readonly ItemType[] = [
-    'epic',
-    'story',
-    'bug',
-    'sub_task',
-    'sub_bug',
-];
+const ITEM_TYPES: readonly ItemType[] = ISSUE_TYPES;
 
 function isItemType(s: string | null | undefined): s is ItemType {
     return typeof s === 'string' && (ITEM_TYPES as readonly string[]).includes(s);
@@ -249,7 +243,7 @@ export async function costRollupForRoot(
 export interface CostRowsParams {
     page?: number;
     limit?: number;
-    /** Restrict to one item type (e.g. only the stories under an epic). */
+    /** Restrict to one item type (e.g. only the sub-tasks under a task). */
     type?: ItemType;
     /** Currently only `cost` is honoured. Default: cost DESC. */
     sort?: 'cost';

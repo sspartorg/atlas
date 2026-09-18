@@ -121,18 +121,11 @@ describe('useGlobalShortcuts', () => {
         expect(onOpenShortcuts).not.toHaveBeenCalled();
     });
 
-    it("pressing 'g' then 'e' navigates to /epics", () => {
+    it("pressing 'g' then 't' navigates to /tasks", () => {
         setup();
         fireKey('g');
-        fireKey('e');
-        expect(navigateSpy).toHaveBeenCalledWith('/epics');
-    });
-
-    it("pressing 'g' then 'i' navigates to /issues", () => {
-        setup();
-        fireKey('g');
-        fireKey('i');
-        expect(navigateSpy).toHaveBeenCalledWith('/issues');
+        fireKey('t');
+        expect(navigateSpy).toHaveBeenCalledWith('/tasks');
     });
 
     it("pressing 'g' when target is TEXTAREA does NOT navigate", () => {

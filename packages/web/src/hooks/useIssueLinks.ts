@@ -7,11 +7,8 @@ import type { IssueType } from '@atlas/shared';
 // has to invalidate BOTH or the just-added link won't show up until the
 // next hard reload (or until staleTime expires).
 const FULL_KEY: Record<IssueType, readonly [string, 'full']> = {
-    epic: ['epics', 'full'],
-    story: ['stories', 'full'],
-    bug: ['bugs', 'full'],
+    task: ['tasks', 'full'],
     sub_task: ['sub-tasks', 'full'],
-    sub_bug: ['sub-bugs', 'full'],
 };
 
 function invalidateLinkCaches(
@@ -29,7 +26,7 @@ function invalidateLinkCaches(
 
     // Composite payload that detail pages actually render from. The cache
     // key shape is `[<plural>, id, 'full']`, so the invalidation has to
-    // match that exact 3-element key — a 2-element `['stories', id]` would
+    // match that exact 3-element key — a 2-element `['tasks', id]` would
     // miss it.
     const fromKey = FULL_KEY[fromType];
     void qc.invalidateQueries({ queryKey: [fromKey[0], fromId, fromKey[1]] });

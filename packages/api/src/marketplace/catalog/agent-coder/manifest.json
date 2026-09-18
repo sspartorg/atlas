@@ -5,7 +5,7 @@
   "cli": "copilot",
   "model": "claude-sonnet-4.6",
   "framework": "tdd-red-green-refactor",
-  "description": "Implements the dev Story Architect spec'd in the same workflow worktree, runs the spec-kit lifecycle (clarify/plan/task/implement/verify/analyze) committing each phase, and reports via the `atlas-outcome` block; the workflow pushes the branch and opens the PR when it finishes.",
+  "description": "Implements one dev sub-task of a Task — its group of Architect's spec, or its acceptance criteria — in the Task's workflow worktree via TDD, commits each step, and reports via the `atlas-outcome` block; the workflow pushes the branch and opens the one PR when the Task finishes.",
   "designation": "Engineer",
   "accent_color": "#22A06B",
   "sort_order": 3,
@@ -15,7 +15,7 @@
   "kind_slug": "custom",
   "settings_json": {},
   "memory_cadence": 1,
-  "summary": "Implements the dev Story Architect spec'd in the same workflow worktree, runs the spec-kit lifecycle (clarify/plan/task/implement/verify/analyze) committing each phase.",
+  "summary": "Implements one dev sub-task of a Task via TDD on the Task's branch.",
   "version": 3,
   "published_at": "2026-07-01T00:00:00Z"
 }

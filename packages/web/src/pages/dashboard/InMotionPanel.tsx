@@ -5,7 +5,7 @@ import Typography from '@mui/material/Typography';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import Skeleton from '@mui/material/Skeleton';
-import type { IAgent } from '@atlas/shared';
+import type { IAgent, IssueType } from '@atlas/shared';
 import { ATLAS_PALETTE, ELEVATION } from '../../theme/tokens.js';
 import type { QueueItem } from '../../api/types.js';
 import { InMotionRow } from './InMotionRow.js';
@@ -17,7 +17,7 @@ interface IInMotionPanelProps {
     isLoading: boolean;
 }
 
-type FilterValue = 'all' | 'epic' | 'story' | 'bug' | 'sub_task' | 'sub_bug';
+type FilterValue = 'all' | IssueType;
 
 const MONO_FONT = '"JetBrains Mono", monospace';
 
@@ -104,11 +104,8 @@ export function InMotionPanel({ rows, agents, isLoading }: IInMotionPanelProps) 
                     }}
                 >
                     <MenuItem value="all">All types</MenuItem>
-                    <MenuItem value="epic">Epics</MenuItem>
-                    <MenuItem value="story">Stories</MenuItem>
-                    <MenuItem value="bug">Bugs</MenuItem>
+                    <MenuItem value="task">Tasks</MenuItem>
                     <MenuItem value="sub_task">Sub-tasks</MenuItem>
-                    <MenuItem value="sub_bug">Sub-bugs</MenuItem>
                 </Select>
             </Box>
 
@@ -145,7 +142,7 @@ export function InMotionPanel({ rows, agents, isLoading }: IInMotionPanelProps) 
                         No active work
                     </Typography>
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate40 }}>
-                        Assign a story to an agent to get things moving.
+                        Assign a task to an agent to get things moving.
                     </Typography>
                 </Box>
             ) : (

@@ -1,16 +1,12 @@
 # Testing `@atlas/mcp`
 
-Two ways to exercise the MCP server end-to-end: a scripted JSON-RPC smoke test, or the official **MCP Inspector** web UI. Both spawn the built server over stdio.
+Two ways to exercise the MCP server end-to-end: a scripted JSON-RPC smoke test, or the official **MCP Inspector** web UI. Both spawn the server over stdio from source through tsx — `@atlas/shared` ships raw TypeScript, so a built `node dist/index.js` can't load it (`pnpm --filter @atlas/mcp start` runs `node --import tsx src/index.ts` for the same reason).
 
 ---
 
 ## Prerequisites
 
-1. **Build the MCP package** (must re-run after any source change):
-   ```powershell
-   pnpm --filter @atlas/mcp build
-   ```
-   This emits `packages/mcp/dist/index.js`.
+1. **Install deps** once (`pnpm install`); no build step — the server runs from `packages/mcp/src` through tsx.
 
 2. **Start `@atlas/api`** in another terminal (the MCP tools call it over HTTP):
    ```powershell
@@ -30,7 +26,7 @@ The Inspector spawns the server, lists tools, and lets you call any tool with a 
 $env:CLIENT_PORT='6280'
 $env:SERVER_PORT='6281'
 $env:ATLAS_API_BASE='http://127.0.0.1:4001'
-npx -y @modelcontextprotocol/inspector node packages/mcp/dist/index.js
+npx -y @modelcontextprotocol/inspector node --import tsx packages/mcp/src/index.ts
 ```
 
 The first run downloads the inspector via `npx`. On startup it prints a line like:
@@ -48,52 +44,39 @@ The Inspector defaults to **6274** (UI) + **6277** (proxy). If either is already
 
 ### What to verify
 
-1. The connection card on the left auto-fills **Command: `node`**, **Args: `packages/mcp/dist/index.js`**, **Transport: STDIO**. Click **Connect**.
-2. Open the **Tools** tab → click **List Tools**. You should see exactly these 10:
-   - `list_projects`
-   - `list_epics`
-   - `get_epic`
-   - `get_epic_tree`
-   - `list_stories`
-   - `get_story`
-   - `list_sub_tasks`
-   - `list_sub_bugs`
-   - `list_bugs`
-   - `search_items`
-3. Call `list_projects` with no args — should return every project as JSON.
-4. Copy an epic id from `list_epics`, paste it into `get_epic_tree` — should return the epic nested with stories, each story's sub-tasks + sub-bugs, and the epic's standalone bugs.
+1. The connection card on the left auto-fills **Command: `node`**, **Args: `--import tsx packages/mcp/src/index.ts`**, **Transport: STDIO**. Click **Connect**.
+2. Open the **Tools** tab → click **List Tools**. You should see the 13 consolidated tools listed in [`mcp.md`](mcp.md): `crud_agent`, `agent_memory`, `marketplace_agent`, `search_item`, `create_item`, `get_item`, `update_item`, `delete_item`, `listProjects`, `getProject`, `crud_reminder`, `search_reminder`, `sendExternalNotification`.
+3. Call `listProjects` with no args — should return every project as JSON.
+4. Call `search_item { query }`, take a Task id from the hits, and call `get_item { issue_type: 'task', id }` — should return the Task with its `sub_tasks`, project, comments, links and activity. `get_item { issue_type: 'sub_task', id }` on one of those returns the sub-task with its parent `task`.
 
 ### Stopping the Inspector
 
-`Ctrl+C` in the terminal that launched `npx`. The Inspector also leaves the spawned `node packages/mcp/dist/index.js` child running for the duration of the session — `Ctrl+C` reaps it.
+`Ctrl+C` in the terminal that launched `npx`. The Inspector also leaves the spawned `node --import tsx packages/mcp/src/index.ts` child running for the duration of the session — `Ctrl+C` reaps it.
 
 ---
 
 ## Option B — Scripted smoke test (no browser)
 
-Faster check that verifies the server boots, the JSON-RPC handshake works, and (optionally) one tool round-trips through the live API.
+`packages/mcp/scripts/smoke-test.mjs` boots the server **from source** over stdio (`node --import tsx src/index.ts`, like `examples/claude-desktop-config.json`; no build needed — `@atlas/shared` ships raw TypeScript, so `node dist/index.js` can't load it), does the JSON-RPC handshake, and checks `tools/list` against the 13 tools `src/tools/*.ts` register. With `LIVE_API=1` it also round-trips the **read-only** tools against a running API: `listProjects` → `getProject`, `crud_agent op=search` → `op=get`, `search_item` → `get_item`. It never writes, so pointing it at a dev stack with real data is safe.
 
-```powershell
-# Tools/list only — does not need the API to be running
+```bash
+# Tool surface only — no API needed
 node packages/mcp/scripts/smoke-test.mjs
 
-# Also exercise list_projects end-to-end (requires @atlas/api running)
-$env:LIVE_API='1'
-node packages/mcp/scripts/smoke-test.mjs
+# Plus the read-only round-trip (API must be running; default base http://127.0.0.1:4001)
+LIVE_API=1 ATLAS_API_BASE=http://127.0.0.1:4001 node packages/mcp/scripts/smoke-test.mjs
 ```
 
-Expected output:
+`SMOKE_QUERY` (default `todo`) is the `search_item` keyword; zero hits only skip the `get_item` leg, and an empty project / agent list skips its `get` leg.
+
+Expected output ends with:
 
 ```
-[smoke] initialize ok. server: { name: 'atlas-mcp', version: '0.1.0' }
-[smoke] tools/list returned 10 tools:
-  - list_projects  (List projects)
-  - list_epics  (List epics)
-  ...
-[smoke] list_projects returned <N> project(s)
+[smoke] tools/list returned 13 tools: agent_memory, create_item, crud_agent, ...
+[smoke] OK ✓          # LIVE_API=1; otherwise "LIVE_API not set — skipping round-trip"
 ```
 
-Non-zero exit means the handshake, the tools/list count, or the tools/call failed.
+Non-zero exit means the handshake, the tool surface, or a tool call failed. A tool added or removed in `src/tools/*.ts` must be added to / removed from `EXPECTED_TOOLS` in the script.
 
 ---
 
@@ -114,7 +97,7 @@ Sample config at `packages/mcp/examples/claude-desktop-config.json`. Replace `<a
 
 ## Common gotchas
 
-- **Tools list is empty / Connect fails in Inspector** → forgot to `pnpm --filter @atlas/mcp build`. The Inspector spawns `dist/index.js`, not source.
+- **Tools list is empty / Connect fails in Inspector** → the Inspector was pointed at `dist/index.js`; it can't load `@atlas/shared`'s TypeScript. Use `node --import tsx packages/mcp/src/index.ts`.
 - **Every tool call errors with `fetch failed` or `ECONNREFUSED 127.0.0.1:4001`** → `@atlas/api` isn't running.
 - **Port already in use** → use the `CLIENT_PORT` / `SERVER_PORT` env-var override shown above.
 - **Inspector opens, but server log says nothing on stdout** → that is correct. The server writes JSON-RPC to stdout (consumed by the transport) and all diagnostics to stderr. `console.log` would corrupt the stream.

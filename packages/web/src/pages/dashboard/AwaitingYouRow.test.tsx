@@ -9,7 +9,7 @@ describe('AwaitingYouRow', () => {
             <AwaitingYouRow
                 row={{
                     id: 'CER-7',
-                    issue_type: 'story',
+                    issue_type: 'sub_task',
                     title: 'Add a login form',
                     status: 'waiting_for_info',
                     updated_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
@@ -21,7 +21,7 @@ describe('AwaitingYouRow', () => {
     });
 
     it('handles each issue_type → route mapping (click executes navigate)', () => {
-        const issueTypes = ['epic', 'story', 'bug', 'sub_task', 'sub_bug'] as const;
+        const issueTypes = ['task', 'sub_task'] as const;
         for (const t of issueTypes) {
             const { unmount } = renderWithProviders(
                 <AwaitingYouRow
@@ -46,7 +46,7 @@ describe('AwaitingYouRow', () => {
             <AwaitingYouRow
                 row={{
                     id: 'M-1',
-                    issue_type: 'story',
+                    issue_type: 'sub_task',
                     title: 'Recent task',
                     status: 'in_review',
                     updated_at: new Date(Date.now() - 10 * 60_000).toISOString(),
@@ -61,8 +61,8 @@ describe('AwaitingYouRow', () => {
             <AwaitingYouRow
                 row={{
                     id: 'H-1',
-                    issue_type: 'bug',
-                    title: 'Old bug',
+                    issue_type: 'sub_task',
+                    title: 'Old item',
                     status: 'in_review',
                     updated_at: new Date(Date.now() - 5 * 60 * 60_000).toISOString(),
                 }}
@@ -76,7 +76,7 @@ describe('AwaitingYouRow', () => {
             <AwaitingYouRow
                 row={{
                     id: 'D-1',
-                    issue_type: 'bug',
+                    issue_type: 'sub_task',
                     title: 'Ancient',
                     status: 'in_review',
                     updated_at: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(),
@@ -91,7 +91,7 @@ describe('AwaitingYouRow', () => {
             <AwaitingYouRow
                 row={{
                     id: 'X-1',
-                    issue_type: 'story',
+                    issue_type: 'sub_task',
                     title: 'Broken date',
                     status: 'in_review',
                     updated_at: 'not-a-date',
@@ -106,7 +106,7 @@ describe('AwaitingYouRow', () => {
             <AwaitingYouRow
                 row={{
                     id: 'N-1',
-                    issue_type: 'story',
+                    issue_type: 'sub_task',
                     title: 'Not overdue',
                     status: 'draft',
                     updated_at: new Date(Date.now() - 60_000).toISOString(),

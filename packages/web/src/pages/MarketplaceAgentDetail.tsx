@@ -204,6 +204,7 @@ export function MarketplaceAgentDetail() {
                         <Chip size="small" label={agent.kind_slug} variant="outlined" />
                         <Chip size="small" label={agent.cli} variant="outlined" />
                         <Chip size="small" label={agent.model} variant="outlined" />
+                        <Chip size="small" label={`effort · ${agent.effort}`} variant="outlined" />
                     </Box>
                 </Box>
                 <Box

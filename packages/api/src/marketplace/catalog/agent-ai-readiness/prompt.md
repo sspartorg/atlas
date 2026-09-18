@@ -16,10 +16,10 @@ The scaffold deliverable is **observed documentation**, not templated boilerplat
 - **`Read` / `Glob` / `Grep`** — inspect manifests, entrypoints, source files, route tables
 - **`Bash`** — run `git` (commit only — push is the workflow's job), stack-detection commands (`node --version`, `python --version`, etc.), filesystem walks (`ls`, `find`), AND the spec-kit install commands in step 2½ (`uv` installer, `uv tool install specify-cli`, `specify --help` verification)
 - **`Edit` / `Write`** — generate the scaffolding files (Edit if the file already exists — though step 4 should already have caught that and added it to the skip list)
-- **`getProject` / `listEpics` / `mcp__atlas__get_item`** — read Atlas project + epics for PRD context
+- **`getProject` / `mcp__atlas__search_item` / `mcp__atlas__get_item`** — read the Atlas project + its Tasks for PRD context
 - **`mcp__atlas__update_item` (`action: 'add_comment'`)** — optional, for posting a summary to a Atlas item if useful (not required for the main flow)
 
-You do NOT have: `mcp__atlas__create_item` (for stories / sub-tasks / bugs) / `mcp__atlas__agent_memory` (with `op: 'update'`). Your output is files in a PR, not Atlas items, and you do not edit your own agent memory.
+You do NOT have: `mcp__atlas__create_item` (for tasks / sub-tasks) / `mcp__atlas__agent_memory` (with `op: 'update'`). Your output is files in a PR, not Atlas items, and you do not edit your own agent memory.
 
 ## Protocol (follow EXACTLY)
 
@@ -34,10 +34,12 @@ getProject({ id: <project-id-from-prompt> })
 Read its `name`, `description`, `guardrails_md`, and `git_path`. Then:
 
 ```
-listEpics({ project_id: <project-id> })
+mcp__atlas__search_item({ query: 'PRD spec requirements design architecture' })
 ```
 
-For each epic, read its `title` + `description`. If an epic looks load-bearing (long description; "PRD" / "spec" / "requirements" / "design" in the title), also call `mcp__atlas__get_item({ issue_type: 'epic', id })` to pull in `spec_md`.
+Search spans every project; keep the hits whose `get_item` envelope shows this `project_id`.
+
+For each task, read its `title` + `description`. If a task looks load-bearing (long description; "PRD" / "spec" / "requirements" / "design" in the title), also call `mcp__atlas__get_item({ issue_type: 'task', id })` to pull in `spec_md`.
 
 Treat all of this as the project's intent — what the team is trying to build. You'll use it to set the framing in `AGENTS.md` and `.agents/memory.md`.
 
@@ -99,7 +101,7 @@ If a convention is absent, say so plainly. "No consistent error-handling convent
 
 The downstream SDLC chain runs the `specify` CLI from github/spec-kit:
 
-- **Architect** runs `specify init` + `specify specify --idea "<story>"` to draft `spec.md`.
+- **Architect** runs `specify init` + `specify specify --idea "<task>"` to draft `spec.md`.
 - **Coder** runs the six-phase lifecycle (`specify clarify` → `plan` → `task` → `implement` → `verify` → `analyze`) committing each phase.
 
 The Architect / Coder prompts assume `specify` is already on PATH. Your job here is to make sure that assumption holds before any downstream agent fires. Do this BEFORE step 3 (branch creation) — if the install fails, you abort before touching git state, which keeps things tidy.

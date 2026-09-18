@@ -34,29 +34,11 @@
       "p95_ms": 17446,
       "floor_ms": 21808
     },
-    "/epics": {
-      "samples": 35,
-      "p50_ms": 9308,
-      "p95_ms": 23090,
-      "floor_ms": 28863
-    },
-    "/epics/new": {
-      "samples": 19,
-      "p50_ms": 6417,
-      "p95_ms": 21775,
-      "floor_ms": 27219
-    },
     "/guardrails": {
       "samples": 21,
       "p50_ms": 7186,
       "p95_ms": 20059,
       "floor_ms": 25074
-    },
-    "/issues": {
-      "samples": 59,
-      "p50_ms": 11101,
-      "p95_ms": 36351,
-      "floor_ms": 45439
     },
     "/notifications": {
       "samples": 20,
@@ -82,12 +64,6 @@
       "p95_ms": 304,
       "floor_ms": 380
     },
-    "/projects/e2e-terminal-project?tab=epics": {
-      "samples": 2,
-      "p50_ms": 141,
-      "p95_ms": 141,
-      "floor_ms": 177
-    },
     "/projects/e2e-terminal-project?tab=guardrails": {
       "samples": 2,
       "p50_ms": 143,
@@ -100,17 +76,17 @@
       "p95_ms": 129,
       "floor_ms": 162
     },
-    "/projects/e2e-terminal-project?tab=issues": {
-      "samples": 2,
-      "p50_ms": 141,
-      "p95_ms": 141,
-      "floor_ms": 177
-    },
     "/projects/e2e-terminal-project?tab=overview": {
       "samples": 3,
       "p50_ms": 260,
       "p95_ms": 260,
       "floor_ms": 325
+    },
+    "/projects/e2e-terminal-project?tab=tasks": {
+      "samples": 2,
+      "p50_ms": 141,
+      "p95_ms": 141,
+      "floor_ms": 177
     },
     "/queue": {
       "samples": 20,
@@ -147,6 +123,18 @@
       "p50_ms": 6934,
       "p95_ms": 15621,
       "floor_ms": 19527
+    },
+    "/tasks": {
+      "samples": 35,
+      "p50_ms": 9308,
+      "p95_ms": 23090,
+      "floor_ms": 28863
+    },
+    "/tasks/new": {
+      "samples": 19,
+      "p50_ms": 6417,
+      "p95_ms": 21775,
+      "floor_ms": 27219
     },
     "/terminal": {
       "samples": 33,

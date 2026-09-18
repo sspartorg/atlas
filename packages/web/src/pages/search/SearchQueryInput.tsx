@@ -281,7 +281,7 @@ export function SearchQueryInput({
                             onFocus={() => setFocused(true)}
                             onBlur={() => setTimeout(() => setFocused(false), 120)}
                             onKeyDown={handleKeyDown}
-                            placeholder={'type = "story" AND status = "Ready for Dev"'}
+                            placeholder={'type = "task" AND status = "Ready"'}
                             sx={{
                                 position: 'relative',
                                 width: '100%',

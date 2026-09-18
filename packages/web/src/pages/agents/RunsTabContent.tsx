@@ -138,7 +138,7 @@ export function RunsTabContent({ agent, runs }: Props) {
                             </Box>
                         }
                         onClick={() =>
-                            toast.show({ message: 'Run now: pick an Epic or Story from the Queue' })
+                            toast.show({ message: 'Run now: pick a Task from the Queue' })
                         }
                         sx={{
                             textTransform: 'none',

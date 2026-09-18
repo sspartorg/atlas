@@ -30,7 +30,7 @@ afterAll(async () => {
 describe('SQL injection guard — searchItems', () => {
     it("classic UNION/DROP payload does not truncate the projects table", async () => {
         await insertProject('sqlinj-p1', 'SQA');
-        await insertItem({ id: 'SQA-1', type: 'epic', project_id: 'sqlinj-p1', title: 'Real epic' });
+        await insertItem({ id: 'SQA-1', type: 'task', project_id: 'sqlinj-p1', title: 'Real epic' });
 
         const countBefore = (await testDb.selectFrom('projects').selectAll().execute()).length;
 
@@ -44,7 +44,7 @@ describe('SQL injection guard — searchItems', () => {
 
     it("UNION SELECT injection in q returns empty / no error (parameterized query)", async () => {
         await insertProject('sqlinj-p2', 'SQB');
-        await insertItem({ id: 'SQB-1', type: 'epic', project_id: 'sqlinj-p2', title: 'Real epic' });
+        await insertItem({ id: 'SQB-1', type: 'task', project_id: 'sqlinj-p2', title: 'Real epic' });
 
         // Should not throw; returns an array (possibly empty).
         const results = await searchItems({

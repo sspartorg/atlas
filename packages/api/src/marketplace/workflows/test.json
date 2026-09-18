@@ -1,0 +1,29 @@
+{
+    "id": "test",
+    "name": "Test sub-task",
+    "description": "Runs inside a Task's Delivery workflow, once per [QA] sub-task: QA Writer plans the tests, a reviewer checks the plan, Automation writes them and a reviewer approves — on the Task's branch, after the dev work is built.",
+    "input_kind": "sub_task",
+    "trigger": "manual",
+    "use_worktree": true,
+    "push_code": false,
+    "raises_pr": false,
+    "graph": {
+        "nodes": [
+            { "id": "start", "type": "start", "position": { "x": 0, "y": 0 } },
+            { "id": "qa-writer", "type": "agent", "agent_id": "agent-qa-writer", "position": { "x": 0, "y": 130 } },
+            { "id": "qa-review", "type": "agent", "agent_id": "agent-qa-reviewer", "position": { "x": 0, "y": 260 } },
+            { "id": "automation", "type": "agent", "agent_id": "agent-automation", "position": { "x": 0, "y": 390 } },
+            { "id": "automation-review", "type": "agent", "agent_id": "agent-automation-reviewer", "position": { "x": 0, "y": 520 } },
+            { "id": "end", "type": "end", "position": { "x": 0, "y": 650 } }
+        ],
+        "edges": [
+            { "id": "e-start", "source": "start", "target": "qa-writer", "kind": "pass" },
+            { "id": "e-qa-writer", "source": "qa-writer", "target": "qa-review", "kind": "pass" },
+            { "id": "e-qa-review", "source": "qa-review", "target": "automation", "kind": "pass" },
+            { "id": "e-qa-review-fail", "source": "qa-review", "target": "qa-writer", "kind": "fail" },
+            { "id": "e-automation", "source": "automation", "target": "automation-review", "kind": "pass" },
+            { "id": "e-automation-review", "source": "automation-review", "target": "end", "kind": "pass" },
+            { "id": "e-automation-review-fail", "source": "automation-review", "target": "automation", "kind": "fail" }
+        ]
+    }
+}

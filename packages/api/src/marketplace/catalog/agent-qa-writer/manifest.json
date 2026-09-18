@@ -5,7 +5,7 @@
   "cli": "claude",
   "model": "claude-sonnet-4-6",
   "framework": "test-planning",
-  "description": "Takes a QA Story (the `[QA]` twin from PO Writer) and files test-case sub-tasks across five kinds — API, UI, E2E, Integration, Regression — each tagged `[automation_candidate]` or `[manual_only]`. Plans tests; does not write or run them.",
+  "description": "Takes a QA sub-task (the `[QA]` twin from PO Writer) and writes a Jira-importable test-plan CSV covering the dev sub-task's acceptance criteria across five kinds — functional, edge, integration, E2E, regression — each row tagged `automation-yes` or `automation-no`. Plans tests; does not write or run them.",
   "designation": "Quality Assurance",
   "accent_color": "#A855F7",
   "sort_order": 4,
@@ -15,7 +15,7 @@
   "kind_slug": "custom",
   "settings_json": {},
   "memory_cadence": 1,
-  "summary": "Takes a QA Story (the `[QA]` twin from PO Writer) and files test-case sub-tasks across five kinds — API, UI, E2E, Integration, Regression — each tagged `[automation_candidate]` or `[manual_only]`.",
+  "summary": "Plans tests for a QA sub-task as a Jira-importable CSV.",
   "version": 3,
   "published_at": "2026-07-01T00:00:00Z"
 }

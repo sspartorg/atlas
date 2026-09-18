@@ -9,14 +9,14 @@ describe('ConfirmDeleteModal', () => {
         renderWithProviders(
             <ConfirmDeleteModal
                 open
-                entityKind="story"
-                entityTitle="Story A"
+                entityKind="task"
+                entityTitle="Task A"
                 onConfirm={() => Promise.resolve()}
                 onClose={() => undefined}
             />,
         );
-        expect(screen.getByText(/Delete this story\?/i)).toBeInTheDocument();
-        expect(screen.getByText('Story A')).toBeInTheDocument();
+        expect(screen.getByText(/Delete this task\?/i)).toBeInTheDocument();
+        expect(screen.getByText('Task A')).toBeInTheDocument();
     });
 
     it('fires onConfirm then onClose on the destructive button', async () => {
@@ -25,13 +25,13 @@ describe('ConfirmDeleteModal', () => {
         renderWithProviders(
             <ConfirmDeleteModal
                 open
-                entityKind="bug"
-                entityTitle="Bug A"
+                entityKind="sub_task"
+                entityTitle="Sub-task A"
                 onConfirm={onConfirm}
                 onClose={onClose}
             />,
         );
-        await userEvent.click(screen.getByRole('button', { name: /Delete bug/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Delete sub-task/i }));
         await waitFor(() => expect(onConfirm).toHaveBeenCalled());
         expect(onClose).toHaveBeenCalled();
     });
@@ -41,13 +41,13 @@ describe('ConfirmDeleteModal', () => {
         renderWithProviders(
             <ConfirmDeleteModal
                 open
-                entityKind="epic"
+                entityKind="task"
                 entityTitle="E1"
                 onConfirm={onConfirm}
                 onClose={() => undefined}
             />,
         );
-        await userEvent.click(screen.getByRole('button', { name: /Delete epic/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Delete task/i }));
         expect(await screen.findByText('nope')).toBeInTheDocument();
     });
 
@@ -71,7 +71,7 @@ describe('ConfirmDeleteModal', () => {
         renderWithProviders(
             <ConfirmDeleteModal
                 open
-                entityKind="story"
+                entityKind="task"
                 entityTitle="S1"
                 onConfirm={() => Promise.resolve()}
                 onClose={onClose}
@@ -86,13 +86,13 @@ describe('ConfirmDeleteModal', () => {
         renderWithProviders(
             <ConfirmDeleteModal
                 open
-                entityKind="sub_bug"
+                entityKind="sub_task"
                 entityTitle="B1"
                 onConfirm={onConfirm}
                 onClose={() => undefined}
             />,
         );
-        await userEvent.click(screen.getByRole('button', { name: /Delete sub-bug/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Delete sub-task/i }));
         expect(await screen.findByText('plain string error')).toBeInTheDocument();
     });
 
@@ -114,11 +114,11 @@ describe('IssueDeleteAction', () => {
     it('shows the modal when the kebab menu Delete is clicked', async () => {
         const onDelete = vi.fn().mockResolvedValue(undefined);
         renderWithProviders(
-            <IssueDeleteAction entityKind="story" entityTitle="S1" onDelete={onDelete} />,
+            <IssueDeleteAction entityKind="task" entityTitle="S1" onDelete={onDelete} />,
         );
-        await userEvent.click(screen.getByRole('button', { name: /Story actions/i }));
-        await userEvent.click(await screen.findByText(/Delete this story…/i));
-        expect(await screen.findByText(/Delete this story\?/i)).toBeInTheDocument();
+        await userEvent.click(screen.getByRole('button', { name: /Task actions/i }));
+        await userEvent.click(await screen.findByText(/Delete this task…/i));
+        expect(await screen.findByText(/Delete this task\?/i)).toBeInTheDocument();
     });
 
     it('renders Clone menu item when onClone is provided (onClone branch)', async () => {
@@ -126,13 +126,13 @@ describe('IssueDeleteAction', () => {
         const onDelete = vi.fn().mockResolvedValue(undefined);
         renderWithProviders(
             <IssueDeleteAction
-                entityKind="epic"
+                entityKind="task"
                 entityTitle="E1"
                 onDelete={onDelete}
                 onClone={onClone}
             />,
         );
-        await userEvent.click(screen.getByRole('button', { name: /Epic actions/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Task actions/i }));
         const cloneItem = await screen.findByText(/Clone item…/i);
         expect(cloneItem).toBeInTheDocument();
         await userEvent.click(cloneItem);
@@ -143,15 +143,15 @@ describe('IssueDeleteAction', () => {
         const onDelete = vi.fn().mockResolvedValue(undefined);
         renderWithProviders(
             <IssueDeleteAction
-                entityKind="story"
+                entityKind="sub_task"
                 entityTitle="S2"
                 onDelete={onDelete}
-                redirectTo="/epics/ep-1"
+                redirectTo="/tasks/ATL-1"
             />,
         );
-        await userEvent.click(screen.getByRole('button', { name: /Story actions/i }));
-        await userEvent.click(await screen.findByText(/Delete this story…/i));
-        await userEvent.click(await screen.findByRole('button', { name: /Delete story/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Sub-task actions/i }));
+        await userEvent.click(await screen.findByText(/Delete this sub-task…/i));
+        await userEvent.click(await screen.findByRole('button', { name: /Delete sub-task/i }));
         await waitFor(() => expect(onDelete).toHaveBeenCalled());
     });
 });

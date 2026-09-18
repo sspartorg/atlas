@@ -3,8 +3,8 @@ import type { ICostSummary, ITerminalCostSummary } from '@atlas/shared';
 
 export interface SidenavCounts {
     projects: number;
-    epics: number;
-    issues: number;
+    tasks: number;
+    sub_tasks: number;
     queue: number;
     agents: number;
     notifications: number;
@@ -12,8 +12,9 @@ export interface SidenavCounts {
 
 type AgentCategoryKey = 'software-dev' | 'marketing' | 'content' | 'design';
 
+// Agents have no queue of their own (Tasks queue for workflows — see
+// `services/workflow-queue.ts`), so the only per-agent number is live runs.
 interface CategoryStat {
-    queued: number;
     running: number;
 }
 
@@ -37,8 +38,8 @@ export interface TodaysPass {
 
 export interface DashboardKpis {
     activeAgents: number;
-    epics: number;
-    storiesInProgress: number;
+    tasks: number;
+    tasksInProgress: number;
     doneThisWeek: number;
     projectCount: number;
     // True totals for the two dashboard panels. The `awaiting` / `queue`
@@ -59,14 +60,12 @@ export interface DashboardKpis {
 
 // Per-project Overview KPIs. Backs `GET /api/counts/project/:id` so the
 // Project Detail Overview tab can render its 4 KPI tiles + their sub-captions
-// without fetching the entire epics / stories / bugs lists client-side.
+// without fetching the entire task list client-side.
 export interface ProjectCounts {
-    open_epics: number;
-    epics_ready: number;
-    stories_in_flight: number;
-    stories_waiting_info: number;
-    open_bugs: number;
-    bugs_ready: number;
+    open_tasks: number;
+    tasks_ready: number;
+    tasks_in_flight: number;
+    tasks_waiting_info: number;
     costSummary: ICostSummary;
     // Manual terminal sessions closed in the same month for this
     // project. Powers the Project Overview AI Cost tile's combined
@@ -76,7 +75,7 @@ export interface ProjectCounts {
 
 export const countsService = {
     async getSidenavCounts(): Promise<SidenavCounts> {
-        const [projects, epics, issues, queue, agents, notifications] = await Promise.all([
+        const [projects, tasks, subTasks, queue, agents, notifications] = await Promise.all([
             db
                 .selectFrom('projects')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
@@ -84,31 +83,49 @@ export const countsService = {
             db
                 .selectFrom('items')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
-                .where('type', '=', 'epic')
+                .where('type', '=', 'task')
                 .executeTakeFirst(),
             db
                 .selectFrom('items')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
-                .where('type', 'in', ['story', 'bug'])
+                .where('type', '=', 'sub_task')
                 .executeTakeFirst(),
-            // Queue badge counts ready items that are actually queued for
-            // an AI agent. Owner-assigned rows (`assignee_agent_id IS NULL`)
-            // are excluded because they don't appear in any agent's queue
-            // on the Queue page — they belong in "Waiting on You" instead.
-            // Without the assignee filter the badge over-counts every
-            // unpicked-up item and stops matching what the page renders.
-            db
-                .selectFrom('items')
-                .select(({ fn }) => fn.countAll<string>().as('n'))
-                .where('type', 'in', ['epic', 'story', 'bug'])
-                .where('status', '=', 'ready')
-                .where('assignee_agent_id', 'is not', null)
-                .executeTakeFirst(),
+            // Queue badge = Tasks queued for a workflow + Task runs running
+            // now, the same rows the Queue page lists as queued / running
+            // (`services/workflow-queue.ts`). Parked runs wait on the Owner
+            // and ready Tasks with no workflow go nowhere, so neither counts.
+            Promise.all([
+                db
+                    .selectFrom('items as i')
+                    .innerJoin('workflows as w', 'w.id', 'i.workflow_id')
+                    .select(({ fn }) => fn.countAll<string>().as('n'))
+                    .where('i.type', '=', 'task')
+                    .where('i.status', '=', 'ready')
+                    .where('w.input_kind', '=', 'item')
+                    .where(({ not, exists, selectFrom }) =>
+                        not(
+                            exists(
+                                selectFrom('workflow_runs as wr')
+                                    .select('wr.id')
+                                    .whereRef('wr.item_id', '=', 'i.id')
+                                    .where('wr.status', 'in', ['running', 'waiting_for_owner']),
+                            ),
+                        ),
+                    )
+                    .executeTakeFirst(),
+                db
+                    .selectFrom('workflow_runs')
+                    .select(({ fn }) => fn.countAll<string>().as('n'))
+                    .where('status', '=', 'running')
+                    .where('parent_workflow_run_id', 'is', null)
+                    .where('item_id', 'is not', null)
+                    .executeTakeFirst(),
+            ]).then(([queued, running]) => ({ n: Number(queued?.n ?? 0) + Number(running?.n ?? 0) })),
             // 2026-09-12 — counts ALL agents, not just `status='active'`.
             // The sidenav label is bare "Agents", the badge links to /agents
             // which lists every agent, and /queue's header counts every agent
             // too — so an active-only badge read as "6 agents are missing".
-            // Its five siblings (projects, epics, issues, queue,
+            // Its five siblings (projects, tasks, sub_tasks, queue,
             // notifications) all count every row; this is the odd one out.
             // The active/paused split is still visible per-card and on the
             // Queue page, where it has a label to explain it.
@@ -127,8 +144,8 @@ export const countsService = {
         /* v8 ignore start */
         return {
             projects: Number(projects?.n ?? 0),
-            epics: Number(epics?.n ?? 0),
-            issues: Number(issues?.n ?? 0),
+            tasks: Number(tasks?.n ?? 0),
+            sub_tasks: Number(subTasks?.n ?? 0),
             queue: Number(queue?.n ?? 0),
             agents: Number(agents?.n ?? 0),
             notifications: Number(notifications?.n ?? 0),
@@ -142,8 +159,8 @@ export const countsService = {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         const [
             activeAgents,
-            epics,
-            storiesInProgress,
+            tasks,
+            tasksInProgress,
             doneThisWeek,
             projectCount,
             awaitingTotal,
@@ -159,18 +176,18 @@ export const countsService = {
             db
                 .selectFrom('items')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
-                .where('type', '=', 'epic')
+                .where('type', '=', 'task')
                 .executeTakeFirst(),
             db
                 .selectFrom('items')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
-                .where('type', '=', 'story')
+                .where('type', '=', 'task')
                 .where('status', 'in', ['ready', 'in_progress', 'in_review'])
                 .executeTakeFirst(),
             db
                 .selectFrom('items')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
-                .where('type', '=', 'story')
+                .where('type', '=', 'task')
                 .where('status', '=', 'done')
                 .where('updated_at', '>=', sevenDaysAgo)
                 .executeTakeFirst(),
@@ -230,8 +247,8 @@ export const countsService = {
         /* v8 ignore start */
         return {
             activeAgents: Number(activeAgents?.n ?? 0),
-            epics: Number(epics?.n ?? 0),
-            storiesInProgress: Number(storiesInProgress?.n ?? 0),
+            tasks: Number(tasks?.n ?? 0),
+            tasksInProgress: Number(tasksInProgress?.n ?? 0),
             doneThisWeek: Number(doneThisWeek?.n ?? 0),
             projectCount: Number(projectCount?.n ?? 0),
             awaitingTotal: Number(awaitingTotal?.n ?? 0),
@@ -259,47 +276,29 @@ export const countsService = {
     },
 
     async getAgentCategoryStats(): Promise<AgentStatsByCategory> {
-        // queued mirrors the Queue sidenav badge (Ready + agent-assigned
-        // items awaiting dispatch) — counting `agent_runs.status='queued'`
-        // read 0 while the Queue page showed work waiting. running stays
-        // run-based: an in_progress run is the live signal.
-        const [queuedRows, runningRows] = await Promise.all([
-            db
-                .selectFrom('items as i')
-                .innerJoin('agents as a', 'a.id', 'i.assignee_agent_id')
-                .select(({ fn }) => ['a.category as category', fn.countAll<string>().as('n')])
-                .where('i.type', 'in', ['epic', 'story', 'bug'])
-                .where('i.status', '=', 'ready')
-                .groupBy('a.category')
-                .execute(),
-            db
-                .selectFrom('agent_runs as r')
-                .innerJoin('agents as a', 'a.id', 'r.agent_id')
-                .select(({ fn }) => ['a.category as category', fn.countAll<string>().as('n')])
-                .where('r.status', '=', 'in_progress')
-                .groupBy('a.category')
-                .execute(),
-        ]);
+        const runningRows = await db
+            .selectFrom('agent_runs as r')
+            .innerJoin('agents as a', 'a.id', 'r.agent_id')
+            .select(({ fn }) => ['a.category as category', fn.countAll<string>().as('n')])
+            .where('r.status', '=', 'in_progress')
+            .groupBy('a.category')
+            .execute();
 
         const stats: AgentStatsByCategory = {
-            'software-dev': { queued: 0, running: 0 },
-            marketing: { queued: 0, running: 0 },
-            content: { queued: 0, running: 0 },
-            design: { queued: 0, running: 0 },
+            'software-dev': { running: 0 },
+            marketing: { running: 0 },
+            content: { running: 0 },
+            design: { running: 0 },
         };
-        const apply = (rows: { category: string; n: string }[], key: keyof CategoryStat) => {
-            for (const row of rows) {
-                const cat = row.category as AgentCategoryKey;
-                // Unreachable from production: PG CHECK constraint on
-                // `agents.category` enforces the enum at the DB level, so
-                // any joined row's category is guaranteed to be a known key.
-                /* v8 ignore next */
-                if (!(cat in stats)) continue;
-                stats[cat][key] = Number(row.n);
-            }
-        };
-        apply(queuedRows, 'queued');
-        apply(runningRows, 'running');
+        for (const row of runningRows) {
+            const cat = row.category as AgentCategoryKey;
+            // Unreachable from production: PG CHECK constraint on
+            // `agents.category` enforces the enum at the DB level, so
+            // any joined row's category is guaranteed to be a known key.
+            /* v8 ignore next */
+            if (!(cat in stats)) continue;
+            stats[cat].running = Number(row.n);
+        }
         return stats;
     },
 
@@ -344,12 +343,10 @@ export const countsService = {
         const projNow = new Date();
         const projMonthStart = new Date(projNow.getFullYear(), projNow.getMonth(), 1).toISOString();
         const [
-            openEpics,
-            epicsReady,
-            storiesInFlight,
-            storiesWaitingInfo,
-            openBugs,
-            bugsReady,
+            openTasks,
+            tasksReady,
+            tasksInFlight,
+            tasksWaitingInfo,
             costRow,
             terminalCostRow,
         ] = await Promise.all([
@@ -357,43 +354,29 @@ export const countsService = {
                 .selectFrom('items')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('project_id', '=', projectId)
-                .where('type', '=', 'epic')
+                .where('type', '=', 'task')
                 .where('status', '!=', 'done')
                 .executeTakeFirst(),
             db
                 .selectFrom('items')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('project_id', '=', projectId)
-                .where('type', '=', 'epic')
+                .where('type', '=', 'task')
                 .where('status', '=', 'ready')
                 .executeTakeFirst(),
             db
                 .selectFrom('items')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('project_id', '=', projectId)
-                .where('type', '=', 'story')
+                .where('type', '=', 'task')
                 .where('status', 'in', ['in_progress', 'in_review'])
                 .executeTakeFirst(),
             db
                 .selectFrom('items')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('project_id', '=', projectId)
-                .where('type', '=', 'story')
+                .where('type', '=', 'task')
                 .where('status', '=', 'waiting_for_info')
-                .executeTakeFirst(),
-            db
-                .selectFrom('items')
-                .select(({ fn }) => fn.countAll<string>().as('n'))
-                .where('project_id', '=', projectId)
-                .where('type', '=', 'bug')
-                .where('status', '!=', 'done')
-                .executeTakeFirst(),
-            db
-                .selectFrom('items')
-                .select(({ fn }) => fn.countAll<string>().as('n'))
-                .where('project_id', '=', projectId)
-                .where('type', '=', 'bug')
-                .where('status', '=', 'ready')
                 .executeTakeFirst(),
             // Sum cost across all completed runs for items in this project
             // (including project-scope runs via agent_runs.project_id) using
@@ -438,12 +421,10 @@ export const countsService = {
         // never undefined for COUNT/SUM queries. The `?.` null arms are unreachable.
         /* v8 ignore start */
         return {
-            open_epics: Number(openEpics?.n ?? 0),
-            epics_ready: Number(epicsReady?.n ?? 0),
-            stories_in_flight: Number(storiesInFlight?.n ?? 0),
-            stories_waiting_info: Number(storiesWaitingInfo?.n ?? 0),
-            open_bugs: Number(openBugs?.n ?? 0),
-            bugs_ready: Number(bugsReady?.n ?? 0),
+            open_tasks: Number(openTasks?.n ?? 0),
+            tasks_ready: Number(tasksReady?.n ?? 0),
+            tasks_in_flight: Number(tasksInFlight?.n ?? 0),
+            tasks_waiting_info: Number(tasksWaitingInfo?.n ?? 0),
             costSummary: {
                 total_cost_usd: Number(costRow?.total_cost_usd ?? 0),
                 input_tokens: Number(costRow?.input_tokens ?? 0),

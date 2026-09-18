@@ -11,7 +11,7 @@ import { ActivityCard, ConversationCard, ActivityLogCard } from './ActivityCard.
 const BASE = 'http://localhost:3000/api';
 const makeComment = (overrides = {}) => makeCommentFactory({ issue_id: 'S1', ...overrides });
 
-const ACTIVITY_URL = 'http://localhost:3000/api/issues/story/S1/activity';
+const ACTIVITY_URL = 'http://localhost:3000/api/issues/task/S1/activity';
 
 function setupEvent(event: IIssueEvent, agents = [makeAgent({ id: 'agent-coder', name: 'Coder' })]): void {
     const activity: IActivityItem[] = [{ kind: 'event', data: event }];
@@ -25,7 +25,7 @@ function setupEvent(event: IIssueEvent, agents = [makeAgent({ id: 'agent-coder',
 function baseEvent(overrides: Partial<IIssueEvent>): IIssueEvent {
     return {
         id: 1,
-        issue_type: 'story',
+        issue_type: 'task',
         issue_id: 'S1',
         event_type: 'created',
         actor_agent_id: null,
@@ -41,7 +41,7 @@ function baseEvent(overrides: Partial<IIssueEvent>): IIssueEvent {
 describe('ActivityCard event-type rendering', () => {
     it('renders a "created" event line', async () => {
         setupEvent(baseEvent({ event_type: 'created', actor_agent_id: 'agent-coder' }));
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/created the item/i)).toBeInTheDocument());
     });
 
@@ -54,7 +54,7 @@ describe('ActivityCard event-type rendering', () => {
                 actor_agent_id: 'agent-coder',
             }),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/moved status from/i)).toBeInTheDocument());
         // status labels render with monospace formatting; the underlying text appears.
         expect(screen.getByText(/Ready/)).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe('ActivityCard event-type rendering', () => {
                 actor_agent_id: 'agent-coder',
             }),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/override/i)).toBeInTheDocument());
     });
 
@@ -89,7 +89,7 @@ describe('ActivityCard event-type rendering', () => {
             }),
             agents,
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/reassigned from/i)).toBeInTheDocument());
     });
 
@@ -103,7 +103,7 @@ describe('ActivityCard event-type rendering', () => {
                 actor_agent_id: 'agent-coder',
             }),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/updated/)).toBeInTheDocument());
     });
 
@@ -114,7 +114,7 @@ describe('ActivityCard event-type rendering', () => {
                 actor_agent_id: 'agent-coder',
             }),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/added a comment/i)).toBeInTheDocument());
     });
 
@@ -127,7 +127,7 @@ describe('ActivityCard event-type rendering', () => {
                 actor_agent_id: 'agent-coder',
             }),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/linked/i)).toBeInTheDocument());
         expect(screen.getByText('ATL-12')).toBeInTheDocument();
     });
@@ -141,7 +141,7 @@ describe('ActivityCard event-type rendering', () => {
                 actor_agent_id: 'agent-coder',
             }),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/removed link to/i)).toBeInTheDocument());
         expect(screen.getByText('ATL-9')).toBeInTheDocument();
     });
@@ -157,7 +157,7 @@ describe('ActivityCard event-type rendering', () => {
             }),
             agents,
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/reset rounds for/i)).toBeInTheDocument());
         await waitFor(() => expect(screen.getByText(/was 3/)).toBeInTheDocument());
     });
@@ -169,13 +169,13 @@ describe('ActivityCard event-type rendering', () => {
                 actor_agent_id: 'agent-coder',
             }),
         );
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/deleted this item/i)).toBeInTheDocument());
     });
 
     it('falls back to the Owner name when actor_agent_id is null', async () => {
         setupEvent(baseEvent({ event_type: 'created', actor_agent_id: null }));
-        renderWithProviders(<ActivityCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/created the item/i)).toBeInTheDocument());
         // Default Owner name in mock-handlers.ts is "Owner".
         expect(screen.getByText('Owner')).toBeInTheDocument();
@@ -198,9 +198,9 @@ describe('CommentRow — edited_at badge branch', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         // findByText throws on timeout — ensures the branch is actually executed
         await screen.findByText('A comment that was edited');
         expect(await screen.findByText('edited')).toBeInTheDocument();
@@ -216,9 +216,9 @@ describe('CommentRow — edited_at badge branch', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Unedited comment');
         expect(screen.queryByText('edited')).toBeNull();
     });
@@ -233,9 +233,9 @@ describe('CommentRow — saveEdit early-return branch', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Some text');
         const editBtn = await screen.findByRole('button', { name: /Edit comment/i });
         fireEvent.click(editBtn);
@@ -261,9 +261,9 @@ describe('CommentRow — saveEdit early-return branch', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
-        renderWithProviders(<ConversationCard issueType="story" issueId="S1" />);
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Original content');
         const editBtn = await screen.findByRole('button', { name: /Edit comment/i });
         fireEvent.click(editBtn);
@@ -300,7 +300,7 @@ describe('CommentRow — agent color fallback branch', () => {
         // Pass activity and empty agents directly so agentsById is an empty map
         renderWithProviders(
             <ConversationCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[]}
@@ -322,12 +322,12 @@ describe('CommentRow — agent color fallback branch', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/story/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
         );
         // Pass agents prop directly so the map is populated without a fetch
         renderWithProviders(
             <ConversationCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[agent]}
@@ -345,7 +345,7 @@ describe('ActivityLogCard — truncateValue empty-string branch', () => {
     it('field_updated with empty-string from_value treats it as null (no before span)', async () => {
         const event: IIssueEvent = {
             id: 300,
-            issue_type: 'story',
+            issue_type: 'task',
             issue_id: 'S1',
             event_type: 'field_updated',
             actor_agent_id: null,
@@ -359,7 +359,7 @@ describe('ActivityLogCard — truncateValue empty-string branch', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[]}
@@ -374,7 +374,7 @@ describe('ActivityLogCard — truncateValue empty-string branch', () => {
     it('field_updated with empty-string to_value treats it as null (no after span)', async () => {
         const event: IIssueEvent = {
             id: 301,
-            issue_type: 'story',
+            issue_type: 'task',
             issue_id: 'S1',
             event_type: 'field_updated',
             actor_agent_id: null,
@@ -388,7 +388,7 @@ describe('ActivityLogCard — truncateValue empty-string branch', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[]}
@@ -403,7 +403,7 @@ describe('ActivityLogCard — truncateValue empty-string branch', () => {
         // humanFieldLabel('') → !field is true → returns 'a field'
         const event: IIssueEvent = {
             id: 302,
-            issue_type: 'story',
+            issue_type: 'task',
             issue_id: 'S1',
             event_type: 'field_updated',
             actor_agent_id: null,
@@ -417,7 +417,7 @@ describe('ActivityLogCard — truncateValue empty-string branch', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
-                issueType="story"
+                issueType="task"
                 issueId="S1"
                 activity={activity}
                 agents={[]}

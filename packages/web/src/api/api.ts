@@ -15,18 +15,12 @@ import type {
     IAgentPromptVersion,
     IAgentChecklistItem,
     IProject,
-    IEpic,
-    IEpicListItem,
-    IStory,
+    ITask,
+    ITaskListItem,
     ISubTask,
-    ISubBug,
-    IBug,
     IIssueTreeResponse,
-    IStoryFullResponse,
-    IBugFullResponse,
+    ITaskFullResponse,
     ISubTaskFullResponse,
-    ISubBugFullResponse,
-    IEpicFullResponse,
     IAgentRun,
     ISettings,
     IComment,
@@ -71,7 +65,11 @@ import type {
 } from '@atlas/shared';
 import type {
     CreateWorkflowInput,
+    IPublishedWorkflow,
+    IPublishedWorkflowDetail,
     IWorkflow,
+    IWorkflowImportResult,
+    IWorkflowQueue,
     IWorkflowRunDetail,
     IWorkflowRunSummary,
     IWorkflowTemplate,
@@ -83,9 +81,9 @@ import type {
     ProjectCounts,
     AnalyticsResponse,
     AnalyticsProjectResponse,
-    AnalyticsProjectEpicsResponse,
-    AnalyticsEpicResponse,
-    AnalyticsEpicChildrenResponse,
+    AnalyticsProjectTasksResponse,
+    AnalyticsTaskResponse,
+    AnalyticsTaskChildrenResponse,
 } from './types.js';
 
 const BASE = '/api';
@@ -234,12 +232,12 @@ export const api = {
             const t = tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
             return get<AnalyticsResponse>(`/analytics?tz=${encodeURIComponent(t)}`);
         },
-        // Drill-down: project aggregate (totals + byKind + top 25 epics).
+        // Drill-down: project aggregate (totals + byKind + top 25 tasks).
         project: (projectId: string) =>
             get<AnalyticsProjectResponse>(
                 `/analytics/project/${encodeURIComponent(projectId)}`,
             ),
-        projectEpics: (
+        projectTasks: (
             projectId: string,
             params: { page?: number; limit?: number } = {},
         ) => {
@@ -247,20 +245,20 @@ export const api = {
             if (params.page) q.set('page', String(params.page));
             if (params.limit) q.set('limit', String(params.limit));
             const qs = q.toString();
-            return get<AnalyticsProjectEpicsResponse>(
-                `/analytics/project/${encodeURIComponent(projectId)}/epics${qs ? `?${qs}` : ''}`,
+            return get<AnalyticsProjectTasksResponse>(
+                `/analytics/project/${encodeURIComponent(projectId)}/tasks${qs ? `?${qs}` : ''}`,
             );
         },
-        epic: (epicId: string) =>
-            get<AnalyticsEpicResponse>(
-                `/analytics/epic/${encodeURIComponent(epicId)}`,
+        task: (taskId: string) =>
+            get<AnalyticsTaskResponse>(
+                `/analytics/task/${encodeURIComponent(taskId)}`,
             ),
-        epicChildren: (
-            epicId: string,
+        taskChildren: (
+            taskId: string,
             params: {
                 page?: number;
                 limit?: number;
-                type?: 'epic' | 'story' | 'bug' | 'sub_task' | 'sub_bug';
+                type?: IssueType;
             } = {},
         ) => {
             const q = new URLSearchParams();
@@ -268,8 +266,8 @@ export const api = {
             if (params.limit) q.set('limit', String(params.limit));
             if (params.type) q.set('type', params.type);
             const qs = q.toString();
-            return get<AnalyticsEpicChildrenResponse>(
-                `/analytics/epic/${encodeURIComponent(epicId)}/children${qs ? `?${qs}` : ''}`,
+            return get<AnalyticsTaskChildrenResponse>(
+                `/analytics/task/${encodeURIComponent(taskId)}/children${qs ? `?${qs}` : ''}`,
             );
         },
     },
@@ -435,8 +433,9 @@ export const api = {
         exportZipUrl: (id: string) => apiUrl(`/agents/${encodeURIComponent(id)}/export`),
         importZip: (file: File, opts: { agent_id?: string } = {}) => {
             const fd = new FormData();
-            fd.append('file', file);
+            // The server only sees fields sent before the file part.
             if (opts.agent_id) fd.append('agent_id', opts.agent_id);
+            fd.append('file', file);
             return postForm<IAgent>('/agents/import', fd);
         },
     },
@@ -641,59 +640,39 @@ export const api = {
             get<{ id: string; value: string }>(`/credentials/${id}/token`),
     },
 
-    epics: {
+    tasks: {
         list: (projectId?: string, includeArchived = false) => {
             const params = new URLSearchParams();
             if (projectId) params.set('project_id', projectId);
             if (includeArchived) params.set('include_archived', 'true');
             const qs = params.toString();
-            return get<IEpicListItem[]>(`/epics${qs ? `?${qs}` : ''}`);
+            return get<ITaskListItem[]>(`/tasks${qs ? `?${qs}` : ''}`);
         },
-        stats: () => get<{ total: number; awaiting_pickup: number }>('/epics/stats'),
-        get: (id: string) => get<IEpic>(`/epics/${id}`),
-        // Composite — epic + project + stories + bugs + related_links +
-        // activity + agents. Backs EpicDetail.
-        full: (id: string) => get<IEpicFullResponse>(`/epics/${id}/full`),
-        create: (data: Partial<IEpic>) => post<IEpic>('/epics', data),
-        update: (id: string, data: Partial<IEpic>) => patch<IEpic>(`/epics/${id}`, data),
-        transition: (id: string, status: string, override = false) =>
-            patch<IEpic>(`/epics/${id}/status${override ? '?override=1' : ''}`, { status }),
+        stats: () => get<{ total: number; awaiting_pickup: number }>('/tasks/stats'),
+        get: (id: string) => get<ITask>(`/tasks/${id}`),
+        // Composite — task + project + sub_tasks + related_links + activity +
+        // agents. Backs TaskDetail.
+        full: (id: string) => get<ITaskFullResponse>(`/tasks/${id}/full`),
+        create: (data: Partial<ITask>) => post<ITask>('/tasks', data),
+        update: (id: string, data: Partial<ITask>) => patch<ITask>(`/tasks/${id}`, data),
+        transition: (id: string, status: string, override = false, closeSubTasks = false) =>
+            patch<ITask>(`/tasks/${id}/status${override ? '?override=1' : ''}`, {
+                status,
+                ...(closeSubTasks ? { close_sub_tasks: true } : {}),
+            }),
         assign: (id: string, assignee_agent_id: string | null) =>
-            patch<IEpic>(`/epics/${id}/assign`, { assignee_agent_id }),
-        delete: (id: string) => del(`/epics/${id}`),
-    },
-
-    stories: {
-        list: (opts: { epicId?: string | undefined; projectId?: string | undefined } = {}) => {
-            const params = new URLSearchParams();
-            if (opts.epicId) params.set('epic_id', opts.epicId);
-            if (opts.projectId) params.set('project_id', opts.projectId);
-            const qs = params.toString();
-            return get<IStory[]>(`/stories${qs ? `?${qs}` : ''}`);
-        },
-        get: (id: string) => get<IStory>(`/stories/${id}`),
-        // Composite — story + epic + project + sub_tasks + sub_bugs +
-        // related_links + activity + agents. Backs StoryDetail.
-        full: (id: string) => get<IStoryFullResponse>(`/stories/${id}/full`),
-        create: (data: Partial<IStory>) => post<IStory>('/stories', data),
-        update: (id: string, data: Partial<IStory>) => patch<IStory>(`/stories/${id}`, data),
-        transition: (id: string, status: string, override = false) =>
-            patch<IStory>(`/stories/${id}/status${override ? '?override=1' : ''}`, { status }),
-        assign: (id: string, assignee_agent_id: string | null) =>
-            patch<IStory>(`/stories/${id}/assign`, { assignee_agent_id }),
-        delete: (id: string) => del(`/stories/${id}`),
-        getSubTasks: (id: string) => get<ISubTask[]>(`/stories/${id}/sub-tasks`),
-        createSubTask: (storyId: string, data: Partial<ISubTask>) =>
-            post<ISubTask>(`/stories/${storyId}/sub-tasks`, data),
-        getSubBugs: (id: string) => get<ISubBug[]>(`/stories/${id}/sub-bugs`),
-        createSubBug: (storyId: string, data: Partial<ISubBug>) =>
-            post<ISubBug>(`/stories/${storyId}/sub-bugs`, data),
+            patch<ITask>(`/tasks/${id}/assign`, { assignee_agent_id }),
+        reorderSubTasks: (id: string, ids: string[]) => put<void>(`/tasks/${id}/sub-tasks/order`, { ids }),
+        delete: (id: string) => del(`/tasks/${id}`),
     },
 
     subTasks: {
         list: () => get<ISubTask[]>('/sub-tasks'),
-        // Composite — sub_task + parent_story + epic + project +
-        // related_links + activity + agents. Backs SubTaskDetail.
+        listForTask: (taskId: string) => get<ISubTask[]>(`/tasks/${taskId}/sub-tasks`),
+        create: (taskId: string, data: Partial<ISubTask>) =>
+            post<ISubTask>(`/tasks/${taskId}/sub-tasks`, { ...data, task_id: taskId }),
+        // Composite — sub_task + task + project + related_links + activity +
+        // agents. Backs SubTaskDetail.
         full: (id: string) => get<ISubTaskFullResponse>(`/sub-tasks/${id}/full`),
         update: (id: string, data: Partial<ISubTask>) => patch<ISubTask>(`/sub-tasks/${id}`, data),
         transition: (id: string, status: string, override = false) =>
@@ -703,43 +682,9 @@ export const api = {
         delete: (id: string) => del(`/sub-tasks/${id}`),
     },
 
-    subBugs: {
-        list: () => get<ISubBug[]>('/sub-bugs'),
-        // Composite — sub_bug + parent_story + epic + project +
-        // related_links + activity + agents. Backs SubBugDetail.
-        full: (id: string) => get<ISubBugFullResponse>(`/sub-bugs/${id}/full`),
-        update: (id: string, data: Partial<ISubBug>) => patch<ISubBug>(`/sub-bugs/${id}`, data),
-        transition: (id: string, status: string, override = false) =>
-            patch<ISubBug>(`/sub-bugs/${id}/status${override ? '?override=1' : ''}`, { status }),
-        assign: (id: string, assignee_agent_id: string | null) =>
-            patch<ISubBug>(`/sub-bugs/${id}/assign`, { assignee_agent_id }),
-        delete: (id: string) => del(`/sub-bugs/${id}`),
-    },
-
-    bugs: {
-        list: (opts: { epicId?: string | undefined; projectId?: string | undefined } = {}) => {
-            const params = new URLSearchParams();
-            if (opts.epicId) params.set('epic_id', opts.epicId);
-            if (opts.projectId) params.set('project_id', opts.projectId);
-            const qs = params.toString();
-            return get<IBug[]>(`/bugs${qs ? `?${qs}` : ''}`);
-        },
-        get: (id: string) => get<IBug>(`/bugs/${id}`),
-        // Composite — bug + epic + project + related_links + activity +
-        // agents. Backs BugDetail.
-        full: (id: string) => get<IBugFullResponse>(`/bugs/${id}/full`),
-        create: (data: Partial<IBug>) => post<IBug>('/bugs', data),
-        update: (id: string, data: Partial<IBug>) => patch<IBug>(`/bugs/${id}`, data),
-        transition: (id: string, status: string, override = false) =>
-            patch<IBug>(`/bugs/${id}/status${override ? '?override=1' : ''}`, { status }),
-        assign: (id: string, assignee_agent_id: string | null) =>
-            patch<IBug>(`/bugs/${id}/assign`, { assignee_agent_id }),
-        delete: (id: string) => del(`/bugs/${id}`),
-    },
-
     issues: {
-        // One round-trip view of stories/bugs + their sub-tasks/sub-bugs,
-        // with project + agent dictionaries inlined. Backs the Issues page.
+        // One round-trip view of Tasks + their Sub-tasks, with project +
+        // agent dictionaries inlined. Backs Project Detail.
         tree: (opts: { projectId?: string | undefined; includeArchived?: boolean | undefined } = {}) => {
             const params = new URLSearchParams();
             if (opts.projectId) params.set('project_id', opts.projectId);
@@ -1122,6 +1067,17 @@ export const api = {
                 `/workflows${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`,
             ),
         templates: () => get<IWorkflowTemplate[]>('/workflows/templates'),
+        // Bundles: the workflow + its sub-workflows + every agent they use.
+        exportZipUrl: (id: string) => apiUrl(`/workflows/${encodeURIComponent(id)}/export`),
+        templateExportZipUrl: (id: string) =>
+            apiUrl(`/workflows/templates/${encodeURIComponent(id)}/export`),
+        importZip: (file: File, projectId: string) => {
+            const fd = new FormData();
+            // The server only sees fields sent before the file part.
+            fd.append('project_id', projectId);
+            fd.append('file', file);
+            return postForm<IWorkflowImportResult>('/workflows/import', fd);
+        },
         get: (id: string) => get<IWorkflow>(`/workflows/${id}`),
         create: (input: CreateWorkflowInput) => post<IWorkflow>('/workflows', input),
         createFromTemplate: (templateId: string, projectId: string) =>
@@ -1133,17 +1089,40 @@ export const api = {
             patch<IWorkflow>(`/workflows/${id}`, input),
         delete: (id: string) => del(`/workflows/${id}`),
         runs: (id: string) => get<IWorkflowRunSummary[]>(`/workflows/${id}/runs`),
-        startRun: (id: string, itemId?: string) =>
-            post<{ run_id: string }>(`/workflows/${id}/runs`, itemId ? { item_id: itemId } : {}),
+        startRun: (id: string, itemId?: string, opts: { fromSubtasks?: boolean } = {}) =>
+            post<{ run_id: string }>(`/workflows/${id}/runs`, {
+                ...(itemId ? { item_id: itemId } : {}),
+                ...(opts.fromSubtasks ? { from_subtasks: true } : {}),
+            }),
         itemRuns: (itemId: string) =>
             get<IWorkflowRunSummary[]>(`/items/${itemId}/workflow-runs`),
         setItemWorkflow: (itemId: string, workflowId: string | null) =>
             put<void>(`/items/${itemId}/workflow`, { workflow_id: workflowId }),
+        // Stores the export bundle in the Marketplace; again replaces the entry.
+        publish: (id: string) => post<IPublishedWorkflow>(`/workflows/${encodeURIComponent(id)}/publish`, {}),
+    },
+
+    // Workflows the Owner published to the Marketplace (each stores its bundle).
+    publishedWorkflows: {
+        list: () => get<IPublishedWorkflow[]>('/marketplace/workflows'),
+        get: (id: string) => get<IPublishedWorkflowDetail>(`/marketplace/workflows/${encodeURIComponent(id)}`),
+        exportZipUrl: (id: string) => apiUrl(`/marketplace/workflows/${encodeURIComponent(id)}/export`),
+        use: (id: string, projectId: string) =>
+            post<IWorkflowImportResult>(`/marketplace/workflows/${encodeURIComponent(id)}/use`, { project_id: projectId }),
+        unpublish: (id: string) => del(`/marketplace/workflows/${encodeURIComponent(id)}`),
     },
 
     workflowRuns: {
         get: (id: string) => get<IWorkflowRunDetail>(`/workflow-runs/${id}`),
         stop: (id: string) => post<IWorkflowRunDetail>(`/workflow-runs/${id}/stop`, {}),
         resume: (id: string) => post<IWorkflowRunDetail>(`/workflow-runs/${id}/resume`, {}),
+    },
+
+    // What each workflow is running and has queued (the /queue page).
+    workflowQueue: {
+        get: (projectId?: string) =>
+            get<IWorkflowQueue>(
+                `/workflow-queue${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`,
+            ),
     },
 };

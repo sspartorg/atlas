@@ -65,7 +65,7 @@ beforeEach(async () => {
     await truncateAll();
     await insertProject('p1', 'ATL', { git_path: '/tmp/repo' });
     await insertAgent({ id: 'agent-coder', status: 'active' });
-    await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Epic', status: 'ready' });
+    await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Task', status: 'ready' });
     app = await buildApp({ logger: false });
     await app.ready();
 });
@@ -125,19 +125,55 @@ describe('workflow CRUD', () => {
     it('lists the shipped templates with valid graphs', async () => {
         const res = await app.inject({ method: 'GET', url: '/api/workflows/templates' });
         const ids = (res.json() as Array<{ id: string }>).map((t) => t.id).sort();
-        expect(ids).toEqual(['ai-readiness', 'dev', 'planning', 'qa']);
+        expect(ids).toEqual(['ai-readiness', 'build', 'delivery', 'test']);
     });
 
-    it('creates Planning with its stories routed to Development and its test stories to Quality', async () => {
+    it('creates Delivery with its Sub-tasks steps pointing at this project’s Build and Test sub-workflows', async () => {
         const agents = ['po-writer', 'po-reviewer', 'architect', 'architect-reviewer', 'code-reviewer', 'qa-writer', 'qa-reviewer', 'automation', 'automation-reviewer'];
         for (const a of agents) await insertAgent({ id: `agent-${a}`, status: 'active' });
 
-        const res = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'planning', project_id: 'p1' } });
+        const res = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'delivery', project_id: 'p1' } });
         expect(res.statusCode).toBe(201);
-        const all = (await app.inject({ method: 'GET', url: '/api/workflows' })).json() as Array<{ id: string; name: string }>;
-        const idOf = (name: string) => all.find((w) => w.name === name)?.id;
-        const end = (res.json().graph.nodes as Array<{ type: string }>).find((n) => n.type === 'end');
-        expect(end).toMatchObject({ child_workflow_id: idOf('Development'), test_child_workflow_id: idOf('Quality') });
+        const all = (await app.inject({ method: 'GET', url: '/api/workflows' })).json() as Array<{ id: string; name: string; input_kind: string }>;
+        const byName = (name: string) => all.find((w) => w.name === name);
+        expect(byName('Build sub-task')).toMatchObject({ input_kind: 'sub_task' });
+        expect(byName('Test sub-task')).toMatchObject({ input_kind: 'sub_task' });
+        const steps = (res.json().graph.nodes as Array<{ id: string; type: string }>).filter((n) => n.type === 'subtasks');
+        expect(steps).toEqual([
+            expect.objectContaining({ id: 'build', sub_workflow_id: byName('Build sub-task')?.id }),
+            expect.objectContaining({ id: 'test', sub_workflow_id: byName('Test sub-task')?.id, label: 'qa' }),
+        ]);
+
+        // A sub-workflow a Sub-tasks step uses can't be deleted from under it.
+        const del = await app.inject({ method: 'DELETE', url: `/api/workflows/${byName('Build sub-task')?.id ?? ''}` });
+        expect(del.statusCode).toBe(409);
+    });
+
+    it('rejects a Sub-tasks step that points at a Task workflow, and a scheduled sub-workflow', async () => {
+        const task = (await createWorkflow()).json();
+        const withStep = {
+            nodes: [
+                { id: 'start', type: 'start', position: { x: 0, y: 0 } },
+                { id: 'subs', type: 'subtasks', sub_workflow_id: task.id, position: { x: 200, y: 0 } },
+                { id: 'end', type: 'end', position: { x: 400, y: 0 } },
+            ],
+            edges: [
+                { id: 'e1', source: 'start', target: 'subs', kind: 'pass' },
+                { id: 'e2', source: 'subs', target: 'end', kind: 'pass' },
+            ],
+        };
+        const res = await createWorkflow({ name: 'Delivery', graph: withStep });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().details.graph_errors).toContainEqual({ node_id: 'subs', message: 'Pick a sub-task workflow for this step' });
+
+        const scheduled = await createWorkflow({ input_kind: 'sub_task', trigger: 'schedule', schedule_preset: 'daily' });
+        expect(scheduled.statusCode).toBe(400);
+    });
+
+    it('rejects push to the default branch together with a pull request', async () => {
+        const res = await createWorkflow({ push_to_default: true, raises_pr: true });
+        expect(res.statusCode).toBe(400);
+        expect((await createWorkflow({ push_to_default: true })).json()).toMatchObject({ push_to_default: true, raises_pr: false });
     });
 
     it('activates an inactive agent the template uses, so the workflow can run', async () => {
@@ -157,7 +193,7 @@ describe('workflow runs over HTTP', () => {
         const runId = start.json().run_id as string;
 
         const detail = await app.inject({ method: 'GET', url: `/api/workflow-runs/${runId}` });
-        expect(detail.json()).toMatchObject({ status: 'running', workflow_name: 'Dev', item_title: 'Epic', current_node_id: 'coder' });
+        expect(detail.json()).toMatchObject({ status: 'running', workflow_name: 'Dev', item_title: 'Task', current_node_id: 'coder' });
         expect(detail.json().steps).toHaveLength(1);
 
         const itemRuns = await app.inject({ method: 'GET', url: '/api/items/ATL-1/workflow-runs' });
@@ -183,13 +219,30 @@ describe('workflow runs over HTTP', () => {
         const wf = (await createWorkflow()).json();
         await app.inject({ method: 'POST', url: `/api/workflows/${wf.id}/runs`, payload: { item_id: 'ATL-1' } });
 
-        const status = await app.inject({ method: 'PATCH', url: '/api/epics/ATL-1/status', payload: { status: 'done' } });
+        const status = await app.inject({ method: 'PATCH', url: '/api/tasks/ATL-1/status', payload: { status: 'done' } });
         expect(status.statusCode).toBe(409);
-        const assign = await app.inject({ method: 'PATCH', url: '/api/epics/ATL-1/assign', payload: { assignee_agent_id: null } });
+        const assign = await app.inject({ method: 'PATCH', url: '/api/tasks/ATL-1/assign', payload: { assignee_agent_id: null } });
         expect(assign.statusCode).toBe(409);
         // Field edits (e.g. an agent writing spec_md) stay allowed.
-        const fields = await app.inject({ method: 'PATCH', url: '/api/epics/ATL-1', payload: { title: 'Epic renamed' } });
+        const fields = await app.inject({ method: 'PATCH', url: '/api/tasks/ATL-1', payload: { title: 'Task renamed' } });
         expect(fields.statusCode).toBe(200);
+    });
+
+    it('locks a sub-task the same way while a run holds it', async () => {
+        const wf = (await createWorkflow()).json();
+        await insertItem({ id: 'ATL-2', type: 'sub_task', project_id: 'p1', parent_id: 'ATL-1', title: 'Sub' });
+        await testDb
+            .insertInto('workflow_runs')
+            .values({ id: 'wr-sub', workflow_id: wf.id, item_id: 'ATL-2', project_id: 'p1', graph_snapshot: JSON.stringify(graph) })
+            .execute();
+
+        const status = await app.inject({ method: 'PATCH', url: '/api/sub-tasks/ATL-2/status', payload: { status: 'ready' } });
+        expect(status.statusCode).toBe(409);
+        const assign = await app.inject({ method: 'PATCH', url: '/api/sub-tasks/ATL-2/assign', payload: { assignee_agent_id: null } });
+        expect(assign.statusCode).toBe(409);
+        // The parent task is not held by that run.
+        const parent = await app.inject({ method: 'PATCH', url: '/api/tasks/ATL-1/assign', payload: { assignee_agent_id: null } });
+        expect(parent.statusCode).toBe(200);
     });
 
     it('deleting a workflow step run cancels its workflow run', async () => {
@@ -219,8 +272,8 @@ describe('workflow runs over HTTP', () => {
         const wf = (await createWorkflow()).json();
         const set = await app.inject({ method: 'PUT', url: '/api/items/ATL-1/workflow', payload: { workflow_id: wf.id } });
         expect(set.statusCode).toBe(204);
-        const epic = await app.inject({ method: 'GET', url: '/api/epics/ATL-1' });
-        expect(epic.json().workflow_id).toBe(wf.id);
+        const task = await app.inject({ method: 'GET', url: '/api/tasks/ATL-1' });
+        expect(task.json().workflow_id).toBe(wf.id);
 
         await insertProject('p2', 'OTH', { git_path: '/tmp/repo2' });
         const other = (await createWorkflow({ project_id: 'p2', name: 'Other' })).json();
@@ -228,3 +281,38 @@ describe('workflow runs over HTTP', () => {
         expect(refused.statusCode).toBe(400);
     });
 });
+
+describe('queueing and run cost', () => {
+    it('assigning a workflow to a draft Task queues it as Ready; other statuses stay', async () => {
+        const wf = (await createWorkflow()).json();
+        await insertItem({ id: 'ATL-5', type: 'task', project_id: 'p1', title: 'Draft task', status: 'draft' });
+        await insertItem({ id: 'ATL-6', type: 'task', project_id: 'p1', title: 'Waiting task', status: 'waiting_for_info' });
+        for (const id of ['ATL-5', 'ATL-6']) {
+            const res = await app.inject({ method: 'PUT', url: `/api/items/${id}/workflow`, payload: { workflow_id: wf.id } });
+            expect(res.statusCode).toBe(204);
+        }
+        const status = async (id: string) =>
+            (await testDb.selectFrom('items').select('status').where('id', '=', id).executeTakeFirstOrThrow()).status;
+        expect(await status('ATL-5')).toBe('ready');
+        expect(await status('ATL-6')).toBe('waiting_for_info');
+    });
+
+    it('a run’s cost includes its sub-task runs', async () => {
+        const wf = (await createWorkflow()).json();
+        const runId = (await app.inject({ method: 'POST', url: `/api/workflows/${wf.id}/runs`, payload: { item_id: 'ATL-1' } })).json().run_id as string;
+        await insertItem({ id: 'ATL-9', type: 'sub_task', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'task', title: 'Sub' });
+        await testDb
+            .insertInto('workflow_runs')
+            .values({ id: 'child-1', workflow_id: wf.id, item_id: 'ATL-9', project_id: 'p1', graph_snapshot: JSON.stringify(graph), parent_workflow_run_id: runId, parent_node_id: 'coder', status: 'completed' })
+            .execute();
+        await testDb.updateTable('agent_runs').set({ total_cost_usd: 0.25 }).where('workflow_run_id', '=', runId).execute();
+        await testDb
+            .insertInto('agent_runs')
+            .values({ id: randomUUID(), agent_id: 'agent-coder', item_id: 'ATL-9', status: 'completed', workflow_run_id: 'child-1', node_id: 'coder', total_cost_usd: 1.5 })
+            .execute();
+
+        const detail = (await app.inject({ method: 'GET', url: `/api/workflow-runs/${runId}` })).json();
+        expect(detail.total_cost_usd).toBeCloseTo(1.75);
+    });
+});
+

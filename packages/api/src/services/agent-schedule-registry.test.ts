@@ -29,7 +29,7 @@ describe('sweepStuckRuns', () => {
     });
 
     it('errors a run that has been in_progress for more than 30 minutes with no output', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E', status: 'in_progress' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E', status: 'in_progress' });
 
         // Insert a run that started 31 minutes ago with null output_text.
         const staleTime = new Date(Date.now() - STUCK_RUN_THRESHOLD_MS - 60_000).toISOString();
@@ -58,7 +58,7 @@ describe('sweepStuckRuns', () => {
     });
 
     it('does NOT touch a run that has output_text (not stuck)', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E', status: 'in_progress' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E', status: 'in_progress' });
 
         const staleTime = new Date(Date.now() - STUCK_RUN_THRESHOLD_MS - 60_000).toISOString();
         await testDb
@@ -85,7 +85,7 @@ describe('sweepStuckRuns', () => {
     });
 
     it('does NOT touch a recent in_progress run with no output (within threshold)', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E', status: 'in_progress' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E', status: 'in_progress' });
 
         // Started only 5 minutes ago — not yet past threshold.
         const recentTime = new Date(Date.now() - 5 * 60_000).toISOString();

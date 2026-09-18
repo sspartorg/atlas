@@ -19,7 +19,7 @@ type Bool0or1 = ColumnType<number, number | undefined, number>;
 type CreatedAt = Generated<string>;
 type UpdatedAt = ColumnType<string, string | undefined, string | undefined>;
 
-export type ItemType = 'epic' | 'story' | 'sub_task' | 'sub_bug' | 'bug';
+export type ItemType = 'task' | 'sub_task';
 export type ItemRelation = 'relates_to' | 'depends_on' | 'tested_by';
 
 export interface SettingsTable {
@@ -377,7 +377,7 @@ export interface ProjectGuardrailScriptsTable {
 }
 
 // Phase 2 — `/commands` framework. Five artifact templates
-// (`spec`, `plan`, `tasks`, `story`, `qa-plan`) that the templates-
+// (`spec`, `plan`, `tasks`, `sub-task`, `qa-plan`) that the templates-
 // assembler writes to `<worktree>/.atlas/templates/<filename>` per
 // run. Same id-primary-key shape as `guardrail_scripts`. Owner-editable
 // via direct DB writes for now; a Settings tab follows.
@@ -411,23 +411,10 @@ export interface ItemsTable {
 
     acceptance_criteria: StrN;
 
-    steps_to_reproduce: StrN;
-    expected: StrN;
-    actual: StrN;
-    frequency: ColumnType<'always' | 'sometimes' | 'rare' | null, 'always' | 'sometimes' | 'rare' | null | undefined, 'always' | 'sometimes' | 'rare' | null | undefined>;
-    failure_scope: ColumnType<'data-loss' | 'functional' | 'cosmetic' | 'performance' | null, 'data-loss' | 'functional' | 'cosmetic' | 'performance' | null | undefined, 'data-loss' | 'functional' | 'cosmetic' | 'performance' | null | undefined>;
-    detected_at: TSn;
-    occurrence_count: IntN;
-    occurrence_total: IntN;
-
     started_at: TSn;
 
-    // T2 — per-item git worktree fields. PO Writer fills `worktree_branch`
-    // (format `atlas/dev/<storyId>` or `atlas/qa/<storyId>`); the
-    // non-AI `worktree-orchestrator` resolves the on-disk path and
-    // writes it back to `worktree_path` so re-runs reuse the same
-    // checkout. Both nullable to support legacy items + non-coding
-    // item kinds (epics, bugs without dev work, etc.).
+    // Per-item git worktree fields; both null until something provisions
+    // a checkout for the item.
     worktree_branch: StrN;
     worktree_path: StrN;
 
@@ -435,11 +422,10 @@ export interface ItemsTable {
     // accept string[] | undefined (DB defaults to []).
     labels: ColumnType<string[], string[] | undefined, string[] | undefined>;
 
-    // ADR 0014 — the workflow this item is queued for, and the run that
-    // created it (child routing at End for project-level runs, which have
-    // no parent item to match on).
+    // ADR 0014 — the workflow this item is queued for.
     workflow_id: StrN;
-    created_by_workflow_run_id: StrN;
+    // Migration 040 — a sub-task's hand-set run order within its Task.
+    sort_order: IntN;
 
     created_at: CreatedAt;
     updated_at: UpdatedAt;
@@ -656,7 +642,10 @@ export interface WorkflowsTable {
     use_worktree: ColumnType<boolean, boolean | undefined, boolean>;
     push_code: ColumnType<boolean, boolean | undefined, boolean>;
     raises_pr: ColumnType<boolean, boolean | undefined, boolean>;
+    // ADR 0015 — migration 038_workflow_subtasks.ts.
+    push_to_default: ColumnType<boolean, boolean | undefined, boolean>;
     max_loops: Int;
+    max_parallel_runs: Int;
     schedule_preset: ColumnType<SchedulePreset | null, SchedulePreset | null | undefined, SchedulePreset | null | undefined>;
     schedule_time_of_day: StrN;
     schedule_weekday: IntN;
@@ -674,10 +663,15 @@ export interface WorkflowRunsTable {
     project_id: StrN;
     status: ColumnType<WorkflowRunStatus, WorkflowRunStatus | undefined, WorkflowRunStatus>;
     graph_snapshot: ColumnType<IWorkflowGraph, string, string>;
+    // ADR 0015 — a sub-task's run points at the Task run that started it.
+    parent_workflow_run_id: StrN;
+    parent_node_id: StrN;
     current_node_id: StrN;
     parked_node_id: StrN;
     park_reason: StrN;
     loop_count: Int;
+    // Migration 040 — End sending the run back for a late sub-task.
+    gate_rounds: Int;
     branch: StrN;
     worktree_path: StrN;
     setup_done: ColumnType<boolean, boolean | undefined, boolean>;
@@ -687,10 +681,23 @@ export interface WorkflowRunsTable {
     finished_at: TSn;
 }
 
+// Migration 041 — workflows published to the Marketplace. `bundle` is the
+// export zip (bytea selects as a Buffer).
+export interface PublishedWorkflowsTable {
+    id: string;
+    name: string;
+    description: StrN;
+    source_workflow_id: StrN;
+    bundle: Buffer;
+    published_at: CreatedAt;
+    updated_at: UpdatedAt;
+}
+
 export interface DB {
     settings: SettingsTable;
     workflows: WorkflowsTable;
     workflow_runs: WorkflowRunsTable;
+    published_workflows: PublishedWorkflowsTable;
     agents: AgentsTable;
     roles: RolesTable;
     reminders: RemindersTable;

@@ -90,9 +90,8 @@ export default defineConfig({
             'src/services/projectGuardrails.test.ts',
             'src/services/projectGuardrailScripts.test.ts',
             'src/services/project-env-file.test.ts',
-            'src/services/epics.test.ts',
-            'src/services/stories.test.ts',
-            'src/services/issues.test.ts',
+            'src/services/tasks.test.ts',
+            'src/services/sub-tasks.test.ts',
             'src/services/comments.test.ts',
             // W2 — service-layer coverage for agentsService.
             'src/services/agents.test.ts',
@@ -162,8 +161,10 @@ export default defineConfig({
             // ADR 0014 — workflow engine against the real DB.
             'src/services/workflow-engine.integration.test.ts',
             'src/routes/workflows.test.ts',
+            'src/routes/workflow-queue.test.ts',
+            'src/routes/workflow-bundle.test.ts',
             'src/routes/run.test.ts',
-            // W2 — Analytics per-project / per-epic cost drill-down.
+            // W2 — Analytics per-project / per-task cost drill-down.
             'src/routes/analytics.test.ts',
             // P6 — POST /api/settings/log-level + isValidLogLevel guard.
             'src/routes/settings.test.ts',
@@ -181,6 +182,11 @@ export default defineConfig({
             'src/db/catalog-sync-migration.test.ts',
             // ADR 0014 — workflows schema constraints (migration 035).
             'src/db/workflows-migration.test.ts',
+            // ADR 0015 — tasks + sub-tasks (migration 037).
+            'src/db/tasks-migration.test.ts',
+            'src/db/graphs-vertical-migration.test.ts',
+            // Migration 041 — workflows published to the Marketplace.
+            'src/db/published-workflows-migration.test.ts',
             // W2 chunk N — subprocess wrappers + boot files.
             'src/services/git-status.test.ts',
             'src/services/git-verify.test.ts',
@@ -200,9 +206,8 @@ export default defineConfig({
             'src/config.test.ts',
             'src/utils/boot-errors.test.ts',
             // W6 — API route integration tests
-            'src/routes/epics.test.ts',
-            'src/routes/stories.test.ts',
-            'src/routes/bugs.test.ts',
+            'src/routes/tasks.test.ts',
+            'src/routes/sub-tasks.test.ts',
             'src/routes/projects.test.ts',
             'src/routes/credentials.test.ts',
             'src/routes/marketplace.test.ts',

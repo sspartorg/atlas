@@ -41,7 +41,7 @@ export const UpdateRoleSchema = z
         label: z.string().min(1).max(80).optional(),
     })
     .strict();
-export const IssueTypeSchema = z.enum(['epic', 'story', 'sub_task', 'sub_bug', 'bug']);
+export const IssueTypeSchema = z.enum(['task', 'sub_task']);
 // Must match the DB CHECK constraint on `agent_runs.status` (see migration
 // 005_environment_secrets_and_setup_runner.ts which added `setup_failed`)
 // AND the RunStatus type in ../types/index.ts. Previously the enum was
@@ -71,9 +71,6 @@ export const IssueStatusSchema = z.enum([
 export const SubTaskStatusSchema = IssueStatusSchema;
 
 export const IssuePrioritySchema = z.enum(['low', 'normal', 'high', 'urgent']);
-
-export const BugFrequencySchema = z.enum(['always', 'sometimes', 'rare']);
-export const BugFailureScopeSchema = z.enum(['data-loss', 'functional', 'cosmetic', 'performance']);
 
 export const AgentChecklistItemInputSchema = z.object({
     label: z.string().min(1).max(500),
@@ -221,11 +218,12 @@ export const ItemLabelsOptionalSchema = z
     .max(20)
     .optional();
 
-export const CreateEpicSchema = z
+export const CreateTaskSchema = z
     .object({
         project_id: z.string().min(1),
         title: z.string().min(1).max(500),
         description: z.string().default(''),
+        acceptance_criteria: z.string().default(''),
         priority: IssuePrioritySchema.default('normal'),
         reporter_agent_id: z.string().nullable().default(null),
         assignee_agent_id: z.string().nullable().default(null),
@@ -233,51 +231,23 @@ export const CreateEpicSchema = z
     })
     .strict();
 
-export const UpdateEpicSchema = z
-    .object({
-        title: z.string().min(1).max(500).optional(),
-        description: z.string().optional(),
-        priority: IssuePrioritySchema.optional(),
-        reporter_agent_id: z.string().nullable().optional(),
-        labels: ItemLabelsOptionalSchema,
-    })
-    .strict();
-
-export const CreateStorySchema = z
-    .object({
-        epic_id: z.string().min(1),
-        title: z.string().min(1).max(500),
-        description: z.string().default(''),
-        acceptance_criteria: z.string().default(''),
-        priority: IssuePrioritySchema.default('normal'),
-        status: IssueStatusSchema.optional(),
-        assignee_agent_id: z.string().nullable().optional(),
-        reporter_agent_id: z.string().nullable().optional(),
-        labels: ItemLabelsSchema,
-    })
-    .strict();
-
-// T2 — `worktree_branch` follows the canonical `atlas/<role>/<id>`
-// shape PO Writer is contracted to write. The regex matches the same
-// pattern the orchestrator validates against in
-// `packages/api/src/services/worktree-orchestrator.ts` (kept in
-// lockstep — change one, change the other).
+// `worktree_branch` follows the canonical `atlas/<role>/<id>` shape. The
+// regex matches the pattern the orchestrator validates against in
+// `packages/api/src/services/worktree-orchestrator.ts` (kept in lockstep —
+// change one, change the other).
 export const WORKTREE_BRANCH_RE_SOURCE = '^atlas/[a-z][a-z0-9-]*/[A-Za-z0-9._-]+$';
 const WORKTREE_BRANCH_SCHEMA = z.string().regex(new RegExp(WORKTREE_BRANCH_RE_SOURCE));
 
-export const UpdateStorySchema = z
+export const UpdateTaskSchema = z
     .object({
         title: z.string().min(1).max(500).optional(),
         description: z.string().optional(),
         acceptance_criteria: z.string().optional(),
         priority: IssuePrioritySchema.optional(),
+        reporter_agent_id: z.string().nullable().optional(),
         spec_md: z.string().nullable().optional(),
         pr_url: z.string().nullable().optional(),
-        points: z.number().int().optional(),
-        // T2 — PO Writer fills this on every dev/QA story it creates so
-        // the non-AI worktree orchestrator can provision the on-disk
-        // checkout. Owner can override the value through the same
-        // PATCH; null clears it (legacy items).
+        // The Owner can point a Task at an existing branch; null clears it.
         worktree_branch: WORKTREE_BRANCH_SCHEMA.nullable().optional(),
         labels: ItemLabelsOptionalSchema,
     })
@@ -285,12 +255,12 @@ export const UpdateStorySchema = z
 
 export const CreateSubTaskSchema = z
     .object({
-        story_id: z.string().min(1),
+        task_id: z.string().min(1),
         title: z.string().min(1).max(500),
         description: z.string().default(''),
         acceptance_criteria: z.string().default(''),
         priority: IssuePrioritySchema.default('normal'),
-        status: SubTaskStatusSchema.optional(),
+        status: IssueStatusSchema.optional(),
         assignee_agent_id: z.string().nullable().optional(),
         reporter_agent_id: z.string().nullable().optional(),
         labels: ItemLabelsSchema,
@@ -307,77 +277,11 @@ export const UpdateSubTaskSchema = z
     })
     .strict();
 
-const BugFieldsSchema = {
-    acceptance_criteria: z.string().default(''),
-    steps_to_reproduce: z.string().default(''),
-    expected: z.string().default(''),
-    actual: z.string().default(''),
-    frequency: BugFrequencySchema.default('sometimes'),
-    failure_scope: BugFailureScopeSchema.default('cosmetic'),
-};
-
-const BugUpdateFieldsSchema = {
-    acceptance_criteria: z.string().optional(),
-    steps_to_reproduce: z.string().optional(),
-    expected: z.string().optional(),
-    actual: z.string().optional(),
-    frequency: BugFrequencySchema.optional(),
-    failure_scope: BugFailureScopeSchema.optional(),
-};
-
-export const CreateSubBugSchema = z
-    .object({
-        story_id: z.string().min(1),
-        title: z.string().min(1).max(500),
-        description: z.string().default(''),
-        ...BugFieldsSchema,
-        priority: IssuePrioritySchema.default('normal'),
-        status: IssueStatusSchema.optional(),
-        assignee_agent_id: z.string().nullable().optional(),
-        reporter_agent_id: z.string().nullable().optional(),
-        labels: ItemLabelsSchema,
-    })
-    .strict();
-
-export const UpdateSubBugSchema = z
-    .object({
-        title: z.string().min(1).max(500).optional(),
-        description: z.string().optional(),
-        priority: IssuePrioritySchema.optional(),
-        ...BugUpdateFieldsSchema,
-        labels: ItemLabelsOptionalSchema,
-    })
-    .strict();
-
-export const CreateBugSchema = z
-    .object({
-        epic_id: z.string().min(1),
-        title: z.string().min(1).max(500),
-        description: z.string().default(''),
-        ...BugFieldsSchema,
-        priority: IssuePrioritySchema.default('normal'),
-        status: IssueStatusSchema.optional(),
-        assignee_agent_id: z.string().nullable().optional(),
-        reporter_agent_id: z.string().nullable().optional(),
-        labels: ItemLabelsSchema,
-    })
-    .strict();
-
-export const UpdateBugSchema = z
-    .object({
-        title: z.string().min(1).max(500).optional(),
-        description: z.string().optional(),
-        priority: IssuePrioritySchema.optional(),
-        ...BugUpdateFieldsSchema,
-        labels: ItemLabelsOptionalSchema,
-    })
-    .strict();
-
 export const CreateIssueLinkSchema = z.object({
     to_type: IssueTypeSchema,
     to_id: z.string().min(1),
     // Optional in the body — route defaults to `relates_to` when omitted.
-    // `tested_by` is directed (from = QA story, to = dev story) and is
+    // `tested_by` is directed (from = QA sub-task, to = dev sub-task) and is
     // intended for PO Writer / agents, not the user-facing add-link picker.
     relation_type: z.enum(['relates_to', 'depends_on', 'tested_by']).optional(),
 });
@@ -471,6 +375,17 @@ export const TransitionStatusSchema = z.object({
         return normalized;
     }),
     requested_by_agent_id: z.string().min(1).optional(),
+    /**
+     * Tasks only: closing a Task (`done`) also closes its sub-tasks that are
+     * `in_review` — the Owner verified the one branch they all live on.
+     * Sub-tasks still open keep blocking the close.
+     */
+    close_sub_tasks: z.boolean().optional(),
+});
+
+/** PUT /api/tasks/:id/sub-tasks/order — every sub-task id of the Task, in run order. */
+export const ReorderSubTasksSchema = z.object({
+    ids: z.array(z.string().min(1)).min(1).max(500),
 });
 
 export const CredentialHostSchema = z.enum(['github']);

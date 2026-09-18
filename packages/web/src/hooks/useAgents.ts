@@ -69,8 +69,8 @@ export function useAgentRuns(id: string) {
 // Project History tab — every agent run that touched any item in this
 // project, ordered newest-first. Implemented as a single server query
 // (items.project_id join in /api/run) rather than a client-side
-// enumeration of project items + sub-items, because sub-tasks and
-// sub-bugs aren't loaded at the project level.
+// enumeration of project items + sub-items, because sub-tasks aren't
+// loaded at the project level.
 //
 // 2026-06-28 — added `staleTime: 30_000` to dedupe concurrent mounts
 // from React StrictMode's double-mount and from sibling tab-content

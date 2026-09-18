@@ -5,7 +5,7 @@
   "cli": "claude",
   "model": "claude-sonnet-4-6",
   "framework": "review",
-  "description": "Dedicated reviewer paired with `agent-po-writer`. Grades the dev story / QA twin breakdown against the PO Writer checklist, then reports via the `atlas-outcome` block (done → workflow finishes and queues the stories for the next workflow, rejected → back to PO Writer for revision, asked_question → Owner).",
+  "description": "Dedicated reviewer paired with `agent-po-writer`. Grades the dev sub-task / QA twin breakdown against the PO Writer checklist, then reports via the `atlas-outcome` block (done → the workflow runs the sub-tasks, rejected → back to PO Writer for revision, asked_question → Owner).",
   "designation": "Product Owner — Reviewer",
   "accent_color": "#0E5C99",
   "sort_order": 12,

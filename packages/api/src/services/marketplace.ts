@@ -247,17 +247,25 @@ export const marketplaceService = {
     },
 
     async exportCatalogBundle(id: string): Promise<Buffer> {
+        return await packAgentBundle(await this.catalogBundle(id));
+    },
+
+    async exportLocalBundle(agentId: string): Promise<Buffer> {
+        return await packAgentBundle(await this.localBundle(agentId));
+    },
+
+    async catalogBundle(id: string): Promise<AgentBundle> {
         const full = await this.getFull(id);
         if (!full) throw new MarketplaceNotFoundError(id);
-        return await packAgentBundle({
+        return {
             manifest: toManifest(full.agent),
             prompt_md: full.agent.prompt_md,
             memory_md: full.agent.memory_template_md,
             checklists: full.checklists,
-        });
+        };
     },
 
-    async exportLocalBundle(agentId: string): Promise<Buffer> {
+    async localBundle(agentId: string): Promise<AgentBundle> {
         const agent = await agentsService.get(agentId);
         if (!agent) throw new MarketplaceNotFoundError(agentId);
         const [checklists, memory] = await Promise.all([
@@ -274,7 +282,7 @@ export const marketplaceService = {
             agent.description.length > 220
                 ? agent.description.slice(0, 217) + '...'
                 : agent.description;
-        return await packAgentBundle({
+        return {
             manifest: manifestFromLocalAgent(agent, summary),
             prompt_md: agent.prompt_md,
             memory_md: memory?.body_md ?? '',
@@ -283,7 +291,7 @@ export const marketplaceService = {
                 sort_order: c.sort_order,
                 required: c.required,
             })),
-        });
+        };
     },
 
     async install(

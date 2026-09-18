@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { goto } from '../helpers/nav.js';
+import { API, PROJECT_NAME, chainGraph, createTask, createWorkflow } from '../helpers/api.js';
 
 test.describe('/queue', () => {
     test('renders without console errors', async ({ page }) => {
@@ -7,25 +8,50 @@ test.describe('/queue', () => {
         await expect(page.getByRole('heading', { name: /queue/i }).first()).toBeVisible();
     });
 
-    test('section labels are present', async ({ page }) => {
+    test('shows the workflow counter strip and project filter', async ({ page }) => {
         await goto(page, '/queue');
-        // "Agents" section header is always rendered above the card grid.
-        await expect(page.getByText(/\bAgents\b/i).first()).toBeVisible();
-        // "Waiting on You" section is always rendered (shows 0 when empty).
-        await expect(page.getByText(/Waiting on You/i).first()).toBeVisible();
-        // "Pause All Agents" button is in the page header.
-        await expect(page.getByRole('button', { name: /Pause All Agents/i })).toBeVisible();
+        await expect(page.getByText(/\d+ running · \d+ queued · \d+ waiting on you · \d+ need a workflow/)).toBeVisible();
+        await expect(page.getByRole('combobox', { name: 'Project' })).toBeVisible();
     });
 
-    test('agent card is visible and opens drawer on click', async ({ page }) => {
+    test('lists workflow cards, or points at /workflows when there are none', async ({ page }) => {
         await goto(page, '/queue');
-        // The seed installs "PO Writer" from the marketplace — expect its card.
-        const card = page.getByText(/PO Writer/i).first();
-        await expect(card).toBeVisible();
-        // Click the card to open QueueAgentDrawer.
-        await card.click();
-        // Drawer renders inside an MUI Drawer — check for its close button or
-        // a second occurrence of the agent name inside the drawer panel.
-        await expect(page.getByRole('button', { name: /close/i }).first()).toBeVisible();
+        const empty = page.getByRole('link', { name: 'Go to workflows' });
+        const card = page.getByRole('progressbar', { name: /running slots/ }).first();
+        await expect(empty.or(card)).toBeVisible();
+    });
+
+    test.describe('a ready Task without a workflow', () => {
+        const name = `E2E queue workflow ${Date.now()}`;
+        let workflowId = '';
+        let taskId = '';
+
+        test.afterAll(async ({ request }) => {
+            if (taskId) await request.delete(`${API}/api/tasks/${taskId}`);
+            if (workflowId) await request.delete(`${API}/api/workflows/${workflowId}`);
+        });
+
+        test('is picked into a workflow card from "Needs a workflow"', async ({ page, request }) => {
+            workflowId = (await createWorkflow(request, name, chainGraph({ type: 'agent', agent_id: 'agent-po-writer' }))).id;
+            const task = await createTask(request, 'E2E queue task');
+            taskId = task.id;
+            const ready = await request.patch(`${API}/api/tasks/${taskId}/status`, { data: { status: 'ready' } });
+            expect(ready.status(), await ready.text()).toBeLessThan(300);
+
+            await goto(page, '/queue');
+            const card = page.getByRole('region', { name, exact: true });
+            await expect(card.getByText(`${PROJECT_NAME} · Manual`)).toBeVisible();
+            await expect(card.getByText('Nothing running or queued.', { exact: false })).toBeVisible();
+
+            const unassigned = page.getByRole('region', { name: 'Needs a workflow' });
+            await expect(unassigned.getByText('E2E queue task')).toBeVisible();
+            await unassigned.getByRole('combobox', { name: `Workflow for ${taskId}` }).click();
+            await page.getByRole('option', { name }).click();
+
+            await expect(card.getByText('E2E queue task')).toBeVisible();
+            await expect(card.getByText('Manual: these wait until you start them.')).toBeVisible();
+            await expect(card.getByRole('button', { name: 'Start now' })).toBeVisible();
+            await expect(unassigned.getByText('E2E queue task')).toBeHidden();
+        });
     });
 });

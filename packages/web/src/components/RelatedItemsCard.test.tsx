@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
+import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
@@ -12,10 +13,10 @@ import type { IIssueLinkRow, IItemExternalLink } from '@atlas/shared';
 function makeLink(over: Partial<IIssueLinkRow> = {}): IIssueLinkRow {
     return {
         id: 1,
-        type: 'story',
+        type: 'sub_task',
         item_id: 'ATL-2',
         short_id: 'ATL-2',
-        title: 'Linked story',
+        title: 'Linked sub-task',
         status: 'draft',
         relation_type: 'relates_to',
         direction: 'outgoing',
@@ -29,7 +30,7 @@ describe('RelatedItemsCard', () => {
         server.use(...defaultHandlers);
         const { container } = renderWithProviders(
             <RelatedItemsCard
-                issueType="story"
+                issueType="sub_task"
                 issueId="S1"
                 relatedLinks={[]}
                 agents={[]}
@@ -46,7 +47,7 @@ describe('RelatedItemsCard', () => {
         ];
         renderWithProviders(
             <RelatedItemsCard
-                issueType="story"
+                issueType="sub_task"
                 issueId="S1"
                 relatedLinks={links}
                 agents={[makeAgent()]}
@@ -68,7 +69,7 @@ describe('RelatedItemsCard', () => {
         ];
         renderWithProviders(
             <RelatedItemsCard
-                issueType="story"
+                issueType="sub_task"
                 issueId="S1"
                 relatedLinks={links}
                 agents={[]}
@@ -82,7 +83,7 @@ describe('RelatedItemsCard', () => {
     it('renders the empty Tested-by state when allowAddTestLink + no rows', () => {
         renderWithProviders(
             <RelatedItemsCard
-                issueType="story"
+                issueType="sub_task"
                 issueId="S1"
                 relatedLinks={[]}
                 agents={[]}
@@ -100,7 +101,7 @@ describe('RelatedItemsCard', () => {
         ];
         renderWithProviders(
             <RelatedItemsCard
-                issueType="story"
+                issueType="sub_task"
                 issueId="S1"
                 relatedLinks={links}
                 agents={[]}
@@ -117,7 +118,7 @@ describe('RelatedItemsCard', () => {
         const links = [makeLink({ id: 21, relation_type: 'relates_to', title: 'Related' })];
         renderWithProviders(
             <RelatedItemsCard
-                issueType="story"
+                issueType="sub_task"
                 issueId="S1"
                 relatedLinks={links}
                 agents={[]}
@@ -133,7 +134,7 @@ describe('RelatedItemsCard', () => {
         const onOpenPicker = vi.fn();
         renderWithProviders(
             <RelatedItemsCard
-                issueType="story"
+                issueType="sub_task"
                 issueId="S1"
                 relatedLinks={[]}
                 agents={[]}
@@ -160,7 +161,7 @@ describe('RelatedItemsCard', () => {
         ];
         renderWithProviders(
             <RelatedItemsCard
-                issueType="story"
+                issueType="sub_task"
                 issueId="S1"
                 relatedLinks={links}
                 agents={[]}
@@ -173,61 +174,33 @@ describe('RelatedItemsCard', () => {
         expect(screen.getByText('Rel')).toBeInTheDocument();
     });
 
-    it('exercises routeFor for epic type via row click on depends_on link', () => {
+    it.each([
+        ['task', 'T1', 'task page'],
+        ['sub_task', 'ST-1', 'sub-task page'],
+    ] as const)('clicking a %s link row opens its detail page', (type, id, page) => {
         const links = [
-            makeLink({ id: 40, type: 'epic', item_id: 'E1', relation_type: 'depends_on', short_id: 'ATL-E1', title: 'Epic Dep' }),
+            makeLink({ id: 40, type, item_id: id, relation_type: 'depends_on', short_id: id, title: 'Dep row' }),
         ];
         renderWithProviders(
-            <RelatedItemsCard
-                issueType="story"
-                issueId="S1"
-                relatedLinks={links}
-                agents={[]}
-                onOpenPicker={vi.fn()}
-            />,
+            <Routes>
+                <Route
+                    path="/"
+                    element={
+                        <RelatedItemsCard
+                            issueType="sub_task"
+                            issueId="S1"
+                            relatedLinks={links}
+                            agents={[]}
+                            onOpenPicker={vi.fn()}
+                        />
+                    }
+                />
+                <Route path="/tasks/:id" element={<div>task page</div>} />
+                <Route path="/sub-tasks/:id" element={<div>sub-task page</div>} />
+            </Routes>,
         );
-        const row = screen.getByText('Epic Dep');
-        // Clicking row exercises onRowClick → navigate(routeFor('epic', 'E1'))
-        fireEvent.click(row);
-        expect(document.body).toBeTruthy();
-    });
-
-    it('exercises routeFor for sub_task and sub_bug types via relates_to row click', () => {
-        const links = [
-            makeLink({ id: 41, type: 'sub_task', item_id: 'ST-1', relation_type: 'relates_to', short_id: 'ATL-ST1', title: 'Sub Task' }),
-            makeLink({ id: 42, type: 'sub_bug', item_id: 'SB-1', relation_type: 'relates_to', short_id: 'ATL-SB1', title: 'Sub Bug' }),
-        ];
-        renderWithProviders(
-            <RelatedItemsCard
-                issueType="story"
-                issueId="S1"
-                relatedLinks={links}
-                agents={[]}
-                onOpenPicker={vi.fn()}
-            />,
-        );
-        const subTaskRow = screen.getByText('Sub Task');
-        fireEvent.click(subTaskRow);
-        const subBugRow = screen.getByText('Sub Bug');
-        fireEvent.click(subBugRow);
-        expect(document.body).toBeTruthy();
-    });
-
-    it('exercises routeFor for bug type via depends_on row click', () => {
-        const links = [
-            makeLink({ id: 43, type: 'bug', item_id: 'B1', relation_type: 'depends_on', short_id: 'ATL-B1', title: 'Bug Dep' }),
-        ];
-        renderWithProviders(
-            <RelatedItemsCard
-                issueType="story"
-                issueId="S1"
-                relatedLinks={links}
-                agents={[]}
-                onOpenPicker={vi.fn()}
-            />,
-        );
-        fireEvent.click(screen.getByText('Bug Dep'));
-        expect(document.body).toBeTruthy();
+        fireEvent.click(screen.getByText('Dep row'));
+        expect(screen.getByText(page)).toBeInTheDocument();
     });
 
     it('exercises unlinkRow for depends_on: renders Unlink button and clicks it', async () => {
@@ -242,7 +215,7 @@ describe('RelatedItemsCard', () => {
         ];
         renderWithProviders(
             <RelatedItemsCard
-                issueType="story"
+                issueType="sub_task"
                 issueId="S1"
                 relatedLinks={links}
                 agents={[]}
@@ -267,7 +240,7 @@ describe('RelatedItemsCard', () => {
         ];
         renderWithProviders(
             <RelatedItemsCard
-                issueType="story"
+                issueType="sub_task"
                 issueId="S1"
                 relatedLinks={links}
                 agents={[]}
@@ -280,31 +253,13 @@ describe('RelatedItemsCard', () => {
         expect(document.body).toBeTruthy();
     });
 
-    it('exercises routeFor for story type via relates_to row click', () => {
-        const links = [
-            makeLink({ id: 44, type: 'story', item_id: 'S99', relation_type: 'relates_to', short_id: 'ATL-S99', title: 'Story Link' }),
-        ];
-        renderWithProviders(
-            <RelatedItemsCard
-                issueType="story"
-                issueId="S1"
-                relatedLinks={links}
-                agents={[]}
-                onOpenPicker={vi.fn()}
-            />,
-        );
-        // Clicking navigates to /issues/stories/S99 — exercises routeFor 'story' branch
-        fireEvent.click(screen.getByText('Story Link'));
-        expect(document.body).toBeTruthy();
-    });
-
     it('exercises testedByTitle = "Tests" when direction is mixed (outgoing only)', () => {
         const links = [
             makeLink({ id: 70, relation_type: 'tested_by', direction: 'outgoing', short_id: 'ATL-70', title: 'Tests Item' }),
         ];
         renderWithProviders(
             <RelatedItemsCard
-                issueType="story"
+                issueType="sub_task"
                 issueId="S1"
                 relatedLinks={links}
                 agents={[]}
@@ -335,7 +290,7 @@ describe('RelatedItemsCard', () => {
             server.use(...defaultHandlers);
             renderWithProviders(
                 <RelatedItemsCard
-                    issueType="story"
+                    issueType="sub_task"
                     issueId="S1"
                     relatedLinks={[]}
                     externalLinks={[]}
@@ -353,7 +308,7 @@ describe('RelatedItemsCard', () => {
             server.use(...defaultHandlers);
             renderWithProviders(
                 <RelatedItemsCard
-                    issueType="story"
+                    issueType="sub_task"
                     issueId="S1"
                     relatedLinks={[]}
                     externalLinks={[
@@ -381,7 +336,7 @@ describe('RelatedItemsCard', () => {
             ];
             renderWithProviders(
                 <RelatedItemsCard
-                    issueType="story"
+                    issueType="sub_task"
                     issueId="S1"
                     relatedLinks={[]}
                     externalLinks={links}
@@ -406,7 +361,7 @@ describe('RelatedItemsCard', () => {
             server.use(...defaultHandlers);
             renderWithProviders(
                 <RelatedItemsCard
-                    issueType="story"
+                    issueType="sub_task"
                     issueId="S1"
                     relatedLinks={[]}
                     externalLinks={[]}
@@ -430,7 +385,7 @@ describe('RelatedItemsCard', () => {
             );
             renderWithProviders(
                 <RelatedItemsCard
-                    issueType="story"
+                    issueType="sub_task"
                     issueId="S1"
                     relatedLinks={[]}
                     externalLinks={[makeExtLink({ id: 200 })]}
@@ -454,7 +409,7 @@ describe('RelatedItemsCard', () => {
             renderWithProviders(
                 <>
                     <RelatedItemsCard
-                        issueType="story"
+                        issueType="sub_task"
                         issueId="S1"
                         relatedLinks={[]}
                         externalLinks={[makeExtLink({ id: 300, external_ref: null, url: 'https://github.com/foo/bar/pull/300' })]}
@@ -476,7 +431,7 @@ describe('RelatedItemsCard', () => {
     it('fetches links, external links, and agents from hooks when no pre-loaded props are supplied', async () => {
         server.use(
             ...defaultHandlers,
-            http.get('http://localhost:3000/api/issues/story/S1/links', () =>
+            http.get('http://localhost:3000/api/issues/sub_task/S1/links', () =>
                 HttpResponse.json([
                     makeLink({ id: 80, relation_type: 'depends_on', short_id: 'ATL-80', title: 'Fetched Dep' }),
                 ]),
@@ -485,7 +440,7 @@ describe('RelatedItemsCard', () => {
         );
         renderWithProviders(
             <RelatedItemsCard
-                issueType="story"
+                issueType="sub_task"
                 issueId="S1"
                 onOpenPicker={vi.fn()}
             />,
@@ -509,7 +464,7 @@ describe('RelatedItemsCard', () => {
         renderWithProviders(
             <>
                 <RelatedItemsCard
-                    issueType="story"
+                    issueType="sub_task"
                     issueId="S1"
                     relatedLinks={links}
                     agents={[]}
@@ -535,7 +490,7 @@ describe('RelatedItemsCard', () => {
         renderWithProviders(
             <>
                 <RelatedItemsCard
-                    issueType="story"
+                    issueType="sub_task"
                     issueId="S1"
                     relatedLinks={links}
                     agents={[]}
@@ -562,7 +517,7 @@ describe('RelatedItemsCard', () => {
         renderWithProviders(
             <>
                 <RelatedItemsCard
-                    issueType="story"
+                    issueType="sub_task"
                     issueId="S1"
                     relatedLinks={links}
                     agents={[]}
@@ -588,7 +543,7 @@ describe('RelatedItemsCard', () => {
         renderWithProviders(
             <>
                 <RelatedItemsCard
-                    issueType="story"
+                    issueType="sub_task"
                     issueId="S1"
                     relatedLinks={links}
                     agents={[]}
@@ -601,14 +556,14 @@ describe('RelatedItemsCard', () => {
         await screen.findByText(/Unlink failed/);
     });
 
-    it('renders tested-by rows WITHOUT the add-test-link header button when allowAddTestLink is false (Epic detail scenario)', () => {
+    it('renders tested-by rows WITHOUT the add-test-link header button when allowAddTestLink is false (Task detail scenario)', () => {
         const links = [
             makeLink({ id: 95, relation_type: 'tested_by', direction: 'incoming', short_id: 'ATL-95', title: 'No Add Button' }),
         ];
         renderWithProviders(
             <RelatedItemsCard
-                issueType="epic"
-                issueId="E1"
+                issueType="task"
+                issueId="T1"
                 relatedLinks={links}
                 agents={[]}
                 onOpenPicker={vi.fn()}

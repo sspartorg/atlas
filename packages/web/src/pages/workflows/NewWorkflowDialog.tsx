@@ -69,7 +69,7 @@ function OptionCard({ title, description, meta, selected, onClick, children }: O
     );
 }
 
-function AgentChips({ ids, agentsById }: { ids: string[]; agentsById: Map<string, IAgent> }) {
+export function AgentChips({ ids, agentsById }: { ids: string[]; agentsById: Map<string, Pick<IAgent, 'name' | 'accent_color'>> }) {
     return (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 2 }}>
             {ids.map((id, i) => {
@@ -109,7 +109,16 @@ function AgentChips({ ids, agentsById }: { ids: string[]; agentsById: Map<string
     );
 }
 
-export function NewWorkflowDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function NewWorkflowDialog({
+    open,
+    onClose,
+    templateId = BLANK,
+}: {
+    open: boolean;
+    onClose: () => void;
+    /** Pre-selects a template (the marketplace's "Use in a project"). */
+    templateId?: string;
+}) {
     const navigate = useNavigate();
     const { data: projects = [] } = useProjects();
     const { data: agents = [] } = useAgents();
@@ -117,7 +126,7 @@ export function NewWorkflowDialog({ open, onClose }: { open: boolean; onClose: (
     const createBlank = useCreateWorkflow();
     const createFromTemplate = useCreateWorkflowFromTemplate();
     const [projectId, setProjectId] = useState('');
-    const [choice, setChoice] = useState(BLANK);
+    const [choice, setChoice] = useState(templateId);
 
     const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
     const pending = createBlank.isPending || createFromTemplate.isPending;
@@ -167,7 +176,7 @@ export function NewWorkflowDialog({ open, onClose }: { open: boolean; onClose: (
                     <OptionCard
                         title="Blank"
                         description="A Start and an End node. Drag agents in and connect them yourself."
-                        meta="Per item · Push + PR"
+                        meta="Per Task · Push + PR"
                         selected={choice === BLANK}
                         onClick={() => setChoice(BLANK)}
                     />

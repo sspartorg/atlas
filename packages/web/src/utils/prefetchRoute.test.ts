@@ -12,8 +12,7 @@ const pageStub = { default: () => null };
 vi.mock('../pages/Dashboard.js', () => pageStub);
 vi.mock('../pages/ScratchPad.js', () => pageStub);
 vi.mock('../pages/Projects.js', () => pageStub);
-vi.mock('../pages/Epics.js', () => pageStub);
-vi.mock('../pages/Issues.js', () => pageStub);
+vi.mock('../pages/Tasks.js', () => pageStub);
 vi.mock('../pages/Queue.js', () => pageStub);
 vi.mock('../pages/Workflows.js', () => pageStub);
 vi.mock('../pages/Agents.js', () => pageStub);
@@ -46,12 +45,8 @@ describe('prefetchRoute', () => {
         expect(prefetchRoute('projects')).toBeUndefined();
     });
 
-    it('returns undefined for epics', () => {
-        expect(prefetchRoute('epics')).toBeUndefined();
-    });
-
-    it('returns undefined for issues', () => {
-        expect(prefetchRoute('issues')).toBeUndefined();
+    it('returns undefined for tasks', () => {
+        expect(prefetchRoute('tasks')).toBeUndefined();
     });
 
     it('returns undefined for queue', () => {
@@ -118,7 +113,7 @@ describe('prefetchRoute', () => {
         const results = await Promise.all(
             Object.values(routes).map((loader) => loader()),
         );
-        expect(results).toHaveLength(18); // 17 unique pages + `home` alias
+        expect(results).toHaveLength(17); // 16 unique pages + `home` alias
         for (const mod of results) {
             expect(mod).toBeDefined();
         }

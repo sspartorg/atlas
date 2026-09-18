@@ -12,18 +12,18 @@ describe('useComments', () => {
     it('fetches comments for an issue', async () => {
         server.use(
             http.get('http://localhost:3000/api/comments', ({ request }) => {
-                expect(request.url).toContain('issue_type=story');
+                expect(request.url).toContain('issue_type=task');
                 expect(request.url).toContain('issue_id=S1');
                 return ok([makeComment({ id: 1 })]);
             }),
         );
-        const { result } = renderHook(() => useComments('story', 'S1'), { wrapper: makeWrapper() });
+        const { result } = renderHook(() => useComments('task', 'S1'), { wrapper: makeWrapper() });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(result.current.data).toHaveLength(1);
     });
 
     it('stays idle when issueId is empty', () => {
-        const { result } = renderHook(() => useComments('story', ''), { wrapper: makeWrapper() });
+        const { result } = renderHook(() => useComments('task', ''), { wrapper: makeWrapper() });
         expect(result.current.fetchStatus).toBe('idle');
     });
 });
@@ -38,14 +38,14 @@ describe('useCreateComment', () => {
         const { result } = renderHook(() => useCreateComment(), { wrapper: makeWrapper() });
         const c = await result.current.mutateAsync({
             author: 'owner',
-            issue_type: 'story',
+            issue_type: 'task',
             issue_id: 'S1',
             body: 'hi',
         });
         expect(c.id).toBe(99);
     });
 
-    it('invalidates comment caches for epic issue type', async () => {
+    it('invalidates comment caches for task issue type', async () => {
         server.use(
             http.post('http://localhost:3000/api/comments', () =>
                 ok(makeComment({ id: 100 })),
@@ -54,9 +54,9 @@ describe('useCreateComment', () => {
         const { result } = renderHook(() => useCreateComment(), { wrapper: makeWrapper() });
         const c = await result.current.mutateAsync({
             author: 'owner',
-            issue_type: 'epic',
-            issue_id: 'E1',
-            body: 'epic comment',
+            issue_type: 'task',
+            issue_id: 'T1',
+            body: 'task comment',
         });
         expect(c.id).toBe(100);
     });
@@ -89,38 +89,24 @@ describe('useUpdateComment', () => {
             }),
         );
         const { result } = renderHook(
-            () => useUpdateComment('story', 'S1'),
+            () => useUpdateComment('task', 'S1'),
             { wrapper: makeWrapper() },
         );
         const c = await result.current.mutateAsync({ id: 5, body: 'updated text' });
         expect(c.id).toBe(5);
     });
 
-    it('invalidates caches for bug issue type after update', async () => {
-        server.use(
-            http.patch('http://localhost:3000/api/comments/7', () =>
-                ok(makeComment({ id: 7 })),
-            ),
-        );
-        const { result } = renderHook(
-            () => useUpdateComment('bug', 'B1'),
-            { wrapper: makeWrapper() },
-        );
-        const c = await result.current.mutateAsync({ id: 7, body: 'fix note' });
-        expect(c.id).toBe(7);
-    });
-
-    it('invalidates caches for sub_bug issue type after update', async () => {
+    it('invalidates caches for sub_task issue type after update', async () => {
         server.use(
             http.patch('http://localhost:3000/api/comments/8', () =>
                 ok(makeComment({ id: 8 })),
             ),
         );
         const { result } = renderHook(
-            () => useUpdateComment('sub_bug', 'SB1'),
+            () => useUpdateComment('sub_task', 'ST1'),
             { wrapper: makeWrapper() },
         );
-        const c = await result.current.mutateAsync({ id: 8, body: 'sub bug fix' });
+        const c = await result.current.mutateAsync({ id: 8, body: 'sub-task fix' });
         expect(c.id).toBe(8);
     });
 });

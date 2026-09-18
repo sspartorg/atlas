@@ -15,15 +15,15 @@ import {
 
 describe('status-machine — forward path', () => {
     it('draft → ready', () => {
-        expect(isValidTransition('story', 'draft', 'ready')).toBe(true);
+        expect(isValidTransition('task', 'draft', 'ready')).toBe(true);
     });
 
     it('ready → in_progress', () => {
-        expect(isValidTransition('story', 'ready', 'in_progress')).toBe(true);
+        expect(isValidTransition('task', 'ready', 'in_progress')).toBe(true);
     });
 
     it('in_progress → in_review', () => {
-        expect(isValidTransition('story', 'in_progress', 'in_review')).toBe(true);
+        expect(isValidTransition('task', 'in_progress', 'in_review')).toBe(true);
     });
 
     // Performer → reviewer agent handoff: the performer finishes (item is
@@ -35,26 +35,26 @@ describe('status-machine — forward path', () => {
     // handoff rule gets a 400 from the route; the parser-path runner has
     // been bypassing this check via a direct Kysely UPDATE.
     it('in_progress → ready (agent-to-agent handoff)', () => {
-        expect(isValidTransition('epic', 'in_progress', 'ready')).toBe(true);
-        expect(isValidTransition('story', 'in_progress', 'ready')).toBe(true);
+        expect(isValidTransition('task', 'in_progress', 'ready')).toBe(true);
+        expect(isValidTransition('sub_task', 'in_progress', 'ready')).toBe(true);
     });
 
     it('in_review → done', () => {
-        expect(isValidTransition('story', 'in_review', 'done')).toBe(true);
+        expect(isValidTransition('task', 'in_review', 'done')).toBe(true);
     });
 });
 
 describe('status-machine — reverse paths', () => {
     it('in_review → in_progress (owner rejects)', () => {
-        expect(isValidTransition('story', 'in_review', 'in_progress')).toBe(true);
+        expect(isValidTransition('task', 'in_review', 'in_progress')).toBe(true);
     });
 
     it('waiting_for_info → ready (re-queue)', () => {
-        expect(isValidTransition('story', 'waiting_for_info', 'ready')).toBe(true);
+        expect(isValidTransition('task', 'waiting_for_info', 'ready')).toBe(true);
     });
 
     it('waiting_for_info → in_progress (resume after info)', () => {
-        expect(isValidTransition('story', 'waiting_for_info', 'in_progress')).toBe(true);
+        expect(isValidTransition('task', 'waiting_for_info', 'in_progress')).toBe(true);
     });
 });
 
@@ -62,35 +62,35 @@ describe('status-machine — escape hatch', () => {
     it.each(['draft', 'ready', 'in_progress', 'in_review'] as const)(
         '%s → waiting_for_info is valid',
         (from) => {
-            expect(isValidTransition('story', from, 'waiting_for_info')).toBe(true);
+            expect(isValidTransition('task', from, 'waiting_for_info')).toBe(true);
         }
     );
 
     it('done → waiting_for_info is invalid (terminal)', () => {
-        expect(isValidTransition('story', 'done', 'waiting_for_info')).toBe(false);
+        expect(isValidTransition('task', 'done', 'waiting_for_info')).toBe(false);
     });
 
     it('waiting_for_info → waiting_for_info is invalid (no-op)', () => {
-        expect(isValidTransition('story', 'waiting_for_info', 'waiting_for_info')).toBe(false);
+        expect(isValidTransition('task', 'waiting_for_info', 'waiting_for_info')).toBe(false);
     });
 });
 
 describe('status-machine — invalid transitions', () => {
     it('draft → done is invalid (must traverse the chain)', () => {
-        expect(isValidTransition('story', 'draft', 'done')).toBe(false);
+        expect(isValidTransition('task', 'draft', 'done')).toBe(false);
     });
 
     it('ready → done is invalid', () => {
-        expect(isValidTransition('story', 'ready', 'done')).toBe(false);
+        expect(isValidTransition('task', 'ready', 'done')).toBe(false);
     });
 
     it('done has no valid next statuses', () => {
-        expect(getValidNextStatuses('story', 'done')).toHaveLength(0);
+        expect(getValidNextStatuses('task', 'done')).toHaveLength(0);
     });
 });
 
 describe('status-machine — all issue types share the same machine', () => {
-    it.each(['epic', 'story', 'bug', 'sub_bug'] as const)('%s: draft → ready is valid', (type) => {
+    it.each(['task', 'sub_task'] as const)('%s: draft → ready is valid', (type) => {
         expect(isValidTransition(type, 'draft', 'ready')).toBe(true);
     });
 
@@ -104,12 +104,12 @@ describe('status-machine — all issue types share the same machine', () => {
 });
 
 describe('isTerminalStatus', () => {
-    it('done is terminal for story', () => {
-        expect(isTerminalStatus('story', 'done')).toBe(true);
+    it('done is terminal for task', () => {
+        expect(isTerminalStatus('task', 'done')).toBe(true);
     });
 
     it('in_progress is not terminal', () => {
-        expect(isTerminalStatus('story', 'in_progress')).toBe(false);
+        expect(isTerminalStatus('task', 'in_progress')).toBe(false);
     });
 
     it('done is terminal for sub_task', () => {

@@ -10,6 +10,8 @@ test.describe('/agents', () => {
     test('shows the seeded PO Writer agent card', async ({ page }) => {
         await goto(page, '/agents');
         await expect(page.getByText(/PO Writer/i).first()).toBeVisible();
+        // Cards list CLI · Model · Effort.
+        await expect(page.getByText('Effort', { exact: true }).first()).toBeVisible();
     });
 
     test('clicking an agent card navigates to its detail page', async ({ page }) => {

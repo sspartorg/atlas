@@ -20,14 +20,15 @@ test('flow: Projects list renders + detail URL navigable', async ({ page }) => {
     await expect(page.getByRole('tab', { name: /Overview/ })).toBeVisible({ timeout: 10_000 });
 });
 
-test('flow: Epics list renders + heading visible', async ({ page }) => {
-    await goto(page, '/epics');
-    await expect(page.getByRole('heading', { name: /Epics/i }).first()).toBeVisible();
-});
+test('flow: Tasks list → Task detail → Sub-task detail', async ({ page }) => {
+    await goto(page, '/tasks');
+    await expect(page.getByRole('heading', { name: /Tasks/i }).first()).toBeVisible();
 
-test('flow: Issues list renders + heading visible', async ({ page }) => {
-    await goto(page, '/issues');
-    await expect(page.getByRole('heading', { name: /Issues/i }).first()).toBeVisible();
+    // Seeded Task ETM-1 with sub-task ETM-2.
+    await goto(page, '/tasks/ETM-1');
+    await expect(page.getByText('E2E seeded sub-task').first()).toBeVisible();
+    await goto(page, '/sub-tasks/ETM-2');
+    await expect(page.getByText('E2E seeded sub-task').first()).toBeVisible();
 });
 
 test('flow: Agents list renders + all 5 tabs visible on detail page', async ({ page }) => {

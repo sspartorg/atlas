@@ -53,21 +53,21 @@ describe('costRollupForRoot', () => {
     });
 
     it('sums costs across the descendant tree grouped by kind in canonical order', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         await insertItem({
             id: 'ATL-2',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'S1',
         });
         await insertItem({
             id: 'ATL-3',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'S2',
         });
         await seedRun({
@@ -101,24 +101,24 @@ describe('costRollupForRoot', () => {
 
         const r = await costRollupForRoot('ATL-1');
         expect(r.root?.id).toBe('ATL-1');
-        expect(r.root?.type).toBe('epic');
+        expect(r.root?.type).toBe('task');
         expect(r.totals.total_cost_usd).toBeCloseTo(2.0, 5);
         expect(r.totals.input_tokens).toBe(130);
         expect(r.totals.output_tokens).toBe(60);
         expect(r.totals.cache_read_tokens).toBe(25);
         expect(r.totals.run_count).toBe(2);
-        // 2 stories are descendants of the epic.
+        // 2 sub-tasks are descendants of the task.
         expect(r.descendant_count).toBe(2);
-        const storyRow = r.byKind.find((k) => k.type === 'story');
-        expect(storyRow?.item_count).toBe(2);
-        expect(storyRow?.total_cost_usd).toBeCloseTo(2.0, 5);
-        // The root epic still appears in byKind as its own group (0 cost since no runs on it).
-        const epicRow = r.byKind.find((k) => k.type === 'epic');
-        expect(epicRow?.item_count).toBe(1);
+        const subRow = r.byKind.find((k) => k.type === 'sub_task');
+        expect(subRow?.item_count).toBe(2);
+        expect(subRow?.total_cost_usd).toBeCloseTo(2.0, 5);
+        // The root task still appears in byKind as its own group (0 cost since no runs on it).
+        const taskRow = r.byKind.find((k) => k.type === 'task');
+        expect(taskRow?.item_count).toBe(1);
     });
 
     it('handles a root with no descendants (single row, no runs)', async () => {
-        await insertItem({ id: 'solo', type: 'epic', project_id: 'p1', title: 'lonely' });
+        await insertItem({ id: 'solo', type: 'task', project_id: 'p1', title: 'lonely' });
         const r = await costRollupForRoot('solo');
         expect(r.root?.id).toBe('solo');
         expect(r.descendant_count).toBe(0);
@@ -128,36 +128,31 @@ describe('costRollupForRoot', () => {
 
 describe('costRowsForRoot', () => {
     beforeEach(async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         await insertItem({
             id: 'ATL-2',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'High-cost',
         });
         await insertItem({
             id: 'ATL-3',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Low-cost',
         });
         await insertItem({
             id: 'ATL-4',
-            type: 'bug',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Bug',
             acceptance_criteria: '',
-            steps_to_reproduce: '',
-            expected: '',
-            actual: '',
-            frequency: 'sometimes',
-            failure_scope: 'cosmetic',
         });
         await seedRun({
             id: 'r-high',
@@ -187,10 +182,11 @@ describe('costRowsForRoot', () => {
         expect(r.rows.find((row) => row.id === 'ATL-1')).toBeUndefined();
     });
 
-    it('honours the type filter (only stories)', async () => {
-        const r = await costRowsForRoot('ATL-1', { type: 'story' });
-        expect(r.rows.map((row) => row.id).sort()).toEqual(['ATL-2', 'ATL-3']);
-        expect(r.total).toBe(2);
+    it('honours the type filter', async () => {
+        const r = await costRowsForRoot('ATL-1', { type: 'sub_task' });
+        expect(r.rows.map((row) => row.id).sort()).toEqual(['ATL-2', 'ATL-3', 'ATL-4']);
+        expect(r.total).toBe(3);
+        expect((await costRowsForRoot('ATL-1', { type: 'task' })).total).toBe(0);
     });
 
     it('clamps oversized and zero/negative limits', async () => {
@@ -210,10 +206,10 @@ describe('costRowsForRoot', () => {
     it('returns last_run_at as null when there are no completed runs', async () => {
         await insertItem({
             id: 'ATL-norun',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'No runs',
         });
         const r = await costRowsForRoot('ATL-1');

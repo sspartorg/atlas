@@ -235,7 +235,7 @@ describe('SearchQueryInput', () => {
         const autocompleteSugg = Array.from(suggBtns).find((b) => {
             // Suggestion buttons are within the autocomplete box (inside the SearchQueryInput, not example queries)
             const text = b.textContent ?? '';
-            return text.includes('story') || text.includes('bug') || text.includes('epic');
+            return text.includes('task');
         });
         if (autocompleteSugg) {
             fireEvent.click(autocompleteSugg);
@@ -588,8 +588,8 @@ describe('SearchQueryInput', () => {
         // The lastWord + non-field kind path triggers when a field= value partial is NOT caught by
         // fieldMatch but lastWord still matches. This can happen if: query ends in an unquoted value
         // that looks like a word but without the "field =" prefix pattern.
-        // e.g. query='type = story' — fieldMatch: /([A-Za-z_]+)\s*=\s*"?([^"]*)$/ → matches
-        // Actually fieldMatch will catch 'type = story'. Let me find a query where lastWord hits
+        // e.g. query='type = task' — fieldMatch: /([A-Za-z_]+)\s*=\s*"?([^"]*)$/ → matches
+        // Actually fieldMatch will catch 'type = task'. Let me find a query where lastWord hits
         // but fieldMatch does NOT and the suggestion kind is 'value'.
         // fieldMatch = /([A-Za-z_]+)\s*=\s*"?([^"]*)$/ — requires "word = something" at end.
         // If query='upd' → suggestions=[{kind:'field', text:'updated'}]

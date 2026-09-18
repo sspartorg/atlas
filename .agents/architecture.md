@@ -139,21 +139,21 @@ Any device on the host's LAN can write â€” fine for home Wi-Fi, **do not en
 User clicks button in web
         â”‚
         â–¼
-useMutation in hook (e.g. useTransitionStory)
+useMutation in hook (e.g. useTransitionTask)
         â”‚
         â–¼
-api.stories.transition(id, status)         â† packages/web/src/api/api.ts
+api.tasks.transition(id, status)         â† packages/web/src/api/api.ts
         â”‚
-        â–¼  fetch(PATCH /api/stories/:id/status)
+        â–¼  fetch(PATCH /api/tasks/:id/status)
         â”‚
         â–¼
-Fastify route handler                       â† packages/api/src/routes/stories.ts
+Fastify route handler                       â† packages/api/src/routes/tasks.ts
         â”‚
         â–¼
 Zod schema parse (from @atlas/shared)
         â”‚
         â–¼
-Service layer                               â† packages/api/src/services/stories.ts
+Service layer                               â† packages/api/src/services/tasks.ts
         â”‚       isValidTransition(...)      â† @atlas/shared/status-machine
         â–¼
 Kysely query (pg)
@@ -162,7 +162,7 @@ Kysely query (pg)
 Response (snake_case JSON, matches @atlas/shared types)
         â”‚
         â–¼
-React Query invalidates relevant keys (['stories'], ['issues'], ...)
+React Query invalidates relevant keys (['tasks'], ['issues'], ...)
         â”‚
         â–¼
 UI refetches and re-renders
@@ -176,12 +176,12 @@ Before the handler, a global `preHandler` (`services/workflow-lock.ts`) returns 
 
 ## Workflow runs (agent kickoff)
 
-Agents never start themselves and never route items (ADR 0014, `docs/adr/0014-workflows-replace-agent-handoffs.md`). A **workflow** (`workflows` row: graph of Start / Agent / Owner / End nodes joined by pass and fail connections) starts a **workflow run**, and `services/workflow-engine.ts` drives it:
+Agents never start themselves and never route items (ADR 0014, `docs/adr/0014-workflows-replace-agent-handoffs.md`). A **workflow** (`workflows` row: graph of Start / Agent / Owner / Sub-tasks / End nodes joined by pass and fail connections) starts a **workflow run**, and `services/workflow-engine.ts` drives it. Since ADR 0015 (`docs/adr/0015-one-task-one-pr.md`) the item is a **Task**: its run does everything, including its sub-tasks, in one worktree on one branch, and delivers once.
 
 ```
 start (manual POST /api/workflows/:id/runs, dispatch tick, End kick, generate-ai-scaffold)
    │  startWorkflowRun: deps gate once · insert workflow_runs (graph_snapshot, one live run per item)
-   │  item → in_progress · ensureWorktree({item:null, branch}) once when use_worktree
+   │  Task → in_progress · ensureWorktree({item:null, branch}) once when use_worktree
    ▼
 goTo(node after Start)
    ├─ agent node → spawnNode: items.assignee_agent_id = agent · spawnAgentRun({workflowRun})
@@ -192,26 +192,39 @@ goTo(node after Start)
    │        asked_question / no outcome / error → park
    │        cancelled                          → cancel run
    ├─ owner node → park
-   └─ end node → finishRun: commit leftovers · push (push_code) · PR (raises_pr) · cleanup
-                  item → in_review (PR) | done · route children → child workflow (ready) · kick dispatch
+   ├─ subtasks node → runNextSubtask: oldest open sub-task of the Task matching the node's label
+   │     (open = not in_review / done; no label = sub-tasks no labelled node claims)
+   │     → child run of node.sub_workflow_id: parent_workflow_run_id set, same branch + worktree,
+   │       sub-task → in_progress, its steps run exactly like the above
+   │     child End → commit leftovers · sub-task → in_review · no push → runNextSubtask again
+   │     child park → Task run parks at this node (Task → waiting_for_info, no second comment)
+   │     none left → pass connection
+   └─ end node → End gate (Task runs with Sub-tasks nodes): open claimed sub-task → back to its
+                  Sub-tasks node (loop_count+1) · open unclaimed sub-task → park
+                  finishRun: commit leftovers · push run branch (push_code) or default branch
+                  (push_to_default) · PR (raises_pr; body lists the sub-tasks) · cleanup
+                  Task → in_review (PR or any sub-task not done) | done · kick dispatch
 
 park   → run waiting_for_owner · item waiting_for_info, no assignee · comment + one notification · worktree kept
 resume → Owner comment on the item (comments.ts) or POST /api/workflow-runs/:id/resume
           owner node: follow its pass connection · agent node: re-run it with loop_count = 0
-stop   → POST /api/workflow-runs/:id/stop, or stop / delete of a step run: cancel steps · push (no PR) · item waiting_for_info
+          sub-task reply: resume the child run + flip the Task run back to running
+          Task reply at a Sub-tasks node: resume the waiting child run
+stop   → POST /api/workflow-runs/:id/stop, or stop / delete of a step run (a child's stop stops its Task run):
+          cancel the run + live children · push (no PR) · Task and child's sub-task waiting_for_info
 ```
 
-**The one-minute tick** (`services/agent-schedule-registry.ts`, started from `main.ts`) only *starts* runs and repairs them: stuck-run watchdog → reminders → GitHub App token refresh → `reconcileWorkflowRuns` (parks a `running` run with no live step for 10 min) → `tickWorkflowDispatch`. Dispatch starts, per active workflow with no `running` run, the oldest `ready` item queued for it (`items.workflow_id`, `trigger='item_ready'`), or a scheduled fire (`trigger='schedule'`, croner on `cron_expr`). Parked runs don't hold a workflow's queue.
+**The one-minute tick** (`services/agent-schedule-registry.ts`, started from `main.ts`) only *starts* runs and repairs them: stuck-run watchdog → reminders → GitHub App token refresh → `reconcileWorkflowRuns` (parks a `running` run with no live step for 10 min) → `tickWorkflowDispatch`. Dispatch starts, per active workflow, the oldest `ready` Tasks queued for it (`items.workflow_id`, `trigger='item_ready'`) until `max_parallel_runs` top-level runs are `running` — each Task in its own worktree — or a scheduled fire (`trigger='schedule'`, croner on `cron_expr`). Parked runs don't hold a slot. Sub-workflows (`input_kind='sub_task'`) are never dispatched; reconcile skips a Task run whose child is `running`.
 
 **Failure paths that bypass `completeRun`** all report the step so the run can't hang: `sweepStuckRuns`, the `setup_failed` branch, `POST /api/run/:id/stop`, `DELETE /api/run/:id`, and the `main.ts` orphan reaper (`failOrphanedRuns` flips dead runs to `error`, then `onStepFinished`; it no longer pushes or deletes worktrees). `reconcileWorkflowRuns` is the backstop for anything else, including an API restart between steps.
 
 **Git ops and locks.** `ensureWorktree` / `pushWorktree` / `openPullRequest` / `cleanupWorktreeAfterPush` each take `withProjectGitLock`, which is not re-entrant — the engine never wraps them. The worktree path lives only on `workflow_runs`, never on `items.worktree_path`.
 
-**Concurrency.** `agent_runs_one_live_per_item` (migration 003) allows one `queued` / `in_progress` step per item; `workflow_runs_one_live_per_item` (035) allows one `running` / `waiting_for_owner` workflow run per item and covers the gaps between steps.
+**Concurrency.** `agent_runs_one_live_per_item` (migration 003) allows one `queued` / `in_progress` step per item; `workflow_runs_one_live_per_item` (035) allows one `running` / `waiting_for_owner` workflow run per item and covers the gaps between steps. Parallelism comes from Tasks (`max_parallel_runs`), never from sub-tasks: a Task run has at most one live child, so no two steps ever share a worktree at once.
 
 **Ad-hoc runs.** `POST /api/run` (Run-now dialog) spawns one agent with no item in a temp dir: no worktree, no routing, no push. It exists to try a prompt.
 
-Off-switches: set the workflow `inactive` (dispatch skips it), take the item off the workflow (`PUT /api/items/:id/workflow {workflow_id:null}`), or stop the run.
+Off-switches: set the workflow `inactive` (dispatch skips it), take the Task off the workflow (`PUT /api/items/:id/workflow {workflow_id:null}`), or stop the run.
 
 ---
 
@@ -248,7 +261,7 @@ Web client                              API server (single process)
 **Events emitted today** (full catalogue lives in `api-surface.md`):
 
 - Agent run lifecycle: `agent_status`, `agent_output`, `agent_error`, `run_queued`, `run_completed`, `run_error`
-- Workflows (ADR 0014): `workflow_run_updated` (`workflowId`, `workflowRunId`, `workflowRunStatus`, `nodeId`, `issueId?`) on start, every node move, park, End and stop; the web invalidates `['workflows']`, `['workflow-run', id]`, `['workflow-runs', workflowId]`, `['item-workflow-runs', issueId]`. `run_completed` / `run_error` / `agent_status` also invalidate `['workflow-run']` so a run view's step list refreshes
+- Workflows (ADR 0014): `workflow_run_updated` (`workflowId`, `workflowRunId`, `workflowRunStatus`, `nodeId`, `issueId?`, `parentWorkflowRunId?` on a sub-task's run) on start, every node move, park, End and stop; the web invalidates `['workflows']`, `['workflow-queue']`, `['workflow-run', id]` (and `['workflow-run', parentWorkflowRunId]`), `['workflow-runs', workflowId]`, `['item-workflow-runs', issueId]`. `run_completed` / `run_error` / `agent_status` also invalidate `['workflow-run']` so a run view's step list refreshes
 - Data mutations (push instead of poll): `counts_changed`, `notification_created`, `notification_updated`
 - Clone: `clone_status`, `clone_output`, `clone_completed`, `clone_error`
 - Reclone: `reclone_status`, `reclone_output`, `reclone_completed`, `reclone_error`
@@ -265,8 +278,8 @@ Scouts (`kind_slug` ∈ `ai-news | market-research | regulations | jira-to-epic`
 
 - **Scheduled** — `trigger='schedule'`; `schedule_preset` + time / weekday materialise to `workflows.cron_expr` (`materializeCron`) and `next_run_at` (croner, `settings.quiet_hours_timezone`). The dispatch tick starts one project-level run when due.
 - **Manual** — `POST /api/workflows/:id/runs` with no body.
-- **Prompt** — `prompt-builder` renders the constitution, the role with `{{ key }}` substitution against `settings_json` and the outcome contract, then either `# Project Context` (name, description, guardrails, every epic + spec, commit discipline) when the workflow has a project, or a `# Project-level Run` paragraph when it doesn't, then output instructions and self-memory. Steps read `.atlas/outcome.md` + `.atlas/self-memory.md` from the working directory.
-- **Children** — an item the step's agent creates is stamped `created_by_workflow_run_id`; End queues it for the End node's `child_workflow_id` as `ready` (or `test_child_workflow_id` when it has an outgoing `tested_by` link). An item whose run routed children ends `in_review`, not `done`.
+- **Prompt** — `prompt-builder` renders the constitution, the role with `{{ key }}` substitution against `settings_json` and the outcome contract, then either `# Project Context` (name, description, guardrails, every Task + spec, commit discipline) when the workflow has a project, or a `# Project-level Run` paragraph when it doesn't, then output instructions and self-memory. Steps read `.atlas/outcome.md` + `.atlas/self-memory.md` from the working directory.
+- **Created items** — Tasks a scout creates (Jira import, market research) land as `draft` and stay put; nothing routes them (End-node child routing was removed by ADR 0015). The Owner queues them for a Task workflow.
 
 **Settings flow**: PATCH `/api/agents/:id` carries `settings_json`. The route looks up `kind_slug` (incoming OR current), grabs the schema via `getAgentSettingsSchema(kind_slug)`, and runs `.safeParse()`; failures return 400 with structured `detail`.
 
@@ -287,7 +300,7 @@ workflow-engine: branch atlas/wf/<runId8>, ensureWorktree once, spawn the single
             │
             ▼
 agent run (project-level: item_id null, project_id set, cwd = run worktree)
-  - reads project + epics via Atlas MCP, detects the stack
+  - reads project + Tasks via Atlas MCP, detects the stack
   - writes the missing scaffold files, bootstraps spec-kit, commits
   - ends with an atlas-outcome block (no push, no gh)
             │
@@ -376,13 +389,13 @@ Pages with tab strips (`ProjectDetail`, `AgentDetail`, `Notifications`) split ev
 1. Tab state is driven by `useTabParam` (`packages/web/src/hooks/useTabParam.ts`), a thin `useState` wrapper. The initial value is read once from `window.location.search` (deep links to `?tab=â€¦` still work). Clicking a tab is a single `useState` update â€” no `useSearchParams`, no `useLocation`, no router subscription anywhere on the click path. (`AppShell`, `Sidenav`, `Topbar` all consume router state; routing the click through the URL was re-rendering the whole shell.)
 2. The parent unmounts the previous tab's Container and mounts the next tab's Container. **No new `fetch` request fires** â€” the data is already in the parent's TanStack Query observers.
 3. The Container synchronously returns a per-tab `<TabNameSkeleton />`. React commits, the browser paints the skeleton.
-4. After `useDeferredMount` fires (`setTimeout(0)` from a `useEffect`), the Container re-renders. For tabs the parent had to fetch (`OverviewTab`, `EpicsTab`, `IssuesTab`, `MemoryTab`, both Notifications tabs), the Container also waits for `data !== undefined` from props. The first time the page is mounted the wait is for the parent's initial fetches; subsequent tab swaps see data immediately.
+4. After `useDeferredMount` fires (`setTimeout(0)` from a `useEffect`), the Container re-renders. For tabs the parent had to fetch (`OverviewTab`, `TasksTab`, `MemoryTab`, both Notifications tabs), the Container also waits for `data !== undefined` from props. The first time the page is mounted the wait is for the parent's initial fetches; subsequent tab swaps see data immediately.
 5. The Container renders `<TabNameContent data={â€¦} {...rest} />` â€” pure render, no fetch, no chunk download.
 
 ### Data fetched in each parent
 
 - `AgentDetail`: `useAgent(id)`, `useAgents()`, `useAgentRuns(id)`, `useAgentMemory(id)`. The last one is lifted from the old `MemoryTab`.
-- `ProjectDetail`: `useProject(id)`, `useEpics(id)`, `useStories({ projectId: id })`, `useBugs({ projectId: id })`, `useAgents()`, `useSettings()`, `useProjectCounts(id)`, `useIssues({ projectId: id })`. The last two are lifted from `OverviewTab` / `IssuesTab`.
+- `ProjectDetail`: `useProject(id)`, `useAgents()`, `useSettings()`, `useProjectCounts(id)`, `useIssues({ projectId: id })`. The Tasks tab's rows (`tasks` + a client-side `sub_task_count`) and the rail's active agents are derived from the one issue-tree fetch.
 - `Notifications`: `useSettings()`, `useNotifications({ external_status: 'sent', limit: 1 })` (top stamp), `useNotifications({ limit: 200 })` (single dataset both tabs filter client-side), `useAgents()`. The `{ limit: 200 }` set and `useAgents` are lifted from the two tabs.
 
 ### Page-level Refresh button
@@ -392,9 +405,9 @@ Pages with tab strips (`ProjectDetail`, `AgentDetail`, `Notifications`) split ev
 ### Why this layout
 
 - React 18 does not yield between a synchronous state update and the commit. Without `useDeferredMount`, the heavy Content render happens on the click frame and blocks paint. With it, the skeleton paints first; the heavy mount happens on a later macrotask, off the clickâ†’paint loop.
-- Lifting fetches removes per-tab fetch latency and per-tab chunk-download latency (the prior `lazyNamed` split has been dropped on `IssuesTabContent`, `GuardrailsTabContent`, `MemoryTabContent`, `PromptTabContent`; they are now eager-imported). After the first paint, tab swap is purely a render exercise.
+- Lifting fetches removes per-tab fetch latency and per-tab chunk-download latency (the prior `lazyNamed` split has been dropped on `GuardrailsTabContent`, `MemoryTabContent`, `PromptTabContent`; they are now eager-imported). After the first paint, tab swap is purely a render exercise.
 - The parent chrome (`ProjectHeader`, `ProjectRightRail`, `AgentHero`, `AgentSidebar`) is wrapped in `React.memo` and receives `useCallback`-stabilised handler props from the parent. A tab click no longer re-walks 800+ LOC of header/sidebar JSX.
-- Conditional rendering of the active tab body (`{currentTab === 'epics' && <EpicsTab â€¦ />}`) is intentional: a previous "mount-all + CSS hide" attempt made hidden tabs re-render on every parent update, which turned heavy panels into perceptible lag.
+- Conditional rendering of the active tab body (`{currentTab === 'tasks' && <TasksTab … />}`) is intentional: a previous "mount-all + CSS hide" attempt made hidden tabs re-render on every parent update, which turned heavy panels into perceptible lag.
 - `AgentDetail.setTab` is **not** wrapped in `useTransition` â€” wrapping would tell React to keep the old tab body visible until the new one is ready, which produces a different "click does nothing for a second" feel.
 
 ### Trade-offs accepted
@@ -454,7 +467,7 @@ reset-rounds banner and A05 Freedom-run pill on the Runs tab.
 - **Repos**: cloned under the workspace folder, one subfolder per project.
 - **`.env`**: the API mirrors the `settings.env` table into a `.env` file in the server folder on every save (powered by `packages/api/src/services/env-file.ts`).
 - **External notification secrets**: token stored encrypted at rest (AES-256-GCM); decrypted only in-memory by `services/external notification.ts`.
-- **Git credentials**: same encryption story â€” `credentials` table + `services/credentials.ts`.
+- **Git credentials**: same encryption approach â€” `credentials` table + `services/credentials.ts`.
 
 ---
 

@@ -20,8 +20,8 @@ const minimalProject = {
         last_run_at: null,
     },
     byKind: [],
-    topEpics: [],
-    epic_count: 0,
+    topTasks: [],
+    task_count: 0,
     totals: {
         run_count: 0,
         total_cost_usd: 0,
@@ -43,26 +43,26 @@ const populatedProject = {
         last_run_at: '2026-06-01T00:00:00.000Z',
     },
     byKind: [
-        { type: 'story', total_cost_usd: 3, item_count: 5 },
-        { type: 'bug', total_cost_usd: 2, item_count: 3 },
+        { type: 'sub_task', total_cost_usd: 3, item_count: 5 },
+        { type: 'task', total_cost_usd: 2, item_count: 3 },
     ],
-    topEpics: [
+    topTasks: [
         {
             id: 'ATL-1',
-            title: 'Epic A',
+            title: 'Task A',
             totals: { run_count: 5, total_cost_usd: 3 },
             descendant_count: 10,
             last_run_at: '2026-06-01T00:00:00.000Z',
         },
         {
             id: 'ATL-2',
-            title: 'Epic B',
+            title: 'Task B',
             totals: { run_count: 3, total_cost_usd: 2 },
             descendant_count: 6,
             last_run_at: null,
         },
     ],
-    epic_count: 25,
+    task_count: 25,
     totals: {
         run_count: 10,
         total_cost_usd: 5,
@@ -85,7 +85,7 @@ describe('AnalyticsProject page', () => {
     it('mounts without crashing for empty data', async () => {
         server.use(
             http.get(`${BASE}/analytics/project/p1`, () => HttpResponse.json(minimalProject)),
-            http.get(`${BASE}/analytics/project/p1/epics`, () =>
+            http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({ rows: [], total: 0, page: 1, limit: 25 }),
             ),
         );
@@ -100,14 +100,14 @@ describe('AnalyticsProject page', () => {
         expect(screen.getByText(/no project id/i)).toBeInTheDocument();
     });
 
-    it('renders the populated hero + top epics ladder', async () => {
+    it('renders the populated hero + top tasks ladder', async () => {
         server.use(
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json(populatedProject),
             ),
-            http.get(`${BASE}/analytics/project/p1/epics`, () =>
+            http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
-                    rows: populatedProject.topEpics,
+                    rows: populatedProject.topTasks,
                     total: 25,
                     page: 1,
                     limit: 25,
@@ -116,11 +116,11 @@ describe('AnalyticsProject page', () => {
         );
         renderAt('/analytics/project/p1');
         await waitFor(() => {
-            expect(screen.getByText('Epic A')).toBeInTheDocument();
+            expect(screen.getByText('Task A')).toBeInTheDocument();
         });
-        expect(screen.getByText('Epic B')).toBeInTheDocument();
-        // "View all 25 epics" button shows when remaining > 0.
-        expect(screen.getByRole('button', { name: /View all 25 epics/i })).toBeInTheDocument();
+        expect(screen.getByText('Task B')).toBeInTheDocument();
+        // "View all 25 tasks" button shows when remaining > 0.
+        expect(screen.getByRole('button', { name: /View all 25 tasks/i })).toBeInTheDocument();
     });
 
     it('flips into showAll mode when the "View all" button is clicked', async () => {
@@ -128,9 +128,9 @@ describe('AnalyticsProject page', () => {
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json(populatedProject),
             ),
-            http.get(`${BASE}/analytics/project/p1/epics`, () =>
+            http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
-                    rows: populatedProject.topEpics,
+                    rows: populatedProject.topTasks,
                     total: 25,
                     page: 1,
                     limit: 25,
@@ -138,11 +138,11 @@ describe('AnalyticsProject page', () => {
             ),
         );
         renderAt('/analytics/project/p1');
-        const btn = await screen.findByRole('button', { name: /View all 25 epics/i });
+        const btn = await screen.findByRole('button', { name: /View all 25 tasks/i });
         fireEvent.click(btn);
-        // After clicking, the paginated section renders with eyebrow "All epics".
+        // After clicking, the paginated section renders with eyebrow "All tasks".
         await waitFor(() => {
-            expect(screen.getByText(/All epics/i)).toBeInTheDocument();
+            expect(screen.getByText(/All tasks/i)).toBeInTheDocument();
         });
     });
 
@@ -195,44 +195,44 @@ describe('AnalyticsProject page', () => {
             expect(screen.getByText(/1 agentic run/)).toBeInTheDocument();
         });
         // Singular "session" label — surfaces in both the header eyebrow
-        // ("25 epics • 1 agentic run • 1 terminal session") and the terminal
+        // ("25 tasks • 1 agentic run • 1 terminal session") and the terminal
         // sessions card. Assert at least one, not exactly one — the singular
         // form on either is enough evidence the branch fired.
         expect(screen.getAllByText(/1 terminal session/).length).toBeGreaterThan(0);
     });
 
-    it('renders zero-cost epics (topMax=0) with 0% bar width (pct=0 branch)', async () => {
-        // When all topEpics have total_cost_usd=0, topMax=0 so pct=0 for every bar.
+    it('renders zero-cost tasks (topMax=0) with 0% bar width (pct=0 branch)', async () => {
+        // When all topTasks have total_cost_usd=0, topMax=0 so pct=0 for every bar.
         // This exercises the `topMax > 0 ? ... : 0` false branch on line 370.
         server.use(
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json({
                     ...populatedProject,
-                    topEpics: [
+                    topTasks: [
                         {
                             id: 'ATL-Z1',
-                            title: 'Zero Cost Epic',
+                            title: 'Zero Cost Task',
                             totals: { run_count: 2, total_cost_usd: 0 },
                             descendant_count: 5,
                             last_run_at: null,
                         },
                     ],
-                    epic_count: 1,
+                    task_count: 1,
                 }),
             ),
         );
         renderAt('/analytics/project/p1');
         await waitFor(() => {
-            expect(screen.getByText('Zero Cost Epic')).toBeInTheDocument();
+            expect(screen.getByText('Zero Cost Task')).toBeInTheDocument();
         });
-        // No "View all N epics" button since remaining = max(0, 1-1) = 0
+        // No "View all N tasks" button since remaining = max(0, 1-1) = 0
         expect(screen.queryByRole('button', { name: /View all/i })).not.toBeInTheDocument();
     });
 
     it('exercises pagination controls (rows-per-page + page) in showAll mode', async () => {
         const rows = Array.from({ length: 26 }, (_, i) => ({
             id: `ATL-${i + 10}`,
-            title: `Epic ${i + 1}`,
+            title: `Task ${i + 1}`,
             totals: { run_count: i, total_cost_usd: i * 0.1 },
             descendant_count: i,
             last_run_at: i % 2 === 0 ? '2026-06-01T00:00:00.000Z' : null,
@@ -241,21 +241,21 @@ describe('AnalyticsProject page', () => {
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json({
                     ...populatedProject,
-                    epic_count: 26,
-                    topEpics: populatedProject.topEpics,
+                    task_count: 26,
+                    topTasks: populatedProject.topTasks,
                 }),
             ),
-            http.get(`${BASE}/analytics/project/p1/epics`, () =>
+            http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({ rows: rows.slice(0, 25), total: 26, page: 1, limit: 25 }),
             ),
         );
         renderAt('/analytics/project/p1');
-        await waitFor(() => expect(screen.getByText('Epic A')).toBeInTheDocument());
-        // Epic A/B are in topEpics, epic_count=26, remaining = 26-2 = 24, so "View all 26 epics" should show
-        const viewAllBtn = screen.queryByRole('button', { name: /View all 26 epics/i });
+        await waitFor(() => expect(screen.getByText('Task A')).toBeInTheDocument());
+        // Two tasks are in topTasks, task_count=26, remaining = 26-2 = 24, so "View all 26 tasks" should show
+        const viewAllBtn = screen.queryByRole('button', { name: /View all 26 tasks/i });
         if (viewAllBtn) {
             fireEvent.click(viewAllBtn);
-            await waitFor(() => expect(screen.getByText(/All epics/i)).toBeInTheDocument());
+            await waitFor(() => expect(screen.getByText(/All tasks/i)).toBeInTheDocument());
             // Exercises fmtRelativeOrDash with non-null dates in rows
             expect(document.body).toBeTruthy();
             // Try rows-per-page Select (MUI standard select)
@@ -281,23 +281,23 @@ describe('AnalyticsProject page', () => {
         renderAt('/analytics/project/p1');
         // The page loads; avg cost / run MetricMarquee renders '—' when run_count=0
         await waitFor(() => {
-            // "No epics with cost data yet." confirms the data branch rendered
-            expect(screen.getByText(/No epics with cost data yet/i)).toBeInTheDocument();
+            // "No tasks with cost data yet." confirms the data branch rendered
+            expect(screen.getByText(/No tasks with cost data yet/i)).toBeInTheDocument();
         });
         // '—' is the avg-cost-per-run MetricMarquee value when run_count=0
         expect(screen.getByText('—')).toBeInTheDocument();
     });
 
-    it('renders epic singular form when epic_count is 1', async () => {
+    it('renders task singular form when task_count is 1', async () => {
         server.use(
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json({
                     ...populatedProject,
-                    epic_count: 1,
-                    topEpics: [
+                    task_count: 1,
+                    topTasks: [
                         {
                             id: 'ATL-1',
-                            title: 'Solo Epic',
+                            title: 'Solo Task',
                             totals: { run_count: 2, total_cost_usd: 1.5 },
                             descendant_count: 3,
                             last_run_at: null,
@@ -308,7 +308,7 @@ describe('AnalyticsProject page', () => {
         );
         renderAt('/analytics/project/p1');
         await waitFor(() => {
-            expect(screen.getByText(/1 epic •/i)).toBeInTheDocument();
+            expect(screen.getByText(/1 task •/i)).toBeInTheDocument();
         });
     });
 
@@ -318,16 +318,16 @@ describe('AnalyticsProject page', () => {
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json({
                     ...populatedProject,
-                    epic_count: 3,
-                    topEpics: populatedProject.topEpics,
+                    task_count: 3,
+                    topTasks: populatedProject.topTasks,
                 }),
             ),
-            http.get(`${BASE}/analytics/project/p1/epics`, () =>
+            http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
                     rows: [
                         {
                             id: 'ATL-JN',
-                            title: 'Just Now Epic',
+                            title: 'Just Now Task',
                             totals: { run_count: 1, total_cost_usd: 0.01 },
                             descendant_count: 0,
                             last_run_at: justNow,
@@ -340,7 +340,7 @@ describe('AnalyticsProject page', () => {
             ),
         );
         renderAt('/analytics/project/p1');
-        const btn = await screen.findByRole('button', { name: /View all 3 epics/i });
+        const btn = await screen.findByRole('button', { name: /View all 3 tasks/i });
         fireEvent.click(btn);
         await waitFor(() => {
             expect(screen.getByText('just now')).toBeInTheDocument();
@@ -353,16 +353,16 @@ describe('AnalyticsProject page', () => {
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json({
                     ...populatedProject,
-                    epic_count: 3,
-                    topEpics: populatedProject.topEpics,
+                    task_count: 3,
+                    topTasks: populatedProject.topTasks,
                 }),
             ),
-            http.get(`${BASE}/analytics/project/p1/epics`, () =>
+            http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
                     rows: [
                         {
                             id: 'ATL-MA',
-                            title: 'Mins Epic',
+                            title: 'Mins Task',
                             totals: { run_count: 1, total_cost_usd: 0.01 },
                             descendant_count: 0,
                             last_run_at: minsAgo,
@@ -375,7 +375,7 @@ describe('AnalyticsProject page', () => {
             ),
         );
         renderAt('/analytics/project/p1');
-        const btn = await screen.findByRole('button', { name: /View all 3 epics/i });
+        const btn = await screen.findByRole('button', { name: /View all 3 tasks/i });
         fireEvent.click(btn);
         await waitFor(() => {
             expect(screen.getByText('15m ago')).toBeInTheDocument();
@@ -388,16 +388,16 @@ describe('AnalyticsProject page', () => {
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json({
                     ...populatedProject,
-                    epic_count: 3,
-                    topEpics: populatedProject.topEpics,
+                    task_count: 3,
+                    topTasks: populatedProject.topTasks,
                 }),
             ),
-            http.get(`${BASE}/analytics/project/p1/epics`, () =>
+            http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
                     rows: [
                         {
                             id: 'ATL-HA',
-                            title: 'Hours Epic',
+                            title: 'Hours Task',
                             totals: { run_count: 1, total_cost_usd: 0.01 },
                             descendant_count: 0,
                             last_run_at: hoursAgo,
@@ -410,7 +410,7 @@ describe('AnalyticsProject page', () => {
             ),
         );
         renderAt('/analytics/project/p1');
-        const btn = await screen.findByRole('button', { name: /View all 3 epics/i });
+        const btn = await screen.findByRole('button', { name: /View all 3 tasks/i });
         fireEvent.click(btn);
         await waitFor(() => {
             expect(screen.getByText('5h ago')).toBeInTheDocument();
@@ -423,16 +423,16 @@ describe('AnalyticsProject page', () => {
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json({
                     ...populatedProject,
-                    epic_count: 3,
-                    topEpics: populatedProject.topEpics,
+                    task_count: 3,
+                    topTasks: populatedProject.topTasks,
                 }),
             ),
-            http.get(`${BASE}/analytics/project/p1/epics`, () =>
+            http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
                     rows: [
                         {
                             id: 'ATL-DA',
-                            title: 'Days Epic',
+                            title: 'Days Task',
                             totals: { run_count: 1, total_cost_usd: 0.01 },
                             descendant_count: 0,
                             last_run_at: daysAgo,
@@ -445,7 +445,7 @@ describe('AnalyticsProject page', () => {
             ),
         );
         renderAt('/analytics/project/p1');
-        const btn = await screen.findByRole('button', { name: /View all 3 epics/i });
+        const btn = await screen.findByRole('button', { name: /View all 3 tasks/i });
         fireEvent.click(btn);
         await waitFor(() => {
             expect(screen.getByText('3d ago')).toBeInTheDocument();
@@ -458,16 +458,16 @@ describe('AnalyticsProject page', () => {
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json({
                     ...populatedProject,
-                    epic_count: 3,
-                    topEpics: populatedProject.topEpics,
+                    task_count: 3,
+                    topTasks: populatedProject.topTasks,
                 }),
             ),
-            http.get(`${BASE}/analytics/project/p1/epics`, () =>
+            http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
                     rows: [
                         {
                             id: 'ATL-OLD',
-                            title: 'Old Epic',
+                            title: 'Old Task',
                             totals: { run_count: 1, total_cost_usd: 0.01 },
                             descendant_count: 0,
                             last_run_at: oldDate,
@@ -480,11 +480,11 @@ describe('AnalyticsProject page', () => {
             ),
         );
         renderAt('/analytics/project/p1');
-        const btn = await screen.findByRole('button', { name: /View all 3 epics/i });
+        const btn = await screen.findByRole('button', { name: /View all 3 tasks/i });
         fireEvent.click(btn);
         // Just confirm the row rendered (locale date varies by environment)
         await waitFor(() => {
-            expect(screen.getByText('Old Epic')).toBeInTheDocument();
+            expect(screen.getByText('Old Task')).toBeInTheDocument();
         });
     });
 
@@ -493,16 +493,16 @@ describe('AnalyticsProject page', () => {
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json({
                     ...populatedProject,
-                    epic_count: 3,
-                    topEpics: populatedProject.topEpics,
+                    task_count: 3,
+                    topTasks: populatedProject.topTasks,
                 }),
             ),
-            http.get(`${BASE}/analytics/project/p1/epics`, () =>
+            http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
                     rows: [
                         {
                             id: 'ATL-INV',
-                            title: 'Invalid Date Epic',
+                            title: 'Invalid Date Task',
                             totals: { run_count: 1, total_cost_usd: 0.01 },
                             descendant_count: 0,
                             last_run_at: 'not-a-date',
@@ -515,7 +515,7 @@ describe('AnalyticsProject page', () => {
             ),
         );
         renderAt('/analytics/project/p1');
-        const btn = await screen.findByRole('button', { name: /View all 3 epics/i });
+        const btn = await screen.findByRole('button', { name: /View all 3 tasks/i });
         fireEvent.click(btn);
         await waitFor(() => {
             // '—' appears as the last_run_at cell for the invalid date row
@@ -527,7 +527,7 @@ describe('AnalyticsProject page', () => {
     it('pagination: clicking page 2 updates the page state', async () => {
         const rows = Array.from({ length: 30 }, (_, i) => ({
             id: `ATL-${i + 10}`,
-            title: `Paged Epic ${i + 1}`,
+            title: `Paged Task ${i + 1}`,
             totals: { run_count: i, total_cost_usd: i * 0.1 },
             descendant_count: i,
             last_run_at: null,
@@ -536,18 +536,18 @@ describe('AnalyticsProject page', () => {
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json({
                     ...populatedProject,
-                    epic_count: 30,
-                    topEpics: populatedProject.topEpics,
+                    task_count: 30,
+                    topTasks: populatedProject.topTasks,
                 }),
             ),
-            http.get(`${BASE}/analytics/project/p1/epics`, () =>
+            http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({ rows: rows.slice(0, 25), total: 30, page: 1, limit: 25 }),
             ),
         );
         renderAt('/analytics/project/p1');
-        const btn = await screen.findByRole('button', { name: /View all 30 epics/i });
+        const btn = await screen.findByRole('button', { name: /View all 30 tasks/i });
         fireEvent.click(btn);
-        await waitFor(() => expect(screen.getByText(/All epics/i)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText(/All tasks/i)).toBeInTheDocument());
         // Find page 2 button and click it to exercise Pagination onChange
         const page2 = screen.queryByRole('button', { name: /page 2/i });
         if (page2) {
@@ -560,7 +560,7 @@ describe('AnalyticsProject page', () => {
     it('rows-per-page select: changing to 50 resets page and updates limit', async () => {
         const rows = Array.from({ length: 30 }, (_, i) => ({
             id: `ATL-${i + 20}`,
-            title: `Limit Epic ${i + 1}`,
+            title: `Limit Task ${i + 1}`,
             totals: { run_count: 1, total_cost_usd: 0.5 },
             descendant_count: 2,
             last_run_at: null,
@@ -569,18 +569,18 @@ describe('AnalyticsProject page', () => {
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json({
                     ...populatedProject,
-                    epic_count: 30,
-                    topEpics: populatedProject.topEpics,
+                    task_count: 30,
+                    topTasks: populatedProject.topTasks,
                 }),
             ),
-            http.get(`${BASE}/analytics/project/p1/epics`, () =>
+            http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({ rows: rows.slice(0, 25), total: 30, page: 1, limit: 25 }),
             ),
         );
         renderAt('/analytics/project/p1');
-        const btn = await screen.findByRole('button', { name: /View all 30 epics/i });
+        const btn = await screen.findByRole('button', { name: /View all 30 tasks/i });
         fireEvent.click(btn);
-        await waitFor(() => expect(screen.getByText(/All epics/i)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText(/All tasks/i)).toBeInTheDocument());
         // Find rows-per-page select (combobox) and change to 50
         const comboboxes = document.querySelectorAll('[role="combobox"]');
         if (comboboxes.length > 0) {
@@ -621,7 +621,7 @@ describe('AnalyticsProject page', () => {
                     ...populatedProject,
                     byKind: [
                         // Known type — ensures byKindPie.length > 0 so the card renders
-                        { type: 'story', total_cost_usd: 2, item_count: 1 },
+                        { type: 'sub_task', total_cost_usd: 2, item_count: 1 },
                         // Unknown type — exercises the fallback ?? branches
                         { type: 'unknown_custom', total_cost_usd: 1, item_count: 1 },
                     ],

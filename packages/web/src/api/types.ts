@@ -1,9 +1,8 @@
-import type { AgentCli } from '@atlas/shared';
+import type { AgentCli, IssueType } from '@atlas/shared';
 
 export interface SidenavCounts {
     projects: number;
-    epics: number;
-    issues: number;
+    tasks: number;
     queue: number;
     agents: number;
     notifications: number;
@@ -31,12 +30,10 @@ export interface TerminalCostSummary {
 }
 
 export interface ProjectCounts {
-    open_epics: number;
-    epics_ready: number;
-    stories_in_flight: number;
-    stories_waiting_info: number;
-    open_bugs: number;
-    bugs_ready: number;
+    open_tasks: number;
+    tasks_ready: number;
+    tasks_in_flight: number;
+    tasks_waiting_info: number;
     costSummary?: CostSummary;
     terminalCostSummary?: TerminalCostSummary;
 }
@@ -44,7 +41,6 @@ export interface ProjectCounts {
 type AgentCategoryKey = 'software-dev' | 'marketing' | 'content' | 'design';
 
 interface CategoryStat {
-    queued: number;
     running: number;
 }
 
@@ -68,8 +64,6 @@ export interface TodaysPass {
 
 interface DashboardKpis {
     activeAgents: number;
-    epics: number;
-    storiesInProgress: number;
     doneThisWeek: number;
     projectCount: number;
     // True totals — `awaiting` / `queue` are capped at 20 for rendering.
@@ -81,7 +75,6 @@ interface DashboardKpis {
     terminalCostSummary30d?: TerminalCostSummary;
 }
 
-import type { IssueType } from '@atlas/shared';
 
 export interface AwaitingItem {
     issue_type: IssueType;
@@ -252,9 +245,8 @@ export interface AnalyticsResponse {
 
 // Per-item cost drill-down. Cost rolls up across the parent/child tree
 // in the `items` table via a recursive CTE on items.parent_id; the
-// `byKind` block lets the UI split the rollup by item type (epic /
-// story / bug / sub_task / sub_bug) without paging through descendant
-// rows.
+// `byKind` block lets the UI split the rollup by item type (task /
+// sub_task) without paging through descendant rows.
 
 interface CostTotals {
     total_cost_usd: number;
@@ -265,7 +257,7 @@ interface CostTotals {
 }
 
 interface CostByKindRow {
-    type: 'epic' | 'story' | 'bug' | 'sub_task' | 'sub_bug';
+    type: IssueType;
     total_cost_usd: number;
     run_count: number;
     item_count: number;
@@ -274,7 +266,7 @@ interface CostByKindRow {
 interface ItemCostRow {
     id: string;
     title: string;
-    type: 'epic' | 'story' | 'bug' | 'sub_task' | 'sub_bug';
+    type: IssueType;
     parent_id: string | null;
     depth: number;
     total_cost_usd: number;
@@ -289,15 +281,15 @@ export interface AnalyticsProjectResponse {
     project: { id: string; name: string };
     totals: CostTotals;
     byKind: CostByKindRow[];
-    /** Top 25 epics by total cost. Use `/epics` for the full paginated list. */
-    topEpics: Array<{
+    /** Top 25 tasks by total cost. Use `/tasks` for the full paginated list. */
+    topTasks: Array<{
         id: string;
         title: string;
         descendant_count: number;
         totals: CostTotals;
         last_run_at: string | null;
     }>;
-    epic_count: number;
+    task_count: number;
     // Terminal-session aggregates scoped to this project (all-time, closed
     // sessions only). Parallel to the page-level analytics response so the
     // drill-down can render the same per-CLI breakdown + top-sessions
@@ -307,7 +299,7 @@ export interface AnalyticsProjectResponse {
     topTerminalSessions: AnalyticsTopTerminalSession[];
 }
 
-export interface AnalyticsProjectEpicsResponse {
+export interface AnalyticsProjectTasksResponse {
     rows: Array<{
         id: string;
         title: string;
@@ -320,14 +312,14 @@ export interface AnalyticsProjectEpicsResponse {
     limit: number;
 }
 
-export interface AnalyticsEpicResponse {
-    epic: { id: string; title: string; project_id: string; project_name: string };
+export interface AnalyticsTaskResponse {
+    task: { id: string; title: string; project_id: string; project_name: string };
     totals: CostTotals;
     byKind: CostByKindRow[];
     descendant_count: number;
 }
 
-export interface AnalyticsEpicChildrenResponse {
+export interface AnalyticsTaskChildrenResponse {
     rows: ItemCostRow[];
     total: number;
     page: number;

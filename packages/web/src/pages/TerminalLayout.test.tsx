@@ -35,7 +35,7 @@ beforeEach(() => {
         http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
         http.get(`${BASE}/projects`, () => HttpResponse.json([])),
         http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
-        http.get(`${BASE}/issues/tree`, () => HttpResponse.json({ epics: [], stories: [], bugs: [], sub_tasks: [], sub_bugs: [] })),
+        http.get(`${BASE}/issues/tree`, () => HttpResponse.json({ projects: [], agents: [], tree: [], tasks: [] })),
     );
     vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
     vi.stubGlobal('HTMLElement', HTMLElement);

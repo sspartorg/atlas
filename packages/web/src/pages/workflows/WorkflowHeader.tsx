@@ -6,6 +6,9 @@ import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import Link from '@mui/material/Link';
 import type { IWorkflow } from '@atlas/shared';
+import { api } from '../../api/api.js';
+import { usePublishWorkflow } from '../../hooks/useWorkflows.js';
+import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { INPUT_KIND_LABEL, TRIGGER_LABEL, deliveryLabel } from './labels.js';
 
@@ -31,6 +34,17 @@ function Icon({ name }: { name: string }) {
 
 export function WorkflowHeader({ workflow: wf, projectName, dirty, saveDisabled, saving, runDisabledReason, onSave, onRun, onDelete }: Props) {
     const active = wf.status === 'active';
+    const toast = useToast();
+    const publish = usePublishWorkflow();
+
+    async function handlePublish() {
+        try {
+            const entry = await publish.mutateAsync(wf.id);
+            toast.show({ message: entry.published_at === entry.updated_at ? 'Published to the marketplace' : 'Updated in the marketplace' });
+        } catch (err) {
+            toast.show({ message: 'Could not publish workflow', detail: err instanceof Error ? err.message : String(err) });
+        }
+    }
     return (
         <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 3, flexWrap: 'wrap', mb: 3 }}>
             <Box sx={{ minWidth: 0 }}>
@@ -92,6 +106,32 @@ export function WorkflowHeader({ workflow: wf, projectName, dirty, saveDisabled,
                             sx={{ textTransform: 'none', fontWeight: 600 }}
                         >
                             Run now
+                        </Button>
+                    </Box>
+                </Tooltip>
+                <Tooltip title={dirty ? 'Save your changes before exporting' : ''}>
+                    <Box component="span">
+                        <Button
+                            variant="outlined"
+                            href={api.workflows.exportZipUrl(wf.id)}
+                            disabled={dirty}
+                            startIcon={<Icon name="download" />}
+                            sx={{ textTransform: 'none', fontWeight: 600 }}
+                        >
+                            Export
+                        </Button>
+                    </Box>
+                </Tooltip>
+                <Tooltip title={dirty ? 'Save your changes before publishing' : ''}>
+                    <Box component="span">
+                        <Button
+                            variant="outlined"
+                            onClick={() => void handlePublish()}
+                            disabled={dirty || publish.isPending}
+                            startIcon={<Icon name="storefront" />}
+                            sx={{ textTransform: 'none', fontWeight: 600 }}
+                        >
+                            {publish.isPending ? 'Publishing…' : 'Publish'}
                         </Button>
                     </Box>
                 </Tooltip>

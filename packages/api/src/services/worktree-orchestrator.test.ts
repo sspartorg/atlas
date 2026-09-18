@@ -77,6 +77,7 @@ const buildGitConfigMock = vi.fn();
 const cleanupGitConfigMock = vi.fn();
 vi.mock('./git-credentials.js', () => ({
     buildGitConfig: (id: string | null) => buildGitConfigMock(id),
+    buildGitAuth: async () => ({ configPath: '/tmp/cfg', token: 'tok', humanGhLogin: null }),
     cleanupGitConfig: (p: string | null) => cleanupGitConfigMock(p),
 }));
 
@@ -190,13 +191,13 @@ async function setupProjectAndStory(opts: {
         ...(opts.defaultBranch ? { default_branch: opts.defaultBranch } : {}),
     });
     const epicId = `${opts.prefix ?? 'ATL'}-epic`;
-    await insertItem({ id: epicId, type: 'epic', project_id: projectId, title: 'E' });
+    await insertItem({ id: epicId, type: 'task', project_id: projectId, title: 'E' });
     await insertItem({
         id: opts.storyId,
-        type: 'story',
+        type: 'sub_task',
         project_id: projectId,
         parent_id: epicId,
-        parent_type: 'epic',
+        parent_type: 'task',
         title: 'S',
     });
     if (opts.worktreeBranch !== undefined) {
@@ -820,6 +821,34 @@ describe('WorktreeProvisioningError', () => {
         expect(err.details).toEqual({ item_id: 'ATL-1' });
         expect(err.message).toBe('oops');
         expect(err.name).toBe('WorktreeProvisioningError');
+    });
+});
+
+describe('openPullRequest — an existing PR', () => {
+    it('reuses the open PR and refreshes its description', async () => {
+        const { openPullRequest } = await import('./worktree-orchestrator.js');
+        const url = 'https://github.com/o/r/pull/11';
+        execFileMock.mockImplementation((bin: string, args: string[]) => {
+            if (bin === 'gh' && args[1] === 'create') {
+                throw Object.assign(new Error('exit 1'), { stderr: 'a pull request for branch "atlas/wf/ATL-1" already exists' });
+            }
+            if (bin === 'gh' && args[1] === 'view') return { stdout: `${url}\n`, stderr: '' };
+            return { stdout: '', stderr: '' };
+        });
+
+        const result = await openPullRequest({
+            worktreePath: '/tmp/wt',
+            branch: 'atlas/wf/ATL-1',
+            base: 'main',
+            title: '[ATL-1] Task',
+            body: '## Sub-tasks\n\n- **ATL-2** First\n- **ATL-3** Added after review',
+            credentialId: 'cred-1',
+            projectId: 'p1',
+        });
+
+        expect(result).toMatchObject({ alreadyExists: true, url });
+        const edit = execFileMock.mock.calls.find((c) => c[0] === 'gh' && (c[1] as string[])[1] === 'edit');
+        expect(edit?.[1]).toEqual(['pr', 'edit', url, '--body', expect.stringContaining('ATL-3** Added after review')]);
     });
 });
 

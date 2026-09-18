@@ -31,18 +31,14 @@ const ScratchPad = lazyNamed(() => import('./pages/ScratchPad.js'), 'ScratchPad'
 const Onboarding = lazyNamed(() => import('./pages/Onboarding.js'), 'Onboarding');
 const Projects = lazyNamed(() => import('./pages/Projects.js'), 'Projects');
 const ProjectDetail = lazyNamed(() => import('./pages/ProjectDetail.js'), 'ProjectDetail');
-const Epics = lazyNamed(() => import('./pages/Epics.js'), 'Epics');
-const EpicDetail = lazyNamed(() => import('./pages/EpicDetail.js'), 'EpicDetail');
-const EpicNew = lazyNamed(() => import('./pages/EpicNew.js'), 'EpicNew');
+const Tasks = lazyNamed(() => import('./pages/Tasks.js'), 'Tasks');
+const TaskDetail = lazyNamed(() => import('./pages/TaskDetail.js'), 'TaskDetail');
+const TaskNew = lazyNamed(() => import('./pages/TaskNew.js'), 'TaskNew');
 const ProjectGuardrails = lazyNamed(
     () => import('./pages/ProjectGuardrails.js'),
     'ProjectGuardrails',
 );
-const Issues = lazyNamed(() => import('./pages/Issues.js'), 'Issues');
-const StoryDetail = lazyNamed(() => import('./pages/StoryDetail.js'), 'StoryDetail');
 const SubTaskDetail = lazyNamed(() => import('./pages/SubTaskDetail.js'), 'SubTaskDetail');
-const SubBugDetail = lazyNamed(() => import('./pages/SubBugDetail.js'), 'SubBugDetail');
-const BugDetail = lazyNamed(() => import('./pages/BugDetail.js'), 'BugDetail');
 const Queue = lazyNamed(() => import('./pages/Queue.js'), 'Queue');
 const Search = lazyNamed(() => import('./pages/Search.js'), 'Search');
 const Terminal = lazyNamed(() => import('./pages/Terminal.js'), 'Terminal');
@@ -59,6 +55,10 @@ const Marketplace = lazyNamed(() => import('./pages/Marketplace.js'), 'Marketpla
 const MarketplaceAgentDetail = lazyNamed(
     () => import('./pages/MarketplaceAgentDetail.js'),
     'MarketplaceAgentDetail',
+);
+const MarketplaceWorkflowDetail = lazyNamed(
+    () => import('./pages/MarketplaceWorkflowDetail.js'),
+    'MarketplaceWorkflowDetail',
 );
 const AgentRunDetail = lazyNamed(() => import('./pages/AgentRunDetail.js'), 'AgentRunDetail');
 const Workflows = lazyNamed(() => import('./pages/Workflows.js'), 'Workflows');
@@ -81,9 +81,9 @@ const AnalyticsProjectPage = lazyNamed(
     () => import('./pages/AnalyticsProject.js'),
     'AnalyticsProject',
 );
-const AnalyticsEpicPage = lazyNamed(
-    () => import('./pages/AnalyticsEpic.js'),
-    'AnalyticsEpic',
+const AnalyticsTaskPage = lazyNamed(
+    () => import('./pages/AnalyticsTask.js'),
+    'AnalyticsTask',
 );
 
 // Freshness model: SSE drives invalidation on every server-side mutation
@@ -281,26 +281,34 @@ export function App() {
                                 }
                             />
                             <Route
-                                path="/epics"
+                                path="/tasks"
                                 element={
-                                    <Wrap name="Epics">
-                                        <Epics />
+                                    <Wrap name="Tasks">
+                                        <Tasks />
                                     </Wrap>
                                 }
                             />
                             <Route
-                                path="/epics/new"
+                                path="/tasks/new"
                                 element={
-                                    <Wrap name="New Epic">
-                                        <EpicNew />
+                                    <Wrap name="New Task">
+                                        <TaskNew />
                                     </Wrap>
                                 }
                             />
                             <Route
-                                path="/epics/:id"
+                                path="/tasks/:id"
                                 element={
-                                    <Wrap name="Epic">
-                                        <EpicDetail />
+                                    <Wrap name="Task">
+                                        <TaskDetail />
+                                    </Wrap>
+                                }
+                            />
+                            <Route
+                                path="/sub-tasks/:id"
+                                element={
+                                    <Wrap name="Sub-task">
+                                        <SubTaskDetail />
                                     </Wrap>
                                 }
                             />
@@ -319,46 +327,6 @@ export function App() {
                                 element={
                                     <Wrap name="Project Guard-rails">
                                         <ProjectGuardrails />
-                                    </Wrap>
-                                }
-                            />
-                            <Route
-                                path="/issues"
-                                element={
-                                    <Wrap name="Issues">
-                                        <Issues />
-                                    </Wrap>
-                                }
-                            />
-                            <Route
-                                path="/issues/stories/:id"
-                                element={
-                                    <Wrap name="Story">
-                                        <StoryDetail />
-                                    </Wrap>
-                                }
-                            />
-                            <Route
-                                path="/issues/sub-tasks/:id"
-                                element={
-                                    <Wrap name="Sub-task">
-                                        <SubTaskDetail />
-                                    </Wrap>
-                                }
-                            />
-                            <Route
-                                path="/issues/sub-bugs/:id"
-                                element={
-                                    <Wrap name="Sub-bug">
-                                        <SubBugDetail />
-                                    </Wrap>
-                                }
-                            />
-                            <Route
-                                path="/issues/bugs/:id"
-                                element={
-                                    <Wrap name="Bug">
-                                        <BugDetail />
                                     </Wrap>
                                 }
                             />
@@ -477,6 +445,22 @@ export function App() {
                                 }
                             />
                             <Route
+                                path="/agents/marketplace/workflows/:templateId"
+                                element={
+                                    <Wrap name="Marketplace workflow">
+                                        <MarketplaceWorkflowDetail />
+                                    </Wrap>
+                                }
+                            />
+                            <Route
+                                path="/agents/marketplace/workflows/published/:publishedId"
+                                element={
+                                    <Wrap name="Marketplace workflow">
+                                        <MarketplaceWorkflowDetail />
+                                    </Wrap>
+                                }
+                            />
+                            <Route
                                 path="/agents/:id"
                                 element={
                                     <Wrap name="Agent">
@@ -549,10 +533,10 @@ export function App() {
                                 }
                             />
                             <Route
-                                path="/analytics/epic/:epicId"
+                                path="/analytics/task/:taskId"
                                 element={
-                                    <Wrap name="AnalyticsEpic">
-                                        <AnalyticsEpicPage />
+                                    <Wrap name="AnalyticsTask">
+                                        <AnalyticsTaskPage />
                                     </Wrap>
                                 }
                             />

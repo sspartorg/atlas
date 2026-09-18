@@ -206,9 +206,9 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
         });
     }
 
-    describe.skipIf(process.platform === 'win32')('po-writer-output verifies the epic stories via the Atlas API', () => {
-        type Story = { id: string; title: string; acceptance_criteria: string; worktree_branch: string | null };
-        let stories: Story[] = [];
+    describe.skipIf(process.platform === 'win32')("po-writer-output verifies the Task's sub-tasks via the Atlas API", () => {
+        type SubTask = { id: string; title: string; acceptance_criteria: string; labels: string[] };
+        let subTasks: SubTask[] = [];
         let links: Record<string, Array<{ relation_type: string; direction: string; item_id: string }>> = {};
         let server: Server;
         let apiUrl = '';
@@ -216,14 +216,15 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
 
         beforeAll(async () => {
             server = createServer((req, res) => {
-                const epic = /^\/api\/epics\/ATL-1\/full$/.exec(req.url ?? '');
-                const link = /^\/api\/issues\/story\/([^/]+)\/links$/.exec(req.url ?? '');
-                if (!epic && !link) {
+                const task = /^\/api\/tasks\/ATL-1\/full$/.exec(req.url ?? '');
+                const link = /^\/api\/issues\/sub_task\/([^/]+)\/links$/.exec(req.url ?? '');
+                if (!task && !link) {
                     res.statusCode = 404;
                     return res.end('{}');
                 }
                 res.setHeader('content-type', 'application/json');
-                res.end(JSON.stringify(epic ? { epic: { id: 'ATL-1' }, stories } : (links[link![1]!] ?? [])));
+                // reason: `link` is non-null whenever `task` is null (checked above).
+                res.end(JSON.stringify(task ? { task: { id: 'ATL-1' }, sub_tasks: subTasks } : (links[link![1]!] ?? [])));
             });
             await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
             apiUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -231,11 +232,11 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
         afterAll(() => new Promise<void>((r) => server.close(() => r())));
 
         beforeEach(() => {
-            stories = [
-                { id: 'ATL-2', title: 'Sign in', acceptance_criteria: '- Given x', worktree_branch: 'atlas/dev/ATL-2' },
-                { id: 'ATL-3', title: 'Sign in [QA]', acceptance_criteria: '- Given x', worktree_branch: 'atlas/qa/ATL-3' },
+            subTasks = [
+                { id: 'ATL-2', title: 'Sign in', acceptance_criteria: '- Given x', labels: ['dev'] },
+                { id: 'ATL-3', title: 'Sign in [QA]', acceptance_criteria: '- Given x', labels: ['qa'] },
             ];
-            // tested_by is created QA -> dev, so it is incoming on the dev story.
+            // tested_by is created QA -> dev, so it is incoming on the dev sub-task.
             links = { 'ATL-2': [{ relation_type: 'tested_by', direction: 'incoming', item_id: 'ATL-3' }] };
         });
 
@@ -249,22 +250,23 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
             expect(r.out).toContain('ATLAS_API_URL is not set');
         });
 
-        it('fails when the epic has no dev stories', async () => {
-            stories = [];
+        it('fails when the task has no dev sub-tasks', async () => {
+            subTasks = [];
             const r = await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl });
             expect(r.code).toBe(1);
-            expect(r.out).toContain('no dev stories');
+            expect(r.out).toContain('no dev sub-tasks');
         });
 
-        it('lists every gap: empty AC, bad branch, missing twin link, missing twin', async () => {
-            stories[0]!.acceptance_criteria = '  ';
-            stories[1]!.worktree_branch = null;
-            stories.push({ id: 'ATL-4', title: 'Sign out', acceptance_criteria: '- Given y', worktree_branch: 'atlas/dev/ATL-4' });
+        it('lists every gap: empty AC, missing labels, missing twin link, missing twin', async () => {
+            subTasks[0]!.acceptance_criteria = '  ';
+            subTasks[1]!.labels = [];
+            subTasks.push({ id: 'ATL-4', title: 'Sign out', acceptance_criteria: '- Given y', labels: [] });
             links = {};
             const r = await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl });
             expect(r.code).toBe(1);
             expect(r.out).toMatch(/ATL-2 has empty acceptance_criteria/);
-            expect(r.out).toMatch(/ATL-3 worktree_branch/);
+            expect(r.out).toMatch(/ATL-3 is missing the qa label/);
+            expect(r.out).toMatch(/ATL-4 is missing the dev label/);
             expect(r.out).toMatch(/ATL-2 has no tested_by link/);
             expect(r.out).toMatch(/ATL-4 has no \[QA\] twin/);
         });

@@ -15,7 +15,7 @@ Edit an agent's configuration, prompt, quality checklist, procedural memory, and
 - **Run now** → opens `RunNowDialog` — a project-level run with **no item** (item-attached ad-hoc runs were removed by ADR 0014; items run through their workflow). Two actions:
   - **Run now** → `POST /api/run` `{ agent_id, issue_type: null, issue_id: null }` → navigates to `/agents/:id/runs/:runId`.
   - **Preview prompt** → `POST /api/agents/:id/compile-prompt` with no item → opens `PromptPreviewDialog` showing the exact markdown that would be piped to the CLI on Run; offers **Copy** + **Download .md**. No spawn, no DB write — for inspection before committing to a real run.
-- **Queue: N items** — ready + in-progress epics / stories / bugs assigned to this agent, the same count the Queue page shows (`useQueueDepthByAgent()` → `countQueueDepthByAgent()` in `pages/queue/queueViewModel.ts`, sharing the Queue page's `useEpics` / `useStories` / `useBugs` cache). Until 2026-09-14 it counted only `queued` / `in_progress` agent runs, so an agent with Ready items but no runs showed "Queue: 0 items".
+- **Queue: N items** — ready + in-progress Tasks and sub-tasks assigned to this agent, (`useQueueDepthByAgent()` → `countQueueDepthByAgent()` in `pages/agents/agentViewModel.ts`, over the `useTasks` / `useAllSubTasks` cache). Until 2026-09-14 it counted only `queued` / `in_progress` agent runs, so an agent with Ready items but no runs showed "Queue: 0 items".
 - **Status label + dot** — same `resolveAgentStatusLabel()` as the Agents card, fed `queuedCount + queueDepth` so Ready items with no run read **Queued**, not **Idle**. Colour from `agentStatusColor()`: a **Failed** label now has an `error` dot (it was green).
 - **CLI not installed** warning — `CliUnavailableAlert` (MUI `Alert severity="warning"`) spans the hero when `GET /api/cli/availability` says the agent's CLI binary is missing: "`<binary>` is not installed on this machine — runs will fail until it is, or switch the agent to `<available cli>`." Renders nothing while availability is loading/unknown.
 - **Pause/Resume** → `handlePauseToggle()` → `PATCH /agents/:id`
@@ -107,7 +107,7 @@ Procedural-memory editor backed by the `agent_memory` table.
 
 ## Edge cases / quirks
 - Prompt version history is **localStorage only** today; reloading on a different machine loses history.
-- Test Run **does** exercise the real CLI now (via `POST /api/agents/:id/dry-run`), but it deliberately ships **only** the workspace constitution + verification ask — no agent prompt, no MCP, no issue context. So a successful dry-run proves "CLI + model + guardrails fetch wired correctly", not "this agent will produce useful output on a story".
+- Test Run **does** exercise the real CLI now (via `POST /api/agents/:id/dry-run`), but it deliberately ships **only** the workspace constitution + verification ask — no agent prompt, no MCP, no issue context. So a successful dry-run proves "CLI + model + guardrails fetch wired correctly", not "this agent will produce useful output on a Task".
 - Test Run **never** writes to `agent_runs`. Closing the panel / navigating away does not abort the server-side CLI process — only the client SSE stream stops.
 - Description save is local-only.
 

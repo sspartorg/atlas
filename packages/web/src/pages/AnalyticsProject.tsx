@@ -66,8 +66,8 @@ export function AnalyticsProject() {
         staleTime: 30_000,
     });
     const paged = useQuery({
-        queryKey: ['analytics-project-epics', safeProjectId, page, limit],
-        queryFn: () => api.analytics.projectEpics(safeProjectId, { page, limit }),
+        queryKey: ['analytics-project-tasks', safeProjectId, page, limit],
+        queryFn: () => api.analytics.projectTasks(safeProjectId, { page, limit }),
         enabled: Boolean(safeProjectId) && showAll,
         placeholderData: keepPreviousData,
         staleTime: 30_000,
@@ -106,10 +106,10 @@ export function AnalyticsProject() {
     const data = summary.data;
     const byKindPie = data.byKind.filter((k) => k.total_cost_usd > 0);
     const topMax =
-        data.topEpics.length > 0
-            ? Math.max(...data.topEpics.map((e) => e.totals.total_cost_usd))
+        data.topTasks.length > 0
+            ? Math.max(...data.topTasks.map((e) => e.totals.total_cost_usd))
             : 0;
-    const remainingEpics = Math.max(0, data.epic_count - data.topEpics.length);
+    const remainingTasks = Math.max(0, data.task_count - data.topTasks.length);
 
     // Terminal aggregates may be absent on older API responses or stale
     // test fixtures — fall through to zero-shaped defaults so the
@@ -166,7 +166,7 @@ export function AnalyticsProject() {
                     </>
                 }
                 title={data.project.name}
-                sub={`${data.epic_count.toLocaleString()} epic${data.epic_count === 1 ? '' : 's'} • ${data.totals.run_count.toLocaleString()} agentic run${data.totals.run_count === 1 ? '' : 's'} • ${sessionCount.toLocaleString()} terminal session${sessionCount === 1 ? '' : 's'}`}
+                sub={`${data.task_count.toLocaleString()} task${data.task_count === 1 ? '' : 's'} • ${data.totals.run_count.toLocaleString()} agentic run${data.totals.run_count === 1 ? '' : 's'} • ${sessionCount.toLocaleString()} terminal session${sessionCount === 1 ? '' : 's'}`}
             >
                 <MetricMarquee
                     label="Total spend"
@@ -181,8 +181,8 @@ export function AnalyticsProject() {
                     accent={ATLAS_PALETTE.gold}
                 />
                 <MetricMarquee
-                    label="Epics"
-                    value={data.epic_count.toLocaleString()}
+                    label="Tasks"
+                    value={data.task_count.toLocaleString()}
                     accent={ATLAS_PALETTE.green}
                 />
                 <MetricMarquee
@@ -199,7 +199,7 @@ export function AnalyticsProject() {
                     <ChartTitle
                         eyebrow="Spend mix"
                         title="Cost by item type"
-                        sub="Rolled-up across every item in the project (epic + descendant story / bug / sub-task / sub-bug)."
+                        sub="Rolled-up across every item in the project (task + its sub-tasks)."
                     />
                     <Box
                         sx={{
@@ -353,26 +353,26 @@ export function AnalyticsProject() {
                 </Suspense>
             </Box>
 
-            {/* Top epics ladder */}
+            {/* Top tasks ladder */}
             <Card sx={{ mb: 4 }}>
                 <ChartTitle
-                    eyebrow="Spend by epic"
-                    title="Top epics by total cost"
+                    eyebrow="Spend by task"
+                    title="Top tasks by total cost"
                     sub={
-                        remainingEpics > 0
-                            ? `Showing top ${data.topEpics.length} of ${data.epic_count} epics — sorted by descendant-rolled cost.`
-                            : `${data.epic_count} epic${data.epic_count === 1 ? '' : 's'} total. Click any row to drill into the child items.`
+                        remainingTasks > 0
+                            ? `Showing top ${data.topTasks.length} of ${data.task_count} tasks — sorted by descendant-rolled cost.`
+                            : `${data.task_count} task${data.task_count === 1 ? '' : 's'} total. Click any row to drill into the sub-tasks.`
                     }
                 />
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    {data.topEpics.map((epic) => {
+                    {data.topTasks.map((task) => {
                         const pct =
-                            topMax > 0 ? (epic.totals.total_cost_usd / topMax) * 100 : 0;
+                            topMax > 0 ? (task.totals.total_cost_usd / topMax) * 100 : 0;
                         return (
                             <Box
-                                key={epic.id}
+                                key={task.id}
                                 component={RouterLink}
-                                to={`/analytics/epic/${epic.id}`}
+                                to={`/analytics/task/${task.id}`}
                                 sx={{
                                     display: 'grid',
                                     gridTemplateColumns: {
@@ -409,9 +409,9 @@ export function AnalyticsProject() {
                                             overflow: 'hidden',
                                             textOverflow: 'ellipsis',
                                         }}
-                                        title={epic.title}
+                                        title={task.title}
                                     >
-                                        {epic.title}
+                                        {task.title}
                                     </Typography>
                                     <Typography
                                         sx={{
@@ -421,7 +421,7 @@ export function AnalyticsProject() {
                                             mt: 0.25,
                                         }}
                                     >
-                                        {epic.id}
+                                        {task.id}
                                     </Typography>
                                 </Box>
                                 <Box
@@ -455,7 +455,7 @@ export function AnalyticsProject() {
                                         fontVariantNumeric: 'tabular-nums',
                                     }}
                                 >
-                                    {formatCostUsd(epic.totals.total_cost_usd)}
+                                    {formatCostUsd(task.totals.total_cost_usd)}
                                 </Typography>
                                 <Typography
                                     sx={{
@@ -466,7 +466,7 @@ export function AnalyticsProject() {
                                         textAlign: 'right',
                                     }}
                                 >
-                                    {epic.totals.run_count} runs
+                                    {task.totals.run_count} runs
                                 </Typography>
                                 <Typography
                                     sx={{
@@ -477,18 +477,18 @@ export function AnalyticsProject() {
                                         textAlign: 'right',
                                     }}
                                 >
-                                    {epic.descendant_count} child
+                                    {task.descendant_count} child
                                 </Typography>
                             </Box>
                         );
                     })}
-                    {data.topEpics.length === 0 && (
+                    {data.topTasks.length === 0 && (
                         <Typography sx={{ color: ATLAS_PALETTE.slate60, fontSize: 13, py: 2 }}>
-                            No epics with cost data yet.
+                            No tasks with cost data yet.
                         </Typography>
                     )}
                 </Box>
-                {remainingEpics > 0 && !showAll && (
+                {remainingTasks > 0 && !showAll && (
                     <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
                         <Box
                             component="button"
@@ -510,19 +510,19 @@ export function AnalyticsProject() {
                                 },
                             }}
                         >
-                            View all {data.epic_count} epics
+                            View all {data.task_count} tasks
                         </Box>
                     </Box>
                 )}
             </Card>
 
-            {/* Paginated epics table */}
+            {/* Paginated tasks table */}
             {showAll && (
                 <Card>
                     <ChartTitle
-                        eyebrow="All epics"
+                        eyebrow="All tasks"
                         title="Full paginated list"
-                        sub={`Sorted by cost. ${paged.data?.total ?? data.epic_count} total — showing page ${page} of ${Math.max(1, Math.ceil((paged.data?.total ?? data.epic_count) / limit))}.`}
+                        sub={`Sorted by cost. ${paged.data?.total ?? data.task_count} total — showing page ${page} of ${Math.max(1, Math.ceil((paged.data?.total ?? data.task_count) / limit))}.`}
                     />
                     <Box sx={{ overflowX: 'auto' }}>
                     <Box
@@ -545,7 +545,7 @@ export function AnalyticsProject() {
                             <Box
                                 key={row.id}
                                 component={RouterLink}
-                                to={`/analytics/epic/${row.id}`}
+                                to={`/analytics/task/${row.id}`}
                                 sx={{
                                     display: 'grid',
                                     gridTemplateColumns: '1.5fr 100px 100px 110px 100px',
@@ -661,7 +661,7 @@ export function AnalyticsProject() {
                             </Select>
                         </Box>
                         <Pagination
-                            count={Math.max(1, Math.ceil((paged.data?.total ?? data.epic_count) / limit))}
+                            count={Math.max(1, Math.ceil((paged.data?.total ?? data.task_count) / limit))}
                             page={page}
                             onChange={(_e, p) => setPage(p)}
                             size="small"

@@ -13,6 +13,7 @@ import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { ATLAS_PALETTE, ELEVATION, TYPOGRAPHY } from '../theme/tokens.js';
 import { formatAbsolute, relativeTime } from '../utils/time.js';
 import { NewWorkflowDialog } from './workflows/NewWorkflowDialog.js';
+import { ImportWorkflowDialog } from './workflows/ImportWorkflowDialog.js';
 import { INPUT_KIND_LABEL, TRIGGER_LABEL, graphAgentIds } from './workflows/labels.js';
 
 const GRID_SX = {
@@ -173,6 +174,7 @@ export function Workflows() {
     const { data: workflows, isLoading, error } = useWorkflows();
     const { data: projects = [] } = useProjects();
     const [newOpen, setNewOpen] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
 
     const projectName = useMemo(() => {
         const byId = new Map(projects.map((p) => [p.id, p.name]));
@@ -207,28 +209,42 @@ export function Workflows() {
                         active
                     </Typography>
                 </Box>
-                <Button
-                    variant="contained"
-                    onClick={() => setNewOpen(true)}
-                    startIcon={
-                        <Box component="span" className="material-symbols-rounded" sx={{ fontSize: 18 }}>
-                            add
-                        </Box>
-                    }
-                    sx={{
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        fontSize: 13.5,
-                        px: 3,
-                        py: 1.25,
-                        bgcolor: ATLAS_PALETTE.green,
-                        boxShadow: 'none',
-                        display: { xs: 'none', md: 'inline-flex' },
-                        '&:hover': { bgcolor: ATLAS_PALETTE.greenDark, boxShadow: 'none' },
-                    }}
-                >
-                    New workflow
-                </Button>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                    <Button
+                        variant="outlined"
+                        onClick={() => setImportOpen(true)}
+                        startIcon={
+                            <Box component="span" className="material-symbols-rounded" sx={{ fontSize: 18 }}>
+                                upload
+                            </Box>
+                        }
+                        sx={{ textTransform: 'none', fontWeight: 600, fontSize: 13.5, px: 3, py: 1.25 }}
+                    >
+                        Import
+                    </Button>
+                    <Button
+                        variant="contained"
+                        onClick={() => setNewOpen(true)}
+                        startIcon={
+                            <Box component="span" className="material-symbols-rounded" sx={{ fontSize: 18 }}>
+                                add
+                            </Box>
+                        }
+                        sx={{
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            fontSize: 13.5,
+                            px: 3,
+                            py: 1.25,
+                            bgcolor: ATLAS_PALETTE.green,
+                            boxShadow: 'none',
+                            display: { xs: 'none', md: 'inline-flex' },
+                            '&:hover': { bgcolor: ATLAS_PALETTE.greenDark, boxShadow: 'none' },
+                        }}
+                    >
+                        New workflow
+                    </Button>
+                </Box>
             </Box>
 
             {error ? (
@@ -269,6 +285,7 @@ export function Workflows() {
             )}
 
             {newOpen && <NewWorkflowDialog open onClose={() => setNewOpen(false)} />}
+            {importOpen && <ImportWorkflowDialog open onClose={() => setImportOpen(false)} />}
             <PageFab onClick={() => setNewOpen(true)} label="New workflow" />
         </Box>
     );

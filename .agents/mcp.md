@@ -24,8 +24,8 @@ hosting it.
 ## Why this package exists
 
 When the Owner or an agent runs a task, the AI client needs both **context**
-(parent epic, sibling stories, related comments) and **write access** (file
-a sub-bug, transition a story, reply with context). The MCP server gives the
+(the parent Task, sibling sub-tasks, related comments) and **write access** (file
+a sub-task, transition a Task, reply with context). The MCP server gives the
 model a tool surface to pull exactly the slice of context it needs and apply
 mutations through the same audited API path the UI uses.
 
@@ -54,7 +54,7 @@ search) pay a much smaller schema-load tax per prompt.
 | Group | Count | File | Tools |
 |---|---|---|---|
 | AGENTS | 3 | `tools/agents.ts` | `crud_agent` (op: search\|get\|create\|update\|delete) + `agent_memory` (op: get\|update) + `marketplace_agent` (op: search\|get) |
-| ITEMS | 5 | `tools/items.ts` | `search_item` + `create_item` (issue_type: epic\|story\|sub_task\|sub_bug\|bug) + `get_item` (always full envelope: item + parent + project + children + comments + item_links + external_links + activity) + `update_item` (action: patch_fields\|change_status\|assign\|add_comment\|add_link\|remove_link\|add_external_link\|remove_external_link) + `delete_item` |
+| ITEMS | 5 | `tools/items.ts` | `search_item` + `create_item` (issue_type: task\|sub_task; a sub-task needs `payload.task_id`) + `get_item` (always full envelope: the item under `task` / `sub_task` + parent `task` or child `sub_tasks` + project + comments + related_links + external_links + activity) + `update_item` (action: patch_fields\|change_status\|assign\|add_comment\|add_link\|remove_link\|add_external_link\|remove_external_link) + `delete_item` |
 | PROJECTS | 2 | `tools/projects.ts` | `listProjects`, `getProject` |
 | REMINDERS | 2 | `tools/reminders.ts` | `crud_reminder` (op: create\|update\|cancel) + `search_reminder` (optional filters: status\|channel\|since) |
 | NOTIFICATIONS | 1 | `tools/notifications.ts` | `sendExternalNotification` (A09) |
@@ -113,26 +113,31 @@ Two transports, share the same tool registrations (`registerAllTools()`):
 The MCP layer now spans read + write, so workflows are no longer
 "discover â†’ pull â†’ draft". Patterns external AI clients run against Atlas:
 
-### PO Writer expanding an epic
-`get_item { issue_type: 'epic', id }` â€” returns the epic + project + every
-child story / bug + comments + related_links + external_links + activity in one
-round trip. The envelope is *always* the full payload â€” there is no partial
+### PO Writer splitting a Task
+`get_item { issue_type: 'task', id }` — returns the Task + project + its
+`sub_tasks` + comments + related_links + external_links + activity in one
+round trip. It then calls `create_item { issue_type: 'sub_task', agent_id,
+payload: { task_id, title, acceptance_criteria, labels: ['dev'] } }` per
+capability, a `[QA]` twin labelled `qa` for each, and `update_item
+{ action: 'add_link', relation_type: 'tested_by' }` twin → dev (ADR 0015). The envelope is *always* the full payload â€” there is no partial
 get.
 
 ### Coder picking up a sub-task
-`get_item { issue_type: 'sub_task', id }` for the full context â†’
+`get_item { issue_type: 'sub_task', id }` for the full context (it includes
+the parent `task`, whose `spec_md` is the Architect's spec) →
 `search_item { query }` (substring on title / description) to spot prior
 duplicates â†’ after work, `update_item { action: 'add_comment', ... }` for
 any note a later step needs. The agent does not move state or record the PR:
-it ends with the `atlas-outcome` block and the workflow routes the item,
-pushes and opens the PR (ADR 0014).
+it ends with the `atlas-outcome` block; the Task's workflow run moves on to
+the next sub-task and, once they are all done, pushes and opens the one PR
+(ADR 0014, ADR 0015).
 
 ### Owner-led item maintenance via Claude
 Every mutation is one `update_item` call with an `action` discriminator:
 - `action: 'patch_fields'` for description / priority / spec edits (per-type
-  Zod validation on the API route). Stories also accept `worktree_branch`
-  (`atlas/<role>/<id>`) — added to the MCP patch schema 2026-09-14; PO
-  Writer's contract requires it and the `.strict()` schema used to reject it.
+  Zod validation on the API route). Tasks also accept `spec_md`, `pr_url`,
+  `reporter_agent_id` and `worktree_branch` (`atlas/<role>/<id>`); the
+  sub-task route's `.strict()` schema rejects them.
 - `action: 'change_status'` for status transitions (with optional `override`
   for Owner corrections).
 - `action: 'assign'` to reassign (active-agent guard on the API).
@@ -143,7 +148,7 @@ Every mutation is one `update_item` call with an `action` discriminator:
   `tested_by` graph edits (optional `agent_id` credits the link event).
 - `action: 'add_external_link' / 'remove_external_link'` for off-platform
   refs (GitHub PR URLs today).
-- `delete_item` for outright removal (cascades per type).
+- `delete_item` for outright removal (deleting a Task drops its sub-tasks).
 
 ### Search-driven traversal
 `search_item { query }` â†’ `get_item` on the top hit. The envelope's
@@ -284,7 +289,7 @@ by ~63%. Mapping:
 - `search_marketplace_agents` / `get_full_marketplace_agent` â†’ `marketplace_agent { op }`
 - `listAgentRuns` â†’ **deleted** (REST route `GET /api/agents/:id/runs` stays for the Activity tab)
 - `searchItems` â†’ `search_item`
-- `createEpic` / `createStory` / `createSubTask` / `createSubBug` / `createBug` â†’ `create_item { issue_type, payload }`
+- `createEpic` / `createStory` / `createSubTask` / `createSubBug` / `createBug` â†’ `create_item { issue_type, payload }` (kinds narrowed to `task` / `sub_task` by ADR 0015)
 - `getEpic` / `getItemFull` / `listComments` / `listItemLinks` / `listItemExternalLinks` / `replyToItem` (read-context mode) â†’ `get_item` (always full envelope)
 - `updateItem` / `transitionItemStatus` / `assignItem` / `addCommentToItem` / `replyToItem` (write mode) / `createItemLink` / `deleteItemLink` / `createItemExternalLink` / `deleteItemExternalLink` â†’ `update_item { action }`
 - `deleteItem` â†’ `delete_item`

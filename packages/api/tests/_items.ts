@@ -3,18 +3,13 @@
 // Use:
 //   await insertProject('p1');
 //   await insertAgent({ id: 'agent-coder' });
-//   const epicId = await insertItem({ type: 'epic', project_id: 'p1', title: 'E' });
+//   const taskId = await insertItem({ type: 'task', project_id: 'p1', title: 'T' });
 //
 // All helpers respect the test DB pool via `testDb` from `_pg-db.ts`.
 
 import { testDb } from './_pg-db.js';
 import type { ItemType } from '../src/db/types.js';
-import type {
-    IssueStatus,
-    IssuePriority,
-    BugFrequency,
-    BugFailureScope,
-} from '@atlas/shared';
+import type { IssueStatus, IssuePriority } from '@atlas/shared';
 
 export async function insertProject(
     id: string = 'p1',
@@ -106,18 +101,10 @@ export interface InsertItemInput {
     priority?: IssuePriority | null;
     assignee_agent_id?: string | null;
     reporter_agent_id?: string | null;
-    // story-only
     spec_md?: string | null;
     pr_url?: string | null;
     points?: number | null;
-    // story / sub_task / sub_bug
     acceptance_criteria?: string | null;
-    // bug / sub_bug
-    steps_to_reproduce?: string | null;
-    expected?: string | null;
-    actual?: string | null;
-    frequency?: BugFrequency | null;
-    failure_scope?: BugFailureScope | null;
 }
 
 let autoSeq = 1;
@@ -134,20 +121,13 @@ export async function insertItem(input: InsertItemInput): Promise<string> {
             title: input.title ?? 'Item',
             description: input.description ?? '',
             status: input.status ?? 'draft',
-            priority: input.priority ?? (input.type === 'epic' || input.type === 'story' || input.type === 'bug' || input.type === 'sub_task' || input.type === 'sub_bug' ? 'normal' : null),
+            priority: input.priority ?? 'normal',
             assignee_agent_id: input.assignee_agent_id ?? null,
             reporter_agent_id: input.reporter_agent_id ?? null,
             spec_md: input.spec_md ?? null,
             pr_url: input.pr_url ?? null,
             points: input.points ?? null,
             acceptance_criteria: input.acceptance_criteria ?? null,
-            steps_to_reproduce: input.steps_to_reproduce ?? null,
-            expected: input.expected ?? null,
-            actual: input.actual ?? null,
-            frequency: input.frequency ?? null,
-            failure_scope: input.failure_scope ?? null,
-            occurrence_count: input.type === 'bug' || input.type === 'sub_bug' ? 1 : null,
-            occurrence_total: input.type === 'bug' || input.type === 'sub_bug' ? 1 : null,
         })
         .execute();
     return id;
@@ -156,75 +136,38 @@ export async function insertItem(input: InsertItemInput): Promise<string> {
 export interface FullTreeIds {
     projectId: string;
     agentId: string;
-    epicId: string;
-    storyId: string;
+    taskId: string;
     subTaskId: string;
-    subBugId: string;
-    bugId: string;
+    subTask2Id: string;
 }
 
 /**
- * Inserts: project + counter + agent + epic + story + sub-task + sub-bug + bug
- * with deterministic IDs. Useful for E2E-style tests that need the whole graph.
+ * Inserts: project + counter + agent + task + two sub-tasks with
+ * deterministic IDs. Useful for E2E-style tests that need the whole graph.
  */
 export async function seedFullTree(): Promise<FullTreeIds> {
     autoSeq = 1;
     await insertProject('p1', 'ATL');
     await insertAgent();
-    const epicId = await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Epic One' });
-    const storyId = await insertItem({
-        id: 'ATL-2',
-        type: 'story',
-        project_id: 'p1',
-        parent_id: epicId,
-        parent_type: 'epic',
-        title: 'Story One',
-    });
+    const taskId = await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Task One' });
     const subTaskId = await insertItem({
-        id: 'ATL-3',
+        id: 'ATL-2',
         type: 'sub_task',
         project_id: 'p1',
-        parent_id: storyId,
-        parent_type: 'story',
+        parent_id: taskId,
+        parent_type: 'task',
         title: 'Sub-task One',
         acceptance_criteria: '',
     });
-    const subBugId = await insertItem({
-        id: 'ATL-4',
-        type: 'sub_bug',
+    const subTask2Id = await insertItem({
+        id: 'ATL-3',
+        type: 'sub_task',
         project_id: 'p1',
-        parent_id: storyId,
-        parent_type: 'story',
-        title: 'Sub-bug One',
+        parent_id: taskId,
+        parent_type: 'task',
+        title: 'Sub-task Two',
         acceptance_criteria: '',
-        steps_to_reproduce: '',
-        expected: '',
-        actual: '',
-        frequency: 'sometimes',
-        failure_scope: 'cosmetic',
     });
-    const bugId = await insertItem({
-        id: 'ATL-5',
-        type: 'bug',
-        project_id: 'p1',
-        parent_id: epicId,
-        parent_type: 'epic',
-        title: 'Bug One',
-        acceptance_criteria: '',
-        steps_to_reproduce: '',
-        expected: '',
-        actual: '',
-        frequency: 'sometimes',
-        failure_scope: 'cosmetic',
-    });
-    autoSeq = 6;
-    return {
-        projectId: 'p1',
-        agentId: 'agent-coder',
-        epicId,
-        storyId,
-        subTaskId,
-        subBugId,
-        bugId,
-    };
+    autoSeq = 4;
+    return { projectId: 'p1', agentId: 'agent-coder', taskId, subTaskId, subTask2Id };
 }

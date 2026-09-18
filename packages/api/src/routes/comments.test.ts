@@ -26,7 +26,7 @@ beforeEach(async () => {
     await insertProject('p1', 'ATL');
     await insertAgent({ id: 'agent-coder' });
     await insertAgent({ id: 'agent-reviewer' });
-    await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+    await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
     if (!app) {
         app = await buildApp({ logger: false });
         await app.ready();
@@ -58,7 +58,7 @@ describe('DELETE /api/comments/:id', () => {
     it('owner (no actor_agent_id) can soft-delete an owner comment', async () => {
         const created = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'first thought',
         });
@@ -79,7 +79,7 @@ describe('DELETE /api/comments/:id', () => {
         expect(row!.deleted_at).not.toBeNull();
 
         // listComments hides it.
-        const list = await commentsService.list('epic', 'ATL-1');
+        const list = await commentsService.list('task', 'ATL-1');
         expect(list.find((c: IComment) => c.id === created.id)).toBeUndefined();
     });
 
@@ -87,7 +87,7 @@ describe('DELETE /api/comments/:id', () => {
         const created = await commentsService.create({
             author: 'agent',
             agent_id: 'agent-coder',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'starting work',
         });
@@ -98,7 +98,7 @@ describe('DELETE /api/comments/:id', () => {
         });
         expect(res.statusCode).toBe(204);
 
-        const list = await commentsService.list('epic', 'ATL-1');
+        const list = await commentsService.list('task', 'ATL-1');
         expect(list).toHaveLength(0);
     });
 
@@ -106,7 +106,7 @@ describe('DELETE /api/comments/:id', () => {
         const created = await commentsService.create({
             author: 'agent',
             agent_id: 'agent-coder',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'mine',
         });
@@ -122,7 +122,7 @@ describe('DELETE /api/comments/:id', () => {
         const created = await commentsService.create({
             author: 'agent',
             agent_id: 'agent-coder',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'mine',
         });
@@ -134,14 +134,14 @@ describe('DELETE /api/comments/:id', () => {
         expect(res.statusCode).toBe(403);
 
         // Still visible — not soft-deleted on the failed call.
-        const list = await commentsService.list('epic', 'ATL-1');
+        const list = await commentsService.list('task', 'ATL-1');
         expect(list).toHaveLength(1);
     });
 
     it('agent cannot delete an owner comment', async () => {
         const created = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'owner says',
         });
@@ -156,7 +156,7 @@ describe('DELETE /api/comments/:id', () => {
     it('a second DELETE on the same comment returns 404', async () => {
         const created = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'once',
         });
@@ -177,13 +177,13 @@ describe('DELETE /api/comments/:id', () => {
     it('soft-deleted comments disappear from the activity feed', async () => {
         const a = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'keep me',
         });
         const b = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'delete me',
         });
@@ -196,7 +196,7 @@ describe('DELETE /api/comments/:id', () => {
 
         const res = await app.inject({
             method: 'GET',
-            url: '/api/issues/epic/ATL-1/activity',
+            url: '/api/issues/task/ATL-1/activity',
         });
         expect(res.statusCode).toBe(200);
         const items = JSON.parse(res.body) as IActivityItem[];
@@ -215,7 +215,7 @@ describe('GET /api/comments', () => {
     it('returns 200 with an empty array when no comments exist', async () => {
         const res = await app.inject({
             method: 'GET',
-            url: '/api/comments?issue_type=epic&issue_id=ATL-1',
+            url: '/api/comments?issue_type=task&issue_id=ATL-1',
         });
         expect(res.statusCode).toBe(200);
         expect(JSON.parse(res.body)).toEqual([]);
@@ -224,13 +224,13 @@ describe('GET /api/comments', () => {
     it('returns 200 with comments for a given issue', async () => {
         await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'hello',
         });
         const res = await app.inject({
             method: 'GET',
-            url: '/api/comments?issue_type=epic&issue_id=ATL-1',
+            url: '/api/comments?issue_type=task&issue_id=ATL-1',
         });
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body) as IComment[];
@@ -246,7 +246,7 @@ describe('POST /api/comments', () => {
             url: '/api/comments',
             payload: {
                 author: 'owner',
-                issue_type: 'epic',
+                issue_type: 'task',
                 issue_id: 'ATL-1',
                 body: 'new comment',
             },
@@ -271,7 +271,7 @@ describe('PATCH /api/comments/:id', () => {
     it('returns 200 on successful update', async () => {
         const created = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'original text',
         });
@@ -308,7 +308,7 @@ describe('GET /api/issues/:type/:id/activity', () => {
     it('returns 200 for a valid issue type', async () => {
         const res = await app.inject({
             method: 'GET',
-            url: '/api/issues/epic/ATL-1/activity',
+            url: '/api/issues/task/ATL-1/activity',
         });
         expect(res.statusCode).toBe(200);
         expect(Array.isArray(JSON.parse(res.body))).toBe(true);
@@ -327,7 +327,7 @@ describe('GET /api/issues/:type/:id/links', () => {
     it('returns 200 with an empty array when no links exist', async () => {
         const res = await app.inject({
             method: 'GET',
-            url: '/api/issues/epic/ATL-1/links',
+            url: '/api/issues/task/ATL-1/links',
         });
         expect(res.statusCode).toBe(200);
         expect(JSON.parse(res.body)).toEqual([]);
@@ -346,16 +346,16 @@ describe('POST /api/issues/:type/:id/links', () => {
     it('returns 201 when creating a valid link between two items', async () => {
         await insertItem({
             id: 'ATL-2',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Story',
         });
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/links',
-            payload: { to_type: 'story', to_id: 'ATL-2' },
+            url: '/api/issues/task/ATL-1/links',
+            payload: { to_type: 'sub_task', to_id: 'ATL-2' },
         });
         expect(res.statusCode).toBe(201);
     });
@@ -363,8 +363,8 @@ describe('POST /api/issues/:type/:id/links', () => {
     it('returns 400 for a self-link', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/links',
-            payload: { to_type: 'epic', to_id: 'ATL-1' },
+            url: '/api/issues/task/ATL-1/links',
+            payload: { to_type: 'task', to_id: 'ATL-1' },
         });
         expect(res.statusCode).toBe(400);
     });
@@ -373,7 +373,7 @@ describe('POST /api/issues/:type/:id/links', () => {
         const res = await app.inject({
             method: 'POST',
             url: '/api/issues/not-a-type/ATL-1/links',
-            payload: { to_type: 'story', to_id: 'ATL-2' },
+            payload: { to_type: 'sub_task', to_id: 'ATL-2' },
         });
         expect(res.statusCode).toBe(400);
     });
@@ -383,16 +383,16 @@ describe('DELETE /api/issues/links/:linkId', () => {
     it('returns 204 on successful delete of a link', async () => {
         await insertItem({
             id: 'ATL-2',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Story',
         });
         const createRes = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/links',
-            payload: { to_type: 'story', to_id: 'ATL-2' },
+            url: '/api/issues/task/ATL-1/links',
+            payload: { to_type: 'sub_task', to_id: 'ATL-2' },
         });
         expect(createRes.statusCode).toBe(201);
         const created = JSON.parse(createRes.body) as { id: number };
@@ -418,18 +418,18 @@ describe('DELETE /api/issues/links/:linkId', () => {
     it('credits x-atlas-agent-id as the actor on link_created + link_deleted (both endpoints)', async () => {
         await insertItem({
             id: 'ATL-2',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Story',
         });
         const headers = { 'x-atlas-agent-id': 'agent-coder' };
         const createRes = await app.inject({
             method: 'POST',
-            url: '/api/issues/story/ATL-2/links',
+            url: '/api/issues/sub_task/ATL-2/links',
             headers,
-            payload: { to_type: 'epic', to_id: 'ATL-1', relation_type: 'tested_by' },
+            payload: { to_type: 'task', to_id: 'ATL-1', relation_type: 'tested_by' },
         });
         expect(createRes.statusCode).toBe(201);
         const created = JSON.parse(createRes.body) as { id: number };
@@ -450,10 +450,10 @@ describe('DELETE /api/issues/links/:linkId', () => {
 });
 
 describe('GET /api/issues/:type/:id/reply-context', () => {
-    it('returns 200 with context for an existing epic', async () => {
+    it('returns 200 with context for an existing task', async () => {
         const res = await app.inject({
             method: 'GET',
-            url: '/api/issues/epic/ATL-1/reply-context',
+            url: '/api/issues/task/ATL-1/reply-context',
         });
         expect(res.statusCode).toBe(200);
     });
@@ -461,7 +461,7 @@ describe('GET /api/issues/:type/:id/reply-context', () => {
     it('returns 404 when the item does not exist', async () => {
         const res = await app.inject({
             method: 'GET',
-            url: '/api/issues/epic/ATL-9999/reply-context',
+            url: '/api/issues/task/ATL-9999/reply-context',
         });
         expect(res.statusCode).toBe(404);
     });
@@ -476,10 +476,10 @@ describe('GET /api/issues/:type/:id/reply-context', () => {
 });
 
 describe('POST /api/issues/:type/:id/reply', () => {
-    it('returns 201 with comment and context for an existing epic', async () => {
+    it('returns 201 with comment and context for an existing task', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/reply',
+            url: '/api/issues/task/ATL-1/reply',
             payload: { author: 'owner', body: 'a reply' },
         });
         expect(res.statusCode).toBe(201);
@@ -491,7 +491,7 @@ describe('POST /api/issues/:type/:id/reply', () => {
     it('returns 404 when the item does not exist', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-9999/reply',
+            url: '/api/issues/task/ATL-9999/reply',
             payload: { author: 'owner', body: 'ghost reply' },
         });
         expect(res.statusCode).toBe(404);
@@ -515,23 +515,23 @@ describe('POST /api/issues/:type/:id/links — all error reason branches (CMNT-L
         // ATL-9999 doesn't exist → reason='missing_from'
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-9999/links',
-            payload: { to_type: 'story', to_id: 'ATL-1' },
+            url: '/api/issues/task/ATL-9999/links',
+            payload: { to_type: 'sub_task', to_id: 'ATL-1' },
         });
         expect(res.statusCode).toBe(400);
-        expect(JSON.parse(res.body).error).toMatch(/Source epic not found/);
+        expect(JSON.parse(res.body).error).toMatch(/Source task not found/);
         expect(JSON.parse(res.body).reason).toBe('missing_from');
     });
 
     it('returns 400 with "Target ... not found" when to-item does not exist (CMNT-LINK-2)', async () => {
-        // ATL-1 exists (epic), ATL-8888 does not → reason='missing_to'
+        // ATL-1 exists (task), ATL-8888 does not → reason='missing_to'
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/links',
-            payload: { to_type: 'story', to_id: 'ATL-8888' },
+            url: '/api/issues/task/ATL-1/links',
+            payload: { to_type: 'sub_task', to_id: 'ATL-8888' },
         });
         expect(res.statusCode).toBe(400);
-        expect(JSON.parse(res.body).error).toMatch(/Target story not found/);
+        expect(JSON.parse(res.body).error).toMatch(/Target sub_task not found/);
         expect(JSON.parse(res.body).reason).toBe('not_found');
     });
 
@@ -540,24 +540,24 @@ describe('POST /api/issues/:type/:id/links — all error reason branches (CMNT-L
         // then attempt ATL-2 → ATL-1 with depends_on to create a cycle.
         await insertItem({
             id: 'ATL-2',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Story',
         });
         // First link: ATL-1 → ATL-2 (depends_on)
         const first = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/links',
-            payload: { to_type: 'story', to_id: 'ATL-2', relation_type: 'depends_on' },
+            url: '/api/issues/task/ATL-1/links',
+            payload: { to_type: 'sub_task', to_id: 'ATL-2', relation_type: 'depends_on' },
         });
         expect(first.statusCode).toBe(201);
         // Cyclic link: ATL-2 → ATL-1 with depends_on → cycle detected
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/story/ATL-2/links',
-            payload: { to_type: 'epic', to_id: 'ATL-1', relation_type: 'depends_on' },
+            url: '/api/issues/sub_task/ATL-2/links',
+            payload: { to_type: 'task', to_id: 'ATL-1', relation_type: 'depends_on' },
         });
         expect(res.statusCode).toBe(400);
         expect(JSON.parse(res.body).error).toMatch(/cycle/i);
@@ -569,7 +569,7 @@ describe('GET /api/issues/:type/:id/external-links', () => {
     it('returns 200 with an empty array when no links exist', async () => {
         const res = await app.inject({
             method: 'GET',
-            url: '/api/issues/epic/ATL-1/external-links',
+            url: '/api/issues/task/ATL-1/external-links',
         });
         expect(res.statusCode).toBe(200);
         expect(JSON.parse(res.body)).toEqual([]);
@@ -586,19 +586,19 @@ describe('GET /api/issues/:type/:id/external-links', () => {
     it('returns links newest-first', async () => {
         const a = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/external-links',
+            url: '/api/issues/task/ATL-1/external-links',
             payload: { link_kind: 'pull_request', url: 'https://github.com/o/r/pull/1' },
         });
         expect(a.statusCode).toBe(201);
         const b = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/external-links',
+            url: '/api/issues/task/ATL-1/external-links',
             payload: { link_kind: 'pull_request', url: 'https://github.com/o/r/pull/2' },
         });
         expect(b.statusCode).toBe(201);
         const res = await app.inject({
             method: 'GET',
-            url: '/api/issues/epic/ATL-1/external-links',
+            url: '/api/issues/task/ATL-1/external-links',
         });
         expect(res.statusCode).toBe(200);
         const rows = JSON.parse(res.body) as Array<{ url: string }>;
@@ -616,7 +616,7 @@ describe('POST /api/issues/:type/:id/external-links/refresh', () => {
             .mockResolvedValueOnce([]);
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/external-links/refresh',
+            url: '/api/issues/task/ATL-1/external-links/refresh',
         });
         expect(res.statusCode).toBe(200);
         expect(res.json()).toEqual([]);
@@ -632,7 +632,7 @@ describe('POST /api/issues/:type/:id/external-links/refresh', () => {
         });
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/external-links/refresh',
+            url: '/api/issues/task/ATL-1/external-links/refresh',
         });
         expect(res.statusCode).toBe(200);
         expect(res.json()).toMatchObject([{ url: 'https://github.com/foo/bar/pull/5', pr_state: null }]);
@@ -641,7 +641,7 @@ describe('POST /api/issues/:type/:id/external-links/refresh', () => {
     it('returns 404 for an unknown item and 400 for an unknown type', async () => {
         const missing = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-404/external-links/refresh',
+            url: '/api/issues/task/ATL-404/external-links/refresh',
         });
         expect(missing.statusCode).toBe(404);
         const badType = await app.inject({
@@ -656,7 +656,7 @@ describe('POST /api/issues/:type/:id/external-links', () => {
     it('returns 201 with the new link for a valid GitHub PR URL', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/external-links',
+            url: '/api/issues/task/ATL-1/external-links',
             payload: {
                 link_kind: 'pull_request',
                 url: 'https://github.com/foo/bar/pull/42',
@@ -673,7 +673,7 @@ describe('POST /api/issues/:type/:id/external-links', () => {
     it('credits x-atlas-agent-id as the actor on the external link_created event', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/external-links',
+            url: '/api/issues/task/ATL-1/external-links',
             headers: { 'x-atlas-agent-id': 'agent-coder' },
             payload: { link_kind: 'pull_request', url: 'https://github.com/foo/bar/pull/77', title: 'x' },
         });
@@ -690,7 +690,7 @@ describe('POST /api/issues/:type/:id/external-links', () => {
     it('returns 201 idempotently — same URL twice returns the same id', async () => {
         const first = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/external-links',
+            url: '/api/issues/task/ATL-1/external-links',
             payload: {
                 link_kind: 'pull_request',
                 url: 'https://github.com/foo/bar/pull/9',
@@ -698,7 +698,7 @@ describe('POST /api/issues/:type/:id/external-links', () => {
         });
         const second = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/external-links',
+            url: '/api/issues/task/ATL-1/external-links',
             payload: {
                 link_kind: 'pull_request',
                 url: 'https://github.com/foo/bar/pull/9',
@@ -712,7 +712,7 @@ describe('POST /api/issues/:type/:id/external-links', () => {
     it('returns 400 when pull_request URL is not a GitHub PR', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/external-links',
+            url: '/api/issues/task/ATL-1/external-links',
             payload: {
                 link_kind: 'pull_request',
                 url: 'https://github.com/foo/bar/issues/123',
@@ -725,7 +725,7 @@ describe('POST /api/issues/:type/:id/external-links', () => {
     it('returns 400 when body fails Zod (no url)', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/external-links',
+            url: '/api/issues/task/ATL-1/external-links',
             payload: { link_kind: 'pull_request' },
         });
         expect(res.statusCode).toBe(400);
@@ -734,7 +734,7 @@ describe('POST /api/issues/:type/:id/external-links', () => {
     it('returns 404 when the item does not exist', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/NOPE-999/external-links',
+            url: '/api/issues/task/NOPE-999/external-links',
             payload: {
                 link_kind: 'pull_request',
                 url: 'https://github.com/foo/bar/pull/1',
@@ -758,7 +758,7 @@ describe('POST /api/issues/:type/:id/external-links', () => {
     it('honors a client-supplied title (skips gh fetch)', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/external-links',
+            url: '/api/issues/task/ATL-1/external-links',
             payload: {
                 link_kind: 'pull_request',
                 url: 'https://github.com/foo/bar/pull/7',
@@ -774,7 +774,7 @@ describe('DELETE /api/issues/external-links/:linkId', () => {
     it('returns 204 on successful delete', async () => {
         const created = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/external-links',
+            url: '/api/issues/task/ATL-1/external-links',
             payload: {
                 link_kind: 'pull_request',
                 url: 'https://github.com/foo/bar/pull/5',
@@ -788,7 +788,7 @@ describe('DELETE /api/issues/external-links/:linkId', () => {
         expect(del.statusCode).toBe(204);
         const after = await app.inject({
             method: 'GET',
-            url: '/api/issues/epic/ATL-1/external-links',
+            url: '/api/issues/task/ATL-1/external-links',
         });
         expect(JSON.parse(after.body)).toEqual([]);
     });
@@ -818,7 +818,7 @@ describe('PATCH /api/comments/:id — Zod rejection (CMNT-EXTRA)', () => {
     it('returns 400 when body field is missing from payload (CMNT-EXTRA-1)', async () => {
         const created = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'to be patched',
         });
@@ -833,7 +833,7 @@ describe('PATCH /api/comments/:id — Zod rejection (CMNT-EXTRA)', () => {
     it('returns 400 when body is an empty string (CMNT-EXTRA-2)', async () => {
         const created = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'to be patched',
         });
@@ -850,7 +850,7 @@ describe('POST /api/issues/:type/:id/reply — Zod rejection (CMNT-EXTRA)', () =
     it('returns 400 when body field is missing (CMNT-EXTRA-3)', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/reply',
+            url: '/api/issues/task/ATL-1/reply',
             payload: { author: 'owner' },
         });
         expect(res.statusCode).toBe(400);
@@ -859,7 +859,7 @@ describe('POST /api/issues/:type/:id/reply — Zod rejection (CMNT-EXTRA)', () =
     it('returns 400 when body is an empty string (CMNT-EXTRA-4)', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/reply',
+            url: '/api/issues/task/ATL-1/reply',
             payload: { author: 'owner', body: '' },
         });
         expect(res.statusCode).toBe(400);
@@ -870,21 +870,21 @@ describe('GET /api/issues/:type/:id/links — non-empty result (CMNT-EXTRA)', ()
     it('returns 200 with projected link fields when a link exists (CMNT-EXTRA-5)', async () => {
         await insertItem({
             id: 'ATL-2',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Linked Story',
         });
         // Create a link so the projection path runs.
         await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/links',
-            payload: { to_type: 'story', to_id: 'ATL-2' },
+            url: '/api/issues/task/ATL-1/links',
+            payload: { to_type: 'sub_task', to_id: 'ATL-2' },
         });
         const res = await app.inject({
             method: 'GET',
-            url: '/api/issues/epic/ATL-1/links',
+            url: '/api/issues/task/ATL-1/links',
         });
         expect(res.statusCode).toBe(200);
         const links = JSON.parse(res.body) as Array<{ id: number; relation_type: string; direction: string; type: string; item_id: string }>;
@@ -901,16 +901,16 @@ describe('POST /api/issues/:type/:id/links — explicit relation_type (CMNT-EXTR
     it('returns 201 with relation_type=relates_to when explicitly provided (CMNT-EXTRA-6)', async () => {
         await insertItem({
             id: 'ATL-2',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Story Two',
         });
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/links',
-            payload: { to_type: 'story', to_id: 'ATL-2', relation_type: 'relates_to' },
+            url: '/api/issues/task/ATL-1/links',
+            payload: { to_type: 'sub_task', to_id: 'ATL-2', relation_type: 'relates_to' },
         });
         expect(res.statusCode).toBe(201);
         const body = JSON.parse(res.body) as { relation_type: string };
@@ -922,13 +922,13 @@ describe('GET /api/issues/:type/:id/activity — non-empty feed (CMNT-EXTRA)', (
     it('returns activity items including a comment after one is posted (CMNT-EXTRA-7)', async () => {
         await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'activity comment',
         });
         const res = await app.inject({
             method: 'GET',
-            url: '/api/issues/epic/ATL-1/activity',
+            url: '/api/issues/task/ATL-1/activity',
         });
         expect(res.statusCode).toBe(200);
         const items = JSON.parse(res.body) as Array<{ kind: string }>;
@@ -940,7 +940,7 @@ describe('POST /api/issues/:type/:id/reply — agent author (CMNT-EXTRA)', () =>
     it('returns 201 with agent author comment and context (CMNT-EXTRA-8)', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/issues/epic/ATL-1/reply',
+            url: '/api/issues/task/ATL-1/reply',
             payload: { author: 'agent', agent_id: 'agent-coder', body: 'agent reply' },
         });
         expect(res.statusCode).toBe(201);
@@ -959,7 +959,7 @@ describe('POST /api/comments — agent author (CMNT-EXTRA)', () => {
             payload: {
                 author: 'agent',
                 agent_id: 'agent-coder',
-                issue_type: 'epic',
+                issue_type: 'task',
                 issue_id: 'ATL-1',
                 body: 'agent comment via POST',
             },
@@ -973,11 +973,11 @@ describe('POST /api/comments — agent author (CMNT-EXTRA)', () => {
 
 describe('GET /api/comments — multiple comments listing (CMNT-EXTRA)', () => {
     it('returns all non-deleted comments for the issue (CMNT-EXTRA-10)', async () => {
-        await commentsService.create({ author: 'owner', issue_type: 'epic', issue_id: 'ATL-1', body: 'first' });
-        await commentsService.create({ author: 'owner', issue_type: 'epic', issue_id: 'ATL-1', body: 'second' });
+        await commentsService.create({ author: 'owner', issue_type: 'task', issue_id: 'ATL-1', body: 'first' });
+        await commentsService.create({ author: 'owner', issue_type: 'task', issue_id: 'ATL-1', body: 'second' });
         const res = await app.inject({
             method: 'GET',
-            url: '/api/comments?issue_type=epic&issue_id=ATL-1',
+            url: '/api/comments?issue_type=task&issue_id=ATL-1',
         });
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body) as IComment[];
@@ -1007,7 +1007,7 @@ describe('agent comment attribution', () => {
 
         const comment = await commentsService.create({
             author: 'agent',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'no agent_id supplied',
         });
@@ -1040,7 +1040,7 @@ describe('agent comment attribution', () => {
         const comment = await commentsService.create({
             author: 'agent',
             agent_id: 'agent-reviewer',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'explicit wins',
         });
@@ -1050,7 +1050,7 @@ describe('agent comment attribution', () => {
     it('leaves agent_id null when no run is live (nothing to attribute to)', async () => {
         const comment = await commentsService.create({
             author: 'agent',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'orphan agent comment',
         });
@@ -1071,7 +1071,7 @@ describe('agent comment attribution', () => {
 
         const comment = await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: 'owner speaking',
         });

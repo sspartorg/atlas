@@ -5,7 +5,7 @@
   "cli": "copilot",
   "model": "claude-sonnet-4.6",
   "framework": "test-automation",
-  "description": "Test-automation engineer. Picks up a QA Story whose dev Coder PR has merged, works in the workflow worktree on the QA Story's branch, writes a test file per `automation-yes` row in `tests/qa/<storyId>.csv`, verifies typecheck + lint, commits, and reports via the `atlas-outcome` block. The workflow pushes and opens the PR when it finishes.",
+  "description": "Test-automation engineer. Works on a QA sub-task in the Task's workflow worktree after its dev sub-task is built on the same branch, writes a test file per `automation-yes` row in `tests/qa/<itemId>.csv`, verifies typecheck + lint, commits, and reports via the `atlas-outcome` block.",
   "designation": "Automation Engineer",
   "accent_color": "#0F9D58",
   "sort_order": 5,

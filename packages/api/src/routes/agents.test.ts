@@ -640,7 +640,7 @@ describe('POST /api/agents/:id/compile-prompt — with issue fields', () => {
         const res = await app.inject({
             method: 'POST',
             url: '/api/agents/agent-item-req/compile-prompt',
-            payload: { issue_type: 'story', issue_id: 'CPT-1' },
+            payload: { issue_type: 'sub_task', issue_id: 'CPT-1' },
         });
         // compilePromptFor is mocked to resolve — should be 200
         expect(res.statusCode).toBe(200);
@@ -668,7 +668,7 @@ describe('POST /api/agents/:id/compile-prompt — with issue fields', () => {
         const res = await app.inject({
             method: 'POST',
             url: '/api/agents/agent-item-req2/compile-prompt',
-            payload: { issue_type: 'story', issue_id: 'MISS-1' },
+            payload: { issue_type: 'sub_task', issue_id: 'MISS-1' },
         });
         expect(res.statusCode).toBe(404);
         expect(JSON.parse(res.body) as { error: string }).toMatchObject({

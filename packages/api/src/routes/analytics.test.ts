@@ -75,21 +75,18 @@ describe('GET /api/analytics/project/:projectId — drill-down (W2)', () => {
         expect(res.statusCode).toBe(404);
     });
 
-    it('aggregates costs across every descendant of every epic in the project', async () => {
-        // Tree: p1 → epic ATL-1 → (story ATL-2 → sub_task ATL-3, sub_bug ATL-4), bug ATL-5
+    it('aggregates costs across every descendant of every task in the project', async () => {
+        // Tree: p1 → task ATL-1 → (sub_task ATL-2, sub_task ATL-3)
         const ids = await seedFullTree();
         // Costs spread across the tree so we can verify the rollup. Total
-        // for the project: 1 + 2 + 0.5 + 0.25 + 3 = $6.75. byKind:
-        // epic=1, story=2, sub_task=0.5, sub_bug=0.25, bug=3.
-        await insertRun({ id: 'r-epic', item_id: ids.epicId, total_cost_usd: 1.0 });
-        await insertRun({ id: 'r-story', item_id: ids.storyId, total_cost_usd: 2.0 });
-        await insertRun({ id: 'r-subtask', item_id: ids.subTaskId, total_cost_usd: 0.5 });
-        await insertRun({ id: 'r-subbug', item_id: ids.subBugId, total_cost_usd: 0.25 });
-        await insertRun({ id: 'r-bug', item_id: ids.bugId, total_cost_usd: 3.0 });
+        // for the project: 1 + 2 + 3 = $6. byKind: task=1, sub_task=5.
+        await insertRun({ id: 'r-task', item_id: ids.taskId, total_cost_usd: 1.0 });
+        await insertRun({ id: 'r-sub1', item_id: ids.subTaskId, total_cost_usd: 2.0 });
+        await insertRun({ id: 'r-sub2', item_id: ids.subTask2Id, total_cost_usd: 3.0 });
         // Non-completed runs must NOT count.
         await insertRun({
             id: 'r-cancelled',
-            item_id: ids.storyId,
+            item_id: ids.subTaskId,
             status: 'cancelled',
             total_cost_usd: 99.0,
         });
@@ -102,24 +99,20 @@ describe('GET /api/analytics/project/:projectId — drill-down (W2)', () => {
         const body = res.json();
 
         expect(body.project).toEqual({ id: 'p1', name: 'Project p1' });
-        expect(body.totals.total_cost_usd).toBeCloseTo(6.75, 5);
-        expect(body.totals.run_count).toBe(5);
-        expect(body.epic_count).toBe(1);
+        expect(body.totals.total_cost_usd).toBeCloseTo(6, 5);
+        expect(body.totals.run_count).toBe(3);
+        expect(body.task_count).toBe(1);
 
         const byKind: Record<string, number> = {};
         for (const k of body.byKind) byKind[k.type] = k.total_cost_usd;
-        expect(byKind['epic']).toBeCloseTo(1.0, 5);
-        expect(byKind['story']).toBeCloseTo(2.0, 5);
-        expect(byKind['sub_task']).toBeCloseTo(0.5, 5);
-        expect(byKind['sub_bug']).toBeCloseTo(0.25, 5);
-        expect(byKind['bug']).toBeCloseTo(3.0, 5);
+        expect(byKind).toEqual({ task: expect.closeTo(1.0, 5), sub_task: expect.closeTo(5.0, 5) });
 
-        // The one epic should appear in topEpics with full descendant
-        // rollup: 1 (self) + 2 + 0.5 + 0.25 + 3 = 6.75.
-        expect(body.topEpics).toHaveLength(1);
-        expect(body.topEpics[0].id).toBe(ids.epicId);
-        expect(body.topEpics[0].totals.total_cost_usd).toBeCloseTo(6.75, 5);
-        expect(body.topEpics[0].descendant_count).toBe(4);
+        // The one task appears in topTasks with its full descendant
+        // rollup: 1 (self) + 2 + 3 = 6.
+        expect(body.topTasks).toHaveLength(1);
+        expect(body.topTasks[0].id).toBe(ids.taskId);
+        expect(body.topTasks[0].totals.total_cost_usd).toBeCloseTo(6, 5);
+        expect(body.topTasks[0].descendant_count).toBe(2);
     });
 
     it('returns project-scoped terminal aggregates alongside the agent-run rollup', async () => {
@@ -237,19 +230,19 @@ describe('GET /api/analytics/project/:projectId — drill-down (W2)', () => {
     });
 });
 
-describe('GET /api/analytics/project/:projectId/epics — paginated (W2)', () => {
-    it('returns paginated epics sorted by cost descending', async () => {
+describe('GET /api/analytics/project/:projectId/tasks — paginated (W2)', () => {
+    it('returns paginated tasks sorted by cost descending', async () => {
         const ids = await seedFullTree();
-        // Add two more epics so we have 3 to page through.
-        await insertItem({ id: 'ATL-10', type: 'epic', project_id: 'p1', title: 'Epic Two' });
-        await insertItem({ id: 'ATL-11', type: 'epic', project_id: 'p1', title: 'Epic Three' });
-        await insertRun({ id: 'r-e1', item_id: ids.epicId, total_cost_usd: 5.0 });
+        // Add two more tasks so we have 3 to page through.
+        await insertItem({ id: 'ATL-10', type: 'task', project_id: 'p1', title: 'Task Two' });
+        await insertItem({ id: 'ATL-11', type: 'task', project_id: 'p1', title: 'Task Three' });
+        await insertRun({ id: 'r-e1', item_id: ids.taskId, total_cost_usd: 5.0 });
         await insertRun({ id: 'r-e2', item_id: 'ATL-10', total_cost_usd: 10.0 });
         await insertRun({ id: 'r-e3', item_id: 'ATL-11', total_cost_usd: 1.0 });
 
         const res = await app.inject({
             method: 'GET',
-            url: `/api/analytics/project/${ids.projectId}/epics?page=1&limit=2`,
+            url: `/api/analytics/project/${ids.projectId}/tasks?page=1&limit=2`,
         });
         expect(res.statusCode).toBe(200);
         const body = res.json();
@@ -260,122 +253,116 @@ describe('GET /api/analytics/project/:projectId/epics — paginated (W2)', () =>
         // Sorted by cost DESC: ATL-10 ($10) first, then ATL-1 ($5).
         expect(body.rows[0].id).toBe('ATL-10');
         expect(body.rows[0].totals.total_cost_usd).toBeCloseTo(10.0, 5);
-        expect(body.rows[1].id).toBe(ids.epicId);
+        expect(body.rows[1].id).toBe(ids.taskId);
     });
 
     it('clamps limit to 100', async () => {
         const ids = await seedFullTree();
         const res = await app.inject({
             method: 'GET',
-            url: `/api/analytics/project/${ids.projectId}/epics?limit=99999`,
+            url: `/api/analytics/project/${ids.projectId}/tasks?limit=99999`,
         });
         expect(res.statusCode).toBe(200);
         expect(res.json().limit).toBe(100);
     });
 });
 
-describe('GET /api/analytics/epic/:epicId — drill-down (W2)', () => {
-    it('returns 404 when the epic id does not exist', async () => {
+describe('GET /api/analytics/task/:taskId — drill-down (W2)', () => {
+    it('returns 404 when the task id does not exist', async () => {
         const res = await app.inject({
             method: 'GET',
-            url: '/api/analytics/epic/no-such-epic',
+            url: '/api/analytics/task/no-such-task',
         });
         expect(res.statusCode).toBe(404);
     });
 
-    it('returns 404 when the id exists but is not an epic', async () => {
+    it('returns 404 when the id exists but is not a task', async () => {
         const ids = await seedFullTree();
         const res = await app.inject({
             method: 'GET',
-            url: `/api/analytics/epic/${ids.storyId}`,
+            url: `/api/analytics/task/${ids.subTaskId}`,
         });
         expect(res.statusCode).toBe(404);
     });
 
-    it('rolls up cost across every descendant under the epic', async () => {
+    it('rolls up cost across every sub-task under the task', async () => {
         const ids = await seedFullTree();
-        await insertRun({ id: 'r-epic', item_id: ids.epicId, total_cost_usd: 1.0 });
-        await insertRun({ id: 'r-story', item_id: ids.storyId, total_cost_usd: 2.0 });
-        await insertRun({ id: 'r-subtask', item_id: ids.subTaskId, total_cost_usd: 0.5 });
-        await insertRun({ id: 'r-subbug', item_id: ids.subBugId, total_cost_usd: 0.25 });
-        await insertRun({ id: 'r-bug', item_id: ids.bugId, total_cost_usd: 3.0 });
+        await insertRun({ id: 'r-task', item_id: ids.taskId, total_cost_usd: 1.0 });
+        await insertRun({ id: 'r-sub1', item_id: ids.subTaskId, total_cost_usd: 2.0 });
+        await insertRun({ id: 'r-sub2', item_id: ids.subTask2Id, total_cost_usd: 3.0 });
 
         const res = await app.inject({
             method: 'GET',
-            url: `/api/analytics/epic/${ids.epicId}`,
+            url: `/api/analytics/task/${ids.taskId}`,
         });
         expect(res.statusCode).toBe(200);
         const body = res.json();
 
-        expect(body.epic.id).toBe(ids.epicId);
-        expect(body.epic.project_id).toBe(ids.projectId);
-        expect(body.totals.total_cost_usd).toBeCloseTo(6.75, 5);
-        expect(body.totals.run_count).toBe(5);
-        expect(body.descendant_count).toBe(4);
+        expect(body.task.id).toBe(ids.taskId);
+        expect(body.task.project_id).toBe(ids.projectId);
+        expect(body.totals.total_cost_usd).toBeCloseTo(6, 5);
+        expect(body.totals.run_count).toBe(3);
+        expect(body.descendant_count).toBe(2);
 
         const byKind: Record<string, number> = {};
         for (const k of body.byKind) byKind[k.type] = k.total_cost_usd;
-        expect(byKind['epic']).toBeCloseTo(1.0, 5);
-        expect(byKind['story']).toBeCloseTo(2.0, 5);
-        expect(byKind['bug']).toBeCloseTo(3.0, 5);
+        expect(byKind['task']).toBeCloseTo(1.0, 5);
+        expect(byKind['sub_task']).toBeCloseTo(5.0, 5);
     });
 });
 
-describe('GET /api/analytics/epic/:epicId/children — paginated (W2)', () => {
+describe('GET /api/analytics/task/:taskId/children — paginated (W2)', () => {
     it('returns descendant rows sorted by cost descending', async () => {
         const ids = await seedFullTree();
-        await insertRun({ id: 'r-story', item_id: ids.storyId, total_cost_usd: 2.0 });
-        await insertRun({ id: 'r-bug', item_id: ids.bugId, total_cost_usd: 3.0 });
-        await insertRun({ id: 'r-subtask', item_id: ids.subTaskId, total_cost_usd: 0.5 });
+        await insertRun({ id: 'r-sub1', item_id: ids.subTaskId, total_cost_usd: 2.0 });
+        await insertRun({ id: 'r-sub2', item_id: ids.subTask2Id, total_cost_usd: 3.0 });
 
         const res = await app.inject({
             method: 'GET',
-            url: `/api/analytics/epic/${ids.epicId}/children?page=1&limit=25`,
+            url: `/api/analytics/task/${ids.taskId}/children?page=1&limit=25`,
         });
         expect(res.statusCode).toBe(200);
         const body = res.json();
-        // Four descendants (story, sub_task, sub_bug, bug). Root epic
-        // itself is excluded.
-        expect(body.total).toBe(4);
-        expect(body.rows).toHaveLength(4);
-        // Sorted by cost desc: bug ($3), story ($2), sub_task ($0.5), sub_bug ($0).
-        expect(body.rows[0].id).toBe(ids.bugId);
+        // Two descendants; the root task itself is excluded.
+        expect(body.total).toBe(2);
+        expect(body.rows).toHaveLength(2);
+        // Sorted by cost desc.
+        expect(body.rows[0].id).toBe(ids.subTask2Id);
         expect(body.rows[0].total_cost_usd).toBeCloseTo(3.0, 5);
-        expect(body.rows[1].id).toBe(ids.storyId);
-        // Depth metadata: story / bug are depth=1, sub_task / sub_bug
-        // depth=2. (The root epic is depth=0 but excluded from rows.)
-        const byId = new Map(body.rows.map((r: { id: string; depth: number }) => [r.id, r.depth]));
-        expect(byId.get(ids.storyId)).toBe(1);
-        expect(byId.get(ids.bugId)).toBe(1);
-        expect(byId.get(ids.subTaskId)).toBe(2);
+        expect(body.rows[1].id).toBe(ids.subTaskId);
+        // Sub-tasks sit at depth 1 (the root task is depth 0, excluded).
+        expect(body.rows.map((r: { depth: number }) => r.depth)).toEqual([1, 1]);
     });
 
-    it('filters by ?type=story', async () => {
+    it('filters by ?type=sub_task', async () => {
         const ids = await seedFullTree();
-        await insertRun({ id: 'r-story', item_id: ids.storyId, total_cost_usd: 2.0 });
-        await insertRun({ id: 'r-bug', item_id: ids.bugId, total_cost_usd: 3.0 });
+        await insertRun({ id: 'r-sub1', item_id: ids.subTaskId, total_cost_usd: 2.0 });
 
         const res = await app.inject({
             method: 'GET',
-            url: `/api/analytics/epic/${ids.epicId}/children?type=story`,
+            url: `/api/analytics/task/${ids.taskId}/children?type=sub_task`,
         });
         expect(res.statusCode).toBe(200);
         const body = res.json();
-        expect(body.rows).toHaveLength(1);
-        expect(body.rows[0].id).toBe(ids.storyId);
-        expect(body.rows[0].type).toBe('story');
+        expect(body.rows).toHaveLength(2);
+        expect(body.rows.map((r: { type: string }) => r.type)).toEqual(['sub_task', 'sub_task']);
+        const none = await app.inject({
+            method: 'GET',
+            url: `/api/analytics/task/${ids.taskId}/children?type=task`,
+        });
+        expect(none.json().rows).toHaveLength(0);
     });
 
     it('ignores invalid type values instead of 400ing', async () => {
         const ids = await seedFullTree();
-        await insertRun({ id: 'r-story', item_id: ids.storyId, total_cost_usd: 2.0 });
+        await insertRun({ id: 'r-sub1', item_id: ids.subTaskId, total_cost_usd: 2.0 });
         const res = await app.inject({
             method: 'GET',
-            url: `/api/analytics/epic/${ids.epicId}/children?type=garbage`,
+            url: `/api/analytics/task/${ids.taskId}/children?type=garbage`,
         });
         expect(res.statusCode).toBe(200);
-        // Filter ignored → all 4 descendants returned.
-        expect(res.json().total).toBe(4);
+        // Filter ignored → both descendants returned.
+        expect(res.json().total).toBe(2);
     });
 });
 
@@ -426,7 +413,7 @@ describe('GET /api/analytics — base summary', () => {
         // Insert a completed run with cache tokens so cacheEfficiency > 0 branch fires
         await insertRun({
             id: 'r-base-1',
-            item_id: ids.storyId,
+            item_id: ids.subTaskId,
             total_cost_usd: 1.5,
             input_tokens: 100,
             output_tokens: 200,
@@ -435,7 +422,7 @@ describe('GET /api/analytics — base summary', () => {
         // A second run for the same agent to confirm byAgent aggregation
         await insertRun({
             id: 'r-base-2',
-            item_id: ids.bugId,
+            item_id: ids.subTask2Id,
             total_cost_usd: 2.5,
             input_tokens: 150,
             output_tokens: 300,
@@ -522,30 +509,30 @@ describe('GET /api/analytics — base summary', () => {
     });
 });
 
-describe('GET /api/analytics/project/:projectId/epics — 404 for missing project', () => {
+describe('GET /api/analytics/project/:projectId/tasks — 404 for missing project', () => {
     it('returns 404 when the project does not exist', async () => {
         const res = await app.inject({
             method: 'GET',
-            url: '/api/analytics/project/no-such-project/epics',
+            url: '/api/analytics/project/no-such-project/tasks',
         });
         expect(res.statusCode).toBe(404);
     });
 });
 
-describe('GET /api/analytics/epic/:epicId/children — 404 cases', () => {
-    it('returns 404 when the epic id does not exist', async () => {
+describe('GET /api/analytics/task/:taskId/children — 404 cases', () => {
+    it('returns 404 when the task id does not exist', async () => {
         const res = await app.inject({
             method: 'GET',
-            url: '/api/analytics/epic/no-such-epic/children',
+            url: '/api/analytics/task/no-such-task/children',
         });
         expect(res.statusCode).toBe(404);
     });
 
-    it('returns 404 when the id exists but is not an epic', async () => {
+    it('returns 404 when the id exists but is not a task', async () => {
         const ids = await seedFullTree();
         const res = await app.inject({
             method: 'GET',
-            url: `/api/analytics/epic/${ids.storyId}/children`,
+            url: `/api/analytics/task/${ids.subTaskId}/children`,
         });
         expect(res.statusCode).toBe(404);
     });
@@ -554,7 +541,7 @@ describe('GET /api/analytics/epic/:epicId/children — 404 cases', () => {
         const ids = await seedFullTree();
         const res = await app.inject({
             method: 'GET',
-            url: `/api/analytics/epic/${ids.epicId}/children?page=abc&limit=xyz`,
+            url: `/api/analytics/task/${ids.taskId}/children?page=abc&limit=xyz`,
         });
         expect(res.statusCode).toBe(200);
         expect(res.json().page).toBe(1);
@@ -562,49 +549,49 @@ describe('GET /api/analytics/epic/:epicId/children — 404 cases', () => {
     });
 });
 
-describe('GET /api/analytics/epic/:epicId — project_id/project_name null fallback', () => {
-    it('returns empty string for project_id and project_name when epic has no project', async () => {
-        // Insert an epic whose project_id is null (orphan epic for coverage)
+describe('GET /api/analytics/task/:taskId — project_id/project_name null fallback', () => {
+    it('returns empty string for project_id and project_name when task has no project', async () => {
+        // Insert a task whose project_id is null (orphan task for coverage)
         // This is unusual but exercises lines 499-500 (project_id ?? '' and project_name ?? '')
         const ids = await seedFullTree();
         // Verify existing test covers the happy path with project; then
-        // try an epic that has no matching project row by updating the project FK to null
+        // try a task that has no matching project row by updating the project FK to null
         // We can't remove the project FK easily, so instead we remove the project row
-        // after inserting the epic (FK is nullable on items.project_id).
+        // after inserting the task (FK is nullable on items.project_id).
         // Actually items.project_id may not be nullable — check by querying with null project
         // via a direct DB manipulation is risky. Instead, just check the response has
         // project_id and project_name set (not the null branch) for the normal case.
         const res = await app.inject({
             method: 'GET',
-            url: `/api/analytics/epic/${ids.epicId}`,
+            url: `/api/analytics/task/${ids.taskId}`,
         });
         expect(res.statusCode).toBe(200);
         const body = res.json();
         // Normal path: project_id and project_name are set (not empty string)
-        expect(body.epic.project_id).toBe(ids.projectId);
-        expect(body.epic.project_name).toBe('Project p1');
+        expect(body.task.project_id).toBe(ids.projectId);
+        expect(body.task.project_name).toBe('Project p1');
     });
 });
 
-describe('GET /api/analytics/project/:projectId/epics — pagination NaN fallback', () => {
+describe('GET /api/analytics/project/:projectId/tasks — pagination NaN fallback', () => {
     it('falls back to page=1 limit=25 when params are non-numeric', async () => {
         const ids = await seedFullTree();
         const res = await app.inject({
             method: 'GET',
-            url: `/api/analytics/project/${ids.projectId}/epics?page=abc&limit=xyz`,
+            url: `/api/analytics/project/${ids.projectId}/tasks?page=abc&limit=xyz`,
         });
         expect(res.statusCode).toBe(200);
         expect(res.json().page).toBe(1);
         expect(res.json().limit).toBe(25);
     });
 
-    it('returns total=0 when project has no epics (result.rows.length === 0 branch)', async () => {
-        // Create a project with no epics at all
+    it('returns total=0 when project has no tasks (result.rows.length === 0 branch)', async () => {
+        // Create a project with no tasks at all
         await testDb
             .insertInto('projects')
             .values({
-                id: 'p-no-epics',
-                name: 'Project No Epics',
+                id: 'p-no-tasks',
+                name: 'Project No Tasks',
                 issue_key_prefix: 'NOE',
                 git_path: '',
                 git_url: '',
@@ -615,12 +602,12 @@ describe('GET /api/analytics/project/:projectId/epics — pagination NaN fallbac
             .execute();
         await testDb
             .insertInto('project_issue_counters')
-            .values({ project_id: 'p-no-epics', last_seq: 0 })
+            .values({ project_id: 'p-no-tasks', last_seq: 0 })
             .execute();
 
         const res = await app.inject({
             method: 'GET',
-            url: '/api/analytics/project/p-no-epics/epics',
+            url: '/api/analytics/project/p-no-tasks/tasks',
         });
         expect(res.statusCode).toBe(200);
         const body = res.json();
@@ -940,7 +927,7 @@ describe('GET /api/analytics — terminal aggregation', () => {
         // Also insert a completed agent run so the agent monthly query
         // has a row for the same calendar month — exercises the stitch
         // logic that merges both sides into a single monthly array.
-        await insertRun({ id: 'rm-1', item_id: ids.storyId, total_cost_usd: 0.12 });
+        await insertRun({ id: 'rm-1', item_id: ids.subTaskId, total_cost_usd: 0.12 });
 
         const res = await app.inject({ method: 'GET', url: '/api/analytics' });
         expect(res.statusCode).toBe(200);
@@ -997,42 +984,41 @@ describe('GET /api/analytics/project/:projectId — zero data project', () => {
         expect(body.totals.total_cost_usd).toBe(0);
         expect(body.totals.run_count).toBe(0);
         expect(body.byKind).toHaveLength(0);
-        expect(body.topEpics).toHaveLength(0);
-        expect(body.epic_count).toBe(0);
+        expect(body.topTasks).toHaveLength(0);
+        expect(body.task_count).toBe(0);
         expect(body.terminalSummary.session_count).toBe(0);
     });
 });
 
-describe('GET /api/analytics/epic/:epicId — zero-run epic', () => {
-    it('returns zero totals when the epic has no runs', async () => {
+describe('GET /api/analytics/task/:taskId — zero-run task', () => {
+    it('returns zero totals when the task has no runs', async () => {
         const ids = await seedFullTree();
         const res = await app.inject({
             method: 'GET',
-            url: `/api/analytics/epic/${ids.epicId}`,
+            url: `/api/analytics/task/${ids.taskId}`,
         });
         expect(res.statusCode).toBe(200);
         const body = res.json();
         // No runs → all cost/run totals are 0
         expect(body.totals.total_cost_usd).toBe(0);
         expect(body.totals.run_count).toBe(0);
-        expect(body.descendant_count).toBe(4);
-        // byKind entries exist for each item type that appears in the tree
-        // (epic, story, sub_task, sub_bug, bug) but all have cost 0 and run_count 0
+        expect(body.descendant_count).toBe(2);
+        // byKind entries exist for each item type in the tree (task,
+        // sub_task) but all have cost 0 and run_count 0
         for (const k of body.byKind) {
             expect(k.total_cost_usd).toBe(0);
             expect(k.run_count).toBe(0);
         }
-        // The tree has 5 item types (epic + story + sub_task + sub_bug + bug)
-        expect(body.byKind.length).toBeGreaterThan(0);
+        expect(body.byKind.map((k: { type: string }) => k.type).sort()).toEqual(['sub_task', 'task']);
     });
 });
 
-describe('GET /api/analytics/epic/:epicId/children — limit clamp', () => {
+describe('GET /api/analytics/task/:taskId/children — limit clamp', () => {
     it('clamps limit to 100', async () => {
         const ids = await seedFullTree();
         const res = await app.inject({
             method: 'GET',
-            url: `/api/analytics/epic/${ids.epicId}/children?limit=99999`,
+            url: `/api/analytics/task/${ids.taskId}/children?limit=99999`,
         });
         expect(res.statusCode).toBe(200);
         expect(res.json().limit).toBe(100);

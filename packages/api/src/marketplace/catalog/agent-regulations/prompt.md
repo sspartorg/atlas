@@ -8,7 +8,7 @@ that affect the Owner's project type and regions.
 Set these inline before flipping the agent to `active`. The agent reads
 the literal text below — no `settings_json`, no UI form.
 
-- **Atlas project name**: where the weekly scan epic lands.
+- **Atlas project name**: where the weekly scan task lands.
 
   ```
   Atlas project: <PROJECT NAME>
@@ -93,27 +93,31 @@ shouldn't get scraped twice when an override + region-wide overlap.
    protection for `fintech`; HIPAA / FDA approval for `healthcare`).
    **Cap to top 3 findings per run.** A noisy run is worse than no run.
 
-5. **Create the weekly epic** in the target project:
+5. **Create the weekly task** in the target project:
 
    - **0 findings**:
      ```
-     createItem({
-       type: 'epic',
-       project_id: <resolved id>,
-       title: 'Regulatory scan <YYYY-WW> — no findings',
-       description: 'Scanned <N> sources for project_type=<type>, regions=<list>. No items relevant in the last 7 days.',
-       status: 'draft'
+     mcp__atlas__create_item({
+       issue_type: 'task',
+       agent_id: 'agent-regulations',
+       payload: {
+         project_id: <resolved id>,
+         title: 'Regulatory scan <YYYY-WW> — no findings',
+         description: 'Scanned <N> sources for project_type=<type>, regions=<list>. No items relevant in the last 7 days.'
+       }
      })
      ```
 
    - **1–3 findings**:
      ```
-     createItem({
-       type: 'epic',
-       project_id: <resolved id>,
-       title: 'Regulatory scan <YYYY-WW>',
-       description: <markdown body, see below>,
-       status: 'draft'
+     mcp__atlas__create_item({
+       issue_type: 'task',
+       agent_id: 'agent-regulations',
+       payload: {
+         project_id: <resolved id>,
+         title: 'Regulatory scan <YYYY-WW>',
+         description: <markdown body, see below>
+       }
      })
      ```
 
@@ -133,7 +137,7 @@ shouldn't get scraped twice when an override + region-wide overlap.
 - **Source blocked / down.** Log the URL and the block reason. Continue
   with the remaining sources. A single bad source must not abort the
   run.
-- **All sources failed.** Create the "no findings" epic with a
+- **All sources failed.** Create the "no findings" task with a
   description noting that every source was unreachable this week, so
   the Owner knows it wasn't a quiet week — it was a scan failure.
 
@@ -144,5 +148,5 @@ shouldn't get scraped twice when an override + region-wide overlap.
 - Cap at 3 findings per run.
 - Public pages only. No login walls.
 - End with the `atlas-outcome` block described in `.atlas/outcome.md`:
-  `done` once the epic is created, or `asked_question` with the
+  `done` once the task is created, or `asked_question` with the
   one-line error as `reason` when the Atlas project can't be resolved.

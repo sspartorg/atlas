@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
-import { makeAgent, makeStory } from '../test-utils/factories.js';
+import { makeAgent, makeSubTask } from '../test-utils/factories.js';
 import { defaultHandlers, handlers } from '../test-utils/mock-handlers.js';
 import { Agents } from './Agents.js';
 
@@ -1024,9 +1024,9 @@ describe('Agents page', () => {
                     {
                         id: 'r1',
                         agent_id: 'a2',
-                        issue_type: 'story',
+                        issue_type: 'sub_task',
                         issue_id: 'S1',
-                        item_title: 'Story 1',
+                        item_title: 'Sub-task 1',
                         status: 'completed',
                         created_at: '2026-06-22T10:00:00Z',
                         started_at: '2026-06-22T10:00:10Z',
@@ -1065,9 +1065,9 @@ describe('Agents page', () => {
                     {
                         id: 'r1',
                         agent_id: 'a1',
-                        issue_type: 'story',
+                        issue_type: 'sub_task',
                         issue_id: 'S1',
-                        item_title: 'Story 1',
+                        item_title: 'Sub-task 1',
                         status: 'completed',
                         created_at: '2026-06-20T10:00:00Z',
                         started_at: '2026-06-20T10:00:10Z',
@@ -1077,9 +1077,9 @@ describe('Agents page', () => {
                     {
                         id: 'r2',
                         agent_id: 'a2',
-                        issue_type: 'story',
+                        issue_type: 'sub_task',
                         issue_id: 'S2',
-                        item_title: 'Story 2',
+                        item_title: 'Sub-task 2',
                         status: 'completed',
                         created_at: '2026-06-22T10:00:00Z',
                         started_at: '2026-06-22T10:00:10Z',
@@ -1185,10 +1185,10 @@ describe('Agents page', () => {
         server.use(
             handlers.listAgents(agents),
             http.get(`${BASE}/run`, () => HttpResponse.json([])),
-            http.get(`${BASE}/stories`, () =>
+            http.get(`${BASE}/sub-tasks`, () =>
                 HttpResponse.json([
-                    makeStory({ id: 'S1', assignee_agent_id: 'a2', status: 'ready' }),
-                    makeStory({ id: 'S2', assignee_agent_id: 'a2', status: 'in_progress' }),
+                    makeSubTask({ id: 'S1', assignee_agent_id: 'a2', status: 'ready' }),
+                    makeSubTask({ id: 'S2', assignee_agent_id: 'a2', status: 'in_progress' }),
                 ]),
             ),
         );

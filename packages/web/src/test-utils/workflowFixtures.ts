@@ -1,8 +1,8 @@
-import type { IWorkflow, IWorkflowRunDetail, IWorkflowRunStep } from '@atlas/shared';
+import type { IPublishedWorkflowDetail, IWorkflow, IWorkflowRunDetail, IWorkflowRunStep, IWorkflowTemplate } from '@atlas/shared';
 
 const ISO = '2026-09-14T10:00:00.000Z';
 
-// A valid Start → Coder ⇄ Reviewer → End graph.
+// A valid Start → Coder ⇄ Reviewer → End graph, laid out top to bottom.
 export function makeWorkflow(overrides: Partial<IWorkflow> = {}): IWorkflow {
     return {
         id: 'wf-1',
@@ -13,9 +13,9 @@ export function makeWorkflow(overrides: Partial<IWorkflow> = {}): IWorkflow {
         graph: {
             nodes: [
                 { id: 'start', type: 'start', position: { x: 0, y: 0 } },
-                { id: 'coder', type: 'agent', agent_id: 'agent-coder', position: { x: 240, y: 0 } },
-                { id: 'review', type: 'agent', agent_id: 'agent-reviewer', position: { x: 480, y: 0 } },
-                { id: 'end', type: 'end', position: { x: 720, y: 0 } },
+                { id: 'coder', type: 'agent', agent_id: 'agent-coder', position: { x: 0, y: 130 } },
+                { id: 'review', type: 'agent', agent_id: 'agent-reviewer', position: { x: 0, y: 260 } },
+                { id: 'end', type: 'end', position: { x: 0, y: 390 } },
             ],
             edges: [
                 { id: 'e1', source: 'start', target: 'coder', kind: 'pass' },
@@ -29,7 +29,9 @@ export function makeWorkflow(overrides: Partial<IWorkflow> = {}): IWorkflow {
         use_worktree: true,
         push_code: true,
         raises_pr: true,
+        push_to_default: false,
         max_loops: 3,
+        max_parallel_runs: 1,
         schedule_preset: null,
         schedule_time_of_day: null,
         schedule_weekday: null,
@@ -51,6 +53,7 @@ export function makeRunStep(overrides: Partial<IWorkflowRunStep> = {}): IWorkflo
         status: 'completed',
         cli: 'claude',
         model: 'claude-opus-4-7',
+        effort: 'medium',
         outcome_kind: 'done',
         outcome_summary: 'Implemented the change',
         outcome_reason: null,
@@ -70,6 +73,8 @@ export function makeRunDetail(overrides: Partial<IWorkflowRunDetail> = {}): IWor
         project_id: 'p1',
         status: 'running',
         graph_snapshot: wf.graph,
+        parent_workflow_run_id: null,
+        parent_node_id: null,
         current_node_id: 'review',
         parked_node_id: null,
         park_reason: null,
@@ -83,6 +88,8 @@ export function makeRunDetail(overrides: Partial<IWorkflowRunDetail> = {}): IWor
         finished_at: null,
         item_title: 'Add login',
         workflow_name: wf.name,
+        children: [],
+        total_cost_usd: 0.42,
         steps: [makeRunStep()],
         ...overrides,
     };
@@ -103,4 +110,80 @@ export function stubReactFlowDom(): void {
         offsetWidth: { configurable: true, get: () => 216 },
     });
     (SVGElement.prototype as unknown as { getBBox: () => object }).getBBox = () => ({ x: 0, y: 0, width: 0, height: 0 });
+}
+
+/** Delivery (PO Writer, then a Sub-tasks step running `template:build`) and Build (Coder). */
+export function makeTemplates(): IWorkflowTemplate[] {
+    const p = { x: 0, y: 0 };
+    return [
+        {
+            id: 'build',
+            name: 'Build sub-task',
+            description: 'Coder builds one sub-task.',
+            input_kind: 'sub_task',
+            trigger: 'manual',
+            use_worktree: true,
+            push_code: false,
+            raises_pr: false,
+            graph: {
+                nodes: [
+                    { id: 'start', type: 'start', position: p },
+                    { id: 'coder', type: 'agent', agent_id: 'agent-coder', position: { x: 0, y: 130 } },
+                    { id: 'end', type: 'end', position: { x: 0, y: 260 } },
+                ],
+                edges: [
+                    { id: 'e1', source: 'start', target: 'coder', kind: 'pass' },
+                    { id: 'e2', source: 'coder', target: 'end', kind: 'pass' },
+                ],
+            },
+        },
+        {
+            id: 'delivery',
+            name: 'Delivery',
+            description: 'Plans a Task, then builds its sub-tasks.',
+            input_kind: 'item',
+            trigger: 'item_ready',
+            use_worktree: true,
+            push_code: true,
+            raises_pr: true,
+            graph: {
+                nodes: [
+                    { id: 'start', type: 'start', position: p },
+                    { id: 'po', type: 'agent', agent_id: 'agent-po-writer', position: { x: 0, y: 130 } },
+                    { id: 'build', type: 'subtasks', sub_workflow_id: 'template:build', position: { x: 0, y: 260 } },
+                    { id: 'end', type: 'end', position: { x: 0, y: 390 } },
+                ],
+                edges: [
+                    { id: 'e1', source: 'start', target: 'po', kind: 'pass' },
+                    { id: 'e2', source: 'po', target: 'build', kind: 'pass' },
+                    { id: 'e3', source: 'build', target: 'end', kind: 'pass' },
+                ],
+            },
+        },
+    ];
+}
+
+/** Delivery as the Owner published it: its Build sub-workflow is the bundle ref `build`. */
+export function makePublishedWorkflow(overrides: Partial<IPublishedWorkflowDetail> = {}): IPublishedWorkflowDetail {
+    const delivery = makeTemplates()[1] as IWorkflowTemplate;
+    return {
+        id: 'pw-1',
+        name: 'My delivery',
+        description: 'Plans, then builds.',
+        source_workflow_id: 'wf-1',
+        input_kind: 'item',
+        trigger: 'item_ready',
+        push_code: true,
+        raises_pr: true,
+        push_to_default: false,
+        agent_ids: ['agent-po-writer', 'agent-coder'],
+        published_at: ISO,
+        updated_at: ISO,
+        graph: {
+            ...delivery.graph,
+            nodes: delivery.graph.nodes.map((n) => (n.type === 'subtasks' ? { ...n, sub_workflow_id: 'build' } : n)),
+        },
+        sub_workflows: [{ ref: 'build', name: 'My build' }],
+        ...overrides,
+    };
 }

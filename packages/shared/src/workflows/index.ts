@@ -1,14 +1,16 @@
 import { z } from 'zod';
-import type { AgentCli, RunOutcomeKind, RunStatus, SchedulePreset } from '../types/index.js';
+import type { AgentCli, AgentEffort, ITask, RunOutcomeKind, RunStatus, SchedulePreset } from '../types/index.js';
 import { SchedulePresetSchema } from '../schemas/index.js';
 
-export const WORKFLOW_NODE_TYPES = ['start', 'agent', 'owner', 'end'] as const;
+export const WORKFLOW_NODE_TYPES = ['start', 'agent', 'owner', 'subtasks', 'end'] as const;
 export type WorkflowNodeType = (typeof WORKFLOW_NODE_TYPES)[number];
 
 export const WORKFLOW_EDGE_KINDS = ['pass', 'fail'] as const;
 export type WorkflowEdgeKind = (typeof WORKFLOW_EDGE_KINDS)[number];
 
-export const WORKFLOW_INPUT_KINDS = ['item', 'none'] as const;
+// `sub_task` marks a sub-workflow: it only runs inside a Task's workflow, on
+// one sub-task at a time, from a Sub-tasks step (ADR 0015).
+export const WORKFLOW_INPUT_KINDS = ['item', 'none', 'sub_task'] as const;
 export type WorkflowInputKind = (typeof WORKFLOW_INPUT_KINDS)[number];
 
 export const WORKFLOW_TRIGGERS = ['manual', 'schedule', 'item_ready'] as const;
@@ -21,13 +23,13 @@ export interface IWorkflowNode {
     id: string;
     type: WorkflowNodeType;
     agent_id?: string | undefined;
-    child_workflow_id?: string | undefined;
+    /** Sub-tasks only: the sub-workflow each matching sub-task runs through. */
+    sub_workflow_id?: string | undefined;
     /**
-     * End only: where children that test another item go (they carry an
-     * outgoing `tested_by` link, like PO Writer's `[QA]` twins). Unset →
-     * they follow `child_workflow_id` with every other child.
+     * Sub-tasks only: run the Task's open sub-tasks carrying this label.
+     * Unset → the sub-tasks no other Sub-tasks step in the graph claims.
      */
-    test_child_workflow_id?: string | undefined;
+    label?: string | undefined;
     position: { x: number; y: number };
 }
 
@@ -55,7 +57,11 @@ export interface IWorkflow {
     use_worktree: boolean;
     push_code: boolean;
     raises_pr: boolean;
+    /** End pushes HEAD straight to the default branch and opens no PR. */
+    push_to_default: boolean;
     max_loops: number;
+    /** How many Task runs of this workflow may run at once. */
+    max_parallel_runs: number;
     schedule_preset: SchedulePreset | null;
     schedule_time_of_day: string | null;
     schedule_weekday: number | null;
@@ -73,6 +79,9 @@ export interface IWorkflowRun {
     project_id: string | null;
     status: WorkflowRunStatus;
     graph_snapshot: IWorkflowGraph;
+    /** Set on a sub-task's run: the Task run whose Sub-tasks step started it. */
+    parent_workflow_run_id: string | null;
+    parent_node_id: string | null;
     current_node_id: string | null;
     parked_node_id: string | null;
     /** Why the run is waiting for the Owner; null unless `waiting_for_owner`. */
@@ -101,8 +110,8 @@ export const WorkflowGraphSchema: z.ZodType<IWorkflowGraph> = z.object({
                 id: ID,
                 type: z.enum(WORKFLOW_NODE_TYPES),
                 agent_id: ID.optional(),
-                child_workflow_id: ID.optional(),
-                test_child_workflow_id: ID.optional(),
+                sub_workflow_id: ID.optional(),
+                label: z.string().trim().min(1).max(40).optional(),
                 position: z.object({ x: z.number(), y: z.number() }),
             }),
         )
@@ -126,6 +135,7 @@ export interface IWorkflowRunStep {
     status: RunStatus;
     cli: AgentCli | null;
     model: string | null;
+    effort: AgentEffort | null;
     outcome_kind: RunOutcomeKind | null;
     outcome_summary: string | null;
     outcome_reason: string | null;
@@ -137,6 +147,10 @@ export interface IWorkflowRunStep {
 export interface IWorkflowRunDetail extends IWorkflowRunSummary {
     workflow_name: string;
     steps: IWorkflowRunStep[];
+    /** The sub-task runs a Task run's Sub-tasks steps started, oldest first. */
+    children: IWorkflowRunSummary[];
+    /** What the run's own steps and its sub-task runs' steps cost together. */
+    total_cost_usd: number;
 }
 
 const WorkflowFieldsSchema = z.object({
@@ -150,7 +164,9 @@ const WorkflowFieldsSchema = z.object({
     use_worktree: z.boolean(),
     push_code: z.boolean(),
     raises_pr: z.boolean(),
+    push_to_default: z.boolean(),
     max_loops: z.number().int().min(1).max(20),
+    max_parallel_runs: z.number().int().min(1).max(10),
     schedule_preset: SchedulePresetSchema.nullable(),
     schedule_time_of_day: z
         .string()
@@ -168,7 +184,15 @@ export type CreateWorkflowInput = z.infer<typeof CreateWorkflowSchema>;
 export const UpdateWorkflowSchema = WorkflowFieldsSchema.partial();
 export type UpdateWorkflowInput = z.infer<typeof UpdateWorkflowSchema>;
 
-export const StartWorkflowRunSchema = z.object({ item_id: ID.optional() });
+export const StartWorkflowRunSchema = z.object({
+    item_id: ID.optional(),
+    /**
+     * Continue a Task after review: start at the first Sub-tasks step instead
+     * of Start, on the Task's existing branch, so only its open sub-tasks run
+     * and End updates the same pull request (ADR 0015).
+     */
+    from_subtasks: z.boolean().optional(),
+});
 
 /** Queue an item for a workflow, or take it off every workflow with null. */
 export const SetItemWorkflowSchema = z.object({ workflow_id: ID.nullable() });
@@ -188,10 +212,76 @@ export interface IWorkflowTemplate {
     use_worktree: boolean;
     push_code: boolean;
     raises_pr: boolean;
+    push_to_default?: boolean;
     graph: IWorkflowGraph;
 }
 
-export function validateWorkflowGraph(graph: IWorkflowGraph): IWorkflowGraphError[] {
+/** What one workflow is doing and has lined up (GET /api/workflow-queue). */
+export interface IWorkflowQueueEntry {
+    workflow: IWorkflow;
+    /** Task runs working now; a Task's sub-task runs live inside its run. */
+    running: IWorkflowRunSummary[];
+    /** Task runs parked on the Owner. They don't hold a parallel slot. */
+    waiting: IWorkflowRunSummary[];
+    /** Ready Tasks assigned to this workflow, in the order dispatch picks them. */
+    queued: ITask[];
+}
+
+export interface IWorkflowQueue {
+    workflows: IWorkflowQueueEntry[];
+    /** Ready Tasks no workflow will pick up. */
+    unassigned: ITask[];
+}
+
+/** POST /api/workflows/import — a bundle unpacked into one project. */
+export interface IWorkflowImportResult {
+    workflow: IWorkflow;
+    /** The sub-workflows its Sub-tasks steps use, created with it. */
+    sub_workflows: IWorkflow[];
+    /** Agent ids created from the bundle. */
+    installed_agents: string[];
+    /** Agent ids already installed here, used as they are. */
+    reused_agents: string[];
+}
+
+/**
+ * A workflow the Owner published to the Marketplace. The row stores the
+ * bundle `GET /api/workflows/:id/export` produces; everything past the
+ * name is read from that bundle.
+ */
+export interface IPublishedWorkflow {
+    id: string;
+    name: string;
+    description: string | null;
+    /** The workflow it was published from; null once that workflow is deleted. */
+    source_workflow_id: string | null;
+    input_kind: WorkflowInputKind;
+    trigger: WorkflowTrigger;
+    push_code: boolean;
+    raises_pr: boolean;
+    push_to_default: boolean;
+    /** Every agent it uses, its sub-workflows' included. */
+    agent_ids: string[];
+    published_at: string;
+    /** Equals `published_at` until it is published again. */
+    updated_at: string;
+}
+
+/** GET /api/marketplace/workflows/:id — the entry plus what its preview draws. */
+export interface IPublishedWorkflowDetail extends IPublishedWorkflow {
+    graph: IWorkflowGraph;
+    /** Its Sub-tasks steps' sub-workflows; `ref` is the step's `sub_workflow_id` in `graph`. */
+    sub_workflows: Array<{ ref: string; name: string }>;
+}
+
+/** POST /api/marketplace/workflows/:id/use */
+export const UsePublishedWorkflowSchema = z.object({ project_id: ID });
+
+/**
+ * Structural rules. Pass `inputKind` to also check the rules that depend on
+ * what the workflow runs on (Sub-tasks steps belong to Task workflows only).
+ */
+export function validateWorkflowGraph(graph: IWorkflowGraph, inputKind?: WorkflowInputKind): IWorkflowGraphError[] {
     const errors: IWorkflowGraphError[] = [];
     const ids = new Set(graph.nodes.map((n) => n.id));
     if (ids.size !== graph.nodes.length) errors.push({ node_id: null, message: 'Node ids must be unique' });
@@ -214,8 +304,14 @@ export function validateWorkflowGraph(graph: IWorkflowGraph): IWorkflowGraphErro
         const failCount = out.length - passCount;
         if (n.type !== 'agent' && n.agent_id) errors.push({ node_id: n.id, message: 'Only agent nodes reference an agent' });
         if (n.type === 'agent' && !n.agent_id) errors.push({ node_id: n.id, message: 'Choose an agent for this node' });
-        if (n.type !== 'end' && (n.child_workflow_id || n.test_child_workflow_id)) {
-            errors.push({ node_id: n.id, message: 'Only End nodes route children to a workflow' });
+        if (n.type !== 'subtasks' && (n.sub_workflow_id || n.label)) {
+            errors.push({ node_id: n.id, message: 'Only Sub-tasks steps take a sub-workflow or label' });
+        }
+        if (n.type === 'subtasks') {
+            if (!n.sub_workflow_id) errors.push({ node_id: n.id, message: 'Choose the sub-workflow for these sub-tasks' });
+            if (inputKind !== undefined && inputKind !== 'item') {
+                errors.push({ node_id: n.id, message: 'Only workflows that run on a Task can have a Sub-tasks step' });
+            }
         }
         if (n.type === 'start' && graph.edges.some((e) => e.target === n.id)) {
             errors.push({ node_id: n.id, message: 'Nothing can connect into Start' });

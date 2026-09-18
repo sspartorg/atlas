@@ -10,7 +10,7 @@ interface Props {
     onOpenMore: () => void;
 }
 
-type TabKey = 'home' | 'epics' | 'issues' | 'queue' | 'more';
+type TabKey = 'home' | 'tasks' | 'queue' | 'more';
 
 interface TabSpec {
     key: TabKey;
@@ -29,18 +29,11 @@ const TABS: TabSpec[] = [
         matches: (p) => p === '/',
     },
     {
-        key: 'epics',
-        label: 'Epics',
+        key: 'tasks',
+        label: 'Tasks',
         icon: 'flag',
-        path: '/epics',
-        matches: (p) => p === '/epics' || p.startsWith('/epics/'),
-    },
-    {
-        key: 'issues',
-        label: 'Issues',
-        icon: 'layers',
-        path: '/issues',
-        matches: (p) => p === '/issues' || p.startsWith('/issues/'),
+        path: '/tasks',
+        matches: (p) => p.startsWith('/tasks') || p.startsWith('/sub-tasks/'),
     },
     {
         key: 'queue',

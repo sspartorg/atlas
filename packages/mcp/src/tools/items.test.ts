@@ -82,7 +82,7 @@ describe('search_item', () => {
         const { server, tools } = captureServer();
         const searchItems = vi.fn().mockResolvedValue([
             {
-                issue_type: 'epic',
+                issue_type: 'task',
                 issue_id: 'ATL-1',
                 title: 'Onboarding revamp',
                 description: 'Source: jira-INT-401',
@@ -94,7 +94,7 @@ describe('search_item', () => {
         expect(searchItems).toHaveBeenCalledWith('INT-401', 5);
         expect(parseToolResult(result)).toEqual([
             {
-                issue_type: 'epic',
+                issue_type: 'task',
                 issue_id: 'ATL-1',
                 title: 'Onboarding revamp',
                 description: 'Source: jira-INT-401',
@@ -113,100 +113,65 @@ describe('search_item', () => {
 });
 
 describe('create_item', () => {
-    it("issue_type='epic' forwards to client.createEpic", async () => {
+    it("issue_type='task' forwards to client.createTask", async () => {
         const { server, tools } = captureServer();
-        const createEpic = vi.fn().mockResolvedValue({ id: 'E1' });
-        registerItemTools(server, makeFakeApiClient({ createEpic }));
+        const createTask = vi.fn().mockResolvedValue({ id: 'T1' });
+        registerItemTools(server, makeFakeApiClient({ createTask }));
         await tools
             .get('create_item')!
-            .handler({ issue_type: 'epic', payload: { project_id: 'p1', title: 'epic' } });
-        expect(createEpic).toHaveBeenCalledWith({ project_id: 'p1', title: 'epic' }, null);
+            .handler({ issue_type: 'task', payload: { project_id: 'p1', title: 'task' } });
+        expect(createTask).toHaveBeenCalledWith({ project_id: 'p1', title: 'task' }, null);
     });
 
-    it("issue_type='story' forwards to client.createStory", async () => {
-        const { server, tools } = captureServer();
-        const createStory = vi.fn().mockResolvedValue({ id: 'S1' });
-        registerItemTools(server, makeFakeApiClient({ createStory }));
-        await tools
-            .get('create_item')!
-            .handler({ issue_type: 'story', payload: { epic_id: 'E1', title: 'story' } });
-        expect(createStory).toHaveBeenCalledWith({ epic_id: 'E1', title: 'story' }, null);
-    });
-
-    it("issue_type='sub_task' forwards to client.createSubTask and lifts sub_task_status alias to status", async () => {
+    it("issue_type='sub_task' forwards to client.createSubTask with task_id and status", async () => {
         const { server, tools } = captureServer();
         const createSubTask = vi.fn().mockResolvedValue({ id: 'ST1' });
         registerItemTools(server, makeFakeApiClient({ createSubTask }));
         await tools.get('create_item')!.handler({
             issue_type: 'sub_task',
-            payload: { story_id: 'S1', title: 't', sub_task_status: 'todo' },
+            payload: { task_id: 'T1', title: 't', status: 'ready' },
         });
-        expect(createSubTask).toHaveBeenCalledWith({
-            story_id: 'S1',
-            title: 't',
-            status: 'todo',
-        }, null);
+        expect(createSubTask).toHaveBeenCalledWith({ task_id: 'T1', title: 't', status: 'ready' }, null);
     });
 
-    it("issue_type='sub_task' works without sub_task_status (no alias lift needed)", async () => {
-        const { server, tools } = captureServer();
-        const createSubTask = vi.fn().mockResolvedValue({ id: 'ST2' });
-        registerItemTools(server, makeFakeApiClient({ createSubTask }));
-        await tools.get('create_item')!.handler({
-            issue_type: 'sub_task',
-            payload: { story_id: 'S1', title: 'no status given' },
-        });
-        expect(createSubTask).toHaveBeenCalledWith({ story_id: 'S1', title: 'no status given' }, null);
-    });
-
-    it("issue_type='sub_bug' forwards to client.createSubBug", async () => {
-        const { server, tools } = captureServer();
-        const createSubBug = vi.fn().mockResolvedValue({ id: 'SB1' });
-        registerItemTools(server, makeFakeApiClient({ createSubBug }));
-        await tools
-            .get('create_item')!
-            .handler({ issue_type: 'sub_bug', payload: { story_id: 'S1', title: 'crash' } });
-        expect(createSubBug).toHaveBeenCalledWith({ story_id: 'S1', title: 'crash' }, null);
-    });
-
-    it("issue_type='bug' forwards to client.createBug", async () => {
-        const { server, tools } = captureServer();
-        const createBug = vi.fn().mockResolvedValue({ id: 'B1' });
-        registerItemTools(server, makeFakeApiClient({ createBug }));
-        await tools
-            .get('create_item')!
-            .handler({ issue_type: 'bug', payload: { epic_id: 'E1', title: 'bug' } });
-        expect(createBug).toHaveBeenCalledWith({ epic_id: 'E1', title: 'bug' }, null);
+    it('rejects the retired story_id / bug fields at the MCP boundary', () => {
+        const schema = z.object(ITEM_TOOLS.find((t) => t.name === 'create_item')!.inputSchema as z.ZodRawShape);
+        const base = { issue_type: 'sub_task', payload: { task_id: 'T1', title: 't' } };
+        expect(schema.safeParse(base).success).toBe(true);
+        for (const extra of [{ story_id: 'S1' }, { epic_id: 'E1' }, { steps_to_reproduce: 'x' }]) {
+            expect(schema.safeParse({ ...base, payload: { ...base.payload, ...extra } }).success).toBe(false);
+        }
+        expect(schema.safeParse({ ...base, issue_type: 'story' }).success).toBe(false);
     });
 
     it('forwards `agent_id` to the client so the API can attribute the create', async () => {
         const { server, tools } = captureServer();
-        const createStory = vi.fn().mockResolvedValue({ id: 'S1' });
-        registerItemTools(server, makeFakeApiClient({ createStory }));
+        const createTask = vi.fn().mockResolvedValue({ id: 'T1' });
+        registerItemTools(server, makeFakeApiClient({ createTask }));
         await tools.get('create_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             agent_id: 'agent-po-writer',
-            payload: { epic_id: 'E1', title: 'story' },
+            payload: { project_id: 'p1', title: 'task' },
         });
-        expect(createStory).toHaveBeenCalledWith({ epic_id: 'E1', title: 'story' }, 'agent-po-writer');
+        expect(createTask).toHaveBeenCalledWith({ project_id: 'p1', title: 'task' }, 'agent-po-writer');
     });
 
     it("forwards `labels` on create through to the API client", async () => {
         const { server, tools } = captureServer();
-        const createStory = vi.fn().mockResolvedValue({ id: 'S1' });
-        registerItemTools(server, makeFakeApiClient({ createStory }));
+        const createSubTask = vi.fn().mockResolvedValue({ id: 'ST1' });
+        registerItemTools(server, makeFakeApiClient({ createSubTask }));
         await tools.get('create_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'sub_task',
             payload: {
-                epic_id: 'E1',
-                title: 'labelled story',
-                labels: ['CER_Stories', 'backend'],
+                task_id: 'T1',
+                title: 'labelled sub-task',
+                labels: ['qa', 'backend'],
             },
         });
-        expect(createStory).toHaveBeenCalledWith({
-            epic_id: 'E1',
-            title: 'labelled story',
-            labels: ['CER_Stories', 'backend'],
+        expect(createSubTask).toHaveBeenCalledWith({
+            task_id: 'T1',
+            title: 'labelled sub-task',
+            labels: ['qa', 'backend'],
         }, null);
     });
 });
@@ -218,8 +183,8 @@ describe('get_item', () => {
         registerItemTools(server, makeFakeApiClient({ getItemFull }));
         const result = await tools
             .get('get_item')!
-            .handler({ issue_type: 'story', id: 'S1' });
-        expect(getItemFull).toHaveBeenCalledWith('story', 'S1');
+            .handler({ issue_type: 'task', id: 'S1' });
+        expect(getItemFull).toHaveBeenCalledWith('task', 'S1');
         const parsed = parseToolResult<{ item: { id: string } }>(result);
         expect(parsed.item.id).toBe('S1');
     });
@@ -233,13 +198,13 @@ describe('update_item', () => {
             .mockResolvedValue({ id: 'ATL-2', title: 'new title', priority: 'high' });
         registerItemTools(server, makeFakeApiClient({ updateItem }));
         const result = await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'ATL-2',
             action: 'patch_fields',
             patch: { title: 'new title', priority: 'high' },
         });
         expect(updateItem).toHaveBeenCalledWith(
-            'story',
+            'task',
             'ATL-2',
             { title: 'new title', priority: 'high' },
             null,
@@ -253,12 +218,12 @@ describe('update_item', () => {
         const updateItem = vi.fn().mockResolvedValue({ id: 'ATL-2' });
         registerItemTools(server, makeFakeApiClient({ updateItem }));
         await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'ATL-2',
             action: 'patch_fields',
             patch: { labels: ['CER_Stories'] },
         });
-        expect(updateItem).toHaveBeenCalledWith('story', 'ATL-2', { labels: ['CER_Stories'] }, null);
+        expect(updateItem).toHaveBeenCalledWith('task', 'ATL-2', { labels: ['CER_Stories'] }, null);
     });
 
     it("action='patch_fields' forwards agent_id so field edits are credited to the agent", async () => {
@@ -266,21 +231,21 @@ describe('update_item', () => {
         const updateItem = vi.fn().mockResolvedValue({ id: 'ATL-2' });
         registerItemTools(server, makeFakeApiClient({ updateItem }));
         await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'ATL-2',
             action: 'patch_fields',
             patch: { title: 't' },
             agent_id: 'agent-po-writer',
         });
-        expect(updateItem).toHaveBeenCalledWith('story', 'ATL-2', { title: 't' }, 'agent-po-writer');
+        expect(updateItem).toHaveBeenCalledWith('task', 'ATL-2', { title: 't' }, 'agent-po-writer');
     });
 
     it("action='patch_fields' schema accepts a canonical worktree_branch and rejects a malformed one", () => {
         const entry = ITEM_TOOLS.find((t) => t.name === 'update_item');
         const schema = z.object(entry!.inputSchema as z.ZodRawShape);
-        const base = { issue_type: 'story', id: 'SDB-2', action: 'patch_fields' };
+        const base = { issue_type: 'task', id: 'SDB-2', action: 'patch_fields' };
         expect(
-            schema.safeParse({ ...base, patch: { worktree_branch: 'atlas/dev/SDB-2' } }).success,
+            schema.safeParse({ ...base, patch: { worktree_branch: 'atlas/wf/SDB-2' } }).success,
         ).toBe(true);
         expect(
             schema.safeParse({ ...base, patch: { worktree_branch: 'feature/whatever' } }).success,
@@ -294,10 +259,10 @@ describe('update_item', () => {
         registerItemTools(server, makeFakeApiClient({ updateItem }));
         await expect(
             tools.get('update_item')!.handler({
-                issue_type: 'epic',
+                issue_type: 'sub_task',
                 id: 'ATL-1',
                 action: 'patch_fields',
-                patch: { spec_md: 'epics do not accept spec_md' },
+                patch: { spec_md: 'sub-tasks do not accept spec_md' },
             }),
         ).rejects.toThrow(/Atlas API 400/);
     });
@@ -307,7 +272,7 @@ describe('update_item', () => {
         const transitionItemStatus = vi.fn().mockResolvedValue({ id: 'ATL-2', status: 'in_progress' });
         registerItemTools(server, makeFakeApiClient({ transitionItemStatus }));
         await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'ATL-2',
             action: 'change_status',
             status: 'in_progress',
@@ -316,7 +281,7 @@ describe('update_item', () => {
         // (was previously `a.override` which permitted the Owner-only
         // status-machine bypass through any MCP-token holder).
         expect(transitionItemStatus).toHaveBeenCalledWith(
-            'story',
+            'task',
             'ATL-2',
             'in_progress',
             false,
@@ -332,7 +297,7 @@ describe('update_item', () => {
         // status-machine + P16 assertChildrenDone guard. Now rejected.
         await expect(
             tools.get('update_item')!.handler({
-                issue_type: 'story',
+                issue_type: 'task',
                 id: 'ATL-2',
                 action: 'change_status',
                 status: 'done',
@@ -347,14 +312,14 @@ describe('update_item', () => {
         const transitionItemStatus = vi.fn().mockResolvedValue({ id: 'ATL-2', status: 'in_review' });
         registerItemTools(server, makeFakeApiClient({ transitionItemStatus }));
         await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'ATL-2',
             action: 'change_status',
             status: 'in_review',
             agent_id: 'agent-po-reviewer',
         });
         expect(transitionItemStatus).toHaveBeenCalledWith(
-            'story',
+            'task',
             'ATL-2',
             'in_review',
             false,
@@ -370,19 +335,19 @@ describe('update_item', () => {
             .mockResolvedValueOnce({ id: 'ATL-2', assignee_agent_id: null });
         registerItemTools(server, makeFakeApiClient({ assignItem }));
         await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'ATL-2',
             action: 'assign',
             assignee_agent_id: 'agent-coder',
         });
         await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'ATL-2',
             action: 'assign',
             assignee_agent_id: null,
         });
-        expect(assignItem).toHaveBeenNthCalledWith(1, 'story', 'ATL-2', 'agent-coder', null);
-        expect(assignItem).toHaveBeenNthCalledWith(2, 'story', 'ATL-2', null, null);
+        expect(assignItem).toHaveBeenNthCalledWith(1, 'task', 'ATL-2', 'agent-coder', null);
+        expect(assignItem).toHaveBeenNthCalledWith(2, 'task', 'ATL-2', null, null);
     });
 
     it("action='assign' forwards the calling agent_id as the audit actor", async () => {
@@ -390,14 +355,14 @@ describe('update_item', () => {
         const assignItem = vi.fn().mockResolvedValue({ id: 'ATL-2', assignee_agent_id: 'agent-qa-writer' });
         registerItemTools(server, makeFakeApiClient({ assignItem }));
         await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'ATL-2',
             action: 'assign',
             assignee_agent_id: 'agent-qa-writer',
             agent_id: 'agent-po-reviewer',
         });
         expect(assignItem).toHaveBeenCalledWith(
-            'story',
+            'task',
             'ATL-2',
             'agent-qa-writer',
             'agent-po-reviewer',
@@ -409,7 +374,7 @@ describe('update_item', () => {
         const addComment = vi.fn().mockResolvedValue({ id: 99 });
         registerItemTools(server, makeFakeApiClient({ addComment }));
         await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'S1',
             action: 'add_comment',
             body: 'hello',
@@ -417,7 +382,7 @@ describe('update_item', () => {
             agent_id: 'agent-coder',
         });
         expect(addComment).toHaveBeenCalledWith({
-            issue_type: 'story',
+            issue_type: 'task',
             issue_id: 'S1',
             body: 'hello',
             author: 'agent',
@@ -430,7 +395,7 @@ describe('update_item', () => {
         const addComment = vi.fn().mockResolvedValue({ id: 100 });
         registerItemTools(server, makeFakeApiClient({ addComment }));
         await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'S1',
             action: 'add_comment',
             body: 'no agent id',
@@ -439,7 +404,7 @@ describe('update_item', () => {
         // caller could pass author='owner' and forge an Owner-authored
         // comment; now the field is normalized before crossing the API.
         expect(addComment).toHaveBeenCalledWith({
-            issue_type: 'story',
+            issue_type: 'task',
             issue_id: 'S1',
             body: 'no agent id',
             author: 'agent',
@@ -452,14 +417,14 @@ describe('update_item', () => {
         const createItemLink = vi.fn().mockResolvedValue({ id: 1 });
         registerItemTools(server, makeFakeApiClient({ createItemLink }));
         await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'S1',
             action: 'add_link',
             to_id: 'S2',
             relation_type: 'depends_on',
         });
         expect(createItemLink).toHaveBeenCalledWith({
-            from_type: 'story',
+            from_type: 'task',
             from_id: 'S1',
             to_id: 'S2',
             relation_type: 'depends_on',
@@ -476,7 +441,7 @@ describe('update_item', () => {
             makeFakeApiClient({ createItemLink, deleteItemLink, createItemExternalLink }),
         );
         const update = tools.get('update_item')!.handler;
-        const base = { issue_type: 'story', id: 'S2', agent_id: 'agent-po-writer' };
+        const base = { issue_type: 'task', id: 'S2', agent_id: 'agent-po-writer' };
         await update({ ...base, action: 'add_link', to_id: 'S1', relation_type: 'tested_by' });
         await update({ ...base, action: 'remove_link', link_id: 9 });
         await update({
@@ -495,7 +460,7 @@ describe('update_item', () => {
         const deleteItemLink = vi.fn().mockResolvedValue(undefined);
         registerItemTools(server, makeFakeApiClient({ deleteItemLink }));
         const result = await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'S1',
             action: 'remove_link',
             link_id: 42,
@@ -509,7 +474,7 @@ describe('update_item', () => {
         const createItemExternalLink = vi.fn().mockResolvedValue({ id: 7, url: 'u' });
         registerItemTools(server, makeFakeApiClient({ createItemExternalLink }));
         await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'S1',
             action: 'add_external_link',
             link_kind: 'pull_request',
@@ -517,7 +482,7 @@ describe('update_item', () => {
             title: 'feat: thing',
         });
         expect(createItemExternalLink).toHaveBeenCalledWith({
-            issue_type: 'story',
+            issue_type: 'task',
             issue_id: 'S1',
             link_kind: 'pull_request',
             url: 'https://github.com/o/r/pull/3',
@@ -530,7 +495,7 @@ describe('update_item', () => {
         const deleteItemExternalLink = vi.fn().mockResolvedValue(undefined);
         registerItemTools(server, makeFakeApiClient({ deleteItemExternalLink }));
         const result = await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'S1',
             action: 'remove_external_link',
             link_id: 99,
@@ -553,7 +518,7 @@ describe('update_item', () => {
                 });
             registerItemTools(server, makeFakeApiClient({ pruneItemHistory }));
             const result = await tools.get('update_item')!.handler({
-                issue_type: 'epic',
+                issue_type: 'task',
                 id: 'JDA-1',
                 action: 'remove_history',
                 before_time: '2026-06-01T00:00:00Z',
@@ -561,7 +526,7 @@ describe('update_item', () => {
             // Bound MCP identity is forwarded to the client so the API
             // route can attribute the audit event (2026-07-03 audit).
             expect(pruneItemHistory).toHaveBeenCalledWith(
-                'epic',
+                'task',
                 'JDA-1',
                 '2026-06-01T00:00:00Z',
                 'agent-coder',
@@ -582,21 +547,21 @@ describe('update_item', () => {
         registerItemTools(server, makeFakeApiClient());
         await expect(
             tools.get('update_item')!.handler({
-                issue_type: 'story',
+                issue_type: 'task',
                 id: 'S1',
                 action: 'add_comment',
             }),
         ).rejects.toThrow(/`body` is required for action='add_comment'/);
         await expect(
             tools.get('update_item')!.handler({
-                issue_type: 'story',
+                issue_type: 'task',
                 id: 'S1',
                 action: 'change_status',
             }),
         ).rejects.toThrow(/`status` is required for action='change_status'/);
         await expect(
             tools.get('update_item')!.handler({
-                issue_type: 'story',
+                issue_type: 'task',
                 id: 'S1',
                 action: 'add_link',
             }),
@@ -608,7 +573,7 @@ describe('update_item', () => {
         registerItemTools(server, makeFakeApiClient());
         await expect(
             tools.get('update_item')!.handler({
-                issue_type: 'story',
+                issue_type: 'task',
                 id: 'S1',
                 action: 'patch_fields',
             }),
@@ -620,7 +585,7 @@ describe('update_item', () => {
         registerItemTools(server, makeFakeApiClient());
         await expect(
             tools.get('update_item')!.handler({
-                issue_type: 'story',
+                issue_type: 'task',
                 id: 'S1',
                 action: 'assign',
             }),
@@ -632,7 +597,7 @@ describe('update_item', () => {
         registerItemTools(server, makeFakeApiClient());
         await expect(
             tools.get('update_item')!.handler({
-                issue_type: 'story',
+                issue_type: 'task',
                 id: 'S1',
                 action: 'remove_link',
             }),
@@ -644,7 +609,7 @@ describe('update_item', () => {
         registerItemTools(server, makeFakeApiClient());
         await expect(
             tools.get('update_item')!.handler({
-                issue_type: 'story',
+                issue_type: 'task',
                 id: 'S1',
                 action: 'add_external_link',
                 url: 'https://github.com/o/r/pull/1',
@@ -653,7 +618,7 @@ describe('update_item', () => {
         ).rejects.toThrow(/`link_kind` \+ `url` are required for action='add_external_link'/);
         await expect(
             tools.get('update_item')!.handler({
-                issue_type: 'story',
+                issue_type: 'task',
                 id: 'S1',
                 action: 'add_external_link',
                 link_kind: 'pull_request',
@@ -667,7 +632,7 @@ describe('update_item', () => {
         registerItemTools(server, makeFakeApiClient());
         await expect(
             tools.get('update_item')!.handler({
-                issue_type: 'story',
+                issue_type: 'task',
                 id: 'S1',
                 action: 'remove_external_link',
             }),
@@ -679,7 +644,7 @@ describe('update_item', () => {
         registerItemTools(server, makeFakeApiClient());
         await expect(
             tools.get('update_item')!.handler({
-                issue_type: 'epic',
+                issue_type: 'task',
                 id: 'JDA-1',
                 action: 'remove_history',
             }),
@@ -691,14 +656,14 @@ describe('update_item', () => {
         const createItemExternalLink = vi.fn().mockResolvedValue({ id: 8, url: 'u2' });
         registerItemTools(server, makeFakeApiClient({ createItemExternalLink }));
         await tools.get('update_item')!.handler({
-            issue_type: 'story',
+            issue_type: 'task',
             id: 'S1',
             action: 'add_external_link',
             link_kind: 'pull_request',
             url: 'https://github.com/o/r/pull/5',
         });
         expect(createItemExternalLink).toHaveBeenCalledWith({
-            issue_type: 'story',
+            issue_type: 'task',
             issue_id: 'S1',
             link_kind: 'pull_request',
             url: 'https://github.com/o/r/pull/5',
@@ -712,14 +677,14 @@ describe('delete_item', () => {
         const deleteItem = vi.fn().mockResolvedValue(undefined);
         registerItemTools(server, makeFakeApiClient({ deleteItem }));
         const result = await tools.get('delete_item')!.handler({
-            issue_type: 'sub_bug',
+            issue_type: 'sub_task',
             id: 'ATL-99',
         });
-        expect(deleteItem).toHaveBeenCalledWith('sub_bug', 'ATL-99');
+        expect(deleteItem).toHaveBeenCalledWith('sub_task', 'ATL-99');
         const parsed = parseToolResult<{ deleted: boolean; issue_type: string; id: string }>(
             result,
         );
-        expect(parsed).toEqual({ deleted: true, issue_type: 'sub_bug', id: 'ATL-99' });
+        expect(parsed).toEqual({ deleted: true, issue_type: 'sub_task', id: 'ATL-99' });
     });
 
     it('propagates 404 errors from the client', async () => {
@@ -727,7 +692,7 @@ describe('delete_item', () => {
         const deleteItem = vi.fn().mockRejectedValue(new Error('Atlas API 404'));
         registerItemTools(server, makeFakeApiClient({ deleteItem }));
         await expect(
-            tools.get('delete_item')!.handler({ issue_type: 'story', id: 'missing' }),
+            tools.get('delete_item')!.handler({ issue_type: 'task', id: 'missing' }),
         ).rejects.toThrow(/404/);
     });
 });

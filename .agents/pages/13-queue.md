@@ -3,93 +3,70 @@
 **Route:** `/queue` • **Component:** `packages/web/src/pages/Queue.tsx` • **Slug:** `search_queues`
 
 ## Purpose
-Live snapshot of every agent's queue. One card per agent. Click any card to open a side drawer with detailed run info.
+What each workflow is running, what is parked on me, and which ready Tasks it picks up next (ADR 0015). Work is queued for **workflows**, not agents: a ready Task with `items.workflow_id` is started by that workflow's dispatch, up to `workflows.max_parallel_runs` Task runs at once; a parked run doesn't hold a slot; a Task's sub-tasks run inside its run, so they never appear here on their own.
 
 ## Sections
-The page has **2 sections** (not 4):
-1. **Agents grid** — `QueueAgentCard` cards, one per agent, filtered by `QueueFiltersBar`. Section header label "AGENTS N" (count of visible summaries).
-2. **`QueueWaitingOnYou`** — table/card list of items in a waiting status; only renders when `waitingItems.length > 0`.
+1. **Workflow cards** (`pages/queue/WorkflowQueueCard.tsx`) — one per workflow from `GET /api/workflow-queue`, 1 column (2 from `lg`). Paused workflows are listed too; a project-run (`none`) workflow only while one of its runs is live; sub-workflows never.
+2. **Needs a workflow** (`pages/queue/UnassignedTasks.tsx`) — ready Tasks with no `workflow_id`, which nothing will start. Hidden when empty.
 
-There are no "Awaiting Decision", "Active", or "Done" sections.
+The old per-agent cards, agent drawer, "Pause All Agents" and the "Waiting on You" table are gone. Parked runs show on their workflow's card; `in_review` Tasks awaiting my sign-off live on the Dashboard's Awaiting You panel.
 
 ## States
-- **Loading**: skeleton grid (lines 321-337)
-- **No results**: filtered set is empty → empty state (lines 338-351)
-- **Populated**: 2-column grid of `QueueAgentCard` (lines 352-371)
+- **Loading**: two rounded `Skeleton` cards.
+- **Error**: `Alert` "Couldn't load the queue: …".
+- **No workflows**: dashed `EmptyState` "No workflows yet" + **Go to workflows** (`/workflows`). The Needs a workflow section still renders under it.
+- **Idle card**: "Nothing running or queued. Set a ready Task's workflow to this one to queue it."
 
 ## UI elements
 **Page header**
-- "Queue" title
-- **Pause All Agents** button (lines 220-236) — calls `handlePauseAll()` (lines 161-175); sets every active agent to `inactive`
+- "Queue" (`h2`) and the counter strip (mono): `N running · N queued · N waiting on you · N need a workflow` — sums over the cards plus the unassigned count.
+- **Project** select (`All projects` + each project) → refetches with `?project_id=`. The only filter; the status chips went with the agent cards.
 
-**Filters (`QueueFiltersBar`)**
-- Multi-select filter chips: running / queued / waiting / idle / failed
-- "Live" label (was "Refreshing every 30s") — the page no longer polls; updates arrive via SSE `run_queued`, `agent_status`, `run_completed` events.
+**Workflow card**
+- Name → `/workflows/:id`; sub-line `project · trigger` (`Scheduled · next <time>` when scheduled).
+- **Active / Paused** switch (`aria-label "<name> active"`) → `PATCH /api/workflows/:id {status}`.
+- **Running meter** — `running / max_parallel_runs` (mono) + a determinate `LinearProgress` (`aria-label "<name> running slots"`).
+- **Running** — each live Task run: Task id + title → `/tasks/:id`, the current step (the node's agent name from `graph_snapshot` via `agentLabel`, or `Sub-tasks` / `Owner` / `Starting` / `Delivering`), **Open run** → `/workflows/:wid/runs/:rid`. A project run shows "Project run" instead of a Task.
+- **Waiting on you** — each parked run: Task → `/tasks/:id` (where I reply), `Waiting for you` chip, **Open run**, and its `park_reason`.
+- **Queued** — ready Tasks in dispatch order (numbered). **Start now** → `POST /api/workflows/:id/runs {item_id}`, shown only while `running < max_parallel_runs`. On a paused or manual workflow a line explains that these wait for me ("Paused: these wait until you turn it back on." / "Manual: these wait until you start them.").
 
-**Agent cards (`QueueAgentCard`)**
-- Header: agent icon + name
-- Status badge (colored dot; blinks if running)
-- "Next Run" / "Last Completed" two-column summary. Next Run reads `running now` while a run is live, `queued` when an item waits, and `—` / "nothing queued" otherwise. The header sub-line is `cli · designation · category` (the cadence label went with agent schedules, ADR 0014).
-- Up to 3 queued items; "view all" link opens drawer
-- Click card body → opens `QueueAgentDrawer`
+**Needs a workflow**
+- Each Task → `/tasks/:id`, its project, and a workflow picker (`aria-label "Workflow for <id>"`) listing that project's Task workflows → `PUT /api/items/:id/workflow {workflow_id}`. No workflow in the project → **Create a workflow** link (`/workflows`).
 
-**`QueueWaitingOnYou` section** (lines 355-359) — only renders if there are waiting items.
-- Desktop: 5-column table (ID · Item · Agent Asked · Asked Time · Reply button).
-- Mobile (`< md`, via `useIsMobile`): stacked card list — each card has a top row (ID + relative time), title (2-line clamp), project name + status chip, asked-by agent row, and a full-width orange **Reply** CTA (`TOUCH.cta` height).
+Every action toasts on failure and invalidates `['workflow-queue']` on success.
 
 ## Why these affordances exist
-- **Pause All Agents** — One-button kill switch for misbehaving loops or demos; faster than walking each agent's toggle.
-- **Multi-select status chips** — Overlapping states (running AND failed-previously) need combined views; multi-select replaces a query language.
-- **Card click opens drawer (not modal)** — Drawer keeps the queue grid context intact while the Owner inspects one agent.
-- **Full trace navigates to Agent Detail** — The drawer is a viewer for prompt/config edits.
-- **Pause/Resume per agent (drawer)** — Owners usually want to pause one misbehaving agent, not all; the toggle sits beside its diagnostic info for tight cause-effect.
+- **One card per workflow** — parallelism, pausing and ordering are workflow settings now; the card shows exactly what dispatch will do next.
+- **Slot meter + Start now only with a free slot** — starting past `max_parallel_runs` by hand would defeat the cap the Owner set.
+- **Pause switch on the card** — pausing one misbehaving workflow is the common case; it sits next to what it would stop.
+- **Needs a workflow** — a ready Task without a workflow otherwise sits forever with nothing telling me why.
 
 ## Modals / drawers
-**`QueueAgentDrawer`** (right-side drawer)
-- Header: agent icon, name, CLI/model/category/queue count, close button
-- Status badge
-- Per-agent queued/running counts come from `summarizeAgents()`; the same ready + in-progress rule is exported as `countQueueDepthByAgent()` and reused by the Agents grid and Agent Detail hero.
-- **Pause/Resume** → toggles agent status via `useUpdateAgent`
-- **Full trace** → navigates to `/agents/:id`
-- Currently Executing section — picks the agent's first `in_progress` (or `queued`) `agent_runs` row, looks up the item via `itemsById`, renders the item card + a live terminal block fed by `useRunOutputTail(runId)` (per-drawer SSE subscription on `/api/events`). When no live run exists, renders an idle state ("Idle.") or a failure state if the last run errored.
-- Next Scheduled section — up to 3 queued runs (clicking an item navigates via `issuePath` for the right detail page)
-- Last Completed section — most recent completed/errored run; shows a tail (last 160 chars) of the real `output_text`, not a hardcoded per-agent string
+None.
 
 ## Hooks used
-- `useStories`, `useBugs`, `useAgents`, `useEpics`, `useProjects`
-- `useQuery(['runs', 'all', 'queue-page'])` — no polling. Invalidated via SSE `run_queued` / `agent_status` / `run_completed` in `useSSE`.
-- `useUpdateAgent`
+- `useWorkflowQueue(projectId)` (`['workflow-queue', projectId]`) — no polling. `useSSE` invalidates `['workflow-queue']` on `workflow_run_updated` and `counts_changed`.
+- `useProjects`, `useAgents` (step names).
+- `useUpdateWorkflow`, `useStartWorkflowRun`, `useSetItemWorkflow` (from `hooks/useWorkflows.ts`).
 
 ## API endpoints touched
-- `GET /api/run?limit=500`
-- `PATCH /api/agents/:id` (pause/resume; invalidates `['agents']`)
+- `GET /api/workflow-queue?project_id=`
+- `PATCH /api/workflows/:id`
+- `POST /api/workflows/:id/runs`
+- `PUT /api/items/:id/workflow`
 
 ## Permissions / guards
-- Post-onboarding only.
+- Post-onboarding only. Writes are token-gated like every workflow write.
 
 ## Edge cases / quirks
-- Filters are multi-select (`Set<QueueFilterKey>`); empty set means show all (lines 135-150).
-- Each open drawer opens its own `EventSource` against `/api/events` for the live log. Closing the drawer tears the connection down. Trade-off: browsers cap same-origin SSE connections at 6 — for a single-owner app the practical risk is negligible. A shared event-bus refactor would be the right move if a future page needs to live-tail multiple runs simultaneously.
-- The drawer's "Full trace" button navigates to `/agents/:id`. The drawer's "Run now" button was removed with item-attached ad-hoc runs (ADR 0014); a no-item run starts from the Agent Detail hero.
+- Queued lists Tasks blocked by a `depends_on` target too, in `updated_at` order; dispatch skips them until the target is done, so the next one to start may not be #1.
+- A queued Task on an active `item_ready` workflow with a free slot normally starts within a dispatch tick; **Start now** matters for manual, scheduled and paused workflows.
+- The sidenav **Queue** badge (`GET /api/counts` → `queue`) counts the same queued + running Tasks this page lists, across all projects.
 
 ## Connectivity
-- **Pages**: [Agents](15-agents.md) — drawer "Full trace" navigates to Agent Detail; issue detail pages — drawer rows for queued/running runs deep-link to the issue.
-- **Routes**: `GET /api/run?limit=500` — fat pull of all recent runs; the page groups client-side because grouping logic varies (by status, by agent) and a server-side group would lock the shape.
-- **Entities**: `agent_run`, `agent`, `epic` / `story` / `sub_task` / `sub_bug` / `bug` (run target).
+- **Pages**: [Workflows](33-workflows.md), [Workflow detail](34-workflow-detail.md), [Workflow run](35-workflow-run.md), Task detail (`/tasks/:id`).
+- **Routes**: `GET /api/workflow-queue` (`services/workflow-queue.ts`).
+- **Entities**: `workflow`, `workflow_run`, `task`.
 
 ## Coming soon on this page
 None.
-
-## Status vocabulary (2026-09-12)
-
-`resolveAgentStatusLabel(agentStatus, runningCount, queuedCount, lastRunErrored)` in
-`pages/queue/queueViewModel.ts` is the single definition used by this page, the
-Agents grid (`AgentCard`) and the Agent Detail hero (`AgentHero`). Precedence:
-**Paused** (inactive beats everything — a paused agent's stale runs are not news)
-→ **Failed** (most recent terminal run errored) → **Running** → **Queued** → **Idle**.
-
-Note the two surfaces feed it from different sources by design: this page counts
-*assigned items* by item status (`isRunningStatus` / `isQueuedStatus`), while the
-cards count *`agent_runs` rows*. In the real flow these agree, because
-`spawnAgentRun` advances the item `ready → in_progress` at dispatch. They can
-only diverge if run rows and item state are written independently.

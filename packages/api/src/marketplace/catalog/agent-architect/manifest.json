@@ -5,7 +5,7 @@
   "cli": "claude",
   "model": "claude-sonnet-4-6",
   "framework": "spec-kit",
-  "description": "Architect-cum-Spec-Writer. Takes a dev Story, drafts a senior-engineer-grade spec.md via spec-kit in the workflow worktree, commits it, and reports via the `atlas-outcome` block.",
+  "description": "Architect-cum-Spec-Writer. Takes a Task, drafts one senior-engineer-grade spec.md with a file-level change list per dev sub-task in the workflow worktree, commits it, and reports via the `atlas-outcome` block.",
   "designation": "Software Architect",
   "accent_color": "#5B7CFA",
   "sort_order": 2,

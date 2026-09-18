@@ -6,6 +6,8 @@ import Skeleton from '@mui/material/Skeleton';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import Chip from '@mui/material/Chip';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 import SearchRounded from '@mui/icons-material/SearchRounded';
 import { api } from '../api/api.js';
 import { useSetPageTitle } from '../components/shell/index.js';
@@ -15,6 +17,11 @@ import { BulkInstallBar } from './marketplace/BulkInstallBar.js';
 import { runBulkInstall } from './marketplace/bulkInstall.js';
 import type { AgentCategory, IMarketplaceAgentSummary } from '@atlas/shared';
 import { useToast } from '../hooks/useToast.js';
+import { useTabParam } from '../hooks/useTabParam.js';
+import { usePublishedWorkflows, useWorkflowTemplates } from '../hooks/useWorkflows.js';
+import { MarketplaceWorkflows } from './marketplace/MarketplaceWorkflows.js';
+
+const TABS = ['agents', 'workflows'] as const;
 
 const CATEGORIES: Array<{ key: AgentCategory | 'all'; label: string }> = [
     { key: 'all', label: 'All' },
@@ -29,6 +36,9 @@ export function Marketplace() {
     const navigate = useNavigate();
     const toast = useToast();
     const queryClient = useQueryClient();
+    const [tab, setTab] = useTabParam(TABS, 'agents');
+    const templates = useWorkflowTemplates({ enabled: tab === 'workflows' });
+    const published = usePublishedWorkflows({ enabled: tab === 'workflows' });
 
     const [query, setQuery] = useState('');
     const [category, setCategory] = useState<AgentCategory | 'all'>('all');
@@ -43,6 +53,9 @@ export function Marketplace() {
                 ...(category !== 'all' ? { category } : {}),
                 limit: 100,
             }),
+        // The Workflows tab reads the catalog through useMarketplaceCatalog;
+        // fetching this list there too sent the same request twice.
+        enabled: tab === 'agents',
     });
 
     const grouped = useMemo(() => {
@@ -115,8 +128,12 @@ export function Marketplace() {
 
     const totalCount = marketplace.data?.length ?? 0;
     const upgradeCount = marketplace.data?.filter((a) => a.upgrade_available).length ?? 0;
+    const templateCount = templates.data?.length ?? 0;
+    const publishedCount = published.data?.length ?? 0;
     const subtitle =
-        totalCount === 0
+        tab === 'workflows'
+            ? `${templateCount} starter workflow${templateCount === 1 ? '' : 's'}${publishedCount > 0 ? ` · ${publishedCount} published` : ''}`
+            : totalCount === 0
             ? 'No catalog agents'
             : upgradeCount > 0
               ? `${totalCount} available · ${upgradeCount} upgrade${upgradeCount === 1 ? '' : 's'} ready`
@@ -135,97 +152,79 @@ export function Marketplace() {
                         color: ATLAS_PALETTE.slate,
                     }}
                 >
-                    Agent Marketplace
+                    {tab === 'workflows' ? 'Workflow Marketplace' : 'Agent Marketplace'}
                 </Typography>
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>
                     {subtitle}
                 </Typography>
             </Box>
 
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 3,
-                    mb: 5,
-                    flexWrap: 'wrap',
-                }}
-            >
-                <TextField
-                    size="small"
-                    placeholder="Search marketplace"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    sx={{ minWidth: 280, flex: '0 0 auto' }}
-                    InputProps={{
-                        startAdornment: (
-                            <SearchRounded
-                                sx={{ fontSize: 18, mr: 1, color: ATLAS_PALETTE.slate60 }}
-                            />
-                        ),
-                    }}
-                />
-                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-                    {CATEGORIES.map((c) => (
-                        <Chip
-                            key={c.key}
-                            label={c.label}
-                            clickable
-                            color={category === c.key ? 'primary' : 'default'}
-                            variant={category === c.key ? 'filled' : 'outlined'}
-                            onClick={() => setCategory(c.key)}
-                            size="small"
-                            sx={{ fontWeight: 500 }}
-                        />
-                    ))}
-                </Box>
-            </Box>
-
-            {marketplace.isLoading ? (
-                <Box
+            <Box sx={{ borderBottom: `1px solid ${ATLAS_PALETTE.slate10}`, mb: 4 }}>
+                <Tabs
+                    value={tab}
+                    onChange={(_, v: (typeof TABS)[number]) => setTab(v)}
                     sx={{
-                        display: 'grid',
-                        gridTemplateColumns: {
-                            xs: '1fr',
-                            sm: 'repeat(2, minmax(0, 1fr))',
-                            md: 'repeat(3, minmax(0, 1fr))',
-                            xl: 'repeat(4, minmax(0, 1fr))',
+                        minHeight: 42,
+                        '& .MuiTabs-indicator': { backgroundColor: ATLAS_PALETTE.brandBlue, height: 2 },
+                        '& .MuiTab-root': {
+                            minHeight: 42,
+                            textTransform: 'none',
+                            fontWeight: 500,
+                            fontSize: 13.5,
+                            color: ATLAS_PALETTE.slate60,
+                            '&.Mui-selected': { color: ATLAS_PALETTE.brandBlue, fontWeight: 600 },
                         },
-                        gap: 3,
                     }}
                 >
-                    {Array.from({ length: 6 }).map((_, i) => (
-                        <Skeleton
-                            key={i}
-                            variant="rectangular"
-                            height={180}
-                            sx={{ borderRadius: 2 }}
-                        />
-                    ))}
-                </Box>
-            ) : marketplace.isError ? (
-                <Typography sx={{ color: ATLAS_PALETTE.error }}>
-                    Failed to load marketplace.
-                </Typography>
-            ) : (marketplace.data?.length ?? 0) === 0 ? (
-                <Typography sx={{ color: ATLAS_PALETTE.slate60 }}>
-                    No marketplace agents match the current filters.
-                </Typography>
+                    <Tab value="agents" label="Agents" />
+                    <Tab value="workflows" label="Workflows" />
+                </Tabs>
+            </Box>
+
+            {tab === 'workflows' ? (
+                <MarketplaceWorkflows />
             ) : (
-                Array.from(grouped.entries()).map(([cat, agents]) => (
-                    <Box key={cat} sx={{ mb: 6 }}>
-                        <Typography
-                            sx={{
-                                fontSize: 11,
-                                fontWeight: 600,
-                                letterSpacing: '0.08em',
-                                textTransform: 'uppercase',
-                                color: ATLAS_PALETTE.slate60,
-                                mb: 3,
+                <>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            mb: 5,
+                            flexWrap: 'wrap',
+                        }}
+                    >
+                        <TextField
+                            size="small"
+                            placeholder="Search marketplace"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            sx={{ minWidth: 280, flex: '0 0 auto' }}
+                            InputProps={{
+                                startAdornment: (
+                                    <SearchRounded
+                                        sx={{ fontSize: 18, mr: 1, color: ATLAS_PALETTE.slate60 }}
+                                    />
+                                ),
                             }}
-                        >
-                            {cat}
-                        </Typography>
+                        />
+                        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                            {CATEGORIES.map((c) => (
+                                <Chip
+                                    key={c.key}
+                                    label={c.label}
+                                    clickable
+                                    color={category === c.key ? 'primary' : 'default'}
+                                    variant={category === c.key ? 'filled' : 'outlined'}
+                                    onClick={() => setCategory(c.key)}
+                                    size="small"
+                                    sx={{ fontWeight: 500 }}
+                                />
+                            ))}
+                        </Box>
+                    </Box>
+
+                    {marketplace.isLoading ? (
                         <Box
                             sx={{
                                 display: 'grid',
@@ -238,32 +237,78 @@ export function Marketplace() {
                                 gap: 3,
                             }}
                         >
-                            {agents.map((a) => (
-                                <MarketplaceAgentCard
-                                    key={a.id}
-                                    agent={a}
-                                    selectable={!a.is_installed}
-                                    selected={selected.has(a.id)}
-                                    onToggleSelect={() => toggleSelected(a.id)}
-                                    onOpen={() => navigate(`/agents/marketplace/${a.id}`)}
-                                    onAfterInstall={(installedId) => {
-                                        toast.show({ message: `Installed ${a.name}` });
-                                        navigate(`/agents/${installedId}`);
-                                    }}
+                            {Array.from({ length: 6 }).map((_, i) => (
+                                <Skeleton
+                                    key={i}
+                                    variant="rectangular"
+                                    height={180}
+                                    sx={{ borderRadius: 2 }}
                                 />
                             ))}
                         </Box>
-                    </Box>
-                ))
-            )}
+                    ) : marketplace.isError ? (
+                        <Typography sx={{ color: ATLAS_PALETTE.error }}>
+                            Failed to load marketplace.
+                        </Typography>
+                    ) : (marketplace.data?.length ?? 0) === 0 ? (
+                        <Typography sx={{ color: ATLAS_PALETTE.slate60 }}>
+                            No marketplace agents match the current filters.
+                        </Typography>
+                    ) : (
+                        Array.from(grouped.entries()).map(([cat, agents]) => (
+                            <Box key={cat} sx={{ mb: 6 }}>
+                                <Typography
+                                    sx={{
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        letterSpacing: '0.08em',
+                                        textTransform: 'uppercase',
+                                        color: ATLAS_PALETTE.slate60,
+                                        mb: 3,
+                                    }}
+                                >
+                                    {cat}
+                                </Typography>
+                                <Box
+                                    sx={{
+                                        display: 'grid',
+                                        gridTemplateColumns: {
+                                            xs: '1fr',
+                                            sm: 'repeat(2, minmax(0, 1fr))',
+                                            md: 'repeat(3, minmax(0, 1fr))',
+                                            xl: 'repeat(4, minmax(0, 1fr))',
+                                        },
+                                        gap: 3,
+                                    }}
+                                >
+                                    {agents.map((a) => (
+                                        <MarketplaceAgentCard
+                                            key={a.id}
+                                            agent={a}
+                                            selectable={!a.is_installed}
+                                            selected={selected.has(a.id)}
+                                            onToggleSelect={() => toggleSelected(a.id)}
+                                            onOpen={() => navigate(`/agents/marketplace/${a.id}`)}
+                                            onAfterInstall={(installedId) => {
+                                                toast.show({ message: `Installed ${a.name}` });
+                                                navigate(`/agents/${installedId}`);
+                                            }}
+                                        />
+                                    ))}
+                                </Box>
+                            </Box>
+                        ))
+                    )}
 
-            <BulkInstallBar
-                count={selected.size}
-                busy={busy}
-                onClear={clearSelected}
-                onSelectAll={selectAllInstallable}
-                onAdd={addSelected}
-            />
+                    <BulkInstallBar
+                        count={selected.size}
+                        busy={busy}
+                        onClear={clearSelected}
+                        onSelectAll={selectAllInstallable}
+                        onAdd={addSelected}
+                    />
+                </>
+            )}
         </Box>
     );
 }

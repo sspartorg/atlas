@@ -6,7 +6,7 @@ import Typography from '@mui/material/Typography';
 import type { IAgent, SdlcRole } from '@atlas/shared';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 
-// Searchable assignee picker shared between EpicNew and NewIssueModal.
+// Searchable assignee picker used by TaskNew.
 // Each row shows: accent dot + agent name + designation (or category fallback
 // for the Owner row / agents missing designation). Search matches against
 // both name and designation.

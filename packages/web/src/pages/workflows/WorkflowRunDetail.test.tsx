@@ -24,9 +24,7 @@ function mount(run: IWorkflowRunDetail) {
                 projects: [],
                 agents: [],
                 tree: [],
-                epics: [],
-                stories: [],
-                bugs: [],
+                tasks: [],
             }),
         ),
     );
@@ -96,5 +94,18 @@ describe('WorkflowRunDetail', () => {
         mount(makeRunDetail());
         await user.click(await screen.findByTestId('wf-step-run-a'));
         expect(await screen.findByText('agent run page')).toBeInTheDocument();
+    });
+
+    it('lists the sub-task runs of a Task run and opens one', async () => {
+        const user = userEvent.setup();
+        const child = { ...makeRunDetail({ id: 'wfr-child', workflow_id: 'wf-build', item_id: 'ATL-8', status: 'completed' }), item_title: 'Fix typo', parent_node_id: 'build' };
+        mount(makeRunDetail({ children: [child] }));
+        const row = await screen.findByTestId('wf-child-wfr-child');
+        expect(row).toHaveTextContent('ATL-8');
+        expect(row).toHaveTextContent('Fix typo');
+        expect(screen.getByText('Sub-tasks · 1 of 1 done')).toBeInTheDocument();
+        server.use(http.get(`${BASE}/workflow-runs/wfr-child`, () => HttpResponse.json({ ...child, parent_workflow_run_id: 'wfr-1', children: [] })));
+        await user.click(row);
+        expect(await screen.findByRole('link', { name: 'part of the Task run' })).toHaveAttribute('href', '/workflows/wf-build/runs/wfr-1');
     });
 });

@@ -65,7 +65,7 @@ describe('verifyRunCommits', () => {
         repos.push(dir);
         const agent = await agentsService.create(agentBase);
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
 
         const out = await verifyRunCommits({
             runId: 'run-1',
@@ -73,7 +73,7 @@ describe('verifyRunCommits', () => {
             itemId: 'ATL-1',
             cwd: dir,
             runStartedAtIso: new Date(Date.now() - 60_000).toISOString(),
-            itemType: 'epic',
+            itemType: 'task',
         });
         expect(out.result).toBe('clean');
 
@@ -96,7 +96,7 @@ describe('verifyRunCommits', () => {
 
         const agent = await agentsService.create(agentBase);
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
 
         const out = await verifyRunCommits({
             runId: 'run-2',
@@ -104,7 +104,7 @@ describe('verifyRunCommits', () => {
             itemId: 'ATL-1',
             cwd: dir,
             runStartedAtIso: new Date(Date.now() + 60_000).toISOString(), // after init commit
-            itemType: 'epic',
+            itemType: 'task',
         });
         expect(out.result).toBe('silent');
     });
@@ -122,7 +122,7 @@ describe('verifyRunCommits', () => {
 
         const agent = await agentsService.create(agentBase);
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
 
         const out = await verifyRunCommits({
             runId: 'run-3',
@@ -130,7 +130,7 @@ describe('verifyRunCommits', () => {
             itemId: 'ATL-1',
             cwd: dir,
             runStartedAtIso: sinceIso,
-            itemType: 'epic',
+            itemType: 'task',
         });
         expect(out.result).toBe('compliant');
         expect(out.commitCount).toBe(1);
@@ -145,7 +145,7 @@ describe('verifyRunCommits', () => {
 
         const agent = await agentsService.create(agentBase);
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
 
         const out = await verifyRunCommits({
             runId: 'run-4',
@@ -153,7 +153,7 @@ describe('verifyRunCommits', () => {
             itemId: 'ATL-1',
             cwd: dir,
             runStartedAtIso: sinceIso,
-            itemType: 'epic',
+            itemType: 'task',
         });
         expect(out.result).toBe('partial');
         expect(out.problems.some((p) => p.reason === 'refs-missing')).toBe(true);
@@ -167,7 +167,7 @@ describe('verifyRunCommits', () => {
 
         const agent = await agentsService.create(agentBase);
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
 
         const out = await verifyRunCommits({
             runId: 'run-5',
@@ -175,7 +175,7 @@ describe('verifyRunCommits', () => {
             itemId: 'ATL-1',
             cwd: dir,
             runStartedAtIso: sinceIso,
-            itemType: 'epic',
+            itemType: 'task',
         });
         expect(out.result).toBe('partial');
         expect(
@@ -189,7 +189,7 @@ describe('verifyRunCommits', () => {
 
         const agent = await agentsService.create(agentBase);
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
 
         const out = await verifyRunCommits({
             runId: 'run-6',
@@ -197,7 +197,7 @@ describe('verifyRunCommits', () => {
             itemId: 'ATL-1',
             cwd: dir,
             runStartedAtIso: new Date().toISOString(),
-            itemType: 'epic',
+            itemType: 'task',
         });
         expect(out.result).toBe('clean');
     });
@@ -210,7 +210,7 @@ describe('verifyRunCommits', () => {
 
         const agent = await agentsService.create(agentBase);
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
 
         await verifyRunCommits({
             runId: 'run-7',
@@ -218,7 +218,7 @@ describe('verifyRunCommits', () => {
             itemId: 'ATL-1',
             cwd: dir,
             runStartedAtIso: sinceIso,
-            itemType: 'epic',
+            itemType: 'task',
         });
         const comments = await testDb
             .selectFrom('comments')
@@ -240,7 +240,7 @@ describe('verifyRunCommits', () => {
 
         const agent = await agentsService.create(agentBase);
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
 
         const out = await verifyRunCommits({
             runId: 'run-silent-noprob',
@@ -248,7 +248,7 @@ describe('verifyRunCommits', () => {
             itemId: 'ATL-1',
             cwd: dir,
             runStartedAtIso: new Date(Date.now() + 60_000).toISOString(),
-            itemType: 'epic',
+            itemType: 'task',
         });
         expect(out.result).toBe('silent');
         expect(out.problems).toHaveLength(0);

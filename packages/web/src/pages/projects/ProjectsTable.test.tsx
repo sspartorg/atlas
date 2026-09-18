@@ -8,8 +8,8 @@ const sampleRow: ProjectRow = {
     displayId: 'ATL',
     name: 'Acme',
     gitPath: 'github.com/x/y',
-    epics: 2,
-    stories: 5,
+    tasks: 2,
+    subTasks: 5,
     lastActivity: 'just now',
     updatedAt: '2026-05-16T00:00:00.000Z',
 };
@@ -19,8 +19,8 @@ const secondRow: ProjectRow = {
     displayId: 'OTH',
     name: 'Beta',
     gitPath: '',
-    epics: 0,
-    stories: 0,
+    tasks: 0,
+    subTasks: 0,
     lastActivity: '2 days ago',
     updatedAt: '2026-05-14T00:00:00.000Z',
 };
@@ -133,10 +133,10 @@ describe('ProjectsTable', () => {
         expect(onRowClick).not.toHaveBeenCalled();
     });
 
-    it('sorts numerically by epics and stories columns', () => {
+    it('sorts numerically by tasks and sub-tasks columns', () => {
         renderTable();
-        fireEvent.click(screen.getByText('Epics'));
-        fireEvent.click(screen.getByText('Stories'));
+        fireEvent.click(screen.getByText('Tasks'));
+        fireEvent.click(screen.getByText('Sub-tasks'));
     });
 
     it('sorts by Last Activity header (default sort key, toggles direction)', () => {
@@ -145,14 +145,14 @@ describe('ProjectsTable', () => {
     });
 
     it('compare: equal values return stable order (compare return 0 branch)', () => {
-        // Two rows with identical epics count exercise the `return 0` branch
+        // Two rows with identical tasks count exercise the `return 0` branch
         const rowA: ProjectRow = {
             id: 'p3',
             displayId: 'A',
             name: 'Alpha',
             gitPath: '',
-            epics: 3,
-            stories: 3,
+            tasks: 3,
+            subTasks: 3,
             lastActivity: 'now',
             updatedAt: '2026-05-16T00:00:00.000Z',
         };
@@ -161,8 +161,8 @@ describe('ProjectsTable', () => {
             displayId: 'B',
             name: 'Bravo',
             gitPath: '',
-            epics: 3,  // same as rowA — compare returns 0
-            stories: 3,
+            tasks: 3,  // same as rowA — compare returns 0
+            subTasks: 3,
             lastActivity: 'now',
             updatedAt: '2026-05-16T00:00:00.000Z',
         };
@@ -178,8 +178,8 @@ describe('ProjectsTable', () => {
                 onScheduleFetch={vi.fn()}
             />,
         );
-        // Sort by Epics — both rows have epics=3, compare returns 0 for the equality case
-        fireEvent.click(screen.getByText('Epics'));
+        // Sort by Tasks — both rows have tasks=3, compare returns 0 for the equality case
+        fireEvent.click(screen.getByText('Tasks'));
         // Both rows should still render
         expect(screen.getByText('Alpha')).toBeInTheDocument();
         expect(screen.getByText('Bravo')).toBeInTheDocument();

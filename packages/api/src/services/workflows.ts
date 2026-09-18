@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
     WorkflowGraphSchema,
     validateWorkflowGraph,
+    type AgentEffort,
     type CreateWorkflowInput,
     type IWorkflow,
     type IWorkflowGraph,
@@ -22,11 +23,13 @@ import { ApiError } from '../utils/errors.js';
 import { materializeCron } from './cron-materializer.js';
 import { computeNextWorkflowFire } from './workflow-engine.js';
 import { marketplaceService } from './marketplace.js';
+import { eventsLog } from './events-log.js';
 import { broadcastSSE } from '../routes/events.js';
 
 const TEMPLATES_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'marketplace', 'workflows');
-// End nodes in templates name the child workflow by template (`template:dev`);
-// it resolves to that template's workflow in the same project, if one exists.
+// Sub-tasks nodes in templates name their sub-workflow by template
+// (`template:build`); it resolves to that template's workflow in the same
+// project, created from the template when the project lacks it.
 const TEMPLATE_REF = 'template:';
 
 function asWorkflow(row: Record<string, unknown>): IWorkflow {
@@ -42,7 +45,9 @@ function asWorkflow(row: Record<string, unknown>): IWorkflow {
         use_worktree: row['use_worktree'] as boolean,
         push_code: row['push_code'] as boolean,
         raises_pr: row['raises_pr'] as boolean,
+        push_to_default: row['push_to_default'] as boolean,
         max_loops: row['max_loops'] as number,
+        max_parallel_runs: row['max_parallel_runs'] as number,
         schedule_preset: (row['schedule_preset'] as IWorkflow['schedule_preset']) ?? null,
         schedule_time_of_day: (row['schedule_time_of_day'] as string | null) ?? null,
         schedule_weekday: (row['schedule_weekday'] as number | null) ?? null,
@@ -54,7 +59,7 @@ function asWorkflow(row: Record<string, unknown>): IWorkflow {
     };
 }
 
-function asRunSummary(row: Record<string, unknown>): IWorkflowRunSummary {
+export function asRunSummary(row: Record<string, unknown>): IWorkflowRunSummary {
     return {
         id: row['id'] as string,
         workflow_id: row['workflow_id'] as string,
@@ -62,6 +67,8 @@ function asRunSummary(row: Record<string, unknown>): IWorkflowRunSummary {
         project_id: (row['project_id'] as string | null) ?? null,
         status: row['status'] as IWorkflowRunSummary['status'],
         graph_snapshot: row['graph_snapshot'] as IWorkflowGraph,
+        parent_workflow_run_id: (row['parent_workflow_run_id'] as string | null) ?? null,
+        parent_node_id: (row['parent_node_id'] as string | null) ?? null,
         current_node_id: (row['current_node_id'] as string | null) ?? null,
         parked_node_id: (row['parked_node_id'] as string | null) ?? null,
         park_reason: (row['park_reason'] as string | null) ?? null,
@@ -77,8 +84,11 @@ function asRunSummary(row: Record<string, unknown>): IWorkflowRunSummary {
     };
 }
 
-async function assertValidGraph(graph: IWorkflowGraph): Promise<void> {
-    const errors = validateWorkflowGraph(graph);
+async function assertValidGraph(
+    graph: IWorkflowGraph,
+    w: Pick<IWorkflow, 'input_kind' | 'project_id'> & { id?: string },
+): Promise<void> {
+    const errors = validateWorkflowGraph(graph, w.input_kind);
     const agentIds = [...new Set(graph.nodes.flatMap((n) => (n.agent_id ? [n.agent_id] : [])))];
     if (agentIds.length > 0) {
         const found = await db.selectFrom('agents').select('id').where('id', 'in', agentIds).execute();
@@ -89,8 +99,32 @@ async function assertValidGraph(graph: IWorkflowGraph): Promise<void> {
             }
         }
     }
+    const subIds = [...new Set(graph.nodes.flatMap((n) => (n.type === 'subtasks' && n.sub_workflow_id ? [n.sub_workflow_id] : [])))];
+    if (subIds.length > 0) {
+        const subs = await db.selectFrom('workflows').select(['id', 'input_kind', 'project_id']).where('id', 'in', subIds).execute();
+        const byId = new Map(subs.map((sw) => [sw.id, sw]));
+        for (const node of graph.nodes) {
+            if (node.type !== 'subtasks' || !node.sub_workflow_id) continue;
+            const sub = byId.get(node.sub_workflow_id);
+            if (!sub) errors.push({ node_id: node.id, message: `Workflow ${node.sub_workflow_id} does not exist` });
+            else if (sub.input_kind !== 'sub_task') errors.push({ node_id: node.id, message: 'Pick a sub-task workflow for this step' });
+            else if (sub.project_id !== w.project_id) errors.push({ node_id: node.id, message: 'The sub-workflow belongs to a different project' });
+        }
+    }
     if (errors.length > 0) {
         throw new ApiError('validation_error', errors[0]?.message ?? 'Invalid workflow graph', 400, { graph_errors: errors });
+    }
+}
+
+/** Rules across the scalar fields; `w` is the workflow as it will be saved. */
+function assertDeliveryRules(w: Pick<IWorkflow, 'input_kind' | 'trigger' | 'push_code' | 'raises_pr' | 'push_to_default'>): void {
+    // A sub-workflow runs only inside its Task's run, on the Task's worktree,
+    // and never delivers on its own.
+    if (w.input_kind === 'sub_task' && w.trigger !== 'manual') {
+        throw new ApiError('validation_error', 'A sub-task workflow only runs from a Task workflow’s Sub-tasks step', 400);
+    }
+    if (w.push_to_default && (!w.push_code || w.raises_pr)) {
+        throw new ApiError('validation_error', 'Pushing to the default branch needs push on and pull request off', 400);
     }
 }
 
@@ -133,8 +167,8 @@ function assertProjectRule(w: Pick<IWorkflow, 'project_id' | 'input_kind' | 'use
 function emptyGraph(): IWorkflowGraph {
     return {
         nodes: [
-            { id: 'start', type: 'start', position: { x: 0, y: 120 } },
-            { id: 'end', type: 'end', position: { x: 480, y: 120 } },
+            { id: 'start', type: 'start', position: { x: 0, y: 0 } },
+            { id: 'end', type: 'end', position: { x: 0, y: 260 } },
         ],
         edges: [{ id: 'e-start', source: 'start', target: 'end', kind: 'pass' }],
     };
@@ -142,6 +176,16 @@ function emptyGraph(): IWorkflowGraph {
 
 function broadcastWorkflowsChanged(): void {
     broadcastSSE({ type: 'counts_changed', scope: 'sidenav' });
+}
+
+/** Cost of every agent step across the given workflow runs. */
+async function runCost(runIds: string[]): Promise<number> {
+    const row = await db
+        .selectFrom('agent_runs')
+        .select((eb) => eb.fn.sum<string | number | null>('total_cost_usd').as('total'))
+        .where('workflow_run_id', 'in', runIds)
+        .executeTakeFirst();
+    return Number(row?.total ?? 0);
 }
 
 export const workflowsService = {
@@ -158,13 +202,19 @@ export const workflowsService = {
 
     async create(input: CreateWorkflowInput): Promise<IWorkflow> {
         const graph = input.graph ?? emptyGraph();
-        await assertValidGraph(graph);
         const base = {
             project_id: input.project_id ?? null,
             input_kind: input.input_kind ?? 'item',
             use_worktree: input.use_worktree ?? true,
         };
+        await assertValidGraph(graph, base);
         assertProjectRule(base);
+        const delivery = {
+            push_code: input.push_code ?? true,
+            raises_pr: input.raises_pr ?? !input.push_to_default,
+            push_to_default: input.push_to_default ?? false,
+        };
+        assertDeliveryRules({ ...base, ...delivery, trigger: input.trigger ?? 'manual' });
         const schedule = await resolveSchedule({
             trigger: input.trigger ?? 'manual',
             schedule_preset: input.schedule_preset ?? null,
@@ -183,9 +233,9 @@ export const workflowsService = {
                 status: input.status ?? 'active',
                 graph: JSON.stringify(graph),
                 trigger: input.trigger ?? 'manual',
-                push_code: input.push_code ?? true,
-                raises_pr: input.raises_pr ?? true,
+                ...delivery,
                 max_loops: input.max_loops ?? 3,
+                max_parallel_runs: input.max_parallel_runs ?? 1,
                 schedule_preset: input.schedule_preset ?? null,
                 schedule_time_of_day: input.schedule_time_of_day ?? null,
                 schedule_weekday: input.schedule_weekday ?? null,
@@ -199,10 +249,12 @@ export const workflowsService = {
     async update(id: string, patch: UpdateWorkflowInput): Promise<IWorkflow> {
         const current = await this.get(id);
         if (!current) throw new ApiError('not_found', 'Workflow not found', 404);
-        if (patch.graph) await assertValidGraph(patch.graph);
         const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
         const merged = { ...current, ...defined } as IWorkflow;
+        // A new input kind or project can invalidate the stored graph too.
+        if (patch.graph || patch.input_kind || patch.project_id !== undefined) await assertValidGraph(merged.graph, merged);
         assertProjectRule(merged);
+        assertDeliveryRules(merged);
         const schedule = await resolveSchedule(merged);
         const { graph, ...scalars } = patch;
         await db
@@ -226,6 +278,10 @@ export const workflowsService = {
             .where('status', 'in', ['running', 'waiting_for_owner'])
             .executeTakeFirst();
         if (live) throw new ApiError('conflict', 'Stop this workflow’s live runs before deleting it', 409);
+        const users = await this.workflowsUsingSubWorkflow(id);
+        if (users.length > 0) {
+            throw new ApiError('conflict', `Used as a sub-workflow by ${users.map((u) => u.name).join(', ')} — remove it from there first`, 409);
+        }
         const res = await db.deleteFrom('workflows').where('id', '=', id).executeTakeFirst();
         if (Number(res.numDeletedRows ?? 0) === 0) throw new ApiError('not_found', 'Workflow not found', 404);
         broadcastWorkflowsChanged();
@@ -260,9 +316,8 @@ export const workflowsService = {
             await db.updateTable('agents').set({ status: 'active' }).where('id', 'in', agentIds).where('status', '!=', 'active').execute();
         }
 
-        // `template:<id>` → that template's workflow in this project, by name.
-        // Children created by this workflow must land somewhere, so the child
-        // workflow is created too when the project lacks it.
+        // `template:<id>` → that template's workflow in this project, by name,
+        // created from the template when the project lacks it.
         const resolveRef = async (ref: string | undefined): Promise<string | undefined> => {
             if (!ref?.startsWith(TEMPLATE_REF)) return ref;
             const childTemplate = this.listTemplates().find((t) => `${TEMPLATE_REF}${t.id}` === ref);
@@ -276,14 +331,9 @@ export const workflowsService = {
             return (existing ?? (await this.createFromTemplate(childTemplate.id, projectId))).id;
         };
         const nodes = [];
-        for (const { child_workflow_id, test_child_workflow_id, ...rest } of template.graph.nodes) {
-            const child = await resolveRef(child_workflow_id);
-            const testChild = await resolveRef(test_child_workflow_id);
-            nodes.push({
-                ...rest,
-                ...(child ? { child_workflow_id: child } : {}),
-                ...(testChild ? { test_child_workflow_id: testChild } : {}),
-            });
+        for (const { sub_workflow_id, ...rest } of template.graph.nodes) {
+            const sub = await resolveRef(sub_workflow_id);
+            nodes.push({ ...rest, ...(sub ? { sub_workflow_id: sub } : {}) });
         }
 
         return this.create({
@@ -295,6 +345,7 @@ export const workflowsService = {
             use_worktree: template.use_worktree,
             push_code: template.push_code,
             raises_pr: template.raises_pr,
+            push_to_default: template.push_to_default ?? false,
             graph: { nodes, edges: template.graph.edges },
         });
     },
@@ -346,6 +397,7 @@ export const workflowsService = {
                 'ar.status',
                 'ar.cli',
                 'ar.model',
+                'ar.effort',
                 'ar.outcome_kind',
                 'ar.outcome_summary',
                 'ar.outcome_reason',
@@ -356,9 +408,19 @@ export const workflowsService = {
             .where('ar.workflow_run_id', '=', runId)
             .orderBy('ar.created_at', 'asc')
             .execute();
+        const children = await db
+            .selectFrom('workflow_runs as wr')
+            .leftJoin('items as i', 'i.id', 'wr.item_id')
+            .selectAll('wr')
+            .select('i.title as item_title')
+            .where('wr.parent_workflow_run_id', '=', runId)
+            .orderBy('wr.started_at', 'asc')
+            .execute();
         return {
             ...asRunSummary(row as never),
             workflow_name: row.workflow_name,
+            children: children.map((c) => asRunSummary(c as never)),
+            total_cost_usd: await runCost([runId, ...children.map((c) => c.id)]),
             steps: steps.map((s) => ({
                 id: s.id,
                 node_id: s.node_id ?? null,
@@ -367,6 +429,8 @@ export const workflowsService = {
                 status: s.status,
                 cli: s.cli ?? null,
                 model: s.model ?? null,
+                // agent_runs.effort is plain text; the runner only writes AgentEffort values.
+                effort: (s.effort as AgentEffort | null) ?? null,
                 outcome_kind: s.outcome_kind ?? null,
                 outcome_summary: s.outcome_summary ?? null,
                 outcome_reason: s.outcome_reason ?? null,
@@ -379,18 +443,48 @@ export const workflowsService = {
 
     /** Queue (or unqueue) an item for a workflow. */
     async setItemWorkflow(itemId: string, workflowId: string | null): Promise<void> {
-        const item = await db.selectFrom('items').select(['id', 'type', 'project_id']).where('id', '=', itemId).executeTakeFirst();
+        const item = await db.selectFrom('items').select(['id', 'type', 'project_id', 'status']).where('id', '=', itemId).executeTakeFirst();
         if (!item) throw new ApiError('not_found', 'Item not found', 404);
         if (workflowId) {
+            // Sub-tasks run inside their Task's workflow run (ADR 0015).
+            if (item.type !== 'task') throw new ApiError('validation_error', 'Only Tasks are queued for workflows', 400);
             const wf = await this.get(workflowId);
             if (!wf) throw new ApiError('not_found', 'Workflow not found', 404);
-            if (wf.input_kind !== 'item') throw new ApiError('validation_error', 'That workflow does not take items', 400);
+            if (wf.input_kind !== 'item') throw new ApiError('validation_error', 'That workflow does not take Tasks', 400);
             if (wf.project_id && wf.project_id !== item.project_id) {
                 throw new ApiError('validation_error', 'That workflow belongs to a different project', 400);
             }
         }
-        await db.updateTable('items').set({ workflow_id: workflowId }).where('id', '=', itemId).execute();
+        // Assigning a draft Task queues it: dispatch only picks up Ready Tasks,
+        // and "pick a workflow, then also set Ready" was one step too many.
+        const queue = workflowId !== null && item.status === 'draft';
+        await db
+            .updateTable('items')
+            .set({ workflow_id: workflowId, ...(queue ? { status: 'ready' } : {}) })
+            .where('id', '=', itemId)
+            .execute();
+        if (queue) {
+            await eventsLog.record({
+                item_id: itemId,
+                item_type: item.type as IssueType,
+                event_type: 'status_changed',
+                actor_agent_id: null,
+                field: 'status',
+                from_value: 'draft',
+                to_value: 'ready',
+                detail: `queued_for_workflow: ${workflowId}`,
+            });
+        }
         broadcastSSE({ type: 'counts_changed', issueType: item.type as IssueType, issueId: itemId });
+    },
+
+    /** Delete guard: a workflow a Sub-tasks step runs cannot be deleted. */
+    async workflowsUsingSubWorkflow(workflowId: string): Promise<Array<{ id: string; name: string }>> {
+        return db
+            .selectFrom('workflows')
+            .select(['id', 'name'])
+            .where('graph', '@>', JSON.stringify({ nodes: [{ sub_workflow_id: workflowId }] }) as never)
+            .execute();
     },
 
     /** Agent delete guard: an agent a workflow graph uses cannot be deleted. */

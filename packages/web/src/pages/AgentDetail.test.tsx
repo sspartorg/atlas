@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
-import { makeAgent, makeStory } from '../test-utils/factories.js';
+import { makeAgent, makeSubTask } from '../test-utils/factories.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { server } from '../test-setup.js';
 import { AgentDetail } from './AgentDetail.js';
@@ -80,9 +80,9 @@ describe('AgentDetail', () => {
 
         it('counts Ready items assigned to the agent in the hero queue, even with no runs', async () => {
             server.use(
-                http.get(`${BASE}/stories`, () =>
+                http.get(`${BASE}/sub-tasks`, () =>
                     HttpResponse.json([
-                        makeStory({ id: 'SDB-4', assignee_agent_id: 'agent-coder', status: 'ready' }),
+                        makeSubTask({ id: 'SDB-4', assignee_agent_id: 'agent-coder', status: 'ready' }),
                     ]),
                 ),
             );
@@ -409,9 +409,7 @@ describe('AgentDetail', () => {
             setupDefaultHandlers();
             server.use(
                 http.get(`${BASE}/projects`, () => HttpResponse.json([])),
-                http.get(`${BASE}/epics`, () => HttpResponse.json([])),
-                http.get(`${BASE}/stories`, () => HttpResponse.json([])),
-                http.get(`${BASE}/bugs`, () => HttpResponse.json([])),
+                http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             );
             renderAgentDetail();
             await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
@@ -517,9 +515,7 @@ describe('AgentDetail', () => {
             setupHandlers();
             server.use(
                 http.get(`${BASE}/projects`, () => HttpResponse.json([])),
-                http.get(`${BASE}/epics`, () => HttpResponse.json([])),
-                http.get(`${BASE}/stories`, () => HttpResponse.json([])),
-                http.get(`${BASE}/bugs`, () => HttpResponse.json([])),
+                http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             );
             renderWithProviders(
                 <Routes>

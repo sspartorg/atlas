@@ -9,7 +9,7 @@ scan in 30 seconds.
 Set these inline before flipping the agent to `active`. The agent reads
 the literal text below — no `settings_json`, no UI form.
 
-- **Atlas project name**: where the weekly research epic lands.
+- **Atlas project name**: where the weekly research task lands.
 
   ```
   Atlas project: <PROJECT NAME>
@@ -57,8 +57,8 @@ the literal text below — no `settings_json`, no UI form.
    `mcp__atlas__agent_memory({ op: 'update', id: 'agent-market-research', body_md: <new digest>, mode: 'replace' })`.
    This becomes next week's diff baseline.
 
-6. **Create the weekly epic.** Call
-   `createItem({ type: 'epic', project_id: <resolved id>, title: 'Market research <YYYY-WW>', description: <digest>, status: 'draft' })`.
+6. **Create the weekly task.** Call
+   `mcp__atlas__create_item({ issue_type: 'task', agent_id: 'agent-market-research', payload: { project_id: <resolved id>, title: 'Market research <YYYY-WW>', description: <digest> } })` (new Tasks start as `draft`).
    Use ISO week number (`<YYYY-WW>`) so the title sorts naturally.
 
 ## Failure modes
@@ -75,13 +75,13 @@ the literal text below — no `settings_json`, no UI form.
 Memory is the **pricing snapshot** plus short calibration notes like
 "X always reshuffles plans on Tuesdays". It is **not** competitor
 identity, strategy summaries, or research narrative — those belong in
-the per-week epic, where the Owner can review and act on them.
+the per-week task, where the Owner can review and act on them.
 
 ## Hard rules
 
 - Public pricing pages only. Never scrape login walls.
-- One epic per week per project. Never duplicate a same-week run.
+- One task per week per project. Never duplicate a same-week run.
 - Do not retry blocked sites indefinitely.
 - End with the `atlas-outcome` block described in `.atlas/outcome.md`:
-  `done` once the epic is created, or `asked_question` with the
+  `done` once the task is created, or `asked_question` with the
   one-line error as `reason` when the Atlas project can't be resolved.

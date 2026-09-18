@@ -82,6 +82,18 @@ describe('agentsService.get', () => {
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe('agentsService.create', () => {
+    it('keeps the effort and designation the Owner picked', async () => {
+        const agent = await agentsService.create({ ...BASE_AGENT, effort: 'low', designation: 'Writer' });
+        expect(agent).toMatchObject({ effort: 'low', designation: 'Writer' });
+        expect((await agentsService.create({ ...BASE_AGENT, name: 'Defaulted' })).effort).toBe('medium');
+    });
+
+    it('changes an agent\'s effort on update', async () => {
+        const agent = await agentsService.create(BASE_AGENT);
+        const updated = await agentsService.update(agent.id, { effort: 'high' });
+        expect(updated?.effort).toBe('high');
+    });
+
     it('creates an agent with default values', async () => {
         const agent = await agentsService.create(BASE_AGENT);
         expect(agent.name).toBe('Test Writer');
@@ -273,7 +285,7 @@ describe('agentsService.getRuns', () => {
     it('returns runs with item metadata', async () => {
         const agent = await agentsService.create(BASE_AGENT);
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'My Epic' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'My Epic' });
         await testDb
             .insertInto('agent_runs')
             .values({ id: 'run-1', agent_id: agent.id, item_id: 'ATL-1', status: 'completed' })
@@ -289,7 +301,7 @@ describe('agentsService.getRuns', () => {
     it('returns runs newest first', async () => {
         const agent = await agentsService.create(BASE_AGENT);
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         await testDb.insertInto('agent_runs').values({ id: 'run-a', agent_id: agent.id, item_id: 'ATL-1', status: 'completed' }).execute();
         await testDb.insertInto('agent_runs').values({ id: 'run-b', agent_id: agent.id, item_id: 'ATL-1', status: 'error' }).execute();
 

@@ -1,10 +1,11 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
     CreateWorkflowFromTemplateSchema,
     CreateWorkflowSchema,
     SetItemWorkflowSchema,
     StartWorkflowRunSchema,
     UpdateWorkflowSchema,
+    UsePublishedWorkflowSchema,
 } from '@atlas/shared';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
 import { ApiError } from '../utils/errors.js';
@@ -16,6 +17,18 @@ import {
     startWorkflowRun,
 } from '../services/workflow-engine.js';
 import { DependenciesNotReadyError } from '../services/dependency-guard.js';
+import {
+    exportTemplateBundle,
+    exportWorkflowBundle,
+    getPublishedWorkflow,
+    importPublishedWorkflow,
+    importWorkflowBundle,
+    listPublishedWorkflows,
+    publishWorkflow,
+    publishedWorkflowZip,
+    unpackWorkflowBundle,
+    unpublishWorkflow,
+} from '../services/workflow-bundle.js';
 
 function parseBody<T>(schema: { safeParse: (v: unknown) => { success: true; data: T } | { success: false; error: { issues: unknown } } }, body: unknown): T {
     const parsed = schema.safeParse(body ?? {});
@@ -34,6 +47,13 @@ function mapStartError(err: unknown): never {
     throw err;
 }
 
+function sendZip(reply: FastifyReply, zip: { filename: string; data: Buffer }) {
+    return reply
+        .header('Content-Type', 'application/zip')
+        .header('Content-Disposition', `attachment; filename="${zip.filename}"`)
+        .send(zip.data);
+}
+
 export async function workflowsRoutes(app: FastifyInstance) {
     app.get('/api/workflows', async (req, reply) => {
         const { project_id } = req.query as { project_id?: string };
@@ -41,6 +61,71 @@ export async function workflowsRoutes(app: FastifyInstance) {
     });
 
     app.get('/api/workflows/templates', async (_req, reply) => reply.send(workflowsService.listTemplates()));
+
+    app.get('/api/workflows/templates/:id/export', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        return sendZip(reply, await exportTemplateBundle(id));
+    });
+
+    app.get('/api/workflows/:id/export', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        return sendZip(reply, await exportWorkflowBundle(id));
+    });
+
+    // Multipart (file + `project_id` field) from the browser, or a raw
+    // application/zip body with `?project_id=` for curl / MCP — same as
+    // POST /api/agents/import.
+    app.post('/api/workflows/import', { preHandler: requireMcpToken }, async (req, reply) => {
+        const query = req.query as { project_id?: string };
+        let data: Buffer;
+        let projectId = query.project_id;
+        if ((req.headers['content-type'] ?? '').includes('multipart/form-data')) {
+            const part = await (req as unknown as {
+                file: () => Promise<{ toBuffer: () => Promise<Buffer>; fields?: Record<string, unknown> } | null>;
+            }).file();
+            if (!part) throw new ApiError('validation_error', 'No file uploaded', 400);
+            data = await part.toBuffer();
+            // Only fields sent before the file part are visible here.
+            projectId = (part.fields?.['project_id'] as { value?: string } | undefined)?.value || projectId;
+        } else if (req.body instanceof Buffer) {
+            data = req.body;
+        } else {
+            throw new ApiError('validation_error', 'Expected an application/zip body or multipart/form-data with a file part', 400);
+        }
+        if (!projectId) throw new ApiError('validation_error', 'Pick the project to import into (project_id)', 400);
+        const bundle = await unpackWorkflowBundle(data);
+        return reply.status(201).send(await importWorkflowBundle(bundle, projectId));
+    });
+
+    app.post('/api/workflows/:id/publish', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const entry = await publishWorkflow(id);
+        return reply.status(entry.published_at === entry.updated_at ? 201 : 200).send(entry);
+    });
+
+    app.get('/api/marketplace/workflows', async (_req, reply) => reply.send(await listPublishedWorkflows()));
+
+    app.get('/api/marketplace/workflows/:id', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        return reply.send(await getPublishedWorkflow(id));
+    });
+
+    app.get('/api/marketplace/workflows/:id/export', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        return sendZip(reply, await publishedWorkflowZip(id));
+    });
+
+    app.post('/api/marketplace/workflows/:id/use', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const { project_id } = parseBody(UsePublishedWorkflowSchema, req.body);
+        return reply.status(201).send(await importPublishedWorkflow(id, project_id));
+    });
+
+    app.delete('/api/marketplace/workflows/:id', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id } = req.params as { id: string };
+        await unpublishWorkflow(id);
+        return reply.status(204).send();
+    });
 
     app.post('/api/workflows', { preHandler: requireMcpToken }, async (req, reply) => {
         const input = parseBody(CreateWorkflowSchema, req.body);
@@ -78,9 +163,9 @@ export async function workflowsRoutes(app: FastifyInstance) {
 
     app.post('/api/workflows/:id/runs', { preHandler: requireMcpToken }, async (req, reply) => {
         const { id } = req.params as { id: string };
-        const { item_id } = parseBody(StartWorkflowRunSchema, req.body);
+        const { item_id, from_subtasks } = parseBody(StartWorkflowRunSchema, req.body);
         try {
-            const runId = await startWorkflowRun(id, item_id ?? null);
+            const runId = await startWorkflowRun(id, item_id ?? null, undefined, { fromSubtasks: from_subtasks ?? false });
             return reply.status(202).send({ run_id: runId });
         } catch (err) {
             mapStartError(err);

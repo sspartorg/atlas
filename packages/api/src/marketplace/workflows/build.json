@@ -1,0 +1,24 @@
+{
+    "id": "build",
+    "name": "Build sub-task",
+    "description": "Runs inside a Task's Delivery workflow, once per dev sub-task: the Coder implements it and the Code Reviewer approves it on the Task's branch.",
+    "input_kind": "sub_task",
+    "trigger": "manual",
+    "use_worktree": true,
+    "push_code": false,
+    "raises_pr": false,
+    "graph": {
+        "nodes": [
+            { "id": "start", "type": "start", "position": { "x": 0, "y": 0 } },
+            { "id": "coder", "type": "agent", "agent_id": "agent-coder", "position": { "x": 0, "y": 130 } },
+            { "id": "code-review", "type": "agent", "agent_id": "agent-code-reviewer", "position": { "x": 0, "y": 260 } },
+            { "id": "end", "type": "end", "position": { "x": 0, "y": 390 } }
+        ],
+        "edges": [
+            { "id": "e-start", "source": "start", "target": "coder", "kind": "pass" },
+            { "id": "e-coder", "source": "coder", "target": "code-review", "kind": "pass" },
+            { "id": "e-code-review", "source": "code-review", "target": "end", "kind": "pass" },
+            { "id": "e-code-review-fail", "source": "code-review", "target": "coder", "kind": "fail" }
+        ]
+    }
+}

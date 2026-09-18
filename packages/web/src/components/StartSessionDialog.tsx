@@ -13,13 +13,13 @@ import Autocomplete from '@mui/material/Autocomplete';
 import AddRounded from '@mui/icons-material/AddRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import TerminalRounded from '@mui/icons-material/TerminalRounded';
-import type { AgentCli, ICliSession, IEpic, IStory, IBug } from '@atlas/shared';
+import type { AgentCli, ICliSession, IIssueTreeResponse } from '@atlas/shared';
 import { DEFAULT_MODEL_BY_CLI } from '@atlas/shared';
 import { CLI_OPTIONS } from '../utils/cliPresentation.js';
 import { useCreateCliSession } from '../hooks/useCliSessions.js';
 import { useProjects } from '../hooks/useProjects.js';
 import { useCliModels } from '../hooks/useCliModels.js';
-import { useIssues } from '../hooks/useIssues.js';
+import { flattenIssueTree, useIssues } from '../hooks/useIssues.js';
 import { useToast } from '../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 
@@ -29,12 +29,13 @@ interface ItemPickerOption {
     groupLabel: string;
 }
 
-function buildItemOptions(epics: IEpic[], stories: IStory[], bugs: IBug[]): ItemPickerOption[] {
-    const opts: ItemPickerOption[] = [];
-    epics.forEach((e) => opts.push({ id: e.id, title: e.title, groupLabel: 'Epics' }));
-    stories.forEach((s) => opts.push({ id: s.id, title: s.title, groupLabel: 'Stories' }));
-    bugs.forEach((b) => opts.push({ id: b.id, title: b.title, groupLabel: 'Bugs' }));
-    return opts;
+function buildItemOptions(tree: IIssueTreeResponse): ItemPickerOption[] {
+    return [
+        ...tree.tasks.map((t) => ({ id: t.id, title: t.title, groupLabel: 'Tasks' })),
+        ...flattenIssueTree(tree.tree)
+            .filter((n) => n.kind === 'sub_task')
+            .map((n) => ({ id: n.id, title: n.title, groupLabel: 'Sub-tasks' })),
+    ];
 }
 
 interface StartSessionDialogProps {
@@ -78,7 +79,7 @@ export function StartSessionDialog({
     const { data: issuesData } = useIssues(projectId ? { projectId } : undefined);
     const itemOptions = useMemo<ItemPickerOption[]>(() => {
         if (!projectId || !issuesData) return [];
-        return buildItemOptions(issuesData.epics, issuesData.stories, issuesData.bugs);
+        return buildItemOptions(issuesData);
     }, [projectId, issuesData]);
 
     const modelsForCli = useMemo(

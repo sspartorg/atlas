@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Theme 13 — E2E teardown. Reads the PID file dropped by
-// global-setup.ts and SIGTERMs the api + web children. On Windows
+// global-setup.ts and SIGTERMs the api + web process groups. On Windows
 // we shell out to `taskkill /T /F` so the whole process tree dies
 // (`pnpm` → `node` → `vite` aren't all the same PID).
 
@@ -32,13 +32,16 @@ async function killTree(pid: number, platform: NodeJS.Platform): Promise<void> {
             /* already dead */
         }
     } else {
+        // global-setup spawns each server as a process-group leader; a
+        // negative pid signals the whole group (pnpm + node / vite + the
+        // fake CLI), not just the pnpm shim.
         try {
-            process.kill(pid, 'SIGTERM');
+            process.kill(-pid, 'SIGTERM');
             await new Promise((r) => setTimeout(r, 1500));
             // Force-kill if still alive.
             try {
-                process.kill(pid, 0);
-                process.kill(pid, 'SIGKILL');
+                process.kill(-pid, 0);
+                process.kill(-pid, 'SIGKILL');
             } catch {
                 /* already gone */
             }

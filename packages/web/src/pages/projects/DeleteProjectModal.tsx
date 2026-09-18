@@ -322,9 +322,8 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                             }}
                         >
                             <strong>
-                                Both options permanently wipe every epic, story, sub-task,
-                                sub-bug, bug, agent run, comment, and notification for this
-                                project.
+                                Both options permanently wipe every task, sub-task, agent
+                                run, comment, and notification for this project.
                             </strong>{' '}
                             They differ only in whether the workspace folder on disk is kept.
                             Re-adding the repo later starts a fresh empty project — the history

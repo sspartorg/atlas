@@ -148,35 +148,24 @@ describe('buildPrompt', () => {
         await insertAgent({ id: 'agent-coder' });
         await insertItem({
             id: 'ATL-1',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
-            title: 'Epic Title',
-            description: 'Epic body',
+            title: 'Task Title',
+            description: 'Task body',
+            acceptance_criteria: 'Task AC',
+            spec_md: '## Task Spec',
         });
         await insertItem({
             id: 'ATL-2',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
-            title: 'Story Title',
-            description: 'Story body',
-            spec_md: '## Spec',
-        });
-        await insertItem({
-            id: 'ATL-5',
-            type: 'bug',
-            project_id: 'p1',
-            parent_id: 'ATL-1',
-            parent_type: 'epic',
-            title: 'Bug Title',
-            description: 'Bug body',
-            acceptance_criteria: '',
-            steps_to_reproduce: '',
-            expected: '',
-            actual: '',
-            frequency: 'sometimes',
-            failure_scope: 'cosmetic',
+            parent_type: 'task',
+            title: 'Sub-task Title',
+            description: 'Sub-task body',
+            acceptance_criteria: 'Sub-task AC',
+            // Sub-tasks carry no spec of their own; a stray value is ignored.
+            spec_md: 'stray sub-task spec',
         });
     });
 
@@ -185,79 +174,100 @@ describe('buildPrompt', () => {
     });
 
     it('throws when the issue does not exist', async () => {
-        await expect(buildPrompt({ agent: agent(), issueType: 'story', issueId: 'nope', constitutionMd: '' })).rejects.toThrow(/not found/);
+        await expect(buildPrompt({ agent: agent(), issueType: 'sub_task', issueId: 'nope', constitutionMd: '' })).rejects.toThrow(/not found/);
     });
 
-    it('assembles constitution + role + context for a story', async () => {
-        const out = await buildPrompt({ agent: agent({ prompt_md: '# I am the agent' }), issueType: 'story', issueId: 'ATL-2', constitutionMd: '## Be safe' });
+    it('assembles constitution + role + context for a sub-task, with its parent task', async () => {
+        const out = await buildPrompt({ agent: agent({ prompt_md: '# I am the agent' }), issueType: 'sub_task', issueId: 'ATL-2', constitutionMd: '## Be safe' });
         // The `# Atlas Constitution` header is owned by buildConstitutionMarkdown;
         // buildPrompt just inlines whatever it receives as `constitutionMd`.
         expect(out).toContain('## Be safe');
         expect(out).toContain('# Your Role');
         expect(out).toContain('# I am the agent');
-        expect(out).toContain('**Issue type:** story');
+        expect(out).toContain('**Issue type:** sub_task');
         expect(out).toContain('**Issue ID:** ATL-2');
         expect(out).toContain('**Project:** Atlas');
-        expect(out).toContain('**Epic:** Epic Title');
-        expect(out).toContain('Story Title');
-        expect(out).toContain('Story body');
-        expect(out).toContain('## Existing Spec');
-        expect(out).toContain('## Spec');
+        expect(out).toContain('**Task:** Task Title (ATL-1)');
+        expect(out).toContain('Sub-task Title');
+        expect(out).toContain('Sub-task body');
+        expect(out).toContain('## Acceptance criteria\nSub-task AC');
+        expect(out).not.toContain('## Existing Spec');
+        expect(out).not.toContain('stray sub-task spec');
+        expect(out).toContain('## Parent Task — Task Title (ATL-1)');
+        expect(out).toContain('### Task description\nTask body');
+        expect(out).toContain('### Task acceptance criteria\nTask AC');
+        expect(out).toContain('### Task spec\n## Task Spec');
         expect(out).toContain('# Output Instructions');
     });
 
+    it("a sub-task prompt carries the Owner's reply posted on the parent task", async () => {
+        await commentsService.create({ author: 'owner', issue_type: 'task', issue_id: 'ATL-1', body: 'Owner: use the v2 API.' });
+        await commentsService.create({ author: 'agent', agent_id: 'agent-coder', issue_type: 'task', issue_id: 'ATL-1', body: 'Agent: asking about the API.' });
+        const out = await buildPrompt({ agent: agent(), issueType: 'sub_task', issueId: 'ATL-2', constitutionMd: '' });
+        const taskThread = out.slice(out.indexOf('### Task discussion'));
+        expect(taskThread).toContain('**Owner**');
+        expect(taskThread).toContain('Owner: use the v2 API.');
+        expect(taskThread).toContain('Agent: asking about the API.');
+        // The sub-task's own thread is still empty.
+        expect(out).toContain('_(no comments yet');
+    });
+
+    it("keeps only the task thread's latest comments", async () => {
+        for (let i = 1; i <= 14; i++) {
+            await commentsService.create({ author: 'owner', issue_type: 'task', issue_id: 'ATL-1', body: `task comment ${i}.` });
+        }
+        const out = await buildPrompt({ agent: agent(), issueType: 'sub_task', issueId: 'ATL-2', constitutionMd: '' });
+        expect(out).toContain('task comment 14.');
+        expect(out).toContain('task comment 3.');
+        expect(out).not.toContain('task comment 2.');
+    });
+
     it('skips the constitution block when empty', async () => {
-        const out = await buildPrompt({ agent: agent({ prompt_md: 'a' }), issueType: 'epic', issueId: 'ATL-1', constitutionMd: '   ' });
+        const out = await buildPrompt({ agent: agent({ prompt_md: 'a' }), issueType: 'task', issueId: 'ATL-1', constitutionMd: '   ' });
         expect(out).not.toContain('# Atlas Constitution');
     });
 
     it('skips the role block when prompt_md is empty/whitespace', async () => {
-        const out = await buildPrompt({ agent: agent({ prompt_md: '   ' }), issueType: 'epic', issueId: 'ATL-1', constitutionMd: 'rules' });
+        const out = await buildPrompt({ agent: agent({ prompt_md: '   ' }), issueType: 'task', issueId: 'ATL-1', constitutionMd: 'rules' });
         expect(out).not.toContain('# Your Role');
     });
 
     it('renders _(none)_ placeholder for empty description', async () => {
         await testDb.updateTable('items').set({ description: '' }).where('id', '=', 'ATL-2').execute();
-        const out = await buildPrompt({ agent: agent(), issueType: 'story', issueId: 'ATL-2', constitutionMd: '' });
+        const out = await buildPrompt({ agent: agent(), issueType: 'sub_task', issueId: 'ATL-2', constitutionMd: '' });
         expect(out).toContain('_(none)_');
     });
 
-    it('builds an epic prompt without epic/spec section', async () => {
-        const out = await buildPrompt({ agent: agent({ prompt_md: 'r' }), issueType: 'epic', issueId: 'ATL-1', constitutionMd: '' });
-        expect(out).toContain('**Issue type:** epic');
-        expect(out).toContain('Epic Title');
+    it('builds a task prompt with its spec and no parent-task section', async () => {
+        const out = await buildPrompt({ agent: agent({ prompt_md: 'r' }), issueType: 'task', issueId: 'ATL-1', constitutionMd: '' });
+        expect(out).toContain('**Issue type:** task');
+        expect(out).toContain('Task Title');
         expect(out).toContain('**Project:** Atlas');
-        expect(out).not.toContain('**Epic:**');
-        expect(out).not.toContain('## Existing Spec');
+        expect(out).toContain('## Acceptance criteria\nTask AC');
+        expect(out).toContain('## Existing Spec\n## Task Spec');
+        expect(out).not.toContain('**Task:**');
+        expect(out).not.toContain('## Parent Task');
     });
 
-    it('builds a bug prompt with minimal context (no project/epic context)', async () => {
-        const out = await buildPrompt({ agent: agent({ prompt_md: 'r' }), issueType: 'bug', issueId: 'ATL-5', constitutionMd: '' });
-        expect(out).toContain('**Issue type:** bug');
-        expect(out).toContain('Bug Title');
-        expect(out).not.toContain('**Project:**');
-        expect(out).not.toContain('**Epic:**');
-    });
-
-    it('throws for an unsupported issue type', async () => {
-        await expect(buildPrompt({ agent: agent(), issueType: 'sub_task', issueId: 'ATL-3', constitutionMd: '' })).rejects.toThrow(/not found/);
+    it('throws when the id is not of the requested kind', async () => {
+        await expect(buildPrompt({ agent: agent(), issueType: 'task', issueId: 'ATL-2', constitutionMd: '' })).rejects.toThrow(/not found/);
     });
 
     it('renders the discussion section with owner + agent comments in chronological order', async () => {
         await commentsService.create({
             author: 'owner',
-            issue_type: 'story',
+            issue_type: 'sub_task',
             issue_id: 'ATL-2',
             body: 'Owner asks for clarification.',
         });
         await commentsService.create({
             author: 'agent',
             agent_id: 'agent-coder',
-            issue_type: 'story',
+            issue_type: 'sub_task',
             issue_id: 'ATL-2',
             body: 'Agent replies with plan.',
         });
-        const out = await buildPrompt({ agent: agent(), issueType: 'story', issueId: 'ATL-2', constitutionMd: '' });
+        const out = await buildPrompt({ agent: agent(), issueType: 'sub_task', issueId: 'ATL-2', constitutionMd: '' });
         expect(out).toContain('## Discussion');
         expect(out).toContain('**Owner**');
         expect(out).toContain('Owner asks for clarification.');
@@ -273,7 +283,7 @@ describe('buildPrompt', () => {
     it('item-attached performer prompts carry the End-of-run memory draft clause', async () => {
         const out = await buildPrompt({
             agent: agent({ prompt_md: 'r' }),
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-2',
             constitutionMd: '',
         });
@@ -295,7 +305,7 @@ describe('buildPrompt', () => {
             .execute();
         const out = await buildPrompt({
             agent: agent({ prompt_md: 'r' }),
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-2',
             constitutionMd: '',
         });
@@ -318,7 +328,7 @@ describe('buildPrompt', () => {
     it('still renders the Run Outcome Contract when the agent has no checklist rows', async () => {
         const out = await buildPrompt({
             agent: agent({ prompt_md: 'r' }),
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-2',
             constitutionMd: '',
         });
@@ -331,17 +341,17 @@ describe('buildPrompt', () => {
         // ATL-2 (story) already exists from beforeEach; insert a link target.
         await insertItem({
             id: 'ATL-6',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Linked Target',
             description: 'deps target',
         });
         await itemLinks.create('ATL-2', 'ATL-6', 'depends_on');
         const out = await buildPrompt({
             agent: agent({ prompt_md: 'r' }),
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-2',
             constitutionMd: '',
         });
@@ -441,9 +451,9 @@ describe('buildLinkedItemsSection', () => {
     beforeEach(async () => {
         await truncateAll();
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Epic A' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Epic B' });
-        await insertItem({ id: 'ATL-3', type: 'epic', project_id: 'p1', title: 'Epic C' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Epic A' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Epic B' });
+        await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'Epic C' });
     });
 
     afterAll(async () => {
@@ -572,7 +582,7 @@ describe('buildPrompt project-scope (Theme 09b)', () => {
             .execute();
         await insertItem({
             id: 'ATL-1',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
             title: 'First epic',
             description: 'The PRD body',
@@ -670,16 +680,16 @@ describe('buildPrompt — optional field null branches (A5)', () => {
         // NULL path requires a follow-up update).
         await insertItem({
             id: 'ATL-1',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
             title: 'Epic with null body',
         });
         await insertItem({
             id: 'ATL-2',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Null Story',
         });
         await testDb
@@ -689,7 +699,7 @@ describe('buildPrompt — optional field null branches (A5)', () => {
             .execute();
         const out = await buildPrompt({
             agent: agent({ prompt_md: 'r' }),
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-2',
             constitutionMd: '',
         });
@@ -702,23 +712,18 @@ describe('buildPrompt — optional field null branches (A5)', () => {
     it('renders bug prompt when description is NULL (description ?? "" branch)', async () => {
         await insertItem({
             id: 'ATL-3',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
             title: 'Parent Epic',
         });
         await insertItem({
             id: 'ATL-4',
-            type: 'bug',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-3',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Null Body Bug',
             acceptance_criteria: '',
-            steps_to_reproduce: '',
-            expected: '',
-            actual: '',
-            frequency: 'sometimes',
-            failure_scope: 'cosmetic',
         });
         await testDb
             .updateTable('items')
@@ -727,7 +732,7 @@ describe('buildPrompt — optional field null branches (A5)', () => {
             .execute();
         const out = await buildPrompt({
             agent: agent({ prompt_md: 'r' }),
-            issueType: 'bug',
+            issueType: 'sub_task',
             issueId: 'ATL-4',
             constitutionMd: '',
         });
@@ -738,7 +743,7 @@ describe('buildPrompt — optional field null branches (A5)', () => {
     it('renders epic prompt when description is NULL (description ?? "" branch)', async () => {
         await insertItem({
             id: 'ATL-5',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
             title: 'Epic No Body',
         });
@@ -749,7 +754,7 @@ describe('buildPrompt — optional field null branches (A5)', () => {
             .execute();
         const out = await buildPrompt({
             agent: agent({ prompt_md: 'r' }),
-            issueType: 'epic',
+            issueType: 'task',
             issueId: 'ATL-5',
             constitutionMd: '',
         });
@@ -802,14 +807,14 @@ describe('buildPrompt — optional field null branches (A5)', () => {
         // exercises the _(no description)_ fallback + skips `_Spec:_`.
         await insertItem({
             id: 'EPI-1',
-            type: 'epic',
+            type: 'task',
             project_id: 'p-epi',
             title: 'Epic no body',
         });
         // Second epic has spec_md set — exercises the spec_md non-null arm.
         await insertItem({
             id: 'EPI-2',
-            type: 'epic',
+            type: 'task',
             project_id: 'p-epi',
             title: 'Epic with spec',
             description: 'desc',
@@ -848,11 +853,11 @@ describe('buildPrompt — agent settings substitution (A5)', () => {
     });
 
     it('renders (unset) for a placeholder whose key is not in settings_json', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         const ag = { ...agent({ prompt_md: 'Source: {{ missing }}' }), settings_json: { other: 'x' } } as IAgent;
         const out = await buildPrompt({
             agent: ag,
-            issueType: 'epic',
+            issueType: 'task',
             issueId: 'ATL-1',
             constitutionMd: '',
         });
@@ -860,11 +865,11 @@ describe('buildPrompt — agent settings substitution (A5)', () => {
     });
 
     it('renders (unset) when the value is explicitly null', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         const ag = { ...agent({ prompt_md: 'Source: {{ key }}' }), settings_json: { key: null } } as IAgent;
         const out = await buildPrompt({
             agent: ag,
-            issueType: 'epic',
+            issueType: 'task',
             issueId: 'ATL-1',
             constitutionMd: '',
         });
@@ -872,11 +877,11 @@ describe('buildPrompt — agent settings substitution (A5)', () => {
     });
 
     it('JSON.stringifies non-string values', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         const ag = { ...agent({ prompt_md: 'Count: {{ n }}; List: {{ list }}' }), settings_json: { n: 7, list: ['a', 'b'] } } as IAgent;
         const out = await buildPrompt({
             agent: ag,
-            issueType: 'epic',
+            issueType: 'task',
             issueId: 'ATL-1',
             constitutionMd: '',
         });
@@ -885,11 +890,11 @@ describe('buildPrompt — agent settings substitution (A5)', () => {
     });
 
     it('passes a string value through unchanged', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         const ag = { ...agent({ prompt_md: 'Source: {{ key }}' }), settings_json: { key: 'hello' } } as IAgent;
         const out = await buildPrompt({
             agent: ag,
-            issueType: 'epic',
+            issueType: 'task',
             issueId: 'ATL-1',
             constitutionMd: '',
         });
@@ -904,8 +909,8 @@ describe('buildLinkedItemsSection — AC empty/whitespace branches (A5)', () => 
     beforeEach(async () => {
         await truncateAll();
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Epic A' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Epic B' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Epic A' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Epic B' });
     });
 
     afterAll(async () => {
@@ -1042,17 +1047,17 @@ describe('buildPrompt — self-memory injection (P10)', () => {
         await insertAgent({ id: 'agent-coder' });
         await insertItem({
             id: 'ATL-1',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
             title: 'Epic Title',
             description: 'Epic body',
         });
         await insertItem({
             id: 'ATL-2',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Story Title',
             description: 'Story body',
         });
@@ -1069,7 +1074,7 @@ describe('buildPrompt — self-memory injection (P10)', () => {
         );
         const out = await buildPrompt({
             agent: agent({ prompt_md: 'role' }),
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-2',
             constitutionMd: '',
         });
@@ -1087,7 +1092,7 @@ describe('buildPrompt — self-memory injection (P10)', () => {
         // regenerator.
         const out = await buildPrompt({
             agent: agent({ prompt_md: 'role' }),
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-2',
             constitutionMd: '',
         });
@@ -1136,7 +1141,7 @@ describe('buildPrompt — self-memory injection (P10)', () => {
 
         const out = await buildPrompt({
             agent: agent({ prompt_md: 'r' }),
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-2',
             constitutionMd: '',
         });
@@ -1165,14 +1170,14 @@ describe('prompt-builder — remaining branch gaps (PB-EXTRA)', () => {
 
     // Line 17: `settings ?? {}` — settings is null / undefined
     it('renders (unset) for placeholder when settings_json is null on the agent', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         // settings_json is not set on the agent helper (undefined → ?? {} fires)
         const ag = { ...agent({ prompt_md: 'Source: {{ x }}' }) } as IAgent;
         // Explicitly null out settings_json to hit the null arm
         (ag as IAgent & { settings_json: null }).settings_json = null;
         const out = await buildPrompt({
             agent: ag,
-            issueType: 'epic',
+            issueType: 'task',
             issueId: 'ATL-1',
             constitutionMd: '',
         });
@@ -1181,7 +1186,7 @@ describe('prompt-builder — remaining branch gaps (PB-EXTRA)', () => {
 
     // Line 123: `c.agent_id ?? 'agent'` — agent_id is null on an agent comment
     it('formatComments falls back to "agent" when agent_id is null on an agent comment', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         // Insert a comment with author='agent' and agent_id=null directly (item_id FK)
         await testDb
             .insertInto('comments')
@@ -1194,7 +1199,7 @@ describe('prompt-builder — remaining branch gaps (PB-EXTRA)', () => {
             .execute();
         const out = await buildPrompt({
             agent: agent({ prompt_md: 'r' }),
-            issueType: 'epic',
+            issueType: 'task',
             issueId: 'ATL-1',
             constitutionMd: '',
         });
@@ -1374,7 +1379,7 @@ describe('getIssueContext — not-found branches (round 2)', () => {
     // true arm, surfaced through buildPrompt as a thrown "not found" error.
     it('throws not-found for a non-existent epic id', async () => {
         await expect(
-            buildPrompt({ agent: agent(), issueType: 'epic', issueId: 'does-not-exist', constitutionMd: '' }),
+            buildPrompt({ agent: agent(), issueType: 'task', issueId: 'does-not-exist', constitutionMd: '' }),
         ).rejects.toThrow(/not found/);
     });
 
@@ -1382,7 +1387,7 @@ describe('getIssueContext — not-found branches (round 2)', () => {
     // true arm.
     it('throws not-found for a non-existent bug id', async () => {
         await expect(
-            buildPrompt({ agent: agent(), issueType: 'bug', issueId: 'does-not-exist', constitutionMd: '' }),
+            buildPrompt({ agent: agent(), issueType: 'sub_task', issueId: 'does-not-exist', constitutionMd: '' }),
         ).rejects.toThrow(/not found/);
     });
 });
@@ -1391,8 +1396,8 @@ describe('buildLinkedItemsSection — dep description null branch (round 2)', ()
     beforeEach(async () => {
         await truncateAll();
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Epic A' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'Epic B' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Epic A' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Epic B' });
     });
 
     afterAll(async () => {
@@ -1425,16 +1430,16 @@ describe('buildPrompt — omitConstitution flag (round 2)', () => {
         await insertAgent({ id: 'agent-coder' });
         await insertItem({
             id: 'ATL-0',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
             title: 'Parent Epic',
         });
         await insertItem({
             id: 'ATL-1',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-0',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Story Title',
             description: 'Story body',
         });
@@ -1451,7 +1456,7 @@ describe('buildPrompt — omitConstitution flag (round 2)', () => {
     it('omits the constitution section entirely when omitConstitution is true, even with non-empty constitutionMd', async () => {
         const out = await buildPrompt({
             agent: agent({ prompt_md: 'r' }),
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-1',
             constitutionMd: '## Safety rules that would normally render',
             omitConstitution: true,
@@ -1465,7 +1470,7 @@ describe('buildPrompt — omitConstitution flag (round 2)', () => {
     it('still renders the constitution when omitConstitution is false (default)', async () => {
         const out = await buildPrompt({
             agent: agent({ prompt_md: 'r' }),
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-1',
             constitutionMd: '## Safety rules',
         });

@@ -7,14 +7,14 @@ import { ATLAS_PALETTE, ELEVATION, TYPOGRAPHY } from '../../theme/tokens.js';
 import { getAgentView } from '../agents/agentViewModel.js';
 import { LiveDot } from '../../components/LiveDot.js';
 import type { INodeRunInfo, WfNode } from './graph.js';
-import { INPUT_KIND_LABEL, TRIGGER_LABEL, deliveryLabel } from './labels.js';
+import { INPUT_KIND_LABEL, TRIGGER_LABEL, deliveryLabel, subtasksLabel } from './labels.js';
 
 export interface ICanvasContext {
     agentsById: Map<string, IAgent>;
     workflowsById: Map<string, IWorkflow>;
     errorNodeIds: Set<string>;
     runStates: Map<string, INodeRunInfo> | null;
-    delivery: Pick<IWorkflow, 'push_code' | 'raises_pr' | 'input_kind' | 'trigger'> | null;
+    delivery: Pick<IWorkflow, 'push_code' | 'raises_pr' | 'push_to_default' | 'input_kind' | 'trigger'> | null;
 }
 
 export const CanvasContext = createContext<ICanvasContext>({
@@ -186,9 +186,10 @@ function NodeShell({ id, selected, accent, children, handles, pill }: ShellProps
                     background: ATLAS_PALETTE.slate60,
                 },
                 '& .wf-handle-pass': { background: ATLAS_PALETTE.success },
-                '& .wf-handle-fail': { background: ATLAS_PALETTE.error },
-                '& .wf-handle-split.wf-handle-pass': { top: '32%' },
-                '& .wf-handle-split.wf-handle-fail': { top: '70%' },
+                '& .wf-handle-fail': { background: ATLAS_PALETTE.error, top: '66%' },
+                // The side entry only matters for loops; keep it faint until hovered.
+                '& .wf-handle-loop': { background: ATLAS_PALETTE.slate40, top: '30%', opacity: 0.25 },
+                '&:hover .wf-handle-loop': { opacity: 1 },
             }}
         >
             {children}
@@ -233,24 +234,34 @@ function Caption({ children, mono }: { children: ReactNode; mono?: boolean }) {
     );
 }
 
-function HandleLabel({ kind }: { kind: 'pass' | 'fail' }) {
+function FailLabel() {
     return (
         <Typography
             sx={{
                 position: 'absolute',
                 right: 10,
-                top: kind === 'pass' ? '32%' : '70%',
+                top: '66%',
                 transform: 'translateY(-50%)',
                 fontSize: 9.5,
                 fontWeight: 600,
                 letterSpacing: '0.04em',
                 textTransform: 'uppercase',
-                color: kind === 'pass' ? ATLAS_PALETTE.successFg : ATLAS_PALETTE.dangerFg,
+                color: ATLAS_PALETTE.dangerFg,
                 pointerEvents: 'none',
             }}
         >
-            {kind}
+            fail
         </Typography>
+    );
+}
+
+/** Input on top, and a side entry for connections looping back up the graph. */
+function TargetHandles() {
+    return (
+        <>
+            <Handle type="target" position={Position.Top} id="in" />
+            <Handle type="target" position={Position.Right} id="loop" className="wf-handle-loop" />
+        </>
     );
 }
 
@@ -261,7 +272,7 @@ function StartNode({ id, selected }: NodeProps<WfNode>) {
             id={id}
             selected={selected}
             pill
-            handles={<Handle type="source" position={Position.Right} id="pass" className="wf-handle-pass" />}
+            handles={<Handle type="source" position={Position.Bottom} id="pass" className="wf-handle-pass" />}
         >
             <Glyph name="play_arrow" color={ATLAS_PALETTE.onAccent} bg={ATLAS_PALETTE.slate} />
             <Box sx={{ minWidth: 0 }}>
@@ -287,21 +298,10 @@ function AgentNode({ id, data, selected }: NodeProps<WfNode>) {
             accent={accent}
             handles={
                 <>
-                    <Handle type="target" position={Position.Left} />
-                    <Handle
-                        type="source"
-                        position={Position.Right}
-                        id="pass"
-                        className="wf-handle-split wf-handle-pass"
-                    />
-                    <Handle
-                        type="source"
-                        position={Position.Right}
-                        id="fail"
-                        className="wf-handle-split wf-handle-fail"
-                    />
-                    <HandleLabel kind="pass" />
-                    <HandleLabel kind="fail" />
+                    <TargetHandles />
+                    <Handle type="source" position={Position.Bottom} id="pass" className="wf-handle-pass" />
+                    <Handle type="source" position={Position.Right} id="fail" className="wf-handle-fail" />
+                    <FailLabel />
                 </>
             }
         >
@@ -312,7 +312,7 @@ function AgentNode({ id, data, selected }: NodeProps<WfNode>) {
             />
             <Box sx={{ minWidth: 0, pr: 8 }}>
                 <Title>{agent?.name ?? data.agent_id ?? 'Choose an agent'}</Title>
-                <Caption mono>{agent ? `${agent.cli} · ${agent.model}` : 'not installed'}</Caption>
+                <Caption mono>{agent ? `${agent.cli} · ${agent.model} · ${agent.effort}` : 'not installed'}</Caption>
             </Box>
         </NodeShell>
     );
@@ -325,8 +325,8 @@ function OwnerNode({ id, selected }: NodeProps<WfNode>) {
             selected={selected}
             handles={
                 <>
-                    <Handle type="target" position={Position.Left} />
-                    <Handle type="source" position={Position.Right} id="pass" className="wf-handle-pass" />
+                    <TargetHandles />
+                    <Handle type="source" position={Position.Bottom} id="pass" className="wf-handle-pass" />
                 </>
             }
         >
@@ -339,27 +339,46 @@ function OwnerNode({ id, selected }: NodeProps<WfNode>) {
     );
 }
 
-function EndNode({ id, data, selected }: NodeProps<WfNode>) {
-    const { delivery, workflowsById } = useContext(CanvasContext);
-    const child = data.child_workflow_id ? workflowsById.get(data.child_workflow_id) : undefined;
-    const testChild = data.test_child_workflow_id ? workflowsById.get(data.test_child_workflow_id) : undefined;
+function SubtasksNode({ id, data, selected }: NodeProps<WfNode>) {
+    const { workflowsById, runStates } = useContext(CanvasContext);
+    const sub = data.sub_workflow_id ? workflowsById.get(data.sub_workflow_id) : undefined;
+    const progress = runStates?.get(id)?.subtasks;
+    return (
+        <NodeShell
+            id={id}
+            selected={selected}
+            accent={ATLAS_PALETTE.brandBlue}
+            handles={
+                <>
+                    <TargetHandles />
+                    <Handle type="source" position={Position.Bottom} id="pass" className="wf-handle-pass" />
+                </>
+            }
+        >
+            <Glyph name="checklist" color={ATLAS_PALETTE.accentFg} bg={ATLAS_PALETTE.accentSoft} />
+            <Box sx={{ minWidth: 0 }}>
+                <Title>{sub?.name ?? 'Sub-tasks'}</Title>
+                <Caption>
+                    {progress ? `${progress.done} of ${progress.started} sub-tasks done` : subtasksLabel(data.label)}
+                </Caption>
+            </Box>
+        </NodeShell>
+    );
+}
+
+function EndNode({ id, selected }: NodeProps<WfNode>) {
+    const { delivery } = useContext(CanvasContext);
     return (
         <NodeShell
             id={id}
             selected={selected}
             pill
-            handles={<Handle type="target" position={Position.Left} />}
+            handles={<TargetHandles />}
         >
             <Glyph name="flag" color={ATLAS_PALETTE.successFg} bg={ATLAS_PALETTE.successSoft} />
             <Box sx={{ minWidth: 0 }}>
                 <Title>End</Title>
                 <Caption>{deliveryLabel(delivery)}</Caption>
-                {data.child_workflow_id && (
-                    <Caption>→ {child?.name ?? 'Child workflow'}</Caption>
-                )}
-                {data.test_child_workflow_id && (
-                    <Caption>Tests → {testChild?.name ?? 'Test workflow'}</Caption>
-                )}
             </Box>
         </NodeShell>
     );
@@ -369,5 +388,6 @@ export const NODE_TYPES = {
     start: StartNode,
     agent: AgentNode,
     owner: OwnerNode,
+    subtasks: SubtasksNode,
     end: EndNode,
 };

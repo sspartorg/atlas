@@ -32,7 +32,7 @@ const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
     { value: 'done', label: 'done' },
 ];
 
-const TYPE_VALUES: SearchType[] = ['epic', 'story', 'bug', 'sub_task', 'sub_bug', 'prompt'];
+const TYPE_VALUES: SearchType[] = ['task', 'sub_task', 'prompt'];
 
 interface AddOption {
     key: 'type' | 'project' | 'updated' | 'status' | 'labels';

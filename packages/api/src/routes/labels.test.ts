@@ -37,7 +37,7 @@ describe('GET /api/labels', () => {
 
     it('returns labels from seeded items', async () => {
         // Insert an item with labels via direct DB (items table stores labels as jsonb)
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Epic One' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Epic One' });
         // Update labels directly since insertItem doesn't support labels param
         await testDb
             .updateTable('items')
@@ -58,8 +58,8 @@ describe('GET /api/labels', () => {
 
     it('returns labels filtered by project_id', async () => {
         await insertProject('p2', 'ALT');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'P1 Epic' });
-        await insertItem({ id: 'ALT-1', type: 'epic', project_id: 'p2', title: 'P2 Epic' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'P1 Epic' });
+        await insertItem({ id: 'ALT-1', type: 'task', project_id: 'p2', title: 'P2 Epic' });
         await testDb
             .updateTable('items')
             .set({ labels: JSON.stringify(['p1-only']) })

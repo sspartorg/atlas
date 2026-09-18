@@ -6,6 +6,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Switch from '@mui/material/Switch';
 import Link from '@mui/material/Link';
 import type { IAgent, IProject, IWorkflow } from '@atlas/shared';
+import { SelectableCard } from '../../components/SchedulePresetFields.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { SectionLabel, StartInspector } from './StartInspector.js';
 import type { IWfNodeData, WfNode } from './graph.js';
@@ -20,7 +21,7 @@ interface Props {
     onNodeData: (patch: IWfNodeData) => void;
 }
 
-const TITLES = { start: 'Workflow settings', agent: 'Agent step', owner: 'Owner', end: 'End' } as const;
+const TITLES = { start: 'Workflow settings', agent: 'Agent step', owner: 'Owner', subtasks: 'Sub-tasks step', end: 'End' } as const;
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
     return (
@@ -97,65 +98,103 @@ function AgentPanel({ node, agents, onNodeData }: Pick<Props, 'agents' | 'onNode
     );
 }
 
-function EndPanel({ workflow, node, workflows, onChange, onNodeData }: Omit<Props, 'agents' | 'projects'> & { node: WfNode }) {
-    const children = workflows.filter(
-        (w) => w.id !== workflow.id && w.input_kind === 'item' && w.project_id === workflow.project_id,
-    );
+function SubtasksPanel({ workflow, node, workflows, onNodeData }: Pick<Props, 'workflow' | 'workflows' | 'onNodeData'> & { node: WfNode }) {
+    const subs = workflows.filter((w) => w.input_kind === 'sub_task' && w.project_id === workflow.project_id);
+    const picked = subs.find((w) => w.id === node.data.sub_workflow_id);
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <TextField
+                select
+                label="Sub-workflow"
+                size="small"
+                value={picked ? picked.id : ''}
+                onChange={(e) => onNodeData({ sub_workflow_id: e.target.value || undefined })}
+                helperText={subs.length === 0 ? 'Create a workflow with the Sub-task workflow input first' : 'Runs once per sub-task'}
+                fullWidth
+            >
+                {subs.map((w) => (
+                    <MenuItem key={w.id} value={w.id}>
+                        {w.name}
+                    </MenuItem>
+                ))}
+            </TextField>
+            <TextField
+                label="Label"
+                size="small"
+                value={node.data.label ?? ''}
+                onChange={(e) => onNodeData({ label: e.target.value || undefined })}
+                helperText="Only sub-tasks with this label. Empty: every sub-task no other Sub-tasks step claims"
+                slotProps={{ htmlInput: { maxLength: 40 } }}
+                fullWidth
+            />
+            {picked && (
+                <Link component={RouterLink} to={`/workflows/${picked.id}`} sx={{ fontSize: 13 }}>
+                    Open {picked.name}
+                </Link>
+            )}
+            <Explain>
+                The run works this Task&apos;s open sub-tasks one at a time, oldest first, on the Task&apos;s own branch — each
+                through the sub-workflow — then follows the pass connection. A sub-task that needs you pauses the whole Task
+                until you reply on either one.
+            </Explain>
+        </Box>
+    );
+}
+
+type DeliveryMode = 'none' | 'push' | 'pr' | 'default';
+
+const DELIVERY_MODES: Array<{ mode: DeliveryMode; title: string; sub: string }> = [
+    { mode: 'pr', title: 'Push + pull request', sub: 'One branch and one PR per run for you to review' },
+    { mode: 'push', title: 'Push branch', sub: 'Push the run’s branch, no PR' },
+    { mode: 'default', title: 'Push to the default branch', sub: 'Publish straight to the default branch, no review' },
+    { mode: 'none', title: 'Keep local', sub: 'Leave the work in the worktree' },
+];
+
+function deliveryMode(w: IWorkflow): DeliveryMode {
+    if (!w.push_code) return 'none';
+    if (w.push_to_default) return 'default';
+    return w.raises_pr ? 'pr' : 'push';
+}
+
+const DELIVERY_PATCH: Record<DeliveryMode, Pick<IWorkflow, 'push_code' | 'raises_pr' | 'push_to_default'>> = {
+    none: { push_code: false, raises_pr: false, push_to_default: false },
+    push: { push_code: true, raises_pr: false, push_to_default: false },
+    pr: { push_code: true, raises_pr: true, push_to_default: false },
+    default: { push_code: true, raises_pr: false, push_to_default: true },
+};
+
+function EndPanel({ workflow, onChange }: Pick<Props, 'workflow' | 'onChange'>) {
+    if (workflow.input_kind === 'sub_task') {
+        return (
+            <Explain>
+                The sub-task is done: its work stays on the Task&apos;s branch and it goes to review. The Task workflow pushes and
+                opens the pull request once every sub-task is done.
+            </Explain>
+        );
+    }
+    const mode = deliveryMode(workflow);
+    return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <ToggleRow
+                label="Use a worktree"
+                sub="All steps share one checkout and branch"
+                checked={workflow.use_worktree}
+                onChange={(v) => onChange({ use_worktree: v })}
+            />
             <Box>
                 <SectionLabel>Delivery</SectionLabel>
-                <ToggleRow
-                    label="Use a worktree"
-                    sub="All steps share one checkout and branch"
-                    checked={workflow.use_worktree}
-                    onChange={(v) => onChange({ use_worktree: v })}
-                />
-                <ToggleRow
-                    label="Push branch"
-                    sub="Push the run's branch when it ends"
-                    checked={workflow.push_code}
-                    onChange={(v) => onChange({ push_code: v })}
-                />
-                <ToggleRow
-                    label="Open pull request"
-                    sub="One PR per run"
-                    checked={workflow.raises_pr}
-                    onChange={(v) => onChange({ raises_pr: v })}
-                />
+                <Box sx={{ display: 'grid', gap: 1.5 }}>
+                    {DELIVERY_MODES.map((d) => (
+                        <SelectableCard
+                            key={d.mode}
+                            title={d.title}
+                            sub={d.sub}
+                            selected={mode === d.mode}
+                            onClick={() => onChange(DELIVERY_PATCH[d.mode])}
+                        />
+                    ))}
+                </Box>
             </Box>
-            <TextField
-                select
-                label="Child workflow"
-                size="small"
-                value={node.data.child_workflow_id ?? ''}
-                onChange={(e) => onNodeData({ child_workflow_id: e.target.value || undefined })}
-                helperText="Items created during the run are queued here"
-                fullWidth
-            >
-                <MenuItem value="">None</MenuItem>
-                {children.map((w) => (
-                    <MenuItem key={w.id} value={w.id}>
-                        {w.name}
-                    </MenuItem>
-                ))}
-            </TextField>
-            <TextField
-                select
-                label="Test items workflow"
-                size="small"
-                value={node.data.test_child_workflow_id ?? ''}
-                onChange={(e) => onNodeData({ test_child_workflow_id: e.target.value || undefined })}
-                helperText="Created items that test another item (a tested_by link, like [QA] stories) go here instead"
-                fullWidth
-            >
-                <MenuItem value="">Same as child workflow</MenuItem>
-                {children.map((w) => (
-                    <MenuItem key={w.id} value={w.id}>
-                        {w.name}
-                    </MenuItem>
-                ))}
-            </TextField>
         </Box>
     );
 }
@@ -192,7 +231,10 @@ export function WorkflowInspector(props: Props) {
                     Reply on the item and the run continues along this node&apos;s pass connection.
                 </Explain>
             )}
-            {type === 'end' && props.node && <EndPanel {...props} node={props.node} />}
+            {type === 'subtasks' && props.node && (
+                <SubtasksPanel workflow={props.workflow} workflows={props.workflows} node={props.node} onNodeData={props.onNodeData} />
+            )}
+            {type === 'end' && <EndPanel workflow={props.workflow} onChange={props.onChange} />}
         </Box>
     );
 }

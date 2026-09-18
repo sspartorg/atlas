@@ -144,19 +144,9 @@ export type RunStatus =
     | 'error'
     | 'cancelled'
     | 'setup_failed';
-export type IssueType = 'epic' | 'story' | 'sub_task' | 'sub_bug' | 'bug';
+// ADR 0015 — the Owner works on Tasks; a Task's children are Sub-tasks.
+export type IssueType = 'task' | 'sub_task';
 export type IssuePriority = 'low' | 'normal' | 'high' | 'urgent';
-
-export type BugFrequency = 'always' | 'sometimes' | 'rare';
-export type BugFailureScope = 'data-loss' | 'functional' | 'cosmetic' | 'performance';
-
-export const BUG_FREQUENCIES: BugFrequency[] = ['always', 'sometimes', 'rare'];
-export const BUG_FAILURE_SCOPES: BugFailureScope[] = [
-    'data-loss',
-    'functional',
-    'cosmetic',
-    'performance',
-];
 
 export interface IAgent {
     id: string;
@@ -319,7 +309,7 @@ export interface IProject {
     created_at: string;
     updated_at: string;
     // Most recent timestamp across the project row and any of its children
-    // (schedule runs, guardrail edits, epic/story/sub-task/sub-bug/bug edits).
+    // (schedule runs, guardrail edits, Task and sub-task edits).
     // Computed at read time in projectsService.list/get — never persisted.
     last_activity_at: string;
 }
@@ -365,145 +355,61 @@ export interface ICredential {
     updated_at: string;
 }
 
-export interface IEpic {
+export interface ITask {
     id: string;
     project_id: string;
     title: string;
     description: string;
     status: IssueStatus;
     assignee_agent_id: string | null;
-    /** ADR 0014 — the workflow this item is queued for; null = unassigned. */
+    /** ADR 0014 — the workflow this Task is queued for; null = unassigned. */
     workflow_id: string | null;
     reporter_agent_id: string | null;
     priority: IssuePriority;
-    /** Task 1 — free-form labels for filtering. Max 20 per item / 40 chars each (enforced at Zod). */
-    labels: string[];
-    created_at: string;
-    updated_at: string;
-}
-
-export interface IEpicListItem extends IEpic {
-    story_count: number;
-}
-
-export interface IStory {
-    id: string;
-    epic_id: string;
-    title: string;
-    description: string;
-    status: IssueStatus;
-    assignee_agent_id: string | null;
-    /** ADR 0014 — the workflow this item is queued for; null = unassigned. */
-    workflow_id: string | null;
-    reporter_agent_id: string | null;
-    priority: IssuePriority;
-    spec_md: string | null;
-    pr_url: string | null;
-    points: number;
     acceptance_criteria: string;
-    /** Task 1 — see IEpic. */
+    /** Architect's spec for the whole Task (ADR 0015). */
+    spec_md: string | null;
+    /** The one PR the Task's workflow run opened. */
+    pr_url: string | null;
+    /** Free-form labels for filtering. Max 20 per item / 40 chars each (enforced at Zod). */
     labels: string[];
-    // T2 — per-item git worktree association. PO Writer fills
-    // `worktree_branch` (`atlas/<role>/<id>`); the worktree-orchestrator
-    // resolves and writes back `worktree_path`. Both null on legacy items.
+    // The run branch (`atlas/wf/<id>`) and its on-disk checkout; both null
+    // until a workflow run provisions them.
     worktree_branch: string | null;
     worktree_path: string | null;
     created_at: string;
     updated_at: string;
+}
+
+export interface ITaskListItem extends ITask {
+    sub_task_count: number;
 }
 
 export interface ISubTask {
     id: string;
-    story_id: string;
+    task_id: string;
     title: string;
     description: string;
-    status: SubTaskStatus;
+    status: IssueStatus;
     assignee_agent_id: string | null;
-    /** ADR 0014 — the workflow this item is queued for; null = unassigned. */
-    workflow_id: string | null;
     reporter_agent_id: string | null;
     priority: IssuePriority;
     acceptance_criteria: string;
     started_at: string | null;
-    /** Task 1 — see IEpic. */
+    /** A Sub-tasks workflow node picks the sub-tasks carrying its label (ADR 0015). */
     labels: string[];
-    // T2 — see IStory for semantics.
-    worktree_branch: string | null;
-    worktree_path: string | null;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface ISubBug {
-    id: string;
-    story_id: string;
-    title: string;
-    description: string;
-    status: IssueStatus;
-    assignee_agent_id: string | null;
-    /** ADR 0014 — the workflow this item is queued for; null = unassigned. */
-    workflow_id: string | null;
-    reporter_agent_id: string | null;
-    priority: IssuePriority;
-    acceptance_criteria: string;
-    steps_to_reproduce: string;
-    expected: string;
-    actual: string;
-    frequency: BugFrequency;
-    failure_scope: BugFailureScope;
-    detected_at: string | null;
-    occurrence_count: number;
-    occurrence_total: number;
-    /** Task 1 — see IEpic. */
-    labels: string[];
-    // T2 — see IStory for semantics.
-    worktree_branch: string | null;
-    worktree_path: string | null;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface IBug {
-    id: string;
-    epic_id: string;
-    title: string;
-    description: string;
-    status: IssueStatus;
-    assignee_agent_id: string | null;
-    /** ADR 0014 — the workflow this item is queued for; null = unassigned. */
-    workflow_id: string | null;
-    reporter_agent_id: string | null;
-    priority: IssuePriority;
-    acceptance_criteria: string;
-    steps_to_reproduce: string;
-    expected: string;
-    actual: string;
-    frequency: BugFrequency;
-    failure_scope: BugFailureScope;
-    detected_at: string | null;
-    occurrence_count: number;
-    occurrence_total: number;
-    /** Task 1 — see IEpic. */
-    labels: string[];
-    // T2 — see IStory for semantics.
-    worktree_branch: string | null;
-    worktree_path: string | null;
     created_at: string;
     updated_at: string;
 }
 
 // ── Issue tree (composite endpoint) ───────────────────────────────────────
-// One round-trip view of the workspace for the /issues page. The server
-// assembles it via SQL JOINs / batched IN-list reads; the client renders
-// the tree directly without per-resource fetches.
-export type IssueTreeKind = 'story' | 'bug' | 'sub_task' | 'sub_bug';
-
+// One round-trip view of the workspace: Tasks with their Sub-tasks nested.
 export interface IIssueTreeNode {
     id: string;
-    kind: IssueTreeKind;
+    kind: IssueType;
     short_id: string;
     title: string;
-    status: IssueStatus | SubTaskStatus;
+    status: IssueStatus;
     assignee_agent_id: string | null;
     reporter_agent_id: string | null;
     created_at: string;
@@ -512,11 +418,10 @@ export interface IIssueTreeNode {
     // render without follow-up lookups).
     project_id: string;
     project_name: string;
-    epic_id: string | null;
-    epic_title: string | null;
-    parent_story_id: string | null;
-    parent_story_title: string | null;
-    // Sub-tasks / sub-bugs nested under a story. Empty array for leaf rows.
+    /** The parent Task of a sub-task; null on a Task. */
+    task_id: string | null;
+    task_title: string | null;
+    // Sub-tasks nested under a Task. Empty array for sub-task rows.
     children: IIssueTreeNode[];
 }
 
@@ -524,41 +429,18 @@ export interface IIssueTreeResponse {
     projects: IProject[];
     agents: IAgent[];
     tree: IIssueTreeNode[];
-    // Raw rows for callers that need the full per-kind shape (Project
-    // Detail's EpicsTab, tab-count labels, derived `activeAgents`). The
-    // tree builder already loads every item in the scope, so populating
-    // these arrays is a project of the same query — no extra round-trip.
-    // For the Issues page (which only renders `tree`), they're a few
-    // extra bytes but already cached client-side, so net-net a single
-    // /api/issues/tree fetch replaces three separate /api/{epics,
-    // stories, bugs}?project_id=… calls on Project Detail.
-    epics: IEpic[];
-    stories: IStory[];
-    bugs: IBug[];
+    tasks: ITask[];
 }
 
 // ── Composite "full" responses for detail pages ──────────────────────────
-// Each detail page (story, bug, sub-task, sub-bug, epic) gets one of these
-// via `GET /api/<kind>/:id/full`. Ancestors, children, related items,
-// activity and the agent dictionary are all assembled server-side so the
-// page renders from one HTTP round-trip.
+// Each detail page gets one of these via `GET /api/<kind>/:id/full`.
+// Ancestors, children, related items, activity and the agent dictionary are
+// all assembled server-side so the page renders from one HTTP round-trip.
 
-export interface IStoryFullResponse {
-    story: IStory;
-    epic: IEpic | null;
+export interface ITaskFullResponse {
+    task: ITask;
     project: IProject | null;
     sub_tasks: ISubTask[];
-    sub_bugs: ISubBug[];
-    related_links: IIssueLinkRow[];
-    external_links: IItemExternalLink[];
-    activity: IActivityItem[];
-    agents: IAgent[];
-}
-
-export interface IBugFullResponse {
-    bug: IBug;
-    epic: IEpic | null;
-    project: IProject | null;
     related_links: IIssueLinkRow[];
     external_links: IItemExternalLink[];
     activity: IActivityItem[];
@@ -567,31 +449,8 @@ export interface IBugFullResponse {
 
 export interface ISubTaskFullResponse {
     sub_task: ISubTask;
-    parent_story: IStory | null;
-    epic: IEpic | null;
+    task: ITask | null;
     project: IProject | null;
-    related_links: IIssueLinkRow[];
-    external_links: IItemExternalLink[];
-    activity: IActivityItem[];
-    agents: IAgent[];
-}
-
-export interface ISubBugFullResponse {
-    sub_bug: ISubBug;
-    parent_story: IStory | null;
-    epic: IEpic | null;
-    project: IProject | null;
-    related_links: IIssueLinkRow[];
-    external_links: IItemExternalLink[];
-    activity: IActivityItem[];
-    agents: IAgent[];
-}
-
-export interface IEpicFullResponse {
-    epic: IEpic;
-    project: IProject | null;
-    stories: IStory[];
-    bugs: IBug[];
     related_links: IIssueLinkRow[];
     external_links: IItemExternalLink[];
     activity: IActivityItem[];
@@ -1243,6 +1102,8 @@ export interface SSEEvent {
     workflowRunId?: string;
     workflowRunStatus?: WorkflowRunStatus;
     nodeId?: string | null;
+    /** Set when the run is a sub-task's run, so the Task run's view refreshes too. */
+    parentWorkflowRunId?: string;
     runId?: string;
     /** Theme 08 — payload field carried by `memory_regenerated`. */
     memoryRegenerationTrigger?: MemoryRegenerationTrigger;

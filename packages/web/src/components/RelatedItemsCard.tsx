@@ -31,6 +31,7 @@ import { AddPrLinkDialog } from './AddPrLinkDialog.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 
 import { relativeTime } from '../utils/time.js';
+import { itemPath } from '../utils/itemPath.js';
 
 interface Props {
     issueType: IssueType;
@@ -54,9 +55,8 @@ interface Props {
     /**
      * When true, render an "Add test link" affordance on the Tested-by
      * section (header button when populated, inline hint + button when
-     * empty). Story / Bug / Sub-Task / Sub-Bug detail pages opt in.
-     * Epic detail pages omit this prop — epics aren't sensible `from`
-     * sides for a `tested_by` edge.
+     * empty). Sub-task detail pages opt in. Task detail pages omit this
+     * prop — a Task isn't a sensible `from` side for a `tested_by` edge.
      */
     allowAddTestLink?: boolean | undefined;
 }
@@ -66,14 +66,6 @@ const PR_STATE_CHIP: Record<ExternalPrState, { label: string; bg: string; fg: st
     merged: { label: 'Merged', bg: ATLAS_PALETTE.accentSoft, fg: ATLAS_PALETTE.accentFg },
     closed: { label: 'Closed', bg: ATLAS_PALETTE.dangerSoft, fg: ATLAS_PALETTE.dangerFg },
 };
-
-function routeFor(type: IssueType, id: string): string {
-    if (type === 'epic') return `/epics/${id}`;
-    if (type === 'story') return `/issues/stories/${id}`;
-    if (type === 'sub_task') return `/issues/sub-tasks/${id}`;
-    if (type === 'sub_bug') return `/issues/sub-bugs/${id}`;
-    return `/issues/bugs/${id}`;
-}
 
 export function RelatedItemsCard({
     issueType,
@@ -146,8 +138,8 @@ export function RelatedItemsCard({
     const relatesRows = useMemo(() => relatesLinks.map(toRow), [relatesLinks]);
 
     // For tested_by the section title flips on direction: incoming = the
-    // QA story tests US (we're the dev story), outgoing = WE test the dev
-    // story (we're the QA twin). A single item is typically on one side
+    // QA sub-task tests US (we're the dev sub-task), outgoing = WE test the
+    // dev sub-task (we're the QA twin). A single item is typically on one side
     // only; if mixed, fall back to a neutral label.
     const testedByDirections = useMemo(() => {
         const set = new Set(testedByLinks.map((l) => l.direction));
@@ -273,7 +265,7 @@ export function RelatedItemsCard({
     //  - allowAddTestLink + empty → minimal empty-state header with the
     //    Add button (no table) so Owner can attach the first one.
     //  - !allowAddTestLink + rows → table (no Add button).
-    //  - !allowAddTestLink + empty → render nothing (Epic detail).
+    //  - !allowAddTestLink + empty → render nothing (Task detail).
     let testedBySection: ReactNode = null;
     if (allowAddTestLink && testedByRows.length === 0) {
         testedBySection = (
@@ -320,7 +312,7 @@ export function RelatedItemsCard({
                 ownerName={ownerName}
                 ownerAccent={ownerAccent}
                 formatRelative={relativeTime}
-                onRowClick={(row) => navigate(routeFor(row.kind, row.id))}
+                onRowClick={(row) => navigate(itemPath(row.kind, row.id))}
                 headerRight={allowAddTestLink ? addTestLinkButton : undefined}
                 rowAction={unlinkRow('tested_by')}
                 hideWhenEmpty
@@ -497,7 +489,7 @@ export function RelatedItemsCard({
                 ownerName={ownerName}
                 ownerAccent={ownerAccent}
                 formatRelative={relativeTime}
-                onRowClick={(row) => navigate(routeFor(row.kind, row.id))}
+                onRowClick={(row) => navigate(itemPath(row.kind, row.id))}
                 headerRight={addDependencyButton}
                 rowAction={unlinkRow('depends_on')}
                 hideWhenEmpty
@@ -519,7 +511,7 @@ export function RelatedItemsCard({
                         ownerName={ownerName}
                         ownerAccent={ownerAccent}
                         formatRelative={relativeTime}
-                        onRowClick={(row) => navigate(routeFor(row.kind, row.id))}
+                        onRowClick={(row) => navigate(itemPath(row.kind, row.id))}
                         headerRight={addRelatedButton}
                         rowAction={unlinkRow('relates_to')}
                         hideWhenEmpty
@@ -533,7 +525,7 @@ export function RelatedItemsCard({
                     ownerName={ownerName}
                     ownerAccent={ownerAccent}
                     formatRelative={relativeTime}
-                    onRowClick={(row) => navigate(routeFor(row.kind, row.id))}
+                    onRowClick={(row) => navigate(itemPath(row.kind, row.id))}
                     headerRight={addRelatedButton}
                     rowAction={unlinkRow('relates_to')}
                     hideWhenEmpty

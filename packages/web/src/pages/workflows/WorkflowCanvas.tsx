@@ -2,6 +2,7 @@ import type { DragEvent, ReactNode } from 'react';
 import {
     Background,
     BackgroundVariant,
+    ConnectionLineType,
     Controls,
     MiniMap,
     ReactFlow,
@@ -29,6 +30,8 @@ interface Props {
     height?: number | string;
     children?: ReactNode;
 }
+
+const NODE_ORIGIN: [number, number] = [0.5, 0];
 
 export function WorkflowCanvas({
     nodes,
@@ -106,6 +109,10 @@ export function WorkflowCanvas({
                     nodes={nodes}
                     edges={edges}
                     nodeTypes={NODE_TYPES}
+                    connectionLineType={ConnectionLineType.SmoothStep}
+                    // Positions anchor a node's top centre, so a column of
+                    // cards and pills lines up whatever each node's width.
+                    nodeOrigin={NODE_ORIGIN}
                     fitView
                     fitViewOptions={{ padding: 0.2, maxZoom: 1.1 }}
                     minZoom={0.2}

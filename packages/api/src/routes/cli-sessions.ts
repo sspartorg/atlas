@@ -8,6 +8,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
+import type { ItemType } from '../db/types.js';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -328,9 +329,8 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         // item id should fail fast, not strand a worktree. We also pull
         // `type` so stageCliWorktree can render the right item snapshot
         // shape in `.atlas/current-task.md`.
-        type ItemTypeStr = 'epic' | 'story' | 'sub_task' | 'bug' | 'sub_bug';
         const itemId = body.item_id ?? null;
-        let itemType: ItemTypeStr | null = null;
+        let itemType: ItemType | null = null;
         if (itemId) {
             const itemRow = await db
                 .selectFrom('items')
@@ -350,7 +350,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
                         kind: 'validation_error',
                     });
             }
-            itemType = itemRow.type as ItemTypeStr;
+            itemType = itemRow.type;
         }
 
         const sessionId = randomUUID();
@@ -771,10 +771,9 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         // Skipped entirely for standalone sessions: nothing was staged into
         // that folder at create time, and re-staging on resume would write
         // `.atlas/` into the Owner's repo behind their back.
-        type ItemTypeStr = 'epic' | 'story' | 'sub_task' | 'bug' | 'sub_bug';
         const standalone = isStandalone(session);
         if (!standalone) {
-            let resumeItemType: ItemTypeStr | null = null;
+            let resumeItemType: ItemType | null = null;
             if (session.item_id) {
                 const itemRow = await db
                     .selectFrom('items')
@@ -782,7 +781,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
                     .where('id', '=', session.item_id)
                     .executeTakeFirst();
                 /* v8 ignore next */
-                resumeItemType = (itemRow?.type as ItemTypeStr | undefined) ?? null;
+                resumeItemType = itemRow?.type ?? null;
             }
             try {
                 await stageCliWorktree({

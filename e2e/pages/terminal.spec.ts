@@ -51,7 +51,7 @@ test.describe('/terminal', () => {
         const itemField = dialog.getByLabel(/^Item/i);
         await itemField.click();
         await itemField.fill('ETM-1');
-        await page.getByRole('option', { name: /ETM-1 — E2E linked epic/ }).click();
+        await page.getByRole('option', { name: /ETM-1 — E2E linked task/ }).click();
 
         await dialog.getByRole('button', { name: /^Start session$/ }).click();
         await expect(page).toHaveURL(/\/terminal\/[a-f0-9-]+$/, { timeout: 30_000 });

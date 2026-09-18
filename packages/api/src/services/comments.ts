@@ -107,11 +107,11 @@ export const commentsService = {
     }): Promise<IComment> {
         // FK constraint ensures the item exists, and lookupItemType's own
         // `row?.type` fallback is unreachable (see its /* v8 ignore */
-        // above) — so the `?? 'story'` here can only fire if a caller omits
+        // above) — so the `?? 'task'` here can only fire if a caller omits
         // issue_type AND the FK-guaranteed item lookup still yields
         // undefined, which cannot happen. Kept as a defensive default.
         /* v8 ignore next */
-        const type = data.issue_type ?? (await lookupItemType(data.issue_id)) ?? 'story';
+        const type = data.issue_type ?? (await lookupItemType(data.issue_id)) ?? 'task';
         // Agent comments arrive without an identity more often than not. The
         // MCP `update_item({action:'add_comment'})` path resolves the author
         // from `ATLAS_AGENT_ID`, which nothing sets — the MCP is hosted
@@ -204,9 +204,9 @@ export const commentsService = {
             .returningAll()
             .executeTakeFirst();
         if (!updated) return null;
-        // FK constraint ensures item still exists; the `?? 'story'` arm is an unreachable defensive fallback.
+        // FK constraint ensures item still exists; the `?? 'task'` arm is an unreachable defensive fallback.
         /* v8 ignore next */
-        const type = (await lookupItemType(updated.item_id)) ?? 'story';
+        const type = (await lookupItemType(updated.item_id)) ?? 'task';
         return asComment(updated as never, type);
     },
 
@@ -230,9 +230,9 @@ export const commentsService = {
             .returningAll()
             .executeTakeFirst();
         if (!deleted) return null;
-        // FK constraint ensures item still exists; the `?? 'story'` arm is an unreachable defensive fallback.
+        // FK constraint ensures item still exists; the `?? 'task'` arm is an unreachable defensive fallback.
         /* v8 ignore next */
-        const type = (await lookupItemType(deleted.item_id)) ?? 'story';
+        const type = (await lookupItemType(deleted.item_id)) ?? 'task';
         return {
             id: deleted.id,
             item_id: deleted.item_id,

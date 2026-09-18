@@ -801,7 +801,7 @@ describe('lifecycle: pause / resume / preflight-stop / stop', () => {
     });
 
     it('stop with open_pull_request:false records no item_external_links row', async () => {
-        await insertItem({ id: 'ATL-90', type: 'epic', project_id: 'p1', title: 'Linked' });
+        await insertItem({ id: 'ATL-90', type: 'task', project_id: 'p1', title: 'Linked' });
         const created = await app.inject({
             method: 'POST',
             url: '/api/cli/sessions',
@@ -1507,7 +1507,7 @@ describe('item linkage (terminal-v2 + item)', () => {
             .set({ git_path: '/tmp/fake-project-2' })
             .where('id', '=', 'p2')
             .execute();
-        await insertItem({ id: 'AAA-1', type: 'epic', project_id: 'p2', title: 'Cross-project epic' });
+        await insertItem({ id: 'AAA-1', type: 'task', project_id: 'p2', title: 'Cross-project epic' });
         const res = await app.inject({
             method: 'POST',
             url: '/api/cli/sessions',
@@ -1519,13 +1519,13 @@ describe('item linkage (terminal-v2 + item)', () => {
     });
 
     it('passes both item + userPrompt to stageCliWorktree and auto-types the current-task pointer', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Epic' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Epic' });
         await insertItem({
             id: 'ATL-2',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Story under epic',
         });
         stageCliWorktreeMock.mockResolvedValueOnce({
@@ -1541,7 +1541,7 @@ describe('item linkage (terminal-v2 + item)', () => {
         const body = res.json();
         expect(body.item_id).toBe('ATL-2');
         const stageArgs = stageCliWorktreeMock.mock.calls[0]![0] as Record<string, unknown>;
-        expect(stageArgs.item).toEqual({ type: 'story', id: 'ATL-2' });
+        expect(stageArgs.item).toEqual({ type: 'sub_task', id: 'ATL-2' });
         expect(stageArgs.userPrompt).toBe('list the files');
         // The literal prompt is no longer typed into the PTY; instead a
         // stable pointer line nudges the CLI to read current-task.md,
@@ -1552,7 +1552,7 @@ describe('item linkage (terminal-v2 + item)', () => {
     });
 
     it('still auto-types the pointer when only an item is linked (no initial prompt)', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Lone' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Lone' });
         stageCliWorktreeMock.mockResolvedValueOnce({
             currentTaskPath: '/tmp/fake-worktree/.atlas/current-task.md',
             constitutionMarkdown: '',
@@ -1567,12 +1567,12 @@ describe('item linkage (terminal-v2 + item)', () => {
             'Read `.atlas/current-task.md` for the full task context, then begin.',
         );
         const stageArgs = stageCliWorktreeMock.mock.calls[0]![0] as Record<string, unknown>;
-        expect(stageArgs.item).toEqual({ type: 'epic', id: 'ATL-1' });
+        expect(stageArgs.item).toEqual({ type: 'task', id: 'ATL-1' });
         expect(stageArgs.userPrompt).toBeUndefined();
     });
 
     it('on Stop with a linked item + pushed PR, records the PR as an item_external_links row', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Epic for PR link' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Epic for PR link' });
         const create = await app.inject({
             method: 'POST',
             url: '/api/cli/sessions',
@@ -1607,7 +1607,7 @@ describe('item linkage (terminal-v2 + item)', () => {
     it('idempotent: re-Stop on the same item collapses to a single external-links row', async () => {
         await insertItem({
             id: 'ATL-1',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
             title: 'Has prior PR',
             pr_url: 'https://github.com/foo/bar/pull/1',
@@ -1816,7 +1816,7 @@ describe('CS3 — RESUME error paths', () => {
     });
 
     it('CS3-6 passes item type to stageCliWorktree on resume when session has item_id', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Epic to resume' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Epic to resume' });
         const created = await app.inject({
             method: 'POST',
             url: '/api/cli/sessions',
@@ -1832,7 +1832,7 @@ describe('CS3 — RESUME error paths', () => {
         expect(res.statusCode).toBe(200);
         expect(stageCliWorktreeMock).toHaveBeenCalledTimes(1);
         const stageArgs = stageCliWorktreeMock.mock.calls[0]![0] as Record<string, unknown>;
-        expect(stageArgs.item).toEqual({ type: 'epic', id: 'ATL-1' });
+        expect(stageArgs.item).toEqual({ type: 'task', id: 'ATL-1' });
         await app.inject({ method: 'POST', url: `/api/cli/sessions/${sessionId}/stop`, payload: { files_to_stage: [] } });
     });
 });
@@ -2475,7 +2475,7 @@ describe('CS-EXTRA — branch coverage gaps', () => {
     // Stop a session that has an item_id WITH a files_to_stage + commit_message
     // so both `session.item_id ? ...` and `body.commit_message ? ...` are true.
     it('CS-EXTRA-2 stop with item_id + commit_message produces PR body with both ternary arms', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'PR body epic' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'PR body epic' });
         const created = await app.inject({
             method: 'POST',
             url: '/api/cli/sessions',

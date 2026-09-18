@@ -24,14 +24,10 @@ interface Props {
 
 function kindBg(kind: string): string {
     switch (kind) {
-        case 'story':
+        case 'task':
             return 'rgba(0,185,255,.12)';
-        case 'bug':
-            return 'rgba(197,38,126,.12)';
         case 'sub_task':
             return 'rgba(49,171,70,.12)';
-        case 'sub_bug':
-            return 'rgba(199,83,47,.12)';
         default:
             return ATLAS_PALETTE.slate08;
     }

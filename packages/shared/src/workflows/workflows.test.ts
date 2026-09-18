@@ -30,7 +30,7 @@ function devGraph(): IWorkflowGraph {
             node('start', 'start'),
             node('coder', 'agent', { agent_id: 'agent-coder' }),
             node('review', 'agent', { agent_id: 'agent-code-reviewer' }),
-            node('end', 'end', { child_workflow_id: 'wf-dev' }),
+            node('end', 'end'),
         ],
         edges: [edge('start', 'coder'), edge('coder', 'review'), edge('review', 'end'), edge('review', 'coder', 'fail')],
     };
@@ -80,17 +80,57 @@ describe('validateWorkflowGraph', () => {
         ]);
     });
 
-    it('rejects an agent node with no agent and a misplaced agent_id / child_workflow_id', () => {
+    it('rejects an agent node with no agent and a misplaced agent_id / sub_workflow_id / label', () => {
         const graph = devGraph();
         graph.nodes[0] = node('start', 'start', { agent_id: 'agent-coder' });
-        graph.nodes[1] = node('coder', 'agent', { child_workflow_id: 'wf-x' });
-        graph.nodes[2] = node('review', 'agent', { agent_id: 'agent-reviewer', test_child_workflow_id: 'wf-qa' });
+        graph.nodes[1] = node('coder', 'agent', { sub_workflow_id: 'wf-x' });
+        graph.nodes[2] = node('review', 'agent', { agent_id: 'agent-reviewer', label: 'qa' });
         expect(errorsOf(graph)).toEqual([
             'start: Only agent nodes reference an agent',
             'coder: Choose an agent for this node',
-            'coder: Only End nodes route children to a workflow',
-            'review: Only End nodes route children to a workflow',
+            'coder: Only Sub-tasks steps take a sub-workflow or label',
+            'review: Only Sub-tasks steps take a sub-workflow or label',
         ]);
+    });
+
+    // Start → PO → Sub-tasks(dev) → Sub-tasks(qa) → End.
+    function taskGraph(): IWorkflowGraph {
+        return {
+            nodes: [
+                node('start', 'start'),
+                node('po', 'agent', { agent_id: 'agent-po-writer' }),
+                node('build', 'subtasks', { sub_workflow_id: 'wf-build' }),
+                node('test', 'subtasks', { sub_workflow_id: 'wf-test', label: 'qa' }),
+                node('end', 'end'),
+            ],
+            edges: [edge('start', 'po'), edge('po', 'build'), edge('build', 'test'), edge('test', 'end')],
+        };
+    }
+
+    it('accepts Sub-tasks steps in a Task workflow', () => {
+        expect(validateWorkflowGraph(taskGraph(), 'item')).toEqual([]);
+    });
+
+    it('requires a sub-workflow on a Sub-tasks step and forbids its fail connection', () => {
+        const graph = taskGraph();
+        graph.nodes[2] = node('build', 'subtasks');
+        graph.edges.push(edge('test', 'po', 'fail'));
+        expect(errorsOf(graph)).toEqual([
+            'build: Choose the sub-workflow for these sub-tasks',
+            'test: Only agent nodes can have a fail connection',
+        ]);
+    });
+
+    it('allows Sub-tasks steps only in workflows that run on a Task', () => {
+        for (const kind of ['none', 'sub_task'] as const) {
+            expect(validateWorkflowGraph(taskGraph(), kind).map((e) => e.node_id)).toEqual(['build', 'test']);
+        }
+    });
+
+    it('rejects a Sub-tasks label longer than 40 characters', () => {
+        const graph = taskGraph();
+        graph.nodes[3] = node('test', 'subtasks', { sub_workflow_id: 'wf-test', label: 'x'.repeat(41) });
+        expect(WorkflowGraphSchema.safeParse(graph).success).toBe(false);
     });
 
     it('rejects connections into Start and out of End', () => {

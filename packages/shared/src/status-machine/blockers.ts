@@ -39,10 +39,10 @@ export function assertCanStart(
 // P16 — Parent cannot close until all children are closed.
 //
 // Mirror of the `assertCanStart` pattern but for the parent_id walk. Pure
-// function: caller pre-loads the children (epic → stories+bugs, story →
-// sub_tasks+sub_bugs) and passes in their statuses. We return the list of
-// children that aren't `done` so the API layer can surface the offending
-// IDs in a 422 body and the UI can list them in a toast.
+// function: caller pre-loads the children (task → sub_tasks) and passes in
+// their statuses. We return the list of children that aren't `done` so the
+// API layer can surface the offending IDs in a 422 body and the UI can list
+// them in a toast.
 //
 // The rule only fires when the target status is `done`. Every other
 // transition is the existing status machine's responsibility.

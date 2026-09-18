@@ -3,7 +3,7 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
-import type { FilterState, SearchType } from './searchViewModel.js';
+import { TYPE_LABEL, type FilterState, type SearchType } from './searchViewModel.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
@@ -22,13 +22,8 @@ export function SearchEmptyState({
     onDropProject,
     onCreateType,
 }: Props) {
-    const createType: SearchType = filters.types[0] ?? 'sub_bug';
-    const createLabel =
-        createType === 'sub_task'
-            ? 'Sub-task'
-            : createType === 'sub_bug'
-              ? 'Sub-Bug'
-              : (createType[0]?.toUpperCase() ?? '') + createType.slice(1);
+    const createType: SearchType = filters.types[0] ?? 'task';
+    const createLabel = TYPE_LABEL[createType];
 
     return (
         <EmptyState
@@ -42,7 +37,7 @@ export function SearchEmptyState({
                 </Box>
             }
             title="No Items Match"
-            description="The query parses cleanly but no epics, stories, bugs, sub-tasks, sub-bugs, prompts, or conversations match."
+            description="The query parses cleanly but no tasks, sub-tasks, prompts, or conversations match."
             supplemental={
                 queryText ? (
                     <Box

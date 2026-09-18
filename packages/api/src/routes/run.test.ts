@@ -44,13 +44,13 @@ beforeEach(async () => {
     await insertProject('p1', 'ATL');
     await insertAgent({ id: 'agent-coder', status: 'active' });
     // Stories need an epic parent per the items CHECK constraint.
-    await insertItem({ id: 'ATL-100', type: 'epic', project_id: 'p1', title: 'Parent epic' });
+    await insertItem({ id: 'ATL-100', type: 'task', project_id: 'p1', title: 'Parent epic' });
     await insertItem({
         id: 'ATL-2',
-        type: 'story',
+        type: 'sub_task',
         project_id: 'p1',
         parent_id: 'ATL-100',
-        parent_type: 'epic',
+        parent_type: 'task',
         title: 'Downstream',
         status: 'ready',
         assignee_agent_id: 'agent-coder',
@@ -69,7 +69,7 @@ describe('POST /api/run — ad-hoc agent runs (ADR 0014)', () => {
         const res = await app.inject({
             method: 'POST',
             url: '/api/run',
-            payload: { agent_id: 'agent-coder', issue_type: 'story', issue_id: 'ATL-2' },
+            payload: { agent_id: 'agent-coder', issue_type: 'sub_task', issue_id: 'ATL-2' },
         });
         expect(res.statusCode).toBe(400);
         expect(res.json()).toMatchObject({ kind: 'validation_error' });
@@ -245,10 +245,10 @@ describe('DELETE /api/run/:id — delete + item unstick (P9)', () => {
     it('leaves a draft item as draft (does not fake-promote on delete)', async () => {
         await insertItem({
             id: 'ATL-DRAFT',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-100',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Never promoted',
             status: 'draft',
             assignee_agent_id: 'agent-coder',
@@ -786,10 +786,10 @@ describe('GET /api/run — filters actually filter', () => {
     });
 
     it('narrows by issue_type', async () => {
-        const stories = await app.inject({ method: 'GET', url: '/api/run?issue_type=story' });
-        const epics = await app.inject({ method: 'GET', url: '/api/run?issue_type=epic' });
-        expect(JSON.parse(stories.body)).toHaveLength(1);
-        expect(JSON.parse(epics.body)).toHaveLength(1);
+        const subTasks = await app.inject({ method: 'GET', url: '/api/run?issue_type=sub_task' });
+        const tasks = await app.inject({ method: 'GET', url: '/api/run?issue_type=task' });
+        expect(JSON.parse(subTasks.body)).toHaveLength(1);
+        expect(JSON.parse(tasks.body)).toHaveLength(1);
     });
 
     it('unfiltered still returns everything', async () => {

@@ -35,9 +35,9 @@ The api package lands at lines/statements/functions â‰ˆ 96% and branches â�
 
 - `crypto.ts` (71.42% branches) â€” `keyPath()` chooses between `%APPDATA%` (Windows) and `$HOME/.config` (macOS/Linux), and the new HKDF derivation path branches on `MachineGuid` (Windows reg query), `/etc/machine-id`, `/var/lib/dbus/machine-id`, and the randomBytes fallback. On any single CI runner most platform branches are unreachable.
 - `env-file.ts` (85.45% branches) â€” `envFileService.write` mutates the api package's own `.env` at the project root. Testing it would clobber the developer's working file. Read path is fully covered.
-- `issue-full.ts` (75.6% branches) and `issue-tree.ts` (84.84% branches) â€” defensive `if (!epic || !project) continue` guards and `epic ? ... : null` ternaries for FK-protected lookups. The orphan path was SQLite-only; PG's `items_check_parent` trigger makes the false side unreachable. The most direct ones in `issue-tree.ts` carry `/* v8 ignore next */` annotations.
+- `issue-full.ts` (75.6% branches) and `issue-tree.ts` (84.84% branches) â€” defensive `if (!task || !project)` guards and `task ? ... : null` ternaries for FK-protected lookups (the parent-Task lookup since ADR 0015; percentages predate it). The orphan path was SQLite-only; PG's `items_check_parent` trigger makes the false side unreachable. The most direct ones in `issue-tree.ts` carry `/* v8 ignore next */` annotations.
 - `prompt-builder.ts` (78.57% branches) â€” null-coalesce on optional issue fields (`description`, `spec_md`, etc.) where seed fixtures don't cover every null/non-null combination.
-- `counts.ts` (60.86% branches) â€” switch-case across the 5 issue types; seed fixtures use a subset of priority/severity values.
+- `counts.ts` (60.86% branches) â€” per-kind branches (five issue types when measured; two — `task` / `sub_task` — since ADR 0015); seed fixtures use a subset of priority/severity values.
 - `external notification.ts`, `events-log.ts`, etc. â€” small `catch` branches around network/parse errors that are caught but not deeply asserted.
 
 ### Active-development exclusions (post-2026-05-16 audit)
@@ -60,8 +60,8 @@ A future session can close these to lift branches back to â‰¥93 and lines ba
 The web package lands at lines/statements 78.06%, branches 69.48%, functions 63.81%. The gap below 80% is concentrated in:
 
 - **Branches at 69** â€” pickers and modals carry lots of `open === true | false` guards plus conditional menu-item rendering. Smoke tests exercise the happy paths but skip many of the `disabled`, `loading`, `danger`, and `pre-confirm` variants.
-- **Functions at 63** â€” large page components (e.g. `EpicDetail`, `StoryDetail`) declare many small inline render helpers and per-row callbacks. Page-level smoke tests cover the canonical render but don't trigger every interactive callback.
-- **Excluded surfaces**: heavy multi-state modals (`NewProjectModal`, `ProjectEnvSecretsModal`, `CredentialModal`, `NewIssueModal`, etc. â€” heavy files at 700-1800 LOC each) are excluded from `coverage.include` and slated for Playwright integration coverage instead. `App.tsx`, `Onboarding.tsx`, and the active-development surfaces (`Agents.tsx`, `AgentDetail.tsx`, `Queue.tsx`, `pages/agents/**`, `pages/queue/**`) are also excluded.
+- **Functions at 63** â€” large page components (e.g. `TaskDetail`, `SubTaskDetail`) declare many small inline render helpers and per-row callbacks. Page-level smoke tests cover the canonical render but don't trigger every interactive callback.
+- **Excluded surfaces**: heavy multi-state modals (`NewProjectModal`, `ProjectEnvSecretsModal`, `CredentialModal`, etc. â€” heavy files at 700-1800 LOC each) are excluded from `coverage.include` and slated for Playwright integration coverage instead. `App.tsx`, `Onboarding.tsx`, and the active-development surfaces (`Agents.tsx`, `AgentDetail.tsx`, `Queue.tsx`, `pages/agents/**`, `pages/queue/**`) are also excluded.
 
 A future session can close these to lift branches and functions toward 80%; the floor is set at the achieved % today to give CI an honest, holding gate.
 
@@ -145,7 +145,7 @@ The one gate that IS enforced remotely is the **web bundle budget** (`bundle:che
 Remaining test-surface work for future sessions:
 
 - **Branches + functions gap on web** â€” lift from 69 / 63 toward 80 by covering modal `open === false`, `disabled`, `loading`, `danger` branches in the picker components, and exercising more of the inline render helpers inside the larger detail pages.
-- **Excluded modals on web** â€” the 13 heavy multi-state modals (`NewProjectModal`, `NewIssueModal`, etc.) are slated for Playwright integration coverage rather than unit tests.
+- **Excluded modals on web** â€” the heavy multi-state modals (`NewProjectModal`, `CredentialModal`, etc.; `NewIssueModal` was deleted with ADR 0015) are slated for Playwright integration coverage rather than unit tests.
 - **Branches gap on api** â€” lift from 93.97% to 95% by covering the `envFileService.write` path (via a tmpdir-rooted test fixture) + a few defensive issue-tree guards.
 - **Subprocess wrapper coverage** â€” if a future session wants to lift the runners into the gate, it'll mock `node:child_process` and assert spawn args + SSE event emissions.
 
@@ -171,6 +171,8 @@ debugging a red spec:**
   terminal spec starts failing on session status.
 
 `pnpm e2e` runs the greenfield Playwright suite at the repo root. The setup owns a dedicated `atlas_e2e` Postgres DB + isolated api on :6001 + web on :6000, so it never collides with `pnpm dev` (4000/4001) or `pnpm prod` (5000/5001). Layout, spec catalogue, and the backfill list live in `docs/regression-2026-05.md`.
+
+The forensic audits (`pnpm e2e:forensic`, `e2e:functional`, `e2e:state-transitions`, config `playwright.forensic.config.ts`) run against a **live** dev stack, not the e2e one: start `pnpm dev` first. They target `http://localhost:4000`; set `FORENSIC_BASE_URL` (e.g. `http://127.0.0.1:4300`) for a stack on other ports, and `OUT_DIR` to keep their ndjson and screenshots out of the repo.
 
 - `pnpm e2e` â€” full headless suite (~7 minutes wall-clock)
 - `pnpm e2e:headed` â€” opens a browser window per spec; slower, useful for debugging

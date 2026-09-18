@@ -1,6 +1,7 @@
 import { memo, useCallback, useRef, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import Chip from '@mui/material/Chip';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import type { IssueStatus, IssueType, IAgent, SubTaskStatus } from '@atlas/shared';
 import { StatusChip } from './StatusChip.js';
@@ -54,9 +55,10 @@ export interface WorkItemTableRow {
     assignee_agent_id: string | null;
     reporter_agent_id: string | null;
     updated_at: string;
+    labels?: string[] | undefined;
     // When true, this row is rendered as a child of the previous top-level row
-    // (sub-task/sub-bug under a story): indented with a horizontal connector
-    // line and a slightly tinted background.
+    // (sub-task under a task): indented with a horizontal connector line and
+    // a slightly tinted background.
     isChild?: boolean;
 }
 
@@ -182,6 +184,9 @@ const WorkItemRow = memo(function WorkItemRow({
                 >
                     {row.title}
                 </Typography>
+                {row.labels?.map((l) => (
+                    <Chip key={l} label={l} size="small" variant="outlined" sx={{ flexShrink: 0 }} />
+                ))}
             </Box>
 
             <Box sx={{ minWidth: 0, overflow: 'hidden' }}>
@@ -437,7 +442,7 @@ export function WorkItemTable({
                     >
                         {showLiveDot ? <Box /> : null}
                         {renderHeader('id', 'ID')}
-                        {renderHeader('title', 'Issue')}
+                        {renderHeader('title', 'Item')}
                         <Typography sx={HEADER_SX}>Reporter</Typography>
                         <Typography sx={HEADER_SX}>Assignee</Typography>
                         {renderHeader('status', 'Status')}

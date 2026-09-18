@@ -129,13 +129,10 @@ export function useSSE() {
                 // changes an item's row, and pages like /queue derive UI off the
                 // joined items + runs view. Without this, freshly-created items
                 // never appear in `itemsById` until a manual refetch.
-                void queryClient.invalidateQueries({ queryKey: ['epics'] });
-                void queryClient.invalidateQueries({ queryKey: ['stories'] });
-                void queryClient.invalidateQueries({ queryKey: ['bugs'] });
-                // The Issues page reads `['issues', 'tree', ...]` — keep it
-                // honest after any item mutation. Without this, updates made
-                // from a detail page only show up on /issues after the 30s
-                // staleTime expires or the tab regains focus.
+                void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+                void queryClient.invalidateQueries({ queryKey: ['sub-tasks'] });
+                // Project Detail reads `['issues', 'tree', ...]` — keep it
+                // honest after any item mutation.
                 void queryClient.invalidateQueries({ queryKey: ['issues'] });
                 // The same event reports the `agents` and `projects` badge
                 // counts, but neither list query was invalidated — so a
@@ -146,6 +143,8 @@ export function useSSE() {
                 void queryClient.invalidateQueries({ queryKey: ['projects'] });
                 // Workflow create/update/delete broadcast this event too.
                 void queryClient.invalidateQueries({ queryKey: ['workflows'] });
+                // Task status / workflow changes and paused workflows move the Queue page.
+                void queryClient.invalidateQueries({ queryKey: ['workflow-queue'] });
             }
             if (event.type === 'notification_created') {
                 void queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -180,9 +179,16 @@ export function useSSE() {
             // `counts_changed`, so only workflow reads are refreshed here.
             if (event.type === 'workflow_run_updated') {
                 void queryClient.invalidateQueries({ queryKey: ['workflows'] });
+                void queryClient.invalidateQueries({ queryKey: ['workflow-queue'] });
                 if (event.workflowRunId) {
                     void queryClient.invalidateQueries({
                         queryKey: ['workflow-run', event.workflowRunId],
+                    });
+                }
+                // A sub-task's run moving also moves its Task run's view.
+                if (event.parentWorkflowRunId) {
+                    void queryClient.invalidateQueries({
+                        queryKey: ['workflow-run', event.parentWorkflowRunId],
                     });
                 }
                 if (event.workflowId) {

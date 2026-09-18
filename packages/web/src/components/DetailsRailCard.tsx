@@ -33,7 +33,7 @@ import { ItemWorkflowPanel } from '../pages/workflows/ItemWorkflowPanel.js';
 const MONO = '"JetBrains Mono", monospace';
 
 export interface ParentLink {
-    label: string; // "Epic", "Story", "Project"
+    label: string; // "Task", "Project"
     text: string; // Display string, typically the issue id (e.g. "CER-7")
     href: string;
 }
@@ -69,12 +69,10 @@ interface Props {
     totalCostUsd?: number | null | undefined;
 
     /**
-     * T2 — per-item git worktree association. PO Writer fills
-     * `worktreeBranch` (`atlas/<role>/<id>`); the worktree-orchestrator
-     * resolves and writes back `worktreePath` so re-runs reuse the same
-     * checkout. Both nullable. When EITHER prop is provided (even as
-     * null) the Branch + Path rows render; pass nothing on kinds that
-     * don't carry worktrees (Epic).
+     * The Task's run branch and its on-disk checkout, provisioned by its
+     * workflow run. Both nullable. When EITHER prop is provided (even as
+     * null) the Branch + Path rows render; pass nothing on sub-tasks,
+     * which share their Task's worktree.
      */
     worktreeBranch?: string | null | undefined;
     worktreePath?: string | null | undefined;
@@ -274,7 +272,9 @@ export function DetailsRailCard({
                 )}
             </InfoRow>
 
-            {issueId && project && <ItemWorkflowPanel issueType={issueType} itemId={issueId} projectId={project.id} />}
+            {issueType === 'task' && issueId && project && (
+                <ItemWorkflowPanel itemId={issueId} projectId={project.id} />
+            )}
 
             {reporter !== undefined && (
                 <InfoRow label="Reporter">
@@ -427,7 +427,7 @@ export function DetailsRailCard({
                     open
                     onClose={() => setAssigneeAnchor(null)}
                     assigneeAgentId={assigneeAgentId}
-                    suggestedRole={issueType === 'epic' ? 'po' : undefined}
+                    suggestedRole={issueType === 'task' ? 'po' : undefined}
                     onAssign={(agentId) => {
                         onAssign(agentId);
                         setAssigneeAnchor(null);

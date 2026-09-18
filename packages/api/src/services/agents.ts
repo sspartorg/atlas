@@ -138,6 +138,7 @@ export interface IAgentCreateInput {
     category: IAgent['category'];
     cli: IAgent['cli'];
     model: string;
+    effort?: IAgent['effort'] | undefined;
     framework?: string | undefined;
     prompt_md?: string | undefined;
     status?: IAgent['status'] | undefined;
@@ -160,6 +161,7 @@ export interface IAgentUpdateInput {
     category?: IAgent['category'] | undefined;
     cli?: IAgent['cli'] | undefined;
     model?: string | undefined;
+    effort?: IAgent['effort'] | undefined;
     framework?: string | undefined;
     prompt_md?: string | undefined;
     status?: IAgent['status'] | undefined;
@@ -182,6 +184,9 @@ const AGENT_SCALAR_FIELDS = [
     'category',
     'cli',
     'model',
+    // Missing until 2026-09-18, so effort could be neither set on create nor
+    // changed from Agent Detail — every agent stayed on the column default.
+    'effort',
     'framework',
     'prompt_md',
     'status',
@@ -258,12 +263,14 @@ export const agentsService = {
                     category: data.category,
                     cli: data.cli,
                     model: data.model,
+                    ...(scalars['effort'] ? { effort: scalars['effort'] as IAgent['effort'] } : {}),
                     framework: (scalars['framework'] as string | undefined) ?? '',
                     prompt_md: (scalars['prompt_md'] as string | undefined) ?? '',
                     status,
                     accent_color: data.accent_color,
                     sort_order: (scalars['sort_order'] as number | undefined) ?? 0,
                     description: (scalars['description'] as string | undefined) ?? '',
+                    designation: (scalars['designation'] as string | undefined) ?? '',
                     glyph: (scalars['glyph'] as string | undefined) ?? '',
                     memory_cadence: (scalars['memory_cadence'] as number | undefined) ?? 1,
                     kind_slug: (scalars['kind_slug'] as AgentKindSlug | undefined) ?? 'custom',
@@ -464,7 +471,7 @@ export const agentsService = {
             .where('r.agent_id', '=', agentId)
             .orderBy('r.created_at', 'desc')
             .execute();
-        return rows.map((r) => asAgentRun(r as never, (r.item_type as IssueType) ?? 'story'));
+        return rows.map((r) => asAgentRun(r as never, (r.item_type as IssueType) ?? 'task'));
     },
 
     async getChecklists(agentId: string): Promise<IAgentChecklistItem[]> {

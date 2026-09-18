@@ -27,13 +27,13 @@ The **SDLC role catalog** is the canonical list of roles an agent can play in At
 
 | `id` | Label | Seeded? | Default status | Notes |
 |---|---|---|---|---|
-| `po` | Product Owner | yes | active | PO Writer — brainstorm-before-scope. Paired PO Reviewer agent checks the stories + `[QA]` twins (`planning` workflow; End queues the stories for `dev`). |
+| `po` | Product Owner | yes | active | PO Writer — brainstorm-before-scope; splits a Task into `dev` sub-tasks + `[QA]` twins labelled `qa`. Paired PO Reviewer agent checks them (`delivery` workflow). |
 | `spec-writer` | Specification Writer | **no** | — | Type-only. Removed from the chain; Architect now authors the spec. |
-| `engineer` | Engineer | yes | active | Coder. Paired Code Reviewer agent (`dev` workflow; the workflow opens the PR at End). |
-| `qa` | Quality Assurance | yes | active | QA Writer — test-plan CSV per dev story. Paired QA Reviewer agent (`qa` workflow). |
-| `architect` | Software Architect | yes | active | Architect — authors `specs/<n>-<slug>/spec.md` ahead of Coder (absorbed Spec Writer). Paired Architect Reviewer agent (`dev` workflow). |
+| `engineer` | Engineer | yes | active | Coder — one dev sub-task at a time. Paired Code Reviewer agent (`build` sub-workflow; the Task's `delivery` run opens the one PR at End). |
+| `qa` | Quality Assurance | yes | active | QA Writer — test-plan CSV per `[QA]` sub-task. Paired QA Reviewer agent (`test` sub-workflow). |
+| `architect` | Software Architect | yes | active | Architect — authors one `specs/<n>-<slug>/spec.md` for the whole Task (saved to its `spec_md`) ahead of Coder (absorbed Spec Writer). Paired Architect Reviewer agent (`delivery` workflow). |
 | `tester` | Exploratory Tester | **no** | — | Type-only. |
-| `automation` | Automation Engineer | yes | active | Automates `[automation-yes]` QA cases. Paired Automation Reviewer agent (`qa` workflow, after QA Reviewer). |
+| `automation` | Automation Engineer | yes | active | Automates `[automation-yes]` QA cases on the Task's branch. Paired Automation Reviewer agent (`test` sub-workflow, after QA Reviewer). |
 | `devops` | DevOps Engineer | **no** | — | Type-only. |
 | `security` | Security Review Lead | **no** | — | Type-only. |
 | `designer` | UX/Visual Designer | **no** | — | Type-only. |

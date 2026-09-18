@@ -1,4 +1,4 @@
-// Workflow engine (ADR 0014).
+// Workflow engine (ADR 0014, ADR 0015).
 //
 // A workflow run owns one worktree + branch for its whole life. Each agent
 // node is an ordinary `agent_runs` row spawned through `spawnAgentRun`; the
@@ -6,6 +6,11 @@
 // engine picks the next node from the run's frozen `graph_snapshot`. Nothing
 // here waits on the scheduler tick: the next node spawns as soon as the
 // previous one finishes. Push, PR and worktree cleanup happen once, at End.
+//
+// A Task run's Sub-tasks step works the Task's sub-tasks one at a time: each
+// gets a child run (`parent_workflow_run_id`) of the step's sub-workflow that
+// shares the parent's worktree and branch and never delivers. A child that
+// parks parks its parent; a child that finishes hands back to the parent.
 //
 // Git helpers (`ensureWorktree`, `pushWorktree`, `openPullRequest`,
 // `cleanupWorktreeAfterPush`) each take `withProjectGitLock` internally and
@@ -69,9 +74,12 @@ interface RunRow {
     project_id: string | null;
     status: WorkflowRunStatus;
     graph_snapshot: IWorkflowGraph;
+    parent_workflow_run_id: string | null;
+    parent_node_id: string | null;
     current_node_id: string | null;
     parked_node_id: string | null;
     loop_count: number;
+    gate_rounds: number;
     branch: string | null;
     worktree_path: string | null;
     setup_done: boolean;
@@ -103,7 +111,11 @@ function nextNodeId(graph: IWorkflowGraph, nodeId: string, kind: 'pass' | 'fail'
     return graph.edges.find((e) => e.source === nodeId && e.kind === kind)?.target ?? null;
 }
 
-function broadcastRun(run: Pick<RunRow, 'id' | 'workflow_id' | 'item_id'>, status: WorkflowRunStatus, nodeId: string | null): void {
+function broadcastRun(
+    run: Pick<RunRow, 'id' | 'workflow_id' | 'item_id' | 'parent_workflow_run_id'>,
+    status: WorkflowRunStatus,
+    nodeId: string | null,
+): void {
     broadcastSSE({
         type: 'workflow_run_updated',
         workflowId: run.workflow_id,
@@ -111,6 +123,7 @@ function broadcastRun(run: Pick<RunRow, 'id' | 'workflow_id' | 'item_id'>, statu
         workflowRunStatus: status,
         nodeId,
         ...(run.item_id ? { issueId: run.item_id } : {}),
+        ...(run.parent_workflow_run_id ? { parentWorkflowRunId: run.parent_workflow_run_id } : {}),
     });
 }
 
@@ -165,7 +178,33 @@ async function notifyOwner(
 
 // ─── Start ──────────────────────────────────────────────────────────────────
 
-export async function startWorkflowRun(workflowId: string, itemId: string | null): Promise<string> {
+/** The Task run (and its Sub-tasks step) a sub-task's run is started from. */
+interface ParentStep {
+    run: RunRow;
+    nodeId: string;
+}
+
+/** The Sub-tasks step reached first from Start along pass connections. */
+function firstSubtasksStep(graph: IWorkflowGraph): string | null {
+    const start = graph.nodes.find((n) => n.type === 'start');
+    const seen = new Set<string>();
+    const queue = start ? [start.id] : [];
+    for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        if (nodeById(graph, id)?.type === 'subtasks') return id;
+        const next = nextNodeId(graph, id, 'pass');
+        if (next) queue.push(next);
+    }
+    return null;
+}
+
+export async function startWorkflowRun(
+    workflowId: string,
+    itemId: string | null,
+    parent?: ParentStep,
+    opts: { fromSubtasks?: boolean } = {},
+): Promise<string> {
     const workflow = await loadWorkflow(workflowId);
     if (!workflow) throw new WorkflowStartError('not_found', 'Workflow not found');
     const graph = workflow.graph;
@@ -174,20 +213,37 @@ export async function startWorkflowRun(workflowId: string, itemId: string | null
         throw new WorkflowStartError('invalid', `Workflow graph is invalid: ${graphErrors[0]?.message ?? ''}`);
     }
     const start = graph.nodes.find((n) => n.type === 'start');
-    const firstNodeId = start ? nextNodeId(graph, start.id, 'pass') : null;
-    if (!firstNodeId) throw new WorkflowStartError('invalid', 'Workflow Start is not connected');
+    // Continuing a Task after review skips planning: its open sub-tasks run
+    // on the branch the first run left, and End updates the same PR.
+    const firstNodeId = opts.fromSubtasks ? firstSubtasksStep(graph) : start ? nextNodeId(graph, start.id, 'pass') : null;
+    if (!firstNodeId) {
+        throw new WorkflowStartError(
+            'invalid',
+            opts.fromSubtasks ? 'This workflow has no Sub-tasks step to continue from' : 'Workflow Start is not connected',
+        );
+    }
 
+    if ((workflow.input_kind === 'sub_task') !== Boolean(parent)) {
+        throw new WorkflowStartError('invalid', 'A sub-task workflow runs only from a Task workflow’s Sub-tasks step');
+    }
     let item: Awaited<ReturnType<typeof loadItem>>;
-    if (workflow.input_kind === 'item') {
-        if (!itemId) throw new WorkflowStartError('invalid', 'This workflow runs on an item — pick one to start it');
+    if (workflow.input_kind !== 'none') {
+        if (!itemId) throw new WorkflowStartError('invalid', 'This workflow runs on a Task — pick one to start it');
         item = await loadItem(itemId);
         if (!item) throw new WorkflowStartError('not_found', 'Item not found');
+        const wantType = workflow.input_kind === 'item' ? 'task' : 'sub_task';
+        if (item.type !== wantType) {
+            throw new WorkflowStartError('invalid', wantType === 'task' ? 'Only Tasks run through this workflow' : 'Only sub-tasks run through a sub-task workflow');
+        }
         if (workflow.project_id && item.project_id !== workflow.project_id) {
             throw new WorkflowStartError('invalid', "Item belongs to a different project than the workflow");
         }
         if (item.status === 'done') throw new WorkflowStartError('invalid', 'Item is already done');
-        const firstAgent = nodeById(graph, firstNodeId)?.agent_id ?? workflowId;
-        await assertDepsAllDoneForDispatch(item.id, firstAgent);
+        // Sub-tasks run in the order the Task's Sub-tasks step picks them.
+        if (!parent) {
+            const firstAgent = nodeById(graph, firstNodeId)?.agent_id ?? workflowId;
+            await assertDepsAllDoneForDispatch(item.id, firstAgent);
+        }
     } else if (itemId) {
         throw new WorkflowStartError('invalid', 'This workflow runs on the project, not on an item');
     }
@@ -195,7 +251,11 @@ export async function startWorkflowRun(workflowId: string, itemId: string | null
     const runId = randomUUID();
     const projectId = item?.project_id ?? workflow.project_id;
     const itemBranch = item?.worktree_branch && WORKTREE_BRANCH_RE.test(item.worktree_branch) ? item.worktree_branch : null;
-    const branch = workflow.use_worktree ? (itemBranch ?? `atlas/wf/${item?.id ?? runId.slice(0, 8)}`) : null;
+    // A sub-task's run works in its Task's worktree, whatever the
+    // sub-workflow's own worktree setting says.
+    const branch = parent
+        ? parent.run.branch
+        : workflow.use_worktree ? (itemBranch ?? `atlas/wf/${item?.id ?? runId.slice(0, 8)}`) : null;
 
     try {
         await db
@@ -207,6 +267,14 @@ export async function startWorkflowRun(workflowId: string, itemId: string | null
                 project_id: projectId,
                 graph_snapshot: JSON.stringify(graph),
                 branch,
+                ...(parent
+                    ? {
+                          parent_workflow_run_id: parent.run.id,
+                          parent_node_id: parent.nodeId,
+                          worktree_path: parent.run.worktree_path,
+                          setup_done: parent.run.setup_done,
+                      }
+                    : {}),
             })
             .execute();
     } catch (err) {
@@ -221,13 +289,13 @@ export async function startWorkflowRun(workflowId: string, itemId: string | null
 
     if (item) {
         await setItemStatus(item.id, 'in_progress', `workflow_run_started: ${workflow.name}`);
-        if (branch && branch !== item.worktree_branch) {
+        if (!parent && branch && branch !== item.worktree_branch) {
             await db.updateTable('items').set({ worktree_branch: branch }).where('id', '=', item.id).execute();
         }
     }
 
-    if (workflow.use_worktree) {
-        const failure = await prepareWorktree(run, workflow.push_code);
+    if (workflow.use_worktree && !parent) {
+        const failure = await prepareWorktree(run, pushesRunBranch(workflow));
         if (failure) {
             await park(run, firstNodeId, `Could not prepare the worktree: ${failure}`);
             return runId;
@@ -236,6 +304,11 @@ export async function startWorkflowRun(workflowId: string, itemId: string | null
 
     await goTo(run, firstNodeId);
     return runId;
+}
+
+/** A workflow that pushes to the default branch never publishes its run branch. */
+function pushesRunBranch(workflow: { push_code: boolean; push_to_default: boolean }): boolean {
+    return workflow.push_code && !workflow.push_to_default;
 }
 
 /**
@@ -293,7 +366,63 @@ async function goTo(run: RunRow, nodeId: string, why?: string): Promise<void> {
         await finishRun(run, node);
         return;
     }
+    if (node.type === 'subtasks') {
+        await runNextSubtask(run, node);
+        return;
+    }
     await spawnNode(run, node);
+}
+
+/**
+ * The Task's open sub-tasks this step claims, in run order: the Owner's
+ * hand-set order first (`sort_order`), then oldest first. A step with a label
+ * takes the sub-tasks carrying it; a step without one takes those no other
+ * Sub-tasks step in the graph claims. Open = not yet in review or done.
+ */
+function openSubtasksQuery(taskId: string, graph: IWorkflowGraph, node: IWorkflowNode) {
+    const claimed = graph.nodes.flatMap((n) => (n.type === 'subtasks' && n.label && n.id !== node.id ? [n.label] : []));
+    let q = db
+        .selectFrom('items')
+        .select(['id', 'title'])
+        .where('parent_id', '=', taskId)
+        .where('type', '=', 'sub_task')
+        .where('status', 'not in', ['in_review', 'done'])
+        // Postgres sorts NULL last ascending: unordered sub-tasks follow.
+        .orderBy('sort_order', 'asc')
+        .orderBy('created_at', 'asc')
+        .orderBy('id', 'asc');
+    if (node.label) {
+        q = q.where('labels', '@>', JSON.stringify([node.label]) as never);
+    } else if (claimed.length > 0) {
+        q = q.where((eb) => eb.not(eb.or(claimed.map((l) => eb('labels', '@>', JSON.stringify([l]) as never)))));
+    }
+    return q;
+}
+
+async function runNextSubtask(run: RunRow, node: IWorkflowNode): Promise<void> {
+    await db
+        .updateTable('workflow_runs')
+        .set({ current_node_id: node.id, status: 'running', parked_node_id: null, park_reason: null })
+        .where('id', '=', run.id)
+        .execute();
+    run.current_node_id = node.id;
+    run.status = 'running';
+    broadcastRun(run, 'running', node.id);
+    const next = run.item_id ? await openSubtasksQuery(run.item_id, run.graph_snapshot, node).executeTakeFirst() : undefined;
+    if (!next) {
+        const target = nextNodeId(run.graph_snapshot, node.id, 'pass');
+        if (!target) {
+            await park(run, node.id, 'No pass connection from this step');
+            return;
+        }
+        await goTo(run, target);
+        return;
+    }
+    try {
+        await startWorkflowRun(node.sub_workflow_id ?? '', next.id, { run, nodeId: node.id });
+    } catch (err) {
+        await park(run, node.id, `Could not start sub-task ${next.id}: ${(err as Error).message}`);
+    }
 }
 
 async function spawnNode(run: RunRow, node: IWorkflowNode): Promise<void> {
@@ -471,6 +600,27 @@ async function park(run: RunRow, nodeId: string | null, reason: string, stepPost
     } else {
         await notifyOwner(run, `${name} needs you: ${reason}`, 'needs_you', 'agent.run_finished_no_item');
     }
+    if (run.parent_workflow_run_id) await waitOnChild(run, reason);
+}
+
+/**
+ * A parked sub-task holds its Task run at the Sub-tasks step. The sub-task
+ * already carries the comment and the notification, so the Task only changes
+ * status — replying on either one resumes both.
+ */
+async function waitOnChild(child: RunRow, reason: string): Promise<void> {
+    const parent = child.parent_workflow_run_id ? await loadRun(child.parent_workflow_run_id) : undefined;
+    if (!parent || parent.status !== 'running') return;
+    const why = `Sub-task ${child.item_id ?? ''} is waiting for you: ${reason}`.slice(0, 1000);
+    await db
+        .updateTable('workflow_runs')
+        .set({ status: 'waiting_for_owner', parked_node_id: child.parent_node_id, current_node_id: child.parent_node_id, park_reason: why })
+        .where('id', '=', parent.id)
+        .execute();
+    broadcastRun(parent, 'waiting_for_owner', child.parent_node_id);
+    if (parent.item_id) {
+        await setItemStatus(parent.item_id, 'waiting_for_info', `workflow_parked: ${why}`.slice(0, 280), { clearAssignee: true });
+    }
 }
 
 /** Owner-initiated resume (project-level runs have no item to reply on). */
@@ -492,6 +642,20 @@ export async function resumeWorkflowRun(runId: string): Promise<void> {
 export async function continueResumedRun(runId: string): Promise<void> {
     const run = await loadRun(runId);
     if (!run || run.status !== 'running') return;
+    if (run.parent_workflow_run_id) {
+        // The Owner answered on the sub-task: its Task run is working again.
+        const reopened = await db
+            .updateTable('workflow_runs')
+            .set({ status: 'running', park_reason: null, parked_node_id: null })
+            .where('id', '=', run.parent_workflow_run_id)
+            .where('status', '=', 'waiting_for_owner')
+            .executeTakeFirst();
+        const parent = await loadRun(run.parent_workflow_run_id);
+        if (parent && Number(reopened.numUpdatedRows ?? 0) > 0) {
+            broadcastRun(parent, 'running', parent.current_node_id);
+            if (parent.item_id) await setItemStatus(parent.item_id, 'in_progress', 'workflow_resumed');
+        }
+    }
     const parked = nodeById(run.graph_snapshot, run.parked_node_id);
     if (!parked) {
         const start = run.graph_snapshot.nodes.find((n) => n.type === 'start');
@@ -500,13 +664,13 @@ export async function continueResumedRun(runId: string): Promise<void> {
         return;
     }
     broadcastRun(run, 'running', parked.id);
-    if (parked.type !== 'end') {
+    // A sub-task's run shares its Task's worktree; the Task run refreshes it.
+    if (parked.type !== 'end' && !run.parent_workflow_run_id) {
         // A parked run can wait days. Refresh the branch onto the latest
-        // default branch so the next step sees what merged meanwhile — e.g.
-        // the dev PR a QA run's Automation step was waiting on.
+        // default branch so the next step sees what merged meanwhile.
         const workflow = await loadWorkflow(run.workflow_id);
         if (workflow?.use_worktree) {
-            const failure = await prepareWorktree(run, workflow.push_code);
+            const failure = await prepareWorktree(run, pushesRunBranch(workflow));
             if (failure) {
                 await park(run, parked.id, `Could not refresh the worktree onto the latest default branch: ${failure}`);
                 return;
@@ -520,6 +684,23 @@ export async function continueResumedRun(runId: string): Promise<void> {
     }
     if (parked.type === 'end') {
         await finishRun(run, parked);
+        return;
+    }
+    if (parked.type === 'subtasks') {
+        // Parked because a sub-task asked: resume that sub-task, not the step.
+        const waiting = await db
+            .updateTable('workflow_runs')
+            .set({ status: 'running', park_reason: null })
+            .where('parent_workflow_run_id', '=', run.id)
+            .where('status', '=', 'waiting_for_owner')
+            .returning(['id', 'item_id'])
+            .executeTakeFirst();
+        if (waiting) {
+            if (waiting.item_id) await setItemStatus(waiting.item_id, 'in_progress', 'workflow_resumed');
+            await continueResumedRun(waiting.id);
+            return;
+        }
+        await runNextSubtask(run, parked);
         return;
     }
     // Re-run the step that asked, with a fresh loop budget: the Owner's reply
@@ -569,30 +750,35 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
         .executeTakeFirst();
     if (!project) return result;
 
+    const defaultBranch = project.default_branch?.trim() ? project.default_branch : 'main';
     let pushOk = !workflow.push_code;
     if (workflow.push_code) {
         const committed = await commitPending(run.worktree_path, project.credential_id, run.id);
         if (committed) log.push(committed);
-        const push = await pushWorktree(run.worktree_path, run.branch, project.credential_id, project.id);
+        // push_to_default publishes straight onto the default branch; on a
+        // non-fast-forward pushWorktree rebases onto it and retries once.
+        const target = workflow.push_to_default ? defaultBranch : run.branch;
+        const push = await pushWorktree(run.worktree_path, target, project.credential_id, project.id);
         pushOk = push.pushed || push.alreadyUpToDate;
         result.pushed = push.pushed;
-        log.push(pushOk ? `pushed ${run.branch}` : `push failed: ${push.error ?? 'unknown'}`);
+        log.push(pushOk ? `pushed ${target}` : `push failed: ${push.error ?? 'unknown'}`);
         if (!pushOk) result.failure = `Push failed: ${push.error ?? 'unknown error'}`;
     }
 
-    if (opts.openPr && workflow.raises_pr && workflow.push_code && pushOk) {
+    if (opts.openPr && workflow.raises_pr && workflow.push_code && !workflow.push_to_default && pushOk) {
         const item = run.item_id ? await loadItem(run.item_id) : undefined;
         const title = item ? `[${item.id}] ${String(item.title).slice(0, 80)}` : `[${workflow.name}] ${project.name}`;
         const body = [
             `Opened by the **${workflow.name}** workflow.`,
             '',
-            ...(item ? [`- Item: ${item.id}`] : [`- Project: ${project.name}`]),
+            ...(item ? [`- Task: ${item.id}`] : [`- Project: ${project.name}`]),
             `- Workflow run: \`${run.id}\``,
+            ...(await subtaskSummaryLines(run)),
         ].join('\n');
         const pr = await openPullRequest({
             worktreePath: run.worktree_path,
             branch: run.branch,
-            base: project.default_branch?.trim() ? project.default_branch : 'main',
+            base: defaultBranch,
             title,
             body,
             credentialId: project.credential_id,
@@ -626,8 +812,9 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
     }
 
     // Any delivery failure keeps the worktree so a resumed run can retry
-    // from exactly this state.
-    if (pushOk && !result.failure && project.git_path) {
+    // from exactly this state. Without a push the worktree and its branch are
+    // the only copy of the work ("keep local"), so they stay too.
+    if (workflow.push_code && pushOk && !result.failure && project.git_path) {
         const cleanup = await cleanupWorktreeAfterPush({
             itemId: null,
             projectId: project.id,
@@ -642,6 +829,12 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
 }
 
 async function finishRun(run: RunRow, endNode: IWorkflowNode): Promise<void> {
+    if (run.parent_workflow_run_id) {
+        await finishChildRun(run, endNode);
+        return;
+    }
+    if (run.item_id && (await sendBackToSubtasks(run, endNode))) return;
+
     await db
         .updateTable('workflow_runs')
         .set({ current_node_id: endNode.id })
@@ -666,12 +859,16 @@ async function finishRun(run: RunRow, endNode: IWorkflowNode): Promise<void> {
 
     const workflow = await loadWorkflow(run.workflow_id);
     const name = workflow?.name ?? 'Workflow';
-    let routedChildren = 0;
     if (run.item_id) {
-        routedChildren = await routeChildren(run, endNode);
-        // A PR waits for review, and so does an item whose work was handed to
-        // children (a planned epic isn't done until its stories are).
-        const finalStatus = delivery.prUrl || routedChildren > 0 ? 'in_review' : 'done';
+        // A PR waits for review, and so does a Task whose sub-tasks do: the
+        // Owner closes them after verifying the branch.
+        const openSubtask = await db
+            .selectFrom('items')
+            .select('id')
+            .where('parent_id', '=', run.item_id)
+            .where('status', '!=', 'done')
+            .executeTakeFirst();
+        const finalStatus = delivery.prUrl || openSubtask ? 'in_review' : 'done';
         await setItemStatus(run.item_id, finalStatus, `workflow_completed: ${name}`, { clearAssignee: true });
         const suffix = delivery.prUrl ? ` PR: ${delivery.prUrl}` : '';
         await notifyOwner(
@@ -681,66 +878,136 @@ async function finishRun(run: RunRow, endNode: IWorkflowNode): Promise<void> {
             delivery.prUrl ? 'item.status_changed:in_review' : null,
         );
     } else {
-        routedChildren = await routeChildren(run, endNode);
         await notifyOwner(run, `${name} finished.${delivery.prUrl ? ` PR: ${delivery.prUrl}` : ''}`, 'update', 'agent.run_finished_no_item');
     }
-    // Start the next queued run (this workflow's queue or a child workflow)
-    // now instead of waiting for the next minute tick.
-    void kickWorkflowDispatch(routedChildren > 0 ? 'children' : 'finished');
+    // Start the next queued Task now instead of waiting for the next tick.
+    void kickWorkflowDispatch('finished');
 }
 
-async function routeChildren(run: RunRow, endNode: IWorkflowNode): Promise<number> {
-    let q = db
-        .selectFrom('items')
-        .select(['id', 'type', 'status', 'workflow_id'])
-        .where((eb) =>
-            eb.or([
-                eb('created_by_workflow_run_id', '=', run.id),
-                ...(run.item_id ? [eb.and([eb('parent_id', '=', run.item_id), eb('created_at', '>=', run.started_at)])] : []),
-            ]),
-        );
-    q = q.where('status', 'in', ['draft', 'ready']);
-    const children = await q.execute();
-    // Children that test another item (an outgoing tested_by link, e.g. a
-    // `[QA]` twin) go to the End node's test workflow when it has one.
-    const testIds = new Set<string>();
-    if (endNode.test_child_workflow_id && children.length > 0) {
-        const links = await db
-            .selectFrom('item_links')
-            .select('from_id')
-            .where('relation_type', '=', 'tested_by')
-            .where('from_id', 'in', children.map((c) => c.id))
-            .execute();
-        for (const l of links) testIds.add(l.from_id);
-    }
-    let routed = 0;
-    for (const child of children) {
-        const routeTo = testIds.has(child.id) ? endNode.test_child_workflow_id : endNode.child_workflow_id;
-        const workflowId = child.workflow_id ?? routeTo ?? null;
-        if (!workflowId) continue;
-        await db.updateTable('items').set({ workflow_id: workflowId, status: 'ready' }).where('id', '=', child.id).execute();
-        if (child.status !== 'ready') {
-            await eventsLog.record({
-                item_id: child.id,
-                item_type: child.type as IssueType,
-                event_type: 'status_changed',
-                actor_agent_id: null,
-                field: 'status',
-                from_value: child.status,
-                to_value: 'ready',
-                detail: `queued_for_workflow: ${workflowId}`,
-            });
+/**
+ * End gate for a Task run with Sub-tasks steps: the run is complete only when
+ * every sub-task is. A sub-task created after its step already passed (e.g. a
+ * fix a QA step asked for) sends the run back to the step that claims it —
+ * counted in `gate_rounds` against `max_loops`, apart from the reviewers'
+ * fail loops; one that no step claims parks the run.
+ * Returns true when the run did not reach End.
+ */
+async function sendBackToSubtasks(run: RunRow, endNode: IWorkflowNode): Promise<boolean> {
+    const steps = run.graph_snapshot.nodes.filter((n) => n.type === 'subtasks');
+    if (!run.item_id || steps.length === 0) return false;
+    for (const step of steps) {
+        const open = await openSubtasksQuery(run.item_id, run.graph_snapshot, step).executeTakeFirst();
+        if (!open) continue;
+        const workflow = await loadWorkflow(run.workflow_id);
+        const rounds = run.gate_rounds + 1;
+        if (rounds > (workflow?.max_loops ?? 3)) {
+            await park(run, endNode.id, `Sent back for late sub-tasks ${workflow?.max_loops ?? 3} times: sub-task ${open.id} is still open`);
+            return true;
         }
-        broadcastSSE({ type: 'counts_changed', issueType: child.type as IssueType, issueId: child.id });
-        routed++;
+        await db.updateTable('workflow_runs').set({ gate_rounds: rounds }).where('id', '=', run.id).execute();
+        run.gate_rounds = rounds;
+        await runNextSubtask(run, step);
+        return true;
     }
-    return routed;
+    const stray = await db
+        .selectFrom('items')
+        .select('id')
+        .where('parent_id', '=', run.item_id)
+        .where('type', '=', 'sub_task')
+        .where('status', 'not in', ['in_review', 'done'])
+        .orderBy('created_at', 'asc')
+        .execute();
+    if (stray.length === 0) return false;
+    await park(
+        run,
+        endNode.id,
+        `No Sub-tasks step runs ${stray.map((i) => i.id).join(', ')} (no matching label). Label or close them, then resume.`,
+    );
+    return true;
+}
+
+/** A sub-task's run never delivers: its work stays on the Task's branch. */
+async function finishChildRun(run: RunRow, endNode: IWorkflowNode): Promise<void> {
+    const project = run.project_id
+        ? await db.selectFrom('projects').select('credential_id').where('id', '=', run.project_id).executeTakeFirst()
+        : undefined;
+    // The next sub-task starts from a clean tree.
+    if (run.worktree_path) await commitPending(run.worktree_path, project?.credential_id ?? null, run.id);
+    await db
+        .updateTable('workflow_runs')
+        .set({ status: 'completed', finished_at: new Date().toISOString(), current_node_id: endNode.id })
+        .where('id', '=', run.id)
+        .execute();
+    broadcastRun(run, 'completed', endNode.id);
+    const workflow = await loadWorkflow(run.workflow_id);
+    if (run.item_id) {
+        await setItemStatus(run.item_id, 'in_review', `workflow_completed: ${workflow?.name ?? 'Workflow'}`, { clearAssignee: true });
+    }
+
+    const parent = run.parent_workflow_run_id ? await loadRun(run.parent_workflow_run_id) : undefined;
+    if (!parent) return;
+    if (run.setup_done && !parent.setup_done) {
+        await db.updateTable('workflow_runs').set({ setup_done: true }).where('id', '=', parent.id).execute();
+        parent.setup_done = true;
+    }
+    const step = nodeById(parent.graph_snapshot, run.parent_node_id);
+    if (!step || parent.status !== 'running' || parent.current_node_id !== step.id) return;
+    await runNextSubtask(parent, step);
+}
+
+/**
+ * The PR body's list of what the Task's sub-tasks did, for the Owner's
+ * review — every sub-task any run of this Task finished, so a run that
+ * continues after review keeps the earlier ones in the list.
+ */
+async function subtaskSummaryLines(run: RunRow): Promise<string[]> {
+    if (!run.item_id) return [];
+    const rows = await db
+        .selectFrom('workflow_runs as wr')
+        .innerJoin('items as i', 'i.id', 'wr.item_id')
+        .select(['wr.id as run_id', 'i.id as item_id', 'i.title'])
+        .where('i.parent_id', '=', run.item_id)
+        .where('wr.parent_workflow_run_id', 'is not', null)
+        .where('wr.status', '=', 'completed')
+        .orderBy('wr.started_at', 'asc')
+        .execute();
+    if (rows.length === 0) return [];
+    const steps = await db
+        .selectFrom('agent_runs')
+        .select(['workflow_run_id', 'outcome_summary'])
+        .where('workflow_run_id', 'in', rows.map((r) => r.run_id))
+        .where('outcome_kind', '=', 'done')
+        .orderBy('created_at', 'asc')
+        .execute();
+    // The last passing step's summary per sub-task; a re-run sub-task keeps its latest run.
+    const summaryByRun = new Map(steps.map((st) => [st.workflow_run_id, st.outcome_summary]));
+    const byItem = new Map(rows.map((r) => [r.item_id, r]));
+    const oneLine = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+    return [
+        '',
+        '## Sub-tasks',
+        '',
+        ...[...byItem.values()].map((r) => {
+            const summary = oneLine(summaryByRun.get(r.run_id));
+            return `- **${r.item_id}** ${r.title}${summary ? ` — ${summary}` : ''}`;
+        }),
+    ];
 }
 
 export async function cancelWorkflowRun(runId: string): Promise<void> {
+    // Stopping a sub-task stops its Task: the sub-tasks share one branch.
+    const target = await loadRun(runId);
+    if (target?.parent_workflow_run_id) {
+        const parent = await loadRun(target.parent_workflow_run_id);
+        if (parent && (parent.status === 'running' || parent.status === 'waiting_for_owner')) {
+            await cancelWorkflowRun(parent.id);
+            return;
+        }
+    }
+    const now = new Date().toISOString();
     const updated = await db
         .updateTable('workflow_runs')
-        .set({ status: 'cancelled', finished_at: new Date().toISOString() })
+        .set({ status: 'cancelled', finished_at: now })
         .where('id', '=', runId)
         .where('status', 'in', ['running', 'waiting_for_owner'])
         .executeTakeFirst();
@@ -748,10 +1015,19 @@ export async function cancelWorkflowRun(runId: string): Promise<void> {
     const run = (await loadRun(runId)) as RunRow;
     broadcastRun(run, 'cancelled', run.current_node_id);
 
+    const children = await db
+        .updateTable('workflow_runs')
+        .set({ status: 'cancelled', finished_at: now })
+        .where('parent_workflow_run_id', '=', runId)
+        .where('status', 'in', ['running', 'waiting_for_owner'])
+        .returningAll()
+        .execute();
+    for (const child of children) broadcastRun(child as unknown as RunRow, 'cancelled', child.current_node_id);
+
     const live = await db
         .selectFrom('agent_runs')
         .select('id')
-        .where('workflow_run_id', '=', runId)
+        .where('workflow_run_id', 'in', [runId, ...children.map((c) => c.id)])
         .where('status', 'in', ['queued', 'in_progress'])
         .execute();
     for (const step of live) {
@@ -763,14 +1039,17 @@ export async function cancelWorkflowRun(runId: string): Promise<void> {
         await cancelRun(step.id).catch(() => ({ cancelled: false }));
     }
 
-    // Keep what the agents committed, but a stopped run opens no PR.
-    try {
-        await deliver(run, { openPr: false });
-    } catch {
-        /* the worktree stays on disk when delivery fails */
+    // Keep what the agents committed, but a stopped run opens no PR. A
+    // sub-task's run owns no delivery of its own.
+    if (!run.parent_workflow_run_id) {
+        try {
+            await deliver(run, { openPr: false });
+        } catch {
+            /* the worktree stays on disk when delivery fails */
+        }
     }
-    if (run.item_id) {
-        await setItemStatus(run.item_id, 'waiting_for_info', 'workflow_run_cancelled', { clearAssignee: true });
+    for (const r of [run, ...children]) {
+        if (r.item_id) await setItemStatus(r.item_id, 'waiting_for_info', 'workflow_run_cancelled', { clearAssignee: true });
     }
     void kickWorkflowDispatch('finished');
 }
@@ -791,6 +1070,18 @@ export async function reconcileWorkflowRuns(now: Date = new Date()): Promise<num
                         .select('ar.id')
                         .whereRef('ar.workflow_run_id', '=', 'wr.id')
                         .where('ar.status', 'in', ['queued', 'in_progress']),
+                ),
+            ),
+        )
+        // A Task run at its Sub-tasks step works through its running child;
+        // the child is reconciled on its own, and its park reaches the Task.
+        .where(({ not, exists, selectFrom }) =>
+            not(
+                exists(
+                    selectFrom('workflow_runs as c')
+                        .select('c.id')
+                        .whereRef('c.parent_workflow_run_id', '=', 'wr.id')
+                        .where('c.status', '=', 'running'),
                 ),
             ),
         )
@@ -832,7 +1123,7 @@ async function oldestReadyItem(workflowId: string, readyBy: string | null): Prom
             ),
         )
         // Skip items still waiting on a depends_on target, so one blocked
-        // story doesn't hold the whole queue (startWorkflowRun would refuse it).
+        // item doesn't hold the whole queue (startWorkflowRun would refuse it).
         .where(({ not, exists, selectFrom }) =>
             not(
                 exists(
@@ -853,9 +1144,10 @@ async function oldestReadyItem(workflowId: string, readyBy: string | null): Prom
 }
 
 /**
- * One dispatch pass. A workflow runs one item at a time: it only starts a
- * run when none of its runs is `running`. Parked runs don't hold the queue,
- * so one unanswered question doesn't stall every other item.
+ * One dispatch pass. A workflow runs up to `max_parallel_runs` Tasks at once,
+ * each in its own worktree. Parked runs don't hold a slot, so one unanswered
+ * question doesn't stall every other Task. Sub-task runs are started by their
+ * Task run, never here.
  */
 export async function tickWorkflowDispatch(now: Date = new Date()): Promise<number> {
     const workflows = await db
@@ -868,12 +1160,14 @@ export async function tickWorkflowDispatch(now: Date = new Date()): Promise<numb
     let started = 0;
     for (const wf of workflows) {
         try {
-            const busy = await db
+            const running = await db
                 .selectFrom('workflow_runs')
-                .select('id')
+                .select((eb) => eb.fn.countAll().as('n'))
                 .where('workflow_id', '=', wf.id)
                 .where('status', '=', 'running')
+                .where('parent_workflow_run_id', 'is', null)
                 .executeTakeFirst();
+            let free = wf.max_parallel_runs - Number(running?.n ?? 0);
 
             if (wf.trigger === 'schedule') {
                 const due = wf.next_run_at !== null && new Date(wf.next_run_at).getTime() <= now.getTime();
@@ -889,7 +1183,7 @@ export async function tickWorkflowDispatch(now: Date = new Date()): Promise<numb
                     const next = computeNextWorkflowFire(wf.cron_expr, now, tz);
                     await db.updateTable('workflows').set({ next_run_at: next?.toISOString() ?? null }).where('id', '=', wf.id).execute();
                 }
-                if (busy) continue;
+                if (free <= 0) continue;
                 if (wf.input_kind === 'none') {
                     if (due) {
                         await startWorkflowRun(wf.id, null);
@@ -899,18 +1193,20 @@ export async function tickWorkflowDispatch(now: Date = new Date()): Promise<numb
                 }
                 // A scheduled item workflow drains the items that were ready
                 // at its last fire; later arrivals wait for the next fire.
-                if (!wf.last_run_at) continue;
-                const itemId = await oldestReadyItem(wf.id, wf.last_run_at);
-                if (itemId) {
+                if (!wf.last_run_at || wf.input_kind !== 'item') continue;
+                for (; free > 0; free--) {
+                    const itemId = await oldestReadyItem(wf.id, wf.last_run_at);
+                    if (!itemId) break;
                     await startWorkflowRun(wf.id, itemId);
                     started++;
                 }
                 continue;
             }
 
-            if (busy || wf.input_kind !== 'item') continue;
-            const itemId = await oldestReadyItem(wf.id, null);
-            if (itemId) {
+            if (wf.input_kind !== 'item') continue;
+            for (; free > 0; free--) {
+                const itemId = await oldestReadyItem(wf.id, null);
+                if (!itemId) break;
                 await startWorkflowRun(wf.id, itemId);
                 started++;
             }

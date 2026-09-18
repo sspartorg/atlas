@@ -5,7 +5,7 @@
 // body references a template at a known path (e.g. `.atlas/templates/
 // spec.md`) so the model fills in a stable shape instead of re-deriving
 // it from the prompt every run. The five seed rows live in `db/seed.ts`
-// (`spec`, `plan`, `tasks`, `story`, `qa-plan`); Owner can edit them via
+// (`spec`, `plan`, `tasks`, `sub-task`, `qa-plan`); Owner can edit them via
 // direct DB writes until the follow-up Settings tab ships.
 //
 // Wipe-rewrite per run: any existing files under

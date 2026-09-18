@@ -4,8 +4,8 @@ import Button from '@mui/material/Button';
 import Link from '@mui/material/Link';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import type { IssueType } from '@atlas/shared';
 import { api } from '../../api/api.js';
 import { InfoRow } from '../../components/InfoPanel.js';
 import {
@@ -20,34 +20,28 @@ import { LIVE_WORKFLOW_RUN_STATUSES } from '../../theme/workflowRunStatusPalette
 import { relativeTime } from '../../utils/time.js';
 import { WorkflowRunStatusChip } from './WorkflowRunStatusChip.js';
 
-// The rail knows the item's kind and id but not its row, so read
-// `workflow_id` from the composite query the detail page already fetched.
-// Key AND fetcher must match the page's hook exactly — whichever observer
-// refetches writes the cache the other one reads.
-const FULL_QUERY: Record<IssueType, [string, (id: string) => Promise<unknown>]> = {
-    epic: ['epics', (id) => api.epics.full(id)],
-    story: ['stories', (id) => api.stories.full(id)],
-    bug: ['bugs', (id) => api.bugs.full(id)],
-    sub_task: ['sub-tasks', (id) => api.subTasks.full(id)],
-    sub_bug: ['sub-bugs', (id) => api.subBugs.full(id)],
-};
-
 interface Props {
-    issueType: IssueType;
     itemId: string;
     projectId: string;
 }
 
-export function ItemWorkflowPanel({ issueType, itemId, projectId }: Props) {
+// Only Tasks are assigned to workflows; a sub-task runs inside its Task's
+// workflow run (ADR 0015).
+export function ItemWorkflowPanel({ itemId, projectId }: Props) {
     const toast = useToast();
-    const [kindKey, fetchFull] = FULL_QUERY[issueType];
-    const { data: workflowId = null } = useQuery({
-        queryKey: [kindKey, itemId, 'full'],
-        queryFn: () => fetchFull(itemId),
-        // Every composite nests the item under its kind (`story`, `sub_task`, …).
-        select: (full) =>
-            (full as Record<string, { workflow_id?: string | null } | undefined>)[issueType]?.workflow_id ?? null,
+    // Key AND fetcher must match useTaskFull exactly — whichever observer
+    // refetches writes the cache the other one reads.
+    const { data: task } = useQuery({
+        queryKey: ['tasks', itemId, 'full'],
+        queryFn: () => api.tasks.full(itemId),
+        select: (full) => ({
+            workflowId: full.task.workflow_id,
+            // Same rule as the engine: open = not yet in review or done.
+            openSubtasks: full.sub_tasks.filter((s) => s.status !== 'in_review' && s.status !== 'done').length,
+        }),
     });
+    const workflowId = task?.workflowId ?? null;
+    const openSubtasks = task?.openSubtasks ?? 0;
     const { data: workflows = [] } = useWorkflows(projectId);
     const { data: runs = [] } = useItemWorkflowRuns(itemId);
     const setWorkflow = useSetItemWorkflow();
@@ -56,6 +50,11 @@ export function ItemWorkflowPanel({ issueType, itemId, projectId }: Props) {
     const options = workflows.filter((w) => w.input_kind === 'item');
     const latest = runs[0];
     const live = latest && LIVE_WORKFLOW_RUN_STATUSES.includes(latest.status);
+    const assigned = workflows.find((w) => w.id === workflowId);
+    // After a finished run, new or reopened sub-tasks go through the Sub-tasks
+    // steps on the same branch and into the same PR — no re-planning.
+    const canContinue =
+        !live && latest?.status === 'completed' && openSubtasks > 0 && Boolean(assigned?.graph.nodes.some((n) => n.type === 'subtasks'));
     const onError = (message: string) => (err: Error) => toast.show({ message, detail: err.message });
 
     return (
@@ -123,6 +122,24 @@ export function ItemWorkflowPanel({ issueType, itemId, projectId }: Props) {
                         >
                             Start now
                         </Button>
+                    )}
+                    {workflowId && canContinue && (
+                        <Tooltip describeChild title="Runs the open sub-tasks on the same branch and updates the pull request">
+                            <Button
+                                size="small"
+                                variant="contained"
+                                disabled={start.isPending}
+                                onClick={() =>
+                                    start.mutate(
+                                        { workflowId, itemId, fromSubtasks: true },
+                                        { onError: onError('Could not continue the workflow') },
+                                    )
+                                }
+                                sx={{ textTransform: 'none', fontSize: 12, py: 0, minWidth: 0, boxShadow: 'none' }}
+                            >
+                                Continue · {openSubtasks} open
+                            </Button>
+                        </Tooltip>
                     )}
                 </InfoRow>
             )}

@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
     CATEGORY_LABEL,
     agentSubtitle,
+    countQueueDepthByAgent,
     getAgentView,
     getRuntimeStats,
+    resolveAgentStatusLabel,
 } from './agentViewModel.js';
-import { makeAgent } from '../../test-utils/factories.js';
+import { makeAgent, makeSubTask, makeTask } from '../../test-utils/factories.js';
 import type { IAgentRun } from '@atlas/shared';
 
 describe('CATEGORY_LABEL', () => {
@@ -269,5 +271,28 @@ describe('getRuntimeStats — started_at set but completed_at null', () => {
         // No completed_at → durations array stays empty → p50DurationSec is null
         expect(stats.p50DurationSec).toBeNull();
         expect(stats.runningCount).toBe(1);
+    });
+});
+
+describe('resolveAgentStatusLabel', () => {
+    it('ranks Paused > Failed > Running > Queued > Idle', () => {
+        expect(resolveAgentStatusLabel('inactive', 1, 1, true)).toBe('Paused');
+        expect(resolveAgentStatusLabel('active', 1, 1, true)).toBe('Failed');
+        expect(resolveAgentStatusLabel('active', 1, 1, false)).toBe('Running');
+        expect(resolveAgentStatusLabel('active', 0, 1, false)).toBe('Queued');
+        expect(resolveAgentStatusLabel('active', 0, 0, false)).toBe('Idle');
+    });
+});
+
+describe('countQueueDepthByAgent', () => {
+    it('counts ready and in_progress items per assignee', () => {
+        const depth = countQueueDepthByAgent([
+            makeSubTask({ id: 'S-1', assignee_agent_id: 'a1', status: 'ready' }),
+            makeTask({ id: 'T-1', assignee_agent_id: 'a1', status: 'in_progress' }),
+            makeTask({ id: 'T-2', assignee_agent_id: 'a1', status: 'in_review' }),
+            makeSubTask({ id: 'S-2', assignee_agent_id: null, status: 'ready' }),
+        ]);
+        expect(depth.get('a1')).toBe(2);
+        expect(depth.size).toBe(1);
     });
 });

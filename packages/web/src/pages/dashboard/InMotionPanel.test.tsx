@@ -7,7 +7,7 @@ import type { QueueItem } from '../../api/types.js';
 
 const makeRow = (overrides: Partial<QueueItem> = {}): QueueItem => ({
     id: 'CER-1',
-    issue_type: 'story',
+    issue_type: 'sub_task',
     title: 'Going',
     status: 'in_progress',
     updated_at: new Date().toISOString(),
@@ -50,25 +50,25 @@ describe('InMotionPanel', () => {
         expect(screen.getByText('Going')).toBeInTheDocument();
     });
 
-    it('filter Select: selecting Epics filters to only epic rows (covers filter !== all branch)', async () => {
-        const epicRow = makeRow({ id: 'CER-E1', issue_type: 'epic', title: 'Epic Work' });
-        const storyRow = makeRow({ id: 'CER-S1', issue_type: 'story', title: 'Story Work' });
+    it('filter Select: selecting Tasks filters to only task rows (covers filter !== all branch)', async () => {
+        const taskRow = makeRow({ id: 'CER-T1', issue_type: 'task', title: 'Task Work' });
+        const subTaskRow = makeRow({ id: 'CER-S1', issue_type: 'sub_task', title: 'Sub-task Work' });
         renderWithProviders(
-            <InMotionPanel rows={[epicRow, storyRow]} agents={[]} isLoading={false} />,
+            <InMotionPanel rows={[taskRow, subTaskRow]} agents={[]} isLoading={false} />,
         );
         // Both visible initially
-        expect(screen.getByText('Epic Work')).toBeInTheDocument();
-        expect(screen.getByText('Story Work')).toBeInTheDocument();
+        expect(screen.getByText('Task Work')).toBeInTheDocument();
+        expect(screen.getByText('Sub-task Work')).toBeInTheDocument();
 
-        // Open the Select and choose Epics
+        // Open the Select and choose Tasks
         const select = document.querySelector('[role="combobox"]') as HTMLElement | null;
         if (select) {
             fireEvent.mouseDown(select);
-            await waitFor(() => screen.getByText('Epics'));
-            fireEvent.click(screen.getByText('Epics'));
-            // After filtering, story should disappear
+            await waitFor(() => screen.getByText('Tasks'));
+            fireEvent.click(screen.getByText('Tasks'));
+            // After filtering, the sub-task should disappear
             await waitFor(() => {
-                expect(screen.queryByText('Story Work')).not.toBeInTheDocument();
+                expect(screen.queryByText('Sub-task Work')).not.toBeInTheDocument();
             });
         } else {
             // If combobox not found, test the filter logic path exists at least

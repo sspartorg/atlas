@@ -24,28 +24,3 @@ export async function allocateIssueKey(project_id: string): Promise<string> {
     }
     return `${projRow.issue_key_prefix}-${counterRow.last_seq}`;
 }
-
-// In the unified items model, both stories and bugs are stored in the `items`
-// table with `parent_id` referencing the parent item. These resolvers walk
-// up the parent chain to find the project root.
-export async function resolveProjectIdFromEpic(epic_id: string): Promise<string> {
-    const row = await db
-        .selectFrom('items')
-        .select('project_id')
-        .where('id', '=', epic_id)
-        .where('type', '=', 'epic')
-        .executeTakeFirst();
-    if (!row) throw new Error(`Epic ${epic_id} not found`);
-    return row.project_id;
-}
-
-export async function resolveProjectIdFromStory(story_id: string): Promise<string> {
-    const row = await db
-        .selectFrom('items')
-        .select('project_id')
-        .where('id', '=', story_id)
-        .where('type', '=', 'story')
-        .executeTakeFirst();
-    if (!row) throw new Error(`Story ${story_id} not found`);
-    return row.project_id;
-}

@@ -66,7 +66,9 @@ function toUpdate(w: IWorkflow): UpdateWorkflowInput {
         use_worktree: w.use_worktree,
         push_code: w.push_code,
         raises_pr: w.raises_pr,
+        push_to_default: w.push_to_default,
         max_loops: w.max_loops,
+        max_parallel_runs: w.max_parallel_runs,
         schedule_preset: w.schedule_preset,
         schedule_time_of_day: w.schedule_time_of_day,
         schedule_weekday: w.schedule_weekday,
@@ -143,7 +145,7 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
 
     useEffect(() => setServerErrors((prev) => (prev.length ? [] : prev)), [graph]);
 
-    const clientErrors = useMemo(() => validateWorkflowGraph(graph), [graph]);
+    const clientErrors = useMemo(() => validateWorkflowGraph(graph, settings.input_kind), [graph, settings.input_kind]);
     const errors = clientErrors.length ? clientErrors : serverErrors;
     const errorNodeIds = useMemo(
         () => new Set(errors.flatMap((e) => (e.node_id ? [e.node_id] : []))),
@@ -182,7 +184,7 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
                 // Palette clicks all target the canvas centre; step each new
                 // node down past any node already sitting there so they
                 // never stack invisibly on top of each other.
-                const position = { x: p.x - 108, y: p.y - 32 };
+                const position = { x: p.x, y: p.y - 32 };
                 while (ns.some((n) => Math.abs(n.position.x - position.x) < 40 && Math.abs(n.position.y - position.y) < 40)) {
                     position.y += 80;
                 }
@@ -255,7 +257,14 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
     }
 
     const projectName = projects.find((p) => p.id === settings.project_id)?.name ?? 'No project';
-    const runDisabledReason = dirty ? 'Save your changes before running' : start.isPending ? 'Starting…' : null;
+    const runDisabledReason =
+        settings.input_kind === 'sub_task'
+            ? 'Runs from a Task workflow’s Sub-tasks step'
+            : dirty
+              ? 'Save your changes before running'
+              : start.isPending
+                ? 'Starting…'
+                : null;
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
@@ -317,7 +326,7 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
                     >
                         {!phone && (
                             <Box sx={{ display: 'flex', minHeight: 0, maxHeight: { xs: 280, md: 'calc(100vh - 300px)' } }}>
-                                <NodePalette agents={agents} onAdd={(item) => addNode(item)} />
+                                <NodePalette agents={agents} showSubtasks={settings.input_kind === 'item'} onAdd={(item) => addNode(item)} />
                             </Box>
                         )}
                         <Box ref={canvasRef} sx={{ height: { xs: 420, md: 'calc(100vh - 300px)' }, minHeight: 420 }}>

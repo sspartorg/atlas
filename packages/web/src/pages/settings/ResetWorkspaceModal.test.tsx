@@ -50,7 +50,7 @@ describe('ResetWorkspaceModal — open', () => {
     it('shows stats from data hooks — zero counts by default', () => {
         renderWithProviders(<ResetWorkspaceModal open onClose={vi.fn()} />);
         // defaultHandlers returns [] for all list endpoints, so all counts are 0
-        const labels = ['agents', 'projects', 'epics', 'stories', 'bugs'];
+        const labels = ['agents', 'projects', 'tasks', 'sub-tasks'];
         for (const label of labels) {
             expect(screen.getByText(label)).toBeInTheDocument();
         }

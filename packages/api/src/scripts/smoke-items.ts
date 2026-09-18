@@ -1,5 +1,5 @@
 import { db, closeDb } from '../db/kysely-client.js';
-import { createItem, rowToEpic, rowToStory, searchItems } from '../services/items.js';
+import { createItem, rowToSubTask, rowToTask, searchItems } from '../services/items.js';
 import { itemLinks } from '../services/item-links.js';
 import { assertNoOpenBlockers, notifyDependentsUnblocked } from '../services/dependency-guard.js';
 
@@ -32,50 +32,50 @@ async function main(): Promise<void> {
     await ensureProject(PROJECT_ID, 'SMK');
 
     console.log('=== Creating items ===');
-    const epicRow = await createItem({
+    const taskRow = await createItem({
         project_id: PROJECT_ID,
-        type: 'epic',
-        title: 'Smoke Epic — search me later',
-        description: 'A test epic for end-to-end smoke verification of unified items.',
+        type: 'task',
+        title: 'Smoke Task — search me later',
+        description: 'A test task for end-to-end smoke verification of unified items.',
         priority: 'high',
     });
-    const epic = rowToEpic(epicRow);
-    console.log(' epic:', epic.id, epic.title, 'priority=', epic.priority);
+    const task = rowToTask(taskRow);
+    console.log(' task:', task.id, task.title, 'priority=', task.priority);
 
-    const storyARow = await createItem({
+    const subARow = await createItem({
         project_id: PROJECT_ID,
-        type: 'story',
-        parent_id: epic.id,
-        title: 'Story A — blocking work',
+        type: 'sub_task',
+        parent_id: task.id,
+        title: 'Sub-task A — blocking work',
         acceptance_criteria: 'AC for A',
     });
-    const storyA = rowToStory(storyARow);
-    console.log(' story A:', storyA.id, 'epic_id=', storyA.epic_id);
+    const subA = rowToSubTask(subARow);
+    console.log(' sub-task A:', subA.id, 'task_id=', subA.task_id);
 
-    const storyBRow = await createItem({
+    const subBRow = await createItem({
         project_id: PROJECT_ID,
-        type: 'story',
-        parent_id: epic.id,
-        title: 'Story B — depends on Story A',
+        type: 'sub_task',
+        parent_id: task.id,
+        title: 'Sub-task B — depends on Sub-task A',
     });
-    const storyB = rowToStory(storyBRow);
-    console.log(' story B:', storyB.id);
+    const subB = rowToSubTask(subBRow);
+    console.log(' sub-task B:', subB.id);
 
     console.log('\n=== Creating depends_on link (B blocked by A) ===');
-    const linkResult = await itemLinks.create(storyB.id, storyA.id, 'depends_on');
+    const linkResult = await itemLinks.create(subB.id, subA.id, 'depends_on');
     console.log(' link:', linkResult);
 
     console.log('\n=== Cycle detection: A -> B should be rejected ===');
-    const cycle = await itemLinks.create(storyA.id, storyB.id, 'depends_on');
+    const cycle = await itemLinks.create(subA.id, subB.id, 'depends_on');
     console.log(' cycle attempt:', cycle);
 
     console.log('\n=== Open blockers of B ===');
-    const blockers = await itemLinks.openBlockers(storyB.id);
+    const blockers = await itemLinks.openBlockers(subB.id);
     console.log(' blockers:', blockers);
 
     console.log('\n=== assertNoOpenBlockers(B, in_progress) — should throw ===');
     try {
-        await assertNoOpenBlockers(storyB.id, 'in_progress');
+        await assertNoOpenBlockers(subB.id, 'in_progress');
         console.log(' UNEXPECTED: did not throw');
     } catch (e) {
         const err = e as Error & { code?: string };
@@ -86,13 +86,13 @@ async function main(): Promise<void> {
     await db
         .updateTable('items')
         .set({ status: 'done' })
-        .where('id', '=', storyA.id)
+        .where('id', '=', subA.id)
         .execute();
-    const unblocked = await notifyDependentsUnblocked(storyA.id);
+    const unblocked = await notifyDependentsUnblocked(subA.id);
     console.log(' unblocked:', unblocked);
 
     console.log('\n=== assertNoOpenBlockers(B, in_progress) — should now pass ===');
-    await assertNoOpenBlockers(storyB.id, 'in_progress');
+    await assertNoOpenBlockers(subB.id, 'in_progress');
     console.log(' OK: no blockers');
 
     console.log('\n=== Search ===');
@@ -100,12 +100,12 @@ async function main(): Promise<void> {
     console.log(' hits:', hits.map((h) => `${h.id} (${h.type}) rank=${h.rank.toFixed(3)}`));
 
     console.log('\n=== Side-table cascade on item delete ===');
-    await db.insertInto('comments').values({ author: 'owner', item_id: storyB.id, body: 'a comment' }).execute();
-    await db.insertInto('issue_events').values({ item_id: storyB.id, event_type: 'created', detail: null }).execute();
-    const before = await db.selectFrom('comments').selectAll().where('item_id', '=', storyB.id).execute();
+    await db.insertInto('comments').values({ author: 'owner', item_id: subB.id, body: 'a comment' }).execute();
+    await db.insertInto('issue_events').values({ item_id: subB.id, event_type: 'created', detail: null }).execute();
+    const before = await db.selectFrom('comments').selectAll().where('item_id', '=', subB.id).execute();
     console.log(' comments before delete:', before.length);
-    await db.deleteFrom('items').where('id', '=', storyB.id).execute();
-    const after = await db.selectFrom('comments').selectAll().where('item_id', '=', storyB.id).execute();
+    await db.deleteFrom('items').where('id', '=', subB.id).execute();
+    const after = await db.selectFrom('comments').selectAll().where('item_id', '=', subB.id).execute();
     console.log(' comments after delete:', after.length);
 
     console.log('\n=== Cleanup ===');

@@ -1,7 +1,6 @@
 import type { IAgent, IAgentRun, AgentCategory } from '@atlas/shared';
 import { SDLC_ROLE_LABELS } from '@atlas/shared';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
-import type { AgentStatusLabel } from '../queue/queueViewModel.js';
 
 export interface AgentView {
     slug: string;
@@ -45,7 +44,7 @@ const SEED_VIEW: Record<string, SeedView> = {
     'agent-po-writer': {
         glyph: 'developer_board',
         description:
-            'Reads an Epic and produces structured Stories with optional Sub-tasks. Runs the 7-check rubric. Escalates to the Owner when grounding is insufficient.',
+            'Reads a Task and breaks it into Sub-tasks labelled dev or qa. Runs the 7-check rubric. Escalates to the Owner when grounding is insufficient.',
     },
     'agent-spec-writer': {
         glyph: 'task_alt',
@@ -203,8 +202,7 @@ export function getRuntimeStats(runs: readonly IAgentRun[] | undefined): AgentRu
     durations.sort((a, b) => a - b);
     const midDur = durations[Math.floor(durations.length / 2)];
     const p50 = midDur != null ? midDur / 1000 : null;
-    // Most recent terminal run decides the Failed state — same rule as
-    // queueViewModel's `lastRunErrored(summary.lastRun)`.
+    // Most recent terminal run decides the Failed state.
     const terminal = runs
         .filter((r) => r.status === 'completed' || r.status === 'error')
         .sort((a, b) =>
@@ -233,4 +231,40 @@ export function agentStatusColor(label: AgentStatusLabel): string {
     if (label === 'Failed') return ATLAS_PALETTE.error;
     if (label === 'Queued') return ATLAS_PALETTE.warning;
     return ATLAS_PALETTE.success;
+}
+
+export type AgentStatusLabel = 'Running' | 'Queued' | 'Idle' | 'Paused' | 'Failed';
+
+/**
+ * The ONE definition of an agent's live-state label, shared by the Agents grid
+ * (`AgentCard`) and the Agent Detail hero (`AgentHero`) so "Idle" and
+ * "Running" mean the same thing on both.
+ *
+ * Precedence: paused beats everything (a paused agent's stale runs are not
+ * news), then a failed last run, then actually-running, then queued.
+ */
+export function resolveAgentStatusLabel(
+    agentStatus: 'active' | 'inactive',
+    runningCount: number,
+    queuedCount: number,
+    errorState: boolean
+): AgentStatusLabel {
+    if (agentStatus === 'inactive') return 'Paused';
+    if (errorState) return 'Failed';
+    if (runningCount > 0) return 'Running';
+    if (queuedCount > 0) return 'Queued';
+    return 'Idle';
+}
+
+/** Ready + in-progress items per assignee agent. */
+export function countQueueDepthByAgent(
+    items: readonly { assignee_agent_id: string | null; status: string }[]
+): Map<string, number> {
+    const depth = new Map<string, number>();
+    for (const i of items) {
+        if (!i.assignee_agent_id) continue;
+        if (i.status !== 'ready' && i.status !== 'in_progress') continue;
+        depth.set(i.assignee_agent_id, (depth.get(i.assignee_agent_id) ?? 0) + 1);
+    }
+    return depth;
 }

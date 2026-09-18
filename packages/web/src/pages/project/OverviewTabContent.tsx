@@ -16,7 +16,8 @@ import { useLabelColor } from '../../hooks/useLabelColor.js';
 import { AgentChip } from '../../components/AgentChip.js';
 import { KindIcon } from '../../components/KindIcon.js';
 import { relativeTime } from '../../utils/time.js';
-import type { IAgentRun, IssueType, RunStatus } from '@atlas/shared';
+import type { IAgentRun, RunStatus } from '@atlas/shared';
+import { itemPath } from '../../utils/itemPath.js';
 
 interface Props {
     counts: ProjectCounts;
@@ -35,13 +36,6 @@ const RUN_STATUS_LABEL: Record<RunStatus, string> = {
     setup_failed: 'Setup failed',
 };
 
-function issueRoute(type: IssueType, id: string): string {
-    if (type === 'epic') return `/epics/${id}`;
-    if (type === 'story') return `/issues/stories/${id}`;
-    if (type === 'sub_task') return `/issues/sub-tasks/${id}`;
-    if (type === 'sub_bug') return `/issues/sub-bugs/${id}`;
-    return `/issues/bugs/${id}`;
-}
 
 function RecentRunRow({
     run,
@@ -86,7 +80,7 @@ function RecentRunRow({
             </Box>
             <Box
                 component={RouterLink}
-                to={issueRoute(run.issue_type, run.issue_id)}
+                to={itemPath(run.issue_type, run.issue_id)}
                 sx={{
                     display: 'flex',
                     alignItems: 'center',
@@ -200,12 +194,10 @@ export function OverviewTabContent({ counts, projectId, onJumpToHistory }: Props
         [agents],
     );
     const recentRuns = useMemo(() => (runs ?? []).slice(0, RECENT_LIMIT), [runs]);
-    const openEpics = counts.open_epics;
-    const epicsReady = counts.epics_ready;
-    const storiesInFlight = counts.stories_in_flight;
-    const storiesWaitingInfo = counts.stories_waiting_info;
-    const openBugs = counts.open_bugs;
-    const bugsReady = counts.bugs_ready;
+    const openTasks = counts.open_tasks;
+    const tasksReady = counts.tasks_ready;
+    const tasksInFlight = counts.tasks_in_flight;
+    const tasksWaitingInfo = counts.tasks_waiting_info;
 
     // Combined (agent + terminal) cost + token totals so the AI Cost
     // KPI tile reflects the same blended spend the Analytics page
@@ -230,46 +222,35 @@ export function OverviewTabContent({ counts, projectId, onJumpToHistory }: Props
     const hasAnyCost = Boolean(counts.costSummary) || Boolean(counts.terminalCostSummary);
     const hasAnyActivity = runCount > 0 || sessionCount > 0;
 
-    const epicCaption = epicsReady > 0 ? `${epicsReady} awaiting pickup` : 'all picked up';
-    const storyCaption =
-        storiesInFlight === 0
-            ? 'queue is empty'
-            : `${Math.max(0, storiesInFlight - storiesWaitingInfo)} in progress · ${storiesWaitingInfo} waiting info`;
-    const bugCaption =
-        bugsReady > 0
-            ? `${bugsReady} ready for pickup`
-            : openBugs === 0
-              ? 'none open'
-              : 'in motion';
+    const taskCaption = tasksReady > 0 ? `${tasksReady} awaiting pickup` : 'all picked up';
+    // In flight = in_progress + in_review; waiting-for-info is counted apart.
+    const inFlightCaption =
+        tasksWaitingInfo > 0
+            ? `${tasksWaitingInfo} waiting info`
+            : tasksInFlight === 0
+              ? 'queue is empty'
+              : 'none waiting on you';
 
     // Per-category accents matching the dashboard so the same kind of slot
     // reads as the same colour across views.
-    const epicColor = useLabelColor('indigo');
-    const storyColor = useLabelColor('emerald');
-    const bugColor = useLabelColor('rose');
+    const taskColor = useLabelColor('indigo');
+    const inFlightColor = useLabelColor('emerald');
     const costColor = useLabelColor('sky');
 
     const kpis: Kpi[] = [
         {
-            label: 'Open Epics',
-            value: openEpics,
-            caption: epicCaption,
-            captionTitle: epicCaption,
-            dotColor: epicColor.border,
+            label: 'Open tasks',
+            value: openTasks,
+            caption: taskCaption,
+            captionTitle: taskCaption,
+            dotColor: taskColor.border,
         },
         {
-            label: 'Stories in flight',
-            value: storiesInFlight,
-            caption: storyCaption,
-            captionTitle: storyCaption,
-            dotColor: storyColor.border,
-        },
-        {
-            label: 'Open bugs',
-            value: openBugs,
-            caption: bugCaption,
-            captionTitle: bugCaption,
-            dotColor: bugColor.border,
+            label: 'Tasks in flight',
+            value: tasksInFlight,
+            caption: inFlightCaption,
+            captionTitle: inFlightCaption,
+            dotColor: inFlightColor.border,
         },
         {
             label: `AI Cost (${new Date().toLocaleString('default', { month: 'long' })})`,
@@ -297,7 +278,7 @@ export function OverviewTabContent({ counts, projectId, onJumpToHistory }: Props
                     gridTemplateColumns: {
                         xs: 'minmax(0, 1fr) minmax(0, 1fr)',
                         sm: 'minmax(0, 1fr) minmax(0, 1fr)',
-                        lg: 'repeat(4, minmax(0, 1fr))',
+                        lg: 'repeat(3, minmax(0, 1fr))',
                     },
                     gap: 3,
                 }}

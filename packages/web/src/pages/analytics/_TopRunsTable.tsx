@@ -1,10 +1,11 @@
+import type { IssueType } from '@atlas/shared';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { Link as RouterLink } from 'react-router-dom';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { formatCostUsd, formatTokenCount } from '../../utils/formatCost.js';
 import { formatAbsolute } from '../../utils/time.js';
-import { Card, ChartEmpty, ChartTitle, CHART_COLORS, MONO } from './_chrome.js';
+import { Card, ChartEmpty, ChartTitle, CHART_COLORS, ITEM_TYPE_LABEL, MONO } from './_chrome.js';
 
 interface TopRun {
     run_id: string;
@@ -151,7 +152,7 @@ export function TopRunsTable({
                                                 mt: 0.25,
                                             }}
                                         >
-                                            {run.issue_type} · {run.issue_id}
+                                            {ITEM_TYPE_LABEL[run.issue_type as IssueType] ?? run.issue_type} · {run.issue_id}
                                         </Typography>
                                     )}
                                 </Box>

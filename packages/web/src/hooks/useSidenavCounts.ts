@@ -4,8 +4,7 @@ import type { SidenavCounts } from '../api/types.js';
 
 const EMPTY_COUNTS: SidenavCounts = {
     projects: 0,
-    epics: 0,
-    issues: 0,
+    tasks: 0,
     queue: 0,
     agents: 0,
     notifications: 0,

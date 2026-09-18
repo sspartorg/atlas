@@ -1,14 +1,8 @@
-import type {
-    BugFailureScope,
-    BugFrequency,
-    IssuePriority,
-    IssueStatus,
-    IssueType,
-} from '../types/index.js';
+import type { IssuePriority, IssueStatus, IssueType } from '../types/index.js';
 
 // Single unified item shape (mirrors the `items` table in Postgres after the
 // SQLite → PG migration). All type-specific fields are nullable; consumers
-// project rows into per-type shapes (IEpic / IStory / etc.) via helpers in
+// project rows into per-type shapes (ITask / ISubTask) via helpers in
 // @atlas/api's items service.
 export interface IItem {
     id: string;
@@ -33,15 +27,6 @@ export interface IItem {
 
     acceptance_criteria: string | null;
 
-    steps_to_reproduce: string | null;
-    expected: string | null;
-    actual: string | null;
-    frequency: BugFrequency | null;
-    failure_scope: BugFailureScope | null;
-    detected_at: string | null;
-    occurrence_count: number | null;
-    occurrence_total: number | null;
-
     started_at: string | null;
 
     created_at: string;
@@ -52,7 +37,7 @@ export interface IItem {
 // normalizes pairs so duplicates in either direction collapse). `depends_on`
 // is strictly directed — `from depends_on to` means `from` is blocked by `to`.
 // `tested_by` is directed and agent-created — `from tested_by to` means
-// `from` is the QA twin that tests `to` (the dev story). PO Writer is the
+// `from` is the QA sub-task that tests `to` (the dev sub-task). PO Writer is the
 // canonical writer; surfaced read-only in the user-facing link picker.
 export type ItemRelation = 'relates_to' | 'depends_on' | 'tested_by';
 

@@ -1,11 +1,8 @@
 import { describe, expect, it, beforeEach, afterAll } from 'vitest';
 import { sql } from 'kysely';
 import {
-    rowToBug,
-    rowToEpic,
-    rowToStory,
-    rowToSubBug,
     rowToSubTask,
+    rowToTask,
     createItem,
     getItem,
     getItemOfType,
@@ -28,7 +25,7 @@ function baseRow(overrides: Partial<IItemRow>): IItemRow {
     return {
         id: 'ATL-1',
         project_id: 'p1',
-        type: 'story',
+        type: 'task',
         parent_id: null,
         parent_type: null,
         title: 't',
@@ -41,95 +38,68 @@ function baseRow(overrides: Partial<IItemRow>): IItemRow {
         pr_url: null,
         points: null,
         acceptance_criteria: null,
-        steps_to_reproduce: null,
-        expected: null,
-        actual: null,
-        frequency: null,
-        failure_scope: null,
-        detected_at: null,
-        occurrence_count: null,
-        occurrence_total: null,
         started_at: null,
         worktree_branch: null,
         worktree_path: null,
+        workflow_id: null,
+        labels: [],
         created_at: '2026-05-31T00:00:00Z',
         updated_at: '2026-05-31T00:00:00Z',
         ...overrides,
     };
 }
 
-describe('rowToStory worktree projection', () => {
-    it('surfaces populated worktree_branch and worktree_path', () => {
-        const story = rowToStory(
+describe('rowToTask projection', () => {
+    it('surfaces the worktree, spec and acceptance fields', () => {
+        const task = rowToTask(
             baseRow({
-                type: 'story',
-                worktree_branch: 'atlas/dev/ATL-1',
-                worktree_path: 'C:\\repos\\atlas\\.worktrees\\dev-ATL-1',
+                worktree_branch: 'atlas/wf/ATL-1',
+                worktree_path: 'C:\\repos\\atlas\\.worktrees\\wf-ATL-1',
+                spec_md: '# spec',
+                pr_url: 'https://github.com/o/r/pull/1',
+                acceptance_criteria: 'AC',
             }),
         );
-        expect(story.worktree_branch).toBe('atlas/dev/ATL-1');
-        expect(story.worktree_path).toBe('C:\\repos\\atlas\\.worktrees\\dev-ATL-1');
+        expect(task.worktree_branch).toBe('atlas/wf/ATL-1');
+        expect(task.worktree_path).toBe('C:\\repos\\atlas\\.worktrees\\wf-ATL-1');
+        expect(task.spec_md).toBe('# spec');
+        expect(task.pr_url).toBe('https://github.com/o/r/pull/1');
+        expect(task.acceptance_criteria).toBe('AC');
     });
 
-    it('preserves null when the worktree has not been provisioned', () => {
-        const story = rowToStory(baseRow({ type: 'story' }));
-        expect(story.worktree_branch).toBeNull();
-        expect(story.worktree_path).toBeNull();
+    it('preserves null worktree fields and defaults empty text', () => {
+        const task = rowToTask(baseRow({}));
+        expect(task.worktree_branch).toBeNull();
+        expect(task.worktree_path).toBeNull();
+        expect(task.description).toBe('');
+        expect(task.acceptance_criteria).toBe('');
+    });
+
+    it('throws when called on a non-task row', () => {
+        expect(() => rowToTask(baseRow({ type: 'sub_task' }))).toThrow(/rowToTask: expected task/);
+    });
+
+    it('projects title and defaults null priority to normal', () => {
+        expect(rowToTask(baseRow({ title: 'My Task', priority: 'high' }))).toMatchObject({
+            title: 'My Task',
+            priority: 'high',
+        });
+        expect(rowToTask(baseRow({ priority: null })).priority).toBe('normal');
     });
 });
 
-describe('rowToBug / rowToSubTask / rowToSubBug worktree projection', () => {
-    it('rowToBug surfaces the worktree fields', () => {
-        const bug = rowToBug(
-            baseRow({
-                type: 'bug',
-                worktree_branch: 'atlas/dev/BUG-1',
-                worktree_path: '/tmp/wt/BUG-1',
-            }),
-        );
-        expect(bug.worktree_branch).toBe('atlas/dev/BUG-1');
-        expect(bug.worktree_path).toBe('/tmp/wt/BUG-1');
+describe('rowToSubTask projection', () => {
+    it('maps parent_id to task_id and omits task-only fields', () => {
+        const st = rowToSubTask(baseRow({ type: 'sub_task', parent_id: 'ATL-9', started_at: '2026-06-01T00:00:00Z' }));
+        expect(st.task_id).toBe('ATL-9');
+        expect(st.started_at).toBe('2026-06-01T00:00:00Z');
+        expect(st).not.toHaveProperty('workflow_id');
+        expect(st).not.toHaveProperty('worktree_branch');
+        expect(st).not.toHaveProperty('spec_md');
     });
 
-    it('rowToSubTask surfaces the worktree fields', () => {
-        const t = rowToSubTask(
-            baseRow({
-                type: 'sub_task',
-                worktree_branch: 'atlas/dev/ST-1',
-                worktree_path: '/tmp/wt/ST-1',
-            }),
-        );
-        expect(t.worktree_branch).toBe('atlas/dev/ST-1');
-        expect(t.worktree_path).toBe('/tmp/wt/ST-1');
-    });
-
-    it('rowToSubBug surfaces the worktree fields', () => {
-        const sb = rowToSubBug(
-            baseRow({
-                type: 'sub_bug',
-                worktree_branch: 'atlas/qa/SB-1',
-                worktree_path: '/tmp/wt/SB-1',
-            }),
-        );
-        expect(sb.worktree_branch).toBe('atlas/qa/SB-1');
-        expect(sb.worktree_path).toBe('/tmp/wt/SB-1');
-    });
-});
-
-describe('rowToEpic type guard', () => {
-    it('throws when called on a non-epic row', () => {
-        expect(() => rowToEpic(baseRow({ type: 'story' }))).toThrow(/rowToEpic: expected epic/);
-    });
-
-    it('projects all fields correctly', () => {
-        const epic = rowToEpic(baseRow({ type: 'epic', title: 'My Epic', priority: 'high' }));
-        expect(epic.title).toBe('My Epic');
-        expect(epic.priority).toBe('high');
-    });
-
-    it('defaults null priority to normal', () => {
-        const epic = rowToEpic(baseRow({ type: 'epic', priority: null }));
-        expect(epic.priority).toBe('normal');
+    it('throws when called on a task row', () => {
+        expect(() => rowToSubTask(baseRow({}))).toThrow(/expected sub_task, got task/);
     });
 });
 
@@ -148,71 +118,76 @@ afterAll(async () => {
 
 describe('createItem', () => {
     it('allocates an issue key from the project counter', async () => {
-        const row = await createItem({ project_id: 'p1', type: 'epic', title: 'Epic One' });
+        const row = await createItem({ project_id: 'p1', type: 'task', title: 'Task One' });
         expect(row.id).toBe('ATL-1');
-        expect(row.title).toBe('Epic One');
-        expect(row.type).toBe('epic');
+        expect(row.title).toBe('Task One');
+        expect(row.type).toBe('task');
         expect(row.project_id).toBe('p1');
         expect(row.status).toBe('draft');
     });
 
     it('increments the counter for each item', async () => {
-        const e1 = await createItem({ project_id: 'p1', type: 'epic', title: 'E1' });
-        const e2 = await createItem({ project_id: 'p1', type: 'epic', title: 'E2' });
+        const e1 = await createItem({ project_id: 'p1', type: 'task', title: 'E1' });
+        const e2 = await createItem({ project_id: 'p1', type: 'task', title: 'E2' });
         expect(e1.id).toBe('ATL-1');
         expect(e2.id).toBe('ATL-2');
     });
 
     it('respects the provided status', async () => {
-        const row = await createItem({ project_id: 'p1', type: 'epic', title: 'E', status: 'ready' });
+        const row = await createItem({ project_id: 'p1', type: 'task', title: 'E', status: 'ready' });
         expect(row.status).toBe('ready');
     });
 
     it('stores labels as JSON array', async () => {
         const row = await createItem({
             project_id: 'p1',
-            type: 'epic',
+            type: 'task',
             title: 'Tagged',
             labels: ['backend', 'urgent'],
         });
         expect(row.labels).toEqual(['backend', 'urgent']);
     });
 
-    it('story fields round-trip correctly', async () => {
-        const epic = await createItem({ project_id: 'p1', type: 'epic', title: 'E' });
-        const story = await createItem({
+    it('task fields round-trip correctly', async () => {
+        const task = await createItem({
             project_id: 'p1',
-            type: 'story',
-            parent_id: epic.id,
-            title: 'S',
+            type: 'task',
+            title: 'T',
             spec_md: '# spec',
             pr_url: 'https://github.com/foo/bar/pull/1',
-            points: 3,
             acceptance_criteria: 'Must work',
         });
-        expect(story.spec_md).toBe('# spec');
-        expect(story.pr_url).toBe('https://github.com/foo/bar/pull/1');
-        expect(story.points).toBe(3);
-        expect(story.acceptance_criteria).toBe('Must work');
+        expect(task.spec_md).toBe('# spec');
+        expect(task.pr_url).toBe('https://github.com/foo/bar/pull/1');
+        expect(task.acceptance_criteria).toBe('Must work');
+    });
+
+    it('parents a sub-task to its task and rejects a sub-task parent', async () => {
+        const task = await createItem({ project_id: 'p1', type: 'task', title: 'T' });
+        const sub = await createItem({ project_id: 'p1', type: 'sub_task', parent_id: task.id, title: 'S' });
+        expect(sub.parent_type).toBe('task');
+        await expect(
+            createItem({ project_id: 'p1', type: 'sub_task', parent_id: sub.id, title: 'nested' }),
+        ).rejects.toThrow(/must be parented to a task/);
     });
 
     it('throws when project_issue_counters row is missing', async () => {
         await testDb.deleteFrom('project_issue_counters').where('project_id', '=', 'p1').execute();
         await expect(
-            createItem({ project_id: 'p1', type: 'epic', title: 'X' }),
+            createItem({ project_id: 'p1', type: 'task', title: 'X' }),
         ).rejects.toThrow(/No project_issue_counters row/);
     });
 
     it('throws when project is missing', async () => {
         await expect(
-            createItem({ project_id: 'does-not-exist', type: 'epic', title: 'X' }),
+            createItem({ project_id: 'does-not-exist', type: 'task', title: 'X' }),
         ).rejects.toThrow();
     });
 });
 
 describe('getItem', () => {
     it('returns the item row when it exists', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Existing' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Existing' });
         const row = await getItem('ATL-1');
         expect(row).toBeDefined();
         expect(row!.id).toBe('ATL-1');
@@ -227,50 +202,50 @@ describe('getItem', () => {
 
 describe('getItemOfType', () => {
     it('returns the item when type matches', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
-        const row = await getItemOfType('ATL-1', 'epic');
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
+        const row = await getItemOfType('ATL-1', 'task');
         expect(row).toBeDefined();
     });
 
     it('returns undefined when type does not match', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
-        const row = await getItemOfType('ATL-1', 'story');
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
+        const row = await getItemOfType('ATL-1', 'sub_task');
         expect(row).toBeUndefined();
     });
 
     it('returns undefined when item does not exist', async () => {
-        const row = await getItemOfType('DOES-NOT-EXIST', 'epic');
+        const row = await getItemOfType('DOES-NOT-EXIST', 'task');
         expect(row).toBeUndefined();
     });
 });
 
 describe('patchItem', () => {
     it('updates the title', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Old' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Old' });
         const updated = await patchItem('ATL-1', { title: 'New' });
         expect(updated.title).toBe('New');
     });
 
     it('updates the status', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E', status: 'draft' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E', status: 'draft' });
         const updated = await patchItem('ATL-1', { status: 'ready' });
         expect(updated.status).toBe('ready');
     });
 
     it('returns the current row unchanged when called with no fields', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Unchanged' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Unchanged' });
         const result = await patchItem('ATL-1', {});
         expect(result.title).toBe('Unchanged');
     });
 
     it('updates labels', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         const updated = await patchItem('ATL-1', { labels: ['alpha', 'beta'] });
         expect(updated.labels).toEqual(['alpha', 'beta']);
     });
 
     it('updates worktree fields', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         const updated = await patchItem('ATL-1', {
             worktree_branch: 'atlas/dev/ATL-1',
             worktree_path: '/tmp/wt/ATL-1',
@@ -286,7 +261,7 @@ describe('patchItem', () => {
     });
 
     it('ignores undefined fields (does not overwrite with null)', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Keep' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Keep' });
         // Passing undefined fields should not affect the DB row
         const result = await patchItem('ATL-1', { title: undefined });
         expect(result.title).toBe('Keep');
@@ -295,7 +270,7 @@ describe('patchItem', () => {
 
 describe('deleteItem', () => {
     it('removes the item from the database', async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'ToDelete' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'ToDelete' });
         await deleteItem('ATL-1');
         const row = await getItem('ATL-1');
         expect(row).toBeUndefined();
@@ -308,9 +283,9 @@ describe('deleteItem', () => {
 
 describe('searchItems', () => {
     beforeEach(async () => {
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Authentication module', status: 'draft' });
-        await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'User profile page', status: 'ready' });
-        await insertItem({ id: 'ATL-3', type: 'epic', project_id: 'p1', title: 'Billing integration', status: 'done' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Authentication module', status: 'draft' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'User profile page', status: 'ready' });
+        await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'Billing integration', status: 'done' });
     });
 
     it('returns all items when no filters applied', async () => {
@@ -319,13 +294,13 @@ describe('searchItems', () => {
     });
 
     it('filters by type', async () => {
-        const results = await searchItems({ types: ['epic'] });
-        expect(results.every((r) => r.type === 'epic')).toBe(true);
+        const results = await searchItems({ types: ['task'] });
+        expect(results.every((r) => r.type === 'task')).toBe(true);
     });
 
     it('filters by project_id', async () => {
         await insertProject('p2', 'OTH');
-        await insertItem({ id: 'OTH-1', type: 'epic', project_id: 'p2', title: 'Other project epic' });
+        await insertItem({ id: 'OTH-1', type: 'task', project_id: 'p2', title: 'Other project task' });
         const p1Results = await searchItems({ project_ids: ['p1'] });
         expect(p1Results.every((r) => r.project_id === 'p1')).toBe(true);
     });
@@ -345,13 +320,13 @@ describe('searchItems', () => {
     });
 
     it('combined type + status filter', async () => {
-        const results = await searchItems({ types: ['epic'], status: 'done' });
+        const results = await searchItems({ types: ['task'], status: 'done' });
         expect(results).toHaveLength(1);
         expect(results[0]!.id).toBe('ATL-3');
     });
 
     it('label filter returns only items with all specified labels', async () => {
-        await insertItem({ id: 'ATL-4', type: 'epic', project_id: 'p1', title: 'Tagged' });
+        await insertItem({ id: 'ATL-4', type: 'task', project_id: 'p1', title: 'Tagged' });
         await testDb.updateTable('items').set({ labels: JSON.stringify(['backend', 'api']) as never }).where('id', '=', 'ATL-4').execute();
         const results = await searchItems({ labels: ['backend'] });
         expect(results.some((r) => r.id === 'ATL-4')).toBe(true);
@@ -457,14 +432,6 @@ describe('rowTo* type-guard throws', () => {
             pr_url: null,
             points: null,
             acceptance_criteria: null,
-            steps_to_reproduce: null,
-            expected: null,
-            actual: null,
-            frequency: null,
-            failure_scope: null,
-            detected_at: null,
-            occurrence_count: null,
-            occurrence_total: null,
             started_at: null,
             worktree_branch: null,
             worktree_path: null,
@@ -474,23 +441,11 @@ describe('rowTo* type-guard throws', () => {
         };
     }
 
-    it('rowToEpic throws when type is not epic', () => {
-        expect(() => rowToEpic(tmpRow('story'))).toThrow(/expected epic, got story/);
-    });
-
-    it('rowToStory throws when type is not story', () => {
-        expect(() => rowToStory(tmpRow('epic'))).toThrow(/expected story, got epic/);
+    it('rowToTask throws when type is not task', () => {
+        expect(() => rowToTask(tmpRow('sub_task'))).toThrow(/expected task, got sub_task/);
     });
 
     it('rowToSubTask throws when type is not sub_task', () => {
-        expect(() => rowToSubTask(tmpRow('story'))).toThrow(/expected sub_task, got story/);
-    });
-
-    it('rowToSubBug throws when type is not sub_bug', () => {
-        expect(() => rowToSubBug(tmpRow('bug'))).toThrow(/expected sub_bug, got bug/);
-    });
-
-    it('rowToBug throws when type is not bug', () => {
-        expect(() => rowToBug(tmpRow('story'))).toThrow(/expected bug, got story/);
+        expect(() => rowToSubTask(tmpRow('task'))).toThrow(/expected sub_task, got task/);
     });
 });

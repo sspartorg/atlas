@@ -11,7 +11,7 @@ const runs = [
         agent_id: 'agent-coder',
         agent_name: 'Coder',
         issue_id: 'ATL-1',
-        issue_type: 'story',
+        issue_type: 'sub_task',
         total_cost_usd: 1.25,
         input_tokens: 12_000,
         output_tokens: 4500,
@@ -23,7 +23,7 @@ const runs = [
         agent_id: 'agent-coder',
         agent_name: 'Coder',
         issue_id: null,
-        issue_type: 'story',
+        issue_type: 'sub_task',
         total_cost_usd: 0.65,
         input_tokens: 7000,
         output_tokens: 2100,
@@ -50,7 +50,7 @@ describe('TopRunsTable', () => {
         renderWithProviders(
             <TopRunsTable topRuns={[runs[1]!]} topRunsMaxCost={runs[1]!.total_cost_usd} />,
         );
-        // Should not show "story · ATL-..." line when issue_id is null
+        // Should not show "Sub-task · ATL-..." line when issue_id is null
         expect(screen.queryByText(/ATL-/)).not.toBeInTheDocument();
     });
 
@@ -58,7 +58,7 @@ describe('TopRunsTable', () => {
         renderWithProviders(
             <TopRunsTable topRuns={[runs[0]!]} topRunsMaxCost={runs[0]!.total_cost_usd} />,
         );
-        expect(screen.getByText('story · ATL-1')).toBeInTheDocument();
+        expect(screen.getByText('Sub-task · ATL-1')).toBeInTheDocument();
     });
 
     it('handles a zero topRunsMaxCost without dividing by zero', () => {

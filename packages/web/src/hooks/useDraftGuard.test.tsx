@@ -102,14 +102,14 @@ describe('useDraftGuard', () => {
                 <Shortcuts />
                 <Where />
             </DraftGuardProvider>,
-            { initialEntries: ['/epics/new'] },
+            { initialEntries: ['/tasks/new'] },
         );
         fireEvent.keyDown(window, { key: 'g' });
-        fireEvent.keyDown(window, { key: 'e' });
+        fireEvent.keyDown(window, { key: 't' });
         expect(await screen.findByText('Discard draft?')).toBeInTheDocument();
-        expect(screen.getByTestId('where')).toHaveTextContent('/epics/new');
+        expect(screen.getByTestId('where')).toHaveTextContent('/tasks/new');
 
         fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
-        await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(/^\/epics$/));
+        await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(/^\/tasks$/));
     });
 });

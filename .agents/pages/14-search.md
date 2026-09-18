@@ -3,7 +3,7 @@
 **Route:** `/search` • **Component:** `packages/web/src/pages/Search.tsx` • **Slug:** `search_queues`
 
 ## Purpose
-Cross-entity search across Epics, Stories, Bugs, Sub-tasks, Sub-bugs (and agents for prompt search). Two modes: structured pill-filter builder, or a KQL-like query string.
+Cross-entity search across Tasks and Sub-tasks (and agents for prompt search). Two modes: structured pill-filter builder, or a KQL-like query string.
 
 ## States
 - **Empty results**: `SearchEmptyState` (lines 209-216)
@@ -17,7 +17,7 @@ Cross-entity search across Epics, Stories, Bugs, Sub-tasks, Sub-bugs (and agents
 **Filters mode (`SearchFilterBuilder`)**
 - Active filter pills: Type, Project, Updated, Status — click to edit, X to remove
 - **Add Filter** dashed pill — menu with options Type / Project / Updated / Status
-- Multi-select for Type (epic / story / bug / sub-task / sub-bug / prompt); single-select for the others
+- Multi-select for Type (task / sub-task / prompt); single-select for the others
 - **Save This Search** button + ⌘S shortcut (lines 140-149) — currently just toasts "Search saved"
 
 **Query mode (`SearchQueryInput`)**
@@ -31,7 +31,7 @@ Cross-entity search across Epics, Stories, Bugs, Sub-tasks, Sub-bugs (and agents
 - Sort dropdown: updated_desc / updated_asc / type
 - Grouped by type
 - Each row: line 1 = short id + status + assignee · line 2 = title (single-line ellipsis) + project pill · line 3 = description **clamped to 2 lines** with ellipsis (no wrap past line 2) — long descriptions never push card height
-- Result row click → navigates to detail (epic/story → working; bug/sub-task → falls back to `/issues`, see coming-soon)
+- Result row click → `/tasks/:id`, `/sub-tasks/:id` (`utils/itemPath.ts`) or `/agents/:id` for a prompt hit
 
 ## Why these affordances exist
 - **Mode toggle (Filters / Query)** — Filters for Owners who know which dimensions to narrow on; Query for power-user KQL not expressible as pills.
@@ -61,13 +61,13 @@ None.
 ## Edge cases / quirks
 - Switching modes resets the query parse state but keeps active filters in their respective pills.
 - KQL parser supports `field = "value"` and `AND` connector; other connectors or operators surface as "unknown" tokens.
-- `SearchEmptyState` has helper buttons for clearing filters and a "Create from search" toast (placeholder, see coming-soon).
+- `SearchEmptyState` has helper buttons for clearing filters and a **Create a Task / Sub-task** button (label from the first Type filter, default Task) that only toasts "Create from search is not wired up yet." (`Search.tsx:138`, see coming-soon).
 
 ## Connectivity
-- **Pages**: All epic/issue detail pages — search results click through.
-- **Routes**: `GET /api/search?q=…` — FTS5 server-side path; today only used as the fallback because the page already holds the loaded entities in memory, but the endpoint remains the canonical full-text answer when the cache is cold.
-- **MCP tools**: `search_items { q, limit? }` — external agents reproduce this surface verbatim; the typical chain is `search_items` → narrow to one hit → `get_epic_tree` or `get_story` for context.
-- **Entities**: `epic`, `story`, `bug`, `sub_task`, `sub_bug`, `agent` (prompt search).
+- **Pages**: [Task Detail](07-task-detail.md), [Sub-task Detail](10-sub-task-detail.md) — search results click through.
+- **Routes**: `GET /api/search?q=…` — the page's only data source (Postgres FTS); `type` accepts `task` / `sub_task`.
+- **MCP tools**: `search_item { query }` → `get_item { issue_type, id }` on the top hit.
+- **Entities**: `task`, `sub_task`, `agent` (prompt search).
 
 ## Coming soon on this page
-- Bug / sub-task / sub-bug result navigation (currently falls back to `/issues`), "Create from search" — see [coming-soon.md](../coming-soon.md).
+- "Create from search" — see [coming-soon.md](../coming-soon.md).

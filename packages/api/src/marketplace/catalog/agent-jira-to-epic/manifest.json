@@ -5,7 +5,7 @@
   "cli": "claude",
   "model": "haiku",
   "framework": "importer",
-  "description": "Pulls your Jira-assigned items into Atlas as draft epics. Edit the prompt with your Atlas project name, then run it from a scheduled workflow (e.g. daily at 09:00).",
+  "description": "Pulls your Jira-assigned items into Atlas as draft Tasks. Edit the prompt with your Atlas project name, then run it from a scheduled workflow (e.g. daily at 09:00).",
   "designation": "Jira Importer",
   "accent_color": "#3B82F6",
   "sort_order": 6,
@@ -15,7 +15,7 @@
   "kind_slug": "jira-to-epic",
   "settings_json": {},
   "memory_cadence": 1,
-  "summary": "Pulls your Jira-assigned items into Atlas as draft epics.",
+  "summary": "Pulls your Jira-assigned items into Atlas as draft Tasks.",
   "version": 2,
   "published_at": "2026-07-01T00:00:00Z"
 }

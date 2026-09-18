@@ -9,9 +9,9 @@
     "raises_pr": true,
     "graph": {
         "nodes": [
-            { "id": "start", "type": "start", "position": { "x": 0, "y": 120 } },
-            { "id": "ai-readiness", "type": "agent", "agent_id": "agent-ai-readiness", "position": { "x": 220, "y": 120 } },
-            { "id": "end", "type": "end", "position": { "x": 480, "y": 120 } }
+            { "id": "start", "type": "start", "position": { "x": 0, "y": 0 } },
+            { "id": "ai-readiness", "type": "agent", "agent_id": "agent-ai-readiness", "position": { "x": 0, "y": 130 } },
+            { "id": "end", "type": "end", "position": { "x": 0, "y": 260 } }
         ],
         "edges": [
             { "id": "e-start", "source": "start", "target": "ai-readiness", "kind": "pass" },

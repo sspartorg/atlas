@@ -8,7 +8,7 @@ import { ATLAS_PALETTE } from '../../theme/tokens.js';
 export const PALETTE_MIME = 'application/x-atlas-workflow-node';
 
 export interface IPaletteItem {
-    type: 'agent' | 'owner' | 'end';
+    type: 'agent' | 'owner' | 'subtasks' | 'end';
     agent_id?: string;
 }
 
@@ -86,7 +86,14 @@ function Heading({ children }: { children: string }) {
     );
 }
 
-export function NodePalette({ agents, onAdd }: { agents: IAgent[]; onAdd: (item: IPaletteItem) => void }) {
+interface PaletteProps {
+    agents: IAgent[];
+    /** Sub-tasks steps belong to workflows that run on a Task. */
+    showSubtasks: boolean;
+    onAdd: (item: IPaletteItem) => void;
+}
+
+export function NodePalette({ agents, showSubtasks, onAdd }: PaletteProps) {
     const [q, setQ] = useState('');
     const needle = q.trim().toLowerCase();
     const shown = agents.filter((a) => !needle || a.name.toLowerCase().includes(needle));
@@ -109,6 +116,9 @@ export function NodePalette({ agents, onAdd }: { agents: IAgent[]; onAdd: (item:
         >
             <Heading>Flow</Heading>
             <PaletteChip item={{ type: 'owner' }} label="Owner" icon="person" color={ATLAS_PALETTE.warning} onAdd={onAdd} />
+            {showSubtasks && (
+                <PaletteChip item={{ type: 'subtasks' }} label="Sub-tasks" icon="checklist" color={ATLAS_PALETTE.brandBlue} onAdd={onAdd} />
+            )}
             <PaletteChip item={{ type: 'end' }} label="End" icon="flag" color={ATLAS_PALETTE.success} onAdd={onAdd} />
             <Heading>Agents</Heading>
             <SearchTextInput value={q} onChange={setQ} label="Search agents" minWidth={0} />

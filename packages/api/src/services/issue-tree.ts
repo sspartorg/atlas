@@ -1,22 +1,12 @@
 import { sql } from 'kysely';
 import { db } from '../db/kysely-client.js';
-import {
-    rowToBug,
-    rowToEpic,
-    rowToStory,
-    rowToSubBug,
-    rowToSubTask,
-} from './items.js';
+import { rowToSubTask, rowToTask } from './items.js';
 import type {
-    IBug,
-    IEpic,
     IIssueTreeNode,
     IIssueTreeResponse,
     IProject,
-    IStory,
-    ISubBug,
     ISubTask,
-    IssueTreeKind,
+    ITask,
     IAgent,
 } from '@atlas/shared';
 
@@ -26,10 +16,6 @@ interface BuildOpts {
     // than 7 days are filtered out — keeps the Issues page focused on active
     // work. Set true to bypass the filter (e.g. archived view, search).
     includeArchived?: boolean | undefined;
-}
-
-function shortId(_kind: IssueTreeKind, id: string): string {
-    return id;
 }
 
 function projectFromRow(r: Record<string, unknown>): IProject {
@@ -73,33 +59,12 @@ export async function buildIssueTree(opts: BuildOpts = {}): Promise<IIssueTreeRe
     }
     const allItems = await itemsQ.orderBy('updated_at', 'desc').execute();
 
-    const epics: IEpic[] = [];
-    const stories: IStory[] = [];
+    const tasks: ITask[] = [];
     const subTasks: ISubTask[] = [];
-    const subBugs: ISubBug[] = [];
-    const bugs: IBug[] = [];
     for (const r of allItems) {
-        switch (r.type) {
-            case 'epic':
-                epics.push(rowToEpic(r as never));
-                break;
-            case 'story':
-                stories.push(rowToStory(r as never));
-                break;
-            case 'sub_task':
-                subTasks.push(rowToSubTask(r as never));
-                break;
-            case 'sub_bug':
-                subBugs.push(rowToSubBug(r as never));
-                break;
-            case 'bug':
-                bugs.push(rowToBug(r as never));
-                break;
-        }
+        if (r.type === 'task') tasks.push(rowToTask(r as never));
+        else subTasks.push(rowToSubTask(r as never));
     }
-
-    const epicById = new Map(epics.map((e) => [e.id, e]));
-    const storyById = new Map(stories.map((s) => [s.id, s]));
 
     // 2. Projects + agents — small tables, fetch in full.
     const [projectRows, agentRows] = await Promise.all([
@@ -109,25 +74,48 @@ export async function buildIssueTree(opts: BuildOpts = {}): Promise<IIssueTreeRe
     const projects = projectRows.map((r) => projectFromRow(r as never));
     const agents = agentRows as unknown as IAgent[];
     const projectById = new Map(projects.map((p) => [p.id, p]));
+    const taskById = new Map(tasks.map((t) => [t.id, t]));
 
     // ── Assemble ───────────────────────────────────────────────────────────
-    const childrenByStory = new Map<string, IIssueTreeNode[]>();
-    for (const t of subTasks) {
-        const story = storyById.get(t.story_id);
-        // FK trigger guarantees parent story resolves.
+    const childrenByTask = new Map<string, IIssueTreeNode[]>();
+    for (const st of subTasks) {
+        const task = taskById.get(st.task_id);
+        // A sub-task whose Task fell out of scope (archived) drops with it.
+        if (!task) continue;
+        const project = projectById.get(task.project_id);
+        // FK guarantees the project resolves.
         /* v8 ignore next */
-        if (!story) continue;
-        const epic = epicById.get(story.epic_id);
-        // FK trigger guarantees epic resolves; the `: undefined` arm is unreachable post-PG-migration.
-        /* v8 ignore next */
-        const project = epic ? projectById.get(epic.project_id) : undefined;
-        // FK trigger guarantees epic+project resolve.
-        /* v8 ignore next */
-        if (!epic || !project) continue;
-        const node: IIssueTreeNode = {
-            id: t.id,
+        if (!project) continue;
+        const arr = childrenByTask.get(task.id) ?? [];
+        arr.push({
+            id: st.id,
             kind: 'sub_task',
-            short_id: shortId('sub_task', t.id),
+            short_id: st.id,
+            title: st.title,
+            status: st.status,
+            assignee_agent_id: st.assignee_agent_id,
+            reporter_agent_id: st.reporter_agent_id,
+            created_at: st.created_at,
+            updated_at: st.updated_at,
+            project_id: project.id,
+            project_name: project.name,
+            task_id: task.id,
+            task_title: task.title,
+            children: [],
+        });
+        childrenByTask.set(task.id, arr);
+    }
+
+    const topLevel: IIssueTreeNode[] = [];
+    for (const t of tasks) {
+        const project = projectById.get(t.project_id);
+        // FK guarantees the project resolves.
+        /* v8 ignore next */
+        if (!project) continue;
+        topLevel.push({
+            id: t.id,
+            kind: 'task',
+            short_id: t.id,
             title: t.title,
             status: t.status,
             assignee_agent_id: t.assignee_agent_id,
@@ -136,111 +124,12 @@ export async function buildIssueTree(opts: BuildOpts = {}): Promise<IIssueTreeRe
             updated_at: t.updated_at,
             project_id: project.id,
             project_name: project.name,
-            epic_id: epic.id,
-            epic_title: epic.title,
-            parent_story_id: story.id,
-            parent_story_title: story.title,
-            children: [],
-        };
-        const arr = childrenByStory.get(story.id) ?? [];
-        arr.push(node);
-        childrenByStory.set(story.id, arr);
-    }
-    for (const b of subBugs) {
-        const story = storyById.get(b.story_id);
-        // FK trigger guarantees parent story resolves.
-        /* v8 ignore next */
-        if (!story) continue;
-        const epic = epicById.get(story.epic_id);
-        // FK trigger guarantees epic resolves; the `: undefined` arm is unreachable post-PG-migration.
-        /* v8 ignore next */
-        const project = epic ? projectById.get(epic.project_id) : undefined;
-        // FK trigger guarantees epic+project resolve.
-        /* v8 ignore next */
-        if (!epic || !project) continue;
-        const node: IIssueTreeNode = {
-            id: b.id,
-            kind: 'sub_bug',
-            short_id: shortId('sub_bug', b.id),
-            title: b.title,
-            status: b.status,
-            assignee_agent_id: b.assignee_agent_id,
-            reporter_agent_id: b.reporter_agent_id,
-            created_at: b.created_at,
-            updated_at: b.updated_at,
-            project_id: project.id,
-            project_name: project.name,
-            epic_id: epic.id,
-            epic_title: epic.title,
-            parent_story_id: story.id,
-            parent_story_title: story.title,
-            children: [],
-        };
-        const arr = childrenByStory.get(story.id) ?? [];
-        arr.push(node);
-        childrenByStory.set(story.id, arr);
-    }
-
-    const topLevel: IIssueTreeNode[] = [];
-    for (const s of stories) {
-        const epic = epicById.get(s.epic_id);
-        // FK trigger guarantees epic resolves; the `: undefined` arm is unreachable post-PG-migration.
-        /* v8 ignore next */
-        const project = epic ? projectById.get(epic.project_id) : undefined;
-        // FK trigger `items_check_parent` guarantees epic+project resolve.
-        /* v8 ignore next */
-        if (!epic || !project) continue;
-        topLevel.push({
-            id: s.id,
-            kind: 'story',
-            short_id: shortId('story', s.id),
-            title: s.title,
-            status: s.status,
-            assignee_agent_id: s.assignee_agent_id,
-            reporter_agent_id: s.reporter_agent_id,
-            created_at: s.created_at,
-            updated_at: s.updated_at,
-            project_id: project.id,
-            project_name: project.name,
-            epic_id: epic.id,
-            epic_title: epic.title,
-            parent_story_id: null,
-            parent_story_title: null,
-            children: childrenByStory.get(s.id) ?? [],
-        });
-    }
-    for (const b of bugs) {
-        const epic = epicById.get(b.epic_id);
-        // FK trigger guarantees epic resolves; the `: undefined` arm is unreachable post-PG-migration.
-        /* v8 ignore next */
-        const project = epic ? projectById.get(epic.project_id) : undefined;
-        // FK trigger `items_check_parent` guarantees epic+project resolve.
-        /* v8 ignore next */
-        if (!epic || !project) continue;
-        topLevel.push({
-            id: b.id,
-            kind: 'bug',
-            short_id: shortId('bug', b.id),
-            title: b.title,
-            status: b.status,
-            assignee_agent_id: b.assignee_agent_id,
-            reporter_agent_id: b.reporter_agent_id,
-            created_at: b.created_at,
-            updated_at: b.updated_at,
-            project_id: project.id,
-            project_name: project.name,
-            epic_id: epic.id,
-            epic_title: epic.title,
-            parent_story_id: null,
-            parent_story_title: null,
-            children: [],
+            task_id: null,
+            task_title: null,
+            children: childrenByTask.get(t.id) ?? [],
         });
     }
     topLevel.sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1));
 
-    // The raw arrays travel alongside `tree` so Project Detail can drop
-    // its three legacy /api/{epics,stories,bugs}?project_id=… fetches.
-    // Already loaded in `allItems` — purely a free roundtrip removal on
-    // top of the tree query.
-    return { projects, agents, tree: topLevel, epics, stories, bugs };
+    return { projects, agents, tree: topLevel, tasks };
 }

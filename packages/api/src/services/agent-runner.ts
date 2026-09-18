@@ -729,7 +729,7 @@ function simulateRun(
 ): void {
     const lines = [
         'Analyzing the issue context...',
-        'Reviewing epic and project requirements...',
+        'Reviewing the task and project requirements...',
         'Drafting structured output...',
         'Applying quality checks...',
         'Finalizing response...',

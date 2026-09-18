@@ -9,7 +9,7 @@ const EMPTY_GRAPH = JSON.stringify({ nodes: [], edges: [] });
 beforeEach(async () => {
     await truncateAll();
     await insertProject('p1', 'ATL');
-    await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Epic' });
+    await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Task' });
 });
 
 afterAll(async () => {
@@ -66,7 +66,7 @@ describe('migration 035 — workflows', () => {
         await testDb.insertInto('workflow_runs').values(runRow()).execute();
         await testDb
             .updateTable('items')
-            .set({ workflow_id: 'wf-dev', created_by_workflow_run_id: 'wr-1' })
+            .set({ workflow_id: 'wf-dev' })
             .where('id', '=', 'ATL-1')
             .execute();
         await testDb
@@ -98,9 +98,9 @@ describe('migration 035 — workflows', () => {
         });
         const item = await testDb
             .selectFrom('items')
-            .select(['workflow_id', 'created_by_workflow_run_id'])
+            .select(['workflow_id'])
             .where('id', '=', 'ATL-1')
             .executeTakeFirstOrThrow();
-        expect(item).toEqual({ workflow_id: null, created_by_workflow_run_id: null });
+        expect(item).toEqual({ workflow_id: null });
     });
 });

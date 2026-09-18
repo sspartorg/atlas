@@ -267,7 +267,7 @@ export function DuplicateAgentModal({ open, agent, existingIds, onClose }: Props
                                 mt: 0.5,
                             }}
                         >
-                            {agent.cli} · {agent.model} · prompt v{agent.prompt_version}
+                            {agent.cli} · {agent.model} · {agent.effort} effort · prompt v{agent.prompt_version}
                         </Typography>
                     </Box>
                 </Box>

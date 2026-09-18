@@ -118,12 +118,12 @@ describe('PromptPreviewDialog', () => {
     it('shows issue details when issue is provided', () => {
         const dataWithIssue = {
             ...mockData,
-            issue: { type: 'story', id: 'ATL-2', title: 'My story' },
+            issue: { type: 'task', id: 'ATL-2', title: 'My task' },
         };
         renderWithProviders(
             <PromptPreviewDialog open={true} data={dataWithIssue} onClose={vi.fn()} />,
         );
-        expect(screen.getByText(/issue · story ATL-2/)).toBeTruthy();
+        expect(screen.getByText(/issue · task ATL-2/)).toBeTruthy();
     });
 
     it('does not show Sections label when sections is empty (sections.length > 0 false branch)', () => {
