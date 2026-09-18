@@ -10,12 +10,17 @@
 //
 // Opt-out: set ATLAS_HOST_MCP=false to skip binding entirely on a
 // given instance (useful when running headless or testing).
+//
+// ATLAS_MCP_PORT moves the listener off 4500 for a second stack that must
+// own its own MCP (e.g. a test stack whose item-attached agent runs have
+// to reach its own database). Those runs get the port through
+// `--mcp-config`; runs that use the Owner's ~/.claude.json still hit 4500.
 
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import { createHttpMcpHandler, type IHttpMcpHost } from '@atlas/mcp/http-handler';
 import type { FastifyBaseLogger } from 'fastify';
 
-const MCP_HOST_PORT = 4500;
+const MCP_HOST_PORT = Number(process.env['ATLAS_MCP_PORT']) || 4500;
 const MCP_HOST_BIND = '127.0.0.1';
 const MCP_HOST_PATH = '/mcp';
 

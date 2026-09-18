@@ -3,13 +3,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { IApiClient } from '../api-client.js';
 import {
-    BugFailureScopeSchema,
-    BugFrequencySchema,
     IssuePrioritySchema,
     IssueStatusSchema,
     IssueTypeSchema,
     ItemLabelsOptionalSchema,
-    SubTaskStatusSchema,
     WORKTREE_BRANCH_RE_SOURCE,
 } from '@atlas/shared';
 import type { IssueType } from '@atlas/shared';
@@ -39,34 +36,25 @@ function resolveAgentId(callerAgentId: string | undefined): string | null {
 
 // Tool consolidation 2026-07: the 17-tool items surface collapsed into FIVE:
 //   * search_item  — full-text search
-//   * create_item  — issue_type discriminator (replaces createEpic/createStory/createSubTask/createSubBug/createBug)
+//   * create_item  — issue_type discriminator (task / sub_task)
 //   * get_item     — always returns full envelope (item + parent + project + children + comments + related_links + external_links + activity); replaces getEpic / getItemFull / listComments / listItemLinks / listItemExternalLinks / replyToItem's read-context mode
 //   * update_item  — `action` discriminator (replaces updateItem / transitionItemStatus / assignItem / addCommentToItem / replyToItem's write mode / createItemLink / deleteItemLink / createItemExternalLink / deleteItemExternalLink)
 //   * delete_item  — issue_type + id
 
 const CreateItemPayloadSchema = z
     .object({
-        // Epic-only
+        // Task-only
         project_id: z.string().min(1).optional(),
-        // Story-only (under epic)
-        epic_id: z.string().min(1).optional(),
-        // Sub-task / sub-bug (under story)
-        story_id: z.string().min(1).optional(),
+        // Sub-task-only (under its task)
+        task_id: z.string().min(1).optional(),
+        status: IssueStatusSchema.optional(),
         // Common
         title: z.string().min(1).max(500),
         description: z.string().optional(),
         priority: IssuePrioritySchema.optional(),
-        status: IssueStatusSchema.optional(),
-        sub_task_status: SubTaskStatusSchema.optional(),
         acceptance_criteria: z.string().optional(),
         assignee_agent_id: z.string().nullable().optional(),
         reporter_agent_id: z.string().nullable().optional(),
-        // Bug-only extras
-        steps_to_reproduce: z.string().optional(),
-        expected: z.string().optional(),
-        actual: z.string().optional(),
-        frequency: BugFrequencySchema.optional(),
-        failure_scope: BugFailureScopeSchema.optional(),
         // Free-form labels — cap of 20 labels per item, 40 chars each.
         // The API accepts labels on every item type; exposing here so
         // the MCP surface can tag items at create time instead of
@@ -88,19 +76,11 @@ const UpdatePatchSchema = z
         description: z.string().optional(),
         priority: IssuePrioritySchema.optional(),
         acceptance_criteria: z.string().optional(),
+        // Task-only (UpdateTaskSchema); the sub-task route rejects them.
         spec_md: z.string().nullable().optional(),
         pr_url: z.string().nullable().optional(),
-        points: z.number().int().optional(),
-        // PO Writer's contract sets this on every dev/QA leg; the API's
-        // UpdateStorySchema already accepts it, so omitting it here made
-        // the contract impossible to satisfy through MCP.
         worktree_branch: z.string().regex(new RegExp(WORKTREE_BRANCH_RE_SOURCE)).nullable().optional(),
         reporter_agent_id: z.string().nullable().optional(),
-        steps_to_reproduce: z.string().optional(),
-        expected: z.string().optional(),
-        actual: z.string().optional(),
-        frequency: BugFrequencySchema.optional(),
-        failure_scope: BugFailureScopeSchema.optional(),
         // Free-form labels — cap of 20 labels per item, 40 chars each.
         // Sending `labels` in a patch replaces the full array (matches
         // API semantics); to append, callers should read via get_item,
@@ -116,7 +96,7 @@ export const ITEM_TOOLS: ToolRegistration[] = [
         name: 'search_item',
         title: 'Full-text search across items',
         description: [
-            'Postgres tsvector FTS across item titles, descriptions, and spec_md (epic / story / sub_task / sub_bug / bug).',
+            'Postgres tsvector FTS across item titles, descriptions, and spec_md (task / sub_task).',
             '',
             'Use this for dedup-by-source-tag (substring-check `description` for a tag string) or general keyword lookup. Returns up to 20 ranked items as `[{issue_type, issue_id, title, description, rank}]`.',
             '',
@@ -137,17 +117,14 @@ export const ITEM_TOOLS: ToolRegistration[] = [
     },
     {
         name: 'create_item',
-        title: 'Create an item (epic / story / sub_task / sub_bug / bug)',
+        title: 'Create an item (task / sub_task)',
         description: [
             'Create a new item under its proper parent. `issue_type` selects the kind:',
             '',
-            "- `issue_type: 'epic'` → requires `project_id` + `title` in `payload`. Top-level scope owner.",
-            "- `issue_type: 'story'` → requires `epic_id` + `title`. Optional: `acceptance_criteria`, `status` (default `draft`).",
-            "- `issue_type: 'sub_task'` → requires `story_id` + `title`. Optional: `sub_task_status` (default `todo`). The unit of work an implementing agent executes.",
-            "- `issue_type: 'sub_bug'` → requires `story_id` + `title`. Bug surfaced during a story's execution. Optional bug fields: `steps_to_reproduce`, `expected`, `actual`, `frequency`, `failure_scope`.",
-            "- `issue_type: 'bug'` → requires `epic_id` + `title`. Standalone bug under an epic. Same bug-specific optionals as sub_bug.",
+            "- `issue_type: 'task'` → requires `project_id` + `title` in `payload`. The top-level unit of work the Owner queues for a workflow.",
+            "- `issue_type: 'sub_task'` → requires `task_id` + `title`. A piece of its Task's work. Optional: `status` (default `draft`).",
             '',
-            'Common optional fields across all types: `description`, `priority` (default `normal`), `assignee_agent_id`, `reporter_agent_id`, `labels` (array of strings, up to 20 labels / 40 chars each — e.g. `["CER_Stories", "backend"]`).',
+            'Common optional fields: `description`, `acceptance_criteria`, `priority` (default `normal`), `assignee_agent_id`, `reporter_agent_id`, `labels` (array of strings, up to 20 labels / 40 chars each — e.g. `["backend", "qa"]`).',
             '',
             'Optional top-level `agent_id` (string, your own agent id): credits the `created` activity event to you and defaults `reporter_agent_id` to you when the payload does not set it. Without it the create is recorded as the Owner.',
         ].join('\n'),
@@ -165,56 +142,14 @@ export const ITEM_TOOLS: ToolRegistration[] = [
                 agent_id?: string;
             };
             const actor = resolveAgentId(agent_id);
-            switch (issue_type) {
-                case 'epic': {
-                    return toToolResult(
-                        await client.createEpic(
-                            payload as unknown as Parameters<IApiClient['createEpic']>[0],
-                            actor,
-                        ),
-                    );
-                }
-                case 'story': {
-                    return toToolResult(
-                        await client.createStory(
-                            payload as unknown as Parameters<IApiClient['createStory']>[0],
-                            actor,
-                        ),
-                    );
-                }
-                case 'sub_task': {
-                    // The CreateSubTaskSchema uses `status` (SubTaskStatusSchema),
-                    // not `sub_task_status`. Lift the alias so the consolidated
-                    // tool stays distinct from the story/bug `status` field.
-                    const lifted = { ...payload } as Record<string, unknown>;
-                    if (lifted['sub_task_status'] !== undefined) {
-                        lifted['status'] = lifted['sub_task_status'];
-                        delete lifted['sub_task_status'];
-                    }
-                    return toToolResult(
-                        await client.createSubTask(
-                            lifted as unknown as Parameters<IApiClient['createSubTask']>[0],
-                            actor,
-                        ),
-                    );
-                }
-                case 'sub_bug': {
-                    return toToolResult(
-                        await client.createSubBug(
-                            payload as unknown as Parameters<IApiClient['createSubBug']>[0],
-                            actor,
-                        ),
-                    );
-                }
-                case 'bug': {
-                    return toToolResult(
-                        await client.createBug(
-                            payload as unknown as Parameters<IApiClient['createBug']>[0],
-                            actor,
-                        ),
-                    );
-                }
-            }
+            return toToolResult(
+                issue_type === 'task'
+                    ? await client.createTask(payload as unknown as Parameters<IApiClient['createTask']>[0], actor)
+                    : await client.createSubTask(
+                          payload as unknown as Parameters<IApiClient['createSubTask']>[0],
+                          actor,
+                      ),
+            );
         },
     },
     {
@@ -223,19 +158,18 @@ export const ITEM_TOOLS: ToolRegistration[] = [
         description: [
             'Fetch the complete payload for an item — everything an agent needs to act in one round-trip:',
             '',
-            '- `item` itself (title, description, status, assignee, etc.)',
-            '- `parent` (epic for stories/bugs; parent story for sub-tasks/sub-bugs; null for epics)',
+            '- the item itself under its kind key: `task` or `sub_task` (title, description, status, assignee, etc.)',
+            '- on a sub-task, `task` is its parent Task; on a task, `sub_tasks` lists its children',
             '- `project` (id, name, default_branch, git_path…)',
-            '- `children` (sub_tasks + sub_bugs for stories; stories + bugs for epics; empty otherwise)',
             '- `comments` — full thread, oldest first',
             '- `related_links` — every depends_on / relates_to / tested_by link touching this item, both directions',
             '- `external_links` — off-platform refs (e.g. GitHub PR URLs)',
             '- `activity` — recent issue_events (status_changed, assigned, comment_added, etc.)',
-            '- `agents` + `round_count` for UI / orchestrator',
+            '- `agents` for UI / orchestrator',
             '',
             'There is **no partial-get tool**. Always call this when you need any of the above. Cheaper than the prior four+ tool calls.',
             '',
-            'Required: `issue_type` (epic / story / sub_task / sub_bug / bug) + `id`.',
+            'Required: `issue_type` (task / sub_task) + `id`.',
         ].join('\n'),
         group_name: 'ITEMS',
         sort_order: 22,
@@ -255,21 +189,21 @@ export const ITEM_TOOLS: ToolRegistration[] = [
             'Single entry point for every write-side operation on an existing item. The `action` enum selects what to do; required payload fields vary per action.',
             '',
             'Common required fields:',
-            '- `issue_type` (epic / story / sub_task / sub_bug / bug)',
+            '- `issue_type` (task / sub_task)',
             '- `id` (the item id)',
             '- `action` (one of the values below)',
             '',
             'Actions and their payload fields:',
             '',
-            "- `action: 'patch_fields'` → patch core fields. `payload` accepts: `title`, `description`, `priority`, `acceptance_criteria`, `labels` (full replacement — send the full array; to append, get_item → merge → send). Story extras: `spec_md`, `pr_url`, `points`, `worktree_branch` (must match `atlas/<role>/<id>`, e.g. `atlas/dev/ATL-2`). Bug / sub_bug extras: `steps_to_reproduce`, `expected`, `actual`, `frequency`, `failure_scope`. Per-type Zod schema rejects fields that don't apply.",
+            "- `action: 'patch_fields'` → patch core fields. `payload` accepts: `title`, `description`, `priority`, `acceptance_criteria`, `labels` (full replacement — send the full array; to append, get_item → merge → send). Task extras: `spec_md`, `pr_url`, `reporter_agent_id`, `worktree_branch` (must match `atlas/<role>/<id>`, e.g. `atlas/wf/ATL-2`). Per-type Zod schema rejects fields that don't apply.",
             '',
-            "- `action: 'change_status'` → move item to a new status. Required: `status` (string). Optional: `override` (boolean, Owner-only — bypasses status-machine guard), `agent_id` (string — credit the change to a specific agent). Status-machine guard rejects illegal transitions unless `override` is true.",
+            "- `action: 'change_status'` → move item to a new status. Required: `status` (string). Optional: `override` (boolean, Owner-only — bypasses status-machine guard), `agent_id` (string — credit the change to a specific agent). Status-machine guard rejects illegal transitions unless `override` is true. Owner-facing flow: an agent running inside a workflow must NOT use this to route work — the API returns 409 while a workflow run holds the item; report through the `atlas-outcome` block instead.",
             '',
-            "- `action: 'assign'` → set/clear the assignee. Required: `assignee_agent_id` (string or null to unassign). Optional: `agent_id` (string — credit the reassignment to a specific agent). Server rejects assignment to inactive agents.",
+            "- `action: 'assign'` → set/clear the assignee. Required: `assignee_agent_id` (string or null to unassign). Optional: `agent_id` (string — credit the reassignment to a specific agent). Server rejects assignment to inactive agents. Owner-facing flow: an agent running inside a workflow must NOT use this to route work — the API returns 409 while a workflow run holds the item; report through the `atlas-outcome` block instead.",
             '',
             "- `action: 'add_comment'` → post a comment. Required: `body` (string). Optional: `author` ('owner' | 'agent', default 'agent'), `agent_id` (string — the comment's avatar / chip).",
             '',
-            "- `action: 'add_link'` → link two items. Required: `to_id` (string, the other item's id), `relation_type` ('depends_on' | 'relates_to' | 'tested_by'). The current item is the `from`. `depends_on` is directed (cycles rejected); `relates_to` is undirected; `tested_by` is directed QA→dev (PO Writer is the canonical writer). Idempotent. Optional: `agent_id` (string — credit the link event to a specific agent; otherwise it is recorded as the Owner).",
+            "- `action: 'add_link'` → link two items. Required: `to_id` (string, the other item's id), `relation_type` ('depends_on' | 'relates_to' | 'tested_by'). The current item is the `from`. `depends_on` is directed (cycles rejected); `relates_to` is undirected; `tested_by` is directed QA→dev. Idempotent. Optional: `agent_id` (string — credit the link event to a specific agent; otherwise it is recorded as the Owner).",
             '',
             "- `action: 'remove_link'` → delete an item-link row by numeric id. Required: `link_id` (number). Get link ids from `get_item` → `related_links[].id`. Optional: `agent_id` (string — credit the unlink event).",
             '',
@@ -497,9 +431,8 @@ export const ITEM_TOOLS: ToolRegistration[] = [
         title: 'Delete an item (cascade on children)',
         description: [
             'Permanently delete an item. Cascade semantics per the API:',
-            '- Deleting a story drops its sub-tasks and sub-bugs.',
-            '- Deleting an epic drops its stories (and transitively their children) and standalone bugs.',
-            '- sub-task / sub-bug / bug have no children to cascade.',
+            '- Deleting a task drops its sub-tasks.',
+            '- A sub-task has no children to cascade.',
             '',
             'Returns `{ deleted: true, issue_type, id }`.',
             '',

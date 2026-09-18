@@ -14,39 +14,23 @@ beforeEach(async () => {
     await insertAgent({ id: 'agent-coder', category: 'software-dev' });
     await insertAgent({ id: 'agent-marketer', category: 'marketing' });
 
-    // 2 epics
-    await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E1', status: 'in_progress' });
-    await insertItem({ id: 'ATL-2', type: 'epic', project_id: 'p1', title: 'E2', status: 'in_review' });
-    // 4 stories across statuses
-    await insertItem({ id: 's1', type: 'story', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'epic', title: 'S1', status: 'in_progress' });
-    await insertItem({ id: 's2', type: 'story', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'epic', title: 'S2', status: 'in_review' });
-    await insertItem({ id: 's3', type: 'story', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'epic', title: 'S3', status: 'ready' });
-    await insertItem({ id: 's4', type: 'story', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'epic', title: 'S4', status: 'done' });
+    // 7 tasks across statuses
+    await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'T1', status: 'in_progress' });
+    await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'T2', status: 'in_review' });
+    await insertItem({ id: 's1', type: 'task', project_id: 'p1', title: 'S1', status: 'in_progress' });
+    await insertItem({ id: 's2', type: 'task', project_id: 'p1', title: 'S2', status: 'in_review' });
+    await insertItem({ id: 's3', type: 'task', project_id: 'p1', title: 'S3', status: 'ready' });
+    await insertItem({ id: 's4', type: 'task', project_id: 'p1', title: 'S4', status: 'done' });
     // s5 is ready AND assigned to an agent — this is the kind of row the
     // Queue sidenav badge should count. s3 above is also ready but has
     // no assignee (NULL = Owner-assigned) and so must NOT count.
-    await insertItem({ id: 's5', type: 'story', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'epic', title: 'S5', status: 'ready', assignee_agent_id: 'agent-coder' });
-    // 2 bugs
-    await insertItem({
-        id: 'b1', type: 'bug', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'epic',
-        title: 'B1', status: 'in_progress',
-        steps_to_reproduce: '', expected: '', actual: '', frequency: 'sometimes', failure_scope: 'cosmetic',
-    });
-    await insertItem({
-        id: 'b2', type: 'bug', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'epic',
-        title: 'B2', status: 'draft',
-        steps_to_reproduce: '', expected: '', actual: '', frequency: 'sometimes', failure_scope: 'cosmetic',
-    });
-    // 2 sub-tasks
-    await insertItem({ id: 'st1', type: 'sub_task', project_id: 'p1', parent_id: 's1', parent_type: 'story', title: 'ST1', status: 'in_progress', acceptance_criteria: '' });
-    await insertItem({ id: 'st2', type: 'sub_task', project_id: 'p1', parent_id: 's1', parent_type: 'story', title: 'ST2', status: 'waiting_for_info', acceptance_criteria: '' });
-    // 1 sub-bug
-    await insertItem({
-        id: 'sb1', type: 'sub_bug', project_id: 'p1', parent_id: 's1', parent_type: 'story',
-        title: 'SB1', status: 'in_review',
-        acceptance_criteria: '', steps_to_reproduce: '', expected: '', actual: '',
-        frequency: 'sometimes', failure_scope: 'cosmetic',
-    });
+    await insertItem({ id: 's5', type: 'task', project_id: 'p1', title: 'S5', status: 'ready', assignee_agent_id: 'agent-coder' });
+    // 5 sub-tasks
+    await insertItem({ id: 'b1', type: 'sub_task', project_id: 'p1', parent_id: 'ATL-1', title: 'B1', status: 'in_progress' });
+    await insertItem({ id: 'b2', type: 'sub_task', project_id: 'p1', parent_id: 'ATL-1', title: 'B2', status: 'draft' });
+    await insertItem({ id: 'st1', type: 'sub_task', project_id: 'p1', parent_id: 's1', title: 'ST1', status: 'in_progress', acceptance_criteria: '' });
+    await insertItem({ id: 'st2', type: 'sub_task', project_id: 'p1', parent_id: 's1', title: 'ST2', status: 'waiting_for_info', acceptance_criteria: '' });
+    await insertItem({ id: 'sb1', type: 'sub_task', project_id: 'p1', parent_id: 's1', title: 'SB1', status: 'in_review' });
     // 2 notifications (one unread, one read)
     await testDb
         .insertInto('notifications')
@@ -63,24 +47,37 @@ afterAll(async () => {
 
 describe('countsService', () => {
     describe('getSidenavCounts', () => {
-        it('aggregates projects/epics/issues/queue/agents/notifications', async () => {
+        it('aggregates projects/tasks/sub_tasks/queue/agents/notifications', async () => {
             const c = await countsService.getSidenavCounts();
             expect(c.projects).toBe(1);
-            expect(c.epics).toBe(2);
-            // issues = stories + bugs = 5 + 2 = 7 (added s5)
-            expect(c.issues).toBe(7);
-            // queue = epics + stories + bugs where status = 'ready' AND
-            // assigned to an AI agent (assignee_agent_id IS NOT NULL).
-            // Owner-assigned (NULL) ready items are excluded so the badge
-            // matches the Queue page, where Owner-assigned rows live in
-            // "Waiting on You" rather than any agent's queue.
-            // From the seed: s3 is ready but Owner-assigned (excluded);
-            // s5 is ready and assigned to agent-coder (counted). → 1.
-            expect(c.queue).toBe(1);
+            expect(c.tasks).toBe(7);
+            expect(c.sub_tasks).toBe(5);
+            // No Task is queued for a workflow and no run is live yet.
+            expect(c.queue).toBe(0);
             // agents active
             expect(c.agents).toBe(2);
             // unread notifications (read_at IS NULL)
             expect(c.notifications).toBe(1);
+        });
+
+        it('queue = Tasks queued for a workflow + running Task runs', async () => {
+            await testDb.insertInto('workflows').values({ id: 'wf-dev', project_id: 'p1', name: 'Dev' }).execute();
+            // s3 and s5 are ready: both queued for wf-dev. ATL-1 is in progress on a running run.
+            await testDb.updateTable('items').set({ workflow_id: 'wf-dev' }).where('id', 'in', ['s3', 's5']).execute();
+            const run = (id: string, item_id: string, status: 'running' | 'waiting_for_owner') => ({
+                id,
+                workflow_id: 'wf-dev',
+                item_id,
+                project_id: 'p1',
+                status,
+                graph_snapshot: JSON.stringify({ nodes: [], edges: [] }),
+            });
+            // A parked run holds no slot and its Task isn't queued; s1 is not ready anyway.
+            await testDb.insertInto('workflow_runs').values([run('r-live', 'ATL-1', 'running'), run('r-parked', 's1', 'waiting_for_owner')]).execute();
+            // A ready Task with no workflow is not in any queue.
+            await insertItem({ id: 's7', type: 'task', project_id: 'p1', title: 'S7', status: 'ready' });
+
+            expect((await countsService.getSidenavCounts()).queue).toBe(3);
         });
     });
 
@@ -88,37 +85,34 @@ describe('countsService', () => {
         it("returns the KPI bundle with agent stats + today's pass", async () => {
             const k = await countsService.getDashboardKpis();
             expect(k.activeAgents).toBe(2);
-            expect(k.epics).toBe(2);
-            // storiesInProgress = stories in {ready,in_progress,in_review} = s1, s2, s3, s5 = 4.
-            expect(k.storiesInProgress).toBe(4);
-            // doneThisWeek = stories.status=done updated within 7d. Seed creates s4 'done'
+            expect(k.tasks).toBe(7);
+            // tasksInProgress = tasks in {ready,in_progress,in_review} = ATL-1, ATL-2, s1, s2, s3, s5.
+            expect(k.tasksInProgress).toBe(6);
+            // doneThisWeek = tasks.status=done updated within 7d. Seed creates s4 'done'
             // with updated_at = now(), so it matches.
             expect(k.doneThisWeek).toBe(1);
             expect(k.projectCount).toBe(1);
-            // queued = Ready + agent-assigned items (s5), same rule as the Queue badge.
-            expect(k.agentStatsByCategory['software-dev']).toEqual({ queued: 1, running: 0 });
-            expect(k.agentStatsByCategory.marketing).toEqual({ queued: 0, running: 0 });
+            // Agents have no queue; ready + agent-assigned items (s5) don't show up here.
+            expect(k.agentStatsByCategory['software-dev']).toEqual({ running: 0 });
+            expect(k.agentStatsByCategory.marketing).toEqual({ running: 0 });
             expect(k.todaysPass.total).toBe(0);
         });
     });
 
     describe('getAgentCategoryStats', () => {
-        it('queued = Ready + agent-assigned items by category; running = in_progress runs', async () => {
-            // Ready + assigned to the marketer, not yet dispatched (no run row).
-            await insertItem({ id: 's6', type: 'story', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'epic', title: 'S6', status: 'ready', assignee_agent_id: 'agent-marketer' });
+        it('running = in_progress runs by agent category; ready assigned items and queued runs do not count', async () => {
+            await insertItem({ id: 's6', type: 'sub_task', project_id: 'p1', parent_id: 'ATL-1', title: 'S6', status: 'ready', assignee_agent_id: 'agent-marketer' });
             await testDb
                 .insertInto('agent_runs')
                 .values([
-                    // A queued run row does not count: queued tracks items awaiting dispatch.
                     { id: 'r1', agent_id: 'agent-coder', item_id: 's1', status: 'queued' },
                     { id: 'r2', agent_id: 'agent-coder', item_id: 's2', status: 'in_progress' },
                 ])
                 .execute();
             const stats = await countsService.getAgentCategoryStats();
-            // s5 (ready, agent-coder); s3 is ready but Owner-assigned so excluded.
-            expect(stats['software-dev']).toEqual({ queued: 1, running: 1 });
-            expect(stats.marketing).toEqual({ queued: 1, running: 0 });
-            expect(stats.design).toEqual({ queued: 0, running: 0 });
+            expect(stats['software-dev']).toEqual({ running: 1 });
+            expect(stats.marketing).toEqual({ running: 0 });
+            expect(stats.design).toEqual({ running: 0 });
         });
 
         it('includes design when an agent in that category has a live run', async () => {
@@ -130,7 +124,7 @@ describe('countsService', () => {
                 ])
                 .execute();
             const stats = await countsService.getAgentCategoryStats();
-            expect(stats.design).toEqual({ queued: 0, running: 1 });
+            expect(stats.design).toEqual({ running: 1 });
         });
 
     });
@@ -161,19 +155,14 @@ describe('countsService', () => {
         it('returns rows across types where status IN waiting_for_info / in_review', async () => {
             const list = (await countsService.getAwaitingItems()) as Array<{ issue_type: string }>;
             // From the beforeEach seed:
-            //   epic ATL-2 (in_review), story s2 (in_review), sub_task st2 (waiting_for_info),
-            //   sub_bug sb1 (in_review)
-            const types = list.map((r) => r.issue_type);
-            expect(types).toContain('epic');
-            expect(types).toContain('story');
-            expect(types).toContain('sub_task');
-            expect(types).toContain('sub_bug');
-            expect(list.length).toBeGreaterThanOrEqual(4);
+            //   tasks ATL-2, s2 (in_review); sub-tasks st2 (waiting_for_info), sb1 (in_review)
+            expect(list.map((r) => (r as { id: string }).id).sort()).toEqual(['ATL-2', 's2', 'sb1', 'st2']);
+            expect(new Set(list.map((r) => r.issue_type))).toEqual(new Set(['task', 'sub_task']));
         });
     });
 
     describe('getQueueItems', () => {
-        it('returns in_progress items across all 5 types joined with assignee', async () => {
+        it('returns in_progress items across both kinds joined with assignee', async () => {
             await testDb
                 .updateTable('items')
                 .set({ assignee_agent_id: 'agent-coder' })
@@ -184,12 +173,9 @@ describe('countsService', () => {
                 id: string;
                 agent_name: string | null;
             }>;
-            // beforeEach seeds in_progress: epic ATL-1, story s1, bug b1, sub_task st1
-            const types = list.map((r) => r.issue_type);
-            expect(types).toContain('epic');
-            expect(types).toContain('story');
-            expect(types).toContain('bug');
-            expect(types).toContain('sub_task');
+            // beforeEach seeds in_progress: tasks ATL-1, s1; sub-tasks b1, st1
+            expect(list.map((r) => r.id).sort()).toEqual(['ATL-1', 'b1', 's1', 'st1']);
+            expect(new Set(list.map((r) => r.issue_type))).toEqual(new Set(['task', 'sub_task']));
             const s1Row = list.find((r) => r.id === 's1');
             expect(s1Row?.agent_name).toBe('Coder');
         });
@@ -199,17 +185,13 @@ describe('countsService', () => {
         it('counts per-project open / ready / in-flight / waiting items', async () => {
             const c = await countsService.getProjectCounts('p1');
             // From the seed:
-            //  - 2 epics; both are non-done (in_progress, in_review) → open_epics = 2;
-            //    none in 'ready' → epics_ready = 0
-            //  - 4 stories: s1 in_progress, s2 in_review → stories_in_flight = 2;
-            //    none in waiting_for_info → stories_waiting_info = 0
-            //  - 2 bugs: b1 in_progress, b2 draft → open_bugs = 2; none ready → bugs_ready = 0
-            expect(c.open_epics).toBe(2);
-            expect(c.epics_ready).toBe(0);
-            expect(c.stories_in_flight).toBe(2);
-            expect(c.stories_waiting_info).toBe(0);
-            expect(c.open_bugs).toBe(2);
-            expect(c.bugs_ready).toBe(0);
+            //  - 7 tasks, 6 not done → open_tasks = 6; s3 + s5 ready → tasks_ready = 2
+            //  - ATL-1, s1 in_progress + ATL-2, s2 in_review → tasks_in_flight = 4
+            //  - sub-tasks never count (st2 is waiting_for_info) → tasks_waiting_info = 0
+            expect(c.open_tasks).toBe(6);
+            expect(c.tasks_ready).toBe(2);
+            expect(c.tasks_in_flight).toBe(4);
+            expect(c.tasks_waiting_info).toBe(0);
         });
 
         it('rolls up cost from runs attached either by item.project_id or run.project_id', async () => {
@@ -363,7 +345,7 @@ describe('countsService', () => {
                 .execute();
             const k = await countsService.getDashboardKpis();
             expect(k.todaysPass.total).toBe(1);
-            expect(k.todaysPass.items[0]!.issue_type).toBe('story');
+            expect(k.todaysPass.items[0]!.issue_type).toBe('task');
             expect(k.todaysPass.items[0]!.agent_category).toBe('software-dev');
         });
     });

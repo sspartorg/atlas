@@ -60,7 +60,7 @@ export function LabelsFormField({ labels, onChange, suggestions, helperText }: P
             >
                 Labels{' '}
                 <Box component="span" sx={{ color: ATLAS_PALETTE.slate40, fontWeight: 400 }}>
-                    â€” optional, press Enter to add
+                    — optional, press Enter to add
                 </Box>
             </Typography>
             <Autocomplete
@@ -125,7 +125,7 @@ export function LabelsFormField({ labels, onChange, suggestions, helperText }: P
                 renderInput={(params) => (
                     <TextField
                         {...params}
-                        placeholder={labels.length === 0 ? 'Type a label and press Enterâ€¦' : ''}
+                        placeholder={labels.length === 0 ? 'Type a label and press Enter…' : ''}
                         helperText={helperText}
                         sx={{
                             '& .MuiOutlinedInput-root': {

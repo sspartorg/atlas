@@ -78,7 +78,7 @@ Wave letters match the sweep order (entity graph first, readers after).
 | Route | Route-specific checks |
 |---|---|
 | `/onboarding` | Owner name + accent + workspace folder survive `POST /settings/onboard` and a reload. Route guard: post-onboarding hit redirects to `/`; pre-onboarding hit on any other route redirects here. |
-| `/` (Dashboard) | KPI numbers equal the same figures on Projects / Epics / Issues / Queue. "In motion" rows resolve agent names (`InMotionRow` reads `agent_name` denormalized by `counts.ts` — check it is populated, not falling back to "Unassigned"). AI-cost figures come from real `agent_runs` sums. |
+| `/` (Dashboard) | KPI numbers equal the same figures on Projects / Tasks / Queue. "In motion" rows resolve agent names (`InMotionRow` reads `agent_name` denormalized by `counts.ts` — check it is populated, not falling back to "Unassigned"). AI-cost figures come from real `agent_runs` sums. |
 | `/projects` | Create → appears without reload (SSE `counts_changed`) and after one. Delete → gone from Projects, Dashboard, sidenav badge, and the NewProjectModal credential picker. Clone/reclone stream SSE and land in a terminal state, not a spinner. Auto-fetch schedule round-trips its cron. |
 | `/projects/:id` (5 tabs + Setup) | **Manage Secrets**: write → reload → per-row Reveal returns the stored value (X1); Copy copies the real value; Reveal-all fans out one call per row; Save with an untouched row preserves it instead of blanking it. Guard-rails tab writes reach `/projects/:id/guardrails`. Setup scripts round-trip both bodies. Tab state survives `?tab=` deep links. |
 | `/projects/:id/guard-rails` | Redirects to `?tab=guardrails`. Add / toggle persists; toggle is not local-only. |
@@ -87,24 +87,21 @@ Wave letters match the sweep order (entity graph first, readers after).
 
 | Route | Route-specific checks |
 |---|---|
-| `/epics`, `/epics/new` | Create → visible on Epics, Issues (if it spawns children), Dashboard, badge. Stats row equals the listed rows. Draft vs Submit land different statuses. |
-| `/epics/:id` | Title / description / priority inline edits round-trip. Status menu offers exactly `getValidNextStatuses()` (4). Assign offers only the Owner + agents valid at the current status. Activity feed authors resolve (2). Children counts match the child lists. |
-| `/issues` | Merged story/bug/sub-task/sub-bug list equals the sum of the per-type endpoints. Archived rows hidden by default (known stub: the show-archived toggle). Filters do not drop rows silently. |
-| `/issues/stories/:id` | Sub-task / sub-bug creation appears in both the child list and `/issues`. AC + spec round-trip. Comment compose posts as the Owner and renders the Owner name, never "Agent". Depends-on blockers actually refuse `in_progress` (`dependency-guard`). |
-| `/issues/sub-tasks/:id`, `/issues/sub-bugs/:id` | No direct GET endpoint — the page resolves by scanning story children. Deep-link to one by URL with a cold cache and confirm it still resolves. |
-| `/issues/bugs/:id` | Every bug-specific field (steps, expected, actual, frequency, failure scope, severity) round-trips. |
+| `/tasks`, `/tasks/new` | Create → visible on Tasks, Project Detail's Tasks tab, Dashboard, sidenav badge. Stats subtitle equals the listed rows. Draft vs Submit land `draft` vs `ready`. The Sub-tasks column equals the Task page's sub-task list. |
+| `/tasks/:id` | Title / description / acceptance criteria / priority / labels round-trip. Status menu offers exactly `getValidNextStatuses()`. **Add sub-task** → appears in the Sub-tasks table and on `/sub-tasks/:id`. Closing with an open sub-task returns 422 naming it. Rail **Workflow** select round-trips (`PUT /api/items/:id/workflow`) and **Start now** starts a run; Spec / Pull request cards appear once the run writes `spec_md` / `pr_url`. Activity feed authors resolve (2). |
+| `/sub-tasks/:id` | Direct fetch (`GET /api/sub-tasks/:id/full`) — deep-link with a cold cache resolves. Breadcrumb / rail link back to the parent Task. Labels round-trip (they pick the Sub-tasks step). **Add test link** is restricted to the same Task. Clone lands under the same Task with a `relates_to` link. Comment compose posts as the Owner and renders the Owner name, never "Agent". Depends-on blockers refuse `in_progress` (`dependency-guard`). No Workflow rows in the rail. |
 
 ### Wave C — agents
 
 | Route | Route-specific checks |
 |---|---|
 | `/agents` | Card count equals `GET /api/agents` length AND the marketplace's `is_installed` count. Sidenav badge vs page count (X4). Pause/resume, disable/enable, duplicate, delete all persist through a reload. Role filter: picking a specific role excludes `role_id IS NULL` autonomous agents **by design** — confirm that is what the user sees, not silent loss. |
-| `/agents/:id` (6 tabs) | Prompt save bumps `prompt_version` and appends an `agent_prompt_versions` row. Handoff rules round-trip. Memory PUT flips `source` to `manual-edit` and bumps `version`. Run-now honours the depends-on gate (409 `dependencies_not_ready`). Model dropdown only offers registered models (X2). |
+| `/agents/:id` (6 tabs) | Prompt save bumps `prompt_version` and appends an `agent_prompt_versions` row. Quality checklist rows round-trip. Memory PUT flips `source` to `manual-edit` and bumps `version`. Run-now starts a no-item run only (`POST /api/run` rejects `issue_id`). Delete is refused with 409 while a workflow uses the agent. Model dropdown only offers registered models (X2). |
 | `/agents/:id/runs/:runId` | Output matches `GET /api/run/:id`. Simulated runs carry the Simulated chip when `ATLAS_AI_ENABLED=false`. Re-run creates a new row, does not mutate this one. |
 | `/agents/marketplace` | Catalog count == `marketplace_agents` rows. Select-all covers every not-installed entry. Bulk install: successes install, failures are **named with their reason** and stay selected; a clean sweep navigates to `/agents` (3). Install with a pruned model returns 400 `MODEL_NOT_IN_REGISTRY`, not a 500 (X2). |
 | `/agents/marketplace/:id` | Install / upgrade / detach / export-zip each do what they claim. A non-409 install error toasts instead of throwing inside the click handler (6). |
 | `/agents/mcp-tools` | Listed tools match `GET /api/tool-catalog`, which is re-synced per boot. |
-| `/queue` | Rows equal `GET /api/run?limit=500` filtered to live states. Drawer's agent name + expected output are real, not keyed off a hardcoded id map (known stub). |
+| `/queue` | Cards equal `GET /api/workflow-queue`: running + waiting runs and queued Tasks per workflow, `running / max_parallel_runs` right, Start now only with a free slot, the sidenav Queue badge = queued + running. |
 
 ### Wave D — admin
 
@@ -120,18 +117,18 @@ Wave letters match the sweep order (entity graph first, readers after).
 
 | Route | Route-specific checks |
 |---|---|
-| `/search` | Results equal what the entity pages show for the same query. Bug / sub-task results land on their detail route (known stub: they fall back to `/issues`). |
+| `/search` | Results equal what the entity pages show for the same query. Task and sub-task results land on `/tasks/:id` / `/sub-tasks/:id`. |
 | `/scratch-pad` | 5s autosave survives a reload; delete is not soft-only. |
-| `/analytics`, `/analytics/project/:projectId`, `/analytics/epic/:epicId` | Totals equal the dashboard's and the entity pages'. Pagination does not drop or duplicate rows. Agent names come from the denormalized `agent_name`. |
+| `/analytics`, `/analytics/project/:projectId`, `/analytics/task/:taskId` | Totals equal the dashboard's and the entity pages'. Pagination does not drop or duplicate rows. Agent names come from the denormalized `agent_name`. |
 | `/terminal`, `/terminal/standalone`, `/terminal/layout`, `/terminal/:id`, `/terminal/:id/history` | Session create → appears in the list and survives a reload. Pause/resume/stop reach terminal states. WS stream reconnects without losing the transcript. Standalone sessions carry their credential and commit under its identity. Diff panel matches `GET /api/cli-sessions/:id/diff`. |
 
-All 37 routes now have a page doc. The last six were written 2026-09-12 as
+Every route has a page doc. The analytics / marketplace ones were written 2026-09-12 as
 part of this sweep: [`27-marketplace.md`](pages/27-marketplace.md),
 [`28-marketplace-detail.md`](pages/28-marketplace-detail.md),
 [`29-mcp-tools.md`](pages/29-mcp-tools.md),
 [`30-analytics.md`](pages/30-analytics.md),
 [`31-analytics-project.md`](pages/31-analytics-project.md),
-[`32-analytics-epic.md`](pages/32-analytics-epic.md).
+[`32-analytics-task.md`](pages/32-analytics-task.md).
 
 ---
 
@@ -159,8 +156,9 @@ Two legitimate things sit on top of it, and neither is a violation:
   `422` naming every blocker, even though the machine allows
   `in_review → done`. Distinct status code, actionable message.
 
-Verified: **150** (from, to) pairs — all 30 for each of the five item types
-(epic, story, sub-task, sub-bug, bug) — probed against the live API agree with
+Verified (2026-09-12, before ADR 0015 cut the item kinds to `task` / `sub_task`,
+which share the same machine): **150** (from, to) pairs — all 30 for each of the five item types then
+in use — probed against the live API agree with
 the machine once those two rules are accounted for; `done → ready` is refused
 (`400`), a leaf `in_review → done` is allowed (`200`), and the override path
 permits `draft → done` (`200`). In the UI, `StatusTransitionBar`,
@@ -183,6 +181,8 @@ Two defects found and fixed in this pass, both on the Kanban drop path:
    snapped back in silence. Now surfaced in a toast.
 
 ## Sweep log
+
+> Historical record. The 2026-09-12 entries below name routes and pages that ADR 0015 removed (`/issues/*`, the epic list and detail pages); their Task / sub-task equivalents are in Wave B above.
 
 **2026-09-12.** All **37** routes in `App.tsx` exercised. Console errors across
 the whole sweep: **two**, both deliberate 404 probes
@@ -208,8 +208,8 @@ reloading. The transport works: `: connected` flushes immediately and a
 `counts_changed` frame arrives within ~1s of the write. What did *not* work was
 which writes push at all — see **F2** below.
 
-Still untested: a **real agent CLI run** (the whole run → handoff →
-status-advance chain). `ATLAS_AI_ENABLED` was left off for the sweep so the
+Still untested: a **real agent CLI run** (the whole workflow run → step →
+outcome routing → End push/PR chain). `ATLAS_AI_ENABLED` was left off for the sweep so the
 dev workspace kept its data.
 
 Fixed this pass: secrets reveal (4 surfaces), comment attribution + backfill,

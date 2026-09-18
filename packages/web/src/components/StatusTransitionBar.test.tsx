@@ -8,7 +8,7 @@ describe('StatusTransitionBar', () => {
     it('renders terminal label for done', () => {
         renderWithProviders(
             <StatusTransitionBar
-                issueType="epic"
+                issueType="task"
                 currentStatus="done"
                 onTransition={vi.fn()}
             />,
@@ -20,7 +20,7 @@ describe('StatusTransitionBar', () => {
         const onTransition = vi.fn();
         renderWithProviders(
             <StatusTransitionBar
-                issueType="story"
+                issueType="task"
                 currentStatus="ready"
                 onTransition={onTransition}
             />,
@@ -34,7 +34,7 @@ describe('StatusTransitionBar', () => {
     it('disables buttons while loading=true', () => {
         renderWithProviders(
             <StatusTransitionBar
-                issueType="story"
+                issueType="task"
                 currentStatus="draft"
                 onTransition={vi.fn()}
                 loading
@@ -44,10 +44,10 @@ describe('StatusTransitionBar', () => {
         expect(buttons[0]).toBeDisabled();
     });
 
-    it('renders terminal label for bug done status', () => {
+    it('renders terminal label for task done status', () => {
         renderWithProviders(
             <StatusTransitionBar
-                issueType="bug"
+                issueType="task"
                 currentStatus="done"
                 onTransition={vi.fn()}
             />,
@@ -58,7 +58,7 @@ describe('StatusTransitionBar', () => {
     it('shows "Transition to" label when transitions exist', () => {
         renderWithProviders(
             <StatusTransitionBar
-                issueType="epic"
+                issueType="task"
                 currentStatus="draft"
                 onTransition={vi.fn()}
             />,
@@ -70,7 +70,7 @@ describe('StatusTransitionBar', () => {
         const onTransition = vi.fn();
         renderWithProviders(
             <StatusTransitionBar
-                issueType="story"
+                issueType="task"
                 currentStatus="draft"
                 onTransition={onTransition}
             />,

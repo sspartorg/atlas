@@ -13,7 +13,7 @@ interface Props {
      * Right for inline prose contexts and mobile lists.
      *
      * `'stacked'`: name on the first line, designation below in smaller
-     * muted text. Use on desktop tables (`WorkItemTable`, `EpicTable`) and
+     * muted text. Use on desktop tables (`WorkItemTable`, `TaskTable`) and
      * detail rails (`DetailsRailCard`) where the row has vertical room.
      * Falls back to a single name line when designation is empty (Owner
      * fallback chips, agents with no designation).

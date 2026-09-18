@@ -17,8 +17,8 @@ const MONO_FONT = '"JetBrains Mono", monospace';
 interface IProjectCardProps {
     project: IProject;
     displayId: string;
-    epicCount: number;
-    storyCount: number;
+    taskCount: number;
+    subTaskCount: number;
     scheduleInfo?: { preset: string; next_run_at: string | null } | undefined;
     onOpen: () => void;
     onCopyUrl: () => void;
@@ -43,8 +43,8 @@ function Counter({ value, label }: { value: number | null; label: string }) {
 export function ProjectCard({
     project,
     displayId,
-    epicCount,
-    storyCount,
+    taskCount,
+    subTaskCount,
     scheduleInfo,
     onOpen,
     onCopyUrl,
@@ -167,8 +167,8 @@ export function ProjectCard({
 
             {/* Counters */}
             <Stack direction="row" spacing={4} sx={{ mt: 4 }}>
-                <Counter value={epicCount} label="epics" />
-                <Counter value={storyCount} label="stories" />
+                <Counter value={taskCount} label="tasks" />
+                <Counter value={subTaskCount} label="sub-tasks" />
             </Stack>
 
             {/* Divider */}

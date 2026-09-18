@@ -120,18 +120,7 @@ function urlForNotification(row: {
     // any future non-item-shaped surface use this).
     if (row.link_url) return row.link_url;
     if (row.item_id && row.item_type) {
-        switch (row.item_type) {
-            case 'epic':
-                return `/epics/${row.item_id}`;
-            case 'story':
-                return `/issues/stories/${row.item_id}`;
-            case 'bug':
-                return `/issues/bugs/${row.item_id}`;
-            case 'sub_task':
-                return `/issues/sub-tasks/${row.item_id}`;
-            case 'sub_bug':
-                return `/issues/sub-bugs/${row.item_id}`;
-        }
+        return row.item_type === 'task' ? `/tasks/${row.item_id}` : `/sub-tasks/${row.item_id}`;
     }
     return '/notifications';
 }

@@ -25,12 +25,6 @@ const view: AgentView = {
     slug: 'coder',
     glyph: 'developer_board',
     description: '',
-    cadenceHours: 6,
-    cadenceLabel: 'Every 6h',
-    nextPassLabel: 'now',
-    nextPassDelta: '0m',
-    concurrentRuns: 1,
-    concurrentMax: 3,
 };
 
 describe('TestRunTab', () => {

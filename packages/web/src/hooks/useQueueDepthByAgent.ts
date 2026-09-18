@@ -1,16 +1,13 @@
 import { useMemo } from 'react';
-import { useBugs } from './useBugs.js';
-import { useEpics } from './useEpics.js';
-import { useStories } from './useStories.js';
-import { countQueueDepthByAgent } from '../pages/queue/queueViewModel.js';
+import { useTasks } from './useTasks.js';
+import { useAllSubTasks } from './useSubTasks.js';
+import { countQueueDepthByAgent } from '../pages/agents/agentViewModel.js';
 
-// Same query keys as the Queue page, so both screens share one cache and one count.
 export function useQueueDepthByAgent(): Map<string, number> {
-    const { data: epics } = useEpics();
-    const { data: stories } = useStories();
-    const { data: bugs } = useBugs();
+    const { data: tasks } = useTasks();
+    const { data: subTasks } = useAllSubTasks();
     return useMemo(
-        () => countQueueDepthByAgent([...(epics ?? []), ...(stories ?? []), ...(bugs ?? [])]),
-        [epics, stories, bugs]
+        () => countQueueDepthByAgent([...(tasks ?? []), ...subTasks]),
+        [tasks, subTasks]
     );
 }

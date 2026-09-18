@@ -1,0 +1,36 @@
+{
+    "id": "delivery",
+    "name": "Delivery",
+    "description": "PO Writer splits a Task into sub-tasks and the Architect specs them. Then every dev sub-task is built and every [QA] sub-task tested, one at a time on the Task's branch, and the Task ends as one pull request. Unclear Tasks come back to you.",
+    "input_kind": "item",
+    "trigger": "item_ready",
+    "use_worktree": true,
+    "push_code": true,
+    "raises_pr": true,
+    "graph": {
+        "nodes": [
+            { "id": "start", "type": "start", "position": { "x": 0, "y": 0 } },
+            { "id": "po-writer", "type": "agent", "agent_id": "agent-po-writer", "position": { "x": 0, "y": 130 } },
+            { "id": "po-review", "type": "agent", "agent_id": "agent-po-reviewer", "position": { "x": 0, "y": 260 } },
+            { "id": "owner", "type": "owner", "position": { "x": 320, "y": 190 } },
+            { "id": "architect", "type": "agent", "agent_id": "agent-architect", "position": { "x": 0, "y": 390 } },
+            { "id": "architect-review", "type": "agent", "agent_id": "agent-architect-reviewer", "position": { "x": 0, "y": 520 } },
+            { "id": "build", "type": "subtasks", "sub_workflow_id": "template:build", "position": { "x": 0, "y": 650 } },
+            { "id": "test", "type": "subtasks", "sub_workflow_id": "template:test", "label": "qa", "position": { "x": 0, "y": 780 } },
+            { "id": "end", "type": "end", "position": { "x": 0, "y": 910 } }
+        ],
+        "edges": [
+            { "id": "e-start", "source": "start", "target": "po-writer", "kind": "pass" },
+            { "id": "e-po-writer", "source": "po-writer", "target": "po-review", "kind": "pass" },
+            { "id": "e-po-writer-fail", "source": "po-writer", "target": "owner", "kind": "fail" },
+            { "id": "e-owner", "source": "owner", "target": "po-writer", "kind": "pass" },
+            { "id": "e-po-review", "source": "po-review", "target": "architect", "kind": "pass" },
+            { "id": "e-po-review-fail", "source": "po-review", "target": "po-writer", "kind": "fail" },
+            { "id": "e-architect", "source": "architect", "target": "architect-review", "kind": "pass" },
+            { "id": "e-architect-review", "source": "architect-review", "target": "build", "kind": "pass" },
+            { "id": "e-architect-review-fail", "source": "architect-review", "target": "architect", "kind": "fail" },
+            { "id": "e-build", "source": "build", "target": "test", "kind": "pass" },
+            { "id": "e-test", "source": "test", "target": "end", "kind": "pass" }
+        ]
+    }
+}

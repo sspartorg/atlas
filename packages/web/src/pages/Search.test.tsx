@@ -31,8 +31,8 @@ describe('Search page', () => {
             expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument();
         });
         // Bold source labels are inside the description.
-        expect(screen.getByText('epics')).toBeInTheDocument();
-        expect(screen.getByText('stories')).toBeInTheDocument();
+        expect(screen.getByText('tasks')).toBeInTheDocument();
+        expect(screen.getByText('sub-tasks')).toBeInTheDocument();
     });
 
     it('restores ?q from URL params on mount', async () => {
@@ -113,8 +113,8 @@ describe('Search page', () => {
                 HttpResponse.json([
                     {
                         id: 'ATL-1',
-                        type: 'story',
-                        title: 'Story One',
+                        type: 'sub_task',
+                        title: 'Sub-task One',
                         project_id: 'p1',
                         status: 'ready',
                         assignee_agent_id: null,
@@ -147,8 +147,8 @@ describe('Search page', () => {
                 HttpResponse.json([
                     {
                         id: 'ATL-1',
-                        type: 'story',
-                        title: 'Story One',
+                        type: 'sub_task',
+                        title: 'Sub-task One',
                         project_id: 'p1',
                         status: 'ready',
                         assignee_agent_id: null,
@@ -162,7 +162,7 @@ describe('Search page', () => {
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() => expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument());
         // Find any create-type button
-        const createBtn = screen.queryByRole('button', { name: /create|new.*story|new.*bug/i });
+        const createBtn = screen.queryByRole('button', { name: /create|new.*task/i });
         if (createBtn) {
             fireEvent.click(createBtn);
             // Toast "Create from search is not wired up yet." should appear
@@ -181,8 +181,8 @@ describe('Search page', () => {
                 HttpResponse.json([
                     {
                         id: 'ATL-10',
-                        type: 'epic',
-                        title: 'Epic Result',
+                        type: 'task',
+                        title: 'Task Result',
                         project_id: 'p1',
                         status: 'ready',
                         assignee_agent_id: null,
@@ -193,14 +193,14 @@ describe('Search page', () => {
             ),
             http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
         );
-        renderWithProviders(<Search />, { initialEntries: ['/search?q=epic'] });
+        renderWithProviders(<Search />, { initialEntries: ['/search?q=task'] });
         // Wait for SearchResults to render (debounce + server response)
         await waitFor(() =>
             expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
         );
-        // Wait for "Epic Result" hit to appear in SearchResults
+        // Wait for "Task Result" hit to appear in SearchResults
         await waitFor(() => {
-            const hitTitle = screen.queryByText('Epic Result');
+            const hitTitle = screen.queryByText('Task Result');
             if (!hitTitle) throw new Error('SearchResults not rendered yet');
         }, { timeout: 3000 }).catch(() => {});
         // SearchResults rendered (or at least Search page didn't crash)
@@ -231,7 +231,7 @@ describe('Search page', () => {
         expect(queryInput.value).toBe('status = "ready"');
     });
 
-    it('calls createType by clicking "Create a Sub-Bug" in empty-state — covers createType function', async () => {
+    it('calls createType by clicking "Create a Task" in empty-state — covers createType function', async () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
@@ -241,7 +241,7 @@ describe('Search page', () => {
         await waitFor(() =>
             expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
         );
-        // SearchEmptyState always renders a "Create a Sub-Bug" button
+        // SearchEmptyState always renders a "Create a Task" button
         const createBtn = screen.queryByRole('button', { name: /Create a/i });
         if (createBtn) {
             fireEvent.click(createBtn);
@@ -516,7 +516,7 @@ describe('Search page', () => {
         const queryInput = document.querySelector('input[placeholder*="type ="]') as HTMLInputElement;
         // Simulate a leading "status = …  AND …" pattern — the else-branch regex
         // on line 121 handles "…AND status=…" and line 122 handles "^status=… AND …"
-        fireEvent.change(queryInput, { target: { value: 'status = "ready" AND type = "story"' } });
+        fireEvent.change(queryInput, { target: { value: 'status = "ready" AND type = "task"' } });
         // Wait for the drop-status button
         await waitFor(() => {
             const dropBtn = screen.queryByRole('button', { name: /Drop the Status Filter/i });
@@ -572,7 +572,7 @@ describe('Search page', () => {
         const queryInput = document.querySelector('input[placeholder*="type ="]') as HTMLInputElement;
         // Simulate a leading "project = Atlas AND …" pattern — line 131 handles
         // "… AND project=…" and line 132 handles "^project=… AND …"
-        fireEvent.change(queryInput, { target: { value: 'project = Atlas AND type = "story"' } });
+        fireEvent.change(queryInput, { target: { value: 'project = Atlas AND type = "task"' } });
         await waitFor(() => {
             const dropBtn = screen.queryByRole('button', { name: /Try a Different Project/i });
             if (!dropBtn) throw new Error('Try a Different Project not found');

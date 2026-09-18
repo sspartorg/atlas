@@ -16,12 +16,13 @@ import {
     CreateItemExternalLinkSchema,
     ReplyToItemSchema,
     PruneItemHistorySchema,
+    ISSUE_TYPES,
 } from '@atlas/shared';
 import { historyPruneService } from '../services/history-prune.js';
 import { headerAgentId } from '../services/request-actor.js';
 import type { IssueType, IssueStatus, IItemLinkRow, IReplyResponse } from '@atlas/shared';
 
-const VALID_TYPES = new Set<IssueType>(['epic', 'story', 'sub_task', 'sub_bug', 'bug']);
+const VALID_TYPES = new Set<IssueType>(ISSUE_TYPES);
 
 export async function commentsRoutes(app: FastifyInstance) {
     app.get('/api/comments', async (req, reply) => {
@@ -107,7 +108,7 @@ export async function commentsRoutes(app: FastifyInstance) {
     // destructive operation is always traceable.
     //
     // Used by long-running agents (e.g. `cer-weekly-automation`) to trim
-    // their own noise off a permanent tracking epic. Called from the MCP
+    // their own noise off a permanent tracking Task. Called from the MCP
     // `update_item` tool with `action: 'remove_history'`.
     //
     // Safety rails (all added 2026-07-03 audit round 2):
@@ -183,7 +184,7 @@ export async function commentsRoutes(app: FastifyInstance) {
 
     // Create a link. Body is { to_type, to_id, relation_type? }; relation_type
     // defaults to 'relates_to' when omitted. Other valid values: 'depends_on',
-    // 'tested_by' (QA → dev story, agent-only).
+    // 'tested_by' (QA → dev sub-task, agent-only).
     app.post('/api/issues/:type/:id/links', async (req, reply) => {
         const { type, id } = req.params as { type: string; id: string };
         if (!VALID_TYPES.has(type as IssueType)) {

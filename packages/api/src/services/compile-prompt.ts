@@ -8,7 +8,7 @@ export interface CompilePromptResult {
     filename: string;
     length: number;
     agent: { id: string; name: string; cli: string; model: string };
-    // `null` for freedom-mode runs (`requires_item = false`) — the prompt
+    // `null` for item-less (project-level) previews — the prompt
     // builder skips item context entirely and the response carries no
     // issue identity.
     issue: { type: IssueType; id: string; title: string } | null;

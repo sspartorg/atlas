@@ -12,9 +12,7 @@ const diff = {
     local_pulled_version: 2,
     fields: {
         prompt_md: { changed: true, from: 'old prompt', to: 'new prompt' },
-        handoff_prompt_md: { changed: false, from: '', to: '' },
         settings_json: { changed: false, from: {}, to: {} },
-        handoff_rules: { changed: false, from: [], to: [] },
         checklists: { changed: false, from: [], to: [] },
     },
 };
@@ -24,9 +22,7 @@ const diffMultiChange = {
     local_pulled_version: 3,
     fields: {
         prompt_md: { changed: true, from: 'old prompt', to: 'new prompt' },
-        handoff_prompt_md: { changed: true, from: 'hold', to: 'hnew' },
         settings_json: { changed: true, from: { a: 1 }, to: { a: 2 } },
-        handoff_rules: { changed: false, from: [], to: [] },
         checklists: { changed: false, from: [], to: [] },
     },
 };
@@ -36,9 +32,7 @@ const diffNoChange = {
     local_pulled_version: 4,
     fields: {
         prompt_md: { changed: false, from: 'same', to: 'same' },
-        handoff_prompt_md: { changed: false, from: '', to: '' },
         settings_json: { changed: false, from: {}, to: {} },
-        handoff_rules: { changed: false, from: [], to: [] },
         checklists: { changed: false, from: [], to: [] },
     },
 };
@@ -247,7 +241,6 @@ describe('AcceptUpgradeModal', () => {
         await waitFor(() => {
             expect(screen.getByText('Apply Prompt')).toBeInTheDocument();
         });
-        expect(screen.getByText('Apply Handoff prompt')).toBeInTheDocument();
         expect(screen.getByText('Apply Settings')).toBeInTheDocument();
     });
 });

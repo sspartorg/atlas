@@ -1,26 +1,13 @@
+import { existsSync } from 'node:fs';
 import { db } from '../db/kysely-client.js';
 import { itemLinks } from './item-links.js';
 import { externalLinks } from './external-links.js';
 import { eventsLog } from './events-log.js';
-import { getRound } from './agent-rounds.js';
-import {
-    rowToBug,
-    rowToEpic,
-    rowToStory,
-    rowToSubBug,
-    rowToSubTask,
-} from './items.js';
+import { rowToSubTask, rowToTask } from './items.js';
 import type {
-    IBug,
-    IBugFullResponse,
-    IEpic,
-    IEpicFullResponse,
+    ITask,
+    ITaskFullResponse,
     IProject,
-    IStory,
-    IStoryFullResponse,
-    ISubBug,
-    ISubBugFullResponse,
-    ISubTask,
     ISubTaskFullResponse,
     IAgent,
     IIssueLinkRow,
@@ -32,35 +19,32 @@ async function getAgentsAll(): Promise<IAgent[]> {
     return rows as unknown as IAgent[];
 }
 
-async function getEpicById(id: string | null | undefined): Promise<IEpic | null> {
-    // FK trigger `items_check_parent` guarantees parent_id resolves; `!id` null
-    // guard is a defensive fallback that is unreachable from issueFullService callers.
-    /* v8 ignore next */
-    if (!id) return null;
+async function getTaskById(id: string): Promise<ITask | null> {
     const row = await db
         .selectFrom('items')
         .selectAll()
         .where('id', '=', id)
-        .where('type', '=', 'epic')
+        .where('type', '=', 'task')
         .executeTakeFirst();
-    // FK trigger guarantees the epic row exists when called from issueFullService.
-    /* v8 ignore next */
-    return row ? rowToEpic(row as never) : null;
+    return row ? rowToTask(row as never) : null;
 }
 
-async function getStoryById(id: string | null | undefined): Promise<IStory | null> {
-    // FK trigger guarantees parent story resolves; `!id` is a defensive guard.
-    /* v8 ignore next */
-    if (!id) return null;
-    const row = await db
-        .selectFrom('items')
-        .selectAll()
-        .where('id', '=', id)
-        .where('type', '=', 'story')
+/**
+ * A workflow run keeps its worktree on `workflow_runs`, not on the Task, so
+ * the Task shows its latest run's checkout while that folder exists — during
+ * the run, and after it when delivery kept it ("keep local", a failed push).
+ */
+async function withRunWorktree(task: ITask): Promise<ITask> {
+    if (task.worktree_path) return task;
+    const run = await db
+        .selectFrom('workflow_runs')
+        .select('worktree_path')
+        .where('item_id', '=', task.id)
+        .where('parent_workflow_run_id', 'is', null)
+        .where('worktree_path', 'is not', null)
+        .orderBy('started_at', 'desc')
         .executeTakeFirst();
-    // FK trigger guarantees the story row exists when called from issueFullService.
-    /* v8 ignore next */
-    return row ? rowToStory(row as never) : null;
+    return run?.worktree_path && existsSync(run.worktree_path) ? { ...task, worktree_path: run.worktree_path } : task;
 }
 
 async function getProjectById(id: string | null | undefined): Promise<IProject | null> {
@@ -81,17 +65,6 @@ async function getProjectById(id: string | null | undefined): Promise<IProject |
     } as IProject;
 }
 
-// A04 — UI surfaces the round count on the detail rail. Returns null
-// when the item has no current assignee (Owner is holding it) so the
-// frontend can hide the "Rounds: X / Y" row instead of rendering "0 / Y".
-async function roundCountFor(
-    itemId: string,
-    assigneeAgentId: string | null | undefined,
-): Promise<number | null> {
-    if (!assigneeAgentId) return null;
-    return await getRound(itemId, assigneeAgentId);
-}
-
 async function relatedLinks(itemId: string): Promise<IIssueLinkRow[]> {
     const rows = await itemLinks.list(itemId);
     return rows.map(
@@ -110,76 +83,34 @@ async function relatedLinks(itemId: string): Promise<IIssueLinkRow[]> {
 }
 
 export const issueFullService = {
-    async story(id: string): Promise<IStoryFullResponse | null> {
-        const story = await getStoryById(id);
-        if (!story) return null;
-        const epic = await getEpicById(story.epic_id);
-        /* v8 ignore next */ // FK trigger `items_check_parent` guarantees the story's epic resolves; the `: null` arm is unreachable post-PG-migration.
-        const project = epic ? await getProjectById(epic.project_id) : null;
-        const [subTaskRows, subBugRows, links, ext_links, activity, agents, round_count] =
-            await Promise.all([
-                db
-                    .selectFrom('items')
-                    .selectAll()
-                    .where('type', '=', 'sub_task')
-                    .where('parent_id', '=', id)
-                    .orderBy('created_at', 'asc')
-                    .execute(),
-                db
-                    .selectFrom('items')
-                    .selectAll()
-                    .where('type', '=', 'sub_bug')
-                    .where('parent_id', '=', id)
-                    .orderBy('created_at', 'asc')
-                    .execute(),
-                relatedLinks(id),
-                externalLinks.list(id),
-                eventsLog.activity(id, 'story'),
-                getAgentsAll(),
-                roundCountFor(id, story.assignee_agent_id),
-            ]);
-        return {
-            story,
-            epic,
-            project,
-            sub_tasks: subTaskRows.map((r) => rowToSubTask(r as never)) as ISubTask[],
-            sub_bugs: subBugRows.map((r) => rowToSubBug(r as never)) as ISubBug[],
-            related_links: links,
-            external_links: ext_links,
-            activity,
-            agents,
-            round_count,
-        };
-    },
-
-    async bug(id: string): Promise<IBugFullResponse | null> {
-        const row = await db
-            .selectFrom('items')
-            .selectAll()
-            .where('id', '=', id)
-            .where('type', '=', 'bug')
-            .executeTakeFirst();
-        if (!row) return null;
-        const bug = rowToBug(row as never) as IBug;
-        const epic = await getEpicById(bug.epic_id);
-        /* v8 ignore next */ // FK trigger `items_check_parent` guarantees the bug's epic resolves; the `: null` arm is unreachable post-PG-migration.
-        const project = epic ? await getProjectById(epic.project_id) : null;
-        const [links, ext_links, activity, agents, round_count] = await Promise.all([
+    async task(id: string): Promise<ITaskFullResponse | null> {
+        const saved = await getTaskById(id);
+        if (!saved) return null;
+        const task = await withRunWorktree(saved);
+        const [project, subTaskRows, links, ext_links, activity, agents] = await Promise.all([
+            getProjectById(task.project_id),
+            db
+                .selectFrom('items')
+                .selectAll()
+                .where('type', '=', 'sub_task')
+                .where('parent_id', '=', id)
+                // The order its Sub-tasks steps run them in.
+                .orderBy('sort_order', 'asc')
+                .orderBy('created_at', 'asc')
+                .execute(),
             relatedLinks(id),
             externalLinks.list(id),
-            eventsLog.activity(id, 'bug'),
+            eventsLog.activity(id, 'task'),
             getAgentsAll(),
-            roundCountFor(id, bug.assignee_agent_id),
         ]);
         return {
-            bug,
-            epic,
+            task,
             project,
+            sub_tasks: subTaskRows.map((r) => rowToSubTask(r as never)),
             related_links: links,
             external_links: ext_links,
             activity,
             agents,
-            round_count,
         };
     },
 
@@ -191,113 +122,23 @@ export const issueFullService = {
             .where('type', '=', 'sub_task')
             .executeTakeFirst();
         if (!row) return null;
-        const sub_task = rowToSubTask(row as never) as ISubTask;
-        const parent_story = await getStoryById(sub_task.story_id);
-        // FK trigger `items_check_parent` guarantees parent story/epic/project all resolve; the `: null` arms are unreachable post-PG-migration.
-        /* v8 ignore start */
-        const epic = parent_story ? await getEpicById(parent_story.epic_id) : null;
-        const project = epic ? await getProjectById(epic.project_id) : null;
-        /* v8 ignore stop */
-        const [links, ext_links, activity, agents, round_count] = await Promise.all([
+        const sub_task = rowToSubTask(row as never);
+        const [task, project, links, ext_links, activity, agents] = await Promise.all([
+            getTaskById(sub_task.task_id),
+            getProjectById(row.project_id),
             relatedLinks(id),
             externalLinks.list(id),
             eventsLog.activity(id, 'sub_task'),
             getAgentsAll(),
-            roundCountFor(id, sub_task.assignee_agent_id),
         ]);
         return {
             sub_task,
-            parent_story,
-            epic,
+            task,
             project,
             related_links: links,
             external_links: ext_links,
             activity,
             agents,
-            round_count,
-        };
-    },
-
-    async subBug(id: string): Promise<ISubBugFullResponse | null> {
-        const row = await db
-            .selectFrom('items')
-            .selectAll()
-            .where('id', '=', id)
-            .where('type', '=', 'sub_bug')
-            .executeTakeFirst();
-        if (!row) return null;
-        const sub_bug = rowToSubBug(row as never) as ISubBug;
-        const parent_story = await getStoryById(sub_bug.story_id);
-        // FK trigger `items_check_parent` guarantees parent story/epic/project all resolve; the `: null` arms are unreachable post-PG-migration.
-        /* v8 ignore start */
-        const epic = parent_story ? await getEpicById(parent_story.epic_id) : null;
-        const project = epic ? await getProjectById(epic.project_id) : null;
-        /* v8 ignore stop */
-        const [links, ext_links, activity, agents, round_count] = await Promise.all([
-            relatedLinks(id),
-            externalLinks.list(id),
-            eventsLog.activity(id, 'sub_bug'),
-            getAgentsAll(),
-            roundCountFor(id, sub_bug.assignee_agent_id),
-        ]);
-        return {
-            sub_bug,
-            parent_story,
-            epic,
-            project,
-            related_links: links,
-            external_links: ext_links,
-            activity,
-            agents,
-            round_count,
-        };
-    },
-
-    async epic(id: string): Promise<IEpicFullResponse | null> {
-        const epic = await getEpicById(id);
-        if (!epic) return null;
-        const [
-            project,
-            storyRows,
-            bugRows,
-            links,
-            ext_links,
-            activity,
-            agents,
-            round_count,
-        ] = await Promise.all([
-            getProjectById(epic.project_id),
-            db
-                .selectFrom('items')
-                .selectAll()
-                .where('type', '=', 'story')
-                .where('parent_id', '=', id)
-                .orderBy('created_at', 'asc')
-                .execute(),
-            db
-                .selectFrom('items')
-                .selectAll()
-                .where('type', '=', 'bug')
-                .where('parent_id', '=', id)
-                .orderBy('created_at', 'asc')
-                .execute(),
-            relatedLinks(id),
-            externalLinks.list(id),
-            eventsLog.activity(id, 'epic'),
-            getAgentsAll(),
-            roundCountFor(id, epic.assignee_agent_id),
-        ]);
-        return {
-            epic,
-            project,
-            stories: storyRows.map((r) => rowToStory(r as never)) as IStory[],
-            bugs: bugRows.map((r) => rowToBug(r as never)) as IBug[],
-            related_links: links,
-            external_links: ext_links,
-            activity,
-            agents,
-            round_count,
         };
     },
 };
-

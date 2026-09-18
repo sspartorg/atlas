@@ -3,7 +3,7 @@
 **Route:** `/scratch-pad` • **Component:** `packages/web/src/pages/ScratchPad.tsx` • **Sidenav:** under WORKSPACE, immediately below Dashboard.
 
 ## Purpose
-A free-form markdown-tile workspace for the Owner. Use it to capture half-formed thoughts, meeting notes, or rough ideas before they become an Epic or a Story. Each tile is a standalone markdown document — no linkage to projects, items, or agents.
+A free-form markdown-tile workspace for the Owner. Use it to capture half-formed thoughts, meeting notes, or rough ideas before they become a Task. Each tile is a standalone markdown document — no linkage to projects, items, or agents.
 
 ## States
 - Loading — no loader chrome; React Query stale-while-revalidate keeps the page populated across navigations.
@@ -24,7 +24,7 @@ A free-form markdown-tile workspace for the Owner. Use it to capture half-formed
 ## Modal — `ScratchPadEditor` (`packages/web/src/components/ScratchPadEditor.tsx`)
 - Plain Google-Keep-style surface: single full-height `<textarea>` (min-height 60vh, max-height 80vh, line-height 1.6). No markdown preview, no view-mode chips, no formatting toolbar.
 - Title editable inline at the top of the dialog; placeholder reads "Title (auto from first 3 words if blank)".
-- Delete icon (header) — clicking it opens the shared `ConfirmDeleteModal` (same component used by epics / stories / bugs / projects / agents). Confirming deletes the tile via `useDeleteScratchPad(id)` and closes the editor on success.
+- Delete icon (header) — clicking it opens the shared `ConfirmDeleteModal` (same component used by Tasks / sub-tasks / projects / agents). Confirming deletes the tile via `useDeleteScratchPad(id)` and closes the editor on success.
 - Close icon — flushes pending changes synchronously, then closes.
 - Footer: soft "Saved · 12s ago" indicator (relative time, re-ticks every second while the modal is open) or "Saving..." while a mutation is in flight.
 - Autosave debounce: 5000 ms after the last keystroke. The autosave compares against the last-saved snapshot, so an idle modal doesn't re-fire PATCH every 5 s.
@@ -34,7 +34,7 @@ A free-form markdown-tile workspace for the Owner. Use it to capture half-formed
 - **Single-page grid, no tabs** — scratch pad is a pad, not a system; one flat surface is the whole point.
 - **Local-first edit state** — the modal keeps title + body in `useState`, not in React Query. Typing stays fluid even if PATCH is slow / queued.
 - **5s autosave + flush on close** — the spec called for autosave every 5 s + on close; the implementation does both with a single ref-tracked snapshot so we never re-write identical bytes.
-- **Delete uses the shared modal** — every deletable in the app (epics, stories, bugs, projects, agents, credentials) routes through `ConfirmDeleteModal`; scratch pad matches that convention so the destructive-action UX stays uniform.
+- **Delete uses the shared modal** — every deletable in the app (Tasks, sub-tasks, projects, agents, credentials) routes through `ConfirmDeleteModal`; scratch pad matches that convention so the destructive-action UX stays uniform.
 
 ## Hooks used
 - `useScratchPadList()` — list query (`['scratch-pad']`).

@@ -10,7 +10,7 @@ function makeRun(overrides: Partial<IAgentRun> = {}): IAgentRun {
     return {
         id: 'run-1',
         agent_id: 'agent-coder',
-        issue_type: 'story',
+        issue_type: 'task',
         issue_id: 'S-1',
         project_id: null,
         status: 'completed',
@@ -32,6 +32,8 @@ function makeRun(overrides: Partial<IAgentRun> = {}): IAgentRun {
         total_cost_usd: null,
         credits: null,
         item_title: null,
+        workflow_run_id: null,
+        node_id: null,
         ...overrides,
     };
 }

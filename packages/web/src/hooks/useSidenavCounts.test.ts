@@ -11,8 +11,7 @@ describe('useSidenavCounts', () => {
             http.get('http://localhost:3000/api/counts', () =>
                 HttpResponse.json({
                     projects: 5,
-                    epics: 3,
-                    issues: 10,
+                    tasks: 3,
                     queue: 2,
                     agents: 1,
                     notifications: 0,
@@ -28,8 +27,7 @@ describe('useSidenavCounts', () => {
             http.get('http://localhost:3000/api/counts', () =>
                 HttpResponse.json({
                     projects: 5,
-                    epics: 3,
-                    issues: 10,
+                    tasks: 3,
                     queue: 2,
                     agents: 1,
                     notifications: 0,

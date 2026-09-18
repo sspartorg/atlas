@@ -5,7 +5,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { server } from '../test-setup.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
-import { makeAgent, makeProject, makeStory, makeSubTask } from '../test-utils/factories.js';
+import { makeAgent, makeProject, makeSubTask, makeTask } from '../test-utils/factories.js';
 import { SubTaskDetail } from './SubTaskDetail.js';
 
 const BASE = 'http://localhost:3000/api';
@@ -32,19 +32,86 @@ function mountHandlers(taskId: string, full: object | null) {
 function renderPage(taskId: string) {
     return renderWithProviders(
         <Routes>
-            <Route path="/issues/sub-tasks/:id" element={<SubTaskDetail />} />
+            <Route path="/sub-tasks/:id" element={<SubTaskDetail />} />
+            <Route path="/tasks/:id" element={<>task page</>} />
         </Routes>,
-        { initialEntries: [`/issues/sub-tasks/${taskId}`] },
+        { initialEntries: [`/sub-tasks/${taskId}`] },
     );
 }
 
 describe('SubTaskDetail page', () => {
+    it('links back to the parent task from the breadcrumb', async () => {
+        server.use(
+            ...mountHandlers('T70', {
+                sub_task: makeSubTask({ id: 'T70', task_id: 'ATL-1' }),
+                task: makeTask({ id: 'ATL-1' }),
+                project: null,
+                related_links: [],
+                external_links: [],
+                activity: [],
+                agents: [],
+            }),
+        );
+        renderPage('T70');
+        await screen.findByText('Sub-task One');
+        fireEvent.click(screen.getAllByText('ATL-1')[0]!);
+        expect(await screen.findByText('task page')).toBeInTheDocument();
+    });
+
+    it('clones under the same task, links back to the source, and opens the copy', async () => {
+        let created: unknown;
+        let linked: unknown;
+        server.use(
+            ...mountHandlers('T71', {
+                sub_task: makeSubTask({ id: 'T71', task_id: 'ATL-1', title: 'Source', labels: ['qa'] }),
+                task: makeTask({ id: 'ATL-1' }),
+                project: null,
+                related_links: [],
+                external_links: [],
+                activity: [],
+                agents: [],
+            }),
+            http.post(`${BASE}/tasks/ATL-1/sub-tasks`, async ({ request }) => {
+                created = await request.json();
+                return HttpResponse.json(makeSubTask({ id: 'T72', task_id: 'ATL-1', title: 'CLONE Source' }));
+            }),
+            http.post(`${BASE}/issues/sub_task/T72/links`, async ({ request }) => {
+                linked = await request.json();
+                return HttpResponse.json({});
+            }),
+            http.get(`${BASE}/sub-tasks/T72/full`, () =>
+                HttpResponse.json({
+                    sub_task: makeSubTask({ id: 'T72', task_id: 'ATL-1', title: 'CLONE Source' }),
+                    task: makeTask({ id: 'ATL-1' }),
+                    project: null,
+                    related_links: [],
+                    external_links: [],
+                    activity: [],
+                    agents: [],
+                }),
+            ),
+        );
+        renderPage('T71');
+        await screen.findByText('Source');
+        fireEvent.click(screen.getByRole('button', { name: 'Sub-task actions' }));
+        fireEvent.click(await screen.findByRole('menuitem', { name: /Clone item/i }));
+        expect(await screen.findByText('CLONE Source')).toBeInTheDocument();
+        expect(created).toEqual({
+            title: 'CLONE Source',
+            description: '',
+            acceptance_criteria: '',
+            labels: ['qa'],
+            task_id: 'ATL-1',
+        });
+        expect(linked).toMatchObject({ to_type: 'sub_task', to_id: 'T71', relation_type: 'relates_to' });
+    });
+
+
     it('renders without crashing', () => {
         server.use(
             ...mountHandlers('T1', {
                 sub_task: makeSubTask({ id: 'T1' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -65,8 +132,7 @@ describe('SubTaskDetail page', () => {
                     description: 'Reset rounds counter on the assignee.',
                     acceptance_criteria: '- **Given** endpoint returns 200\n- Counter is zero',
                 }),
-                parent_story: makeStory({ id: 'ATL-2' }),
-                epic: null,
+                task: makeTask(),
                 project: makeProject(),
                 related_links: [],
                 external_links: [],
@@ -96,8 +162,7 @@ describe('SubTaskDetail page', () => {
                     id: 'T3',
                     description: 'Existing description body.',
                 }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -136,8 +201,7 @@ describe('SubTaskDetail page', () => {
                     id: 'T4',
                     description: 'Before save',
                 }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -165,8 +229,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T5', {
                 sub_task: makeSubTask({ id: 'T5' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -192,40 +255,11 @@ describe('SubTaskDetail page', () => {
     });
 
     // Lazy NewIssueModal load + dialog render is slow under coverage instrumentation.
-    it('opens the Clone modal via the kebab menu', async () => {
-        server.use(
-            ...mountHandlers('T6', {
-                sub_task: makeSubTask({ id: 'T6', title: 'Source task' }),
-                parent_story: null,
-                epic: null,
-                project: null,
-                related_links: [],
-                external_links: [],
-                activity: [],
-                agents: [],
-            }),
-        );
-        renderPage('T6');
-        await screen.findByText('Description');
-        // Open the kebab. RowActionMenu's IconButton has aria-label
-        // "Sub-task actions".
-        fireEvent.click(screen.getByRole('button', { name: 'Sub-task actions' }));
-        fireEvent.click(await screen.findByRole('menuitem', { name: /Clone item/i }));
-        // NewIssueModal is lazy — wait for it to land.
-        await waitFor(
-            () => {
-                expect(screen.getAllByRole('dialog').length).toBeGreaterThanOrEqual(1);
-            },
-            { timeout: 10000 },
-        );
-    }, 30000);
-
     it('opens the delete-confirm modal via the kebab menu and cancels', async () => {
         server.use(
             ...mountHandlers('T7', {
                 sub_task: makeSubTask({ id: 'T7', title: 'Doomed task' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -256,17 +290,16 @@ describe('SubTaskDetail page', () => {
         renderPage('TMISS');
         // useSubTaskFull → 404 → query returns undefined → "Sub-task not found" branch.
         expect(await screen.findByText('Sub-task not found')).toBeInTheDocument();
-        const back = screen.getByRole('button', { name: /Back to Issues/i });
+        const back = screen.getByRole('button', { name: /Back to Tasks/i });
         fireEvent.click(back); // exercises navigate('/issues') inline callback.
     });
 
-    it('edits the title via the EditableTitle and triggers patchTask', async () => {
+    it('edits the title via the EditableTitle and triggers patchSubTask', async () => {
         let titlePatch = '';
         server.use(
             ...mountHandlers('T9', {
                 sub_task: makeSubTask({ id: 'T9', title: 'Original title' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -296,8 +329,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T10', {
                 sub_task: makeSubTask({ id: 'T10', status: 'ready' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -329,42 +361,12 @@ describe('SubTaskDetail page', () => {
         }
     });
 
-    it('opens the Reset-rounds popover and confirms (handleResetRounds)', async () => {
-        let reset = false;
-        const agent = makeAgent({ id: 'agent-1', name: 'Coder', max_rounds: 5 });
-        server.use(
-            ...mountHandlers('T11', {
-                sub_task: makeSubTask({ id: 'T11', assignee_agent_id: 'agent-1' }),
-                parent_story: null,
-                epic: null,
-                project: null,
-                related_links: [],
-                activity: [],
-                agents: [agent],
-                round_count: 3,
-            }),
-            http.post(`${BASE}/sub-tasks/T11/reset-rounds`, async () => {
-                reset = true;
-                return HttpResponse.json({ ok: true });
-            }),
-        );
-        renderPage('T11');
-        // Wait for the Rounds row to render and click it.
-        const rounds = await screen.findByText('Rounds');
-        fireEvent.click(rounds);
-        // The ResetRoundsPopover renders "Reset rounds?" + confirm/cancel.
-        await screen.findByText('Reset rounds?');
-        fireEvent.click(screen.getByRole('button', { name: /Reset rounds/i }));
-        await waitFor(() => expect(reset).toBe(true));
-    });
-
     it('exercises handleAssign via onAssign in DetailsRailCard — fn#3 (line 114)', async () => {
         const agent = makeAgent({ id: 'agent-1', name: 'Coder' });
         server.use(
             ...mountHandlers('T12', {
                 sub_task: makeSubTask({ id: 'T12', assignee_agent_id: null }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: makeProject(),
                 related_links: [],
                 activity: [],
@@ -389,8 +391,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T13', {
                 sub_task: makeSubTask({ id: 'T13' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -414,8 +415,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T14', {
                 sub_task: makeSubTask({ id: 'T14', title: 'To delete' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -439,37 +439,6 @@ describe('SubTaskDetail page', () => {
         expect(document.body).toBeTruthy();
     }, 30000);
 
-    it('opens clone modal via IssueDeleteAction onClone — exercises onClose at line 319 (fn#20)', async () => {
-        server.use(
-            ...mountHandlers('T15', {
-                sub_task: makeSubTask({ id: 'T15' }),
-                parent_story: null,
-                epic: null,
-                project: null,
-                related_links: [],
-                external_links: [],
-                activity: [],
-                agents: [],
-            }),
-        );
-        renderPage('T15');
-        await screen.findByText('Sub-task One');
-        const actionsBtn = screen.queryByRole('button', { name: /Sub-task actions/i });
-        if (actionsBtn) {
-            fireEvent.click(actionsBtn);
-            const cloneItem = screen.queryByRole('menuitem', { name: /Clone/i });
-            if (cloneItem) {
-                fireEvent.click(cloneItem);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 5000 }).catch(() => {});
-                const dialog = document.querySelector('[role="dialog"]');
-                if (dialog) fireEvent.keyDown(dialog, { key: 'Escape' });
-            }
-        }
-        expect(document.body).toBeTruthy();
-    }, 30000);
-
     it('renders rail metadata when project + parent + assignee agent are present', async () => {
         // Exercises the parents[] memo, the assignee/reporter memo lookups,
         // and the totalCostUsd accumulator (which reads useItemAgentRuns).
@@ -482,13 +451,11 @@ describe('SubTaskDetail page', () => {
                     reporter_agent_id: 'agent-1',
                     labels: ['needs-tests'],
                 }),
-                parent_story: makeStory({ id: 'ATL-2' }),
-                epic: null,
+                task: makeTask(),
                 project: makeProject(),
                 related_links: [],
                 activity: [],
                 agents: [agent],
-                round_count: 1,
             }),
             http.get(`${BASE}/run`, () =>
                 HttpResponse.json([{ total_cost_usd: 0.0123 }]),
@@ -511,13 +478,11 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T16', {
                 sub_task: makeSubTask({ id: 'T16', assignee_agent_id: 'agent-cost' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: makeProject(),
                 related_links: [],
                 activity: [],
                 agents: [agent],
-                round_count: 1,
             }),
         );
         // Prepend the /run override AFTER the base handlers so it sits at
@@ -543,8 +508,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T17', {
                 sub_task: makeSubTask({ id: 'T17', assignee_agent_id: null }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: makeProject(),
                 related_links: [],
                 activity: [],
@@ -576,8 +540,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T18', {
                 sub_task: makeSubTask({ id: 'T18', title: 'Confirm delete task' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -609,13 +572,11 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T19', {
                 sub_task: makeSubTask({ id: 'T19', assignee_agent_id: 'agent-nocost' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: makeProject(),
                 related_links: [],
                 activity: [],
                 agents: [agent],
-                round_count: 1,
             }),
         );
         // Prepend /run stub that returns runs with null cost — hasAny stays false.
@@ -634,8 +595,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T20', {
                 sub_task: makeSubTask({ id: 'T20' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -657,13 +617,12 @@ describe('SubTaskDetail page', () => {
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     });
 
-    it('patches priority via onPriorityPick — exercises patchTask({ priority }) branch', async () => {
+    it('patches priority via onPriorityPick — exercises patchSubTask({ priority }) branch', async () => {
         let priorityPatch: string | undefined;
         server.use(
             ...mountHandlers('T21', {
                 sub_task: makeSubTask({ id: 'T21', priority: 'normal' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: makeProject(),
                 related_links: [],
                 external_links: [],
@@ -693,63 +652,12 @@ describe('SubTaskDetail page', () => {
         expect(document.body).toBeTruthy();
     }, 30000);
 
-    it('renders worktree_branch and worktree_path when set', async () => {
-        server.use(
-            ...mountHandlers('T22', {
-                sub_task: makeSubTask({
-                    id: 'T22',
-                    worktree_branch: 'feature/T22',
-                    worktree_path: '/tmp/atlas/T22',
-                }),
-                parent_story: null,
-                epic: null,
-                project: makeProject(),
-                related_links: [],
-                external_links: [],
-                activity: [],
-                agents: [],
-            }),
-        );
-        renderPage('T22');
-        // Title renders → page mounted. Worktree branch/path appear in the rail.
-        expect(await screen.findByText('Sub-task One')).toBeInTheDocument();
-        // DetailsRailCard renders the branch value somewhere in the rail.
-        expect(screen.getByText('feature/T22')).toBeInTheDocument();
-    }, 15000);
-
-    it('clone modal with parentStory set passes initialParentStoryId', async () => {
-        server.use(
-            ...mountHandlers('T23', {
-                sub_task: makeSubTask({ id: 'T23', title: 'Clonable task' }),
-                parent_story: makeStory({ id: 'ATL-story-1' }),
-                epic: null,
-                project: makeProject(),
-                related_links: [],
-                external_links: [],
-                activity: [],
-                agents: [],
-            }),
-        );
-        renderPage('T23');
-        await screen.findByText('Clonable task');
-        // Open the kebab and trigger Clone — exercises the cloning branch
-        // with parentStory set so initialParentStoryId != null.
-        fireEvent.click(screen.getByRole('button', { name: 'Sub-task actions' }));
-        const cloneItem = await screen.findByRole('menuitem', { name: /Clone item/i });
-        fireEvent.click(cloneItem);
-        await waitFor(
-            () => expect(screen.getAllByRole('dialog').length).toBeGreaterThanOrEqual(1),
-            { timeout: 10000 },
-        );
-    }, 30000);
-
-    it('patches labels via onLabelsChange — exercises patchTask({ labels }) branch', async () => {
+    it('patches labels via onLabelsChange — exercises patchSubTask({ labels }) branch', async () => {
         let labelsPatch: string[] | undefined;
         server.use(
             ...mountHandlers('T24', {
                 sub_task: makeSubTask({ id: 'T24', labels: ['existing'] }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: makeProject(),
                 related_links: [],
                 external_links: [],
@@ -781,14 +689,13 @@ describe('SubTaskDetail page', () => {
         expect(document.body).toBeTruthy();
     }, 30000);
 
-    it('saves acceptance_criteria via onSave (line 262 — patchTask({ acceptance_criteria }))', async () => {
+    it('saves acceptance_criteria via onSave (patchSubTask({ acceptance_criteria }))', async () => {
         // Exercises the onSave callback on the acceptance criteria EditableMarkdownCard.
         let patchedBody: unknown;
         server.use(
             ...mountHandlers('T8', {
                 sub_task: makeSubTask({ id: 'T8', acceptance_criteria: '- Old criteria' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -827,8 +734,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T90', {
                 sub_task: makeSubTask({ id: 'T90' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -848,8 +754,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T91', {
                 sub_task: makeSubTask({ id: 'T91', labels: null as unknown as string[] }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -868,8 +773,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T92', {
                 sub_task: makeSubTask({ id: 'T92', assignee_agent_id: 'ghost-agent' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -886,8 +790,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T93', {
                 sub_task: makeSubTask({ id: 'T93', reporter_agent_id: 'ghost-reporter' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: null,
                 related_links: [],
                 external_links: [],
@@ -899,16 +802,12 @@ describe('SubTaskDetail page', () => {
         expect(await screen.findByText('Sub-task One')).toBeInTheDocument();
     });
 
-    it('L202: redirectTo truthy-parentStory branch — delete with parentStory redirects to /issues/stories/:id', async () => {
-        // redirectTo={parentStory ? `/issues/stories/${parentStory.id}` : '/issues'}
-        // Prior delete tests all use parent_story:null → false branch. This test has a non-null
-        // parentStory so the truthy branch fires.
+    it('deletes and returns to the parent task', async () => {
         let deleted = false;
         server.use(
             ...mountHandlers('T95', {
                 sub_task: makeSubTask({ id: 'T95', title: 'Delete with story' }),
-                parent_story: makeStory({ id: 'ATL-story-del' }),
-                epic: null,
+                task: makeTask({ id: 'ATL-task-del' }),
                 project: makeProject(),
                 related_links: [],
                 external_links: [],
@@ -930,15 +829,11 @@ describe('SubTaskDetail page', () => {
         await waitFor(() => expect(deleted).toBe(true));
     }, 30000);
 
-    it('L310: pickerMode===tested_by true-branch — parentStory?.epic_id passed as restrictToEpicId', async () => {
-        // When "Add test link" is clicked, pickerMode becomes 'tested_by' and
-        // line 310 evaluates: restrictToEpicId = parentStory?.epic_id ?? undefined
-        // With a parentStory whose epic_id is set, the truthy branch fires.
+    it('opens the tested_by picker restricted to the parent task', async () => {
         server.use(
             ...mountHandlers('T94', {
                 sub_task: makeSubTask({ id: 'T94' }),
-                parent_story: makeStory({ id: 'ATL-2', epic_id: 'ATL-1' }),
-                epic: null,
+                task: makeTask(),
                 project: makeProject(),
                 related_links: [],
                 external_links: [],
@@ -966,8 +861,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T_COST', {
                 sub_task: makeSubTask({ id: 'T_COST' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: makeProject(),
                 related_links: [],
                 external_links: [],
@@ -996,8 +890,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T_OWN', {
                 sub_task: makeSubTask({ id: 'T_OWN' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: makeProject(),
                 related_links: [],
                 external_links: [],
@@ -1022,8 +915,7 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('T_ACC', {
                 sub_task: makeSubTask({ id: 'T_ACC' }),
-                parent_story: null,
-                epic: null,
+                task: null,
                 project: makeProject(),
                 related_links: [],
                 external_links: [],

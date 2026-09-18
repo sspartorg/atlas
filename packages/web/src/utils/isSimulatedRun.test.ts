@@ -5,7 +5,7 @@ import type { IAgentRun } from '@atlas/shared';
 const baseRun: Partial<IAgentRun> = {
     id: 'R1',
     agent_id: 'agent-coder',
-    issue_type: 'epic',
+    issue_type: 'task',
     issue_id: 'X',
     prompt_snapshot: null,
     started_at: null,

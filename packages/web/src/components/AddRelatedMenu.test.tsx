@@ -12,20 +12,20 @@ describe('AddRelatedMenu', () => {
     it('renders the trigger button and opens the menu on click', () => {
         const onClick = vi.fn();
         renderWithProviders(
-            <AddRelatedMenu options={[{ label: 'Add story', onClick }]} />,
+            <AddRelatedMenu options={[{ label: 'Add relates-to', onClick }]} />,
         );
         const trigger = screen.getByRole('button', { name: /add related item/i });
         fireEvent.click(trigger);
-        expect(screen.getByRole('menuitem', { name: 'Add story' })).toBeInTheDocument();
+        expect(screen.getByRole('menuitem', { name: 'Add relates-to' })).toBeInTheDocument();
     });
 
     it('fires the option onClick and closes the menu', () => {
         const onClick = vi.fn();
         renderWithProviders(
-            <AddRelatedMenu options={[{ label: 'Add story', onClick }]} />,
+            <AddRelatedMenu options={[{ label: 'Add relates-to', onClick }]} />,
         );
         fireEvent.click(screen.getByRole('button', { name: /add related item/i }));
-        fireEvent.click(screen.getByRole('menuitem', { name: 'Add story' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Add relates-to' }));
         expect(onClick).toHaveBeenCalledTimes(1);
     });
 
@@ -33,11 +33,11 @@ describe('AddRelatedMenu', () => {
         const onClick = vi.fn();
         renderWithProviders(
             <AddRelatedMenu
-                options={[{ label: 'Add story', onClick, disabled: true }]}
+                options={[{ label: 'Add relates-to', onClick, disabled: true }]}
             />,
         );
         fireEvent.click(screen.getByRole('button', { name: /add related item/i }));
-        const item = screen.getByRole('menuitem', { name: 'Add story' });
+        const item = screen.getByRole('menuitem', { name: 'Add relates-to' });
         // MUI MenuItem marks the option as aria-disabled. The actual click-block
         // happens in the browser native handler — jsdom doesn't enforce it, so
         // we assert the visual/a11y signal instead of click suppression.

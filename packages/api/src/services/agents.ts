@@ -5,20 +5,15 @@ import type {
     AgentCli,
     IAgent,
     IAgentRun,
-    IAgentHandoffRule,
     IAgentChecklistItem,
     IAgentPromptVersion,
-    IssueStatus,
     IssueType,
-    AgentHandoffKind,
-    AgentSchedulePreset,
     AgentKindSlug,
     SdlcRole,
 } from '@atlas/shared';
 import { randomUUID } from 'crypto';
-import { Cron } from 'croner';
-import { computeNextAgentSlot, getSchedulingTimezone } from './agent-schedule-registry.js';
 import { broadcastSSE } from '../routes/events.js';
+import { ApiError } from '../utils/errors.js';
 
 // Workstream #4 — Validation guard that rejects (cli, model) pairs not in
 // `cli_models`. Throws a tagged Error the route layer recognises and
@@ -32,10 +27,6 @@ export class ModelNotInRegistryError extends Error {
     }
 }
 
-// Rejects cron_expr strings that croner cannot parse. Thrown from create
-// and update before any DB write so the API surface returns a 400 with a
-// useful message instead of a silently-null next_run_at (which would
-// otherwise leave the agent dormant).
 // `agents.role_id` is an FK into `roles`, but the Zod schemas validate
 // against the `SdlcRole` UNION in @atlas/shared, which declares 10 slugs
 // while the shipped baseline seeds only 5 (po, architect, engineer, qa,
@@ -47,28 +38,6 @@ export class RoleNotInCatalogError extends Error {
     constructor(message: string) {
         super(message);
         this.name = 'RoleNotInCatalogError';
-    }
-}
-
-export class CronExpressionInvalidError extends Error {
-    public readonly code = 'CRON_EXPRESSION_INVALID';
-    constructor(message: string) {
-        super(message);
-        this.name = 'CronExpressionInvalidError';
-    }
-}
-
-export function assertCronExprValid(value: string | null | undefined): void {
-    if (value == null) return;
-    const trimmed = value.trim();
-    if (trimmed === '') return;
-    try {
-        new Cron(trimmed, { paused: true });
-    } catch (err) {
-        const detail = err instanceof Error ? err.message : String(err);
-        throw new CronExpressionInvalidError(
-            `cron_expr "${trimmed}" is not a valid croner expression: ${detail}`,
-        );
     }
 }
 
@@ -150,13 +119,9 @@ export function asAgentRun(r: Record<string, unknown>, issueType: IssueType): IA
         // pulls `i.title as item_title`. NULL on freedom-mode runs and
         // on rows whose item has been deleted.
         item_title: (r['item_title'] as string | null) ?? null,
+        workflow_run_id: (r['workflow_run_id'] as string | null) ?? null,
+        node_id: (r['node_id'] as string | null) ?? null,
     };
-}
-
-export interface IHandoffRuleInput {
-    target_agent_id: string;
-    kind: AgentHandoffKind;
-    status: IssueStatus;
 }
 
 export interface IChecklistInput {
@@ -173,9 +138,9 @@ export interface IAgentCreateInput {
     category: IAgent['category'];
     cli: IAgent['cli'];
     model: string;
+    effort?: IAgent['effort'] | undefined;
     framework?: string | undefined;
     prompt_md?: string | undefined;
-    handoff_prompt_md?: string | undefined;
     status?: IAgent['status'] | undefined;
     accent_color: string;
     sort_order?: number | undefined;
@@ -183,24 +148,11 @@ export interface IAgentCreateInput {
     designation?: string | undefined;
     // A08 — FK into the SDLC role catalog. null = autonomous, no role.
     role_id?: SdlcRole | null | undefined;
-    max_rounds?: number | undefined;
-    requires_item?: boolean | undefined;
-    schedule_hours?: number | undefined;
-    schedule_preset?: AgentSchedulePreset | undefined;
-    schedule_time_of_day?: string | null | undefined;
-    schedule_weekdays?: number[] | null | undefined;
-    schedule_day_of_month?: number | null | undefined;
-    concurrent_runs?: number | undefined;
     glyph?: string | undefined;
     memory_cadence?: number | undefined;
     // Theme 09 — autonomous-agent metadata.
     kind_slug?: AgentKindSlug | undefined;
     settings_json?: Record<string, unknown> | undefined;
-    cron_expr?: string | null | undefined;
-    raises_pr?: boolean | undefined;
-    push_code?: boolean | undefined;
-    requires_worktree?: boolean | undefined;
-    handoff_rules?: IHandoffRuleInput[] | undefined;
     checklists?: IChecklistInput[] | undefined;
 }
 
@@ -209,9 +161,9 @@ export interface IAgentUpdateInput {
     category?: IAgent['category'] | undefined;
     cli?: IAgent['cli'] | undefined;
     model?: string | undefined;
+    effort?: IAgent['effort'] | undefined;
     framework?: string | undefined;
     prompt_md?: string | undefined;
-    handoff_prompt_md?: string | undefined;
     status?: IAgent['status'] | undefined;
     accent_color?: string | undefined;
     sort_order?: number | undefined;
@@ -219,24 +171,11 @@ export interface IAgentUpdateInput {
     designation?: string | undefined;
     // A08 — re-pointing an agent at a different SDLC role.
     role_id?: SdlcRole | null | undefined;
-    max_rounds?: number | undefined;
-    requires_item?: boolean | undefined;
-    schedule_hours?: number | undefined;
-    schedule_preset?: AgentSchedulePreset | undefined;
-    schedule_time_of_day?: string | null | undefined;
-    schedule_weekdays?: number[] | null | undefined;
-    schedule_day_of_month?: number | null | undefined;
-    concurrent_runs?: number | undefined;
     glyph?: string | undefined;
     memory_cadence?: number | undefined;
     // Theme 09 — autonomous-agent metadata.
     kind_slug?: AgentKindSlug | undefined;
     settings_json?: Record<string, unknown> | undefined;
-    cron_expr?: string | null | undefined;
-    raises_pr?: boolean | undefined;
-    push_code?: boolean | undefined;
-    requires_worktree?: boolean | undefined;
-    handoff_rules?: IHandoffRuleInput[] | undefined;
     checklists?: IChecklistInput[] | undefined;
 }
 
@@ -245,46 +184,21 @@ const AGENT_SCALAR_FIELDS = [
     'category',
     'cli',
     'model',
+    // Missing until 2026-09-18, so effort could be neither set on create nor
+    // changed from Agent Detail — every agent stayed on the column default.
+    'effort',
     'framework',
     'prompt_md',
-    'handoff_prompt_md',
     'status',
     'accent_color',
     'sort_order',
     'description',
     'designation',
     'role_id',
-    'max_rounds',
-    'requires_item',
-    'schedule_hours',
-    'schedule_preset',
-    'schedule_time_of_day',
-    'schedule_weekdays',
-    'schedule_day_of_month',
-    'concurrent_runs',
     'glyph',
     'memory_cadence',
     'kind_slug',
     'settings_json',
-    'cron_expr',
-    'raises_pr',
-    'push_code',
-    'requires_worktree',
-] as const;
-
-const SCHEDULE_TRIGGER_FIELDS = [
-    'schedule_preset',
-    'schedule_hours',
-    'schedule_time_of_day',
-    'schedule_weekdays',
-    'schedule_day_of_month',
-    // cron_expr is an override-style schedule field: when non-empty, it
-    // wins over the preset in computeNextAgentSlot. Without listing it
-    // here, PATCH'ing only `cron_expr` would leave next_run_at frozen at
-    // its previous value and the scheduler would dispatch on the old
-    // cadence until something else triggered a reseed.
-    'cron_expr',
-    'status',
 ] as const;
 
 function pickAgentScalars(input: IAgentCreateInput | IAgentUpdateInput): Record<string, unknown> {
@@ -296,26 +210,6 @@ function pickAgentScalars(input: IAgentCreateInput | IAgentUpdateInput): Record<
         }
     }
     return out;
-}
-
-async function replaceHandoffRules(
-    trx: Transaction<DB>,
-    agentId: string,
-    rules: IHandoffRuleInput[]
-): Promise<void> {
-    await trx.deleteFrom('agent_handoff_rules').where('agent_id', '=', agentId).execute();
-    if (rules.length === 0) return;
-    await trx
-        .insertInto('agent_handoff_rules')
-        .values(
-            rules.map((r) => ({
-                agent_id: agentId,
-                target_agent_id: r.target_agent_id,
-                kind: r.kind,
-                status: r.status,
-            }))
-        )
-        .execute();
 }
 
 async function replaceChecklists(
@@ -357,39 +251,9 @@ export const agentsService = {
         // PG constraint error.
         await assertModelInRegistry(data.cli, data.model);
         await assertRoleInCatalog(data.role_id);
-        assertCronExprValid(data.cron_expr);
         const id = data.id ?? randomUUID();
         const scalars = pickAgentScalars(data);
         const status = (scalars['status'] as IAgent['status']) ?? 'active';
-        const scheduleHours = (scalars['schedule_hours'] as number | undefined) ?? 6;
-        const schedulePreset =
-            (scalars['schedule_preset'] as AgentSchedulePreset | undefined) ??
-            'every_n_hours';
-        const scheduleTimeOfDay =
-            (scalars['schedule_time_of_day'] as string | null | undefined) ?? null;
-        const scheduleWeekdays =
-            (scalars['schedule_weekdays'] as number[] | null | undefined) ?? null;
-        const scheduleDayOfMonth =
-            (scalars['schedule_day_of_month'] as number | null | undefined) ?? null;
-        // Seed next_run_at at create time using the preset-aware math. The
-        // scheduler only checks `next_run_at <= now`; it never re-anchors
-        // at boot. Inactive agents are left with next_run_at=null since
-        // the poller filters those out.
-        const createTz = status === 'active' ? await getSchedulingTimezone() : undefined;
-        const nextRunAt =
-            status === 'active'
-                ? computeNextAgentSlot(
-                      new Date(),
-                      {
-                          schedule_preset: schedulePreset,
-                          schedule_hours: scheduleHours,
-                          schedule_time_of_day: scheduleTimeOfDay,
-                          schedule_weekdays: scheduleWeekdays,
-                          schedule_day_of_month: scheduleDayOfMonth,
-                      },
-                      createTz,
-                  ).toISOString()
-                : null;
         const created = await db.transaction().execute(async (trx) => {
             const inserted = await trx
                 .insertInto('agents')
@@ -399,29 +263,21 @@ export const agentsService = {
                     category: data.category,
                     cli: data.cli,
                     model: data.model,
+                    ...(scalars['effort'] ? { effort: scalars['effort'] as IAgent['effort'] } : {}),
                     framework: (scalars['framework'] as string | undefined) ?? '',
                     prompt_md: (scalars['prompt_md'] as string | undefined) ?? '',
-                    handoff_prompt_md:
-                        (scalars['handoff_prompt_md'] as string | undefined) ?? '',
                     status,
                     accent_color: data.accent_color,
                     sort_order: (scalars['sort_order'] as number | undefined) ?? 0,
                     description: (scalars['description'] as string | undefined) ?? '',
-                    schedule_hours: scheduleHours,
-                    schedule_preset: schedulePreset,
-                    schedule_time_of_day: scheduleTimeOfDay,
-                    schedule_weekdays: scheduleWeekdays,
-                    schedule_day_of_month: scheduleDayOfMonth,
-                    concurrent_runs: (scalars['concurrent_runs'] as number | undefined) ?? 1,
+                    designation: (scalars['designation'] as string | undefined) ?? '',
                     glyph: (scalars['glyph'] as string | undefined) ?? '',
                     memory_cadence: (scalars['memory_cadence'] as number | undefined) ?? 1,
                     kind_slug: (scalars['kind_slug'] as AgentKindSlug | undefined) ?? 'custom',
                     settings_json: (scalars['settings_json'] as Record<string, unknown> | undefined) ?? {},
-                    cron_expr: (scalars['cron_expr'] as string | null | undefined) ?? null,
                     // A08 — optional FK to the SDLC role catalog. null
                     // keeps the agent in autonomous/unbound state.
                     role_id: (scalars['role_id'] as string | null | undefined) ?? null,
-                    next_run_at: nextRunAt,
                 })
                 .returningAll()
                 .executeTakeFirstOrThrow();
@@ -442,7 +298,6 @@ export const agentsService = {
                 .onConflict((oc) => oc.column('agent_id').doNothing())
                 .execute();
 
-            if (data.handoff_rules) await replaceHandoffRules(trx, id, data.handoff_rules);
             if (data.checklists) await replaceChecklists(trx, id, data.checklists);
 
             return inserted as unknown as IAgent;
@@ -466,7 +321,6 @@ export const agentsService = {
             await assertModelInRegistry(cli, model);
         }
         if (data.role_id !== undefined) await assertRoleInCatalog(data.role_id);
-        if (data.cron_expr !== undefined) assertCronExprValid(data.cron_expr);
         const scalars = pickAgentScalars(data);
         const promptMdChanged = 'prompt_md' in data && data.prompt_md !== undefined;
         const updated = await db.transaction().execute(async (trx) => {
@@ -515,42 +369,8 @@ export const agentsService = {
                     .executeTakeFirstOrThrow()) as unknown as IAgent;
             }
 
-            if (data.handoff_rules !== undefined) {
-                await replaceHandoffRules(trx, id, data.handoff_rules);
-            }
             if (data.checklists !== undefined) {
                 await replaceChecklists(trx, id, data.checklists);
-            }
-
-            // When status or any schedule field changes, recompute
-            // next_run_at via the preset-aware math. The dispatcher walks
-            // it forward by calling computeNextAgentSlot too, so this
-            // create/modify path stays in lockstep with how dispatch
-            // advances the clock. concurrent_runs is a fan-out cap, not a
-            // cadence input, so it doesn't need a reseed.
-            const scheduleTouched = SCHEDULE_TRIGGER_FIELDS.some(
-                (f) => f in scalars,
-            );
-            if (scheduleTouched) {
-                let nextRunAt: string | null = null;
-                if (row.status === 'active') {
-                    try {
-                        const updateTz = await getSchedulingTimezone();
-                        nextRunAt = computeNextAgentSlot(new Date(), row, updateTz).toISOString();
-                    } catch {
-                        // Invalid schedule combo (e.g. monthly without
-                        // day_of_month). Leave next_run_at null; the
-                        // scheduler will skip the row and the operator can
-                        // fix the config from the UI.
-                        nextRunAt = null;
-                    }
-                }
-                await trx
-                    .updateTable('agents')
-                    .set({ next_run_at: nextRunAt })
-                    .where('id', '=', id)
-                    .execute();
-                row = { ...row, next_run_at: nextRunAt };
             }
 
             return row;
@@ -605,6 +425,14 @@ export const agentsService = {
     },
 
     async delete(id: string): Promise<void> {
+        // Dynamic import: workflows.ts -> marketplace.ts -> agents.ts would
+        // otherwise form a static import cycle.
+        const { workflowsService } = await import('./workflows.js');
+        const users = await workflowsService.workflowsUsingAgent(id);
+        if (users.length > 0) {
+            const names = users.map((w) => w.name).join(', ');
+            throw new ApiError('conflict', `Agent is used by workflow(s): ${names}`, 409);
+        }
         await db.deleteFrom('agents').where('id', '=', id).execute();
         broadcastSSE({ type: 'counts_changed' });
     },
@@ -643,23 +471,7 @@ export const agentsService = {
             .where('r.agent_id', '=', agentId)
             .orderBy('r.created_at', 'desc')
             .execute();
-        return rows.map((r) => asAgentRun(r as never, (r.item_type as IssueType) ?? 'story'));
-    },
-
-    async getHandoffRules(agentId: string): Promise<IAgentHandoffRule[]> {
-        const rows = await db
-            .selectFrom('agent_handoff_rules')
-            .selectAll()
-            .where('agent_id', '=', agentId)
-            .orderBy('kind', 'asc')
-            .execute();
-        return rows as unknown as IAgentHandoffRule[];
-    },
-
-    async setHandoffRules(agentId: string, rules: IHandoffRuleInput[]): Promise<void> {
-        await db.transaction().execute(async (trx) => {
-            await replaceHandoffRules(trx, agentId, rules);
-        });
+        return rows.map((r) => asAgentRun(r as never, (r.item_type as IssueType) ?? 'task'));
     },
 
     async getChecklists(agentId: string): Promise<IAgentChecklistItem[]> {

@@ -27,7 +27,7 @@ Full read of a single `agent_runs` row: status header, issue link card, **per-ev
   - **Download log** → Blob → anchor → click → `.log` file.
 
 **Issue link card**
-- Polymorphic link back to the issue (`/issues/{type}/{id}` for stories/bugs/sub-*; `/epics/{id}` for epics). Helps the Owner pivot from "what ran" to "what it ran on".
+- Link back to the item (`/tasks/:id` or `/sub-tasks/:id` via `utils/itemPath.ts`). Helps the Owner pivot from "what ran" to "what it ran on".
 
 **Live tail (queued + in-progress)**
 - While `run.status === 'queued'` or `'in_progress'`, a small header reads `live · agent_output` with a blinking accent `LiveDot` (`final · no new lines` once `useRunOutputTail` sees `run_completed` / `run_error`).
@@ -55,7 +55,7 @@ Full read of a single `agent_runs` row: status header, issue link card, **per-ev
 
 ## Why these affordances exist
 - **Separate route (not a drawer)** — Log inspection is the second most-used action after writing prompts; giving it a URL means logs can be shared, bookmarked, and reached by deep-link. A drawer would hide everything behind a back gesture and lose its place in browser history.
-- **Re-run with same inputs** — Tuning an agent often means "edit prompt → re-run on the same target". Putting the action on the run page (not just the agent page) cuts an Epic/Story pick step out of every iteration.
+- **Re-run with same inputs** — Tuning an agent often means "edit prompt → re-run on the same target". Putting the action on the run page (not just the agent page) cuts an item pick step out of every iteration.
 - **Raw stream-json over a synthesized transcript** — An earlier version of the API tried to flatten Claude's stream-json events into a single human-readable log (`[init] model=… [tool] Bash {…} [tool_result] …`). It looked tidy until you wanted to *tune* a prompt — the synthesized lines hid the model's actual reasoning, the exact tool inputs, the rate-limit pings, and the structure of `tool_result` payloads. The viewer now persists Claude's NDJSON byte-for-byte and pretty-prints each event so the Owner can read the *real* exchange and adjust constitution/prompt/tool grants based on what actually happened. Downloaded `.log` files are the same NDJSON, ready to diff between runs.
 - **Per-event cards, not one big `<pre>`** — Cards keep huge events (the `system/hook_response` SessionStart payload, the encrypted `thinking.signature` blobs) collapsible without dropping them. The Owner can scan headers, expand what's interesting, ignore the rest.
 - **Two-pane layout (index + log)** — A long run can produce 50+ events; even with collapsed cards, scrolling through them to find "the tool_result before the model gave up" is tedious. The section index gives a stable, glanceable list of headers so the Owner can navigate by event type and number, then jump to the card with a click. Side-by-side on desktop keeps both views on screen simultaneously; on mobile the index sits above the log so it stays reachable without horizontal real estate.
@@ -83,7 +83,7 @@ Full read of a single `agent_runs` row: status header, issue link card, **per-ev
 - Stderr lines come in as `[stderr] <text>` (not JSON), still indexed in the left pane, and shown as plain text in the right pane with red tint. Copilot runs are entirely plain-text rows — no cards.
 
 ## Connectivity
-- **Pages**: [Agent Detail](16-agent-detail.md) — entry from the Runs tab row click; [Stories / Bugs](08-issues.md) — the issue link card target.
+- **Pages**: [Agent Detail](16-agent-detail.md) — entry from the Runs tab row click; [Task Detail](07-task-detail.md) / [Sub-task Detail](10-sub-task-detail.md) — the item link card target.
 - **Routes**: `POST /run` re-uses the same endpoint as the original spawn so re-runs follow the identical scheduling and SSE-broadcast path as the initial run.
 - **Entities**: `agent_run`, `agent` (via the breadcrumb hook).
 

@@ -88,23 +88,38 @@ await db
     .values({ project_id: PROJECT_ID, last_seq: 0 })
     .execute();
 
-// Terminal v2 — seed one epic so the linked-session spec has an item
-// to pick from the Start Session dialog's Item Autocomplete.
+// Seed one Task (Terminal v2 item-linkage spec picks it from the Start
+// Session dialog's Item Autocomplete) and one Sub-task under it, so the
+// Task / Sub-task detail specs and the dup-fetch + perf audits always have
+// a row to open.
 await db
     .insertInto('items')
-    .values({
-        id: 'ETM-1',
-        type: 'epic',
-        project_id: PROJECT_ID,
-        title: 'E2E linked epic',
-        description: 'Used by the Terminal v2 item-linkage Playwright spec.',
-        status: 'in_progress',
-        priority: 'normal',
-    })
+    .values([
+        {
+            id: 'ETM-1',
+            type: 'task',
+            project_id: PROJECT_ID,
+            title: 'E2E linked task',
+            description: 'Used by the Terminal v2 item-linkage Playwright spec.',
+            status: 'in_progress',
+            priority: 'normal',
+        },
+        {
+            id: 'ETM-2',
+            type: 'sub_task',
+            parent_id: 'ETM-1',
+            parent_type: 'task',
+            project_id: PROJECT_ID,
+            title: 'E2E seeded sub-task',
+            description: 'Seeded sub-task of ETM-1.',
+            status: 'draft',
+            priority: 'normal',
+        },
+    ])
     .execute();
 await db
     .updateTable('project_issue_counters')
-    .set({ last_seq: 1 })
+    .set({ last_seq: 2 })
     .where('project_id', '=', PROJECT_ID)
     .execute();
 

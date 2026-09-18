@@ -41,16 +41,17 @@ describe('GET /api/counts', () => {
         await insertAgent({ id: 'agent-coder' });
         await insertItem({
             id: 'ATL-1',
-            type: 'epic',
+            type: 'task',
             project_id: 'p1',
-            title: 'Epic',
+            title: 'Task',
             status: 'ready',
         });
 
         const res = await app.inject({ method: 'GET', url: '/api/counts' });
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body);
-        expect(typeof body).toBe('object');
+        expect(body.tasks).toBe(1);
+        expect(body.sub_tasks).toBe(0);
     });
 });
 

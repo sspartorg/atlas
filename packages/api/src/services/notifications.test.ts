@@ -230,8 +230,8 @@ describe('notificationsService', () => {
     describe('stale needs_you (item left waiting_for_info / in_review)', () => {
         async function seed() {
             await insertProject('p1');
-            const waiting = await insertItem({ type: 'epic', project_id: 'p1', status: 'waiting_for_info' });
-            const moved = await insertItem({ type: 'epic', project_id: 'p1', status: 'waiting_for_info' });
+            const waiting = await insertItem({ type: 'task', project_id: 'p1', status: 'waiting_for_info' });
+            const moved = await insertItem({ type: 'task', project_id: 'p1', status: 'waiting_for_info' });
             const mk = (issue_id: string | null, event_type = 'agent_completed') =>
                 notificationsService.create({ event_type, message: 'm', kind: 'needs_you', issue_id });
             await mk(waiting);

@@ -8,11 +8,8 @@ import type { IssueType } from '@atlas/shared';
 // `[<plural>, id, 'full']` cache as well, or the new/edited row won't
 // appear until the next hard reload.
 const FULL_KEY: Record<IssueType, readonly [string, 'full']> = {
-    epic: ['epics', 'full'],
-    story: ['stories', 'full'],
-    bug: ['bugs', 'full'],
+    task: ['tasks', 'full'],
     sub_task: ['sub-tasks', 'full'],
-    sub_bug: ['sub-bugs', 'full'],
 };
 
 function invalidateCommentCaches(qc: QueryClient, issueType: IssueType, issueId: string): void {

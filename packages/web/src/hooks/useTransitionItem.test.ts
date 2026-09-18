@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AtlasApiError } from '../api/api.js';
-import { transitionItemOnError } from './useTransitionItem.js';
+import { reviewedChildrenBlocking, transitionItemOnError } from './useTransitionItem.js';
 
 function makeToast() {
     return { show: vi.fn() };
@@ -82,5 +82,23 @@ describe('transitionItemOnError', () => {
         transitionItemOnError(toast, err);
         const arg = toast.show.mock.calls[0]?.[0];
         expect(arg?.detail).toBe('Server says: closed by force');
+    });
+});
+
+describe('reviewedChildrenBlocking', () => {
+    const blocked = (statuses: string[]) =>
+        new AtlasApiError('Conflict', 'conflict', 422, {
+            parent_id: 'ATL-1',
+            open_children: statuses.map((status, i) => ({ id: `ATL-${i + 2}`, status })),
+        });
+
+    it('counts the blockers when every one is in review', () => {
+        expect(reviewedChildrenBlocking(blocked(['in_review', 'in_review']))).toBe(2);
+    });
+
+    it('is 0 when any blocker is still open, or for other errors', () => {
+        expect(reviewedChildrenBlocking(blocked(['in_review', 'in_progress']))).toBe(0);
+        expect(reviewedChildrenBlocking(blocked([]))).toBe(0);
+        expect(reviewedChildrenBlocking(new Error('boom'))).toBe(0);
     });
 });

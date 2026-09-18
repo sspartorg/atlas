@@ -14,9 +14,9 @@ test('sidenav: walk every workspace destination', async ({ page }) => {
 
     const destinations: Array<{ key: string; urlFragment: RegExp; heading: RegExp }> = [
         { key: 'projects', urlFragment: /\/projects$/, heading: /Projects/i },
-        { key: 'epics', urlFragment: /\/epics$/, heading: /Epics/i },
-        { key: 'issues', urlFragment: /\/issues$/, heading: /Issues/i },
+        { key: 'tasks', urlFragment: /\/tasks$/, heading: /Tasks/i },
         { key: 'queue', urlFragment: /\/queue$/, heading: /Queue/i },
+        { key: 'workflows', urlFragment: /\/workflows$/, heading: /Workflows/i },
         { key: 'search', urlFragment: /\/search$/, heading: /Search/i },
         { key: 'agents', urlFragment: /\/agents$/, heading: /Agents/i },
         { key: 'notifications', urlFragment: /\/notifications$/, heading: /Notifications/i },

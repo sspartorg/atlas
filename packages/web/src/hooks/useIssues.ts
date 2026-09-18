@@ -1,10 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import type { IIssueTreeNode, IIssueTreeResponse, IssueTreeKind } from '@atlas/shared';
+import type { IIssueTreeNode, IIssueTreeResponse, IssueType } from '@atlas/shared';
 import { api } from '../api/api.js';
 
 // Type aliases for the row-list view of the issue tree.
-export type IssueListKind = IssueTreeKind;
-export type IIssueListRow = IIssueTreeNode;
+export type IssueListKind = IssueType;
 
 // Issue ids are Jira-style human keys (e.g. CER-7); the displayed short id is
 // the id itself. Stable indirection so the short-id derivation can change
@@ -13,9 +12,8 @@ export function makeShortId(_kind: IssueListKind, id: string): string {
     return id;
 }
 
-// Replaces the previous 6-call Promise.all fan-out (projects, epics,
-// stories, bugs, sub-tasks, sub-bugs). One HTTP round-trip, tree assembled
-// server-side via SQL IN-list reads.
+// One HTTP round-trip: Tasks with their Sub-tasks nested, plus the project
+// and agent dictionaries, assembled server-side.
 export function useIssues(opts?: { projectId?: string | undefined; includeArchived?: boolean | undefined }) {
     const projectId = opts?.projectId ?? null;
     const includeArchived = opts?.includeArchived ?? false;
@@ -30,8 +28,7 @@ export function useIssues(opts?: { projectId?: string | undefined; includeArchiv
 }
 
 // Walks a tree response into a flat list (parents first, then children in
-// place under each parent). Useful for the Issues table view where the
-// existing render pipeline expects a single ordered array of rows.
+// place under each parent).
 export function flattenIssueTree(tree: IIssueTreeNode[]): IIssueTreeNode[] {
     const out: IIssueTreeNode[] = [];
     for (const node of tree) {

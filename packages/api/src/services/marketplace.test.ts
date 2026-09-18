@@ -31,28 +31,15 @@ async function insertCatalogAgent(overrides: Partial<{
             model: 'claude-sonnet-4-6',
             framework: '',
             prompt_md: overrides.prompt_md ?? 'catalog prompt v1',
-            handoff_prompt_md: '',
             description: 'desc',
             designation: 'tester',
             accent_color: '#007AC9',
             sort_order: overrides.sort_order ?? 1,
             glyph: 'science',
             role_id: null,
-            max_rounds: 5,
-            requires_item: true,
-            requires_worktree: false,
-            push_code: false,
-            raises_pr: false,
             status: 'active',
             kind_slug: 'custom',
             settings_json: overrides.settings_json ?? {},
-            schedule_hours: 6,
-            schedule_preset: 'every_n_hours',
-            schedule_time_of_day: null,
-            schedule_weekdays: null,
-            schedule_day_of_month: null,
-            cron_expr: null,
-            concurrent_runs: 1,
             memory_cadence: 1,
             memory_template_md: '',
             summary: 'short summary',
@@ -195,7 +182,7 @@ describe('marketplaceService', () => {
         expect(diff.fields.prompt_md.from).toBe('v1 body');
         expect(diff.fields.prompt_md.to).toBe('v2 body — upgraded');
         expect(diff.fields.settings_json.changed).toBe(true);
-        expect(diff.fields.handoff_rules.changed).toBe(false);
+        expect(diff.fields.checklists.changed).toBe(false);
     });
 
     it('acceptUpgrade applies selected fields and bumps pulled_version', async () => {
@@ -258,30 +245,16 @@ describe('marketplaceService', () => {
                 sort_order: 200,
                 glyph: installed.glyph,
                 role_id: installed.role_id,
-                max_rounds: installed.max_rounds,
-                requires_item: installed.requires_item,
-                requires_worktree: installed.requires_worktree,
-                push_code: installed.push_code,
-                raises_pr: installed.raises_pr,
                 status: installed.status,
                 kind_slug: installed.kind_slug,
                 settings_json: installed.settings_json,
-                schedule_hours: installed.schedule_hours,
-                schedule_preset: installed.schedule_preset,
-                schedule_time_of_day: installed.schedule_time_of_day,
-                schedule_weekdays: installed.schedule_weekdays,
-                schedule_day_of_month: installed.schedule_day_of_month,
-                cron_expr: installed.cron_expr,
-                concurrent_runs: installed.concurrent_runs,
                 memory_cadence: installed.memory_cadence,
-                handoff_prompt_md: installed.handoff_prompt_md,
                 summary: 'imported via test',
                 version: 1,
                 published_at: '2026-06-03T00:00:00Z',
             },
             prompt_md: 'imported prompt',
             memory_md: '',
-            handoff_rules: [],
             checklists: [],
         };
         const imported = await marketplaceService.importBundle(bundle);
@@ -369,22 +342,11 @@ describe('marketplaceService', () => {
         expect(buf.length).toBeGreaterThan(0);
     });
 
-    it('exportLocalBundle maps non-empty handoff_rules and checklists (lines 330-339)', async () => {
-        // Covers the .map() callbacks over handoffs/checklists in
-        // exportLocalBundle — the other exportLocalBundle tests install an
-        // agent with no handoff rules/checklists, so those maps never ran.
+    it('exportLocalBundle maps non-empty checklists', async () => {
+        // Covers the .map() callback over checklists in exportLocalBundle —
+        // the other exportLocalBundle tests install an agent with no
+        // checklists, so that map never ran.
         await insertCatalogAgent({ id: 'cat-elb-src' });
-        await insertCatalogAgent({ id: 'cat-elb-tgt', sort_order: 2 });
-        await marketplaceService.install('cat-elb-tgt');
-        await testDb
-            .insertInto('marketplace_agent_handoffs')
-            .values({
-                marketplace_agent_id: 'cat-elb-src',
-                target_agent_id: 'cat-elb-tgt',
-                kind: 'on-pass',
-                status: 'in_review',
-            })
-            .execute();
         await testDb
             .insertInto('marketplace_agent_checklists')
             .values({
@@ -493,30 +455,16 @@ describe('marketplaceService', () => {
                 sort_order: 1,
                 glyph: '',
                 role_id: null,
-                max_rounds: 1,
-                requires_item: true,
-                requires_worktree: false,
-                push_code: false,
-                raises_pr: false,
                 status: 'active' as const,
                 kind_slug: 'custom' as const,
                 settings_json: {},
-                schedule_hours: 6,
-                schedule_preset: 'every_n_hours' as const,
-                schedule_time_of_day: null,
-                schedule_weekdays: null,
-                schedule_day_of_month: null,
-                cron_expr: null,
-                concurrent_runs: 1,
                 memory_cadence: 1,
-                handoff_prompt_md: '',
                 summary: '',
                 version: 1,
                 published_at: '2026-06-03T00:00:00Z',
             },
             prompt_md: '',
             memory_md: '',
-            handoff_rules: [],
             checklists: [],
         };
         await expect(marketplaceService.importBundle(bundle)).rejects.toBeInstanceOf(
@@ -524,11 +472,8 @@ describe('marketplaceService', () => {
         );
     });
 
-    it('importBundle persists non-empty handoff_rules and checklists', async () => {
+    it('importBundle persists non-empty checklists', async () => {
         await insertCatalogAgent({ id: 'cat-src-hr' });
-        await insertCatalogAgent({ id: 'cat-tgt-hr', sort_order: 2 });
-        // Install the target so the FK on agent_handoff_rules.target_agent_id is satisfied.
-        const target = await marketplaceService.install('cat-tgt-hr');
         const src = await marketplaceService.install('cat-src-hr');
         const bundle = {
             manifest: {
@@ -544,36 +489,16 @@ describe('marketplaceService', () => {
                 sort_order: 300,
                 glyph: src.glyph,
                 role_id: src.role_id,
-                max_rounds: src.max_rounds,
-                requires_item: src.requires_item,
-                requires_worktree: src.requires_worktree,
-                push_code: src.push_code,
-                raises_pr: src.raises_pr,
                 status: src.status,
                 kind_slug: src.kind_slug,
                 settings_json: src.settings_json,
-                schedule_hours: src.schedule_hours,
-                schedule_preset: src.schedule_preset,
-                schedule_time_of_day: src.schedule_time_of_day,
-                schedule_weekdays: src.schedule_weekdays,
-                schedule_day_of_month: src.schedule_day_of_month,
-                cron_expr: src.cron_expr,
-                concurrent_runs: src.concurrent_runs,
                 memory_cadence: src.memory_cadence,
-                handoff_prompt_md: src.handoff_prompt_md,
-                summary: 'import with handoff rules',
+                summary: 'import with checklists',
                 version: 1,
                 published_at: '2026-06-03T00:00:00Z',
             },
-            prompt_md: 'prompt with handoffs',
+            prompt_md: 'prompt with checklists',
             memory_md: '',
-            handoff_rules: [
-                {
-                    target_agent_id: target.id,
-                    kind: 'on-pass' as const,
-                    status: 'in_review' as const,
-                },
-            ],
             checklists: [
                 {
                     label: 'Review acceptance criteria',
@@ -584,14 +509,6 @@ describe('marketplaceService', () => {
         };
         const imported = await marketplaceService.importBundle(bundle);
         expect(imported.id).toBe('imp-with-hr');
-        // Verify the handoff rule was persisted.
-        const handoffs = await testDb
-            .selectFrom('agent_handoff_rules')
-            .selectAll()
-            .where('agent_id', '=', 'imp-with-hr')
-            .execute();
-        expect(handoffs).toHaveLength(1);
-        expect(handoffs[0]!.target_agent_id).toBe(target.id);
         // Verify the checklist row was persisted.
         const chks = await testDb
             .selectFrom('agent_checklists')
@@ -602,23 +519,9 @@ describe('marketplaceService', () => {
         expect(chks[0]!.label).toBe('Review acceptance criteria');
     });
 
-    it('install copies marketplace_agent_handoffs and marketplace_agent_checklists into local tables', async () => {
-        // Cover lines 421-432 and 434-445 in install(): handoff_rules.length > 0 and
-        // checklists.length > 0 branches in the install path.
+    it('install copies marketplace_agent_checklists into agent_checklists', async () => {
+        // Covers the checklists.length > 0 branch in the install path.
         await insertCatalogAgent({ id: 'cat-hr-src' });
-        await insertCatalogAgent({ id: 'cat-hr-tgt', sort_order: 2 });
-        // Install the target first so agent_handoff_rules.target_agent_id FK is satisfied.
-        await marketplaceService.install('cat-hr-tgt');
-        // Add a marketplace handoff pointing at the installed target.
-        await testDb
-            .insertInto('marketplace_agent_handoffs')
-            .values({
-                marketplace_agent_id: 'cat-hr-src',
-                target_agent_id: 'cat-hr-tgt',
-                kind: 'on-pass',
-                status: 'in_review',
-            })
-            .execute();
         // Add a marketplace checklist entry.
         await testDb
             .insertInto('marketplace_agent_checklists')
@@ -631,15 +534,6 @@ describe('marketplaceService', () => {
             .execute();
         const installed = await marketplaceService.install('cat-hr-src');
         expect(installed.id).toBe('cat-hr-src');
-        // Verify agent_handoff_rules was populated.
-        const handoffs = await testDb
-            .selectFrom('agent_handoff_rules')
-            .selectAll()
-            .where('agent_id', '=', 'cat-hr-src')
-            .execute();
-        expect(handoffs).toHaveLength(1);
-        expect(handoffs[0]!.target_agent_id).toBe('cat-hr-tgt');
-        expect(handoffs[0]!.kind).toBe('on-pass');
         // Verify agent_checklists was populated.
         const chks = await testDb
             .selectFrom('agent_checklists')
@@ -677,19 +571,6 @@ describe('marketplaceService', () => {
         expect(after.marketplace_pulled_version).toBe(2); // pulled_version still advances
     });
 
-    it('acceptUpgrade applies handoff_prompt_md field (line 547-552)', async () => {
-        await insertCatalogAgent({ id: 'cat-hpm' });
-        await marketplaceService.install('cat-hpm');
-        await testDb
-            .updateTable('marketplace_agents')
-            .set({ handoff_prompt_md: 'new handoff md', version: 2, content_hash: 'h2' })
-            .where('id', '=', 'cat-hpm')
-            .execute();
-        const after = await marketplaceService.acceptUpgrade('cat-hpm', ['handoff_prompt_md']);
-        expect(after.handoff_prompt_md).toBe('new handoff md');
-        expect(after.marketplace_pulled_version).toBe(2);
-    });
-
     it('acceptUpgrade applies settings_json field (line 554-559)', async () => {
         await insertCatalogAgent({ id: 'cat-sj' });
         await marketplaceService.install('cat-sj');
@@ -704,38 +585,6 @@ describe('marketplaceService', () => {
             .execute();
         const after = await marketplaceService.acceptUpgrade('cat-sj', ['settings_json']);
         expect(after.settings_json).toEqual({ feature: 'on' });
-    });
-
-    it('acceptUpgrade applies handoff_rules field including new rows (lines 561-578)', async () => {
-        // Covers the handoff_rules branch in acceptUpgrade. Uses a catalog source
-        // with a handoff pointing at an already-installed agent.
-        await insertCatalogAgent({ id: 'cat-ahr-src' });
-        await insertCatalogAgent({ id: 'cat-ahr-tgt', sort_order: 2 });
-        await marketplaceService.install('cat-ahr-tgt');
-        await marketplaceService.install('cat-ahr-src');
-        // Simulate upgrade: add a handoff_rule to the catalog entry.
-        await testDb
-            .insertInto('marketplace_agent_handoffs')
-            .values({
-                marketplace_agent_id: 'cat-ahr-src',
-                target_agent_id: 'cat-ahr-tgt',
-                kind: 'on-pass',
-                status: 'in_review',
-            })
-            .execute();
-        await testDb
-            .updateTable('marketplace_agents')
-            .set({ version: 2, content_hash: 'h2-ahr' })
-            .where('id', '=', 'cat-ahr-src')
-            .execute();
-        await marketplaceService.acceptUpgrade('cat-ahr-src', ['handoff_rules']);
-        const handoffs = await testDb
-            .selectFrom('agent_handoff_rules')
-            .selectAll()
-            .where('agent_id', '=', 'cat-ahr-src')
-            .execute();
-        expect(handoffs).toHaveLength(1);
-        expect(handoffs[0]!.target_agent_id).toBe('cat-ahr-tgt');
     });
 
     it('acceptUpgrade applies checklists field including new rows (lines 580-597)', async () => {
@@ -789,30 +638,16 @@ describe('marketplaceService', () => {
                 sort_order: 1,
                 glyph: '',
                 role_id: null,
-                max_rounds: 1,
-                requires_item: true,
-                requires_worktree: false,
-                push_code: false,
-                raises_pr: false,
                 status: 'active' as const,
                 kind_slug: 'custom' as const,
                 settings_json: {},
-                schedule_hours: 6,
-                schedule_preset: 'every_n_hours' as const,
-                schedule_time_of_day: null,
-                schedule_weekdays: null,
-                schedule_day_of_month: null,
-                cron_expr: null,
-                concurrent_runs: 1,
                 memory_cadence: 1,
-                handoff_prompt_md: '',
                 summary: '',
                 version: 1,
                 published_at: '2026-06-03T00:00:00Z',
             },
             prompt_md: 'body',
             memory_md: '',
-            handoff_rules: [],
             checklists: [],
         };
         const imported = await marketplaceService.importBundle(bundle);
@@ -853,23 +688,6 @@ describe('marketplaceService', () => {
         expect(diff.local_pulled_version).toBeNull();
     });
 
-    it('acceptUpgrade with handoff_rules field but no catalog handoffs clears without inserting (line 566 false branch)', async () => {
-        await insertCatalogAgent({ id: 'cat-hr-empty' });
-        const installed = await marketplaceService.install('cat-hr-empty');
-        await testDb
-            .updateTable('marketplace_agents')
-            .set({ version: 2, content_hash: 'h2-hr-empty' })
-            .where('id', '=', 'cat-hr-empty')
-            .execute();
-        await marketplaceService.acceptUpgrade('cat-hr-empty', ['handoff_rules']);
-        const handoffs = await testDb
-            .selectFrom('agent_handoff_rules')
-            .selectAll()
-            .where('agent_id', '=', installed.id)
-            .execute();
-        expect(handoffs).toHaveLength(0);
-    });
-
     it('acceptUpgrade with checklists field but no catalog checklists clears without inserting (line 585 false branch)', async () => {
         await insertCatalogAgent({ id: 'cat-cl-empty' });
         const installed = await marketplaceService.install('cat-cl-empty');
@@ -904,30 +722,16 @@ describe('marketplaceService', () => {
                 sort_order: src.sort_order,
                 glyph: src.glyph,
                 role_id: src.role_id,
-                max_rounds: src.max_rounds,
-                requires_item: src.requires_item,
-                requires_worktree: src.requires_worktree,
-                push_code: src.push_code,
-                raises_pr: src.raises_pr,
                 status: src.status,
                 kind_slug: src.kind_slug,
                 settings_json: src.settings_json,
-                schedule_hours: src.schedule_hours,
-                schedule_preset: src.schedule_preset,
-                schedule_time_of_day: src.schedule_time_of_day,
-                schedule_weekdays: src.schedule_weekdays,
-                schedule_day_of_month: src.schedule_day_of_month,
-                cron_expr: src.cron_expr,
-                concurrent_runs: src.concurrent_runs,
                 memory_cadence: src.memory_cadence,
-                handoff_prompt_md: src.handoff_prompt_md,
                 summary: 'explicit id override',
                 version: 1,
                 published_at: '2026-06-03T00:00:00Z',
             },
             prompt_md: 'override body',
             memory_md: '',
-            handoff_rules: [],
             checklists: [],
         };
         const imported = await marketplaceService.importBundle(bundle, {
@@ -962,30 +766,16 @@ describe('marketplaceService', () => {
                 sort_order: 1,
                 glyph: '',
                 role_id: null,
-                max_rounds: 1,
-                requires_item: true,
-                requires_worktree: false,
-                push_code: false,
-                raises_pr: false,
                 status: 'active' as const,
                 kind_slug: 'custom' as const,
                 settings_json: {},
-                schedule_hours: 6,
-                schedule_preset: 'every_n_hours' as const,
-                schedule_time_of_day: null,
-                schedule_weekdays: null,
-                schedule_day_of_month: null,
-                cron_expr: null,
-                concurrent_runs: 1,
                 memory_cadence: 1,
-                handoff_prompt_md: '',
                 summary: '',
                 version: 1,
                 published_at: '2026-06-03T00:00:00Z',
             },
             prompt_md: 'body',
             memory_md: '',
-            handoff_rules: [],
             checklists: [],
         };
         const imported = await marketplaceService.importBundle(bundle, { agent_id: '   ' });

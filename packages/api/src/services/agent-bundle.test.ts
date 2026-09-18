@@ -21,31 +21,17 @@ const FIXTURE: AgentBundle = {
         sort_order: 99,
         glyph: 'science',
         role_id: null,
-        max_rounds: 5,
-        requires_item: true,
-        requires_worktree: false,
-        push_code: false,
-        raises_pr: false,
         status: 'active',
         kind_slug: 'custom',
         settings_json: { canary: true, depth: 3 },
-        schedule_hours: 6,
-        schedule_preset: 'every_n_hours',
-        schedule_time_of_day: null,
-        schedule_weekdays: null,
-        schedule_day_of_month: null,
-        cron_expr: null,
-        concurrent_runs: 1,
         memory_cadence: 1,
         effort: 'medium',
-        handoff_prompt_md: 'When done, hand back to Owner.',
         summary: 'A fixture agent used by tests',
         version: 1,
         published_at: '2026-06-03T00:00:00Z',
     },
     prompt_md: '# Fixture\n\nYou are a fixture agent.\n',
     memory_md: '## Memory\n- nothing yet\n',
-    handoff_rules: [{ target_agent_id: 'owner', kind: 'on-pass', status: 'done' }],
     checklists: [{ label: 'Checked', sort_order: 0, required: true }],
 };
 
@@ -56,7 +42,6 @@ describe('agent-bundle pack/unpack', () => {
         expect(out.manifest).toEqual(FIXTURE.manifest);
         expect(out.prompt_md).toBe(FIXTURE.prompt_md);
         expect(out.memory_md).toBe(FIXTURE.memory_md);
-        expect(out.handoff_rules).toEqual(FIXTURE.handoff_rules);
         expect(out.checklists).toEqual(FIXTURE.checklists);
     });
 
@@ -75,16 +60,14 @@ describe('agent-bundle pack/unpack', () => {
         await expect(unpackAgentBundle(zip)).rejects.toBeInstanceOf(AgentBundleParseError);
     });
 
-    it('treats missing optional files (memory, handoffs, checklists) as empty', async () => {
+    it('treats missing optional files (memory, checklists) as empty', async () => {
         const minimal = await packAgentBundle({
             ...FIXTURE,
             memory_md: '',
-            handoff_rules: [],
             checklists: [],
         });
         const out = await unpackAgentBundle(minimal);
         expect(out.memory_md).toBe('');
-        expect(out.handoff_rules).toEqual([]);
         expect(out.checklists).toEqual([]);
     });
 
@@ -102,12 +85,20 @@ describe('agent-bundle pack/unpack', () => {
         await expect(unpackAgentBundle(buf)).rejects.toThrow(/not valid JSON/);
     });
 
-    it('rejects a bundle whose handoff_rules.json fails schema validation', async () => {
-        const goodZip = await packAgentBundle(FIXTURE);
-        const zip = await JSZip.loadAsync(goodZip);
-        zip.file('handoff_rules.json', JSON.stringify([{ wrong: 'shape' }]));
-        const buf = await zip.generateAsync({ type: 'nodebuffer' });
-        await expect(unpackAgentBundle(buf)).rejects.toThrow(/handoff_rules\.json failed validation/);
+    it('does not write handoff_rules.json into packed bundles', async () => {
+        const zip = await JSZip.loadAsync(await packAgentBundle(FIXTURE));
+        expect(zip.file('handoff_rules.json')).toBeNull();
+    });
+
+    // ADR 0014 dropped agent routing: bundles exported before the hard cut
+    // still carry handoff_rules.json and schedule/git manifest fields.
+    it('imports a pre-workflow bundle, ignoring handoff_rules.json and dropped manifest fields', async () => {
+        const zip = await JSZip.loadAsync(await packAgentBundle(FIXTURE));
+        zip.file('manifest.json', JSON.stringify({ ...FIXTURE.manifest, max_rounds: 5, cron_expr: null, push_code: true }));
+        zip.file('handoff_rules.json', JSON.stringify([{ target_agent_id: 'owner', kind: 'on-pass', status: 'done' }]));
+        const out = await unpackAgentBundle(await zip.generateAsync({ type: 'nodebuffer' }));
+        expect(out.manifest).toEqual(FIXTURE.manifest);
+        expect(out).not.toHaveProperty('handoff_rules');
     });
 
     it('rejects a bundle whose checklists.json fails schema validation', async () => {
@@ -130,23 +121,19 @@ describe('agent-bundle pack/unpack', () => {
     });
 
     // readZipFile: the required=false + file-absent path returns null, which
-    // triggers the `handoffParsed ?? []` and `checklistParsed ?? []` null-path arms.
-    it('falls back to empty arrays when handoff_rules.json is absent from zip', async () => {
+    // triggers the `checklistParsed ?? []` null-path arm.
+    it('falls back to empty values when optional files are absent from zip', async () => {
         const zip = new JSZip();
         const manifest = { ...FIXTURE.manifest };
         zip.file('manifest.json', JSON.stringify(manifest));
         zip.file('prompt.md', FIXTURE.prompt_md);
-        // memory.md and handoff_rules.json and checklists.json are intentionally omitted.
+        // memory.md and checklists.json are intentionally omitted.
         const buf = await zip.generateAsync({ type: 'nodebuffer' });
         const out = await unpackAgentBundle(buf);
-        expect(out.handoff_rules).toEqual([]);
         expect(out.checklists).toEqual([]);
         expect(out.memory_md).toBe('');
     });
 
-    // readZipFile: required=false + file absent → null → covered by above; but
-    // also covers the `handoffParsed && !handoffParsed.success` false branch
-    // (handoffParsed is null → short-circuit) and same for checklists.
     it('populates prompt_md from zip when present', async () => {
         const zip = new JSZip();
         zip.file('manifest.json', JSON.stringify(FIXTURE.manifest));

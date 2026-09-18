@@ -87,7 +87,7 @@ export function ImportAgentZipModal({ open, onClose, onImported }: Props) {
             <DialogContent>
                 <Typography sx={{ fontSize: 13.5, color: ATLAS_PALETTE.slate70, mb: 3 }}>
                     Upload an agent bundle (manifest.json + prompt.md + memory.md +
-                    handoff_rules.json + checklists.json). The imported agent is fully owned
+                    checklists.json). The imported agent is fully owned
                     locally — no link to the marketplace, no upgrade tracking.
                 </Typography>
                 <Box

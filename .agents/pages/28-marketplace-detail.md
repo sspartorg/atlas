@@ -3,14 +3,15 @@
 **Route:** `/agents/marketplace/:id`  •  **Component:** `packages/web/src/pages/MarketplaceAgentDetail.tsx`
 
 ## Purpose
-Read the whole catalog entry — prompt, runtime, schedule, handoff rules,
-pre-handoff checklist — before deciding to install it.
+Read the whole catalog entry — prompt, runtime, settings, quality
+checklist — before deciding to install it. Catalog entries carry no schedule,
+handoff rules or git flags (ADR 0014: workflows own those).
 
 ## States
 - Loading: skeleton block.
 - Not found: `full.isError` → message + a **Back to marketplace** button (`:180`).
-- Populated: header + action row, prompt body, runtime/schedule/flags rail, handoff rules, checklist.
-- Handoff rules and checklists each render their own "none" line when the arrays are empty (`:469`, `:517`).
+- Populated: header + action row, prompt body, runtime / custom-settings blocks, quality checklist.
+- The checklist renders a "None." line when the array is empty.
 
 ## UI elements
 
@@ -28,27 +29,25 @@ pre-handoff checklist — before deciding to install it.
 
 **Body sections**
 - `prompt_md` rendered verbatim (`:370`).
-- **Runtime** / **Schedule** / **Flags** / **Custom settings** label blocks (`:388`–`:412`).
-- **Handoff prompt** when `agent.handoff_prompt_md` is non-empty (`:433`).
-- **Handoff rules** list — `{target_agent_id, kind, status}` per row.
-- **Pre-handoff checklist** (`:515`).
+- **Runtime** (status, framework, role_id, designation, memory_cadence) / **Custom settings** label blocks.
+- **Quality checklist** — the agent's quality gate, reported in `atlas-outcome`.
 
 ## Modals / drawers
 - `AddFromMarketplaceModal` — takes a slug (defaults to the catalog id) and calls `handleInstall(slug)`. Two faces:
   - **first attempt** — explains that a fresh local copy is made and that local edits never travel back to the marketplace
-  - both faces also show the CLI warning above and, per handoff target that's in the catalog but not installed, an info Alert "This agent hands off to `<Target>`, which isn't installed." with an **Install `<Target>` too** checkbox. Checked targets install first (`useInstallCatalogAgents` → `runBulkInstall`), then this agent; target failures toast but don't block the main install, and the picks are cleared so a rename retry can't install them twice. The same modal (and hints) opens from a catalog card's **Add**.
+  - both faces also show the CLI warning above. The same modal opens from a catalog card's **Add**.
   - **rename retry** — when the install came back `409`, shows the conflicting id in a warning panel and pre-fills `details.suggested_id`; the existing local agent is left untouched
 
 ## Hooks used
-- `useMarketplaceAgentFull(id)` → `['marketplace','full',id]` → `api.marketplace.get(id)` — the full entry.
+- `useMarketplaceAgentFull(id)` (`hooks/useMarketplace.ts`) → `['marketplace','full',id]` → `api.marketplace.get(id)` — the full entry.
 - `useMarketplaceCatalog()` → `['marketplace','list','detail']` → `api.marketplace.list({limit:100})` — only to read *this* entry's `is_installed` / `installed_agent_id` / `upgrade_available`, which the full payload does not carry.
-- `useMissingCli(agent.cli)` (via `CliUnavailableAlert`); modal: `useMissingHandoffTargets([id])`, `useInstallCatalogAgents()`, `useAgents()`.
+- `useMissingCli(agent.cli)` (via `CliUnavailableAlert`); modal: `useMarketplaceAgentFull(id)` for the CLI warning.
 
 ## API endpoints touched
 - `GET /api/marketplace/agents/:id` — full catalog entry (`IMarketplaceAgentFull`)
 - `GET /api/marketplace/agents` — summary row, for install state
-- `POST /api/marketplace/agents/:id/install` — install, optional `{agent_id}` slug override (also once per checked paired target)
-- `GET /api/cli/availability` — CLI warning; `GET /api/agents` — which handoff targets are already local
+- `POST /api/marketplace/agents/:id/install` — install, optional `{agent_id}` slug override
+- `GET /api/cli/availability` — CLI warning
 - `GET /api/marketplace/agents/:id/export` — zip download
 
 ## Permissions / guards

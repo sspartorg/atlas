@@ -25,8 +25,7 @@ const SECTIONS: IShortcutSection[] = [
         rows: [
             { keys: ['G', 'D'], desc: 'Dashboard', sequence: true },
             { keys: ['G', 'P'], desc: 'Projects', sequence: true },
-            { keys: ['G', 'E'], desc: 'Epics', sequence: true },
-            { keys: ['G', 'I'], desc: 'Issues', sequence: true },
+            { keys: ['G', 'T'], desc: 'Tasks', sequence: true },
             { keys: ['G', 'Q'], desc: 'Queue', sequence: true },
             { keys: ['G', 'A'], desc: 'Agents', sequence: true },
             { keys: ['G', 'N'], desc: 'Notifications', sequence: true },

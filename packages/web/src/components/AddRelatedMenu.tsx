@@ -23,8 +23,7 @@ interface Props {
 
 /**
  * Jira-style `+` button rendered next to an issue title. Opens a popup
- * menu of "Add story / Add sub-task / Link an item / Add dependency"
- * style actions — what's offered depends on the issue type and is
+ * menu of "Link an item / Add dependency" style actions — what's offered depends on the issue type and is
  * decided by the parent page.
  *
  * Rendering nothing (returning null) is the caller's job — if `options`

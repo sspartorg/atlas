@@ -12,7 +12,7 @@ List all projects with cards or table view; create new ones; trigger reclone, de
 
 ## UI elements
 **Header**
-- "Projects" heading + stats line (projects · epics · stories) (lines 262-284)
+- "Projects" heading + stats line (projects · tasks · sub-tasks; sub-tasks summed from each Task's `sub_task_count`)
 - **View toggle** Cards ↔ Table (`ViewToggle`, line 287)
 - **New Project** button (lines 288-296) → opens `NewProjectModal`
 
@@ -22,7 +22,7 @@ List all projects with cards or table view; create new ones; trigger reclone, de
 - Folder icon + name + schedule indicator (`ProjectCard:120-133` shows when auto-fetch is configured)
 - Display ID chip (e.g., `CER`) — taken straight from `p.issue_key_prefix` (Projects.tsx:86-92), the prefix picked at project-create time, NOT derived from creation order. This is what keeps the project tag aligned with the issue ids it produces (CER-1, CER-2, …).
 - **Repo URL** link — `git_url`, opens externally (ProjectCard:161-181)
-- Counters: epics, stories
+- Counters: tasks, sub-tasks
 - Last activity timestamp
 - **Open →** link → `RouterLink` to `/projects/:id`
 - **Menu** button → opens `ProjectRowMenu`
@@ -62,12 +62,12 @@ These four modals are rendered outside the empty/populated branches (Projects.ts
 ## Hooks used
 - `useProjectsPaged({ page, limit })` (Projects.tsx:58) — paged project fetch; `rows` populates the visible grid/table and `total` drives the footer + empty-vs-populated branch.
 - `useProjects()` (line 65) — full unpaged list, kept as a fallback so the empty-state branch can tell "no projects on this page" from "no projects anywhere".
-- `useEpics`, `useStories`, `useAgents`, `useSettings`, `useToast`
+- `useTasks`, `useAgents`, `useSettings`, `useToast`
 - `useEnabledSchedules()` — map of projectId → schedule info (for the calendar indicator)
 - `useIsMobile()` — flips the layout to single-column cards + the `PageFab`.
 
 ## API endpoints touched
-- `GET /api/projects`, `GET /api/epics`, `GET /api/stories`, `GET /api/agents`, `GET /api/settings`
+- `GET /api/projects`, `GET /api/tasks`, `GET /api/agents`, `GET /api/settings`
 - `POST /api/projects/:id/reveal`
 - `POST /api/projects/clone` (via `NewProjectModal`)
 - `POST /api/projects/:id/reclone` (via `RecloneProjectModal`)
@@ -79,7 +79,7 @@ These four modals are rendered outside the empty/populated branches (Projects.ts
 - Filter `mine` == `all` because the app is single-owner; "mine" is provided for UI parity (line 121).
 
 ## Edge cases / quirks
-- Story-per-project counts are computed via the epic→project map because stories don't have a direct `project_id` (Projects.tsx:125-134).
+- Per-project counts come from the one `GET /api/tasks` list: Tasks by `project_id`, sub-tasks as the sum of `sub_task_count` (`Projects.tsx:117-129`). The category filter chips join agent categories through Task assignees.
 - Display IDs come from `p.issue_key_prefix` (Projects.tsx:86-92), NOT creation order — they're picked at project-create time and stay aligned with the issue keys the project will mint.
 - Modals must stay mounted across state transitions (see Projects.tsx:258-261 comment) — don't move them inside conditional blocks.
 - Pagination state (`page`, `limit`) is local React `useState` (Projects.tsx:56-57); not URL-controlled. Hard refresh resets to page 1, limit 20.

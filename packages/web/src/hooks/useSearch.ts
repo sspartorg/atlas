@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import type { IssueType } from '@atlas/shared';
 import { api } from '../api/api.js';
 
 // P14 — TanStack Query wrapper around `GET /api/search`. The server does
@@ -12,7 +13,6 @@ import { api } from '../api/api.js';
 // 1000-item workspace) but the round-trip still feels nicer with
 // `keepPreviousData`.
 
-type SearchType = 'epic' | 'story' | 'sub_task' | 'sub_bug' | 'bug';
 type SearchUpdatedRange = 'today' | 'last_7_days' | 'last_30_days' | 'older';
 
 export interface SearchHitRow {
@@ -29,7 +29,7 @@ export interface SearchHitRow {
 
 export interface UseSearchArgs {
     q?: string;
-    type?: SearchType[];
+    type?: IssueType[];
     project_id?: string[];
     agent_id?: string[];
     status?: string;

@@ -18,7 +18,7 @@ import { SettingsSection } from './SettingsSection.js';
 import { AccentColorPicker } from './AccentColorPicker.js';
 import { ThemeModeToggle } from '../../components/ThemeModeToggle.js';
 import { lazyNamed } from '../../utils/lazyNamed.js';
-// Lazy: pulls in 5 entity-list hooks (projects/epics/stories/agents/bugs) that
+// Lazy: pulls in entity-list hooks (projects/tasks/agents) that
 // otherwise fire on every Settings cold-load even when the modal is closed.
 const ResetWorkspaceModal = lazyNamed(
     () => import('./ResetWorkspaceModal.js'),
@@ -232,7 +232,7 @@ export function ProfileTab() {
 
                     <SettingsSection
                         title="Reset"
-                        subtitle="Wipes all projects, epics, stories, bugs, agents, runs, notifications and saved credentials from the local database, clears the external notification channel, and returns to onboarding. Git repositories on disk are not touched."
+                        subtitle="Wipes all projects, tasks, sub-tasks, agents, runs, notifications and saved credentials from the local database, clears the external notification channel, and returns to onboarding. Git repositories on disk are not touched."
                     >
                         <Button
                             variant="outlined"

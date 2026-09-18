@@ -8,11 +8,8 @@ import type { IssueType } from '@atlas/shared';
 // refresh once the soft-delete settles.
 
 const FULL_KEY: Record<IssueType, readonly [string, 'full']> = {
-    epic: ['epics', 'full'],
-    story: ['stories', 'full'],
-    bug: ['bugs', 'full'],
+    task: ['tasks', 'full'],
     sub_task: ['sub-tasks', 'full'],
-    sub_bug: ['sub-bugs', 'full'],
 };
 
 function invalidateCommentCaches(qc: QueryClient, issueType: IssueType, issueId: string): void {

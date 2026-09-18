@@ -43,8 +43,7 @@ const NAV_GROUPS: NavGroup[] = [
                 path: '/projects',
                 countKey: 'projects',
             },
-            { key: 'epics', icon: 'flag', label: 'Epics', path: '/epics', countKey: 'epics' },
-            { key: 'issues', icon: 'layers', label: 'Issues', path: '/issues', countKey: 'issues' },
+            { key: 'tasks', icon: 'flag', label: 'Tasks', path: '/tasks', countKey: 'tasks' },
             { key: 'queue', icon: 'schedule', label: 'Queue', path: '/queue', countKey: 'queue' },
             { key: 'terminal', icon: 'terminal', label: 'Terminal', path: '/terminal' },
             {
@@ -60,6 +59,12 @@ const NAV_GROUPS: NavGroup[] = [
     {
         group: 'Agents',
         items: [
+            {
+                key: 'workflows',
+                icon: 'account_tree',
+                label: 'Workflows',
+                path: '/workflows',
+            },
             {
                 key: 'agents',
                 icon: 'smart_toy',

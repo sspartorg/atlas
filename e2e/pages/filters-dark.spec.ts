@@ -3,11 +3,11 @@ import { goto } from '../helpers/nav.js';
 import { setThemeMode } from '../helpers/theme.js';
 
 // Phase C — Filter-chip readability in dark mode. The unselected
-// filter chips on /agents, /epics, /issues all used to render light
+// filter chips on /agents and /tasks all used to render light
 // text on a near-white bg that flipped wrong; this test confirms the
 // "All" chip is visible and clickable in dark mode for each page.
 
-const PAGES_WITH_FILTERS = ['/agents', '/epics', '/issues'];
+const PAGES_WITH_FILTERS = ['/agents', '/tasks'];
 
 for (const path of PAGES_WITH_FILTERS) {
     test.describe(`${path} — dark mode filters`, () => {

@@ -1,14 +1,12 @@
 import { http, HttpResponse, type DefaultBodyType, type HttpResponseResolver } from 'msw';
 import type {
     IAgent,
-    IBug,
-    IEpic,
-    IEpicListItem,
     INotification,
     IProject,
-    IStory,
-    ISubBug,
     ISubTask,
+    ITask,
+    ITaskListItem,
+    IWorkflowQueue,
 } from '@atlas/shared';
 
 const BASE = 'http://localhost:3000/api';
@@ -25,18 +23,15 @@ function ok<T extends DefaultBodyType>(body: T): HttpResponseResolver {
 export const defaultHandlers = [
     http.get(`${BASE}/projects`, ok<IProject[]>([])),
     http.get(`${BASE}/agents`, ok<IAgent[]>([])),
-    http.get(`${BASE}/epics`, ok<IEpicListItem[]>([])),
-    http.get(`${BASE}/stories`, ok<IStory[]>([])),
-    http.get(`${BASE}/bugs`, ok<IBug[]>([])),
+    http.get(`${BASE}/tasks`, ok<ITaskListItem[]>([])),
     http.get(`${BASE}/sub-tasks`, ok<ISubTask[]>([])),
-    http.get(`${BASE}/sub-bugs`, ok<ISubBug[]>([])),
     http.get(`${BASE}/notifications`, ok<INotification[]>([])),
     http.get(`${BASE}/settings`, ok({ id: 1, owner_name: 'Owner', onboarding_complete: 1 })),
     http.get(`${BASE}/counts`, ok({})),
     http.get(`${BASE}/dashboard`, ok({})),
     http.get(
         `${BASE}/issues/tree`,
-        ok({ tree: [], projects: [], agents: [], epics: [], stories: [], bugs: [] }),
+        ok({ tree: [], projects: [], agents: [], tasks: [] }),
     ),
     // The Projects page calls `useEnabledSchedules` which hits this endpoint.
     // Returning an empty list keeps the page rendering without an unhandled-request
@@ -52,6 +47,10 @@ export const defaultHandlers = [
     // Agent surfaces warn when a CLI binary is missing; default to "nothing
     // known" so they render no warning unless a test opts in.
     http.get(`${BASE}/cli/availability`, () => HttpResponse.json([])),
+    // The agent Overview tab's Quality checklist card loads this on mount.
+    http.get(`${BASE}/agents/:id/checklists`, () => HttpResponse.json([])),
+    // The Queue page.
+    http.get(`${BASE}/workflow-queue`, ok<IWorkflowQueue>({ workflows: [], unassigned: [] })),
 ];
 
 // Convenience factories so tests can express "this endpoint returns X" in one line.
@@ -60,11 +59,8 @@ export const handlers = {
     getProject: (project: IProject) =>
         http.get(`${BASE}/projects/${project.id}`, ok(project)),
     listAgents: (rows: IAgent[]) => http.get(`${BASE}/agents`, ok(rows)),
-    listEpics: (rows: IEpicListItem[]) => http.get(`${BASE}/epics`, ok(rows)),
-    getEpic: (epic: IEpic) => http.get(`${BASE}/epics/${epic.id}`, ok(epic)),
-    listStories: (rows: IStory[]) => http.get(`${BASE}/stories`, ok(rows)),
-    getStory: (story: IStory) => http.get(`${BASE}/stories/${story.id}`, ok(story)),
+    listTasks: (rows: ITaskListItem[]) => http.get(`${BASE}/tasks`, ok(rows)),
+    getTask: (task: ITask) => http.get(`${BASE}/tasks/${task.id}`, ok(task)),
     listSubTasks: (rows: ISubTask[]) => http.get(`${BASE}/sub-tasks`, ok(rows)),
-    listSubBugs: (rows: ISubBug[]) => http.get(`${BASE}/sub-bugs`, ok(rows)),
-    listBugs: (rows: IBug[]) => http.get(`${BASE}/bugs`, ok(rows)),
+    workflowQueue: (queue: IWorkflowQueue) => http.get(`${BASE}/workflow-queue`, ok(queue)),
 };

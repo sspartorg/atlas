@@ -12,9 +12,9 @@ const pageStub = { default: () => null };
 vi.mock('../pages/Dashboard.js', () => pageStub);
 vi.mock('../pages/ScratchPad.js', () => pageStub);
 vi.mock('../pages/Projects.js', () => pageStub);
-vi.mock('../pages/Epics.js', () => pageStub);
-vi.mock('../pages/Issues.js', () => pageStub);
+vi.mock('../pages/Tasks.js', () => pageStub);
 vi.mock('../pages/Queue.js', () => pageStub);
+vi.mock('../pages/Workflows.js', () => pageStub);
 vi.mock('../pages/Agents.js', () => pageStub);
 vi.mock('../pages/Marketplace.js', () => pageStub);
 vi.mock('../pages/McpTools.js', () => pageStub);
@@ -45,12 +45,8 @@ describe('prefetchRoute', () => {
         expect(prefetchRoute('projects')).toBeUndefined();
     });
 
-    it('returns undefined for epics', () => {
-        expect(prefetchRoute('epics')).toBeUndefined();
-    });
-
-    it('returns undefined for issues', () => {
-        expect(prefetchRoute('issues')).toBeUndefined();
+    it('returns undefined for tasks', () => {
+        expect(prefetchRoute('tasks')).toBeUndefined();
     });
 
     it('returns undefined for queue', () => {

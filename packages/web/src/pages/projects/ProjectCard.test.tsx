@@ -6,8 +6,8 @@ import { ProjectCard } from './ProjectCard.js';
 
 const defaultProps = {
     displayId: 'ACM',
-    epicCount: 2,
-    storyCount: 5,
+    taskCount: 2,
+    subTaskCount: 5,
     onOpen: vi.fn(),
     onCopyUrl: vi.fn(),
     onReclone: vi.fn(),
@@ -79,18 +79,18 @@ describe('ProjectCard', () => {
         expect(screen.queryByLabelText('Auto-fetch enabled')).not.toBeInTheDocument();
     });
 
-    it('renders em-dash in Counter when epicCount is null (Counter value === null branch)', () => {
+    it('renders em-dash in Counter when taskCount is null (Counter value === null branch)', () => {
         renderWithProviders(
             <ProjectCard
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 {...defaultProps}
-                epicCount={null as unknown as number}
-                storyCount={null as unknown as number}
+                taskCount={null as unknown as number}
+                subTaskCount={null as unknown as number}
             />,
         );
         // Counter renders '—' for null values
         const dashes = screen.getAllByText('—');
-        // At least 2 dashes: one for epicCount=null, one for storyCount=null
+        // At least 2 dashes: one for taskCount=null, one for subTaskCount=null
         expect(dashes.length).toBeGreaterThanOrEqual(2);
     });
 

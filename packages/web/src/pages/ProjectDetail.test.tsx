@@ -6,7 +6,32 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { server } from '../test-setup.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
-import { makeProject, makeEpic, makeStory, makeBug, makeAgent } from '../test-utils/factories.js';
+import type { IIssueTreeNode } from '@atlas/shared';
+import { makeProject, makeTask, makeAgent } from '../test-utils/factories.js';
+
+function subTaskNode(overrides: Partial<IIssueTreeNode> = {}): IIssueTreeNode {
+    return {
+        id: 'ATL-2',
+        kind: 'sub_task',
+        short_id: 'ATL-2',
+        title: 'Sub-task',
+        status: 'draft',
+        assignee_agent_id: null,
+        reporter_agent_id: null,
+        created_at: '2026-05-16T00:00:00.000Z',
+        updated_at: '2026-05-16T00:00:00.000Z',
+        project_id: 'p1',
+        project_name: 'Atlas',
+        task_id: 'ATL-1',
+        task_title: 'Task One',
+        children: [],
+        ...overrides,
+    };
+}
+
+function taskNode(id: string, children: IIssueTreeNode[] = []): IIssueTreeNode {
+    return subTaskNode({ id, short_id: id, kind: 'task', task_id: null, task_title: null, children });
+}
 import { ProjectDetail } from './ProjectDetail.js';
 
 // Stamp the URL search string into the DOM so tab-nav tests can assert on it.
@@ -69,9 +94,9 @@ describe('ProjectDetail page', () => {
             { initialEntries: ['/projects/p1'] },
         );
 
-        const epicsTab = await screen.findByRole('tab', { name: /epics/i });
-        await user.click(epicsTab);
-        expect(screen.getByTestId('search').textContent).toBe('?tab=epics');
+        const tasksTab = await screen.findByRole('tab', { name: /tasks/i });
+        await user.click(tasksTab);
+        expect(screen.getByTestId('search').textContent).toBe('?tab=tasks');
 
         const overviewTab = await screen.findByRole('tab', { name: /overview/i });
         await user.click(overviewTab);
@@ -97,9 +122,9 @@ describe('ProjectDetail page', () => {
         await user.click(firstEdit);
         expect(screen.getByTestId('search').textContent).toBe('?tab=guardrails');
 
-        // Bounce to Epics so we're back somewhere the right rail is visible.
-        await user.click(await screen.findByRole('tab', { name: /epics/i }));
-        expect(screen.getByTestId('search').textContent).toBe('?tab=epics');
+        // Bounce to Tasks so we're back somewhere the right rail is visible.
+        await user.click(await screen.findByRole('tab', { name: /tasks/i }));
+        expect(screen.getByTestId('search').textContent).toBe('?tab=tasks');
 
         // Second Edit click — the previously reported regression. URL flips back.
         const secondEdit = await screen.findByRole('button', { name: /edit/i });
@@ -388,11 +413,11 @@ describe('ProjectDetail page', () => {
 
     // ── New branch-coverage tests ───────────────────────────────────────────
 
-    it('epics useMemo: empty issueTree.epics returns [] (early-return branch)', async () => {
+    it('Tasks tab shows 0 when the tree has no tasks', async () => {
         registerProjectMocks(
             undefined,
             http.get('http://localhost:3000/api/issues/tree', () =>
-                HttpResponse.json({ tree: [], projects: [], agents: [], epics: [], stories: [], bugs: [] }),
+                HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] }),
             ),
         );
         renderWithProviders(
@@ -401,26 +426,28 @@ describe('ProjectDetail page', () => {
             </Routes>,
             { initialEntries: ['/projects/p1'] },
         );
-        // The Epics tab label shows the epics.length — should be 0.
-        const epicsTab = await screen.findByRole('tab', { name: /epics\s+0/i });
-        expect(epicsTab).toBeInTheDocument();
+        expect(await screen.findByRole('tab', { name: /tasks\s+0/i })).toBeInTheDocument();
     });
 
-    it('epics useMemo: populated epics compute story_count via countByEpic map (with and without matching stories)', async () => {
-        const epicWithStories = makeEpic({ id: 'ATL-1', title: 'Epic With Stories' });
-        const epicWithoutStories = makeEpic({ id: 'ATL-9', title: 'Epic Without Stories' });
-        const story1 = makeStory({ id: 'ATL-2', epic_id: 'ATL-1' });
-        const story2 = makeStory({ id: 'ATL-3', epic_id: 'ATL-1' });
+    it('derives sub_task_count per task from the tree (with and without sub-tasks)', async () => {
+        const user = userEvent.setup();
         registerProjectMocks(
             undefined,
             http.get('http://localhost:3000/api/issues/tree', () =>
                 HttpResponse.json({
-                    tree: [],
+                    tree: [
+                        taskNode('ATL-1', [
+                            subTaskNode({ id: 'ATL-2' }),
+                            subTaskNode({ id: 'ATL-3' }),
+                        ]),
+                        taskNode('ATL-9'),
+                    ],
                     projects: [],
                     agents: [],
-                    epics: [epicWithStories, epicWithoutStories],
-                    stories: [story1, story2],
-                    bugs: [],
+                    tasks: [
+                        makeTask({ id: 'ATL-1', title: 'Task With Sub-tasks' }),
+                        makeTask({ id: 'ATL-9', title: 'Task Without Sub-tasks' }),
+                    ],
                 }),
             ),
         );
@@ -430,33 +457,13 @@ describe('ProjectDetail page', () => {
             </Routes>,
             { initialEntries: ['/projects/p1'] },
         );
-        // Epics tab label shows total epic count (2), issues tab shows stories+bugs (2).
-        expect(await screen.findByRole('tab', { name: /epics\s+2/i })).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: /issues\s+2/i })).toBeInTheDocument();
-    });
-
-    it('stories/bugs default to [] before issueTree loads, then reflect loaded data', async () => {
-        registerProjectMocks(
-            undefined,
-            http.get('http://localhost:3000/api/issues/tree', () =>
-                HttpResponse.json({
-                    tree: [],
-                    projects: [],
-                    agents: [],
-                    epics: [],
-                    stories: [makeStory({ id: 'ATL-2' })],
-                    bugs: [makeBug({ id: 'ATL-5' })],
-                }),
-            ),
-        );
-        renderWithProviders(
-            <Routes>
-                <Route path="/projects/:id" element={<ProjectDetail />} />
-            </Routes>,
-            { initialEntries: ['/projects/p1'] },
-        );
-        // Once loaded: 1 story + 1 bug = 2 on the Issues tab.
-        expect(await screen.findByRole('tab', { name: /issues\s+2/i })).toBeInTheDocument();
+        await user.click(await screen.findByRole('tab', { name: /tasks\s+2/i }));
+        // The sub-task count cell sits right after the title cell.
+        const countCell = (title: string) =>
+            screen.getByText(title).parentElement?.nextElementSibling?.textContent;
+        await screen.findByText('Task With Sub-tasks');
+        expect(countCell('Task With Sub-tasks')).toBe('2');
+        expect(countCell('Task Without Sub-tasks')).toBe('0');
     });
 
     it('renders with owner_name/accent_color present in settings (ownerName/ownerAccent non-fallback branch)', async () => {
@@ -505,32 +512,29 @@ describe('ProjectDetail page', () => {
         expect(matches.length).toBeGreaterThan(0);
     });
 
-    it('activeAgents includes epic/story/bug assignees, excluding done stories/bugs', async () => {
+    it('activeAgents includes task/sub-task assignees, excluding done items', async () => {
         const agentA = makeAgent({ id: 'agent-a', name: 'Agent A' });
         const agentB = makeAgent({ id: 'agent-b', name: 'Agent B' });
-        const agentDoneStory = makeAgent({ id: 'agent-done-story', name: 'Done Story Agent' });
-        const agentDoneBug = makeAgent({ id: 'agent-done-bug', name: 'Done Bug Agent' });
+        const agentDoneTask = makeAgent({ id: 'agent-done-task', name: 'Done Task Agent' });
+        const agentDoneSub = makeAgent({ id: 'agent-done-sub', name: 'Done Sub-task Agent' });
         registerProjectMocks(
             undefined,
             http.get('http://localhost:3000/api/agents', () =>
-                HttpResponse.json([agentA, agentB, agentDoneStory, agentDoneBug]),
+                HttpResponse.json([agentA, agentB, agentDoneTask, agentDoneSub]),
             ),
             http.get('http://localhost:3000/api/issues/tree', () =>
                 HttpResponse.json({
-                    tree: [],
+                    tree: [
+                        taskNode('ATL-1', [
+                            subTaskNode({ id: 'ATL-2', assignee_agent_id: 'agent-b', status: 'in_progress' }),
+                            subTaskNode({ id: 'ATL-3', assignee_agent_id: 'agent-done-sub', status: 'done' }),
+                        ]),
+                    ],
                     projects: [],
                     agents: [],
-                    epics: [makeEpic({ id: 'ATL-1', assignee_agent_id: 'agent-a' })],
-                    stories: [
-                        makeStory({ id: 'ATL-2', assignee_agent_id: 'agent-b', status: 'in_progress' }),
-                        makeStory({
-                            id: 'ATL-3',
-                            assignee_agent_id: 'agent-done-story',
-                            status: 'done',
-                        }),
-                    ],
-                    bugs: [
-                        makeBug({ id: 'ATL-5', assignee_agent_id: 'agent-done-bug', status: 'done' }),
+                    tasks: [
+                        makeTask({ id: 'ATL-1', assignee_agent_id: 'agent-a' }),
+                        makeTask({ id: 'ATL-4', assignee_agent_id: 'agent-done-task', status: 'done' }),
                     ],
                 }),
             ),
@@ -541,12 +545,11 @@ describe('ProjectDetail page', () => {
             </Routes>,
             { initialEntries: ['/projects/p1'] },
         );
-        // Active agents surface in the right rail: Agent A (epic) + Agent B (non-done story).
+        // Active agents surface in the right rail: Agent A (task) + Agent B (open sub-task).
         expect(await screen.findByText('Agent A')).toBeInTheDocument();
         expect(screen.getByText('Agent B')).toBeInTheDocument();
-        // Done story/bug assignees must NOT appear as active agents.
-        expect(screen.queryByText('Done Story Agent')).not.toBeInTheDocument();
-        expect(screen.queryByText('Done Bug Agent')).not.toBeInTheDocument();
+        expect(screen.queryByText('Done Task Agent')).not.toBeInTheDocument();
+        expect(screen.queryByText('Done Sub-task Agent')).not.toBeInTheDocument();
     });
 
     it('guardrailsActive renders "Guard-rails active" pill when guardrails_md is non-empty', async () => {
@@ -593,9 +596,9 @@ describe('ProjectDetail page', () => {
             expect(screen.queryByText(/Active agents/i)).not.toBeInTheDocument();
         });
 
-        // Back to Epics — right rail reappears.
-        const epicsTab = await screen.findByRole('tab', { name: /epics/i });
-        await user.click(epicsTab);
+        // Back to Tasks — right rail reappears.
+        const tasksTab = await screen.findByRole('tab', { name: /tasks/i });
+        await user.click(tasksTab);
         await waitFor(() => {
             expect(screen.getByText(/Active agents/i)).toBeInTheDocument();
         });

@@ -15,19 +15,16 @@ vi.mock('./reminders.js', () => ({
     },
 }));
 
-// agent-dispatcher is called for due agents; mock it to avoid real dispatch.
-vi.mock('./agent-dispatcher.js', () => ({
-    maybeAutoDispatch: vi.fn().mockResolvedValue({ dispatched: false, reason: 'mocked' }),
-}));
-
-// agent-runner is used by spawnFreedomRun; mock to avoid subprocess spawn.
+// The workflow engine (reconcile + dispatch) runs for real against the
+// empty test DB; mock the runner so nothing could spawn a CLI.
 vi.mock('./agent-runner.js', () => ({
     spawnAgentRun: vi.fn().mockResolvedValue('mock-run-id'),
+    cancelRun: vi.fn(),
 }));
 
 import { tickAgentScheduler } from './agent-schedule-registry.js';
 import { truncateAll, closeTestDb, testDb } from '../../tests/_pg-db.js';
-import { insertProject, insertAgent, insertItem } from '../../tests/_items.js';
+import { insertProject, insertAgent } from '../../tests/_items.js';
 
 // Silence scheduler console output in test runs.
 vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -41,39 +38,6 @@ beforeEach(async () => {
 afterAll(async () => {
     await closeTestDb();
 });
-
-/** Insert an agent and immediately stamp its next_run_at to a past time
- *  so tickAgentScheduler treats it as "due". */
-async function insertDueAgent(
-    id: string,
-    overrides: Partial<{
-        requires_item: boolean;
-        concurrent_runs: number;
-        schedule_preset: string;
-        schedule_hours: number;
-    }> = {},
-): Promise<string> {
-    await insertAgent({
-        id,
-        requires_item: overrides.requires_item ?? true,
-    });
-    // Stamp next_run_at to a time in the past so the agent is "due".
-    await testDb
-        .updateTable('agents')
-        .set({
-            next_run_at: '2020-01-01T00:00:00.000Z',
-            schedule_preset: (overrides.schedule_preset ?? 'every_n_hours') as
-                | 'every_n_hours'
-                | 'daily'
-                | 'weekly'
-                | 'monthly',
-            schedule_hours: overrides.schedule_hours ?? 6,
-            concurrent_runs: overrides.concurrent_runs ?? 1,
-        })
-        .where('id', '=', id)
-        .execute();
-    return id;
-}
 
 describe('tickAgentScheduler — remindersService.fireDueReminders catch branches (ASRTICK)', () => {
     it('ASRTICK-1: tick runs cleanly when there are no stuck runs, no due reminders, and no due agents', async () => {
@@ -145,203 +109,6 @@ describe('tickAgentScheduler — remindersService.fireDueReminders catch branche
             if (prev === undefined) delete process.env['ATLAS_LOG_LEVEL'];
             else process.env['ATLAS_LOG_LEVEL'] = prev;
         }
-    });
-});
-
-describe('tickAgentScheduler — dispatchOneAgent branches via due item-driven agent (ASRTICK)', () => {
-    it('ASRTICK-5: due item-driven agent with empty queue returns silently (ready.length === 0 branch)', async () => {
-        // Insert a project + item-driven agent that is due but has no 'ready' items.
-        await insertProject('atk-p1', 'ATK');
-        await insertDueAgent('atk-agent-1');
-        // No items in 'ready' status for this agent → dispatchOneAgent hits
-        // `if (ready.length === 0) return;` branch.
-        await expect(tickAgentScheduler()).resolves.toBeUndefined();
-    });
-
-    it('ASRTICK-6: due item-driven agent at capacity returns without dispatching (capacity === 0 branch)', async () => {
-        // Insert project + agent with concurrent_runs=1 and a 'queued' agent_run
-        // already in-flight so capacity === 0.
-        await insertProject('atk-p2', 'BTK');
-        await insertDueAgent('atk-agent-2', { concurrent_runs: 1 });
-        // Insert a ready item assigned to this agent.
-        // stories require a parent epic (items_check_parent trigger).
-        const epicId = await insertItem({
-            id: 'BTK-epic-1',
-            type: 'epic',
-            project_id: 'atk-p2',
-            title: 'Epic for cap test',
-        });
-        const itemId = await insertItem({
-            type: 'story',
-            project_id: 'atk-p2',
-            parent_id: epicId,
-            parent_type: 'epic',
-            title: 'Story for cap test',
-            status: 'ready',
-            assignee_agent_id: 'atk-agent-2',
-        });
-        // Insert an existing in-progress run to fill the capacity.
-        await testDb
-            .insertInto('agent_runs')
-            .values({
-                id: 'atk-run-1',
-                item_id: itemId,
-                agent_id: 'atk-agent-2',
-                status: 'in_progress',
-                started_at: new Date().toISOString(),
-            })
-            .execute();
-        // Tick should hit `if (capacity === 0) … return` branch.
-        await expect(tickAgentScheduler()).resolves.toBeUndefined();
-    });
-
-    it('ASRTICK-7: due item-driven agent dispatches a ready item (happy dispatch path)', async () => {
-        const { maybeAutoDispatch } = await import('./agent-dispatcher.js');
-        vi.mocked(maybeAutoDispatch).mockResolvedValueOnce({ dispatched: true, runId: 'r1' });
-
-        await insertProject('atk-p3', 'CTK');
-        await insertDueAgent('atk-agent-3', { concurrent_runs: 2 });
-        // stories require a parent epic (items_check_parent trigger).
-        const epicId = await insertItem({
-            id: 'CTK-epic-1',
-            type: 'epic',
-            project_id: 'atk-p3',
-            title: 'Epic for dispatch test',
-        });
-        await insertItem({
-            type: 'story',
-            project_id: 'atk-p3',
-            parent_id: epicId,
-            parent_type: 'epic',
-            title: 'Dispatching story',
-            status: 'ready',
-            assignee_agent_id: 'atk-agent-3',
-        });
-        // maybeAutoDispatch returns dispatched=true → schedLog dispatch line fires.
-        await expect(tickAgentScheduler()).resolves.toBeUndefined();
-        expect(maybeAutoDispatch).toHaveBeenCalledTimes(1);
-    });
-
-    it('ASRTICK-8: due item-driven agent with maybeAutoDispatch returning not-dispatched (skip-dispatch log branch)', async () => {
-        const { maybeAutoDispatch } = await import('./agent-dispatcher.js');
-        vi.mocked(maybeAutoDispatch).mockResolvedValueOnce({ dispatched: false, reason: 'lock-held' });
-
-        await insertProject('atk-p4', 'DTK');
-        await insertDueAgent('atk-agent-4', { concurrent_runs: 2 });
-        // stories require a parent epic (items_check_parent trigger).
-        const epicId = await insertItem({
-            id: 'DTK-epic-1',
-            type: 'epic',
-            project_id: 'atk-p4',
-            title: 'Epic for skip test',
-        });
-        await insertItem({
-            type: 'story',
-            project_id: 'atk-p4',
-            parent_id: epicId,
-            parent_type: 'epic',
-            title: 'Skip story',
-            status: 'ready',
-            assignee_agent_id: 'atk-agent-4',
-        });
-        // dispatched=false → skip-dispatch log line fires.
-        await expect(tickAgentScheduler()).resolves.toBeUndefined();
-        expect(maybeAutoDispatch).toHaveBeenCalledTimes(1);
-    });
-});
-
-describe('tickAgentScheduler — dispatch on ready (item-driven agents ignore their cadence slot)', () => {
-    async function pushSlotIntoFuture(agentId: string): Promise<void> {
-        await testDb
-            .updateTable('agents')
-            .set({ next_run_at: '2999-01-01T00:00:00.000Z' })
-            .where('id', '=', agentId)
-            .execute();
-    }
-
-    it('ASRTICK-15: item-driven agent with a future slot still dispatches a ready item on this tick', async () => {
-        const { maybeAutoDispatch } = await import('./agent-dispatcher.js');
-        vi.mocked(maybeAutoDispatch).mockResolvedValueOnce({ dispatched: true, runId: 'r-ready' });
-
-        await insertProject('atk-p15', 'GTK');
-        await insertDueAgent('atk-agent-15', { concurrent_runs: 1 });
-        await pushSlotIntoFuture('atk-agent-15');
-        const epicId = await insertItem({
-            id: 'GTK-epic-1',
-            type: 'epic',
-            project_id: 'atk-p15',
-            title: 'Epic',
-        });
-        await insertItem({
-            type: 'story',
-            project_id: 'atk-p15',
-            parent_id: epicId,
-            parent_type: 'epic',
-            title: 'Ready now',
-            status: 'ready',
-            assignee_agent_id: 'atk-agent-15',
-        });
-
-        await tickAgentScheduler();
-        expect(maybeAutoDispatch).toHaveBeenCalledTimes(1);
-    });
-
-    it('ASRTICK-16: freedom-mode agent with a future slot does NOT spawn', async () => {
-        const { spawnAgentRun } = await import('./agent-runner.js');
-        await insertProject('atk-p16', 'HTK');
-        await insertDueAgent('atk-agent-16', { requires_item: false, concurrent_runs: 1 });
-        await pushSlotIntoFuture('atk-agent-16');
-
-        await tickAgentScheduler();
-        expect(spawnAgentRun).not.toHaveBeenCalled();
-    });
-});
-
-describe('tickAgentScheduler — dispatchOneAgent freedom-mode branches (ASRTICK)', () => {
-    it('ASRTICK-9: freedom-mode agent at capacity does NOT spawn (at_capacity branch)', async () => {
-        await insertProject('atk-p5', 'ETK');
-        // requires_item=false → freedom mode; concurrent_runs=1
-        await insertDueAgent('atk-agent-5', { requires_item: false, concurrent_runs: 1 });
-        // Fill capacity with an existing in-progress run (item_id=null for freedom runs).
-        await testDb
-            .insertInto('agent_runs')
-            .values({
-                id: 'atk-run-2',
-                item_id: null,
-                agent_id: 'atk-agent-5',
-                status: 'in_progress',
-                started_at: new Date().toISOString(),
-            })
-            .execute();
-        // Should hit the `at_capacity` branch → return without spawning.
-        await expect(tickAgentScheduler()).resolves.toBeUndefined();
-    });
-
-    it('ASRTICK-10: freedom-mode agent below capacity spawns a freedom run', async () => {
-        const { spawnAgentRun } = await import('./agent-runner.js');
-        vi.mocked(spawnAgentRun).mockResolvedValueOnce('freedom-run-id');
-
-        await insertProject('atk-p6', 'FTK');
-        await insertDueAgent('atk-agent-6', { requires_item: false, concurrent_runs: 2 });
-        // No existing runs → capacity available → should spawn.
-        await expect(tickAgentScheduler()).resolves.toBeUndefined();
-        expect(spawnAgentRun).toHaveBeenCalledTimes(1);
-    });
-});
-
-describe('tickAgentScheduler — unseeded next_run_at seeding branch (ASRTICK)', () => {
-    it('ASRTICK-11: active agent with next_run_at=null gets seeded by tick (lines 439-461)', async () => {
-        await insertProject('atk-p7', 'GTK');
-        await insertAgent({ id: 'atk-agent-7' });
-        // next_run_at defaults to null in insertAgent — the tick should seed it.
-        await expect(tickAgentScheduler()).resolves.toBeUndefined();
-        // After the tick next_run_at should be set.
-        const row = await testDb
-            .selectFrom('agents')
-            .select('next_run_at')
-            .where('id', '=', 'atk-agent-7')
-            .executeTakeFirst();
-        expect(row?.next_run_at).not.toBeNull();
     });
 });
 

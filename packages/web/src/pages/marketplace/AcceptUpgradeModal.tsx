@@ -29,9 +29,7 @@ interface Props {
 
 const FIELDS: Array<{ key: MarketplaceUpgradeField; label: string }> = [
     { key: 'prompt_md', label: 'Prompt' },
-    { key: 'handoff_prompt_md', label: 'Handoff prompt' },
     { key: 'settings_json', label: 'Settings' },
-    { key: 'handoff_rules', label: 'Handoff rules' },
     { key: 'checklists', label: 'Checklists' },
 ];
 
@@ -125,10 +123,7 @@ export function AcceptUpgradeModal({
                         {FIELDS.map(({ key, label }) => {
                             const field = diff.fields[key];
                             if (!field.changed) return null;
-                            const isJson =
-                                key === 'settings_json' ||
-                                key === 'handoff_rules' ||
-                                key === 'checklists';
+                            const isJson = key === 'settings_json' || key === 'checklists';
                             return (
                                 <Box key={key} sx={{ mb: 4 }}>
                                     <FormControlLabel

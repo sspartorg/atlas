@@ -6,7 +6,7 @@
 // can serve p50 / p95 / p99 stats from `GET /api/_perf/routes` without
 // pulling logs.
 //
-// Route templates (e.g. `/api/epics/:id`) are used as the aggregation
+// Route templates (e.g. `/api/tasks/:id`) are used as the aggregation
 // key, not the concrete URL — the Fastify router surfaces this on
 // `req.routeOptions.url` at onResponse time. When it isn't available
 // (404, static assets), we fall back to `<UNKNOWN>` so the registry

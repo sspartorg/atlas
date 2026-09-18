@@ -19,14 +19,14 @@ import { gotoWithPerf } from '../helpers/perf.js';
 
 const PERF_ENABLED = process.env['PERF'] === '1';
 
-// Static routes: always navigable, no dynamic ID.
+// Static routes plus seeded detail routes: always navigable.
 const STATIC_ROUTES = [
     '/',
     '/projects',
-    '/epics',
-    '/epics/new',
-    '/issues',
+    '/tasks',
+    '/tasks/new',
     '/queue',
+    '/workflows',
     '/search',
     '/terminal',
     '/terminal/layout',
@@ -40,6 +40,10 @@ const STATIC_ROUTES = [
     '/settings/credentials',
     '/analytics',
     '/scratch-pad',
+    // Seeded by e2e/fixtures/run-seed.ts: Task ETM-1 and its sub-task ETM-2.
+    '/tasks/ETM-1',
+    '/sub-tasks/ETM-2',
+    '/analytics/task/ETM-1',
 ] as const;
 
 test.describe('cold/warm TTI baseline', () => {
@@ -112,47 +116,6 @@ test.describe('cold/warm TTI baseline', () => {
             expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
         });
 
-        test('cold /epics/:id (first seeded epic)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/epics');
-            const epicLink = page.locator('a[href^="/epics/"]')
-                .filter({ hasNot: page.locator('[href="/epics/new"]') })
-                .first();
-            if ((await epicLink.count()) === 0) {
-                test.skip(true, 'no seeded epic');
-                return;
-            }
-            const href = await epicLink.getAttribute('href');
-            if (!href || href === '/epics/new') return;
-            const record = await gotoWithPerfCold(page, context, href);
-            expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
-        });
-
-        test('cold /issues/stories/:id (first seeded story)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/issues');
-            const storyLink = page.locator('a[href^="/issues/stories/"]').first();
-            if ((await storyLink.count()) === 0) {
-                test.skip(true, 'no seeded story');
-                return;
-            }
-            const href = await storyLink.getAttribute('href');
-            if (!href) return;
-            const record = await gotoWithPerfCold(page, context, href);
-            expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
-        });
-
-        test('cold /issues/bugs/:id (first seeded bug)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/issues');
-            const bugLink = page.locator('a[href^="/issues/bugs/"]').first();
-            if ((await bugLink.count()) === 0) {
-                test.skip(true, 'no seeded bug');
-                return;
-            }
-            const href = await bugLink.getAttribute('href');
-            if (!href) return;
-            const record = await gotoWithPerfCold(page, context, href);
-            expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
-        });
-
         test('cold /agents/:id (first seeded agent)', async ({ page, context }) => {
             await gotoWithPerf(page, '/agents');
             const agentLink = page.locator('a[href^="/agents/"]')
@@ -194,19 +157,6 @@ test.describe('cold/warm TTI baseline', () => {
             const record = await gotoWithPerfCold(page, context, href);
             expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
         });
-
-        test('cold /analytics/epic/:id (first analytics epic)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/analytics');
-            const epicLink = page.locator('a[href^="/analytics/epic/"]').first();
-            if ((await epicLink.count()) === 0) {
-                test.skip(true, 'no analytics epic links');
-                return;
-            }
-            const href = await epicLink.getAttribute('href');
-            if (!href) return;
-            const record = await gotoWithPerfCold(page, context, href);
-            expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
-        });
     });
 
     // ------------------------------------------------------------------
@@ -237,47 +187,6 @@ test.describe('cold/warm TTI baseline', () => {
             if (!href) return;
             const projectId = href.replace('/projects/', '').split('/')[0];
             const record = await gotoWithPerfWarm(page, context, `/projects/${projectId}/guardrails`);
-            expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
-        });
-
-        test('warm /epics/:id (first seeded epic)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/epics');
-            const epicLink = page.locator('a[href^="/epics/"]')
-                .filter({ hasNot: page.locator('[href="/epics/new"]') })
-                .first();
-            if ((await epicLink.count()) === 0) {
-                test.skip(true, 'no seeded epic');
-                return;
-            }
-            const href = await epicLink.getAttribute('href');
-            if (!href || href === '/epics/new') return;
-            const record = await gotoWithPerfWarm(page, context, href);
-            expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
-        });
-
-        test('warm /issues/stories/:id (first seeded story)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/issues');
-            const storyLink = page.locator('a[href^="/issues/stories/"]').first();
-            if ((await storyLink.count()) === 0) {
-                test.skip(true, 'no seeded story');
-                return;
-            }
-            const href = await storyLink.getAttribute('href');
-            if (!href) return;
-            const record = await gotoWithPerfWarm(page, context, href);
-            expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
-        });
-
-        test('warm /issues/bugs/:id (first seeded bug)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/issues');
-            const bugLink = page.locator('a[href^="/issues/bugs/"]').first();
-            if ((await bugLink.count()) === 0) {
-                test.skip(true, 'no seeded bug');
-                return;
-            }
-            const href = await bugLink.getAttribute('href');
-            if (!href) return;
-            const record = await gotoWithPerfWarm(page, context, href);
             expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
         });
 
@@ -318,19 +227,6 @@ test.describe('cold/warm TTI baseline', () => {
                 return;
             }
             const href = await projLink.getAttribute('href');
-            if (!href) return;
-            const record = await gotoWithPerfWarm(page, context, href);
-            expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
-        });
-
-        test('warm /analytics/epic/:id (first analytics epic)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/analytics');
-            const epicLink = page.locator('a[href^="/analytics/epic/"]').first();
-            if ((await epicLink.count()) === 0) {
-                test.skip(true, 'no analytics epic links');
-                return;
-            }
-            const href = await epicLink.getAttribute('href');
             if (!href) return;
             const record = await gotoWithPerfWarm(page, context, href);
             expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);

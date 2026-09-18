@@ -1,6 +1,7 @@
 import { db } from '../db/kysely-client.js';
 import { commentsService } from './comments.js';
 import { itemLinks } from './item-links.js';
+import { DEFAULT_THREAD_TAIL_COMMENTS, takeRecentComments } from './context-budget.js';
 import { COMMIT_DISCIPLINE_PROMPT_SECTION, buildHumanAttributionSection } from './commit-discipline.js';
 
 // Theme 09 — render `{{ key }}` placeholders in an agent's prompt
@@ -44,12 +45,26 @@ import type {
 export interface IssueContext {
     title: string;
     description: string;
+    acceptance_criteria?: string | undefined;
     spec_md?: string | undefined;
-    epicTitle?: string | undefined;
-    epicDescription?: string | undefined;
     projectName?: string | undefined;
     comments: IComment[];
+    // A sub-task's parent Task. A step running on a sub-task works inside
+    // the Task's brief, and the Owner often answers on the Task, not on
+    // the sub-task — so its spec and latest discussion travel along.
+    task?:
+        | {
+              id: string;
+              title: string;
+              description: string;
+              acceptance_criteria?: string | undefined;
+              spec_md?: string | undefined;
+              comments: IComment[];
+          }
+        | undefined;
 }
+
+const orUndef = (v: string | null | undefined): string | undefined => v || undefined;
 
 export async function getIssueContext(issueType: IssueType, issueId: string): Promise<IssueContext | null> {
     // Always pull the comment thread in parallel — the owner's working
@@ -57,84 +72,109 @@ export async function getIssueContext(issueType: IssueType, issueId: string): Pr
     // are how the spec actually evolves. Agents need both.
     const commentsPromise = commentsService.list(issueType, issueId);
 
-    if (issueType === 'story') {
-        const row = await db
-            .selectFrom('items as s')
-            .leftJoin('items as e', 'e.id', 's.parent_id')
-            .leftJoin('projects as p', 'p.id', 's.project_id')
-            .select([
-                's.title as title',
-                's.description as description',
-                's.spec_md as spec_md',
-                'e.title as epic_title',
-                'e.description as epic_description',
-                'p.name as project_name',
-            ])
-            .where('s.id', '=', issueId)
-            .where('s.type', '=', 'story')
-            .executeTakeFirst();
-        if (!row) return null;
-        // reason: `items.project_id` is NOT NULL and FK-enforced
-        // (ON DELETE CASCADE), and the `items_check_parent` trigger
-        // requires every story to have a `parent_id` pointing at an
-        // existing epic — so the `e`/`p` leftJoins above can never
-        // actually miss, and the `?? undefined` fallbacks on
-        // epicTitle/epicDescription/projectName are unreachable
-        // defensively (see migrations/001_baseline.sql).
-        return {
-            title: row.title as string,
-            description: (row.description as string | null) ?? '',
-            spec_md: (row.spec_md as string | null) ?? undefined,
-            /* v8 ignore next */
-            epicTitle: (row.epic_title as string | null) ?? undefined,
-            /* v8 ignore next */
-            epicDescription: (row.epic_description as string | null) ?? undefined,
-            /* v8 ignore next */
-            projectName: (row.project_name as string | null) ?? undefined,
-            comments: await commentsPromise,
-        };
-    }
+    const row = await db
+        .selectFrom('items as i')
+        .leftJoin('projects as p', 'p.id', 'i.project_id')
+        .select([
+            'i.title as title',
+            'i.description as description',
+            'i.acceptance_criteria as acceptance_criteria',
+            'i.spec_md as spec_md',
+            'i.parent_id as parent_id',
+            'p.name as project_name',
+        ])
+        .where('i.id', '=', issueId)
+        .where('i.type', '=', issueType)
+        .executeTakeFirst();
+    if (!row) return null;
 
-    if (issueType === 'epic') {
-        const row = await db
-            .selectFrom('items as e')
-            .leftJoin('projects as p', 'p.id', 'e.project_id')
-            .select(['e.title as title', 'e.description as description', 'p.name as project_name'])
-            .where('e.id', '=', issueId)
-            .where('e.type', '=', 'epic')
-            .executeTakeFirst();
-        if (!row) return null;
-        return {
-            title: row.title as string,
-            description: (row.description as string | null) ?? '',
-            // reason: `items.project_id` is NOT NULL and FK-enforced
-            // (ON DELETE CASCADE), so the `p` leftJoin above can never
-            // actually miss for an existing epic row.
-            /* v8 ignore next */
-            projectName: (row.project_name as string | null) ?? undefined,
-            comments: await commentsPromise,
-        };
-    }
+    const ctx: IssueContext = {
+        title: row.title,
+        description: row.description ?? '',
+        acceptance_criteria: orUndef(row.acceptance_criteria),
+        // Sub-tasks carry no spec of their own; the Task's spec is theirs.
+        spec_md: issueType === 'task' ? orUndef(row.spec_md) : undefined,
+        // reason: `items.project_id` is NOT NULL and FK-enforced, so the
+        // `p` leftJoin can never actually miss.
+        /* v8 ignore next */
+        projectName: row.project_name ?? undefined,
+        comments: await commentsPromise,
+    };
 
-    if (issueType === 'bug') {
-        const row = await db
-            .selectFrom('items')
-            .select(['title', 'description'])
-            .where('id', '=', issueId)
-            .where('type', '=', 'bug')
-            .executeTakeFirst();
-        if (!row) return null;
-        return {
-            title: row.title as string,
-            description: (row.description as string | null) ?? '',
-            comments: await commentsPromise,
-        };
+    if (issueType === 'sub_task' && row.parent_id) {
+        const [task, taskComments] = await Promise.all([
+            db
+                .selectFrom('items')
+                .select(['id', 'title', 'description', 'acceptance_criteria', 'spec_md'])
+                .where('id', '=', row.parent_id)
+                .executeTakeFirst(),
+            commentsService.list('task', row.parent_id),
+        ]);
+        // reason: the `items_check_parent` trigger guarantees a sub-task's
+        // parent is an existing task.
+        /* v8 ignore next */
+        if (task) {
+            ctx.task = {
+                id: task.id,
+                title: task.title,
+                description: task.description ?? '',
+                acceptance_criteria: orUndef(task.acceptance_criteria),
+                spec_md: orUndef(task.spec_md),
+                comments: takeRecentComments(taskComments, DEFAULT_THREAD_TAIL_COMMENTS),
+            };
+        }
     }
-
-    return null;
+    return ctx;
 }
 
-export function formatComments(comments: IComment[]): string {
+// The `# Current Task` body shared by the inline prompt and
+// `.atlas/current-task.md` (current-task-writer.ts).
+export function renderIssueContext(issueType: IssueType, issueId: string, ctx: IssueContext): string[] {
+    const lines: string[] = [`**Issue type:** ${issueType}`, `**Issue ID:** ${issueId}`];
+    if (ctx.projectName) lines.push(`**Project:** ${ctx.projectName}`);
+    if (ctx.task) lines.push(`**Task:** ${ctx.task.title} (${ctx.task.id})`);
+
+    lines.push(
+        '',
+        `## Title`,
+        ctx.title,
+        '',
+        `## Description (starting point — may be vague / incomplete on purpose)`,
+        ctx.description || '_(none)_',
+    );
+    if (ctx.acceptance_criteria) {
+        lines.push('', `## Acceptance criteria`, ctx.acceptance_criteria);
+    }
+    if (ctx.spec_md) {
+        lines.push('', `## Existing Spec`, ctx.spec_md);
+    }
+    lines.push(
+        '',
+        `## Discussion (chronological — newer comments override older ones)`,
+        formatComments(ctx.comments),
+    );
+
+    if (ctx.task) {
+        const t = ctx.task;
+        lines.push(
+            '',
+            `## Parent Task — ${t.title} (${t.id})`,
+            '',
+            `### Task description`,
+            t.description || '_(none)_',
+        );
+        if (t.acceptance_criteria) lines.push('', `### Task acceptance criteria`, t.acceptance_criteria);
+        if (t.spec_md) lines.push('', `### Task spec`, t.spec_md);
+        lines.push(
+            '',
+            `### Task discussion (latest comments — the Owner often answers on the Task)`,
+            formatComments(t.comments),
+        );
+    }
+    return lines;
+}
+
+function formatComments(comments: IComment[]): string {
     if (comments.length === 0) return '_(no comments yet — the description above is the starting point.)_';
     return comments
         .map((c) => {
@@ -150,11 +190,9 @@ export function formatComments(comments: IComment[]): string {
 // + …) and can technically call any Atlas MCP tool, so the safety net
 // moved to a prompt-level clause.
 //
-// 2026-06-01 (Plan E) — `mcp__atlas__execGitHub` was removed. The
-// orchestrator regains ownership of `git push` and `gh pr create`:
-// `pushWorktree` always fires at run-end, and `openPullRequest` fires
-// when the agent row has `raises_pr = true` AND the run exited cleanly.
-// Agents commit only. The constitution mirrors that contract.
+// ADR 0014 — the workflow owns `git push` and `gh pr create`: it pushes and
+// opens one PR when the whole workflow run reaches End. Agents commit only.
+// The constitution mirrors that contract.
 const FORBIDDEN_TOOLS_SECTION = `## One run = one model session
 
 You may not dispatch sub-agents from this session. Concretely:
@@ -191,9 +229,16 @@ explain that this is an Owner-only action.
 
 ## Repository operations (every agent, no exceptions)
 
-**You commit. The orchestrator pushes and opens the PR.** This split
+**You commit. The workflow pushes and opens the PR.** This split
 is non-negotiable and identical for every role; do not duplicate or
 vary it in a per-agent prompt.
+
+**You are one step of a workflow.** Other agents may run before and
+after you in this same working directory — their commits are already
+here, and yours will be there for the next step. Routing is the
+workflow's job: never assign the item, change its status, or hand the
+work to another agent yourself. Report your result with the
+\`atlas-outcome\` block and stop.
 
 **Commit your own work.** Every commit must use the Husky workaround
 \`git -c core.hooksPath=.husky/_ commit\` (the sandbox can't spawn
@@ -204,17 +249,14 @@ trail credits the AI for the work. Stage with \`git add\` (no
 
 **Do NOT run \`git push\`, \`gh pr create\`, \`gh pr edit\`, or any
 other remote-mutating git/gh command — via Bash or anywhere else.**
-The orchestrator owns those:
+The workflow owns those:
 
-- After your run ends — success OR failure — it pushes the worktree
-  HEAD to \`origin/<worktree_branch>\` so nothing strands on disk.
-- On a clean exit (run status \`completed\`), when your agent row has
-  \`raises_pr = true\`, it opens a pull request against the project's
-  default branch (typically \`main\`). The PR URL is written to
-  \`items.pr_url\` automatically; you do not need to mention it in a
-  comment.
-- The orchestrator uses the API server's stored GitHub credential
-  (HTTPS \`http.extraheader\`) — no token is exposed to your shell.
+- When the workflow run reaches its End step it pushes the branch
+  and, if the workflow is configured to, opens one pull request
+  against the project's default branch. The PR is linked on the
+  item automatically; you do not need to mention it in a comment.
+- It uses the API server's stored GitHub credential (HTTPS
+  \`http.extraheader\`) — no token is exposed to your shell.
 
 Local reads are fine: \`git status\`, \`git diff\`, \`git log\`,
 \`gh pr view\` (read-only). Anything that mutates origin is the
@@ -341,9 +383,9 @@ export async function renderRunOutcomeContract(agentId: string): Promise<string>
         '',
         '## Outcomes',
         '',
-        '- `done` — your work this round is complete; the orchestrator applies your **on-pass** handoff (next agent in the chain).',
-        '- `rejected` — you are explicitly bouncing the work back; the orchestrator applies your **on-fail** handoff (typically back to the prior agent). Provide `reason`.',
-        '- `asked_question` — you cannot proceed without Owner input; the orchestrator parks the item in `waiting_for_info`. Provide `reason`.',
+        '- `done` — your work this round is complete; the workflow follows its **pass** connection to the next step.',
+        '- `rejected` — you are explicitly bouncing the work back; the workflow follows its **fail** connection (typically back to the previous step). Provide `reason` — the next step reads it.',
+        '- `asked_question` — you cannot proceed without Owner input (the request is unclear, contradictory, or missing information); the workflow parks the item with the Owner and re-runs your step once they reply. Provide `reason` as the exact question.',
         '',
         '## Block format',
         '',
@@ -378,7 +420,7 @@ export async function renderRunOutcomeContract(agentId: string): Promise<string>
         }
         lines.push(
             '',
-            '**Strict mode.** If you emit `outcome: done` and any **required** row is either missing from `checklist` or reports `passed: false`, the orchestrator treats your run as a checklist failure and applies the **on-fail** handoff instead (typically back to the prior agent with the failed labels named).',
+            '**Strict mode.** If you emit `outcome: done` and any **required** row is either missing from `checklist` or reports `passed: false`, the workflow treats your run as a checklist failure and follows the **fail** connection instead (or parks with the Owner when there is none).',
             '',
         );
     } else {
@@ -440,7 +482,7 @@ export function buildConstitutionMarkdown(
 // dispatch. depends_on shows outgoing-only (items
 // THIS task waits on); relates_to shows both directions because the
 // relation is undirected. tested_by shows both directions with role labels
-// (`Tests` on the QA twin, `Tested by` on the dev story) — dropping it made
+// (`Tests` on the QA twin, `Tested by` on the dev sub-task) — dropping it made
 // QA Writer conclude its twin link was missing.
 //
 // B04 — the `Depends on` subsection now also bakes in each dep's
@@ -461,7 +503,7 @@ export async function buildLinkedItemsSection(itemId: string): Promise<string> {
         (l) => l.relation_type === 'depends_on' && l.direction === 'incoming',
     );
     const relatesTo = links.filter((l) => l.relation_type === 'relates_to');
-    // tested_by points test → dev: outgoing on the QA twin, incoming on the dev story.
+    // tested_by points test → dev: outgoing on the QA twin, incoming on the dev sub-task.
     const tests = links.filter((l) => l.relation_type === 'tested_by' && l.direction === 'outgoing');
     const testedBy = links.filter((l) => l.relation_type === 'tested_by' && l.direction === 'incoming');
 
@@ -599,7 +641,7 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
     // Theme 09b — project-scope run path. Reached when the agent
     // operates on a project (not an item) — e.g., the AI-Readiness
     // Agent. Renders a project preamble (name + description +
-    // guardrails_md + epic list) so the agent has full PRD context
+    // guardrails_md + task list) so the agent has full PRD context
     // without an item to anchor to.
     if (!issueType && !issueId && projectId) {
         const project = await db
@@ -608,11 +650,11 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
             .where('id', '=', projectId)
             .executeTakeFirst();
         if (!project) throw new Error(`Project ${projectId} not found`);
-        const epics = await db
+        const tasks = await db
             .selectFrom('items')
             .select(['id', 'title', 'description', 'spec_md'])
             .where('project_id', '=', projectId)
-            .where('type', '=', 'epic')
+            .where('type', '=', 'task')
             .orderBy('created_at', 'asc')
             .execute();
 
@@ -647,7 +689,7 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
             ``,
             `**Project id:** ${project.id}`,
             `**Project name:** ${project.name}`,
-            `**Repo path (your cwd):** ${gitPath}`,
+            `**Repo path:** ${gitPath} (a workflow step works in its own worktree of this repo)`,
             ``,
             `## Description`,
             projectDescription,
@@ -656,9 +698,9 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
         if ((project.guardrails_md ?? '').trim()) {
             ctxLines.push('', `## Project guardrails`, project.guardrails_md.trim());
         }
-        if (epics.length > 0) {
-            ctxLines.push('', `## Epics under this project (additional PRD context)`);
-            for (const e of epics) {
+        if (tasks.length > 0) {
+            ctxLines.push('', `## Tasks under this project (additional PRD context)`);
+            for (const e of tasks) {
                 ctxLines.push('', `### ${e.title} (${e.id})`);
                 ctxLines.push((e.description ?? '').trim() || '_(no description)_');
                 if ((e.spec_md ?? '').trim()) {
@@ -672,7 +714,7 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
                 }
             }
         } else {
-            ctxLines.push('', `## Epics under this project`, '_(none yet)_');
+            ctxLines.push('', `## Tasks under this project`, '_(none yet)_');
         }
         sections.push(ctxLines.join('\n'));
         sections.push(
@@ -715,12 +757,12 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
         /* v8 ignore next */
         if (outcomeContract) sections.push(outcomeContract);
         sections.push(
-            `# Freedom Run\n\n` +
-                `This is a scheduled run with no item attached. You were dispatched ` +
-                `by the cron scheduler because your \`requires_item\` flag is off. Use ` +
-                `your role prompt above to decide what to produce; results go into ` +
-                `the run output and any side effects (comments, notifications, etc.) ` +
-                `are at your discretion via the MCP tools your agent record grants.`,
+            `# Project-level Run\n\n` +
+                `This run has no item attached — the workflow runs you against the ` +
+                `project (or on its own). Use your role prompt above to decide what ` +
+                `to produce; results go into the run output and any side effects ` +
+                `(items, comments, notifications) are at your discretion via the MCP ` +
+                `tools your agent record grants.`,
         );
         sections.push(
             `# Output Instructions\n\n` +
@@ -759,34 +801,7 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
     /* v8 ignore next */
     if (outcomeContract) sections.push(outcomeContract);
 
-    const contextLines: string[] = [
-        `# Current Task\n`,
-        `**Issue type:** ${issueType}`,
-        `**Issue ID:** ${issueId}`,
-    ];
-
-    if (ctx.projectName) contextLines.push(`**Project:** ${ctx.projectName}`);
-    if (ctx.epicTitle) contextLines.push(`**Epic:** ${ctx.epicTitle}`);
-    if (ctx.epicDescription) contextLines.push(`**Epic description:** ${ctx.epicDescription}`);
-
-    contextLines.push(
-        '',
-        `## Title`,
-        ctx.title,
-        '',
-        `## Description (starting point — may be vague / incomplete on purpose)`,
-        ctx.description || '_(none)_',
-    );
-
-    if (ctx.spec_md) {
-        contextLines.push('', `## Existing Spec`, ctx.spec_md);
-    }
-
-    contextLines.push(
-        '',
-        `## Discussion (chronological — newer comments override older ones)`,
-        formatComments(ctx.comments),
-    );
+    const contextLines: string[] = [`# Current Task\n`, ...renderIssueContext(issueType, issueId, ctx)];
 
     const linkedSection = await buildLinkedItemsSection(issueId);
     if (linkedSection) {
@@ -804,7 +819,7 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
             ``,
             `1. **Read the Discussion section above carefully.** The Description is just the seed; the Owner refines, clarifies, and corrects through comments. **When the description and a later comment disagree, the latest comment wins.** Treat the chronological comment thread as the authoritative source of truth.`,
             `2. **The orchestrator posts a single completion comment on this item after your run ends**, composed from the \`summary\` field of your terminal \`atlas-outcome\` block. **Do NOT post starting or closing comments yourself.** One persona = one auto-comment; agent-authored comments on top would just create noise. Focus on the work; the orchestrator owns the audit trail.`,
-            `3. **Comment only to ask the Owner a question** you genuinely need an answer to before you can proceed. If you do, use \`update_item\` with \`action: 'add_comment'\`, \`author: 'agent'\` and your own \`agent_id\`; phrase it as a numbered list ("Answer Q1 first; I'll work down after each answer.") and exit without doing further work. The orchestrator will still post your completion comment.`,
+            `3. **To ask the Owner a question** you genuinely need answered before you can proceed, end the run with \`outcome: asked_question\` and put the question in \`reason\` — phrase several as a numbered list ("Answer Q1 first; I'll work down after each answer."). The orchestrator posts that reason on the item and the workflow waits for the Owner's reply, then re-runs you with the answer in the Discussion. **Do not also post the question as a comment** — it would appear twice.`,
             `4. Never assume; if the comments do not give you enough to proceed, ask via step 3 and exit — do not invent answers.`,
             // A06 — end-of-run memory draft. Optional, gated by the boundary
             // rule already embedded in the `updateAgentMemory` tool description.

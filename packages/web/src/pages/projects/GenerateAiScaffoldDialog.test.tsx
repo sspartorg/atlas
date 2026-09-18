@@ -29,7 +29,7 @@ describe('GenerateAiScaffoldDialog', () => {
     it('starts generation, calls onClose on success', async () => {
         server.use(
             http.post('http://localhost:3000/api/projects/p1/generate-ai-scaffold', () =>
-                HttpResponse.json({ run_id: 'r99' }),
+                HttpResponse.json({ run_id: 'r99', workflow_id: 'wf-1' }),
             ),
         );
         const onClose = vi.fn();

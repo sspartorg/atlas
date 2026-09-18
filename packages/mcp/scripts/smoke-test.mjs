@@ -1,23 +1,27 @@
-// Smoke test for the four agent-authoring MCP tools.
+// Smoke test for the MCP server's tool surface.
 //
-// Boots the built MCP server over stdio, lists tools, and (when LIVE_API=1)
-// exercises listAgents → getAgent → updateAgent → re-getAgent against a real
-// running Atlas API. Confirms the X-Atlas-Token round-trip works end-to-end.
+// Boots the MCP server from source over stdio (through tsx, the way
+// examples/claude-desktop-config.json runs it: `@atlas/shared` ships raw
+// TypeScript, so a plain `node dist/index.js` can't load it), checks tools/list against the 13
+// tools `src/tools/*.ts` register, and (when LIVE_API=1) round-trips the
+// read-only tools against a real running Atlas API:
+// listProjects → getProject, crud_agent search → get, search_item → get_item.
+// Never writes, so it is safe to point at a dev stack with real data.
 //
-//   pnpm -F @atlas/mcp build
-//   LIVE_API=1 ATLAS_MCP_TOKEN=dev-secret node packages/mcp/scripts/smoke-test.mjs
+//   node packages/mcp/scripts/smoke-test.mjs
+//   LIVE_API=1 ATLAS_API_BASE=http://127.0.0.1:4001 node packages/mcp/scripts/smoke-test.mjs
 //
-// Requires the API to be running at ATLAS_API_BASE (default 127.0.0.1:4001)
-// with ATLAS_MCP_TOKEN matching the one passed here.
+// SMOKE_QUERY (default `todo`) is the search_item keyword; zero hits just
+// skips the get_item leg.
 
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const serverPath = join(__dirname, '..', 'dist', 'index.js');
+const serverPath = join(__dirname, '..', 'src', 'index.ts');
 
-const child = spawn(process.execPath, [serverPath], {
+const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), serverPath], {
     stdio: ['pipe', 'pipe', 'pipe'],
     env: {
         ...process.env,
@@ -60,13 +64,27 @@ async function waitForResponse(id, timeoutMs = 4000) {
     throw new Error(`Timed out waiting for response id=${id}`);
 }
 
-const EXPECTED_TOOLS = ['createAgent', 'getAgent', 'listAgents', 'updateAgent'];
+const EXPECTED_TOOLS = [
+    'agent_memory',
+    'create_item',
+    'crud_agent',
+    'crud_reminder',
+    'delete_item',
+    'getProject',
+    'get_item',
+    'listProjects',
+    'marketplace_agent',
+    'search_item',
+    'search_reminder',
+    'sendExternalNotification',
+    'update_item',
+];
 
 function unwrap(callResp, label) {
-    if (callResp.error) {
-        throw new Error(`${label} errored: ${JSON.stringify(callResp.error)}`);
-    }
     const text = callResp.result?.content?.[0]?.text ?? '';
+    if (callResp.error || callResp.result?.isError) {
+        throw new Error(`${label} errored: ${JSON.stringify(callResp.error) ?? text}`);
+    }
     try {
         return JSON.parse(text);
     } catch {
@@ -100,47 +118,50 @@ try {
     }
 
     if (process.env.LIVE_API === '1') {
-        send({
-            jsonrpc: '2.0',
-            id: 3,
-            method: 'tools/call',
-            params: { name: 'listAgents', arguments: {} },
-        });
-        const listAgents = unwrap(await waitForResponse(3, 8000), 'listAgents');
-        if (!Array.isArray(listAgents) || listAgents.length === 0) {
-            throw new Error('listAgents returned no agents — seed first');
-        }
-        const targetId = listAgents[0].id;
-        console.log(`[smoke] listAgents → ${listAgents.length} agent(s). first id=${targetId}`);
+        let nextId = 3;
+        const call = async (name, args, label = name) => {
+            const id = nextId++;
+            send({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
+            return unwrap(await waitForResponse(id, 8000), label);
+        };
 
-        send({
-            jsonrpc: '2.0',
-            id: 4,
-            method: 'tools/call',
-            params: { name: 'getAgent', arguments: { id: targetId } },
-        });
-        const composite = unwrap(await waitForResponse(4, 8000), 'getAgent');
-        console.log(
-            `[smoke] getAgent ${targetId}: prompt_version=${composite.agent.prompt_version} ` +
-                `rules=${composite.handoff_rules.length} ` +
-                `checks=${composite.checklists.length}`
-        );
-
-        const stamp = `smoke-test-${Date.now()}`;
-        send({
-            jsonrpc: '2.0',
-            id: 5,
-            method: 'tools/call',
-            params: {
-                name: 'updateAgent',
-                arguments: { id: targetId, description: stamp },
-            },
-        });
-        const updated = unwrap(await waitForResponse(5, 8000), 'updateAgent');
-        if (updated.agent.description !== stamp) {
-            throw new Error(`updateAgent did not persist: got "${updated.agent.description}"`);
+        const projects = await call('listProjects', {});
+        if (!Array.isArray(projects)) throw new Error('listProjects did not return an array');
+        console.log(`[smoke] listProjects → ${projects.length} project(s)`);
+        if (projects.length > 0) {
+            const project = await call('getProject', { id: projects[0].id });
+            if (project.id !== projects[0].id) {
+                throw new Error(`getProject returned id=${project.id}, expected ${projects[0].id}`);
+            }
+            console.log(`[smoke] getProject ${project.id}: ${project.name}`);
         }
-        console.log(`[smoke] updateAgent ${targetId}: description now "${updated.agent.description}"`);
+
+        const agents = await call('crud_agent', { op: 'search' }, 'crud_agent search');
+        if (!Array.isArray(agents)) throw new Error('crud_agent search did not return an array');
+        console.log(`[smoke] crud_agent search → ${agents.length} agent(s)`);
+        if (agents.length > 0) {
+            const composite = await call('crud_agent', { op: 'get', id: agents[0].id }, 'crud_agent get');
+            if (composite.agent?.id !== agents[0].id) {
+                throw new Error(`crud_agent get returned agent=${composite.agent?.id}, expected ${agents[0].id}`);
+            }
+            console.log(
+                `[smoke] crud_agent get ${composite.agent.id}: prompt_version=${composite.agent.prompt_version} ` +
+                    `checks=${composite.checklists.length}`
+            );
+        }
+
+        const query = process.env.SMOKE_QUERY ?? 'todo';
+        const hits = await call('search_item', { query });
+        if (!Array.isArray(hits)) throw new Error('search_item did not return an array');
+        console.log(`[smoke] search_item "${query}" → ${hits.length} hit(s)`);
+        if (hits.length > 0) {
+            const { issue_type, issue_id } = hits[0];
+            const full = await call('get_item', { issue_type, id: issue_id });
+            if (full[issue_type]?.id !== issue_id) {
+                throw new Error(`get_item ${issue_type} ${issue_id} did not return the item under \`${issue_type}\``);
+            }
+            console.log(`[smoke] get_item ${issue_type} ${issue_id}: ${full.comments.length} comment(s)`);
+        }
         console.log('[smoke] OK ✓');
     } else {
         console.log('[smoke] LIVE_API not set — skipping round-trip. tool surface verified.');

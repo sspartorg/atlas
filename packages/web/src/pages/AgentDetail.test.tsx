@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
-import { makeAgent, makeStory } from '../test-utils/factories.js';
+import { makeAgent, makeSubTask } from '../test-utils/factories.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { server } from '../test-setup.js';
 import { AgentDetail } from './AgentDetail.js';
@@ -80,9 +80,9 @@ describe('AgentDetail', () => {
 
         it('counts Ready items assigned to the agent in the hero queue, even with no runs', async () => {
             server.use(
-                http.get(`${BASE}/stories`, () =>
+                http.get(`${BASE}/sub-tasks`, () =>
                     HttpResponse.json([
-                        makeStory({ id: 'SDB-4', assignee_agent_id: 'agent-coder', status: 'ready' }),
+                        makeSubTask({ id: 'SDB-4', assignee_agent_id: 'agent-coder', status: 'ready' }),
                     ]),
                 ),
             );
@@ -115,7 +115,7 @@ describe('AgentDetail', () => {
             expect(overviewTab).toHaveAttribute('aria-selected', 'true');
         });
 
-        it('renders all 6 tab labels', async () => {
+        it('renders all 5 tab labels', async () => {
             renderAgentDetail();
 
             await waitFor(() => {
@@ -123,7 +123,6 @@ describe('AgentDetail', () => {
             });
 
             expect(screen.getByRole('tab', { name: /prompt/i })).toBeInTheDocument();
-            expect(screen.getByRole('tab', { name: /handoffs/i })).toBeInTheDocument();
             expect(screen.getByRole('tab', { name: /test run/i })).toBeInTheDocument();
             expect(screen.getByRole('tab', { name: /runs/i })).toBeInTheDocument();
             expect(screen.getByRole('tab', { name: /memory/i })).toBeInTheDocument();
@@ -191,13 +190,6 @@ describe('AgentDetail', () => {
     describe('Run now button', () => {
         beforeEach(() => {
             setupDefaultHandlers();
-            // RunNowDialog fires useProjects, useEpics, useStories, useBugs.
-            server.use(
-                http.get(`${BASE}/projects`, () => HttpResponse.json([])),
-                http.get(`${BASE}/epics`, () => HttpResponse.json([])),
-                http.get(`${BASE}/stories`, () => HttpResponse.json([])),
-                http.get(`${BASE}/bugs`, () => HttpResponse.json([])),
-            );
         });
 
         it('opens RunNowDialog when "Run now" is clicked', async () => {
@@ -209,9 +201,6 @@ describe('AgentDetail', () => {
 
             fireEvent.click(screen.getByRole('button', { name: /run now/i }));
 
-            // RunNowDialog renders a DialogTitle of the form "Run <agentName> on an issue"
-            // or "Run <agentName>" (freedom mode). Either way the agent name appears in
-            // the dialog.
             await waitFor(() => {
                 expect(screen.getByRole('dialog')).toBeInTheDocument();
             });
@@ -420,9 +409,7 @@ describe('AgentDetail', () => {
             setupDefaultHandlers();
             server.use(
                 http.get(`${BASE}/projects`, () => HttpResponse.json([])),
-                http.get(`${BASE}/epics`, () => HttpResponse.json([])),
-                http.get(`${BASE}/stories`, () => HttpResponse.json([])),
-                http.get(`${BASE}/bugs`, () => HttpResponse.json([])),
+                http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             );
             renderAgentDetail();
             await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
@@ -524,27 +511,11 @@ describe('AgentDetail', () => {
             );
         }
 
-        it('renders HandoffsTab content when tab=handoffs (line 318)', async () => {
-            setupHandlers();
-            renderWithProviders(
-                <Routes>
-                    <Route path="/agents/:id" element={<AgentDetail />} />
-                </Routes>,
-                { initialEntries: ['/agents/agent-coder?tab=handoffs'] },
-            );
-            await waitFor(() =>
-                expect(screen.getByRole('tab', { name: /handoffs/i })).toHaveAttribute('aria-selected', 'true'),
-            );
-            expect(document.body).toBeTruthy();
-        }, 15000);
-
         it('renders TestRunTab content when tab=test (line 319)', async () => {
             setupHandlers();
             server.use(
                 http.get(`${BASE}/projects`, () => HttpResponse.json([])),
-                http.get(`${BASE}/epics`, () => HttpResponse.json([])),
-                http.get(`${BASE}/stories`, () => HttpResponse.json([])),
-                http.get(`${BASE}/bugs`, () => HttpResponse.json([])),
+                http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             );
             renderWithProviders(
                 <Routes>

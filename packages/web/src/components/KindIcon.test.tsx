@@ -5,11 +5,8 @@ import { KindIcon } from './KindIcon.js';
 
 describe('KindIcon', () => {
     it.each([
-        ['epic', 'Epic'],
-        ['story', 'Story'],
-        ['bug', 'Bug'],
+        ['task', 'Task'],
         ['sub_task', 'Sub-task'],
-        ['sub_bug', 'Sub-bug'],
     ] as const)('renders the %s label', (kind, label) => {
         renderWithProviders(<KindIcon kind={kind} />);
         expect(screen.getByLabelText(label)).toBeInTheDocument();

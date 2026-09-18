@@ -24,8 +24,8 @@ hosting it.
 ## Why this package exists
 
 When the Owner or an agent runs a task, the AI client needs both **context**
-(parent epic, sibling stories, related comments) and **write access** (file
-a sub-bug, transition a story, reply with context). The MCP server gives the
+(the parent Task, sibling sub-tasks, related comments) and **write access** (file
+a sub-task, transition a Task, reply with context). The MCP server gives the
 model a tool surface to pull exactly the slice of context it needs and apply
 mutations through the same audited API path the UI uses.
 
@@ -54,7 +54,7 @@ search) pay a much smaller schema-load tax per prompt.
 | Group | Count | File | Tools |
 |---|---|---|---|
 | AGENTS | 3 | `tools/agents.ts` | `crud_agent` (op: search\|get\|create\|update\|delete) + `agent_memory` (op: get\|update) + `marketplace_agent` (op: search\|get) |
-| ITEMS | 5 | `tools/items.ts` | `search_item` + `create_item` (issue_type: epic\|story\|sub_task\|sub_bug\|bug) + `get_item` (always full envelope: item + parent + project + children + comments + item_links + external_links + activity) + `update_item` (action: patch_fields\|change_status\|assign\|add_comment\|add_link\|remove_link\|add_external_link\|remove_external_link) + `delete_item` |
+| ITEMS | 5 | `tools/items.ts` | `search_item` + `create_item` (issue_type: task\|sub_task; a sub-task needs `payload.task_id`) + `get_item` (always full envelope: the item under `task` / `sub_task` + parent `task` or child `sub_tasks` + project + comments + related_links + external_links + activity) + `update_item` (action: patch_fields\|change_status\|assign\|add_comment\|add_link\|remove_link\|add_external_link\|remove_external_link) + `delete_item` |
 | PROJECTS | 2 | `tools/projects.ts` | `listProjects`, `getProject` |
 | REMINDERS | 2 | `tools/reminders.ts` | `crud_reminder` (op: create\|update\|cancel) + `search_reminder` (optional filters: status\|channel\|since) |
 | NOTIFICATIONS | 1 | `tools/notifications.ts` | `sendExternalNotification` (A09) |
@@ -89,6 +89,7 @@ Two transports, share the same tool registrations (`registerAllTools()`):
   owning instance and start the other.
 - Opt-out via `ATLAS_HOST_MCP=false` on a given instance â€” useful when
   running a second stack headless or in CI.
+- `ATLAS_MCP_PORT` moves the listener off 4500 for a second stack that needs its own MCP (a test stack whose agents must reach its own database). Item-attached agent runs receive the port via `--mcp-config`; runs using the Owner's `~/.claude.json` still reach 4500.
 - Loopback only. No LAN exposure regardless of `ATLAS_LAN_ACCESS`.
 - MCP â†’ API loopback HTTP still carries `X-Atlas-Token` per the existing
   `api-client.ts`; the token is the `ATLAS_MCP_TOKEN` from `.env` /
@@ -112,33 +113,42 @@ Two transports, share the same tool registrations (`registerAllTools()`):
 The MCP layer now spans read + write, so workflows are no longer
 "discover â†’ pull â†’ draft". Patterns external AI clients run against Atlas:
 
-### PO Writer expanding an epic
-`get_item { issue_type: 'epic', id }` â€” returns the epic + project + every
-child story / bug + comments + related_links + external_links + activity in one
-round trip. The envelope is *always* the full payload â€” there is no partial
+### PO Writer splitting a Task
+`get_item { issue_type: 'task', id }` — returns the Task + project + its
+`sub_tasks` + comments + related_links + external_links + activity in one
+round trip. It then calls `create_item { issue_type: 'sub_task', agent_id,
+payload: { task_id, title, acceptance_criteria, labels: ['dev'] } }` per
+capability, a `[QA]` twin labelled `qa` for each, and `update_item
+{ action: 'add_link', relation_type: 'tested_by' }` twin → dev (ADR 0015). The envelope is *always* the full payload â€” there is no partial
 get.
 
 ### Coder picking up a sub-task
-`get_item { issue_type: 'sub_task', id }` for the full context â†’
+`get_item { issue_type: 'sub_task', id }` for the full context (it includes
+the parent `task`, whose `spec_md` is the Architect's spec) →
 `search_item { query }` (substring on title / description) to spot prior
-duplicates â†’ after work, `update_item { action: 'add_comment', ... }` to
-comment, `update_item { action: 'change_status', ... }` to move state,
-`update_item { action: 'patch_fields', patch: { pr_url } }` to record the PR.
+duplicates â†’ after work, `update_item { action: 'add_comment', ... }` for
+any note a later step needs. The agent does not move state or record the PR:
+it ends with the `atlas-outcome` block; the Task's workflow run moves on to
+the next sub-task and, once they are all done, pushes and opens the one PR
+(ADR 0014, ADR 0015).
 
 ### Owner-led item maintenance via Claude
 Every mutation is one `update_item` call with an `action` discriminator:
 - `action: 'patch_fields'` for description / priority / spec edits (per-type
-  Zod validation on the API route). Stories also accept `worktree_branch`
-  (`atlas/<role>/<id>`) — added to the MCP patch schema 2026-09-14; PO
-  Writer's contract requires it and the `.strict()` schema used to reject it.
+  Zod validation on the API route). Tasks also accept `spec_md`, `pr_url`,
+  `reporter_agent_id` and `worktree_branch` (`atlas/<role>/<id>`); the
+  sub-task route's `.strict()` schema rejects them.
 - `action: 'change_status'` for status transitions (with optional `override`
   for Owner corrections).
 - `action: 'assign'` to reassign (active-agent guard on the API).
+- Both are Owner-facing: an agent inside a workflow run must not use them to
+  route work. The API returns 409 while a workflow run holds the item, and the
+  tool description tells agents to report via the `atlas-outcome` block.
 - `action: 'add_link' / 'remove_link'` for `depends_on` / `relates_to` /
   `tested_by` graph edits (optional `agent_id` credits the link event).
 - `action: 'add_external_link' / 'remove_external_link'` for off-platform
   refs (GitHub PR URLs today).
-- `delete_item` for outright removal (cascades per type).
+- `delete_item` for outright removal (deleting a Task drops its sub-tasks).
 
 ### Search-driven traversal
 `search_item { query }` â†’ `get_item` on the top hit. The envelope's
@@ -154,6 +164,9 @@ linked items, recent activity). Compose your reply with that context, then
 `crud_agent { op: 'search' }` / `{ op: 'get', id }` for read paths;
 `{ op: 'create' / 'update' / 'delete' }` are reserved for Owner via the UI
 and forbidden in agent prompts (constitution `FORBIDDEN_TOOLS_SECTION`).
+`get` returns `{ agent, checklists }`. Schedules, handoff rules and git flags
+are no longer agent fields (ADR 0014) — they live on workflows, which have no
+MCP tool.
 `agent_memory { op: 'get' / 'update' }` is the procedural memory channel.
 `marketplace_agent { op: 'search' / 'get' }` for catalog discovery + install
 chains.
@@ -239,9 +252,8 @@ carries an explicit "Forbidden Atlas MCP tool calls" clause that forbids
 guardrail / global-settings mutation.
 
 **Attribution.** The in-process MCP host has no bound agent id, so a write
-is credited to an agent only when the call passes `agent_id`; the generated
-`.atlas/handoff.md` (`handoff-assembler.ts`) tells the agent to pass its own
-id on every `update_item` call. `create_item` (top-level `agent_id`) and
+is credited to an agent only when the call passes `agent_id`; catalog prompts
+tell the agent to pass its own id on every `create_item` / `update_item` call. `create_item` (top-level `agent_id`) and
 `update_item` `patch_fields` / `add_link` / `remove_link` / `add_external_link` forward it as
 the `x-atlas-agent-id` header; the create routes credit it as the `created`
 event actor (and default `reporter_agent_id`), the item-link routes as the
@@ -277,7 +289,7 @@ by ~63%. Mapping:
 - `search_marketplace_agents` / `get_full_marketplace_agent` â†’ `marketplace_agent { op }`
 - `listAgentRuns` â†’ **deleted** (REST route `GET /api/agents/:id/runs` stays for the Activity tab)
 - `searchItems` â†’ `search_item`
-- `createEpic` / `createStory` / `createSubTask` / `createSubBug` / `createBug` â†’ `create_item { issue_type, payload }`
+- `createEpic` / `createStory` / `createSubTask` / `createSubBug` / `createBug` â†’ `create_item { issue_type, payload }` (kinds narrowed to `task` / `sub_task` by ADR 0015)
 - `getEpic` / `getItemFull` / `listComments` / `listItemLinks` / `listItemExternalLinks` / `replyToItem` (read-context mode) â†’ `get_item` (always full envelope)
 - `updateItem` / `transitionItemStatus` / `assignItem` / `addCommentToItem` / `replyToItem` (write mode) / `createItemLink` / `deleteItemLink` / `createItemExternalLink` / `deleteItemExternalLink` â†’ `update_item { action }`
 - `deleteItem` â†’ `delete_item`
@@ -300,9 +312,8 @@ per-action tool names.
 
 ## What's deferred (C03 scope boundary, 2026-05-27)
 
-- **Reset-rounds via MCP** â€” Owner-only escape hatch (per A04). Stays UI-only.
 - **Comment edit** â€” `PATCH /api/comments/:id` exists but no MCP tool; audit-trail concern. Revisit if Owner asks.
-- **Run spawning** â€” `POST /api/run` exists but no MCP tool; cross-agent handoffs go through `handoff_rules`, not ad-hoc MCP spawns.
+- **Run spawning** â€” `POST /api/run` exists but no MCP tool; agent steps are chained by workflows (ADR 0014), not ad-hoc MCP spawns.
 - **Project lifecycle** â€” clone / connect / reclone / delete project are onboarding flows; stay Owner-only.
 - **Workspace settings**, **model registry**, **notification settings** â€” explicitly excluded by `requirments_new.md` L19.
 

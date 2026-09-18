@@ -17,7 +17,7 @@ let app: FastifyInstance;
 beforeEach(async () => {
     await truncateAll();
     await insertProject('p1', 'ATL');
-    await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'Fix authentication flow' });
+    await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Fix authentication flow' });
     if (!app) {
         app = await buildApp({ logger: false });
         await app.ready();

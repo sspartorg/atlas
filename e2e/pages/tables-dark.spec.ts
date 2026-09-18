@@ -3,12 +3,12 @@ import { goto } from '../helpers/nav.js';
 import { setThemeMode } from '../helpers/theme.js';
 
 // Phase C — table username visibility in dark mode. AgentChip's
-// stacked layout (used in EpicTable + WorkItemTable) now renders the
+// stacked layout (used in TaskTable + WorkItemTable) now renders the
 // name in ATLAS_PALETTE.slate (flipping var) rather than the brand
 // accent. This test asserts the seed-fixture owner name is rendered
-// and visible on the epics + issues tables in dark mode.
+// and visible on the Tasks table in dark mode.
 
-const PAGES_WITH_TABLES = ['/epics', '/issues'];
+const PAGES_WITH_TABLES = ['/tasks'];
 
 for (const path of PAGES_WITH_TABLES) {
     test.describe(`${path} — dark mode tables`, () => {

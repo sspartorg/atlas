@@ -72,7 +72,7 @@ const MAP: Record<string, IconMeta> = {
     },
     story_complete: {
         icon: 'check_circle',
-        label: 'Story Complete',
+        label: 'Sub-task Complete',
         color: ATLAS_PALETTE.success,
         bg: 'rgba(49,171,70,.12)',
     },

@@ -53,7 +53,7 @@ describe('projectsService', () => {
             await sql`
                 ALTER TABLE items DISABLE TRIGGER items_set_updated_at;
                 INSERT INTO items (id, type, project_id, title, status, priority, updated_at, created_at)
-                VALUES ('ATL-1', 'epic', 'p1', 'E', 'draft', 'normal', '2030-03-01T00:00:00Z', '2030-03-01T00:00:00Z');
+                VALUES ('ATL-1', 'task', 'p1', 'E', 'draft', 'normal', '2030-03-01T00:00:00Z', '2030-03-01T00:00:00Z');
                 ALTER TABLE items ENABLE TRIGGER items_set_updated_at;
             `.execute(testDb);
             const got = (await projectsService.get('p1'))!;

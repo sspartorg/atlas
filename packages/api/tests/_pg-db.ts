@@ -57,6 +57,11 @@ export async function closeTestDb(): Promise<void> {
 // list is intentionally explicit (not "every table") so adding new tables
 // makes you think about whether they need test cleanup.
 const TRUNCATE_TABLES = [
+    // ADR 0014 — listed explicitly for the same reason as cli_sessions.
+    'workflow_runs',
+    // Migration 041 — Marketplace entries published from workflows.
+    'published_workflows',
+    'workflows',
     // 2026-06-22 — Terminal v1. FK → projects.id with ON DELETE CASCADE,
     // but listed explicitly so tests that only touch cli_sessions still
     // clear it (CASCADE only fires when projects is truncated).
@@ -75,7 +80,6 @@ const TRUNCATE_TABLES = [
     'items',
     'projects',
     'credentials',
-    'agent_handoff_rules',
     'agent_checklists',
     'agent_memory',
     'agent_prompt_versions',
@@ -102,7 +106,6 @@ const TRUNCATE_TABLES = [
     // P12 — Scratch Pad tiles.
     'scratch_pad',
     // Marketplace catalog + cascades.
-    'marketplace_agent_handoffs',
     'marketplace_agent_checklists',
     'marketplace_agents',
 ] as const;

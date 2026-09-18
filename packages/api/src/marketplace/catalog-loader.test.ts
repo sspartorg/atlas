@@ -18,6 +18,7 @@ function mkRoot(): string {
 }
 
 function writeManifest(folder: string, overrides: Record<string, unknown> = {}): void {
+    const { id: _id, name: _name, sort_order: _so, version: _v, ...extra } = overrides;
     const manifest = {
         id: overrides['id'] ?? 'demo-agent',
         name: overrides['name'] ?? 'Demo',
@@ -31,27 +32,15 @@ function writeManifest(folder: string, overrides: Record<string, unknown> = {}):
         sort_order: overrides['sort_order'] ?? 1,
         glyph: 'science',
         role_id: null,
-        max_rounds: 5,
-        requires_item: true,
-        requires_worktree: false,
-        push_code: false,
-        raises_pr: false,
         status: 'active',
         kind_slug: 'custom',
         settings_json: {},
-        schedule_hours: 6,
-        schedule_preset: 'every_n_hours',
-        schedule_time_of_day: null,
-        schedule_weekdays: null,
-        schedule_day_of_month: null,
-        cron_expr: null,
-        concurrent_runs: 1,
         memory_cadence: 1,
-        handoff_prompt_md: '',
         summary: 's',
         version: overrides['version'] ?? 1,
         published_at: '2026-06-03T00:00:00Z',
         effort: 'medium',
+        ...extra,
     };
     writeFileSync(join(folder, 'manifest.json'), JSON.stringify(manifest, null, 2));
 }
@@ -76,19 +65,13 @@ describe('loadCatalog', () => {
         expect(loadCatalog('/this/does/not/exist-atlas-test')).toEqual([]);
     });
 
-    it('loads a single entry with all 5 optional files present', () => {
+    it('loads a single entry with all optional files present', () => {
         const root = mkRoot();
         const folder = join(root, 'agent-x');
         mkdirSync(folder, { recursive: true });
         writeManifest(folder);
         writeFileSync(join(folder, 'prompt.md'), '# prompt');
         writeFileSync(join(folder, 'memory.md'), '# memory');
-        writeFileSync(
-            join(folder, 'handoff_rules.json'),
-            JSON.stringify([
-                { target_agent_id: 't1', kind: 'on-pass', status: 'done' },
-            ]),
-        );
         writeFileSync(
             join(folder, 'checklists.json'),
             JSON.stringify([{ label: 'a', sort_order: 1, required: true }]),
@@ -100,12 +83,11 @@ describe('loadCatalog', () => {
         expect(e.manifest.id).toBe('demo-agent');
         expect(e.prompt_md).toBe('# prompt');
         expect(e.memory_md).toBe('# memory');
-        expect(e.handoff_rules).toHaveLength(1);
         expect(e.checklists).toHaveLength(1);
         expect(e.content_hash).toMatch(/^[0-9a-f]{64}$/);
     });
 
-    it('treats missing optional files as empty (prompt/memory blank, handoffs/checklists [])', () => {
+    it('treats missing optional files as empty (prompt/memory blank, checklists [])', () => {
         const root = mkRoot();
         const folder = join(root, 'agent-min');
         mkdirSync(folder, { recursive: true });
@@ -115,7 +97,6 @@ describe('loadCatalog', () => {
         expect(entries).toHaveLength(1);
         expect(entries[0]!.prompt_md).toBe('');
         expect(entries[0]!.memory_md).toBe('');
-        expect(entries[0]!.handoff_rules).toEqual([]);
         expect(entries[0]!.checklists).toEqual([]);
     });
 
@@ -164,32 +145,25 @@ describe('loadCatalog', () => {
         expect(h1).toBe(h2);
     });
 
-    it('content_hash changes when handoff_rules order is permuted (since they are sorted)', () => {
+    // ADR 0014 — catalog folders written before the hard cut still carry
+    // handoff_rules.json and agent routing/schedule manifest fields.
+    it('ignores legacy handoff_rules.json and dropped manifest fields (manifest + hash)', () => {
         const root = mkRoot();
-        const folder = join(root, 'agent-h');
+        const folder = join(root, 'agent-legacy');
         mkdirSync(folder);
         writeManifest(folder);
-        writeFileSync(
-            join(folder, 'handoff_rules.json'),
-            JSON.stringify([
-                { target_agent_id: 'a', kind: 'on-pass', status: 'done' },
-                { target_agent_id: 'b', kind: 'on-fail', status: 'failed' },
-            ]),
-        );
-        const h1 = loadCatalog(root)[0]!.content_hash;
+        const clean = loadCatalog(root)[0]!;
 
-        rmSync(folder, { recursive: true, force: true });
-        mkdirSync(folder);
-        writeManifest(folder);
+        writeManifest(folder, { max_rounds: 5, requires_item: true, cron_expr: null, handoff_prompt_md: 'x' });
         writeFileSync(
             join(folder, 'handoff_rules.json'),
-            JSON.stringify([
-                { target_agent_id: 'b', kind: 'on-fail', status: 'failed' },
-                { target_agent_id: 'a', kind: 'on-pass', status: 'done' },
-            ]),
+            JSON.stringify([{ target_agent_id: 'a', kind: 'on-pass', status: 'done' }]),
         );
-        const h2 = loadCatalog(root)[0]!.content_hash;
-        // Sorted before hashing → identical.
-        expect(h1).toBe(h2);
+        const legacy = loadCatalog(root)[0]!;
+
+        expect(legacy.manifest).toEqual(clean.manifest);
+        expect(legacy.manifest).not.toHaveProperty('max_rounds');
+        expect(legacy).not.toHaveProperty('handoff_rules');
+        expect(legacy.content_hash).toBe(clean.content_hash);
     });
 });

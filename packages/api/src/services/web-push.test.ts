@@ -298,54 +298,21 @@ describe('urlForNotification via sendWebPushForNotification', () => {
         return JSON.parse(calls[calls.length - 1][1] as string) as { url: string; title: string };
     }
 
-    it('routes epic items to /epics/:id', async () => {
-        await insertItem({ id: 'URL-1', type: 'epic', project_id: 'p1', title: 'E1' });
+    it('routes task items to /tasks/:id', async () => {
+        await insertItem({ id: 'URL-1', type: 'task', project_id: 'p1', title: 'T1' });
         const notifId = await insertNotification({ item_id: 'URL-1' });
         await sendWebPushForNotification(notifId);
         const payload = await getLastPayload();
-        expect(payload.url).toBe('/epics/URL-1');
+        expect(payload.url).toBe('/tasks/URL-1');
     });
 
-    it('routes story items to /issues/stories/:id', async () => {
-        // story must be parented to an epic.
-        await insertItem({ id: 'URL-E3', type: 'epic', project_id: 'p1', title: 'EpicForStory' });
-        await insertItem({ id: 'URL-2', type: 'story', project_id: 'p1', title: 'S1', parent_id: 'URL-E3' });
-        const notifId = await insertNotification({ item_id: 'URL-2' });
-        await sendWebPushForNotification(notifId);
-        const payload = await getLastPayload();
-        expect(payload.url).toBe('/issues/stories/URL-2');
-    });
-
-    it('routes bug items to /issues/bugs/:id', async () => {
-        // bug must be parented to an epic.
-        await insertItem({ id: 'URL-E4', type: 'epic', project_id: 'p1', title: 'EpicForBug' });
-        await insertItem({ id: 'URL-3', type: 'bug', project_id: 'p1', title: 'B1', parent_id: 'URL-E4' });
-        const notifId = await insertNotification({ item_id: 'URL-3' });
-        await sendWebPushForNotification(notifId);
-        const payload = await getLastPayload();
-        expect(payload.url).toBe('/issues/bugs/URL-3');
-    });
-
-    it('routes sub_task items to /issues/sub-tasks/:id', async () => {
-        // sub_task must be parented to a story, which must be parented to an epic.
-        await insertItem({ id: 'URL-E1', type: 'epic', project_id: 'p1', title: 'Epic' });
-        await insertItem({ id: 'URL-S1', type: 'story', project_id: 'p1', title: 'Story', parent_id: 'URL-E1' });
-        await insertItem({ id: 'URL-4', type: 'sub_task', project_id: 'p1', title: 'ST1', parent_id: 'URL-S1' });
+    it('routes sub_task items to /sub-tasks/:id', async () => {
+        await insertItem({ id: 'URL-T1', type: 'task', project_id: 'p1', title: 'Task' });
+        await insertItem({ id: 'URL-4', type: 'sub_task', project_id: 'p1', title: 'ST1', parent_id: 'URL-T1' });
         const notifId = await insertNotification({ item_id: 'URL-4' });
         await sendWebPushForNotification(notifId);
         const payload = await getLastPayload();
-        expect(payload.url).toBe('/issues/sub-tasks/URL-4');
-    });
-
-    it('routes sub_bug items to /issues/sub-bugs/:id', async () => {
-        // sub_bug must be parented to a story, which must be parented to an epic.
-        await insertItem({ id: 'URL-E2', type: 'epic', project_id: 'p1', title: 'Epic2' });
-        await insertItem({ id: 'URL-S2', type: 'story', project_id: 'p1', title: 'Story2', parent_id: 'URL-E2' });
-        await insertItem({ id: 'URL-5', type: 'sub_bug', project_id: 'p1', title: 'SB1', parent_id: 'URL-S2' });
-        const notifId = await insertNotification({ item_id: 'URL-5' });
-        await sendWebPushForNotification(notifId);
-        const payload = await getLastPayload();
-        expect(payload.url).toBe('/issues/sub-bugs/URL-5');
+        expect(payload.url).toBe('/sub-tasks/URL-4');
     });
 
     it('uses link_url when set (overrides item route)', async () => {

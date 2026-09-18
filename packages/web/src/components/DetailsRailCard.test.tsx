@@ -3,7 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import type { IItemExternalLink } from '@atlas/shared';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
-import { makeAgent } from '../test-utils/factories.js';
+import { makeAgent, makeProject } from '../test-utils/factories.js';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { DetailsRailCard } from './DetailsRailCard.js';
@@ -12,7 +12,7 @@ describe('DetailsRailCard', () => {
     it('renders the details panel', () => {
         renderWithProviders(
             <DetailsRailCard
-                issueType="story"
+                issueType="sub_task"
                 status="ready"
                 onStatusPick={vi.fn()}
                 assigneeAgentId={null}
@@ -28,118 +28,17 @@ describe('DetailsRailCard', () => {
         expect(screen.getByText('Details')).toBeInTheDocument();
     });
 
-    it('renders the Rounds row when roundCount and maxRounds are both provided', () => {
-        // A04 — the rail surfaces per-CLI round usage against the assignee's
-        // cap so the Owner can see how close the chain is to escalation.
-        renderWithProviders(
-            <DetailsRailCard
-                issueType="story"
-                status="in_progress"
-                onStatusPick={vi.fn()}
-                assigneeAgentId="agent-1"
-                onAssign={vi.fn()}
-                assignee={null}
-                project={null}
-                ownerName="Bob"
-                ownerAccent="#0A0A0A"
-                createdAt="2026-05-15T00:00:00.000Z"
-                updatedAt="2026-05-16T00:00:00.000Z"
-                roundCount={2}
-                maxRounds={5}
-            />,
-        );
-        expect(screen.getByText('Rounds')).toBeInTheDocument();
-        expect(screen.getByText('2 / 5')).toBeInTheDocument();
-    });
-
-    it('hides the Rounds row when roundCount is null (no current assignee)', () => {
-        renderWithProviders(
-            <DetailsRailCard
-                issueType="story"
-                status="ready"
-                onStatusPick={vi.fn()}
-                assigneeAgentId={null}
-                onAssign={vi.fn()}
-                assignee={null}
-                project={null}
-                ownerName="Bob"
-                ownerAccent="#0A0A0A"
-                createdAt="2026-05-15T00:00:00.000Z"
-                updatedAt="2026-05-16T00:00:00.000Z"
-                roundCount={null}
-                maxRounds={5}
-            />,
-        );
-        expect(screen.queryByText('Rounds')).not.toBeInTheDocument();
-    });
-
-    it('opens the reset-rounds popover when the Rounds row is clicked', async () => {
-        // A04 — clickable Rounds row → ResetRoundsPopover. The popover
-        // shows the "Reset rounds?" heading and the X / Y snapshot.
-        const user = userEvent.setup();
-        renderWithProviders(
-            <DetailsRailCard
-                issueType="story"
-                status="in_progress"
-                onStatusPick={vi.fn()}
-                assigneeAgentId="agent-1"
-                onAssign={vi.fn()}
-                assignee={null}
-                project={null}
-                ownerName="Bob"
-                ownerAccent="#0A0A0A"
-                createdAt="2026-05-15T00:00:00.000Z"
-                updatedAt="2026-05-16T00:00:00.000Z"
-                roundCount={3}
-                maxRounds={5}
-                onResetRounds={vi.fn()}
-                assigneeName="PO Writer"
-            />,
-        );
-        await user.click(screen.getByText('Rounds'));
-        expect(await screen.findByText('Reset rounds?')).toBeInTheDocument();
-        expect(screen.getAllByText('3 / 5').length).toBeGreaterThan(0);
-        expect(screen.getByText(/PO Writer gets a fresh/)).toBeInTheDocument();
-    });
-
-    it('fires onResetRounds when the popover confirm button is clicked', async () => {
-        const user = userEvent.setup();
-        const onResetRounds = vi.fn();
-        renderWithProviders(
-            <DetailsRailCard
-                issueType="story"
-                status="in_progress"
-                onStatusPick={vi.fn()}
-                assigneeAgentId="agent-1"
-                onAssign={vi.fn()}
-                assignee={null}
-                project={null}
-                ownerName="Bob"
-                ownerAccent="#0A0A0A"
-                createdAt="2026-05-15T00:00:00.000Z"
-                updatedAt="2026-05-16T00:00:00.000Z"
-                roundCount={2}
-                maxRounds={5}
-                onResetRounds={onResetRounds}
-                assigneeName="PO Writer"
-            />,
-        );
-        await user.click(screen.getByText('Rounds'));
-        await user.click(await screen.findByRole('button', { name: 'Reset rounds' }));
-        expect(onResetRounds).toHaveBeenCalledTimes(1);
-    });
-
     it('navigates to the project page when the project name is clicked', async () => {
         const user = userEvent.setup();
         renderWithProviders(
             <DetailsRailCard
-                issueType="story"
+                issueType="sub_task"
                 status="ready"
                 onStatusPick={vi.fn()}
                 assigneeAgentId={null}
                 onAssign={vi.fn()}
                 assignee={null}
-                project={{ id: 'proj-1', name: 'My Project' } as any}
+                project={makeProject({ id: 'proj-1', name: 'My Project' })}
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
                 createdAt="2026-05-15T00:00:00.000Z"
@@ -158,23 +57,23 @@ describe('DetailsRailCard', () => {
         const user = userEvent.setup();
         renderWithProviders(
             <DetailsRailCard
-                issueType="story"
+                issueType="sub_task"
                 status="ready"
                 onStatusPick={vi.fn()}
                 assigneeAgentId={null}
                 onAssign={vi.fn()}
                 assignee={null}
                 project={null}
-                parents={[{ label: 'Epic', text: 'CER-7', href: '/issues/epic-1' }]}
+                parents={[{ label: 'Task', text: 'CER-7', href: '/tasks/CER-7' }]}
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
                 createdAt="2026-05-15T00:00:00.000Z"
                 updatedAt="2026-05-16T00:00:00.000Z"
             />,
         );
-        const epicLink = screen.getByText('CER-7');
-        expect(epicLink).toBeInTheDocument();
-        await user.click(epicLink);
+        const taskLink = screen.getByText('CER-7');
+        expect(taskLink).toBeInTheDocument();
+        await user.click(taskLink);
     });
 
     it('opens the priority picker popover when the Priority row is clicked', async () => {
@@ -182,7 +81,7 @@ describe('DetailsRailCard', () => {
         const onPriorityPick = vi.fn();
         renderWithProviders(
             <DetailsRailCard
-                issueType="story"
+                issueType="sub_task"
                 status="ready"
                 onStatusPick={vi.fn()}
                 assigneeAgentId={null}
@@ -218,7 +117,7 @@ describe('DetailsRailCard', () => {
         });
         renderWithProviders(
             <DetailsRailCard
-                issueType="story"
+                issueType="sub_task"
                 status="ready"
                 onStatusPick={vi.fn()}
                 assigneeAgentId={null}
@@ -229,13 +128,13 @@ describe('DetailsRailCard', () => {
                 ownerAccent="#0A0A0A"
                 createdAt="2026-05-15T00:00:00.000Z"
                 updatedAt="2026-05-16T00:00:00.000Z"
-                worktreeBranch="atlas/writer/story-1"
-                worktreePath="/tmp/atlas/story-1"
+                worktreeBranch="atlas/wf/task-1"
+                worktreePath="/tmp/atlas/task-1"
             />,
         );
         expect(screen.getByText('Branch')).toBeInTheDocument();
         expect(screen.getByText('Path')).toBeInTheDocument();
-        expect(screen.getByText('atlas/writer/story-1')).toBeInTheDocument();
+        expect(screen.getByText('atlas/wf/task-1')).toBeInTheDocument();
         // Clicking the copy button exercises CopyValueButton.handleClick.
         const copyButtons = screen.getAllByRole('button', { name: /copy/i });
         if (copyButtons[0]) {
@@ -243,7 +142,7 @@ describe('DetailsRailCard', () => {
         }
     });
 
-    it('epic assignee picker suggests PO-role agents first', async () => {
+    it('task assignee picker suggests PO-role agents first', async () => {
         server.use(
             http.get('http://localhost:3000/api/agents', () =>
                 HttpResponse.json([
@@ -258,7 +157,7 @@ describe('DetailsRailCard', () => {
         const user = userEvent.setup();
         renderWithProviders(
             <DetailsRailCard
-                issueType="epic"
+                issueType="task"
                 status="draft"
                 onStatusPick={vi.fn()}
                 assigneeAgentId={null}
@@ -273,6 +172,36 @@ describe('DetailsRailCard', () => {
         );
         await user.click(screen.getByText('Assignee'));
         expect(await screen.findByText('Suggested')).toBeInTheDocument();
+    });
+
+    it('shows the workflow picker on a task but not on a sub-task', async () => {
+        server.use(
+            http.get('http://localhost:3000/api/tasks/T1/full', () =>
+                HttpResponse.json({ task: { id: 'T1', workflow_id: null } }),
+            ),
+            http.get('http://localhost:3000/api/workflows', () => HttpResponse.json([])),
+            http.get('http://localhost:3000/api/items/T1/workflow-runs', () => HttpResponse.json([])),
+        );
+        const rail = (issueType: 'task' | 'sub_task') => (
+            <DetailsRailCard
+                issueType={issueType}
+                issueId="T1"
+                status="ready"
+                onStatusPick={vi.fn()}
+                assigneeAgentId={null}
+                onAssign={vi.fn()}
+                assignee={null}
+                project={makeProject({ id: 'p1', name: 'My Project' })}
+                ownerName="Bob"
+                ownerAccent="#0A0A0A"
+                createdAt="2026-05-15T00:00:00.000Z"
+                updatedAt="2026-05-16T00:00:00.000Z"
+            />
+        );
+        const { rerender } = renderWithProviders(rail('sub_task'));
+        expect(screen.queryByText('Workflow')).not.toBeInTheDocument();
+        rerender(rail('task'));
+        expect(await screen.findByText('Workflow')).toBeInTheDocument();
     });
 
     describe('Done with unmerged pull requests', () => {
@@ -293,7 +222,7 @@ describe('DetailsRailCard', () => {
         function renderRail(onStatusPick: (s: string, o: boolean) => void, links: IItemExternalLink[]) {
             return renderWithProviders(
                 <DetailsRailCard
-                    issueType="story"
+                    issueType="sub_task"
                     issueId="S1"
                     externalLinks={links}
                     status="in_review"
@@ -314,7 +243,7 @@ describe('DetailsRailCard', () => {
             const user = userEvent.setup();
             let refreshed = 0;
             server.use(
-                http.post(`${BASE}/issues/story/S1/external-links/refresh`, () => {
+                http.post(`${BASE}/issues/sub_task/S1/external-links/refresh`, () => {
                     refreshed += 1;
                     return HttpResponse.json([pr({ pr_state: 'open' })]);
                 }),
@@ -335,7 +264,7 @@ describe('DetailsRailCard', () => {
         it('transitions straight away when the refresh finds every PR merged', async () => {
             const user = userEvent.setup();
             server.use(
-                http.post(`${BASE}/issues/story/S1/external-links/refresh`, () =>
+                http.post(`${BASE}/issues/sub_task/S1/external-links/refresh`, () =>
                     HttpResponse.json([pr({ pr_state: 'merged' })]),
                 ),
             );

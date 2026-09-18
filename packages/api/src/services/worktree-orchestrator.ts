@@ -790,9 +790,9 @@ export function buildWorktreePreamble(opts: {
             ? 'The worktree was just created from origin/main for this run.'
             : 'The worktree was pulled --ff-only and rebased onto fresh origin/main just before the run started.',
         '',
-        '**Do NOT run `git worktree add`, `git pull`, `git fetch`, `git checkout <branch>`, `git push`, or `gh pr create` / `gh pr edit`.** The harness owns all network git operations: it pulls before your run starts and pushes whatever you commit when your run ends (on success AND on failure). When your agent has `raises_pr = true` and the run exits cleanly, the harness opens the PR for you (URL written to `items.pr_url` automatically). Edit files and commit from the current directory; everything else is taken care of for you.',
+        '**Do NOT run `git worktree add`, `git pull`, `git fetch`, `git checkout <branch>`, `git push`, or `gh pr create` / `gh pr edit`.** The workflow owns all network git operations. This worktree is shared by every step of the workflow run: earlier steps\' commits are already here, and the workflow pushes and opens the PR once, when the run reaches its End step. Edit files and commit from the current directory; everything else is taken care of for you.',
         '',
-        '**If the worktree looks broken — `.git` file pointing nowhere, expected files appear missing, `git rev-parse --abbrev-ref HEAD` errors out — STOP IMMEDIATELY.** Do NOT write a script to "fix" gitdir links, do NOT manually edit `.git/worktrees/*`, do NOT `git checkout` the branch in some other clone to "rescue" it. Past incident (2026-06-03): a self-repair attempt accidentally attached the project\'s main clone to the worktree\'s branch, leaving every subsequent run blocked. Instead: post a comment naming the broken path + branch via `mcp__atlas__update_item({ action: "add_comment", ... })`, then emit a `atlas-outcome` fenced block with `outcome: asked_question`, `summary: worktree_inconsistent`, and exit. The Owner does the manual recovery.',
+        '**If the worktree looks broken — `.git` file pointing nowhere, expected files appear missing, `git rev-parse --abbrev-ref HEAD` errors out — STOP IMMEDIATELY.** Do NOT write a script to "fix" gitdir links, do NOT manually edit `.git/worktrees/*`, do NOT `git checkout` the branch in some other clone to "rescue" it. Past incident (2026-06-03): a self-repair attempt accidentally attached the project\'s main clone to the worktree\'s branch, leaving every subsequent run blocked. Instead: emit a `atlas-outcome` fenced block with `outcome: asked_question` and `reason: worktree_inconsistent — <broken path> on <branch>`, and exit (the orchestrator posts the reason on the item). The Owner does the manual recovery.',
         '',
     ].join('\n');
 }
@@ -1085,6 +1085,14 @@ async function openPullRequestInner(opts: {
                     { cwd: worktreePath, env, timeout: 60_000 },
                 );
                 const url = (view.stdout ?? '').trim();
+                // A run that continues a Task after review pushes onto the
+                // same PR; refresh its description so the list of what it
+                // contains stays true. Best-effort — the push already landed.
+                if (url) {
+                    await exec('gh', ['pr', 'edit', url, '--body', humanBody], { cwd: worktreePath, env, timeout: 60_000 }).catch(
+                        () => undefined,
+                    );
+                }
                 return { opened: false, url: url || null, alreadyExists: true };
             } catch (viewErr) {
                 const v = viewErr as NodeJS.ErrnoException & { stderr?: string };

@@ -35,7 +35,7 @@ beforeEach(async () => {
     await insertProject('p1', 'MON');
     await insertAgent({ id: ARCHITECT, name: 'Architect' });
     await insertAgent({ id: ARCHITECT_REVIEWER, name: 'Architect Reviewer' });
-    await insertItem({ id: 'MON-1', type: 'epic', project_id: 'p1', title: 'Epic' });
+    await insertItem({ id: 'MON-1', type: 'task', project_id: 'p1', title: 'Epic' });
 });
 
 afterEach(() => {
@@ -57,10 +57,10 @@ async function setStrandedItem(itemId: string, worktreePath: string | null): Pro
         .insertInto('items')
         .values({
             id: itemId,
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'MON-1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Stranded story',
             description: '',
             status: 'in_review',
@@ -140,10 +140,10 @@ describe('recoverItem — Architect-stranded item recovery', () => {
             .insertInto('items')
             .values({
                 id: 'MON-14',
-                type: 'story',
+                type: 'sub_task',
                 project_id: 'p1',
                 parent_id: 'MON-1',
-                parent_type: 'epic',
+                parent_type: 'task',
                 title: 'Already done',
                 description: '',
                 status: 'done',

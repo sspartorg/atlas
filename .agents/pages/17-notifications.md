@@ -32,7 +32,7 @@ Two-tab notifications hub. The **Notification Log** tab is the delivery queue (s
 - Top alert when `needs_you > 0` ("{N} items need you. Click any rowâ€¦")
 - Filter pills: All / Needs You / Updates / System
 - Row layout: Agent chip (or Atlas badge) | Issue ID badge | Message | Issue type + failure reason | **Open** button (if `issue_id`) | relative time
-- **Open** navigates to the matching detail (`/issues/stories/:id`, `/epics/:id`, or `/issues` fallback)
+- **Open** navigates to `/tasks/:id` or `/sub-tasks/:id` (`utils/itemPath.ts`), or `/tasks` when the row has no item. Migration 037 rewrote stored `link_url`s onto these routes.
 
 ## Why these affordances exist
 - **Two tabs (Notification Log / In-App Feed)** â€” Notification Log is the diagnostic surface; In-App is the unread inbox. Splitting them prevents diagnostics from drowning actionable items.
@@ -83,9 +83,9 @@ None.
 - A `needs_you` completion row (`event_type='agent_completed'`) drops out of the In-App Feed and the unread count once its item leaves `waiting_for_info` / `in_review`. `agent_error`, terminal-idle, and item-less `needs_you` rows are unaffected.
 
 ## Connectivity
-- **Pages**: [Settings â†’ external notification](19-settings.md) â€” header CTA target for configuring the bridge; [Issues](08-issues.md) and [Epic Detail](07-epic-detail.md) â€” row "Open" navigation when the notification references an entity.
+- **Pages**: [Settings â†’ external notification](19-settings.md) â€” header CTA target for configuring the bridge; [Task Detail](07-task-detail.md) and [Sub-task Detail](10-sub-task-detail.md) â€” row "Open" navigation when the notification references an item.
 - **Routes**: `POST /api/notifications/:id/resend` â€” separate from the create path because resend preserves the original event metadata; re-creating would lose the audit trail.
-- **Entities**: `notification`, `agent` (sender), `epic` / `story` / `bug` / `sub_task` / `sub_bug` (subject).
+- **Entities**: `notification`, `agent` (sender), `task` / `sub_task` (subject).
 
 ## Coming soon on this page
 None.

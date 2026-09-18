@@ -133,9 +133,31 @@ async function syncPrStates(itemId: string, onlyStale: boolean): Promise<void> {
             .where('id', '=', row.id)
             .execute();
         if (state && state !== row.pr_state) changed = true;
+        if (state === 'merged' && row.pr_state !== 'merged' && item.type === 'task') await closeMergedTask(itemId);
     }
     // counts_changed is what the item detail + list queries already refetch on.
     if (changed) broadcastSSE({ type: 'counts_changed', issueType: item.type, issueId: itemId });
+}
+
+/**
+ * A Task's PR merged: the Owner accepted the branch, so the Task and the
+ * sub-tasks it was reviewed with close. A sub-task still open (not reviewed)
+ * keeps the Task open for the Owner to decide.
+ */
+async function closeMergedTask(taskId: string): Promise<void> {
+    // Dynamic import: tasks.ts → items.ts is a heavy graph this module
+    // otherwise doesn't need, and it keeps external-links free of cycles.
+    const { tasksService } = await import('./tasks.js');
+    const task = await tasksService.get(taskId);
+    if (task?.status !== 'in_review') return;
+    await tasksService.closeReviewedSubtasks(taskId, 'pr_merged');
+    const open = await db
+        .selectFrom('items')
+        .select('id')
+        .where('parent_id', '=', taskId)
+        .where('status', '!=', 'done')
+        .executeTakeFirst();
+    if (!open) await tasksService.transition(taskId, 'done', false, null, 'pr_merged');
 }
 
 interface CreateInput {
@@ -182,6 +204,32 @@ export const externalLinks = {
                 .finally(() => refreshing.delete(itemId));
         }
         return rows.map(rowToShared);
+    },
+
+    /**
+     * Scheduler tick: re-checks (TTL-limited) the PRs of Tasks in review, so
+     * a merged PR closes its Task even if nobody opens the Task page.
+     */
+    async syncReviewedTaskPrs(): Promise<void> {
+        const rows = await db
+            .selectFrom('item_external_links as l')
+            .innerJoin('items as i', 'i.id', 'l.item_id')
+            .select('l.item_id')
+            .distinct()
+            .where('l.link_kind', '=', 'pull_request')
+            .where('i.type', '=', 'task')
+            .where('i.status', '=', 'in_review')
+            .where((eb) => eb.or([eb('l.pr_state', 'is', null), eb('l.pr_state', '=', 'open')]))
+            .execute();
+        for (const { item_id } of rows) {
+            if (refreshing.has(item_id)) continue;
+            refreshing.add(item_id);
+            try {
+                await syncPrStates(item_id, true);
+            } finally {
+                refreshing.delete(item_id);
+            }
+        }
     },
 
     /** Synchronously re-check every PR link on the item, then return the fresh list. */

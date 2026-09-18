@@ -31,7 +31,7 @@ import { useSetPageTitle } from '../components/shell/index.js';
 
 // P14 — the page now sources hits from `GET /api/search` (Postgres FTS +
 // filter pushdown) instead of building a client-side corpus from every
-// epic/story/bug/sub-task/sub-bug. Filter chips translate into query-
+// task/sub-task. Filter chips translate into query-
 // string flags; the text input is debounced so we don't fire a request
 // per keystroke. Prompts live on the agents table (not items.search_tsv)
 // so they're still filtered client-side and mixed into the result set.
@@ -169,23 +169,11 @@ export function Search() {
                 <Typography sx={{ fontSize: 14, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>
                     Across{' '}
                     <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>
-                        epics
-                    </Box>
-                    ,{' '}
-                    <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>
-                        stories
-                    </Box>
-                    ,{' '}
-                    <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>
-                        bugs
+                        tasks
                     </Box>
                     ,{' '}
                     <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>
                         sub-tasks
-                    </Box>
-                    ,{' '}
-                    <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>
-                        sub-bugs
                     </Box>
                     ,{' '}
                     <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>

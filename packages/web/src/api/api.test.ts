@@ -172,10 +172,6 @@ describe('api.agents', () => {
         await api.agents.delete('a1');
         captureGet('/agents/a1/runs', []);
         await api.agents.getRuns('a1');
-        captureGet('/agents/a1/handoff-rules', []);
-        await api.agents.getHandoffRules('a1');
-        captureMethod('put', '/agents/a1/handoff-rules', []);
-        await api.agents.setHandoffRules('a1', []);
     });
 });
 
@@ -273,127 +269,68 @@ describe('api.credentials', () => {
     });
 });
 
-describe('api.epics', () => {
+describe('api.tasks', () => {
     it('CRUD + composite + transitions', async () => {
-        const cap = captureGet('/epics', []);
-        await api.epics.list();
-        expect(cap.url).toMatch(/\/epics$/);
-        captureGet('/epics', []);
-        await api.epics.list('p1');
-        captureGet('/epics/stats', { total: 0, awaiting_pickup: 0 });
-        await api.epics.stats();
-        captureGet('/epics/E1', {});
-        await api.epics.get('E1');
-        captureGet('/epics/E1/full', {});
-        await api.epics.full('E1');
-        captureMethod('post', '/epics', {});
-        await api.epics.create({});
-        captureMethod('patch', '/epics/E1', {});
-        await api.epics.update('E1', {});
-        captureMethod('patch', '/epics/E1/status', {});
-        await api.epics.transition('E1', 'ready');
-        captureMethod('patch', '/epics/E1/status', {});
-        await api.epics.transition('E1', 'ready', true);
-        captureMethod('patch', '/epics/E1/assign', {});
-        await api.epics.assign('E1', 'agent-coder');
-        captureMethod('delete', '/epics/E1', {});
-        await api.epics.delete('E1');
+        const cap = captureGet('/tasks', []);
+        await api.tasks.list();
+        expect(cap.url).toMatch(/\/tasks$/);
+        const scoped = captureGet('/tasks', []);
+        await api.tasks.list('p1');
+        expect(scoped.url).toContain('project_id=p1');
+        captureGet('/tasks/stats', { total: 0, awaiting_pickup: 0 });
+        await api.tasks.stats();
+        captureGet('/tasks/T1', {});
+        await api.tasks.get('T1');
+        captureGet('/tasks/T1/full', {});
+        await api.tasks.full('T1');
+        captureMethod('post', '/tasks', {});
+        await api.tasks.create({});
+        captureMethod('patch', '/tasks/T1', {});
+        await api.tasks.update('T1', {});
+        const status = captureMethod('patch', '/tasks/T1/status', {});
+        await api.tasks.transition('T1', 'ready');
+        expect(status.url).not.toContain('override');
+        const override = captureMethod('patch', '/tasks/T1/status', {});
+        await api.tasks.transition('T1', 'ready', true);
+        expect(override.url).toContain('?override=1');
+        const assign = captureMethod('patch', '/tasks/T1/assign', {});
+        await api.tasks.assign('T1', 'agent-coder');
+        expect(assign.body).toEqual({ assignee_agent_id: 'agent-coder' });
+        captureMethod('delete', '/tasks/T1', {});
+        await api.tasks.delete('T1');
     });
 });
 
-describe('api.stories', () => {
-    it('builds correct list query string', async () => {
-        const cap = captureGet('/stories', []);
-        await api.stories.list({ epicId: 'E1', projectId: 'p1' });
-        expect(cap.url).toContain('epic_id=E1');
-        expect(cap.url).toContain('project_id=p1');
-    });
-    it('CRUD + composite + sub creations', async () => {
-        captureGet('/stories/S1', {});
-        await api.stories.get('S1');
-        captureGet('/stories/S1/full', {});
-        await api.stories.full('S1');
-        captureMethod('post', '/stories', {});
-        await api.stories.create({});
-        captureMethod('patch', '/stories/S1', {});
-        await api.stories.update('S1', {});
-        captureMethod('patch', '/stories/S1/status', {});
-        await api.stories.transition('S1', 'ready');
-        captureMethod('patch', '/stories/S1/assign', {});
-        await api.stories.assign('S1', null);
-        captureMethod('delete', '/stories/S1', {});
-        await api.stories.delete('S1');
-        captureGet('/stories/S1/sub-tasks', []);
-        await api.stories.getSubTasks('S1');
-        captureMethod('post', '/stories/S1/sub-tasks', {});
-        await api.stories.createSubTask('S1', {});
-        captureGet('/stories/S1/sub-bugs', []);
-        await api.stories.getSubBugs('S1');
-        captureMethod('post', '/stories/S1/sub-bugs', {});
-        await api.stories.createSubBug('S1', {});
-    });
-});
-
-describe('api.subTasks + subBugs', () => {
-    it('full CRUD', async () => {
+describe('api.subTasks', () => {
+    it('lists, creates under the task, and full CRUD', async () => {
         captureGet('/sub-tasks', []);
         await api.subTasks.list();
-        captureGet('/sub-tasks/T1/full', {});
-        await api.subTasks.full('T1');
-        captureMethod('patch', '/sub-tasks/T1', {});
-        await api.subTasks.update('T1', {});
-        captureMethod('patch', '/sub-tasks/T1/status', {});
-        await api.subTasks.transition('T1', 'ready');
-        captureMethod('patch', '/sub-tasks/T1/assign', {});
-        await api.subTasks.assign('T1', null);
-        captureMethod('delete', '/sub-tasks/T1', {});
-        await api.subTasks.delete('T1');
-
-        captureGet('/sub-bugs', []);
-        await api.subBugs.list();
-        captureGet('/sub-bugs/SB1/full', {});
-        await api.subBugs.full('SB1');
-        captureMethod('patch', '/sub-bugs/SB1', {});
-        await api.subBugs.update('SB1', {});
-        captureMethod('patch', '/sub-bugs/SB1/status', {});
-        await api.subBugs.transition('SB1', 'ready');
-        captureMethod('patch', '/sub-bugs/SB1/assign', {});
-        await api.subBugs.assign('SB1', null);
-        captureMethod('delete', '/sub-bugs/SB1', {});
-        await api.subBugs.delete('SB1');
-    });
-});
-
-describe('api.bugs', () => {
-    it('list with filters and full CRUD', async () => {
-        const cap = captureGet('/bugs', []);
-        await api.bugs.list({ epicId: 'E1' });
-        expect(cap.url).toContain('epic_id=E1');
-        captureGet('/bugs/B1', {});
-        await api.bugs.get('B1');
-        captureGet('/bugs/B1/full', {});
-        await api.bugs.full('B1');
-        captureMethod('post', '/bugs', {});
-        await api.bugs.create({});
-        captureMethod('patch', '/bugs/B1', {});
-        await api.bugs.update('B1', {});
-        captureMethod('patch', '/bugs/B1/status', {});
-        await api.bugs.transition('B1', 'ready');
-        captureMethod('patch', '/bugs/B1/assign', {});
-        await api.bugs.assign('B1', null);
-        captureMethod('delete', '/bugs/B1', {});
-        await api.bugs.delete('B1');
+        captureGet('/tasks/T1/sub-tasks', []);
+        await api.subTasks.listForTask('T1');
+        const create = captureMethod('post', '/tasks/T1/sub-tasks', {});
+        await api.subTasks.create('T1', { title: 'Write tests', labels: ['qa'] });
+        expect(create.body).toEqual({ title: 'Write tests', labels: ['qa'], task_id: 'T1' });
+        captureGet('/sub-tasks/ST1/full', {});
+        await api.subTasks.full('ST1');
+        captureMethod('patch', '/sub-tasks/ST1', {});
+        await api.subTasks.update('ST1', {});
+        captureMethod('patch', '/sub-tasks/ST1/status', {});
+        await api.subTasks.transition('ST1', 'ready');
+        captureMethod('patch', '/sub-tasks/ST1/assign', {});
+        await api.subTasks.assign('ST1', null);
+        captureMethod('delete', '/sub-tasks/ST1', {});
+        await api.subTasks.delete('ST1');
     });
 });
 
 describe('api.issues.tree', () => {
     it('appends project_id when given', async () => {
-        const cap = captureGet('/issues/tree', { tree: [], projects: [], agents: [], epics: [], stories: [], bugs: [] });
+        const cap = captureGet('/issues/tree', { tree: [], projects: [], agents: [], tasks: [] });
         await api.issues.tree({ projectId: 'p1' });
         expect(cap.url).toContain('project_id=p1');
     });
     it('omits query when no project_id', async () => {
-        const cap = captureGet('/issues/tree', { tree: [], projects: [], agents: [], epics: [], stories: [], bugs: [] });
+        const cap = captureGet('/issues/tree', { tree: [], projects: [], agents: [], tasks: [] });
         await api.issues.tree({});
         expect(cap.url).toMatch(/\/issues\/tree$/);
     });
@@ -402,8 +339,8 @@ describe('api.issues.tree', () => {
 describe('api.comments', () => {
     it('list + create + delete', async () => {
         const cap = captureGet('/comments', []);
-        await api.comments.list('story', 'S1');
-        expect(cap.url).toContain('issue_type=story');
+        await api.comments.list('sub_task', 'S1');
+        expect(cap.url).toContain('issue_type=sub_task');
         expect(cap.url).toContain('issue_id=S1');
         captureMethod('post', '/comments', {});
         await api.comments.create({});
@@ -414,18 +351,18 @@ describe('api.comments', () => {
 
 describe('api.activity', () => {
     it('GET /issues/:type/:id/activity', async () => {
-        const cap = captureGet('/issues/story/S1/activity', []);
-        await api.activity.get('story', 'S1');
-        expect(cap.url).toMatch(/\/issues\/story\/S1\/activity$/);
+        const cap = captureGet('/issues/sub_task/S1/activity', []);
+        await api.activity.get('sub_task', 'S1');
+        expect(cap.url).toMatch(/\/issues\/sub_task\/S1\/activity$/);
     });
 });
 
 describe('api.issueLinks', () => {
     it('list/create/delete', async () => {
-        captureGet('/issues/story/S1/links', []);
-        await api.issueLinks.list('story', 'S1');
-        captureMethod('post', '/issues/story/S1/links', {});
-        await api.issueLinks.create('story', 'S1', 'bug', 'B1');
+        captureGet('/issues/sub_task/S1/links', []);
+        await api.issueLinks.list('sub_task', 'S1');
+        captureMethod('post', '/issues/sub_task/S1/links', {});
+        await api.issueLinks.create('sub_task', 'S1', 'task', 'T1');
         captureMethod('delete', '/issues/links/9', {});
         await api.issueLinks.delete(9);
     });
@@ -499,13 +436,13 @@ describe('api.search.query', () => {
         const cap = captureGet('/search', []);
         await api.search.query({
             q: 'foo',
-            type: ['story', 'bug'],
+            type: ['task', 'sub_task'],
             project_id: ['p1'],
             status: 'ready',
             updated: 'last_7_days',
             limit: 25,
         });
-        expect(cap.url).toContain('type=story%2Cbug');
+        expect(cap.url).toContain('type=task%2Csub_task');
         expect(cap.url).toContain('project_id=p1');
         expect(cap.url).toContain('status=ready');
         expect(cap.url).toContain('updated=last_7_days');
@@ -514,21 +451,21 @@ describe('api.search.query', () => {
 
     it('drops queries shorter than 2 chars to avoid noisy hits', async () => {
         const cap = captureGet('/search', []);
-        await api.search.query({ q: 'a', type: ['story'] });
+        await api.search.query({ q: 'a', type: ['sub_task'] });
         expect(cap.url).not.toContain('q=');
-        expect(cap.url).toContain('type=story');
+        expect(cap.url).toContain('type=sub_task');
     });
 });
 
 describe('api.run', () => {
     it('trigger/get/list', async () => {
         captureMethod('post', '/run', { runId: 'r1' });
-        await api.run.trigger('agent-coder', 'story', 'S1');
+        await api.run.trigger('agent-coder', 'sub_task', 'S1');
         captureGet('/run/r1', {});
         await api.run.get('r1');
         const cap = captureGet('/run', []);
-        await api.run.list({ issue_type: 'story', issue_id: 'S1', limit: 5 });
-        expect(cap.url).toContain('issue_type=story');
+        await api.run.list({ issue_type: 'sub_task', issue_id: 'S1', limit: 5 });
+        expect(cap.url).toContain('issue_type=sub_task');
         expect(cap.url).toContain('limit=5');
     });
 });
@@ -579,31 +516,31 @@ describe('api.analytics (extended)', () => {
         await api.analytics.project('p1');
         expect(cap.url).toContain('/analytics/project/p1');
     });
-    it('projectEpics with page+limit', async () => {
-        const cap = captureGet('/analytics/project/p1/epics', { rows: [], total: 0 });
-        await api.analytics.projectEpics('p1', { page: 2, limit: 10 });
+    it('projectTasks with page+limit', async () => {
+        const cap = captureGet('/analytics/project/p1/tasks', { rows: [], total: 0 });
+        await api.analytics.projectTasks('p1', { page: 2, limit: 10 });
         expect(cap.url).toContain('page=2');
         expect(cap.url).toContain('limit=10');
     });
-    it('projectEpics without params', async () => {
-        const cap = captureGet('/analytics/project/p1/epics', { rows: [], total: 0 });
-        await api.analytics.projectEpics('p1');
-        expect(cap.url).toMatch(/\/analytics\/project\/p1\/epics$/);
+    it('projectTasks without params', async () => {
+        const cap = captureGet('/analytics/project/p1/tasks', { rows: [], total: 0 });
+        await api.analytics.projectTasks('p1');
+        expect(cap.url).toMatch(/\/analytics\/project\/p1\/tasks$/);
     });
-    it('epic drill-down', async () => {
-        const cap = captureGet('/analytics/epic/e1', {});
-        await api.analytics.epic('e1');
-        expect(cap.url).toContain('/analytics/epic/e1');
+    it('task drill-down', async () => {
+        const cap = captureGet('/analytics/task/t1', {});
+        await api.analytics.task('t1');
+        expect(cap.url).toContain('/analytics/task/t1');
     });
-    it('epicChildren with type', async () => {
-        const cap = captureGet('/analytics/epic/e1/children', { rows: [], total: 0 });
-        await api.analytics.epicChildren('e1', { page: 1, limit: 25, type: 'story' });
-        expect(cap.url).toContain('type=story');
+    it('taskChildren with type', async () => {
+        const cap = captureGet('/analytics/task/t1/children', { rows: [], total: 0 });
+        await api.analytics.taskChildren('t1', { page: 1, limit: 25, type: 'sub_task' });
+        expect(cap.url).toContain('type=sub_task');
     });
-    it('epicChildren without params', async () => {
-        const cap = captureGet('/analytics/epic/e1/children', { rows: [], total: 0 });
-        await api.analytics.epicChildren('e1');
-        expect(cap.url).toMatch(/\/analytics\/epic\/e1\/children$/);
+    it('taskChildren without params', async () => {
+        const cap = captureGet('/analytics/task/t1/children', { rows: [], total: 0 });
+        await api.analytics.taskChildren('t1');
+        expect(cap.url).toMatch(/\/analytics\/task\/t1\/children$/);
     });
 });
 
@@ -676,7 +613,7 @@ describe('api.agents (extended)', () => {
     });
     it('compile prompt', async () => {
         captureMethod('post', '/agents/a1/compile-prompt', { prompt: '', filename: '', length: 0, agent: { id: '', name: '', cli: '', model: '' }, issue: null, guardrails_count: 0, sections: [] });
-        await api.agents.compilePrompt('a1', 'story', 'S1');
+        await api.agents.compilePrompt('a1', 'sub_task', 'S1');
     });
     it('marketplace ops', async () => {
         captureMethod('post', '/agents/a1/accept-upgrade', {});
@@ -873,39 +810,17 @@ describe('api.comments.update', () => {
     });
 });
 
-describe('api.epics.resetRounds + stories + subTasks + subBugs + bugs', () => {
-    it('resetRounds POSTs to /reset-rounds for each type', async () => {
-        captureMethod('post', '/epics/E1/reset-rounds', {});
-        await api.epics.resetRounds('E1');
-        captureMethod('post', '/stories/S1/reset-rounds', {});
-        await api.stories.resetRounds('S1');
-        captureMethod('post', '/sub-tasks/T1/reset-rounds', {});
-        await api.subTasks.resetRounds('T1');
-        captureMethod('post', '/sub-bugs/SB1/reset-rounds', {});
-        await api.subBugs.resetRounds('SB1');
-        captureMethod('post', '/bugs/B1/reset-rounds', {});
-        await api.bugs.resetRounds('B1');
-    });
-});
-
-describe('api.epics.list (includeArchived)', () => {
+describe('api.tasks.list (includeArchived)', () => {
     it('appends include_archived when true', async () => {
-        const cap = captureGet('/epics', []);
-        await api.epics.list(undefined, true);
+        const cap = captureGet('/tasks', []);
+        await api.tasks.list(undefined, true);
         expect(cap.url).toContain('include_archived=true');
     });
 });
 
 describe('api.issues.tree (includeArchived)', () => {
     it('appends include_archived when true', async () => {
-        const cap = captureGet('/issues/tree', {
-            tree: [],
-            projects: [],
-            agents: [],
-            epics: [],
-            stories: [],
-            bugs: [],
-        });
+        const cap = captureGet('/issues/tree', { tree: [], projects: [], agents: [], tasks: [] });
         await api.issues.tree({ includeArchived: true });
         expect(cap.url).toContain('include_archived=true');
     });
@@ -913,64 +828,16 @@ describe('api.issues.tree (includeArchived)', () => {
 
 describe('api.issueLinks.create with relationType', () => {
     it('forwards relation_type to server', async () => {
-        const cap = captureMethod('post', '/issues/story/S1/links', {});
-        await api.issueLinks.create('story', 'S1', 'bug', 'B1', 'depends_on');
+        const cap = captureMethod('post', '/issues/sub_task/S1/links', {});
+        await api.issueLinks.create('sub_task', 'S1', 'task', 'T1', 'depends_on');
         expect((cap.body as Record<string, unknown>)['relation_type']).toBe('depends_on');
     });
 });
 
-describe('api.stories.list (empty opts)', () => {
-    it('returns all stories when no filters provided', async () => {
-        const cap = captureGet('/stories', []);
-        await api.stories.list();
-        expect(cap.url).toMatch(/\/stories$/);
-    });
-});
-
-describe('api.bugs.list (empty opts)', () => {
-    it('returns all bugs when no filters provided', async () => {
-        const cap = captureGet('/bugs', []);
-        await api.bugs.list();
-        expect(cap.url).toMatch(/\/bugs$/);
-    });
-});
-
-describe('api.bugs.list (projectId filter)', () => {
-    it('includes project_id param when projectId provided (line 659 true branch)', async () => {
-        const cap = captureGet('/bugs', []);
-        await api.bugs.list({ projectId: 'P1' });
-        expect(cap.url).toContain('project_id=P1');
-    });
-});
-
 describe('api.subTasks.transition (override=true)', () => {
-    it('appends ?override=1 when override=true (line 633 true branch)', async () => {
-        const cap = captureMethod('patch', '/sub-tasks/T1/status', {});
-        await api.subTasks.transition('T1', 'ready', true);
-        expect(cap.url).toContain('?override=1');
-    });
-});
-
-describe('api.subBugs.transition (override=true)', () => {
-    it('appends ?override=1 when override=true (line 647 true branch)', async () => {
-        const cap = captureMethod('patch', '/sub-bugs/SB1/status', {});
-        await api.subBugs.transition('SB1', 'ready', true);
-        expect(cap.url).toContain('?override=1');
-    });
-});
-
-describe('api.bugs.transition (override=true)', () => {
-    it('appends ?override=1 when override=true (line 670 true branch)', async () => {
-        const cap = captureMethod('patch', '/bugs/B1/status', {});
-        await api.bugs.transition('B1', 'ready', true);
-        expect(cap.url).toContain('?override=1');
-    });
-});
-
-describe('api.stories.transition (override=true)', () => {
-    it('appends ?override=1 when override=true (line 614 true branch)', async () => {
-        const cap = captureMethod('patch', '/stories/S1/status', {});
-        await api.stories.transition('S1', 'ready', true);
+    it('appends ?override=1 when override=true', async () => {
+        const cap = captureMethod('patch', '/sub-tasks/ST1/status', {});
+        await api.subTasks.transition('ST1', 'ready', true);
         expect(cap.url).toContain('?override=1');
     });
 });

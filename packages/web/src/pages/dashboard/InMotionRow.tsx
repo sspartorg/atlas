@@ -5,6 +5,7 @@ import type { IAgent, IssueType } from '@atlas/shared';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import type { QueueItem } from '../../api/types.js';
 import { StatusPill } from './StatusPill.js';
+import { itemPath } from '../../utils/itemPath.js';
 
 interface IInMotionRowProps {
     row: QueueItem;
@@ -26,14 +27,6 @@ const GLYPH_BY_AGENT_NAME: Record<string, string> = {
     'API Docs Writer': 'api',
     'UI/UX Designer': 'brush',
     Wireframer: 'dashboard_customize',
-};
-
-const DETAIL_PATH: Record<IssueType, (id: string) => string> = {
-    epic: (id) => `/epics/${id}`,
-    story: (id) => `/issues/stories/${id}`,
-    bug: (id) => `/issues/bugs/${id}`,
-    sub_task: (id) => `/issues/sub-tasks/${id}`,
-    sub_bug: (id) => `/issues/sub-bugs/${id}`,
 };
 
 function shortId(_type: IssueType, id: string): string {
@@ -59,7 +52,7 @@ export function InMotionRow({ row, agent }: IInMotionRowProps) {
 
     return (
         <Box
-            onClick={() => navigate(DETAIL_PATH[row.issue_type](row.id))}
+            onClick={() => navigate(itemPath(row.issue_type, row.id))}
             sx={{
                 display: 'flex',
                 alignItems: 'center',

@@ -15,14 +15,12 @@ import type {
     AgentCategory,
     AgentKindSlug,
     AgentStatus,
-    AgentSchedulePreset,
     AgentCli,
     IAgent,
     IAgentBundleManifest,
     IMarketplaceAgent,
     IMarketplaceAgentChecklist,
     IMarketplaceAgentFull,
-    IMarketplaceAgentHandoff,
     IMarketplaceAgentSummary,
     IMarketplaceUpgradeDiff,
     MarketplaceUpgradeField,
@@ -72,29 +70,16 @@ function toMarketplaceAgent(r: Record<string, unknown>): IMarketplaceAgent {
         effort: (r['effort'] as IMarketplaceAgent['effort']) ?? 'medium',
         framework: r['framework'] as string,
         prompt_md: r['prompt_md'] as string,
-        handoff_prompt_md: r['handoff_prompt_md'] as string,
         description: r['description'] as string,
         designation: r['designation'] as string,
         accent_color: r['accent_color'] as string,
         sort_order: r['sort_order'] as number,
         glyph: r['glyph'] as string,
         role_id: (r['role_id'] as SdlcRole | null) ?? null,
-        max_rounds: r['max_rounds'] as number,
-        requires_item: r['requires_item'] as boolean,
-        requires_worktree: r['requires_worktree'] as boolean,
-        push_code: r['push_code'] as boolean,
-        raises_pr: r['raises_pr'] as boolean,
         status: r['status'] as AgentStatus,
         kind_slug: r['kind_slug'] as AgentKindSlug,
         /* v8 ignore next -- settings_json is NOT NULL DEFAULT '{}' at the DB level; `??` branch is unreachable defensive code */
         settings_json: (r['settings_json'] as Record<string, unknown>) ?? {},
-        schedule_hours: r['schedule_hours'] as number,
-        schedule_preset: r['schedule_preset'] as AgentSchedulePreset,
-        schedule_time_of_day: (r['schedule_time_of_day'] as string | null) ?? null,
-        schedule_weekdays: (r['schedule_weekdays'] as number[] | null) ?? null,
-        schedule_day_of_month: (r['schedule_day_of_month'] as number | null) ?? null,
-        cron_expr: (r['cron_expr'] as string | null) ?? null,
-        concurrent_runs: r['concurrent_runs'] as number,
         memory_cadence: r['memory_cadence'] as number,
         /* v8 ignore next -- memory_template_md is NOT NULL DEFAULT '' at the DB level; `??` branch is unreachable defensive code */
         memory_template_md: (r['memory_template_md'] as string) ?? '',
@@ -121,23 +106,10 @@ function toManifest(agent: IMarketplaceAgent): IAgentBundleManifest {
         sort_order: agent.sort_order,
         glyph: agent.glyph,
         role_id: agent.role_id,
-        max_rounds: agent.max_rounds,
-        requires_item: agent.requires_item,
-        requires_worktree: agent.requires_worktree,
-        push_code: agent.push_code,
-        raises_pr: agent.raises_pr,
         status: agent.status,
         kind_slug: agent.kind_slug,
         settings_json: agent.settings_json,
-        schedule_hours: agent.schedule_hours,
-        schedule_preset: agent.schedule_preset,
-        schedule_time_of_day: agent.schedule_time_of_day,
-        schedule_weekdays: agent.schedule_weekdays,
-        schedule_day_of_month: agent.schedule_day_of_month,
-        cron_expr: agent.cron_expr,
-        concurrent_runs: agent.concurrent_runs,
         memory_cadence: agent.memory_cadence,
-        handoff_prompt_md: agent.handoff_prompt_md,
         summary: agent.summary,
         version: agent.version,
         published_at: agent.published_at,
@@ -159,23 +131,10 @@ function manifestFromLocalAgent(agent: IAgent, summary: string): IAgentBundleMan
         sort_order: agent.sort_order,
         glyph: agent.glyph,
         role_id: agent.role_id,
-        max_rounds: agent.max_rounds,
-        requires_item: agent.requires_item,
-        requires_worktree: agent.requires_worktree,
-        push_code: agent.push_code,
-        raises_pr: agent.raises_pr,
         status: agent.status,
         kind_slug: agent.kind_slug,
         settings_json: agent.settings_json,
-        schedule_hours: agent.schedule_hours,
-        schedule_preset: agent.schedule_preset,
-        schedule_time_of_day: agent.schedule_time_of_day,
-        schedule_weekdays: agent.schedule_weekdays,
-        schedule_day_of_month: agent.schedule_day_of_month,
-        cron_expr: agent.cron_expr,
-        concurrent_runs: agent.concurrent_runs,
         memory_cadence: agent.memory_cadence,
-        handoff_prompt_md: agent.handoff_prompt_md,
         summary,
         // Exported bundle carries a self-version of 1 unless the local
         // agent has a pinned marketplace_pulled_version (rare for export).
@@ -275,44 +234,41 @@ export const marketplaceService = {
             .executeTakeFirst();
         if (!row) return undefined;
         const agent = toMarketplaceAgent(row);
-        const [handoffs, checklists] = await Promise.all([
-            db
-                .selectFrom('marketplace_agent_handoffs')
-                .select(['target_agent_id', 'kind', 'status'])
-                .where('marketplace_agent_id', '=', id)
-                .orderBy('kind', 'asc')
-                .execute(),
-            db
-                .selectFrom('marketplace_agent_checklists')
-                .select(['label', 'sort_order', 'required'])
-                .where('marketplace_agent_id', '=', id)
-                .orderBy('sort_order', 'asc')
-                .execute(),
-        ]);
+        const checklists = await db
+            .selectFrom('marketplace_agent_checklists')
+            .select(['label', 'sort_order', 'required'])
+            .where('marketplace_agent_id', '=', id)
+            .orderBy('sort_order', 'asc')
+            .execute();
         return {
             agent,
-            handoff_rules: handoffs as unknown as IMarketplaceAgentHandoff[],
             checklists: checklists as unknown as IMarketplaceAgentChecklist[],
         };
     },
 
     async exportCatalogBundle(id: string): Promise<Buffer> {
-        const full = await this.getFull(id);
-        if (!full) throw new MarketplaceNotFoundError(id);
-        return await packAgentBundle({
-            manifest: toManifest(full.agent),
-            prompt_md: full.agent.prompt_md,
-            memory_md: full.agent.memory_template_md,
-            handoff_rules: full.handoff_rules,
-            checklists: full.checklists,
-        });
+        return await packAgentBundle(await this.catalogBundle(id));
     },
 
     async exportLocalBundle(agentId: string): Promise<Buffer> {
+        return await packAgentBundle(await this.localBundle(agentId));
+    },
+
+    async catalogBundle(id: string): Promise<AgentBundle> {
+        const full = await this.getFull(id);
+        if (!full) throw new MarketplaceNotFoundError(id);
+        return {
+            manifest: toManifest(full.agent),
+            prompt_md: full.agent.prompt_md,
+            memory_md: full.agent.memory_template_md,
+            checklists: full.checklists,
+        };
+    },
+
+    async localBundle(agentId: string): Promise<AgentBundle> {
         const agent = await agentsService.get(agentId);
         if (!agent) throw new MarketplaceNotFoundError(agentId);
-        const [handoffs, checklists, memory] = await Promise.all([
-            agentsService.getHandoffRules(agentId),
+        const [checklists, memory] = await Promise.all([
             agentsService.getChecklists(agentId),
             db
                 .selectFrom('agent_memory')
@@ -326,21 +282,16 @@ export const marketplaceService = {
             agent.description.length > 220
                 ? agent.description.slice(0, 217) + '...'
                 : agent.description;
-        return await packAgentBundle({
+        return {
             manifest: manifestFromLocalAgent(agent, summary),
             prompt_md: agent.prompt_md,
             memory_md: memory?.body_md ?? '',
-            handoff_rules: handoffs.map((h) => ({
-                target_agent_id: h.target_agent_id,
-                kind: h.kind,
-                status: h.status,
-            })),
             checklists: checklists.map((c) => ({
                 label: c.label,
                 sort_order: c.sort_order,
                 required: c.required,
             })),
-        });
+        };
     },
 
     async install(
@@ -349,7 +300,7 @@ export const marketplaceService = {
     ): Promise<IAgent> {
         const full = await this.getFull(catalogId);
         if (!full) throw new MarketplaceNotFoundError(catalogId);
-        const { agent: m, handoff_rules, checklists } = full;
+        const { agent: m, checklists } = full;
 
         // Target slug for the local row. Defaults to the catalog id; the
         // Owner can override (via the AddFromMarketplaceModal "rename"
@@ -379,29 +330,16 @@ export const marketplaceService = {
                     framework: m.framework,
                     prompt_md: m.prompt_md,
                     prompt_version: 1,
-                    handoff_prompt_md: m.handoff_prompt_md,
                     status: m.status,
                     accent_color: m.accent_color,
                     sort_order: m.sort_order,
                     description: m.description,
                     designation: m.designation,
                     role_id: m.role_id,
-                    max_rounds: m.max_rounds,
-                    requires_item: m.requires_item,
-                    schedule_hours: m.schedule_hours,
-                    schedule_preset: m.schedule_preset,
-                    schedule_time_of_day: m.schedule_time_of_day,
-                    schedule_weekdays: m.schedule_weekdays,
-                    schedule_day_of_month: m.schedule_day_of_month,
-                    concurrent_runs: m.concurrent_runs,
                     glyph: m.glyph,
                     memory_cadence: m.memory_cadence,
                     kind_slug: m.kind_slug,
                     settings_json: m.settings_json,
-                    cron_expr: m.cron_expr,
-                    raises_pr: m.raises_pr,
-                    push_code: m.push_code,
-                    requires_worktree: m.requires_worktree,
                     // marketplace_source_id points at the CATALOG id (m.id),
                     // not the local slug — that's how upgrades keep flowing
                     // even after the user installs under a custom slug.
@@ -427,19 +365,6 @@ export const marketplaceService = {
                     source: 'ai-generated' as const,
                 })
                 .execute();
-            if (handoff_rules.length > 0) {
-                await trx
-                    .insertInto('agent_handoff_rules')
-                    .values(
-                        handoff_rules.map((h) => ({
-                            agent_id: targetId,
-                            target_agent_id: h.target_agent_id,
-                            kind: h.kind,
-                            status: h.status,
-                        }))
-                    )
-                    .execute();
-            }
             if (checklists.length > 0) {
                 await trx
                     .insertInto('agent_checklists')
@@ -463,20 +388,14 @@ export const marketplaceService = {
     },
 
     async diff(catalogId: string, localAgentId: string): Promise<IMarketplaceUpgradeDiff> {
-        const [full, agent, localHandoffs, localChecklists] = await Promise.all([
+        const [full, agent, localChecklists] = await Promise.all([
             this.getFull(catalogId),
             agentsService.get(localAgentId),
-            agentsService.getHandoffRules(localAgentId),
             agentsService.getChecklists(localAgentId),
         ]);
         if (!full) throw new MarketplaceNotFoundError(catalogId);
         if (!agent) throw new MarketplaceNotFoundError(localAgentId);
 
-        const fromHandoffs: IMarketplaceAgentHandoff[] = localHandoffs.map((h) => ({
-            target_agent_id: h.target_agent_id,
-            kind: h.kind,
-            status: h.status,
-        }));
         const fromChecklists: IMarketplaceAgentChecklist[] = localChecklists.map((c) => ({
             label: c.label,
             sort_order: c.sort_order,
@@ -496,20 +415,10 @@ export const marketplaceService = {
                     to: full.agent.prompt_md,
                     changed: agent.prompt_md !== full.agent.prompt_md,
                 },
-                handoff_prompt_md: {
-                    from: agent.handoff_prompt_md,
-                    to: full.agent.handoff_prompt_md,
-                    changed: agent.handoff_prompt_md !== full.agent.handoff_prompt_md,
-                },
                 settings_json: {
                     from: agent.settings_json,
                     to: full.agent.settings_json,
                     changed: !jsonEqual(agent.settings_json, full.agent.settings_json),
-                },
-                handoff_rules: {
-                    from: fromHandoffs,
-                    to: full.handoff_rules,
-                    changed: !jsonEqual(fromHandoffs, full.handoff_rules),
                 },
                 checklists: {
                     from: fromChecklists,
@@ -550,38 +459,12 @@ export const marketplaceService = {
                     })
                     .execute();
             }
-            if (fields.includes('handoff_prompt_md')) {
-                await trx
-                    .updateTable('agents')
-                    .set({ handoff_prompt_md: full.agent.handoff_prompt_md })
-                    .where('id', '=', localAgentId)
-                    .execute();
-            }
             if (fields.includes('settings_json')) {
                 await trx
                     .updateTable('agents')
                     .set({ settings_json: full.agent.settings_json })
                     .where('id', '=', localAgentId)
                     .execute();
-            }
-            if (fields.includes('handoff_rules')) {
-                await trx
-                    .deleteFrom('agent_handoff_rules')
-                    .where('agent_id', '=', localAgentId)
-                    .execute();
-                if (full.handoff_rules.length > 0) {
-                    await trx
-                        .insertInto('agent_handoff_rules')
-                        .values(
-                            full.handoff_rules.map((h) => ({
-                                agent_id: localAgentId,
-                                target_agent_id: h.target_agent_id,
-                                kind: h.kind,
-                                status: h.status,
-                            }))
-                        )
-                        .execute();
-                }
             }
             if (fields.includes('checklists')) {
                 await trx
@@ -666,29 +549,16 @@ export const marketplaceService = {
                     framework: m.framework,
                     prompt_md: bundle.prompt_md,
                     prompt_version: 1,
-                    handoff_prompt_md: m.handoff_prompt_md,
                     status: m.status,
                     accent_color: m.accent_color,
                     sort_order: m.sort_order,
                     description: m.description,
                     designation: m.designation,
                     role_id: m.role_id,
-                    max_rounds: m.max_rounds,
-                    requires_item: m.requires_item,
-                    schedule_hours: m.schedule_hours,
-                    schedule_preset: m.schedule_preset,
-                    schedule_time_of_day: m.schedule_time_of_day,
-                    schedule_weekdays: m.schedule_weekdays,
-                    schedule_day_of_month: m.schedule_day_of_month,
-                    concurrent_runs: m.concurrent_runs,
                     glyph: m.glyph,
                     memory_cadence: m.memory_cadence,
                     kind_slug: m.kind_slug,
                     settings_json: m.settings_json,
-                    cron_expr: m.cron_expr,
-                    raises_pr: m.raises_pr,
-                    push_code: m.push_code,
-                    requires_worktree: m.requires_worktree,
                     marketplace_source_id: null,
                     marketplace_pulled_version: null,
                 })
@@ -711,19 +581,6 @@ export const marketplaceService = {
                     source: 'manual-edit' as const,
                 })
                 .execute();
-            if (bundle.handoff_rules.length > 0) {
-                await trx
-                    .insertInto('agent_handoff_rules')
-                    .values(
-                        bundle.handoff_rules.map((h) => ({
-                            agent_id: id,
-                            target_agent_id: h.target_agent_id,
-                            kind: h.kind,
-                            status: h.status,
-                        }))
-                    )
-                    .execute();
-            }
             if (bundle.checklists.length > 0) {
                 await trx
                     .insertInto('agent_checklists')

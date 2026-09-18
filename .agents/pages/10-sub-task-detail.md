@@ -1,71 +1,55 @@
 # Sub-task Detail
 
-**Route:** `/issues/sub-tasks/:id` • **Component:** `packages/web/src/pages/SubTaskDetail.tsx` • **Slug:** `issues`
+**Route:** `/sub-tasks/:id` • **Component:** `packages/web/src/pages/SubTaskDetail.tsx` • **Slug:** `tasks`
 
 ## Purpose
-Single sub-task view. Uses the unified `IssueDetailShell`. Title, description, proposed plan, and acceptance criteria are editable inline.
+One sub-task of a Task (ADR 0015). Sub-tasks are never queued for a workflow of their own: the Task's workflow run works them through its Sub-tasks steps, one at a time on the Task's branch. This page is where the Owner reads, edits and answers them.
 
 ## States
-- **Resolving**: skeleton while the page scans stories to find this sub-task
-- **Not found**: "Sub-task not found" + back button
-- **Populated**: shared shell layout
+- **Loading**: `IssueDetailLoading`
+- **Not found**: "Sub-task not found" + **Back to Tasks**
+- **Populated**: shared `IssueDetailShell`
 
 ## UI elements
-**Breadcrumb**: Projects → project → Issues → parent `STR-NNN` → sub-task short id. Ends with `CopyLinkButton`.
+**Shell**
+- Breadcrumb: Tasks → parent Task id (→ `/tasks/:taskId`) → sub-task id + `CopyLinkButton`.
+- `EditableTitle` → `PATCH /api/sub-tasks/:id {title}`.
+- **3-dots menu**: **Clone item** — `POST /api/tasks/:taskId/sub-tasks` with `CLONE <title>`, the description, acceptance criteria and labels, then a `relates_to` link back to the source, then navigates to the clone (`SubTaskDetail.tsx` `handleClone`). Below a divider: **Delete** (→ parent Task).
+- **`AddRelatedMenu`** (`+`): **Add relates-to**, **Add blocked-by** → `LinkPickerDialog`.
 
-**Header (via shell)**
-- `EditableTitle` — Enter saves via `api.subTasks.update`.
-- **3-dots actions menu**: **Clone item…** opens `NewIssueModal` pre-filled with the sub-task's title (`CLONE <title>`), description, and acceptance_criteria; same parent story; status reset to `draft`. After create, a `relates_to` link to the source is attached. Below a divider: **Delete this sub-task…**.
-- **`AddRelatedMenu`** (Jira-style `+` button) on its own row below the title. Options: **Add relates-to**, **Add blocked-by** → opens `LinkPickerDialog`. (Sub-tasks have no natural children.)
-- `KindChipDetail kind="sub_task"`.
-
-**Blocked-by + Relates-to** sections (`RelatedItemsCard`) hide when their link list is empty — `+` menu carries the add path.
-
-**Body cards** (in order)
-- `EditableMarkdownCard` "Description".
-- `EditableMarkdownCard` "Acceptance criteria" — body renders as markdown via `MarkdownPreview`.
+**Body cards**
+- **Description**, **Acceptance criteria** — `EditableMarkdownCard` → `PATCH /api/sub-tasks/:id`.
+- `RelatedItemsCard` with `allowAddTestLink` — **Tested by** / **Tests** section (`tested_by` twin links) always offers **Add test link**; that picker is restricted to sub-tasks of the same Task (`restrictToTaskId`). Blocked by / Relates to / Pull Requests hide while empty.
+- `ConversationCard` — while the sub-task is `waiting_for_info` with no assignee and its latest run is a workflow step, helper text reads "Replying continues the waiting workflow run." The reply resumes the sub-task's run and its Task's run.
 
 **Right rail**
-- `DetailsRailCard` with Project, Parent story (link), Status (`StatusPickerPopover`), Assignee (`AssigneePickerPopover`), Rounds (A04 — `X / Y` against the assignee's `max_rounds`; hidden when no assignee; clickable → `ResetRoundsPopover` so Owner can wipe the counter and give the agent a fresh budget), Created, Last updated.
-
-**Owner-reply hand-back + PR merge awareness** (shared components)
-- `ConversationCard` composer — when the item is `waiting_for_info` with no assignee and the most recent run on it (`useItemAgentRuns`) belongs to an active agent, helper text reads *"Replying hands this back to <Agent> and sets it Ready."* It mirrors the API's owner-reply auto-resume (`commentsService`), so posting really does reassign + re-queue.
-- **Pull Requests** rows (`RelatedItemsCard`) carry an **Open** / **Merged** / **Closed** chip from `pr_state`; no chip while the state is unknown (`null`/absent).
-- `DetailsRailCard` status picker → **Done** while any `pull_request` link isn't `merged`: first `POST /api/issues/:type/:id/external-links/refresh`; if still unmerged, a **Mark done anyway?** dialog (`ConfirmActionModal`) lists the PRs (`#ref title (state)`) and only **Mark done** transitions. Refresh failure falls back to the loaded links, so the dialog still guards.
+- `DetailsRailCard`: Project, **Task** parent link, Status (with Override), Assignee (locked while `in_progress`), Reporter, Priority, Labels, Total cost, Created, Updated. No Workflow rows and no Branch / Path — the sub-task shares its Task's worktree.
+- `ActivityLogCard`.
 
 ## Why these affordances exist
-- **EditableTitle + EditableMarkdownCards** — Sub-tasks are the smallest implementation unit; agents (or the Owner) refine them as the work uncovers details. Inline edit keeps the iteration tight without bouncing through a modal.
-- **Acceptance criteria card** — A sub-task without acceptance criteria can't be marked done deterministically; surfacing the field as a first-class card pressures the author to fill it before agent hand-off.
-- **Parent story link in rail** — Sub-tasks share context with siblings on the parent; the rail link is the fastest path back to that context.
-- **Status picker with bidirectional ready ↔ in_progress ↔ blocked** — Sub-tasks use a simpler 4-state machine where work can stall and resume; the popover exposes those backward moves so the Owner can record blockers without overriding.
-
-## Data resolution
-`useSubTaskFull(id)` is now the single composite fetch (`SubTaskDetail.tsx:48`). The legacy "scan every story's sub-task list" path is retired — server-side `GET /api/sub-tasks/:id/full` returns the sub-task + parent story + project + activity in one round-trip.
+- **Labels matter here** — a Sub-tasks step with a label (e.g. `qa`) takes only sub-tasks carrying it; an unlabelled step takes the rest. PO Writer labels its sub-tasks `dev` / `qa`.
+- **Test links** — PO Writer pairs every dev sub-task with a `[QA]` twin via `tested_by` (twin → dev).
 
 ## Hooks used
-- `useSubTaskFull(id)` — single composite hook
-- `useEpics`, `useProjects`, `useAgents`, `useSettings`
-- `useUpdateSubTask`, `useTransitionSubTask`, `useAssignSubTask`, `useDeleteSubTask`
-- `useItemAgentRuns(id)` — recent agent runs against this sub-task
-- `useProjectLabels(projectId)` — labels picker
+- `useSubTaskFull(id)`, `useDeleteSubTask` (`hooks/useSubTasks.ts`)
+- `api.subTasks.update / transition / assign / create`, `api.issueLinks.create` directly, invalidating `['tasks']`, `['sub-tasks']`, `['issues']`, `['labels']`
+- `useItemAgentRuns(id)`, `useProjectLabels(projectId)`, `useSettings`
 
 ## API endpoints touched
-- `GET /api/sub-tasks/:id/full` — single composite endpoint
-- `PATCH /api/sub-tasks/:id` (title, description, acceptance_criteria, labels)
-- `PATCH /api/sub-tasks/:id/status`, `PATCH /api/sub-tasks/:id/assign`
-- `DELETE /api/sub-tasks/:id`
-- `POST /api/issues/sub_task/:id/external-links/refresh` — synchronous PR-state re-check before Done (via `useRefreshIssueExternalLinks`)
-
-(Legacy `PATCH /:id/plan` retired; agent narrative flows through the comments thread.)
+- `GET /api/sub-tasks/:id/full` — sub-task + parent `task` + project + links + activity + agents
+- `PATCH /api/sub-tasks/:id` (title, description, acceptance_criteria, priority, labels), `PATCH /api/sub-tasks/:id/status`, `PATCH /api/sub-tasks/:id/assign`, `DELETE /api/sub-tasks/:id`
+- `POST /api/tasks/:taskId/sub-tasks` + `POST /api/issues/sub_task/:id/links` (Clone)
+- `POST /api/issues/sub_task/:id/external-links/refresh` (Done guard)
 
 ## Edge cases / quirks
-- No direct sub-task fetch endpoint; resolution scans every story's sub-task list until the id matches. Slow if you have many stories.
+- A sub-task whose run finished is `in_review`, not `done`: the Owner closes it after checking the Task's branch. A Sub-tasks step only picks up sub-tasks that are neither `in_review` nor `done`, so re-running a Task redoes only the unfinished ones.
+- Status / assign PATCHes 409 while the sub-task's own workflow run is `running`.
+- Creating a sub-task while its Task's run is live is fine: the run picks it up at its Sub-tasks step, or its End gate sends the run back to that step.
 
 ## Connectivity
-- **Pages**: [Story Detail](09-story-detail.md) — parent rail link and the canonical entry; [Issues](08-issues.md) — list/kanban that lands here; [Sub-bug Detail](12-sub-bug-detail.md) — sibling resolution pattern.
-- **Routes**: `GET /api/stories/:id/sub-tasks` — only fetch path; the page scans story-by-story because there's no `GET /sub-tasks/:id` (the URL contract is "sub-tasks are addressed through their story"). Future direct-fetch route would replace the scan.
-- **MCP tools**: `list_sub_tasks { story_id }` — Coder agent's call to enumerate siblings under a story; mirrors what the parent story's sub-items card renders.
-- **Entities**: `sub_task`, `story` (parent), `agent` (assignee).
+- **Pages**: [Task Detail](07-task-detail.md) (parent; Sub-tasks table), [Workflow Run](35-workflow-run.md) (a sub-task's run).
+- **MCP tools**: `get_item { issue_type: 'sub_task', id }` (includes the parent `task`); `create_item { issue_type: 'sub_task', payload: { task_id, … } }`.
+- **Entities**: `sub_task`, `task` (parent), `agent`.
 
 ## Coming soon on this page
 None.

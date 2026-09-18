@@ -11,7 +11,7 @@ describe('InMotionRow', () => {
                 agent={makeAgent({ name: 'Coder' })}
                 row={{
                     id: 'CER-1',
-                    issue_type: 'story',
+                    issue_type: 'sub_task',
                     title: 'Build login',
                     status: 'in_progress',
                     updated_at: new Date(Date.now() - 60_000).toISOString(),
@@ -30,7 +30,7 @@ describe('InMotionRow', () => {
                 agent={undefined}
                 row={{
                     id: 'CER-2',
-                    issue_type: 'bug',
+                    issue_type: 'sub_task',
                     title: 'Fallback name',
                     status: 'in_progress',
                     updated_at: new Date(Date.now() - 60_000).toISOString(),
@@ -50,7 +50,7 @@ describe('InMotionRow', () => {
                 agent={undefined}
                 row={{
                     id: 'CER-3',
-                    issue_type: 'epic',
+                    issue_type: 'task',
                     title: 'No assignee',
                     status: 'in_progress',
                     updated_at: new Date(Date.now() - 60_000).toISOString(),
@@ -63,13 +63,13 @@ describe('InMotionRow', () => {
         expect(screen.getByText('Unassigned')).toBeInTheDocument();
     });
 
-    it('clicks the row to fire the navigate path (story)', () => {
+    it('clicks the row to fire the navigate path (sub-task)', () => {
         renderWithProviders(
             <InMotionRow
                 agent={makeAgent()}
                 row={{
                     id: 'ATL-9',
-                    issue_type: 'story',
+                    issue_type: 'sub_task',
                     title: 'Clickable',
                     status: 'in_progress',
                     updated_at: new Date(Date.now() - 60_000).toISOString(),
@@ -83,8 +83,8 @@ describe('InMotionRow', () => {
         fireEvent.click(title);
     });
 
-    it('clicks the row to fire the navigate path (epic + sub_task + sub_bug + bug)', () => {
-        const issueTypes = ['epic', 'sub_task', 'sub_bug', 'bug'] as const;
+    it('clicks the row to fire the navigate path (task + sub_task)', () => {
+        const issueTypes = ['task', 'sub_task'] as const;
         for (const t of issueTypes) {
             const { unmount } = renderWithProviders(
                 <InMotionRow
@@ -113,7 +113,7 @@ describe('InMotionRow', () => {
                 agent={makeAgent()}
                 row={{
                     id: 'H-1',
-                    issue_type: 'story',
+                    issue_type: 'sub_task',
                     title: 'Long runner',
                     status: 'in_progress',
                     updated_at: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
@@ -132,7 +132,7 @@ describe('InMotionRow', () => {
                 agent={makeAgent()}
                 row={{
                     id: 'D-1',
-                    issue_type: 'story',
+                    issue_type: 'sub_task',
                     title: 'Day runner',
                     status: 'in_progress',
                     updated_at: new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString(),
@@ -151,7 +151,7 @@ describe('InMotionRow', () => {
                 agent={makeAgent()}
                 row={{
                     id: 'X-1',
-                    issue_type: 'story',
+                    issue_type: 'sub_task',
                     title: 'Bad date',
                     status: 'in_progress',
                     updated_at: 'invalid',
@@ -170,7 +170,7 @@ describe('InMotionRow', () => {
                 agent={makeAgent({ name: 'Unknown Glyph' })}
                 row={{
                     id: 'X-2',
-                    issue_type: 'story',
+                    issue_type: 'sub_task',
                     title: 'Glyphless',
                     status: 'in_progress',
                     updated_at: new Date(Date.now() - 60_000).toISOString(),

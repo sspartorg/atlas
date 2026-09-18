@@ -28,7 +28,7 @@ interface MoreItem {
 // order as the sidenav; icons match the sidenav so the same affordance shows
 // in both surfaces.
 const ITEMS: MoreItem[] = [
-    // Workspace (skipping Dashboard / Epics / Issues / Queue — those are
+    // Workspace (skipping Dashboard / Tasks / Queue — those are
     // top-level BottomNav tabs).
     { key: 'scratch-pad', label: 'Scratch Pad', icon: 'sticky_note_2', path: '/scratch-pad' },
     { key: 'projects', label: 'Projects', icon: 'folder_open', path: '/projects' },
@@ -42,6 +42,7 @@ const ITEMS: MoreItem[] = [
         path: '/terminal/standalone',
     },
     // Agents — smart_toy mirrors the Sidenav Agents icon.
+    { key: 'workflows', label: 'Workflows', icon: 'account_tree', path: '/workflows' },
     { key: 'agents', label: 'Agents', icon: 'smart_toy', path: '/agents' },
     { key: 'marketplace', label: 'Marketplace', icon: 'storefront', path: '/agents/marketplace' },
     { key: 'mcp-tools', label: 'MCP Tools', icon: 'build', path: '/agents/mcp-tools' },

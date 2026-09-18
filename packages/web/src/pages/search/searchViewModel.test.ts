@@ -5,7 +5,6 @@ import {
     TYPE_LABEL,
     applyFilters,
     autocompleteSuggestions,
-    buildSearchCorpus,
     filtersToServerArgs,
     filtersIncludePrompts,
     groupByType,
@@ -16,55 +15,14 @@ import {
     type FilterState,
     type SearchHit,
 } from './searchViewModel.js';
-import {
-    makeAgent,
-    makeBug,
-    makeEpic,
-    makeProject,
-    makeStory,
-    makeSubBug,
-    makeSubTask,
-} from '../../test-utils/factories.js';
-
-describe('buildSearchCorpus', () => {
-    it('produces hits for every entity kind', () => {
-        const epic = makeEpic({ id: 'E1', title: 'Epic A' });
-        const story = makeStory({ id: 'S1', title: 'Story A', epic_id: 'E1' });
-        const bug = makeBug({ id: 'B1', title: 'Bug A', epic_id: 'E1' });
-        const subTask = makeSubTask({ id: 'T1', title: 'T A', story_id: 'S1' });
-        const subBug = makeSubBug({ id: 'SB1', title: 'SB A', story_id: 'S1' });
-        const agent = makeAgent({
-            id: 'agent-coder',
-            name: 'Coder',
-            prompt_md: 'first line\nsecond line\n# heading',
-            prompt_version: 3,
-        });
-
-        const corpus = buildSearchCorpus({
-            epics: [epic],
-            stories: [story],
-            bugs: [bug],
-            subTasks: [subTask],
-            subBugs: [subBug],
-            agents: [agent],
-            projectIdByEpic: new Map([['E1', 'p1']]),
-            projectIdByStory: new Map([['S1', 'p1']]),
-        });
-
-        const types = corpus.map((h) => h.type).sort();
-        expect(types).toEqual(['bug', 'epic', 'prompt', 'story', 'sub_bug', 'sub_task']);
-        const prompt = corpus.find((c) => c.type === 'prompt');
-        expect(prompt?.displayId).toMatch(/^PRM-/);
-        expect(prompt?.title).toContain('Coder');
-    });
-});
+import { makeAgent, makeProject } from '../../test-utils/factories.js';
 
 describe('applyFilters', () => {
     const hit = (over: Partial<SearchHit>): SearchHit => ({
-        type: 'story',
+        type: 'task',
         id: 'S1',
         displayId: 'S1',
-        title: 'Story A',
+        title: 'Task A',
         description: '',
         status: 'ready',
         assignee_agent_id: null,
@@ -74,10 +32,10 @@ describe('applyFilters', () => {
     });
 
     it('filters by type set', () => {
-        const corpus = [hit({ type: 'story' }), hit({ type: 'bug', id: 'B1' })];
-        const out = applyFilters(corpus, { ...EMPTY_FILTERS, types: ['bug'] });
+        const corpus = [hit({ type: 'sub_task' }), hit({ type: 'task', id: 'T1' })];
+        const out = applyFilters(corpus, { ...EMPTY_FILTERS, types: ['task'] });
         expect(out).toHaveLength(1);
-        expect(out[0]?.type).toBe('bug');
+        expect(out[0]?.type).toBe('task');
     });
 
     it('filters by project', () => {
@@ -113,7 +71,7 @@ describe('groupByType', () => {
     it('groups hits into a map per type', () => {
         const corpus: SearchHit[] = [
             {
-                type: 'story',
+                type: 'task',
                 id: '1',
                 displayId: '1',
                 title: '',
@@ -124,7 +82,7 @@ describe('groupByType', () => {
                 updated_at: '',
             },
             {
-                type: 'bug',
+                type: 'task',
                 id: '2',
                 displayId: '2',
                 title: '',
@@ -135,7 +93,7 @@ describe('groupByType', () => {
                 updated_at: '',
             },
             {
-                type: 'story',
+                type: 'sub_task',
                 id: '3',
                 displayId: '3',
                 title: '',
@@ -147,8 +105,8 @@ describe('groupByType', () => {
             },
         ];
         const grouped = groupByType(corpus);
-        expect(grouped.get('story')).toHaveLength(2);
-        expect(grouped.get('bug')).toHaveLength(1);
+        expect(grouped.get('task')).toHaveLength(2);
+        expect(grouped.get('sub_task')).toHaveLength(1);
     });
 });
 
@@ -165,10 +123,10 @@ describe('parseQuery', () => {
         expect(result.filters).toEqual(EMPTY_FILTERS);
     });
 
-    it('parses type = "story"', () => {
-        const result = parseQuery('type = story', ctx);
+    it('parses type = "task"', () => {
+        const result = parseQuery('type = task', ctx);
         expect(result.ok).toBe(true);
-        expect(result.filters.types).toEqual(['story']);
+        expect(result.filters.types).toEqual(['task']);
     });
 
     it('rejects unknown type', () => {
@@ -208,7 +166,7 @@ describe('parseQuery', () => {
     });
 
     it('rejects unsupported operators', () => {
-        const result = parseQuery('type > story', ctx);
+        const result = parseQuery('type > task', ctx);
         expect(result.ok).toBe(false);
     });
 
@@ -219,19 +177,19 @@ describe('parseQuery', () => {
     });
 
     it('accepts AND/OR connectors', () => {
-        const result = parseQuery('type = story AND status = ready', ctx);
+        const result = parseQuery('type = task AND status = ready', ctx);
         expect(result.ok).toBe(true);
-        expect(result.filters.types).toEqual(['story']);
+        expect(result.filters.types).toEqual(['task']);
         expect(result.filters.status).toBe('ready');
     });
 });
 
 describe('highlightQuery', () => {
     it('classifies field, op, value tokens', () => {
-        const tokens = highlightQuery('type = story');
+        const tokens = highlightQuery('type = task');
         expect(tokens.some((t) => t.kind === 'field' && t.text === 'type')).toBe(true);
         expect(tokens.some((t) => t.kind === 'op' && t.text === '=')).toBe(true);
-        expect(tokens.some((t) => t.kind === 'value' && t.text === 'story')).toBe(true);
+        expect(tokens.some((t) => t.kind === 'value' && t.text === 'task')).toBe(true);
     });
 
     it('marks quoted values as value-string', () => {
@@ -287,7 +245,7 @@ describe('autocompleteSuggestions', () => {
 describe('module exports', () => {
     it('exposes example queries and label map', () => {
         expect(EXAMPLE_QUERIES.length).toBeGreaterThan(0);
-        expect(TYPE_LABEL.epic).toBe('Epic');
+        expect(TYPE_LABEL.task).toBe('Task');
     });
 });
 
@@ -305,9 +263,9 @@ describe('filtersToServerArgs (P14)', () => {
     it('drops prompt from server types and keeps item kinds', () => {
         const args = filtersToServerArgs({
             ...EMPTY_FILTERS,
-            types: ['story', 'prompt', 'sub_task'],
+            types: ['task', 'prompt', 'sub_task'],
         });
-        expect(args.type).toEqual(['story', 'sub_task']);
+        expect(args.type).toEqual(['task', 'sub_task']);
     });
 
     it('omits prompt-only filter set entirely', () => {
@@ -340,14 +298,14 @@ describe('filtersIncludePrompts (P14)', () => {
     });
 
     it('returns false when prompt is excluded', () => {
-        expect(filtersIncludePrompts({ ...EMPTY_FILTERS, types: ['story'] })).toBe(false);
+        expect(filtersIncludePrompts({ ...EMPTY_FILTERS, types: ['task'] })).toBe(false);
     });
 });
 
 describe('serverRowToHit (P14)', () => {
     it('projects a server row to a SearchHit', () => {
         const hit = serverRowToHit({
-            issue_type: 'story',
+            issue_type: 'task',
             issue_id: 'PRAG-12',
             title: 'A title',
             description: 'A description',
@@ -357,7 +315,7 @@ describe('serverRowToHit (P14)', () => {
             updated_at: '2026-05-15T00:00:00Z',
             rank: 0.42,
         });
-        expect(hit.type).toBe('story');
+        expect(hit.type).toBe('task');
         expect(hit.displayId).toBe('PRAG-12');
         expect(hit.assignee_agent_id).toBe('agent-coder');
         expect(hit.project_id).toBe('p1');
@@ -381,7 +339,7 @@ describe('promptHits (P14)', () => {
     });
 
     it('returns nothing when types excludes prompt', () => {
-        const hits = promptHits([agent], { ...EMPTY_FILTERS, types: ['story'] });
+        const hits = promptHits([agent], { ...EMPTY_FILTERS, types: ['task'] });
         expect(hits).toEqual([]);
     });
 
@@ -418,7 +376,7 @@ describe('applyFilters - updated range', () => {
     afterEach(() => vi.useRealTimers());
 
     const baseHit: SearchHit = {
-        type: 'story',
+        type: 'task',
         id: 'S1',
         displayId: 'S1',
         title: 'X',
@@ -475,10 +433,10 @@ describe('applyFilters - updated range', () => {
 
 describe('applyFilters - projectIds and agentIds edge cases', () => {
     const hit = (over: Partial<SearchHit>): SearchHit => ({
-        type: 'story',
+        type: 'task',
         id: 'S1',
         displayId: 'S1',
-        title: 'Story A',
+        title: 'Task A',
         description: '',
         status: 'ready',
         assignee_agent_id: null,
@@ -531,10 +489,10 @@ describe('parseQuery — additional branches', () => {
         // != is not a supported operator for "type" field — it falls through to
         // the op check before the switch statement which rejects != for all fields
         // Actually per the source, != IS accepted as op ('=' OR '!='),
-        // so "type != story" should parse and set types to ['story']
-        const result = parseQuery('type != story', ctx);
+        // so "type != task" should parse and set types to ['task']
+        const result = parseQuery('type != task', ctx);
         expect(result.ok).toBe(true);
-        expect(result.filters.types).toEqual(['story']);
+        expect(result.filters.types).toEqual(['task']);
     });
 
     it('status = "in_review" alias', () => {
@@ -593,23 +551,23 @@ describe('parseQuery — additional branches', () => {
     });
 
     it('AND connector consumed between fields', () => {
-        const result = parseQuery('type = story AND status = "in_review"', ctx);
+        const result = parseQuery('type = task AND status = "in_review"', ctx);
         expect(result.ok).toBe(true);
-        expect(result.filters.types).toEqual(['story']);
+        expect(result.filters.types).toEqual(['task']);
         expect(result.filters.status).toBe('in_review');
     });
 
     it('OR connector consumed between fields', () => {
-        const result = parseQuery('type = bug OR status = done', ctx);
+        const result = parseQuery('type = sub_task OR status = done', ctx);
         expect(result.ok).toBe(true);
-        expect(result.filters.types).toEqual(['bug']);
+        expect(result.filters.types).toEqual(['sub_task']);
         expect(result.filters.status).toBe('done');
     });
 });
 
 describe('highlightQuery — additional branches', () => {
     it('comma is classified as op kind', () => {
-        const tokens = highlightQuery('type = story,bug');
+        const tokens = highlightQuery('type = task,sub_task');
         expect(tokens.some((t) => t.kind === 'op' && t.text === ',')).toBe(true);
     });
 
@@ -655,8 +613,8 @@ describe('autocompleteSuggestions — additional branches', () => {
 
     it('returns type options after type=', () => {
         const out = autocompleteSuggestions('type = ', ctx);
-        expect(out.some((s) => s.text.includes('story'))).toBe(true);
-        expect(out.some((s) => s.text.includes('epic'))).toBe(true);
+        expect(out.some((s) => s.text.includes('sub_task'))).toBe(true);
+        expect(out.some((s) => s.text.includes('task'))).toBe(true);
     });
 
     it('returns empty array when lastEq present but no fieldMatch', () => {
@@ -742,7 +700,7 @@ describe('parseQuery — status fallback to any (line 383)', () => {
 describe('applyFilters — inRange fallback (line 205)', () => {
     it('inRange returns true for unrecognized range string (covers the final return true)', () => {
         const hit = {
-            type: 'story' as const,
+            type: 'task' as const,
             id: 'S1',
             displayId: 'S1',
             title: 'Title',
@@ -810,164 +768,10 @@ describe('promptHits — inRange filter and text miss', () => {
 // Additional branch coverage — targets the ~27 uncovered ?? / if branches
 // ---------------------------------------------------------------------------
 
-describe('buildSearchCorpus — null/undefined field fallbacks', () => {
-    it('uses empty string when epic description is null', () => {
-        const epic = makeEpic({ id: 'E1', description: undefined as unknown as string });
-        const corpus = buildSearchCorpus({
-            epics: [epic],
-            stories: [],
-            bugs: [],
-            subTasks: [],
-            subBugs: [],
-            agents: [],
-            projectIdByEpic: new Map(),
-            projectIdByStory: new Map(),
-        });
-        expect(corpus[0]?.description).toBe('');
-    });
-
-    it('uses null when epic project_id is undefined', () => {
-        const epic = makeEpic({ id: 'E1', project_id: undefined as unknown as string });
-        const corpus = buildSearchCorpus({
-            epics: [epic],
-            stories: [],
-            bugs: [],
-            subTasks: [],
-            subBugs: [],
-            agents: [],
-            projectIdByEpic: new Map(),
-            projectIdByStory: new Map(),
-        });
-        expect(corpus[0]?.project_id).toBeNull();
-    });
-
-    it('preserves non-null epic assignee_agent_id', () => {
-        const epic = makeEpic({ id: 'E1', assignee_agent_id: 'agent-coder' });
-        const corpus = buildSearchCorpus({
-            epics: [epic],
-            stories: [],
-            bugs: [],
-            subTasks: [],
-            subBugs: [],
-            agents: [],
-            projectIdByEpic: new Map(),
-            projectIdByStory: new Map(),
-        });
-        expect(corpus[0]?.assignee_agent_id).toBe('agent-coder');
-    });
-
-    it('resolves story project_id from epic map (present key)', () => {
-        const story = makeStory({ id: 'S1', epic_id: 'E1', assignee_agent_id: undefined as unknown as string | null });
-        const corpus = buildSearchCorpus({
-            epics: [],
-            stories: [story],
-            bugs: [],
-            subTasks: [],
-            subBugs: [],
-            agents: [],
-            projectIdByEpic: new Map([['E1', 'p1']]),
-            projectIdByStory: new Map(),
-        });
-        expect(corpus[0]?.project_id).toBe('p1');
-    });
-
-    it('falls back to null when story epic_id not in projectIdByEpic', () => {
-        const story = makeStory({ id: 'S1', epic_id: 'E-MISSING' });
-        const corpus = buildSearchCorpus({
-            epics: [],
-            stories: [story],
-            bugs: [],
-            subTasks: [],
-            subBugs: [],
-            agents: [],
-            projectIdByEpic: new Map(),
-            projectIdByStory: new Map(),
-        });
-        expect(corpus[0]?.project_id).toBeNull();
-    });
-
-    it('falls back to null when bug epic_id not in projectIdByEpic', () => {
-        const bug = makeBug({ id: 'B1', epic_id: 'E-MISSING', description: undefined as unknown as string });
-        const corpus = buildSearchCorpus({
-            epics: [],
-            stories: [],
-            bugs: [bug],
-            subTasks: [],
-            subBugs: [],
-            agents: [],
-            projectIdByEpic: new Map(),
-            projectIdByStory: new Map(),
-        });
-        expect(corpus[0]?.project_id).toBeNull();
-        expect(corpus[0]?.description).toBe('');
-    });
-
-    it('falls back to null when subTask story_id not in projectIdByStory', () => {
-        const subTask = makeSubTask({ id: 'T1', story_id: 'S-MISSING', assignee_agent_id: undefined as unknown as string | null });
-        const corpus = buildSearchCorpus({
-            epics: [],
-            stories: [],
-            bugs: [],
-            subTasks: [subTask],
-            subBugs: [],
-            agents: [],
-            projectIdByEpic: new Map(),
-            projectIdByStory: new Map(),
-        });
-        expect(corpus[0]?.project_id).toBeNull();
-        expect(corpus[0]?.assignee_agent_id).toBeNull();
-    });
-
-    it('falls back to null when subBug story_id not in projectIdByStory', () => {
-        const subBug = makeSubBug({ id: 'SB1', story_id: 'S-MISSING', description: undefined as unknown as string });
-        const corpus = buildSearchCorpus({
-            epics: [],
-            stories: [],
-            bugs: [],
-            subTasks: [],
-            subBugs: [subBug],
-            agents: [],
-            projectIdByEpic: new Map(),
-            projectIdByStory: new Map(),
-        });
-        expect(corpus[0]?.project_id).toBeNull();
-        expect(corpus[0]?.description).toBe('');
-    });
-
-    it('handles agent with null prompt_md (falls back to empty description)', () => {
-        const agent = makeAgent({ id: 'agent-coder', prompt_md: null as unknown as string });
-        const corpus = buildSearchCorpus({
-            epics: [],
-            stories: [],
-            bugs: [],
-            subTasks: [],
-            subBugs: [],
-            agents: [agent],
-            projectIdByEpic: new Map(),
-            projectIdByStory: new Map(),
-        });
-        expect(corpus[0]?.description).toBe('');
-    });
-
-    it('returns empty corpus when all arrays are empty', () => {
-        const corpus = buildSearchCorpus({
-            epics: [],
-            stories: [],
-            bugs: [],
-            subTasks: [],
-            subBugs: [],
-            agents: [],
-            projectIdByEpic: new Map(),
-            projectIdByStory: new Map(),
-        });
-        expect(corpus).toHaveLength(0);
-    });
-});
-
 describe('applyFilters — whitespace-only text is a no-op', () => {
     it('treats whitespace-only text as empty (passes all hits)', () => {
         const hit: SearchHit = {
-            type: 'story',
+            type: 'task',
             id: 'S1',
             displayId: 'S1',
             title: 'Hello World',
@@ -985,10 +789,10 @@ describe('applyFilters — whitespace-only text is a no-op', () => {
 describe('applyFilters — agentId filter excludes wrong assignee', () => {
     it('excludes hit whose assignee_agent_id is set but not in agentIds filter', () => {
         const hit: SearchHit = {
-            type: 'story',
+            type: 'task',
             id: 'S1',
             displayId: 'S1',
-            title: 'Story X',
+            title: 'Task X',
             description: '',
             status: 'ready',
             assignee_agent_id: 'agent-other',
@@ -1051,7 +855,7 @@ describe('highlightQuery — edge cases', () => {
     });
 
     it('OR connector clears expectValue flag', () => {
-        const tokens = highlightQuery('type = story OR status = done');
+        const tokens = highlightQuery('type = task OR status = done');
         const connectorToken = tokens.find((t) => t.kind === 'connector');
         expect(connectorToken?.text).toBe('OR');
     });
@@ -1092,7 +896,7 @@ describe('autocompleteSuggestions — partial empty string per field', () => {
 
     it('returns all type options when partial is empty', () => {
         const out = autocompleteSuggestions('type = ', ctx);
-        expect(out.length).toBe(Object.keys({ epic: 1, story: 1, bug: 1, sub_task: 1, sub_bug: 1, prompt: 1 }).length);
+        expect(out.length).toBe(Object.keys(TYPE_LABEL).length);
     });
 
     it('returns all updated options when partial is empty', () => {
@@ -1154,9 +958,9 @@ describe('parseQuery — AND/OR connector in multi-field query', () => {
     };
 
     it('parses three fields joined by AND connectors', () => {
-        const result = parseQuery('type = story AND status = done AND updated = today', ctx);
+        const result = parseQuery('type = task AND status = done AND updated = today', ctx);
         expect(result.ok).toBe(true);
-        expect(result.filters.types).toEqual(['story']);
+        expect(result.filters.types).toEqual(['task']);
         expect(result.filters.status).toBe('done');
         expect(result.filters.updated).toBe('today');
     });
@@ -1176,69 +980,16 @@ describe('parseQuery — AND/OR connector in multi-field query', () => {
     });
 });
 
-describe('buildSearchCorpus — inactive agent status', () => {
-    it('maps inactive agent status to "inactive" hit status', () => {
-        const agent = makeAgent({ id: 'agent-idle', status: 'inactive' as 'active' });
-        const corpus = buildSearchCorpus({
-            epics: [],
-            stories: [],
-            bugs: [],
-            subTasks: [],
-            subBugs: [],
-            agents: [agent],
-            projectIdByEpic: new Map(),
-            projectIdByStory: new Map(),
-        });
-        expect(corpus[0]?.status).toBe('inactive');
-    });
-});
-
 // ---------------------------------------------------------------------------
 // Targeted branch coverage for the 15 remaining gaps
 // ---------------------------------------------------------------------------
-
-// Line 121: story description ?? '' — null branch
-describe('buildSearchCorpus — story description null branch (line 121)', () => {
-    it('uses empty string when story description is undefined', () => {
-        const story = makeStory({ id: 'S1', description: undefined as unknown as string });
-        const corpus = buildSearchCorpus({
-            epics: [],
-            stories: [story],
-            bugs: [],
-            subTasks: [],
-            subBugs: [],
-            agents: [],
-            projectIdByEpic: new Map([['E1', 'p1']]),
-            projectIdByStory: new Map(),
-        });
-        expect(corpus[0]?.description).toBe('');
-    });
-});
-
-// Line 147: subTask description ?? '' — null branch
-describe('buildSearchCorpus — subTask description null branch (line 147)', () => {
-    it('uses empty string when subTask description is null', () => {
-        const subTask = makeSubTask({ id: 'T1', description: undefined as unknown as string });
-        const corpus = buildSearchCorpus({
-            epics: [],
-            stories: [],
-            bugs: [],
-            subTasks: [subTask],
-            subBugs: [],
-            agents: [],
-            projectIdByEpic: new Map(),
-            projectIdByStory: new Map([['S1', 'p1']]),
-        });
-        expect(corpus[0]?.description).toBe('');
-    });
-});
 
 // Line 217: applyFilters — project filter, hit has null project_id
 describe('applyFilters — null project_id excluded when projectIds filter active (line 217)', () => {
     it('excludes hit with null project_id when projectIds filter is set', () => {
         const corpus: SearchHit[] = [
             {
-                type: 'story',
+                type: 'task',
                 id: 'S1',
                 displayId: 'S1',
                 title: 'No Project',

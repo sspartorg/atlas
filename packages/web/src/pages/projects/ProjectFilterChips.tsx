@@ -25,7 +25,7 @@ const CHIPS: IChipDef[] = [
 
 // 2026-06-10 — Delegates to the canonical `FilterPill` from
 // `components/filterPrimitives` so the count-chip rendering matches Queue,
-// Issues, Epics, and Notifications. The inline implementation here had
+// Tasks, and Notifications. The inline implementation here had
 // `ATLAS_PALETTE.white` / `.cloud` (mode-flipping) hardcoded into the
 // selected state, which turned the active pill text invisible in dark
 // mode.

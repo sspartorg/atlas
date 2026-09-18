@@ -35,13 +35,13 @@ describe('Sidenav', () => {
                 <Sidenav onNavigate={onNavigate} />
             </DraftGuardProvider>,
         );
-        fireEvent.click(screen.getByTestId('nav-item-epics'));
+        fireEvent.click(screen.getByTestId('nav-item-tasks'));
         expect(await screen.findByText('Discard draft?')).toBeInTheDocument();
         expect(navigateSpy).not.toHaveBeenCalled();
         expect(onNavigate).not.toHaveBeenCalled();
 
         fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
-        expect(navigateSpy).toHaveBeenCalledWith('/epics');
+        expect(navigateSpy).toHaveBeenCalledWith('/tasks');
         expect(onNavigate).toHaveBeenCalledTimes(1);
     });
 
@@ -55,7 +55,7 @@ describe('Sidenav', () => {
     it('resolves activeKey for a non-root path via the longest-prefix loop', () => {
         countsMock.mockReturnValue({});
         server.use(...defaultHandlers);
-        renderWithProviders(<Sidenav />, { initialEntries: ['/projects/abc/issues'] });
+        renderWithProviders(<Sidenav />, { initialEntries: ['/projects/abc/tasks'] });
         expect(screen.getByText(/Projects/i)).toBeInTheDocument();
     });
 

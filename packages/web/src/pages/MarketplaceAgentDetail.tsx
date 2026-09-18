@@ -5,40 +5,16 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Divider from '@mui/material/Divider';
 import Skeleton from '@mui/material/Skeleton';
 import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded';
 import DownloadRounded from '@mui/icons-material/DownloadRounded';
-import type { IMarketplaceAgent } from '@atlas/shared';
 import { api } from '../api/api.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 import { useToast } from '../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { AddFromMarketplaceModal } from './marketplace/AddFromMarketplaceModal.js';
 import { CliUnavailableAlert } from '../components/CliUnavailableAlert.js';
-import { useMarketplaceAgentFull, useMarketplaceCatalog } from '../hooks/useMarketplacePairing.js';
-
-const WEEKDAY_SHORT = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-function formatSchedule(a: IMarketplaceAgent): string {
-    switch (a.schedule_preset) {
-        case 'every_n_hours': {
-            const h = a.schedule_hours;
-            if (h <= 0) return 'On demand';
-            return `Every ${h} hour${h === 1 ? '' : 's'}`;
-        }
-        case 'daily':
-            return `Daily at ${a.schedule_time_of_day ?? '—'}`;
-        case 'weekly': {
-            const days = (a.schedule_weekdays ?? []).map((d) => WEEKDAY_SHORT[d] ?? '?').join('/');
-            return `Weekly on ${days || '—'} at ${a.schedule_time_of_day ?? '—'}`;
-        }
-        case 'monthly':
-            return `Monthly on day ${a.schedule_day_of_month ?? '—'} at ${a.schedule_time_of_day ?? '—'}`;
-        default:
-            return '—';
-    }
-}
+import { useMarketplaceAgentFull, useMarketplaceCatalog } from '../hooks/useMarketplace.js';
 
 const SECTION_LABEL_SX = {
     fontSize: 11,
@@ -57,35 +33,12 @@ const KV_ROW_SX = {
     fontSize: 13,
 } as const;
 
-function KvRow({ k, v, mono = false }: { k: string; v: string | number; mono?: boolean }) {
+function KvRow({ k, v }: { k: string; v: string | number }) {
     return (
         <Box sx={KV_ROW_SX}>
             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>{k}</Typography>
-            <Typography
-                sx={{
-                    fontSize: 12,
-                    fontFamily: mono ? '"JetBrains Mono", monospace' : undefined,
-                    color: ATLAS_PALETTE.slate,
-                }}
-            >
+            <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate }}>
                 {String(v)}
-            </Typography>
-        </Box>
-    );
-}
-
-function BoolRow({ k, v }: { k: string; v: boolean }) {
-    return (
-        <Box sx={KV_ROW_SX}>
-            <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>{k}</Typography>
-            <Typography
-                sx={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: v ? ATLAS_PALETTE.green : ATLAS_PALETTE.slate60,
-                }}
-            >
-                {v ? '✓' : '—'}
             </Typography>
         </Box>
     );
@@ -175,7 +128,7 @@ export function MarketplaceAgentDetail() {
         );
     }
 
-    const { agent, handoff_rules, checklists } = full.data;
+    const { agent, checklists } = full.data;
     const isInstalled = summaryRow?.is_installed ?? false;
     const hasUpgrade = summaryRow?.upgrade_available ?? false;
 
@@ -251,6 +204,7 @@ export function MarketplaceAgentDetail() {
                         <Chip size="small" label={agent.kind_slug} variant="outlined" />
                         <Chip size="small" label={agent.cli} variant="outlined" />
                         <Chip size="small" label={agent.model} variant="outlined" />
+                        <Chip size="small" label={`effort · ${agent.effort}`} variant="outlined" />
                     </Box>
                 </Box>
                 <Box
@@ -383,22 +337,7 @@ export function MarketplaceAgentDetail() {
                             {agent.framework && <KvRow k="framework" v={agent.framework} />}
                             <KvRow k="role_id" v={agent.role_id ?? '—'} />
                             {agent.designation && <KvRow k="designation" v={agent.designation} />}
-                            <KvRow k="max_rounds" v={agent.max_rounds} />
-                            <KvRow k="concurrent_runs" v={agent.concurrent_runs} />
                             <KvRow k="memory_cadence" v={agent.memory_cadence} />
-                        </Box>
-                        <Box>
-                            <Typography sx={SECTION_LABEL_SX}>Schedule</Typography>
-                            <KvRow k="preset" v={agent.schedule_preset} />
-                            <KvRow k="cadence" v={formatSchedule(agent)} />
-                            {agent.cron_expr && <KvRow k="cron_expr" v={agent.cron_expr} mono />}
-                        </Box>
-                        <Box>
-                            <Typography sx={SECTION_LABEL_SX}>Flags</Typography>
-                            <BoolRow k="requires_item" v={agent.requires_item} />
-                            <BoolRow k="requires_worktree" v={agent.requires_worktree} />
-                            <BoolRow k="push_code" v={agent.push_code} />
-                            <BoolRow k="raises_pr" v={agent.raises_pr} />
                         </Box>
                         {Object.keys(agent.settings_json ?? {}).length > 0 && (
                             <Box>
@@ -422,78 +361,8 @@ export function MarketplaceAgentDetail() {
                             </Box>
                         )}
                     </Box>
-
-                    {agent.handoff_prompt_md && (
-                        <Box sx={{ mt: 4 }}>
-                            <Typography sx={SECTION_LABEL_SX}>Handoff prompt</Typography>
-                            <Box
-                                sx={{
-                                    p: 3,
-                                    borderRadius: 1.5,
-                                    border: `1px solid ${ATLAS_PALETTE.slate06}`,
-                                    bgcolor: ATLAS_PALETTE.cloud,
-                                    fontFamily: '"JetBrains Mono", monospace',
-                                    fontSize: 12,
-                                    lineHeight: 1.6,
-                                    whiteSpace: 'pre-wrap',
-                                    maxHeight: 240,
-                                    overflow: 'auto',
-                                }}
-                            >
-                                {agent.handoff_prompt_md}
-                            </Box>
-                        </Box>
-                    )}
                 </Box>
                 <Box>
-                    <Box sx={{ mb: 4 }}>
-                        <Typography
-                            sx={{
-                                fontSize: 11,
-                                fontWeight: 600,
-                                letterSpacing: '0.08em',
-                                textTransform: 'uppercase',
-                                color: ATLAS_PALETTE.slate60,
-                                mb: 2,
-                            }}
-                        >
-                            Handoff rules
-                        </Typography>
-                        {handoff_rules.length === 0 ? (
-                            <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                                None.
-                            </Typography>
-                        ) : (
-                            handoff_rules.map((r, i) => (
-                                <Box
-                                    key={i}
-                                    sx={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        py: 1,
-                                        fontSize: 13,
-                                        borderBottom:
-                                            i === handoff_rules.length - 1
-                                                ? 'none'
-                                                : `1px solid ${ATLAS_PALETTE.slate06}`,
-                                    }}
-                                >
-                                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
-                                        {r.kind}
-                                    </Typography>
-                                    <Typography
-                                        sx={{
-                                            fontSize: 12,
-                                            fontFamily: '"JetBrains Mono", monospace',
-                                        }}
-                                    >
-                                        → {r.target_agent_id} ({r.status})
-                                    </Typography>
-                                </Box>
-                            ))
-                        )}
-                    </Box>
-                    <Divider sx={{ mb: 3 }} />
                     <Box>
                         <Typography
                             sx={{
@@ -505,7 +374,7 @@ export function MarketplaceAgentDetail() {
                                 mb: 2,
                             }}
                         >
-                            Pre-handoff checklist
+                            Quality checklist
                         </Typography>
                         {checklists.length === 0 ? (
                             <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>

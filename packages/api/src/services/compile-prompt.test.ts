@@ -23,10 +23,6 @@ function freedomAgent(over: Partial<IAgent> = {}): IAgent {
         sort_order: 1,
         description: '',
         designation: '',
-        max_rounds: 5,
-        requires_item: false,
-        schedule_hours: 0,
-        concurrent_runs: 1,
         glyph: '',
         created_at: '2026-05-28T00:00:00.000Z',
         updated_at: '2026-05-28T00:00:00.000Z',
@@ -45,7 +41,7 @@ afterAll(async () => {
 describe('compilePromptFor — issue not found', () => {
     it('throws when item params are provided but item does not exist in DB', async () => {
         await expect(
-            compilePromptFor(freedomAgent(), 'story', 'CPT-NOTEXIST'),
+            compilePromptFor(freedomAgent(), 'sub_task', 'CPT-NOTEXIST'),
         ).rejects.toThrow(/CPT-NOTEXIST/);
     });
 });
@@ -56,7 +52,7 @@ describe('compilePromptFor — freedom mode', () => {
 
         expect(result.issue).toBeNull();
         expect(result.filename).toMatch(/^prompt-freedom-scout-freedom-\d{8}-\d{6}\.md$/);
-        expect(result.prompt).toContain('# Freedom Run');
+        expect(result.prompt).toContain('# Project-level Run');
         // The freedom preamble should NOT include any item context block.
         expect(result.prompt).not.toContain('# Current Task');
         // Regression — the constitution header used to render twice because
@@ -69,13 +65,13 @@ describe('compilePromptFor — freedom mode', () => {
     it('returns issue + item-attached filename when called with both item params', async () => {
         await insertProject('p1', 'ATL');
         await insertAgent({ id: 'agent-coder' });
-        await insertItem({ id: 'ATL-100', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-100', type: 'task', project_id: 'p1', title: 'E' });
         await insertItem({
             id: 'ATL-1',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'ATL-100',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'A story',
         });
 
@@ -85,10 +81,10 @@ describe('compilePromptFor — freedom mode', () => {
             .where('id', '=', 'agent-coder')
             .executeTakeFirstOrThrow();
 
-        const result = await compilePromptFor(agent as unknown as IAgent, 'story', 'ATL-1');
+        const result = await compilePromptFor(agent as unknown as IAgent, 'sub_task', 'ATL-1');
 
-        expect(result.issue).toEqual({ type: 'story', id: 'ATL-1', title: 'A story' });
-        expect(result.filename).toMatch(/^prompt-coder-story-ATL-1-\d{8}-\d{6}\.md$/);
+        expect(result.issue).toEqual({ type: 'sub_task', id: 'ATL-1', title: 'A story' });
+        expect(result.filename).toMatch(/^prompt-coder-sub_task-ATL-1-\d{8}-\d{6}\.md$/);
         expect(result.prompt).toContain('# Current Task');
     });
 });

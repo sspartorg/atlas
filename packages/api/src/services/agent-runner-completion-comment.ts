@@ -1,12 +1,13 @@
-import type { IssueType } from '@atlas/shared';
+import type { IRunOutcome, IssueType } from '@atlas/shared';
 
 // 2026-06-08 — Two body shapes only:
 //
-// 1) `buildOrchestratorRunCompletedBody` — the success-path Run-link pin.
-//    Posted by the runner once per run on top of the agent's own MCP
-//    `What I did / verified / Open questions` structured comment.
-//    Pure metadata, no AI content — gives the Owner a one-click jump to
-//    the run-detail page from the comment thread.
+// 1) `buildOrchestratorRunCompletedBody` — the success-path comment: the
+//    agent's `atlas-outcome` (result, summary, reason) plus a run link.
+//    ADR 0014: this is how one workflow step hears from the previous one —
+//    a retried Coder reads the reviewer's rejection reason from the
+//    comment thread in `.atlas/current-task.md` — and the constitution
+//    tells agents not to post a duplicate summary themselves.
 //
 // 2) `buildCompletionCommentBody` — the error-path body. The agent
 //    crashed before it could emit the `atlas-outcome` block, so its
@@ -32,14 +33,34 @@ export interface OrchestratorRunCompletedInput {
     agentName: string;
     runId: string;
     issueType: IssueType;
+    /** Parsed `atlas-outcome`; null when the agent emitted none. */
+    outcome?: IRunOutcome | null;
 }
+
+const OUTCOME_LABEL: Record<IRunOutcome['kind'], string> = {
+    done: 'finished',
+    rejected: 'sent the work back',
+    asked_question: 'needs an answer',
+};
+
+const SUMMARY_CAP = 4000;
 
 export function buildOrchestratorRunCompletedBody(
     input: OrchestratorRunCompletedInput,
 ): string {
-    const { agentId, agentName, runId, issueType } = input;
+    const { agentId, agentName, runId, issueType, outcome } = input;
     const tail = `\nRun: [${shortRunId(runId)}](/agents/${agentId}/runs/${runId})`;
-    return `**${agentName}** — orchestrator: run completed on this ${issueType}.${tail}`;
+    if (!outcome) {
+        return `**${agentName}** — orchestrator: run completed on this ${issueType} without an outcome block.${tail}`;
+    }
+    const parts = [`**${agentName}** ${OUTCOME_LABEL[outcome.kind]} (\`${outcome.kind}\`).`];
+    const reason = outcome.reason?.trim();
+    const summary = outcome.summary?.trim();
+    // A multi-line reason (numbered questions, a heading) gets its own block
+    // so its markdown still renders.
+    if (reason) parts.push(reason.includes('\n') ? `**Reason:**\n\n${clip(reason, SUMMARY_CAP)}` : `**Reason:** ${clip(reason, SUMMARY_CAP)}`);
+    if (summary && summary !== reason) parts.push(clip(summary, SUMMARY_CAP));
+    return `${parts.join('\n\n')}\n${tail}`;
 }
 
 export interface ErrorCompletionCommentInput {

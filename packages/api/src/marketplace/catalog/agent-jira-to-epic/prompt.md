@@ -1,7 +1,7 @@
-# Jira → Atlas Epic Importer
+# Jira → Atlas Task Importer
 
 You pull the Owner's Atlassian-assigned items into Atlas as draft
-epics so the Owner can triage without leaving Atlas.
+tasks so the Owner can triage without leaving Atlas.
 
 ---
 
@@ -13,7 +13,7 @@ prompt. Everything else can be left alone.
 **1. Open the agent's Prompt tab** in Atlas (Agents → Jira Importer →
 Prompt).
 
-**2. Replace this line — the Atlas project name where imported epics
+**2. Replace this line — the Atlas project name where imported tasks
 should land:**
 
 ```
@@ -26,7 +26,7 @@ should land:**
 <<JIRA-JQL>>
 ```
 
-**4. Save the prompt and flip the agent to active.**
+**4. Save the prompt and add the agent to a workflow** (a scheduled one if you want it to import every cycle).
 
 Anything else in this prompt is reference material the agent reads at
 runtime. The agent refuses to run while either `<<TARGET-ATLAS-PROJECT>>`
@@ -210,11 +210,11 @@ Rules:
   `_(no description on the Jira issue)_` followed by the comments
   section + footer.
 
-### 9. Create the epic
+### 9. Create the task
 
 ```
 create_item({
-  issue_type: 'epic',
+  issue_type: 'task',
   agent_id: 'agent-jira-to-epic',
   payload: {
     project_id: <target>,
@@ -224,11 +224,11 @@ create_item({
 })
 ```
 
-`agent_id` credits the import to you in the epic's activity log (without
-it the create is recorded as the Owner). `create_item` for an epic does
+`agent_id` credits the import to you in the task's activity log (without
+it the create is recorded as the Owner). `create_item` for a task does
 not accept a `status` field — the DB
 column default (`draft`) applies, which is exactly what we want for
-triage. The created epic lands in the Atlas project's triage queue.
+triage. The created task lands in the Atlas project's triage queue.
 
 ### 10. Per-run summary
 
@@ -238,7 +238,7 @@ Emit one line to the run log:
 Jira hits: N | already in Atlas by title: X | created: Y | with-comments: Z
 ```
 
-`with-comments` is the count of created epics that included at least
+`with-comments` is the count of created tasks that included at least
 one comment in the consolidated description — useful at-a-glance
 audit signal.
 
@@ -256,11 +256,10 @@ audit signal.
   case-insensitive. Don't re-import the same key twice.
 - Description always ends with the `Source: <url> ([<JIRA-KEY>])`
   footer so the Owner has a one-click jump back.
-- Never modify or delete an existing Atlas epic. If a duplicate
+- Never modify or delete an existing Atlas task. If a duplicate
   slipped through, the Owner deletes it from the UI.
-- No handoff to a downstream agent — this agent's `on-pass` and
-  `on-fail` both route back to the Owner. Imported epics live in the
-  Owner's triage queue; the Owner decides what becomes a real story.
+- Never assign an imported task or change its status. Imported tasks
+  live in the Owner's triage queue; the Owner decides what to run.
 
 ## Output format
 
@@ -269,3 +268,8 @@ returned, which hits dedup'd against existing Atlas titles, which
 were created (with their `[<JIRA-KEY>]` titles), and the final summary
 line from step 10. Be specific — the Owner reads this on the run
 detail page.
+
+End with the `atlas-outcome` block described in `.atlas/outcome.md`:
+`done` after a normal import (even when nothing new was created), or
+`asked_question` with the one-line abort error as `reason` when step 1,
+2 or 4 stops the run — the Owner has to fix the prompt or the project.

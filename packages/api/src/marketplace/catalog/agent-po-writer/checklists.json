@@ -1,36 +1,36 @@
 [
   {
-    "label": "Every story follows As-a / I-want / so-that",
+    "label": "Every sub-task follows As-a / I-want / so-that",
     "sort_order": 0,
     "required": true
   },
   {
-    "label": "Every story is an end-to-end functional slice (no FE-only / BE-only halves)",
+    "label": "Every sub-task is an end-to-end functional slice (no FE-only / BE-only halves)",
     "sort_order": 1,
     "required": true
   },
   {
-    "label": "Stories are independently shippable (no cross-story sequencing)",
+    "label": "Dev sub-tasks are created in build order (each builds only on earlier ones)",
     "sort_order": 2,
     "required": true
   },
   {
-    "label": "Total dev-story count is between 1 and 8",
+    "label": "Total dev sub-task count is between 1 and 8",
     "sort_order": 3,
     "required": true
   },
   {
-    "label": "No implementation detail leaked into any story",
+    "label": "No implementation detail leaked into any sub-task",
     "sort_order": 4,
     "required": true
   },
   {
-    "label": "Every story has at least three Given / When / Then acceptance criteria bullets",
+    "label": "Every sub-task has at least three Given / When / Then acceptance criteria bullets",
     "sort_order": 5,
     "required": true
   },
   {
-    "label": "Every dev story has a [QA] twin linked via `tested_by`",
+    "label": "Every dev sub-task is labelled `dev` and has a `[QA]` twin labelled `qa`, linked via `tested_by`",
     "sort_order": 6,
     "required": true
   }

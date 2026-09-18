@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { spawnAgentRun } from '../services/agent-runner.js';
+import { workflowsService } from '../services/workflows.js';
+import { startWorkflowRun } from '../services/workflow-engine.js';
 import { projectsService, PrefixCollisionError } from '../services/projects.js';
 import { IssueKeyPrefixSchema } from '@atlas/shared';
 import { settingsService } from '../services/settings.js';
@@ -401,11 +402,14 @@ export async function projectsRoutes(app: FastifyInstance) {
                 });
             }
             try {
-                const runId = await spawnAgentRun({
-                    agentId: 'agent-ai-readiness',
-                    projectId: id,
-                });
-                return reply.status(202).send({ run_id: runId });
+                // ADR 0014 — the scaffold is the project's AI Readiness
+                // workflow (worktree + push + PR), created from the starter
+                // template on first use.
+                const templateName = workflowsService.listTemplates().find((t) => t.id === 'ai-readiness')?.name;
+                const existing = (await workflowsService.list(id)).find((w) => w.name === templateName);
+                const workflow = existing ?? (await workflowsService.createFromTemplate('ai-readiness', id));
+                const runId = await startWorkflowRun(workflow.id, null);
+                return reply.status(202).send({ run_id: runId, workflow_id: workflow.id });
             } catch (err) {
                 return reply.status(500).send({
                     error: 'Failed to spawn AI-readiness run',

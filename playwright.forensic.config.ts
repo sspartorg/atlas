@@ -2,9 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 // 2026-06-11 — Forensic-audit Playwright config.
 //
-// Targets the LIVE dev stack (http://localhost:4000) instead of the
-// hermetic e2e stack on :6000. The audit needs the user's real
-// `mono-repo` project + MON-N epic visible at /epics/<key>, and
+// Targets the LIVE dev stack (http://localhost:4000, or FORENSIC_BASE_URL
+// for a stack on other ports) instead of the hermetic e2e stack on :6000.
+// The audit needs the user's real project and Tasks visible at /tasks, and
 // pg_stat_statements running on the dev DB — none of which exist in
 // the e2e env.
 //
@@ -29,7 +29,7 @@ export default defineConfig({
     ],
 
     use: {
-        baseURL: 'http://localhost:4000',
+        baseURL: process.env['FORENSIC_BASE_URL'] ?? 'http://localhost:4000',
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
         video: 'off',

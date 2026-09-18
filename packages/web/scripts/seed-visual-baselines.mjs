@@ -22,8 +22,7 @@ const OUT_DIR = path.join(REPO_ROOT, 'e2e', 'visual', '__snapshots__', 'snapshot
 const TOP_LEVEL_ROUTES = [
     '/',
     '/projects',
-    '/epics',
-    '/issues',
+    '/tasks',
     '/agents',
     '/agents/marketplace',
     '/agents/mcp-tools',

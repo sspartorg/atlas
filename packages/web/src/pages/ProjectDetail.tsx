@@ -13,14 +13,13 @@ import { useProject } from '../hooks/useProjects.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useProjectCounts } from '../hooks/useProjectCounts.js';
-import { useIssues } from '../hooks/useIssues.js';
+import { flattenIssueTree, useIssues } from '../hooks/useIssues.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { RefreshButton } from '../components/index.js';
 import { ProjectHeader } from './project/ProjectHeader.js';
 import { ProjectRightRail } from './project/ProjectRightRail.js';
 import { OverviewTab } from './project/OverviewTab.js';
-import { EpicsTab } from './project/EpicsTab.js';
-import { IssuesTab } from './project/IssuesTab.js';
+import { TasksTab } from './project/TasksTab.js';
 import { GuardrailsTab } from './project/GuardrailsTab.js';
 import { HistoryTab } from './project/HistoryTab.js';
 import { SetupTab } from './project/SetupTab.js';
@@ -38,8 +37,8 @@ import { useSetPageTitle } from '../components/shell/index.js';
 
 import { relativeTime } from '../utils/time.js';
 
-type TabKey = 'overview' | 'epics' | 'issues' | 'guardrails' | 'setup' | 'history';
-const TAB_KEYS = ['overview', 'epics', 'issues', 'guardrails', 'setup', 'history'] as const;
+type TabKey = 'overview' | 'tasks' | 'guardrails' | 'setup' | 'history';
+const TAB_KEYS = ['overview', 'tasks', 'guardrails', 'setup', 'history'] as const;
 
 export function ProjectDetail() {
     const { id = '' } = useParams<{ id: string }>();
@@ -71,34 +70,25 @@ export function ProjectDetail() {
     // and otherwise pass the data straight through.
     const { data: counts } = useProjectCounts(id);
     const { data: issueTree } = useIssues({ projectId: id });
-    // 2026-05-30 — Project Detail used to fan-fetch `useEpics(id)`,
-    // `useStories({projectId: id})`, `useBugs({projectId: id})` on top
-    // of the tree query, even though `buildIssueTree` already loads
-    // every item in the project. The tree endpoint now returns the
-    // same arrays inline; reading them from `issueTree` drops three
-    // duplicate HTTP requests.
-    const stories = issueTree?.stories ?? [];
-    const bugs = issueTree?.bugs ?? [];
-    // EpicsTab wants `IEpicListItem` (IEpic + per-epic story_count). The
-    // original `/api/epics?project_id=…` GROUP BY'd on the server; here we
-    // derive the count client-side because the stories array we just
-    // pulled covers every epic in the project.
-    const epics = useMemo(() => {
-        const raw = issueTree?.epics ?? [];
-        if (raw.length === 0) return [];
-        const countByEpic = new Map<string, number>();
-        for (const s of stories) {
-            countByEpic.set(s.epic_id, (countByEpic.get(s.epic_id) ?? 0) + 1);
+    const subTasks = useMemo(
+        () => (issueTree ? flattenIssueTree(issueTree.tree).filter((n) => n.kind === 'sub_task') : []),
+        [issueTree],
+    );
+    // TasksTab wants `ITaskListItem` (ITask + sub_task_count); the tree
+    // already carries every sub-task in the project, so count client-side.
+    const tasks = useMemo(() => {
+        const countByTask = new Map<string, number>();
+        for (const s of subTasks) {
+            if (s.task_id) countByTask.set(s.task_id, (countByTask.get(s.task_id) ?? 0) + 1);
         }
-        return raw.map((e) => ({ ...e, story_count: countByEpic.get(e.id) ?? 0 }));
-    }, [issueTree?.epics, stories]);
+        return (issueTree?.tasks ?? []).map((t) => ({
+            ...t,
+            sub_task_count: countByTask.get(t.id) ?? 0,
+        }));
+    }, [issueTree?.tasks, subTasks]);
 
     const queryClient = useQueryClient();
-    // 2026-05-30 — the per-kind epics/stories/bugs branches were here to
-    // catch the dedicated `useEpics(id)` / `useStories({projectId})` /
-    // `useBugs({projectId})` fetches; those were collapsed into the tree
-    // query, so the predicate now only tracks the two queries this page
-    // actually owns.
+    // Tracks only the two queries this page owns.
     const projectFetching = useIsFetching({
         predicate: (q) => {
             const k = q.queryKey;
@@ -126,22 +116,14 @@ export function ProjectDetail() {
 
     const displayId = project?.issue_key_prefix ?? '';
 
-    const agentsById = useMemo(() => {
-        const map = new Map<string, (typeof agents)[number]>();
-        agents.forEach((w) => map.set(w.id, w));
-        return map;
-    }, [agents]);
-
-    // Active agents = agents assigned to any open issue in this project.
+    // Active agents = agents assigned to any open task or sub-task in this project.
     const activeAgents = useMemo(() => {
         const ids = new Set<string>();
-        for (const e of epics) if (e.assignee_agent_id) ids.add(e.assignee_agent_id);
-        for (const s of stories)
-            if (s.assignee_agent_id && s.status !== 'done') ids.add(s.assignee_agent_id);
-        for (const b of bugs)
-            if (b.assignee_agent_id && b.status !== 'done') ids.add(b.assignee_agent_id);
+        for (const i of [...tasks, ...subTasks]) {
+            if (i.assignee_agent_id && i.status !== 'done') ids.add(i.assignee_agent_id);
+        }
         return agents.filter((w) => ids.has(w.id));
-    }, [epics, stories, bugs, agents]);
+    }, [tasks, subTasks, agents]);
 
     const guardrailsActive = project ? project.guardrails_md.trim().length > 0 : false;
 
@@ -226,7 +208,7 @@ export function ProjectDetail() {
                     label="Overview"
                 />
                 <Tab
-                    value="epics"
+                    value="tasks"
                     icon={
                         <Box
                             component="span"
@@ -237,21 +219,7 @@ export function ProjectDetail() {
                         </Box>
                     }
                     iconPosition="start"
-                    label={`Epics  ${epics.length}`}
-                />
-                <Tab
-                    value="issues"
-                    icon={
-                        <Box
-                            component="span"
-                            className="material-symbols-rounded"
-                            sx={{ fontSize: 16 }}
-                        >
-                            layers
-                        </Box>
-                    }
-                    iconPosition="start"
-                    label={`Issues  ${stories.length + bugs.length}`}
+                    label={`Tasks  ${tasks.length}`}
                 />
                 <Tab
                     value="guardrails"
@@ -315,24 +283,14 @@ export function ProjectDetail() {
                             onJumpToHistory={handleJumpToHistory}
                         />
                     )}
-                    {currentTab === 'epics' && (
-                        <EpicsTab
+                    {currentTab === 'tasks' && (
+                        <TasksTab
                             projectId={id}
-                            epics={epics}
+                            tasks={issueTree ? tasks : undefined}
                             projects={project ? [project] : []}
                             agents={agents}
                             ownerName={ownerName}
                             ownerAccent={ownerAccent}
-                        />
-                    )}
-                    {currentTab === 'issues' && (
-                        <IssuesTab
-                            projectId={id}
-                            treeData={issueTree}
-                            agentsById={agentsById}
-                            ownerName={ownerName}
-                            ownerAccent={ownerAccent}
-                            formatRelative={relativeTime}
                         />
                     )}
                     {currentTab === 'guardrails' && <GuardrailsTab project={project} />}

@@ -11,7 +11,7 @@ import { goto } from './helpers/nav.js';
 //   3. Specific audit for the suspect hook clusters called out in the
 //      master plan:
 //        - useAgentRuns + useProjectAgentRuns + useItemAgentRuns
-//        - useStories + useIssues(tree) double-fetch on ProjectDetail
+//        - per-kind list endpoints + useIssues(tree) double-fetch on ProjectDetail
 //
 // SSE (/api/events) is excluded from all counts — it is a persistent
 // long-poll that the server never closes; it is not a data fetch.
@@ -56,16 +56,18 @@ function pathOf(url: string): string {
 const STATIC_ROUTES = [
     '/',
     '/projects',
-    '/epics',
-    '/epics/new',
-    '/issues',
+    '/tasks',
+    '/tasks/new',
     '/queue',
+    '/workflows',
     '/search',
     '/terminal',
     '/terminal/layout',
     '/agents',
     '/agents/mcp-tools',
     '/agents/marketplace',
+    '/agents/marketplace?tab=workflows',
+    '/agents/marketplace/workflows/delivery',
     '/guardrails',
     '/settings',
     '/settings/credentials',
@@ -191,24 +193,19 @@ test.describe('/projects/:id — no dup API calls on project detail', () => {
             `Fan-out on ${href}: ${JSON.stringify(fanout)}`,
         ).toEqual([]);
 
-        // Specific audit: ProjectDetail must NOT call /api/stories or /api/epics
-        // or /api/bugs separately — they are folded into /api/issues/tree.
-        // If any of these show up, it means the tree-dedup refactor regressed.
-        const storiesCall = fetches.find((f) => f.path === '/api/stories' || f.path.startsWith('/api/stories?'));
-        const epicsCall = fetches.find((f) => f.path === '/api/epics' || f.path.startsWith('/api/epics?'));
-        const bugsCall = fetches.find((f) => f.path === '/api/bugs' || f.path.startsWith('/api/bugs?'));
+        // Specific audit: ProjectDetail must NOT call /api/tasks or
+        // /api/sub-tasks separately — they are folded into /api/issues/tree.
+        // If either shows up, the tree-dedup refactor regressed.
+        const tasksCall = fetches.find((f) => f.path === '/api/tasks');
+        const subTasksCall = fetches.find((f) => f.path === '/api/sub-tasks');
 
         expect(
-            storiesCall,
-            `ProjectDetail hit /api/stories separately — should use /api/issues/tree only`,
+            tasksCall,
+            `ProjectDetail hit /api/tasks separately — should use /api/issues/tree only`,
         ).toBeUndefined();
         expect(
-            epicsCall,
-            `ProjectDetail hit /api/epics separately — should use /api/issues/tree only`,
-        ).toBeUndefined();
-        expect(
-            bugsCall,
-            `ProjectDetail hit /api/bugs separately — should use /api/issues/tree only`,
+            subTasksCall,
+            `ProjectDetail hit /api/sub-tasks separately — should use /api/issues/tree only`,
         ).toBeUndefined();
     });
 });
@@ -235,118 +232,19 @@ test.describe('/projects/:id/guardrails — no dup API calls', () => {
     });
 });
 
-test.describe('/epics/:id — no dup API calls on epic detail', () => {
-    test('first epic detail passes dup audit', async ({ page }) => {
-        await goto(page, '/epics');
-        const firstLink = page
-            .locator('a[href^="/epics/"]')
-            .filter({ hasNot: page.locator('a[href="/epics/new"]') })
-            .first();
-        if ((await firstLink.count()) === 0) {
-            test.skip(true, 'no seeded epic — skipping /epics/:id dup audit');
-            return;
-        }
-        const href = await firstLink.getAttribute('href');
-        if (!href || href === '/epics/new') return;
+// The e2e seed creates Task ETM-1 and its sub-task ETM-2.
+for (const route of ['/tasks/ETM-1', '/sub-tasks/ETM-2']) {
+    test.describe(`${route} — no dup API calls on item detail`, () => {
+        test('item detail passes dup audit', async ({ page }) => {
+            const fetches = await captureApiFetches(page, () => goto(page, route));
+            const dups = findDuplicatesWithinWindow(fetches);
+            expect(dups, `Duplicate API calls on ${route}: ${JSON.stringify(dups)}`).toEqual([]);
 
-        const fetches = await captureApiFetches(page, () => goto(page, href));
-        const dups = findDuplicatesWithinWindow(fetches);
-        expect(dups, `Duplicate API calls on ${href}: ${JSON.stringify(dups)}`).toEqual([]);
-
-        const fanout = findFanout(fetches);
-        expect(fanout, `Fan-out on ${href}: ${JSON.stringify(fanout)}`).toEqual([]);
+            const fanout = findFanout(fetches);
+            expect(fanout, `Fan-out on ${route}: ${JSON.stringify(fanout)}`).toEqual([]);
+        });
     });
-});
-
-test.describe('/issues/stories/:id — no dup API calls on story detail', () => {
-    test('first story detail passes dup audit', async ({ page }) => {
-        await goto(page, '/issues');
-        const storyLink = page.locator('a[href^="/issues/stories/"]').first();
-        if ((await storyLink.count()) === 0) {
-            test.skip(true, 'no seeded story — skipping story detail dup audit');
-            return;
-        }
-        const href = await storyLink.getAttribute('href');
-        if (!href) return;
-
-        const fetches = await captureApiFetches(page, () => goto(page, href));
-        const dups = findDuplicatesWithinWindow(fetches);
-        expect(dups, `Duplicate API calls on ${href}: ${JSON.stringify(dups)}`).toEqual([]);
-
-        const fanout = findFanout(fetches);
-        expect(fanout, `Fan-out on ${href}: ${JSON.stringify(fanout)}`).toEqual([]);
-
-        // Specific audit: StoryDetail uses useItemAgentRuns (hits /api/run?issue_id=…).
-        // Confirm it fires at most once.
-        const runCalls = fetches.filter(
-            (f) => f.method === 'GET' && f.path.startsWith('/api/run'),
-        );
-        expect(
-            runCalls.length,
-            `StoryDetail fired /api/run ${runCalls.length} times — expected at most 1`,
-        ).toBeLessThanOrEqual(1);
-    });
-});
-
-test.describe('/issues/bugs/:id — no dup API calls on bug detail', () => {
-    test('first bug detail passes dup audit', async ({ page }) => {
-        await goto(page, '/issues');
-        const bugLink = page.locator('a[href^="/issues/bugs/"]').first();
-        if ((await bugLink.count()) === 0) {
-            test.skip(true, 'no seeded bug — skipping bug detail dup audit');
-            return;
-        }
-        const href = await bugLink.getAttribute('href');
-        if (!href) return;
-
-        const fetches = await captureApiFetches(page, () => goto(page, href));
-        const dups = findDuplicatesWithinWindow(fetches);
-        expect(dups, `Duplicate API calls on ${href}: ${JSON.stringify(dups)}`).toEqual([]);
-
-        const fanout = findFanout(fetches);
-        expect(fanout, `Fan-out on ${href}: ${JSON.stringify(fanout)}`).toEqual([]);
-    });
-});
-
-test.describe('/issues/sub-tasks/:id — no dup API calls on sub-task detail', () => {
-    test('first sub-task detail passes dup audit', async ({ page }) => {
-        await goto(page, '/issues');
-        const subtaskLink = page.locator('a[href^="/issues/sub-tasks/"]').first();
-        if ((await subtaskLink.count()) === 0) {
-            test.skip(true, 'no seeded sub-task — skipping sub-task detail dup audit');
-            return;
-        }
-        const href = await subtaskLink.getAttribute('href');
-        if (!href) return;
-
-        const fetches = await captureApiFetches(page, () => goto(page, href));
-        const dups = findDuplicatesWithinWindow(fetches);
-        expect(dups, `Duplicate API calls on ${href}: ${JSON.stringify(dups)}`).toEqual([]);
-
-        const fanout = findFanout(fetches);
-        expect(fanout, `Fan-out on ${href}: ${JSON.stringify(fanout)}`).toEqual([]);
-    });
-});
-
-test.describe('/issues/sub-bugs/:id — no dup API calls on sub-bug detail', () => {
-    test('first sub-bug detail passes dup audit', async ({ page }) => {
-        await goto(page, '/issues');
-        const subBugLink = page.locator('a[href^="/issues/sub-bugs/"]').first();
-        if ((await subBugLink.count()) === 0) {
-            test.skip(true, 'no seeded sub-bug — skipping sub-bug detail dup audit');
-            return;
-        }
-        const href = await subBugLink.getAttribute('href');
-        if (!href) return;
-
-        const fetches = await captureApiFetches(page, () => goto(page, href));
-        const dups = findDuplicatesWithinWindow(fetches);
-        expect(dups, `Duplicate API calls on ${href}: ${JSON.stringify(dups)}`).toEqual([]);
-
-        const fanout = findFanout(fetches);
-        expect(fanout, `Fan-out on ${href}: ${JSON.stringify(fanout)}`).toEqual([]);
-    });
-});
+}
 
 // -----------------------------------------------------------------------
 // Agent routes — agent detail, run detail, marketplace agent detail.
@@ -424,14 +322,8 @@ test.describe('/agents/:id/runs/:runId — no dup API calls on run detail', () =
 
 test.describe('/agents/marketplace/:id — no dup API calls on marketplace agent detail', () => {
     test('first marketplace agent detail passes dup audit', async ({ page }) => {
-        await goto(page, '/agents/marketplace');
-        const firstLink = page.locator('a[href^="/agents/marketplace/"]').first();
-        if ((await firstLink.count()) === 0) {
-            test.skip(true, 'no marketplace agents — skipping marketplace detail dup audit');
-            return;
-        }
-        const href = await firstLink.getAttribute('href');
-        if (!href) return;
+        // Catalog cards are clickable boxes, not links; the seed installs PO Writer.
+        const href = '/agents/marketplace/agent-po-writer';
 
         const fetches = await captureApiFetches(page, () => goto(page, href));
         const dups = findDuplicatesWithinWindow(fetches);
@@ -514,27 +406,9 @@ test.describe('/analytics/project/:projectId — no dup API calls', () => {
     });
 });
 
-test.describe('/analytics/epic/:epicId — no dup API calls', () => {
-    test('first analytics epic page passes dup audit', async ({ page }) => {
-        // Try to reach an analytics epic page via the project drill-down.
-        await goto(page, '/analytics');
-        const projectLink = page.locator('a[href^="/analytics/project/"]').first();
-        if ((await projectLink.count()) === 0) {
-            test.skip(true, 'no analytics project links — skipping analytics epic dup audit');
-            return;
-        }
-        const projectHref = await projectLink.getAttribute('href');
-        if (!projectHref) return;
-
-        await goto(page, projectHref);
-        const epicLink = page.locator('a[href^="/analytics/epic/"]').first();
-        if ((await epicLink.count()) === 0) {
-            test.skip(true, 'no analytics epic links on project page — skipping dup audit');
-            return;
-        }
-        const href = await epicLink.getAttribute('href');
-        if (!href) return;
-
+test.describe('/analytics/task/:taskId — no dup API calls', () => {
+    test('seeded analytics task page passes dup audit', async ({ page }) => {
+        const href = '/analytics/task/ETM-1';
         const fetches = await captureApiFetches(page, () => goto(page, href));
         const dups = findDuplicatesWithinWindow(fetches);
         expect(dups, `Duplicate API calls on ${href}: ${JSON.stringify(dups)}`).toEqual([]);
@@ -570,25 +444,17 @@ test.describe('useAgentRuns family — endpoint distinctness audit', () => {
         expect(unique.size).toBe(paths.length);
     });
 
-    test('useItemAgentRuns on StoryDetail fires at most once on first paint', async ({ page }) => {
-        await goto(page, '/issues');
-        const storyLink = page.locator('a[href^="/issues/stories/"]').first();
-        if ((await storyLink.count()) === 0) {
-            test.skip(true, 'no seeded story — skipping useItemAgentRuns story-detail audit');
-            return;
-        }
-        const href = await storyLink.getAttribute('href');
-        if (!href) return;
+    test('useItemAgentRuns on SubTaskDetail fires at most once on first paint', async ({ page }) => {
+        const fetches = await captureApiFetches(page, () => goto(page, '/sub-tasks/ETM-2'));
 
-        const fetches = await captureApiFetches(page, () => goto(page, href));
-
-        // useItemAgentRuns → GET /api/run?issue_id=…
+        // useItemAgentRuns → GET /api/run?issue_id=…. Match on the full URL:
+        // the shell's own /api/run?limit=500 is a different hook.
         const runFetches = fetches.filter(
-            (f) => f.method === 'GET' && f.path.startsWith('/api/run'),
+            (f) => f.method === 'GET' && f.path === '/api/run' && /[?&]issue_id=/.test(f.url),
         );
         expect(
             runFetches.length,
-            `StoryDetail: /api/run fetched ${runFetches.length} times — expected ≤ 1`,
+            `SubTaskDetail: /api/run?issue_id=… fetched ${runFetches.length} times — expected ≤ 1`,
         ).toBeLessThanOrEqual(1);
     });
 
@@ -627,8 +493,8 @@ test.describe('useAgentRuns family — endpoint distinctness audit', () => {
     });
 });
 
-test.describe('useStories vs useIssues tree — double-fetch audit', () => {
-    test('ProjectDetail does NOT call /api/stories or /api/epics or /api/bugs separately', async ({ page }) => {
+test.describe('per-kind list endpoints vs useIssues tree — double-fetch audit', () => {
+    test('ProjectDetail calls /api/issues/tree once and no per-kind list endpoint', async ({ page }) => {
         await goto(page, '/projects');
         const firstLink = page.locator('a[href^="/projects/"]').first();
         if ((await firstLink.count()) === 0) {
@@ -639,108 +505,29 @@ test.describe('useStories vs useIssues tree — double-fetch audit', () => {
         if (!href) return;
 
         const fetches = await captureApiFetches(page, () => goto(page, href));
+        const gets = (path: string) => fetches.filter((f) => f.method === 'GET' && f.path === path);
 
-        const storiesCalls = fetches.filter(
-            (f) => f.method === 'GET' && f.path.startsWith('/api/stories'),
-        );
-        const epicsCalls = fetches.filter(
-            (f) => f.method === 'GET' && f.path.startsWith('/api/epics'),
-        );
-        const bugsCalls = fetches.filter(
-            (f) => f.method === 'GET' && f.path.startsWith('/api/bugs'),
-        );
-        const treeCalls = fetches.filter(
-            (f) => f.method === 'GET' && f.path.startsWith('/api/issues/tree'),
-        );
-
-        // The tree endpoint should be called exactly once.
+        const treeCalls = gets('/api/issues/tree');
         expect(
             treeCalls.length,
             `ProjectDetail should call /api/issues/tree exactly once; got ${treeCalls.length}`,
         ).toBe(1);
-
-        // None of the individual kind endpoints should appear — they are
-        // folded into the tree response as of the 2026-05-30 refactor.
-        expect(
-            storiesCalls.length,
-            `ProjectDetail should NOT call /api/stories (use tree); got ${storiesCalls.length}`,
-        ).toBe(0);
-        expect(
-            epicsCalls.length,
-            `ProjectDetail should NOT call /api/epics (use tree); got ${epicsCalls.length}`,
-        ).toBe(0);
-        expect(
-            bugsCalls.length,
-            `ProjectDetail should NOT call /api/bugs (use tree); got ${bugsCalls.length}`,
-        ).toBe(0);
+        expect(gets('/api/tasks').length, 'ProjectDetail should NOT call /api/tasks (use tree)').toBe(0);
+        expect(gets('/api/sub-tasks').length, 'ProjectDetail should NOT call /api/sub-tasks (use tree)').toBe(0);
     });
 
-    test('/queue page — useStories, useBugs, useEpics each fire at most once', async ({ page }) => {
-        // The Queue page uses separate hooks (useStories, useBugs, useEpics) because
-        // it needs assignable items across ALL projects (not a single-project tree).
-        // This is an intentional design. The test verifies there are no DUPLICATE
-        // calls to each endpoint (i.e., each fires at most once, not that it is
-        // consolidated into tree).
+    test('/queue page — /api/workflow-queue fires at most once', async ({ page }) => {
+        // One read model backs the whole page (per-workflow runs + queued Tasks).
         const fetches = await captureApiFetches(page, () => goto(page, '/queue'));
-
-        const storiesCalls = fetches.filter(
-            (f) => f.method === 'GET' && f.path.startsWith('/api/stories'),
-        );
-        const bugsCalls = fetches.filter(
-            (f) => f.method === 'GET' && f.path.startsWith('/api/bugs'),
-        );
-        const epicsCalls = fetches.filter(
-            (f) => f.method === 'GET' && f.path.startsWith('/api/epics'),
-        );
-
-        expect(
-            storiesCalls.length,
-            `/queue fired /api/stories ${storiesCalls.length} times — expected ≤ 1`,
-        ).toBeLessThanOrEqual(1);
-        expect(
-            bugsCalls.length,
-            `/queue fired /api/bugs ${bugsCalls.length} times — expected ≤ 1`,
-        ).toBeLessThanOrEqual(1);
-        expect(
-            epicsCalls.length,
-            `/queue fired /api/epics ${epicsCalls.length} times — expected ≤ 1`,
-        ).toBeLessThanOrEqual(1);
+        for (const path of ['/api/workflow-queue']) {
+            const calls = fetches.filter((f) => f.method === 'GET' && f.path === path);
+            expect(calls.length, `/queue fired ${path} ${calls.length} times — expected ≤ 1`).toBeLessThanOrEqual(1);
+        }
     });
 
-    test('/issues page — useIssues(tree) fires exactly once, no per-kind parallel calls', async ({ page }) => {
-        const fetches = await captureApiFetches(page, () => goto(page, '/issues'));
-
-        const treeCalls = fetches.filter(
-            (f) => f.method === 'GET' && f.path.startsWith('/api/issues/tree'),
-        );
-        const storiesCalls = fetches.filter(
-            (f) => f.method === 'GET' && f.path.startsWith('/api/stories'),
-        );
-        const bugsCalls = fetches.filter(
-            (f) => f.method === 'GET' && f.path.startsWith('/api/bugs'),
-        );
-        const epicsCalls = fetches.filter(
-            (f) => f.method === 'GET' && f.path.startsWith('/api/epics'),
-        );
-
-        // The Issues page uses useIssues(tree) — exactly one call.
-        expect(
-            treeCalls.length,
-            `/issues should call /api/issues/tree exactly once; got ${treeCalls.length}`,
-        ).toBe(1);
-
-        // No per-kind parallel calls expected on the Issues page.
-        expect(
-            storiesCalls.length,
-            `/issues should NOT call /api/stories separately; got ${storiesCalls.length}`,
-        ).toBe(0);
-        expect(
-            bugsCalls.length,
-            `/issues should NOT call /api/bugs separately; got ${bugsCalls.length}`,
-        ).toBe(0);
-        expect(
-            epicsCalls.length,
-            `/issues should NOT call /api/epics separately; got ${epicsCalls.length}`,
-        ).toBe(0);
+    test('/tasks page — /api/tasks fires exactly once', async ({ page }) => {
+        const fetches = await captureApiFetches(page, () => goto(page, '/tasks'));
+        const calls = fetches.filter((f) => f.method === 'GET' && f.path === '/api/tasks');
+        expect(calls.length, `/tasks should call /api/tasks exactly once; got ${calls.length}`).toBe(1);
     });
 });

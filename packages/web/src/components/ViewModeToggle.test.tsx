@@ -27,13 +27,13 @@ describe('loadViewMode + saveViewMode', () => {
     afterEach(() => window.localStorage.clear());
 
     it('returns the fallback when no key', () => {
-        expect(loadViewMode('epics')).toBe('table');
-        expect(loadViewMode('epics', 'kanban')).toBe('kanban');
+        expect(loadViewMode('tasks')).toBe('table');
+        expect(loadViewMode('tasks', 'kanban')).toBe('kanban');
     });
 
     it('round-trips through localStorage', () => {
-        saveViewMode('epics', 'kanban');
-        expect(loadViewMode('epics')).toBe('kanban');
+        saveViewMode('tasks', 'kanban');
+        expect(loadViewMode('tasks')).toBe('kanban');
     });
 
     it('ignores invalid stored values', () => {

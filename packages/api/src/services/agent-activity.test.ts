@@ -7,36 +7,31 @@ beforeEach(async () => {
     await truncateAll();
     await insertProject('p1', 'ATL');
     await insertAgent({ id: 'agent-coder' });
-    await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+    await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
     await insertItem({
         id: 'ATL-2',
-        type: 'story',
+        type: 'sub_task',
         project_id: 'p1',
         parent_id: 'ATL-1',
-        parent_type: 'epic',
+        parent_type: 'task',
         title: 'S',
     });
     await insertItem({
         id: 'ATL-3',
         type: 'sub_task',
         project_id: 'p1',
-        parent_id: 'ATL-2',
-        parent_type: 'story',
+        parent_id: 'ATL-1',
+        parent_type: 'task',
         title: 'T',
     });
     await insertItem({
         id: 'ATL-5',
-        type: 'bug',
+        type: 'sub_task',
         project_id: 'p1',
         parent_id: 'ATL-1',
-        parent_type: 'epic',
+        parent_type: 'task',
         title: 'B',
         acceptance_criteria: '',
-        steps_to_reproduce: '',
-        expected: '',
-        actual: '',
-        frequency: 'sometimes',
-        failure_scope: 'cosmetic',
     });
 });
 

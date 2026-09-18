@@ -216,7 +216,6 @@ export async function settingsRoutes(app: FastifyInstance) {
             await trx.deleteFrom('items').execute();
             await trx.deleteFrom('projects').execute();
             await trx.deleteFrom('credentials').execute();
-            await trx.deleteFrom('agent_handoff_rules').execute();
             await trx.deleteFrom('agent_checklists').execute();
             await trx.deleteFrom('agents').execute();
             await trx

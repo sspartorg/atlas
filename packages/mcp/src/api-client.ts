@@ -1,15 +1,10 @@
 import type {
     AgentCategory,
     AgentKindSlug,
-    BugFailureScope,
-    BugFrequency,
     IAgent,
     IAgentChecklistItem,
-    IAgentHandoffRule,
     IAgentRun,
-    IBug,
     IComment,
-    IEpic,
     IGuardrailRule,
     IIssueLinkRow,
     IItemExternalLink,
@@ -21,9 +16,8 @@ import type {
     IReminder,
     IReplyContext,
     IReplyResponse,
-    IStory,
-    ISubBug,
     ISubTask,
+    ITask,
     IssuePriority,
     IssueStatus,
     IssueType,
@@ -31,7 +25,6 @@ import type {
     ReminderSchedule,
     ScheduleConflictPolicy,
     SchedulePreset,
-    SubTaskStatus,
 } from '@atlas/shared';
 import type { IMcpConfig } from './config.js';
 
@@ -59,7 +52,6 @@ export class AtlasApiError extends Error {
  */
 export interface IAgentComposite {
     agent: IAgent;
-    handoff_rules: IAgentHandoffRule[];
     checklists: IAgentChecklistItem[];
 }
 
@@ -75,7 +67,6 @@ export interface IAgentWritePayload {
     model?: string;
     framework?: string;
     prompt_md?: string;
-    handoff_prompt_md?: string;
     status?: IAgent['status'];
     accent_color?: string;
     sort_order?: number;
@@ -84,78 +75,38 @@ export interface IAgentWritePayload {
     // A08 — FK into the SDLC role catalog. null detaches the agent
     // from the catalog (autonomous-style).
     role_id?: IAgent['role_id'];
-    schedule_hours?: number;
-    concurrent_runs?: number;
     glyph?: string;
-    handoff_rules?: Array<Pick<IAgentHandoffRule, 'target_agent_id' | 'kind' | 'status'>>;
     checklists?: Array<Pick<IAgentChecklistItem, 'label' | 'sort_order' | 'required'>>;
 }
 
-// Create-item payloads — match the shared Zod CreateStorySchema /
-// CreateSubTaskSchema / CreateSubBugSchema / CreateBugSchema. Optional
-// fields default server-side (description='', priority='normal',
-// acceptance_criteria=''); the MCP tool only needs to pass the required
-// parent + title.
+// Create-item payloads — match the shared Zod CreateTaskSchema /
+// CreateSubTaskSchema. Optional fields default server-side
+// (description='', priority='normal', acceptance_criteria=''); the MCP tool
+// only needs to pass the required parent + title.
 // `field?: T | undefined` (not bare `field?: T`) because the project ships
 // with `exactOptionalPropertyTypes: true`, and Zod's `.optional()` produces
 // `T | undefined`. Aligning the two avoids a mismatch at the call site.
-interface ICreateEpicPayload {
+interface ICreateTaskPayload {
     project_id: string;
-    title: string;
-    description?: string | undefined;
-    priority?: IssuePriority | undefined;
-    reporter_agent_id?: string | null | undefined;
-    assignee_agent_id?: string | null | undefined;
-    labels?: string[] | undefined;
-}
-
-interface ICreateStoryPayload {
-    epic_id: string;
     title: string;
     description?: string | undefined;
     acceptance_criteria?: string | undefined;
     priority?: IssuePriority | undefined;
-    status?: IssueStatus | undefined;
-    assignee_agent_id?: string | null | undefined;
     reporter_agent_id?: string | null | undefined;
+    assignee_agent_id?: string | null | undefined;
     labels?: string[] | undefined;
 }
 
 interface ICreateSubTaskPayload {
-    story_id: string;
+    task_id: string;
     title: string;
     description?: string | undefined;
     acceptance_criteria?: string | undefined;
-    priority?: IssuePriority | undefined;
-    status?: SubTaskStatus | undefined;
-    assignee_agent_id?: string | null | undefined;
-    reporter_agent_id?: string | null | undefined;
-    labels?: string[] | undefined;
-}
-
-interface ICreateBugFields {
-    description?: string | undefined;
-    acceptance_criteria?: string | undefined;
-    steps_to_reproduce?: string | undefined;
-    expected?: string | undefined;
-    actual?: string | undefined;
-    frequency?: BugFrequency | undefined;
-    failure_scope?: BugFailureScope | undefined;
     priority?: IssuePriority | undefined;
     status?: IssueStatus | undefined;
     assignee_agent_id?: string | null | undefined;
     reporter_agent_id?: string | null | undefined;
     labels?: string[] | undefined;
-}
-
-interface ICreateSubBugPayload extends ICreateBugFields {
-    story_id: string;
-    title: string;
-}
-
-interface ICreateBugPayload extends ICreateBugFields {
-    epic_id: string;
-    title: string;
 }
 
 // Comment payload for `addCommentToItem`. The MCP gateway has no agent-
@@ -304,7 +255,6 @@ export interface IApiClient {
         limit?: number;
     }): Promise<IMarketplaceAgentSummary[]>;
     getMarketplaceAgent(id: string): Promise<IMarketplaceAgentFull>;
-    getEpic(id: string): Promise<IEpic>;
     getItemFull(issueType: IssueType, issueId: string): Promise<unknown>;
     searchItems(
         query: string,
@@ -315,11 +265,8 @@ export interface IApiClient {
     // `actorAgentId` (create* / item-link writes) is forwarded as the
     // `x-atlas-agent-id` header so the API credits the activity event to
     // the calling agent instead of the Owner.
-    createEpic(payload: ICreateEpicPayload, actorAgentId?: string | null): Promise<IEpic>;
-    createStory(payload: ICreateStoryPayload, actorAgentId?: string | null): Promise<IStory>;
+    createTask(payload: ICreateTaskPayload, actorAgentId?: string | null): Promise<ITask>;
     createSubTask(payload: ICreateSubTaskPayload, actorAgentId?: string | null): Promise<ISubTask>;
-    createSubBug(payload: ICreateSubBugPayload, actorAgentId?: string | null): Promise<ISubBug>;
-    createBug(payload: ICreateBugPayload, actorAgentId?: string | null): Promise<IBug>;
     addComment(payload: IAddCommentPayload): Promise<IComment>;
     listComments(issueType: IssueType, issueId: string): Promise<IComment[]>;
     getReplyContext(issueType: IssueType, issueId: string): Promise<IReplyContext>;
@@ -359,8 +306,8 @@ export interface IApiClient {
     }): Promise<IReminder[]>;
     sendExternalNotification(payload: { message: string; event_key?: string }): Promise<{ ok: true }>;
     // C03 — item mutation polymorphic surface. The server-side Update*Schemas
-    // differ per issue type (story has spec_md + pr_url + points, bug has
-    // steps_to_reproduce + frequency + failure_scope, etc.). The client passes
+    // differ per issue type (a task has spec_md + pr_url + worktree_branch,
+    // a sub-task doesn't). The client passes
     // `patch` through verbatim; the per-type Zod schema on the route enforces
     // which fields are accepted, so a typo or wrong-type field gets a 400 with
     // the Zod error message.
@@ -412,10 +359,9 @@ export interface IApiClient {
     ): Promise<IProjectSchedule>;
     deleteProjectSchedule(projectId: string): Promise<void>;
     triggerProjectAutoFetch(projectId: string): Promise<{ autofetch_id: string }>;
-    // Plan E (Owner request, 2026-06-01) — `execGitHub` removed. The
-    // orchestrator now owns git push + `gh pr create` (gated on
-    // `agents.raises_pr`); agents commit only. See
-    // `services/worktree-orchestrator.ts: pushWorktree / openPullRequest`.
+    // Plan E (Owner request, 2026-06-01) — `execGitHub` removed. Workflows
+    // own git push + `gh pr create` (ADR 0014); agents commit only. See
+    // `services/workflow-engine.ts`.
 }
 
 export function createApiClient(config: IMcpConfig): IApiClient {
@@ -463,12 +409,11 @@ export function createApiClient(config: IMcpConfig): IApiClient {
 
     const fetchComposite = async (id: string): Promise<IAgentComposite> => {
         const encoded = encodeURIComponent(id);
-        const [agent, handoff_rules, checklists] = await Promise.all([
+        const [agent, checklists] = await Promise.all([
             request<IAgent>(`/api/agents/${encoded}`),
-            request<IAgentHandoffRule[]>(`/api/agents/${encoded}/handoff-rules`),
             request<IAgentChecklistItem[]>(`/api/agents/${encoded}/checklists`),
         ]);
-        return { agent, handoff_rules, checklists };
+        return { agent, checklists };
     };
 
     return {
@@ -501,33 +446,19 @@ export function createApiClient(config: IMcpConfig): IApiClient {
             });
             return fetchComposite(id);
         },
-        getEpic: (id) => request<IEpic>(`/api/epics/${encodeURIComponent(id)}`),
-        createEpic: (payload, actorAgentId) =>
-            request<IEpic>('/api/epics', { method: 'POST', body: payload, ...agentHeader(actorAgentId) }),
-        createStory: (payload, actorAgentId) =>
-            request<IStory>('/api/stories', { method: 'POST', body: payload, ...agentHeader(actorAgentId) }),
-        // Sub-tasks / sub-bugs live UNDER a story — the REST route is
-        // `/api/stories/:id/sub-{tasks,bugs}` (see packages/api/src/routes/stories.ts).
-        // The MCP payload carries `story_id` so we lift it into the URL.
-        // The route's handler also re-injects `story_id` from the path
-        // before zod-parsing, so leaving it in the body is harmless but
-        // we strip it for clarity.
+        createTask: (payload, actorAgentId) =>
+            request<ITask>('/api/tasks', { method: 'POST', body: payload, ...agentHeader(actorAgentId) }),
+        // Sub-tasks live UNDER a task — the REST route is
+        // `/api/tasks/:id/sub-tasks` (see packages/api/src/routes/sub-tasks.ts).
+        // The MCP payload carries `task_id` so we lift it into the URL; the
+        // route re-injects it from the path before zod-parsing.
         createSubTask: (payload, actorAgentId) => {
-            const { story_id, ...rest } = payload;
+            const { task_id, ...rest } = payload;
             return request<ISubTask>(
-                `/api/stories/${encodeURIComponent(story_id)}/sub-tasks`,
+                `/api/tasks/${encodeURIComponent(task_id)}/sub-tasks`,
                 { method: 'POST', body: rest, ...agentHeader(actorAgentId) },
             );
         },
-        createSubBug: (payload, actorAgentId) => {
-            const { story_id, ...rest } = payload;
-            return request<ISubBug>(
-                `/api/stories/${encodeURIComponent(story_id)}/sub-bugs`,
-                { method: 'POST', body: rest, ...agentHeader(actorAgentId) },
-            );
-        },
-        createBug: (payload, actorAgentId) =>
-            request<IBug>('/api/bugs', { method: 'POST', body: payload, ...agentHeader(actorAgentId) }),
         addComment: (payload) =>
             request<IComment>('/api/comments', {
                 method: 'POST',
@@ -799,19 +730,8 @@ export function createApiClient(config: IMcpConfig): IApiClient {
     };
 }
 
-// Map IssueType discriminator → REST route segment. The five entity types
-// each have their own /api/{segment}/:id/* surface.
+// Map IssueType discriminator → REST route segment. Each kind has its own
+// /api/{segment}/:id/* surface.
 function issueTypeToRouteSegment(t: IssueType): string {
-    switch (t) {
-        case 'epic':
-            return 'epics';
-        case 'story':
-            return 'stories';
-        case 'sub_task':
-            return 'sub-tasks';
-        case 'sub_bug':
-            return 'sub-bugs';
-        case 'bug':
-            return 'bugs';
-    }
+    return t === 'task' ? 'tasks' : 'sub-tasks';
 }

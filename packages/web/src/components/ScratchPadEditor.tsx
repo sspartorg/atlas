@@ -23,7 +23,7 @@ import { ConfirmDeleteModal } from './ConfirmDeleteModal.js';
 //   • Empty-title-on-close auto-fills from the first 3 words of the body
 //     (or "Untitled" if both blank) — the server enforces the same rule.
 //   • Delete shows ConfirmDeleteModal, matching every other deletable in
-//     the app (epics, stories, projects, agents, credentials).
+//     the app (tasks, projects, agents, credentials).
 
 interface ScratchPadEditorProps {
     open: boolean;

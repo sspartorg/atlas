@@ -21,7 +21,6 @@ import { AgentChip } from './AgentChip.js';
 import { AssigneePickerPopover } from './AssigneePickerPopover.js';
 import { StatusPickerPopover } from './StatusPickerPopover.js';
 import { PriorityPickerPopover } from './PriorityPickerPopover.js';
-import { ResetRoundsPopover } from './ResetRoundsPopover.js';
 import { InfoPanel, InfoRow } from './InfoPanel.js';
 import { LabelsRailRow } from './LabelsRailRow.js';
 import { ConfirmActionModal } from './ConfirmActionModal.js';
@@ -29,11 +28,12 @@ import { useRefreshIssueExternalLinks } from '../hooks/useIssueExternalLinks.js'
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { formatDate, relativeTime } from '../utils/time.js';
 import { formatCostUsd } from '../utils/formatCost.js';
+import { ItemWorkflowPanel } from '../pages/workflows/ItemWorkflowPanel.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
 export interface ParentLink {
-    label: string; // "Epic", "Story", "Project"
+    label: string; // "Task", "Project"
     text: string; // Display string, typically the issue id (e.g. "CER-7")
     href: string;
 }
@@ -65,37 +65,14 @@ interface Props {
     createdAt: string;
     updatedAt: string;
 
-    /**
-     * A04 — total CLI invocations the assigned agent has run against this
-     * item (performer leg, reviewer leg, and any retries each count as 1).
-     * Null when no agent is assigned (Owner holds the item) or the agent
-     * has not started yet. Renders as `Rounds: X / Y` against `maxRounds`.
-     */
-    roundCount?: number | null | undefined;
-    /** `agents.max_rounds` for the current assignee; pair with `roundCount`. */
-    maxRounds?: number | null | undefined;
-    /**
-     * A04 — when provided, the Rounds row becomes clickable and opens the
-     * reset-rounds popover. Omit on read-only views (project rail,
-     * non-Owner contexts).
-     */
-    onResetRounds?: (() => void) | undefined;
-    /** Display name piped into the popover copy. Falls back to a
-     *  generic "this agent" when null. */
-    assigneeName?: string | null | undefined;
-    /** Disables the popover's confirm button while the parent's mutation
-     *  is in-flight; the row still renders normally. */
-    resetRoundsPending?: boolean | undefined;
     /** Sum of total_cost_usd across all agent runs for this item. */
     totalCostUsd?: number | null | undefined;
 
     /**
-     * T2 — per-item git worktree association. PO Writer fills
-     * `worktreeBranch` (`atlas/<role>/<id>`); the worktree-orchestrator
-     * resolves and writes back `worktreePath` so re-runs reuse the same
-     * checkout. Both nullable. When EITHER prop is provided (even as
-     * null) the Branch + Path rows render; pass nothing on kinds that
-     * don't carry worktrees (Epic).
+     * The Task's run branch and its on-disk checkout, provisioned by its
+     * workflow run. Both nullable. When EITHER prop is provided (even as
+     * null) the Branch + Path rows render; pass nothing on sub-tasks,
+     * which share their Task's worktree.
      */
     worktreeBranch?: string | null | undefined;
     worktreePath?: string | null | undefined;
@@ -167,11 +144,6 @@ export function DetailsRailCard({
     onPriorityPick,
     createdAt,
     updatedAt,
-    roundCount,
-    maxRounds,
-    onResetRounds,
-    assigneeName,
-    resetRoundsPending,
     totalCostUsd,
     worktreeBranch,
     worktreePath,
@@ -184,7 +156,6 @@ export function DetailsRailCard({
     const [assigneeAnchor, setAssigneeAnchor] = useState<HTMLElement | null>(null);
     const [statusAnchor, setStatusAnchor] = useState<HTMLElement | null>(null);
     const [priorityAnchor, setPriorityAnchor] = useState<HTMLElement | null>(null);
-    const [roundsAnchor, setRoundsAnchor] = useState<HTMLElement | null>(null);
     const refreshPrs = useRefreshIssueExternalLinks(issueType, issueId ?? '');
     const [doneGuard, setDoneGuard] = useState<{
         override: boolean;
@@ -208,11 +179,6 @@ export function DetailsRailCard({
         if (prs.length === 0) onStatusPick(next, override);
         else setDoneGuard({ override, prs });
     }
-    // The Rounds row is only clickable when (a) the parent wired an
-    // `onResetRounds` handler AND (b) we have meaningful values to render.
-    // Off otherwise — keeps Owner-less / no-assignee surfaces read-only.
-    const roundsClickable =
-        Boolean(onResetRounds) && roundCount != null && maxRounds != null && maxRounds > 0;
 
     return (
         <InfoPanel label="Details">
@@ -306,6 +272,10 @@ export function DetailsRailCard({
                 )}
             </InfoRow>
 
+            {issueType === 'task' && issueId && project && (
+                <ItemWorkflowPanel itemId={issueId} projectId={project.id} />
+            )}
+
             {reporter !== undefined && (
                 <InfoRow label="Reporter">
                     {reporter ? (
@@ -349,37 +319,6 @@ export function DetailsRailCard({
                     onChange={onLabelsChange}
                     suggestions={labelSuggestions ?? []}
                 />
-            )}
-
-            {roundCount != null && maxRounds != null && maxRounds > 0 && (
-                <InfoRow
-                    label="Rounds"
-                    clickable={roundsClickable}
-                    onClick={
-                        roundsClickable
-                            ? (e) => setRoundsAnchor(e.currentTarget as HTMLElement)
-                            : undefined
-                    }
-                >
-                    <Typography
-                        sx={{
-                            fontSize: 12.5,
-                            color: ATLAS_PALETTE.slate,
-                            fontFamily: MONO,
-                        }}
-                    >
-                        {roundCount} / {maxRounds}
-                    </Typography>
-                    {roundsClickable && (
-                        <Box
-                            component="span"
-                            className="material-symbols-rounded"
-                            sx={{ fontSize: 16, color: ATLAS_PALETTE.slate40 }}
-                        >
-                            arrow_drop_down
-                        </Box>
-                    )}
-                </InfoRow>
             )}
 
             {totalCostUsd != null && (
@@ -488,7 +427,7 @@ export function DetailsRailCard({
                     open
                     onClose={() => setAssigneeAnchor(null)}
                     assigneeAgentId={assigneeAgentId}
-                    suggestedRole={issueType === 'epic' ? 'po' : undefined}
+                    suggestedRole={issueType === 'task' ? 'po' : undefined}
                     onAssign={(agentId) => {
                         onAssign(agentId);
                         setAssigneeAnchor(null);
@@ -523,24 +462,6 @@ export function DetailsRailCard({
                 />
             )}
 
-            {roundsAnchor &&
-                onResetRounds &&
-                roundCount != null &&
-                maxRounds != null && (
-                    <ResetRoundsPopover
-                        anchorEl={roundsAnchor}
-                        open
-                        onClose={() => setRoundsAnchor(null)}
-                        roundCount={roundCount}
-                        maxRounds={maxRounds}
-                        assigneeName={assigneeName ?? null}
-                        pending={resetRoundsPending}
-                        onConfirm={() => {
-                            onResetRounds();
-                            setRoundsAnchor(null);
-                        }}
-                    />
-                )}
             <ConfirmActionModal
                 open={doneGuard !== null}
                 title="Mark done anyway?"

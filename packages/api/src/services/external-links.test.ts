@@ -20,21 +20,21 @@ beforeEach(async () => {
     await insertProject('p1', 'ATL');
     // Items only — PR external links attach to any item type, but the
     // non-epic items need a parent epic.
-    await insertItem({ id: 'ATL-EPIC', type: 'epic', project_id: 'p1', title: 'Epic' });
+    await insertItem({ id: 'ATL-EPIC', type: 'task', project_id: 'p1', title: 'Epic' });
     await insertItem({
         id: 'ATL-1',
-        type: 'story',
+        type: 'sub_task',
         project_id: 'p1',
         parent_id: 'ATL-EPIC',
-        parent_type: 'epic',
+        parent_type: 'task',
         title: 'Story',
     });
     await insertItem({
         id: 'ATL-2',
-        type: 'bug',
+        type: 'sub_task',
         project_id: 'p1',
         parent_id: 'ATL-EPIC',
-        parent_type: 'epic',
+        parent_type: 'task',
         title: 'Bug',
     });
 });
@@ -392,8 +392,47 @@ describe('PR state refresh', () => {
         expect((await storedState()).pr_state_checked_at).not.toBeNull();
         expect(broadcastSSE).toHaveBeenCalledWith({
             type: 'counts_changed',
-            issueType: 'story',
+            issueType: 'sub_task',
             issueId: 'ATL-1',
+        });
+    });
+
+    describe('a merged Task PR', () => {
+        const taskPr = 'https://github.com/foo/bar/pull/12';
+        const statusOf = async (id: string) =>
+            (await testDb.selectFrom('items').select('status').where('id', '=', id).executeTakeFirstOrThrow()).status;
+
+        beforeEach(async () => {
+            await testDb.updateTable('items').set({ status: 'in_review' }).where('id', 'in', ['ATL-EPIC', 'ATL-1', 'ATL-2']).execute();
+            await externalLinks.create({ itemId: 'ATL-EPIC', url: taskPr, linkKind: 'pull_request' });
+        });
+
+        it('closes the Task and the sub-tasks it was reviewed with', async () => {
+            await externalLinks.refreshPrStates('ATL-EPIC');
+            expect(await statusOf('ATL-EPIC')).toBe('done');
+            expect(await statusOf('ATL-1')).toBe('done');
+            expect(await statusOf('ATL-2')).toBe('done');
+        });
+
+        it('leaves the Task in review while a sub-task is still open', async () => {
+            await testDb.updateTable('items').set({ status: 'in_progress' }).where('id', '=', 'ATL-2').execute();
+            await externalLinks.refreshPrStates('ATL-EPIC');
+            expect(await statusOf('ATL-1')).toBe('done');
+            expect(await statusOf('ATL-2')).toBe('in_progress');
+            expect(await statusOf('ATL-EPIC')).toBe('in_review');
+        });
+
+        it('the scheduler tick checks in-review Tasks without anyone opening them', async () => {
+            await externalLinks.syncReviewedTaskPrs();
+            expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/pulls/12'), expect.anything());
+            expect(await statusOf('ATL-EPIC')).toBe('done');
+        });
+
+        it('an open PR closes nothing', async () => {
+            fetchMock.mockResolvedValue(new Response(JSON.stringify({ state: 'open', merged_at: null }), { status: 200 }));
+            await externalLinks.syncReviewedTaskPrs();
+            expect(await statusOf('ATL-EPIC')).toBe('in_review');
+            expect(await statusOf('ATL-1')).toBe('in_review');
         });
     });
 

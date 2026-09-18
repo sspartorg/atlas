@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
+import { useLocation } from 'react-router-dom';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { SearchResults } from './SearchResults.js';
 import type { SearchHit } from './searchViewModel.js';
@@ -7,13 +8,17 @@ import { makeAgent } from '../../test-utils/factories.js';
 
 const ISO = '2026-05-16T00:00:00.000Z';
 
+function LocationDisplay() {
+    return <div data-testid="location">{useLocation().pathname}</div>;
+}
+
 function makeHit(overrides: Partial<SearchHit> = {}): SearchHit {
     return {
-        type: 'story',
+        type: 'sub_task',
         id: 'S1',
         displayId: 'ATL-1',
-        title: 'Sample Story',
-        description: 'A sample story',
+        title: 'Sample Sub-task',
+        description: 'A sample sub-task',
         status: 'ready',
         assignee_agent_id: null,
         project_id: 'p1',
@@ -42,7 +47,7 @@ describe('SearchResults', () => {
             <SearchResults
                 hits={[
                     {
-                        type: 'story',
+                        type: 'sub_task',
                         id: 'S1',
                         displayId: 'S1',
                         title: 'Hi there',
@@ -66,7 +71,7 @@ describe('SearchResults', () => {
     it('renders with highlightText to exercise highlightSubstring', () => {
         renderWithProviders(
             <SearchResults
-                hits={[makeHit({ title: 'Sample Story about foo' })]}
+                hits={[makeHit({ title: 'Sample Sub-task about foo' })]}
                 agentsById={new Map()}
                 projectNameById={new Map()}
                 highlightText="foo"
@@ -104,10 +109,10 @@ describe('SearchResults', () => {
         expect(document.body).toBeTruthy();
     });
 
-    it('renders epic hit (exercises open for epic type)', () => {
+    it('renders task hit', () => {
         renderWithProviders(
             <SearchResults
-                hits={[makeHit({ type: 'epic', id: 'E1', displayId: 'ATL-E1', title: 'Epic One' })]}
+                hits={[makeHit({ type: 'task', id: 'E1', displayId: 'ATL-E1', title: 'Task One' })]}
                 agentsById={new Map()}
                 projectNameById={new Map()}
                 highlightText=""
@@ -115,7 +120,7 @@ describe('SearchResults', () => {
                 onSortChange={vi.fn()}
             />,
         );
-        expect(document.body.textContent).toContain('Epic One');
+        expect(document.body.textContent).toContain('Task One');
     });
 
     it('renders prompt hit (exercises open for prompt type) and clicking navigates', () => {
@@ -136,23 +141,26 @@ describe('SearchResults', () => {
         expect(document.body.textContent).toContain('My Agent');
     });
 
-    it('exercises open() for story type via row click', () => {
+    it.each([
+        ['task', '/tasks/X1'],
+        ['sub_task', '/sub-tasks/X1'],
+        ['prompt', '/agents/X1'],
+    ] as const)('opens a %s hit on its page', (type, path) => {
         renderWithProviders(
-            <SearchResults
-                hits={[makeHit({ type: 'story', id: 'S1', title: 'Story Click' })]}
-                agentsById={new Map()}
-                projectNameById={new Map()}
-                highlightText=""
-                sort="updated_desc"
-                onSortChange={vi.fn()}
-            />,
+            <>
+                <SearchResults
+                    hits={[makeHit({ type, id: 'X1', title: 'Open me' })]}
+                    agentsById={new Map()}
+                    projectNameById={new Map()}
+                    highlightText=""
+                    sort="updated_desc"
+                    onSortChange={vi.fn()}
+                />
+                <LocationDisplay />
+            </>,
         );
-        const titleEl = screen.queryByText('Story Click');
-        if (titleEl) {
-            const row = titleEl.closest('[role="button"]') ?? titleEl;
-            fireEvent.click(row);
-        }
-        expect(document.body.textContent).toContain('Story Click');
+        fireEvent.click(screen.getByText('Open me'));
+        expect(screen.getByTestId('location').textContent).toBe(path);
     });
 
     it('renders hit with assignee_agent_id — covers agent lookup + getAgentView (lines 232-269)', () => {
@@ -161,7 +169,7 @@ describe('SearchResults', () => {
         const agentsById = new Map([['agent-coder', agent]]);
         renderWithProviders(
             <SearchResults
-                hits={[makeHit({ type: 'story', id: 'S2', title: 'Story With Agent', assignee_agent_id: 'agent-coder' })]}
+                hits={[makeHit({ id: 'S2', title: 'Sub-task With Agent', assignee_agent_id: 'agent-coder' })]}
                 agentsById={agentsById}
                 projectNameById={new Map()}
                 highlightText=""
@@ -177,7 +185,7 @@ describe('SearchResults', () => {
         // lines 296-300: ProjectTag renders when projectName and project_id are both set
         renderWithProviders(
             <SearchResults
-                hits={[makeHit({ type: 'story', id: 'S3', title: 'Story With Project', project_id: 'p1' })]}
+                hits={[makeHit({ id: 'S3', title: 'Sub-task With Project', project_id: 'p1' })]}
                 agentsById={new Map()}
                 projectNameById={new Map([['p1', 'My Project']])}
                 highlightText=""
@@ -202,26 +210,6 @@ describe('SearchResults', () => {
         expect(document.body.textContent).toContain('match');
     });
 
-    it('exercises open() fallback branch (non-story/epic/prompt type navigates to /issues)', () => {
-        renderWithProviders(
-            <SearchResults
-                hits={[makeHit({ type: 'bug', id: 'B1', title: 'Bug fallback' })]}
-                agentsById={new Map()}
-                projectNameById={new Map()}
-                highlightText=""
-                sort="updated_desc"
-                onSortChange={vi.fn()}
-            />,
-        );
-        const titleEl = screen.queryByText('Bug fallback');
-        if (titleEl) {
-            // Click to trigger open() → navigate('/issues') for non-story/epic/prompt type
-            const row = titleEl.closest('div') ?? titleEl;
-            fireEvent.click(row);
-        }
-        expect(document.body.textContent).toContain('Bug fallback');
-    });
-
     it('exercises updated_asc sort path (lines 72-74) by changing sort prop', () => {
         renderWithProviders(
             <SearchResults
@@ -244,8 +232,8 @@ describe('SearchResults', () => {
         renderWithProviders(
             <SearchResults
                 hits={[
-                    makeHit({ type: 'epic', id: 'E1', title: 'Epic First' }),
-                    makeHit({ type: 'story', id: 'S1', title: 'Story Second' }),
+                    makeHit({ type: 'task', id: 'E1', title: 'Task First' }),
+                    makeHit({ type: 'sub_task', id: 'S1', title: 'Sub-task Second' }),
                 ]}
                 agentsById={new Map()}
                 projectNameById={new Map()}
@@ -254,27 +242,8 @@ describe('SearchResults', () => {
                 onSortChange={vi.fn()}
             />,
         );
-        expect(document.body.textContent).toContain('Epic First');
-        expect(document.body.textContent).toContain('Story Second');
-    });
-
-    it('clicks epic row to trigger open() for epic type (line 81)', () => {
-        renderWithProviders(
-            <SearchResults
-                hits={[makeHit({ type: 'epic', id: 'E1', displayId: 'ATL-E1', title: 'Clickable Epic' })]}
-                agentsById={new Map()}
-                projectNameById={new Map()}
-                highlightText=""
-                sort="updated_desc"
-                onSortChange={vi.fn()}
-            />,
-        );
-        const titleEl = screen.queryByText('Clickable Epic');
-        if (titleEl) {
-            const row = titleEl.closest('div') ?? titleEl;
-            fireEvent.click(row);
-        }
-        expect(document.body.textContent).toContain('Clickable Epic');
+        expect(document.body.textContent).toContain('Task First');
+        expect(document.body.textContent).toContain('Sub-task Second');
     });
 
     it('renders hit where assignee_agent_id set but not in agentsById (line 187 ?? null branch)', () => {

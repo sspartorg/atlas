@@ -1,29 +1,6 @@
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
 import { db } from './kysely-client.js';
 import { loadCatalog, type CatalogEntry } from '../marketplace/catalog-loader.js';
 import { sourcesFor, type RegulationSource } from '../agents/sources/regulations-matrix.js';
-import {
-    PO_WRITER_PROMPT,
-    CODER_PROMPT,
-    QA_WRITER_PROMPT,
-    ARCHITECT_PROMPT,
-    AUTOMATION_PROMPT,
-    PO_REVIEWER_PROMPT,
-    CODE_REVIEWER_PROMPT,
-    QA_REVIEWER_PROMPT,
-    ARCHITECT_REVIEWER_PROMPT,
-    AUTOMATION_REVIEWER_PROMPT,
-} from './seeds/sdlc-roles.js';
-// T1 — T0 (Wave 1) introduced 5 new reviewer agent records as siblings
-// of the 5 performers. Performer rows carry `prompt_md = <role>_PROMPT`;
-// each reviewer row picks up its own `_REVIEWER_PROMPT` directly into
-// `prompt_md`. The runner treats both kinds the same (one CLI per run);
-// what makes a reviewer "review" is its prompt + the on-pass / on-fail
-// handoff wiring below.
-import type { AgentCli, SdlcRole } from '@atlas/shared';
-import { WORKTREE_BRANCH_RE_SOURCE } from '@atlas/shared';
 
 // Theme 09 — defensive boot check that the regulations matrix has
 // at least one source per project_type × region we ship. Catches
@@ -35,726 +12,6 @@ function assertRegulationsMatrixHealthy(): void {
         throw new Error('regulations-matrix: saas:EU returned no sources');
     }
 }
-
-// Resolve prompt files relative to this seed module so the agent
-// prompts can be diffed cleanly outside the seed source.
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-function loadPrompt(name: string): string {
-    return readFileSync(resolve(__dirname, '..', 'agents', 'prompts', name), 'utf8');
-}
-
-// ─── Agent seed ──────────────────────────────────────────────────────────────
-//
-// SDLC chain (on-pass shown; performer on-fail → Owner / waiting_for_info,
-// reviewer on-fail → its writer / ready — see HANDOFF_RULE_SEEDS and the
-// marketplace catalog handoff_rules.json):
-//
-//   PO Writer ─▶ PO Reviewer ─▶ Owner (children dispatched from the reviewer prompt)
-//   dev story:  Architect ─▶ Architect Reviewer ─▶ Coder ─▶ Code Reviewer ─▶ Owner
-//   [QA] twin:  QA Writer ─▶ QA Reviewer ─▶ Owner;  Automation ─▶ Automation Reviewer ─▶ Owner
-//
-// Each agent has its own checklist + allowed-tools set. The Owner mutates these
-// via the four MCP tools (`listAgents`, `getAgent`, `createAgent`, `updateAgent`)
-// rather than hand-editing this file.
-
-interface AgentSeed {
-    id: string;
-    name: string;
-    category: 'software-dev' | 'marketing' | 'content' | 'design';
-    cli: AgentCli;
-    model: string;
-    framework: string;
-    prompt_md: string;
-    prompt_version: number;
-    handoff_prompt_md: string;
-    status: 'active' | 'inactive';
-    accent_color: string;
-    sort_order: number;
-    description: string;
-    designation: string;
-    /**
-     * A08 — FK into the SDLC role catalog. Optional: autonomous agents
-     * (kind_slug != 'custom') leave this undefined and store NULL.
-     */
-    role_id?: SdlcRole;
-    max_rounds: number;
-    requires_item: boolean;
-    schedule_hours?: number;
-    /** A09 — preset-based scheduling for autonomous agents that fire at a
-     *  specific wall-clock time (e.g. ai-news daily at 09:00). When set,
-     *  the runtime ignores `schedule_hours` and uses preset math. */
-    schedule_preset?: 'every_n_hours' | 'daily' | 'weekly' | 'monthly';
-    schedule_time_of_day?: string;
-    concurrent_runs: number;
-    glyph: string;
-    // Theme 09 — autonomous-agent metadata. Optional in the seed
-    // interface so the existing 14 rows compile without churn; the
-    // DB defaults handle missing fields on INSERT.
-    kind_slug?: 'ai-news' | 'market-research' | 'regulations' | 'jira-to-epic' | 'ai-readiness' | 'knowledge-base' | 'custom';
-    settings_json?: Record<string, unknown>;
-    cron_expr?: string | null;
-    // Plan E — orchestrator opens a PR at run-end when this is true and
-    // the run pushed something. Default false; the three SDLC reviewers
-    // flip it on below. No effect on autonomous agents (no worktree, no
-    // branch, push step short-circuits).
-    raises_pr?: boolean;
-    // Plan #7 — orchestrator pushes the worktree branch to origin at
-    // run-end when this is true. Default false (set by migration 066).
-    // True for the six software-dev agents that commit code today;
-    // false for PO Writer + the two read-only reviewers + every
-    // non-SDLC utility agent.
-    push_code?: boolean;
-    // When true, orchestrator provisions an isolated worktree before
-    // dispatch (item-attached uses item.worktree_branch; project-scope
-    // gets atlas/<kind_slug|role_id|'run'>/<short-runId>). False ⇒ run
-    // executes directly in project.git_path. Required for any agent
-    // that commits code OR needs branch isolation from the user's clone.
-    requires_worktree?: boolean;
-}
-
-interface HandoffRuleSeed {
-    agent_id: string;
-    target_agent_id: string;
-    kind: 'on-pass' | 'on-fail';
-    status: string;
-}
-
-interface ChecklistSeed {
-    agent_id: string;
-    label: string;
-    sort_order: number;
-    required: boolean;
-}
-
-// A08 — Prompt constants for the 4 active SDLC agents now live in
-// `./seeds/sdlc-roles.ts` (single source of truth shared with migration
-// 025 and the role catalog). Importing them keeps each agent row's
-// `prompt_md` byte-equal to its role's default
-// at install time. Owner edits via the Prompt tab continue to write
-// only to the agent row — the role default stays put unless edited via
-// `PATCH /api/roles/:id`.
-
-export const AGENT_SEEDS: AgentSeed[] = [
-    {
-        id: 'agent-po-writer',
-        name: 'PO Writer',
-        category: 'software-dev',
-        cli: 'claude',
-        // Migration 045 walked the SDLC trio (PO / Architect / QA) back
-        // off Opus 1M and onto Sonnet 4.6 — the spec-kit lifecycle is
-        // doing the heavy reasoning downstream, so Sonnet is the right
-        // tier here. Only AI Readiness keeps an Opus model now.
-        model: 'claude-sonnet-4-6',
-        framework: 'agile-po',
-        prompt_version: 1,
-        status: 'active',
-        accent_color: '#007AC9',
-        // Monotonic 1..11 sort order — see migration 041 for the
-        // live-DB realignment. Order in the seed file mirrors the UI
-        // order: PO → Architect → Coder → QA → Automation → Jira →
-        // AI Readiness → AI News → Market Research → Regulations →
-        // Knowledge Base.
-        sort_order: 1,
-        description:
-            'Decomposes Epics into end-to-end functional Stories. v3 duplicates every dev story as a QA twin and links the pair via `tested_by` so the Architect picks up the dev side while QA Writer picks up the test side.',
-        designation: 'Product Owner',
-        role_id: 'po',
-        max_rounds: 5,
-        requires_item: true,
-        schedule_hours: 3,
-        concurrent_runs: 1,
-        glyph: 'developer_board',
-        prompt_md: PO_WRITER_PROMPT,
-        handoff_prompt_md:
-            'When you finish: the paired PO reviewer agent (`agent-po-reviewer`) grades your output against the checklist before the chain fans out to **Architect** (for the dev story) and **QA Writer** (for the QA twin). If a story is ambiguous, scope is too large, acceptance criteria are missing, or a dev story is missing its `tested_by` QA twin, comment on the item and exit — the reviewer agent escalates to the Owner with `waiting_for_info`.',
-        requires_worktree: true,
-    },
-    // Spec Writer removed in P1 — `agent-spec-writer` is deleted by
-    // migration 030. P2 promotes the merged Architect-cum-Spec-Writer
-    // role on `agent-architect` instead.
-    {
-        // P3 — Coder v2 (spec-kit lifecycle + PR raise). Model flips to
-        // `claude-sonnet-4-6` (Copilot CLI stays), schedule moves to
-        // `every_n_hours` at 1 hour, `cron_expr` is null. Migration 034
-        // reconciles existing installs.
-        id: 'agent-coder',
-        name: 'Coder',
-        category: 'software-dev',
-        cli: 'copilot',
-        // Workstream #4 — Copilot CLI registry uses the dot form;
-        // `cli_models` row is `claude-sonnet-4.6`. The hyphen form is
-        // the Claude-CLI strain and never matched the copilot registry.
-        model: 'claude-sonnet-4.6',
-        framework: 'tdd-red-green-refactor',
-        prompt_version: 1,
-        status: 'active',
-        accent_color: '#22A06B',
-        sort_order: 3,
-        description:
-            "Picks up the dev Story Architect spec'd, reuses Architect's worktree, runs the spec-kit lifecycle (clarify/plan/task/implement/verify/analyze) committing each phase, raises a PR with `gh pr create`, comments the PR URL on the story, then removes the local worktree (remote branch survives as the PR head).",
-        designation: 'Engineer',
-        role_id: 'engineer',
-        max_rounds: 5,
-        requires_item: true,
-        schedule_preset: 'every_n_hours',
-        schedule_hours: 1,
-        cron_expr: null,
-        concurrent_runs: 1,
-        glyph: 'terminal',
-        prompt_md: CODER_PROMPT,
-        handoff_prompt_md:
-            'When you finish: the paired Code Reviewer agent (`agent-code-reviewer`) grades the PR diff against the checklist before the chain advances. If the Architect handoff is missing or the build is blocked, comment and exit so the reviewer agent escalates to the Owner.',
-        push_code: true,
-        requires_worktree: true,
-    },
-    {
-        // P4 — QA Writer v2. Plans test cases as sub-tasks under a QA Story
-        // (the `[QA]` twin PO Writer produced) — five kinds (API / UI / E2E
-        // / Integration / Regression), each tagged `[automation_candidate]`
-        // or `[manual_only]`. Cadence moved from 1h to 2h (twin items
-        // don't need sub-hour scheduling). Migration 035 reconciled the
-        // earlier model bump (Sonnet→Opus); migration 045 walked it back
-        // to Sonnet 4.6 along with PO Writer + Architect — the spec-kit
-        // lifecycle handles the deep reasoning downstream.
-        id: 'agent-qa-writer',
-        name: 'QA Writer',
-        category: 'software-dev',
-        cli: 'claude',
-        model: 'claude-sonnet-4-6',
-        framework: 'test-planning',
-        prompt_version: 1,
-        status: 'active',
-        accent_color: '#A855F7',
-        sort_order: 4,
-        description:
-            'Takes a QA Story (the `[QA]` twin from PO Writer) and files test-case sub-tasks across five kinds — API, UI, E2E, Integration, Regression — each tagged `[automation_candidate]` or `[manual_only]`. Plans tests; does not write or run them.',
-        designation: 'Quality Assurance',
-        role_id: 'qa',
-        max_rounds: 5,
-        requires_item: true,
-        schedule_hours: 2,
-        concurrent_runs: 1,
-        glyph: 'verified',
-        prompt_md: QA_WRITER_PROMPT,
-        handoff_prompt_md:
-            'When you finish: the paired QA reviewer agent (`agent-qa-reviewer`) counts sub-tasks per (criterion × applicable kind) and verifies the shape of each one. On pass, the chain returns the QA Story to the Owner for sign-off with status `in_review`. On fail (`insufficient_coverage` / `malformed_subtask` / `missing_tested_by_link`), the reviewer agent bounces back so you can fill the gaps.',
-        push_code: true,
-        requires_worktree: true,
-    },
-    // -------------------------------------------------------------------
-    // Disabled SDLC swarm — Theme 06 seeds the broader roles in the
-    // inactive state so the user can flip them on as needed. Prompts and
-    // handoff rules are intentionally empty; the user fills them in (via
-    // the agent maintenance UI) before activation. Scheduler ignores
-    // inactive agents.
-    // -------------------------------------------------------------------
-    {
-        // P2 — Architect-cum-Spec-Writer promoted to active. Picks up a
-        // dev Story PO Writer produced, spawns a worktree off
-        // origin/main, runs spec-kit (`specify init` + `specify specify
-        // --idea`), hand-edits the generated spec.md to senior-engineer
-        // quality, commits + pushes, comments branch + spec path on the
-        // dev story, and hands off to Architect Reviewer (then Coder,
-        // who reuses the worktree). Migration 033 reconciles
-        // existing installs.
-        id: 'agent-architect',
-        name: 'Architect',
-        category: 'software-dev',
-        cli: 'claude',
-        // SDLC trio sits on Sonnet 4.6 after migration 045. See PO Writer
-        // for the rationale.
-        model: 'claude-sonnet-4-6',
-        framework: 'spec-kit',
-        prompt_version: 1,
-        status: 'active',
-        accent_color: '#5B7CFA',
-        sort_order: 2,
-        description: 'Architect-cum-Spec-Writer. Takes a dev Story from PO Writer, spawns a worktree, drafts a senior-engineer-grade spec.md via spec-kit, hands off to Coder.',
-        designation: 'Software Architect',
-        role_id: 'architect',
-        max_rounds: 5,
-        requires_item: true,
-        schedule_hours: 3,
-        concurrent_runs: 1,
-        glyph: 'architecture',
-        prompt_md: ARCHITECT_PROMPT,
-        handoff_prompt_md:
-            'When you finish: the paired Architect reviewer agent (`agent-architect-reviewer`) fetches the spec from origin/<branch> and walks the checklist. On pass, the chain advances to **Coder**, who reuses the same worktree to run the rest of the spec-kit lifecycle and raise the PR. Never remove the worktree — Coder needs it.',
-        push_code: true,
-        requires_worktree: true,
-    },
-    // Tester removed in P1 — `agent-tester` is deleted by migration 030.
-    // Automation Engineer post-merge automation-tests flow. Picks up a
-    // QA Story whose dev Coder PR has merged, runs on the harness-
-    // provisioned worktree on the QA Story's `worktree_branch` (the
-    // same branch QA Writer authored the test-plan CSV on), writes a
-    // test file per `automation-yes` CSV row, runs the project test
-    // suite locally, commits, and transitions the QA Story to
-    // `in_review`. The orchestrator pushes the branch and the paired
-    // reviewer agent's clean exit opens the PR against `main`.
-    {
-        id: 'agent-automation',
-        name: 'Automation Engineer',
-        category: 'software-dev',
-        cli: 'copilot',
-        // Workstream #4 — Copilot CLI registry uses the dot form;
-        // `cli_models` row is `claude-sonnet-4.6`. The hyphen form is
-        // the Claude-CLI strain and never matched the copilot registry.
-        model: 'claude-sonnet-4.6',
-        framework: 'test-automation',
-        prompt_version: 1,
-        status: 'active',
-        accent_color: '#0F9D58',
-        sort_order: 5,
-        description: 'Test-automation engineer. Picks up a QA Story whose dev Coder PR has merged, runs on the harness-provisioned worktree on the QA Story\'s `worktree_branch`, writes a test file per `automation-yes` row in `tests/qa/<storyId>.csv`, runs the project test suite locally, commits, and transitions the QA Story to `in_review`. The orchestrator pushes; the Automation Reviewer\'s clean exit opens the PR against `main`.',
-        designation: 'Automation Engineer',
-        role_id: 'automation',
-        max_rounds: 5,
-        requires_item: true,
-        schedule_hours: 2,
-        concurrent_runs: 1,
-        glyph: 'precision_manufacturing',
-        prompt_md: AUTOMATION_PROMPT,
-        handoff_prompt_md:
-            'When you finish: the paired Automation reviewer agent (`agent-automation-reviewer`) walks the PR diff for `[automation_candidate]` coverage and runs the project\'s test suite on the PR head. On pass, the chain terminally returns the QA Story to the Owner with status `in_review`. On fail, the reviewer agent bounces back to you with the failing coverage gap inline (up to `max_rounds` retries).',
-        push_code: true,
-        requires_worktree: true,
-    },
-    // ── T1 — Dedicated reviewer agents (one per SDLC role) ────────────
-    // Each reviewer is a standalone agent whose `prompt_md` is the
-    // reviewer-side prompt (formerly bundled on the performer row as
-    // formerly the bundled reviewer-prompt column). On-pass handoff fires the standard
-    // inter-agent dispatch path: performer.on-pass → reviewer; reviewer
-    // grades; reviewer.on-pass → next role's performer (or Owner if
-    // terminal); reviewer.on-fail → paired performer (retry round).
-    {
-        id: 'agent-po-reviewer',
-        name: 'PO Reviewer',
-        category: 'software-dev',
-        cli: 'claude',
-        model: 'claude-sonnet-4-6',
-        framework: 'review',
-        prompt_version: 1,
-        status: 'active',
-        accent_color: '#0E5C99',
-        sort_order: 12,
-        description:
-            'Dedicated reviewer paired with `agent-po-writer`. Grades the dev story / QA twin breakdown against the PO Writer checklist, then routes via `submit_review` (pass → Architect + QA Writer fan-out, fail → PO Writer retry, needs_info → Owner).',
-        designation: 'Product Owner — Reviewer',
-        role_id: 'po',
-        max_rounds: 5,
-        requires_item: true,
-        schedule_hours: 3,
-        concurrent_runs: 1,
-        glyph: 'fact_check',
-        prompt_md: PO_REVIEWER_PROMPT,
-        handoff_prompt_md: '',
-        requires_worktree: true,
-    },
-    {
-        id: 'agent-architect-reviewer',
-        name: 'Architect Reviewer',
-        category: 'software-dev',
-        cli: 'claude',
-        model: 'claude-sonnet-4-6',
-        framework: 'review',
-        prompt_version: 1,
-        status: 'active',
-        accent_color: '#4263CB',
-        sort_order: 13,
-        description:
-            'Dedicated reviewer paired with `agent-architect`. Fetches the spec from origin/<branch>, walks every required section, and routes via `submit_review` (pass → Coder, fail → Architect retry, needs_info → Owner).',
-        designation: 'Software Architect — Reviewer',
-        role_id: 'architect',
-        max_rounds: 5,
-        requires_item: true,
-        schedule_hours: 3,
-        concurrent_runs: 1,
-        glyph: 'fact_check',
-        prompt_md: ARCHITECT_REVIEWER_PROMPT,
-        handoff_prompt_md: '',
-        requires_worktree: true,
-    },
-    {
-        id: 'agent-code-reviewer',
-        name: 'Code Reviewer',
-        category: 'software-dev',
-        cli: 'copilot',
-        // Workstream #4 — Copilot CLI registry uses the dot form;
-        // `cli_models` row is `claude-sonnet-4.6`. The hyphen form is
-        // the Claude-CLI strain and never matched the copilot registry.
-        model: 'claude-sonnet-4.6',
-        framework: 'review',
-        prompt_version: 1,
-        status: 'active',
-        accent_color: '#1D8348',
-        sort_order: 14,
-        description:
-            'Dedicated reviewer paired with `agent-coder`. Confirms PR diff covers every spec.md change, scans for anti-patterns, clones the PR head and runs `pnpm test`. Routes via `submit_review` (pass → QA Writer, fail → Coder retry, needs_info → Owner).',
-        designation: 'Code — Reviewer',
-        role_id: 'engineer',
-        max_rounds: 5,
-        requires_item: true,
-        schedule_preset: 'every_n_hours',
-        schedule_hours: 1,
-        cron_expr: null,
-        concurrent_runs: 1,
-        glyph: 'fact_check',
-        prompt_md: CODE_REVIEWER_PROMPT,
-        handoff_prompt_md: '',
-        raises_pr: true,
-        push_code: true,
-        requires_worktree: true,
-    },
-    {
-        id: 'agent-qa-reviewer',
-        name: 'QA Reviewer',
-        category: 'software-dev',
-        cli: 'claude',
-        model: 'claude-sonnet-4-6',
-        framework: 'review',
-        prompt_version: 1,
-        status: 'active',
-        accent_color: '#8E44AD',
-        sort_order: 15,
-        description:
-            'Dedicated reviewer paired with `agent-qa-writer`. Counts sub-tasks per (criterion × applicable kind), enforces the five-kind coverage floor, and verifies the `tested_by` link. Routes via `submit_review` (pass → Owner, fail → QA Writer retry, needs_info → Owner).',
-        designation: 'Quality Assurance — Reviewer',
-        role_id: 'qa',
-        max_rounds: 5,
-        requires_item: true,
-        schedule_hours: 2,
-        concurrent_runs: 1,
-        glyph: 'fact_check',
-        prompt_md: QA_REVIEWER_PROMPT,
-        handoff_prompt_md: '',
-        raises_pr: true,
-        push_code: true,
-        requires_worktree: true,
-    },
-    {
-        id: 'agent-automation-reviewer',
-        name: 'Automation Reviewer',
-        category: 'software-dev',
-        cli: 'copilot',
-        // Workstream #4 — Copilot CLI registry uses the dot form;
-        // `cli_models` row is `claude-sonnet-4.6`. The hyphen form is
-        // the Claude-CLI strain and never matched the copilot registry.
-        model: 'claude-sonnet-4.6',
-        framework: 'review',
-        prompt_version: 1,
-        status: 'active',
-        accent_color: '#0B7A4B',
-        sort_order: 16,
-        description:
-            'Dedicated reviewer paired with `agent-automation`. Confirms the PR head matches the QA Story\'s `worktree_branch` and targets `main`, walks the diff for `automation-yes` coverage from the QA test-plan CSV + `not automated:` roll-up comments for `automation-no` rows, scans new tests for anti-patterns (sleeps, brittle selectors, dangling promises), and runs the project test suite on the PR head. Routes via `submit_review` (pass → Owner with status `in_review`, fail → Automation retry, needs_info → Owner).',
-        designation: 'Automation Engineer — Reviewer',
-        role_id: 'automation',
-        max_rounds: 5,
-        requires_item: true,
-        schedule_hours: 2,
-        concurrent_runs: 1,
-        glyph: 'fact_check',
-        prompt_md: AUTOMATION_REVIEWER_PROMPT,
-        handoff_prompt_md: '',
-        raises_pr: true,
-        push_code: true,
-        requires_worktree: true,
-    },
-    // DevOps / Security Reviewer / Designer removed in P1 —
-    // `agent-devops`, `agent-security-reviewer`, and `agent-designer`
-    // are deleted by migration 030.
-    // ── Theme 09 — autonomous agent fleet (4 inactive seeds) ──────────
-    // Each is a freedom agent (requires_item=false) so the scheduler
-    // dispatches on schedule_hours / cron_expr without needing a
-    // queued item. All ship `status: 'inactive'` so the Owner
-    // configures `settings_json` before flipping them on.
-    {
-        id: 'agent-ai-news',
-        name: 'AI News Scout',
-        category: 'content',
-        cli: 'claude',
-        // Utility agents use the `haiku` model from the cli_models registry
-        // (cheaper / faster for scraping + digest tasks where deep reasoning
-        // is not the bottleneck). Migration 040 reconciles existing rows.
-        model: 'haiku',
-        framework: 'scout',
-        prompt_version: 1,
-        status: 'inactive',
-        accent_color: '#FACC15',
-        sort_order: 8,
-        description: 'Daily 24-hour AI-tooling digest delivered as an external notification at 09:00 Owner-local. Scrapes via Playwright MCP. Edit the prompt with your curated sources, then activate.',
-        designation: 'Daily AI News Scout',
-        max_rounds: 5,
-        requires_item: false,
-        schedule_preset: 'daily',
-        schedule_time_of_day: '09:00',
-        concurrent_runs: 1,
-        glyph: 'newspaper',
-        prompt_md: loadPrompt('ai-news-daily.md'),
-        handoff_prompt_md: '',
-        kind_slug: 'ai-news',
-        settings_json: {},
-        cron_expr: null,
-    },
-    {
-        id: 'agent-market-research',
-        name: 'Market Research',
-        category: 'content',
-        cli: 'claude',
-        model: 'haiku',
-        framework: 'competitive-watch',
-        prompt_version: 1,
-        status: 'inactive',
-        accent_color: '#84CC16',
-        sort_order: 9,
-        description: 'Weekly competitor pricing + positioning watch. Edit the prompt with your Atlas project name + competitor list, then activate.',
-        designation: 'Competitive Analyst',
-        max_rounds: 5,
-        requires_item: false,
-        schedule_hours: 168,
-        concurrent_runs: 1,
-        glyph: 'monitoring',
-        prompt_md: loadPrompt('market-research.md'),
-        handoff_prompt_md: '',
-        kind_slug: 'market-research',
-        settings_json: {},
-        cron_expr: null,
-    },
-    {
-        id: 'agent-regulations',
-        name: 'Regulations Scout',
-        category: 'content',
-        cli: 'claude',
-        model: 'haiku',
-        framework: 'compliance-watch',
-        prompt_version: 1,
-        status: 'inactive',
-        accent_color: '#0EA5E9',
-        sort_order: 10,
-        description: 'Weekly regulator-news scan scoped to your project_type + regions. Edit the prompt with your Atlas project name + project type + regions, then activate.',
-        designation: 'Legal Scout',
-        max_rounds: 5,
-        requires_item: false,
-        schedule_hours: 168,
-        concurrent_runs: 1,
-        glyph: 'gavel',
-        prompt_md: loadPrompt('regulations.md'),
-        handoff_prompt_md: '',
-        kind_slug: 'regulations',
-        settings_json: {},
-        cron_expr: null,
-    },
-    {
-        id: 'agent-jira-to-epic',
-        name: 'Jira Importer',
-        category: 'software-dev',
-        cli: 'claude',
-        model: 'haiku',
-        framework: 'importer',
-        prompt_version: 1,
-        status: 'inactive',
-        accent_color: '#3B82F6',
-        sort_order: 6,
-        description: 'Daily at 09:00, pulls your Jira-assigned items into Atlas as draft epics. Edit the prompt with your Atlas project name, then activate.',
-        designation: 'Jira Importer',
-        max_rounds: 5,
-        requires_item: false,
-        // P1 — Jira importer moves from every-4-hours to daily at 09:00
-        // local. Migration 030 reconciles existing rows.
-        schedule_preset: 'daily',
-        schedule_time_of_day: '09:00',
-        concurrent_runs: 1,
-        glyph: 'sync_alt',
-        prompt_md: loadPrompt('jira-to-epic.md'),
-        handoff_prompt_md: '',
-        kind_slug: 'jira-to-epic',
-        settings_json: {},
-        cron_expr: null,
-    },
-    // ── Theme 09b — AI-Readiness Agent ────────────────────────────────
-    // Manually triggered from Project Detail. Two responsibilities:
-    //   1. Read the project end-to-end and write a layered `.agents/`
-    //      scaffold (always-on + conditional docs) on a fresh branch,
-    //      then open a PR via `gh`.
-    //   2. Bootstrap GitHub Spec Kit on the host (detect-then-install
-    //      `uv` + `specify-cli`) so the downstream SDLC chain
-    //      (Architect → Coder) finds `specify` on PATH.
-    //
-    // Sits on `claude-opus-4-7[1m]` (1M context) after migration 045 —
-    // it's a one-time-per-project job that ingests the whole repo in
-    // one sweep, so the larger window matters even though every other
-    // SDLC agent dropped Opus.
-    {
-        id: 'agent-ai-readiness',
-        name: 'AI Readiness Specialist',
-        category: 'software-dev',
-        cli: 'claude',
-        model: 'claude-opus-4-7[1m]',
-        framework: 'scaffolding',
-        prompt_version: 1,
-        status: 'inactive',
-        accent_color: '#6366F1',
-        sort_order: 7,
-        description: 'Walks the repo end-to-end (every package, public surfaces, key code paths, observed conventions) regardless of stack, then bootstraps an AI-ready scaffold on a fresh branch — 8 always-on docs (AGENTS.md, CLAUDE.md, Copilot instructions, .agents/README.md + architecture.md + conventions.md + glossary.md + memory.md) plus up to 4 conditional .agents/ docs (data-model.md, api-surface.md, routes-map.md, testing.md) gated on what is detected. Also installs GitHub Spec Kit (uv + specify-cli) on the host so the downstream SDLC chain (Architect → Coder → QA → Curator) lands on a ready environment. memory.md is a bootstrap digest future agent runs read first. Fires from the "Generate AI scaffold" button on Project Detail.',
-        designation: 'AI Readiness Specialist',
-        max_rounds: 5,
-        requires_item: false,
-        schedule_hours: 0,
-        concurrent_runs: 1,
-        glyph: 'rocket_launch',
-        prompt_md: loadPrompt('ai-readiness.md'),
-        handoff_prompt_md: '',
-        kind_slug: 'ai-readiness',
-        settings_json: {},
-        cron_expr: null,
-        push_code: true,
-        requires_worktree: true,
-        raises_pr: true,
-    },
-    // C08 — Knowledge Base Curator. Per-project `skills/` folder maintenance:
-    // Owner triggers a run, agent surveys the target project's codebase,
-    // identifies 1-3 documentation gaps, writes / refines `skills/<topic>.md`
-    // entries on a fresh `atlas/skills-<YYYY-MM-DD>` branch, opens a PR via
-    // `gh`. Manual / on-demand only (no schedule). Project_id is supplied via
-    // the Run-now dispatch path same as `agent-ai-readiness`.
-    {
-        id: 'agent-knowledge-base',
-        name: 'Knowledge Base Curator',
-        category: 'content',
-        cli: 'claude',
-        model: 'haiku',
-        framework: 'docs',
-        prompt_version: 1,
-        status: 'inactive',
-        accent_color: '#7C3AED',
-        sort_order: 11,
-        description: 'Curates a `skills/` folder under each Atlas-managed project — Confluence-style technical reference of the application. Owner triggers a run, agent picks 1-3 documentation gaps, opens a PR with new / refined `skills/<topic>.md` entries.',
-        designation: 'Knowledge Base Curator',
-        max_rounds: 5,
-        requires_item: false,
-        schedule_hours: 0,
-        concurrent_runs: 1,
-        glyph: 'menu_book',
-        prompt_md: loadPrompt('knowledge-base.md'),
-        handoff_prompt_md: '',
-        kind_slug: 'knowledge-base',
-        settings_json: {},
-        cron_expr: null,
-        push_code: true,
-        raises_pr: true,
-        requires_worktree: true,
-    },
-];
-
-// 2026-05-31 — Handoff rules realigned: handoffs are ONLY the agent's
-// terminal "I'm done" routing. Two rows per SDLC agent (on-pass +
-// on-fail), uniform shape. Intermediate routing — PO Reviewer
-// dispatching dev/QA children to Architect/QA Writer — lives in
-// the prompt, where the agent uses Atlas MCP (`assignItem`,
-// `transitionItemStatus`, `addCommentToItem`) directly. The runner
-// detects mid-run reassignment and silently skips the on-pass rule
-// when the agent already routed the item itself.
-//
-// Two patterns, every SDLC agent fits one:
-//   Performer: on-pass → paired reviewer / `ready`
-//              on-fail → owner / `waiting_for_info`
-//   Reviewer:  on-pass → next-phase agent (`ready`) OR owner
-//              (`in_review` for terminal reviewers — PO/Engineer/QA/
-//              Automation Reviewer end with Owner-in-review)
-//              on-fail → paired writer / `ready` (revision round)
-//
-// Terminal reviewers route to Owner with `in_review` (work product is
-// ready for Owner to inspect / merge). Mid-chain reviewers route to
-// the next performer with `ready` so it can be picked up immediately.
-// 2026-09-14: reviewer on-fail bounces the item back to its paired
-// writer with `ready` (it used to escalate to Owner); performer on-fail
-// still escalates to Owner. Migration 032 aligns installed rows.
-export const HANDOFF_RULE_SEEDS: HandoffRuleSeed[] = [
-    // ── Performers: on-pass → paired reviewer (ready) ───────────────
-    { agent_id: 'agent-po-writer', target_agent_id: 'agent-po-reviewer', kind: 'on-pass', status: 'ready' },
-    { agent_id: 'agent-architect', target_agent_id: 'agent-architect-reviewer', kind: 'on-pass', status: 'ready' },
-    { agent_id: 'agent-coder', target_agent_id: 'agent-code-reviewer', kind: 'on-pass', status: 'ready' },
-    { agent_id: 'agent-qa-writer', target_agent_id: 'agent-qa-reviewer', kind: 'on-pass', status: 'ready' },
-    { agent_id: 'agent-automation', target_agent_id: 'agent-automation-reviewer', kind: 'on-pass', status: 'ready' },
-
-    // ── Reviewers: on-pass ──────────────────────────────────────────
-    // Architect Reviewer hands the dev story onward to Coder. Every
-    // other reviewer's work product reaches Owner in `in_review` —
-    // PO Reviewer hands the epic to Owner (dev/QA children are
-    // already in flight from the prompt's MCP dispatch); Engineer
-    // Reviewer hands the merged-PR story to Owner; QA Reviewer hands
-    // the verified QA story to Owner; Automation Reviewer hands the
-    // PR-raised automation story to Owner.
-    { agent_id: 'agent-po-reviewer', target_agent_id: 'owner', kind: 'on-pass', status: 'in_review' },
-    { agent_id: 'agent-architect-reviewer', target_agent_id: 'agent-coder', kind: 'on-pass', status: 'ready' },
-    { agent_id: 'agent-code-reviewer', target_agent_id: 'owner', kind: 'on-pass', status: 'in_review' },
-    { agent_id: 'agent-qa-reviewer', target_agent_id: 'owner', kind: 'on-pass', status: 'in_review' },
-    { agent_id: 'agent-automation-reviewer', target_agent_id: 'owner', kind: 'on-pass', status: 'in_review' },
-
-    // ── On-fail ─────────────────────────────────────────────────────
-    // Performers: on-fail → Owner (waiting_for_info) — "I'm blocked / I
-    // have a question Owner must answer". Reviewers: on-fail → their
-    // paired writer (ready) so a failed review goes back for revision
-    // (2026-09-14; migration 032 aligns installed rows, catalog
-    // handoff_rules.json carries the same rows).
-    { agent_id: 'agent-po-writer', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-po-reviewer', target_agent_id: 'agent-po-writer', kind: 'on-fail', status: 'ready' },
-    { agent_id: 'agent-architect', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-architect-reviewer', target_agent_id: 'agent-architect', kind: 'on-fail', status: 'ready' },
-    { agent_id: 'agent-coder', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-code-reviewer', target_agent_id: 'agent-coder', kind: 'on-fail', status: 'ready' },
-    { agent_id: 'agent-qa-writer', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-qa-reviewer', target_agent_id: 'agent-qa-writer', kind: 'on-fail', status: 'ready' },
-    { agent_id: 'agent-automation', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-automation-reviewer', target_agent_id: 'agent-automation', kind: 'on-fail', status: 'ready' },
-    // 2026-05-30 — Self-contained agents (Jira Importer, AI Readiness
-    // Specialist, AI News Scout, Market Research, Regulations Scout,
-    // Knowledge Base Curator). These don't pass work to a downstream
-    // SDLC role — both on-pass and on-fail route back to the Owner.
-    // `target_agent_id = 'owner'` is the sentinel the resolver
-    // (`agent-handoff.ts`) translates to "Owner queue" (assigneeId =
-    // null). Migration 042 backfills these rows on existing live DBs;
-    // `runSeed()` only inserts handoff rules for agents that are newly
-    // added to the seed.
-    { agent_id: 'agent-jira-to-epic', target_agent_id: 'owner', kind: 'on-pass', status: 'done' },
-    { agent_id: 'agent-jira-to-epic', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-ai-readiness', target_agent_id: 'owner', kind: 'on-pass', status: 'done' },
-    { agent_id: 'agent-ai-readiness', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-ai-news', target_agent_id: 'owner', kind: 'on-pass', status: 'done' },
-    { agent_id: 'agent-ai-news', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-market-research', target_agent_id: 'owner', kind: 'on-pass', status: 'done' },
-    { agent_id: 'agent-market-research', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-regulations', target_agent_id: 'owner', kind: 'on-pass', status: 'done' },
-    { agent_id: 'agent-regulations', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-    { agent_id: 'agent-knowledge-base', target_agent_id: 'owner', kind: 'on-pass', status: 'done' },
-    { agent_id: 'agent-knowledge-base', target_agent_id: 'owner', kind: 'on-fail', status: 'waiting_for_info' },
-];
-
-export const CHECKLIST_SEEDS: ChecklistSeed[] = [
-    // PO Writer
-    { agent_id: 'agent-po-writer', label: 'Every story follows As-a / I-want / so-that', sort_order: 0, required: true },
-    { agent_id: 'agent-po-writer', label: 'Every story is an end-to-end functional slice (no FE-only / BE-only halves)', sort_order: 1, required: true },
-    { agent_id: 'agent-po-writer', label: 'Stories are independently shippable (no cross-story sequencing)', sort_order: 2, required: true },
-    { agent_id: 'agent-po-writer', label: 'Total dev-story count is between 1 and 8', sort_order: 3, required: true },
-    { agent_id: 'agent-po-writer', label: 'No implementation detail leaked into any story', sort_order: 4, required: true },
-    { agent_id: 'agent-po-writer', label: 'Every story has at least three Given / When / Then acceptance criteria bullets', sort_order: 5, required: true },
-    { agent_id: 'agent-po-writer', label: 'Every dev story has a [QA] twin linked via `tested_by`', sort_order: 6, required: true },
-    // Spec Writer checklist removed in P1 — `agent-spec-writer` is
-    // deleted by migration 030.
-    // Coder
-    { agent_id: 'agent-coder', label: 'pnpm typecheck clean across affected packages', sort_order: 0, required: true },
-    { agent_id: 'agent-coder', label: 'At least one new unit test added; integration test added if surface dictates', sort_order: 1, required: true },
-    { agent_id: 'agent-coder', label: 'pnpm test clean across affected packages', sort_order: 2, required: true },
-    { agent_id: 'agent-coder', label: 'Commit message follows Conventional Commits', sort_order: 3, required: true },
-    { agent_id: 'agent-coder', label: 'No console.log / debugger / TODO residue in the diff', sort_order: 4, required: true },
-    // QA Writer
-    { agent_id: 'agent-qa-writer', label: 'Happy-path scenario exists and passes', sort_order: 0, required: true },
-    { agent_id: 'agent-qa-writer', label: 'At least 2 edge-case scenarios exist and pass', sort_order: 1, required: true },
-    { agent_id: 'agent-qa-writer', label: 'Scenarios use stable selectors (no nth-child / brittle CSS)', sort_order: 2, required: true },
-    { agent_id: 'agent-qa-writer', label: 'No explicit sleeps — only awaitable waits', sort_order: 3, required: true },
-];
 
 // Two-phase seeding:
 //   1. Sync the on-disk catalog (packages/api/src/marketplace/catalog/) into
@@ -801,28 +58,15 @@ async function syncMarketplaceCatalog(): Promise<CatalogEntry[]> {
                 model: entry.manifest.model,
                 framework: entry.manifest.framework,
                 prompt_md: entry.prompt_md,
-                handoff_prompt_md: entry.manifest.handoff_prompt_md,
                 description: entry.manifest.description,
                 designation: entry.manifest.designation,
                 accent_color: entry.manifest.accent_color,
                 sort_order: entry.manifest.sort_order,
                 glyph: entry.manifest.glyph,
                 role_id: entry.manifest.role_id,
-                max_rounds: entry.manifest.max_rounds,
-                requires_item: entry.manifest.requires_item,
-                requires_worktree: entry.manifest.requires_worktree,
-                push_code: entry.manifest.push_code,
-                raises_pr: entry.manifest.raises_pr,
                 status: entry.manifest.status,
                 kind_slug: entry.manifest.kind_slug,
                 settings_json: entry.manifest.settings_json,
-                schedule_hours: entry.manifest.schedule_hours,
-                schedule_preset: entry.manifest.schedule_preset,
-                schedule_time_of_day: entry.manifest.schedule_time_of_day,
-                schedule_weekdays: entry.manifest.schedule_weekdays,
-                schedule_day_of_month: entry.manifest.schedule_day_of_month,
-                cron_expr: entry.manifest.cron_expr,
-                concurrent_runs: entry.manifest.concurrent_runs,
                 memory_cadence: entry.manifest.memory_cadence,
                 memory_template_md: entry.memory_md,
                 summary: entry.manifest.summary,
@@ -837,28 +81,11 @@ async function syncMarketplaceCatalog(): Promise<CatalogEntry[]> {
             } else {
                 await trx.updateTable('marketplace_agents').set(row).where('id', '=', row.id).execute();
                 await trx
-                    .deleteFrom('marketplace_agent_handoffs')
-                    .where('marketplace_agent_id', '=', row.id)
-                    .execute();
-                await trx
                     .deleteFrom('marketplace_agent_checklists')
                     .where('marketplace_agent_id', '=', row.id)
                     .execute();
             }
 
-            if (entry.handoff_rules.length > 0) {
-                await trx
-                    .insertInto('marketplace_agent_handoffs')
-                    .values(
-                        entry.handoff_rules.map((h) => ({
-                            marketplace_agent_id: row.id,
-                            target_agent_id: h.target_agent_id,
-                            kind: h.kind,
-                            status: h.status,
-                        }))
-                    )
-                    .execute();
-            }
             if (entry.checklists.length > 0) {
                 await trx
                     .insertInto('marketplace_agent_checklists')
@@ -879,7 +106,7 @@ async function syncMarketplaceCatalog(): Promise<CatalogEntry[]> {
 }
 
 // Phase 2 of the /commands framework redesign — five artifact templates
-// (`spec`, `plan`, `tasks`, `story`, `qa-plan`) seeded into the
+// (`spec`, `plan`, `tasks`, `sub-task`, `qa-plan`) seeded into the
 // `agent_templates` table. The templates-assembler writes each row to
 // `<worktree>/.atlas/templates/<filename>` per run so the slash-command
 // bodies can reference a stable shape. Owner edits via direct DB writes
@@ -897,7 +124,7 @@ interface AgentTemplateSeed {
 
 const SPEC_TEMPLATE_MD = `# Spec
 
-> Architect-grade spec for this story. Every section below MUST have
+> Architect-grade spec for this Task. Every section below MUST have
 > substantive content before review — empty sections fail.
 
 ## Feasibility
@@ -914,11 +141,11 @@ const SPEC_TEMPLATE_MD = `# Spec
 
 ## File-level change list
 
-<For every file Coder will create, edit, or delete, one line: \`<path>\` — \`<what changes>\`.>
+<One \`### <sub-task id> — <title>\` group per dev sub-task, in build order. Under each, for every file that sub-task's Coder will create, edit, or delete, one line: \`<path>\` — \`<what changes>\`.>
 
 ## Test scenarios
 
-<Given / When / Then bullets, one per acceptance criterion, mapped to the story's existing acceptance criteria.>
+<Given / When / Then bullets, one per acceptance criterion, mapped to the sub-tasks' existing acceptance criteria.>
 
 ## Performance + security notes
 
@@ -974,7 +201,7 @@ const TASKS_TEMPLATE_MD = `# Tasks
   - Verify: \`pnpm --filter @atlas/api test <test-file>\`
 `;
 
-const STORY_TEMPLATE_MD = `# Story
+const SUB_TASK_TEMPLATE_MD = `# Sub-task
 
 ## User story
 
@@ -1026,10 +253,10 @@ const AGENT_TEMPLATE_SEEDS: AgentTemplateSeed[] = [
         body_md: TASKS_TEMPLATE_MD,
     },
     {
-        id: 'story',
-        filename: 'story.md',
-        description: 'PO Writer story template',
-        body_md: STORY_TEMPLATE_MD,
+        id: 'sub-task',
+        filename: 'sub-task.md',
+        description: 'PO Writer sub-task template',
+        body_md: SUB_TASK_TEMPLATE_MD,
     },
     {
         id: 'qa-plan',
@@ -1123,42 +350,42 @@ exit 1
         id: 'po-writer-output',
         name: 'PO Writer output check',
         description:
-            "Reads the epic's stories from the Atlas API ($ATLAS_API_URL) and verifies the PO Writer contract: at least one dev story, non-empty acceptance_criteria on every dev story, a `<dev title> [QA]` twin joined to it by a tested_by link (either direction), and a valid worktree_branch on every story.",
+            "Reads the Task's sub-tasks from the Atlas API ($ATLAS_API_URL) and verifies the PO Writer contract: at least one dev sub-task, every dev sub-task labelled `dev` with non-empty acceptance_criteria, and a `<dev title> [QA]` twin labelled `qa` joined to it by a tested_by link (either direction).",
         sort_order: 101,
         body_sh: `#!/usr/bin/env bash
-# PO Writer output gate. $1 is the epic id. Reads the epic's stories from the
+# PO Writer output gate. $1 is the Task id. Reads the Task's sub-tasks from the
 # Atlas API at $ATLAS_API_URL (set on every agent run's env).
 set -u
-epic="\${1:-}"
+task="\${1:-}"
 fail() { printf "po-writer-output:\\n1. %s\\n" "$1"; exit 1; }
-[ -n "$epic" ] || fail 'epic id ($1) missing'
-[ -n "\${ATLAS_API_URL:-}" ] || fail "ATLAS_API_URL is not set -- cannot read the epic's stories from the Atlas API"
+[ -n "$task" ] || fail 'task id ($1) missing'
+[ -n "\${ATLAS_API_URL:-}" ] || fail "ATLAS_API_URL is not set -- cannot read the Task's sub-tasks from the Atlas API"
 api="\${ATLAS_API_URL%/}"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-curl -fsS "$api/api/epics/$epic/full" -o "$tmp/epic.json" 2>/dev/null || fail "GET $api/api/epics/$epic/full failed"
-ids="$(node -e 'for (const s of require(process.argv[1]).stories || []) console.log(s.id)' "$tmp/epic.json" 2>/dev/null)"
+curl -fsS "$api/api/tasks/$task/full" -o "$tmp/task.json" 2>/dev/null || fail "GET $api/api/tasks/$task/full failed"
+ids="$(node -e 'for (const s of require(process.argv[1]).sub_tasks || []) console.log(s.id)' "$tmp/task.json" 2>/dev/null)"
 for id in $ids; do
-    curl -fsS "$api/api/issues/story/$id/links" -o "$tmp/links-$id.json" 2>/dev/null || echo '[]' > "$tmp/links-$id.json"
+    curl -fsS "$api/api/issues/sub_task/$id/links" -o "$tmp/links-$id.json" 2>/dev/null || echo '[]' > "$tmp/links-$id.json"
 done
 node -e '
 const dir = process.argv[1];
-const stories = require(dir + "/epic.json").stories || [];
-const branchRe = new RegExp("${WORKTREE_BRANCH_RE_SOURCE}");
+const subs = require(dir + "/task.json").sub_tasks || [];
+const has = (s, l) => (s.labels || []).includes(l);
+const isQa = (s) => s.title.trimEnd().endsWith("[QA]");
 const gaps = [];
-const dev = stories.filter((s) => !s.title.trimEnd().endsWith("[QA]"));
-if (dev.length === 0) gaps.push("no dev stories (titles not ending [QA]) under the epic");
-for (const s of stories) {
-    if (!branchRe.test(s.worktree_branch || "")) gaps.push(s.id + " worktree_branch missing or malformed: " + s.worktree_branch);
-}
+const dev = subs.filter((s) => !isQa(s));
+if (dev.length === 0) gaps.push("no dev sub-tasks (titles not ending [QA]) under the task");
 for (const d of dev) {
+    if (!has(d, "dev")) gaps.push(d.id + " is missing the dev label");
     if (!(d.acceptance_criteria || "").trim()) gaps.push(d.id + " has empty acceptance_criteria");
     const twinTitle = d.title + " [QA]";
-    const qa = stories.find((s) => s.title === twinTitle);
+    const qa = subs.find((s) => s.title === twinTitle);
     if (!qa) {
         gaps.push(d.id + " has no [QA] twin titled " + JSON.stringify(twinTitle));
         continue;
     }
+    if (!has(qa, "qa")) gaps.push(qa.id + " is missing the qa label");
     const links = require(dir + "/links-" + d.id + ".json");
     if (!links.some((l) => l.relation_type === "tested_by" && l.item_id === qa.id)) {
         gaps.push(d.id + " has no tested_by link to its [QA] twin " + qa.id);
@@ -1170,34 +397,32 @@ gaps.forEach((g, i) => console.log(i + 1 + ". " + g));
 process.exit(1);
 ' "$tmp"
 `,
-        body_ps1: `# PO Writer output gate. $args[0] is the epic id. Reads the epic's stories
+        body_ps1: `# PO Writer output gate. $args[0] is the Task id. Reads the Task's sub-tasks
 # from the Atlas API at $env:ATLAS_API_URL (see body_sh for the contract).
 $ErrorActionPreference = 'Continue'
-$epic = if ($args.Count -gt 0) { $args[0] } else { '' }
+$task = if ($args.Count -gt 0) { $args[0] } else { '' }
 function Fail([string]$msg) { Write-Output 'po-writer-output:'; Write-Output ('1. ' + $msg); exit 1 }
-if ([string]::IsNullOrWhiteSpace($epic)) { Fail 'epic id ($args[0]) missing' }
-if ([string]::IsNullOrWhiteSpace($env:ATLAS_API_URL)) { Fail "ATLAS_API_URL is not set -- cannot read the epic's stories from the Atlas API" }
+if ([string]::IsNullOrWhiteSpace($task)) { Fail 'task id ($args[0]) missing' }
+if ([string]::IsNullOrWhiteSpace($env:ATLAS_API_URL)) { Fail "ATLAS_API_URL is not set -- cannot read the Task's sub-tasks from the Atlas API" }
 $api = $env:ATLAS_API_URL.TrimEnd('/')
-try { $full = Invoke-RestMethod -Uri "$api/api/epics/$epic/full" -ErrorAction Stop } catch { Fail "GET $api/api/epics/$epic/full failed" }
-$stories = @()
-if ($full.stories) { $stories = @($full.stories) }
-$re = '${WORKTREE_BRANCH_RE_SOURCE}'
+try { $full = Invoke-RestMethod -Uri "$api/api/tasks/$task/full" -ErrorAction Stop } catch { Fail "GET $api/api/tasks/$task/full failed" }
+$subs = @()
+if ($full.sub_tasks) { $subs = @($full.sub_tasks) }
 $gaps = New-Object System.Collections.ArrayList
 $dev = @()
-foreach ($s in $stories) { if (-not "$($s.title)".TrimEnd().EndsWith('[QA]')) { $dev += $s } }
-if ($dev.Count -eq 0) { [void]$gaps.Add('no dev stories (titles not ending [QA]) under the epic') }
-foreach ($s in $stories) {
-    if (-not ("$($s.worktree_branch)" -cmatch $re)) { [void]$gaps.Add("$($s.id) worktree_branch missing or malformed: $($s.worktree_branch)") }
-}
+foreach ($s in $subs) { if (-not "$($s.title)".TrimEnd().EndsWith('[QA]')) { $dev += $s } }
+if ($dev.Count -eq 0) { [void]$gaps.Add('no dev sub-tasks (titles not ending [QA]) under the task') }
 foreach ($d in $dev) {
+    if (-not (@($d.labels) -contains 'dev')) { [void]$gaps.Add("$($d.id) is missing the dev label") }
     if ([string]::IsNullOrWhiteSpace($d.acceptance_criteria)) { [void]$gaps.Add("$($d.id) has empty acceptance_criteria") }
     $twinTitle = "$($d.title) [QA]"
     $qa = $null
-    foreach ($s in $stories) { if ($s.title -ceq $twinTitle) { $qa = $s } }
+    foreach ($s in $subs) { if ($s.title -ceq $twinTitle) { $qa = $s } }
     if ($null -eq $qa) { [void]$gaps.Add("$($d.id) has no [QA] twin titled '$twinTitle'"); continue }
+    if (-not (@($qa.labels) -contains 'qa')) { [void]$gaps.Add("$($qa.id) is missing the qa label") }
     $linked = $false
     try {
-        foreach ($l in (Invoke-RestMethod -Uri "$api/api/issues/story/$($d.id)/links" -ErrorAction Stop)) {
+        foreach ($l in (Invoke-RestMethod -Uri "$api/api/issues/sub_task/$($d.id)/links" -ErrorAction Stop)) {
             if ($l.relation_type -eq 'tested_by' -and $l.item_id -eq $qa.id) { $linked = $true }
         }
     } catch { }
@@ -1283,13 +508,16 @@ exit 1
         id: 'coder-tests-green',
         name: 'Coder typecheck/lint/tests changed',
         description:
-            "Coder gate: the project's own typecheck and lint scripts (run only when package.json declares them, via the package manager its lockfile implies) must exit 0, and the diff against origin/main (or HEAD~10) must add or modify at least one test file (*.test|spec.{js,ts,jsx,tsx,mjs,cjs}, *_test.go, test_*.py).",
+            "Coder gate: the project's own typecheck and lint scripts (run only when package.json declares them, via the package manager its lockfile implies) must exit 0, and the diff against origin/main (or HEAD~10) must add or modify at least one test file (*.test|spec.{js,ts,jsx,tsx,mjs,cjs}, *_test.go, test_*.py). With `--run-tests` as the second argument (Code Reviewer) the declared `test` script must pass too.",
         sort_order: 103,
         body_sh: `#!/usr/bin/env bash
-# Coder gate. $1 is the item id (unused).
+# Coder gate. $1 is the item id (unused). $2 = --run-tests also runs the
+# project's test script (Code Reviewer owns the full suite; Coder skips it).
 # Project-agnostic: scripts run only if package.json declares them, with
 # the package manager the lockfile implies.
 set -u
+checks="typecheck lint"
+[ "\${2:-}" = "--run-tests" ] && checks="$checks test"
 gaps=""
 n=0
 pm=npm
@@ -1298,7 +526,7 @@ pm=npm
 has_script() {
     [ -f package.json ] && node -e "process.exit((require('./package.json').scripts || {})['$1'] ? 0 : 1)" 2>/dev/null
 }
-for s in typecheck lint; do
+for s in $checks; do
     if has_script "$s" && ! "$pm" run "$s" >/dev/null 2>&1; then
         n=$((n+1))
         gaps="$gaps$n. $s failed
@@ -1316,7 +544,8 @@ if [ -z "$gaps" ]; then exit 0; fi
 printf "coder-tests-green:\\n%s" "$gaps"
 exit 1
 `,
-        body_ps1: `# Coder gate. $args[0] is the item id (unused).
+        body_ps1: `# Coder gate. $args[0] is the item id (unused). $args[1] = --run-tests also
+# runs the project's test script (Code Reviewer owns the full suite).
 $ErrorActionPreference = 'Continue'
 $gaps = New-Object System.Collections.ArrayList
 $pm = 'npm'
@@ -1326,7 +555,9 @@ $scripts = $null
 if (Test-Path 'package.json') {
     try { $scripts = (Get-Content -Raw 'package.json' | ConvertFrom-Json).scripts } catch { $scripts = $null }
 }
-foreach ($s in @('typecheck', 'lint')) {
+$checks = @('typecheck', 'lint')
+if ($args.Count -gt 1 -and $args[1] -eq '--run-tests') { $checks += 'test' }
+foreach ($s in $checks) {
     if ($scripts -and ($scripts.PSObject.Properties.Name -contains $s)) {
         & $pm run $s 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) { [void]$gaps.Add("$s failed") }
@@ -1353,20 +584,20 @@ exit 1
         id: 'qa-writer-csv',
         name: 'QA Writer test-plan CSV',
         description:
-            'QA Writer gate: tests/qa/<storyId>.csv must exist, carry the Jira-importable header `Summary,Description,Issue Type,Priority,Labels,Components`, contain at least one body row, and be touched by the HEAD commit.',
+            'QA Writer gate: tests/qa/<itemId>.csv must exist, carry the Jira-importable header `Summary,Description,Issue Type,Priority,Labels,Components`, contain at least one body row, and be touched by the HEAD commit.',
         sort_order: 104,
         body_sh: `#!/usr/bin/env bash
-# QA Writer gate. $1 is the story id.
+# QA Writer gate. $1 is the QA sub-task id.
 set -u
-story="\${1:-}"
+item="\${1:-}"
 expected_header="Summary,Description,Issue Type,Priority,Labels,Components"
 gaps=""
 n=0
-if [ -z "$story" ]; then
-    printf "qa-writer-csv:\\n1. story id (\\$1) missing\\n"
+if [ -z "$item" ]; then
+    printf "qa-writer-csv:\\n1. item id (\\$1) missing\\n"
     exit 1
 fi
-csv="tests/qa/\${story}.csv"
+csv="tests/qa/\${item}.csv"
 if [ ! -f "$csv" ]; then
     printf "qa-writer-csv:\\n1. %s missing\\n" "$csv"
     exit 1
@@ -1399,17 +630,17 @@ if [ -z "$gaps" ]; then exit 0; fi
 printf "qa-writer-csv (%s):\\n%s" "$csv" "$gaps"
 exit 1
 `,
-        body_ps1: `# QA Writer gate. $args[0] is the story id.
+        body_ps1: `# QA Writer gate. $args[0] is the QA sub-task id.
 $ErrorActionPreference = 'Continue'
-$story = if ($args.Count -gt 0) { $args[0] } else { '' }
+$item = if ($args.Count -gt 0) { $args[0] } else { '' }
 $expected = 'Summary,Description,Issue Type,Priority,Labels,Components'
 $gaps = New-Object System.Collections.ArrayList
-if ([string]::IsNullOrWhiteSpace($story)) {
+if ([string]::IsNullOrWhiteSpace($item)) {
     Write-Output 'qa-writer-csv:'
-    Write-Output '1. story id ($args[0]) missing'
+    Write-Output '1. item id ($args[0]) missing'
     exit 1
 }
-$csv = "tests/qa/$story.csv"
+$csv = "tests/qa/$item.csv"
 if (-not (Test-Path -LiteralPath $csv -PathType Leaf)) {
     Write-Output 'qa-writer-csv:'
     Write-Output ("1. {0} missing" -f $csv)
@@ -1447,17 +678,17 @@ exit 1
         id: 'check-automation-tests',
         name: 'Automation Engineer test coverage (CSV automation-yes rows)',
         description:
-            'Automation Engineer gate: tests/qa/<storyId>.csv must exist; for every row whose Labels carry `automation-yes`, a test file added or modified between merge-base and HEAD (*.test|spec.{js,ts,jsx,tsx,mjs,cjs}, *_test.go, test_*.py) must contain the row Summary. The CSV is parsed RFC-4180 (quoted cells may hold commas and newlines).',
+            'Automation Engineer gate: tests/qa/<itemId>.csv must exist; for every row whose Labels carry `automation-yes`, a test file added or modified between merge-base and HEAD (*.test|spec.{js,ts,jsx,tsx,mjs,cjs}, *_test.go, test_*.py) must contain the row Summary. The CSV is parsed RFC-4180 (quoted cells may hold commas and newlines).',
         sort_order: 105,
         body_sh: `#!/usr/bin/env bash
-# Automation Engineer gate. $1 is the story id.
+# Automation Engineer gate. $1 is the QA sub-task id.
 set -u
-story="\${1:-}"
-if [ -z "$story" ]; then
-    printf "check-automation-tests:\\n1. story id (\\$1) missing\\n"
+item="\${1:-}"
+if [ -z "$item" ]; then
+    printf "check-automation-tests:\\n1. item id (\\$1) missing\\n"
     exit 1
 fi
-csv="tests/qa/\${story}.csv"
+csv="tests/qa/\${item}.csv"
 if [ ! -f "$csv" ]; then
     printf "check-automation-tests:\\n1. %s missing\\n" "$csv"
     exit 1
@@ -1502,15 +733,15 @@ gaps.forEach((g, i) => console.log(i + 1 + ". " + g));
 process.exit(1);
 ' "$csv"
 `,
-        body_ps1: `# Automation Engineer gate. $args[0] is the story id.
+        body_ps1: `# Automation Engineer gate. $args[0] is the QA sub-task id.
 $ErrorActionPreference = 'Continue'
-$story = if ($args.Count -gt 0) { $args[0] } else { '' }
-if ([string]::IsNullOrWhiteSpace($story)) {
+$item = if ($args.Count -gt 0) { $args[0] } else { '' }
+if ([string]::IsNullOrWhiteSpace($item)) {
     Write-Output 'check-automation-tests:'
-    Write-Output '1. story id ($args[0]) missing'
+    Write-Output '1. item id ($args[0]) missing'
     exit 1
 }
-$csv = "tests/qa/$story.csv"
+$csv = "tests/qa/$item.csv"
 if (-not (Test-Path -LiteralPath $csv -PathType Leaf)) {
     Write-Output 'check-automation-tests:'
     Write-Output ("1. {0} missing" -f $csv)
@@ -1627,6 +858,9 @@ async function seedGuardrailScripts(): Promise<void> {
 
 async function seedAgentTemplates(): Promise<void> {
     const now = new Date().toISOString();
+    // ADR 0015 renamed the PO Writer template; drop the old row so worktrees
+    // stop getting a stale `story.md`.
+    await db.deleteFrom('agent_templates').where('id', '=', 'story').execute();
     for (const tpl of AGENT_TEMPLATE_SEEDS) {
         await db
             .insertInto('agent_templates')

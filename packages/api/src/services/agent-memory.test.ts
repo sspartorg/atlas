@@ -69,13 +69,13 @@ describe('agentMemoryService', () => {
     it('regenerate (simulated) bumps version, flips source back to ai-generated, attaches last_run_id', async () => {
         const a = await agentsService.create(base);
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'e1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'e1', type: 'task', project_id: 'p1', title: 'E' });
         await insertItem({
             id: 's1',
-            type: 'story',
+            type: 'sub_task',
             project_id: 'p1',
             parent_id: 'e1',
-            parent_type: 'epic',
+            parent_type: 'task',
             title: 'Test',
         });
         await testDb
@@ -211,7 +211,7 @@ describe('agentMemoryService', () => {
     it('maybeRegenerateAfterRun returns null below cadence threshold', async () => {
         const a = await agentsService.create({ ...base, memory_cadence: 5 });
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         await testDb
             .insertInto('agent_runs')
             .values({ id: 'r1', agent_id: a.id, item_id: 'ATL-1', status: 'completed' })
@@ -229,7 +229,7 @@ describe('agentMemoryService', () => {
     it('maybeRegenerateAfterRun fires cadence regen at threshold and resets counter', async () => {
         const a = await agentsService.create({ ...base, memory_cadence: 2 });
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         await testDb
             .insertInto('agent_runs')
             .values({ id: 'r1', agent_id: a.id, item_id: 'ATL-1', status: 'completed' })
@@ -253,7 +253,7 @@ describe('agentMemoryService', () => {
     it('maybeRegenerateAfterRun: errors count double toward cadence', async () => {
         const a = await agentsService.create({ ...base, memory_cadence: 3 });
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         await testDb
             .insertInto('agent_runs')
             .values({ id: 'r1', agent_id: a.id, item_id: 'ATL-1', status: 'error' })
@@ -271,14 +271,14 @@ describe('agentMemoryService', () => {
     it('maybeRegenerateAfterRun fires high_signal regardless of cadence when Owner posts [lesson:]', async () => {
         const a = await agentsService.create({ ...base, memory_cadence: 100 });
         await insertProject('p1', 'ATL');
-        await insertItem({ id: 'ATL-1', type: 'epic', project_id: 'p1', title: 'E' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'E' });
         await testDb
             .insertInto('agent_runs')
             .values({ id: 'r1', agent_id: a.id, item_id: 'ATL-1', status: 'completed' })
             .execute();
         await commentsService.create({
             author: 'owner',
-            issue_type: 'epic',
+            issue_type: 'task',
             issue_id: 'ATL-1',
             body: '[lesson: escalate ambiguous epics to Owner instead of guessing]',
         });

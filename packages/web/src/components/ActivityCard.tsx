@@ -105,7 +105,9 @@ function CommentRow({
     ownerAccent: string;
 }) {
     const agent = comment.agent_id ? agentsById.get(comment.agent_id) : null;
-    const name = comment.author === 'owner' ? ownerName : (agent?.name ?? 'Agent');
+    // An agent comment with no agent_id is the workflow itself speaking
+    // (e.g. "waiting for you" when a run parks).
+    const name = comment.author === 'owner' ? ownerName : comment.agent_id ? (agent?.name ?? 'Agent') : 'Workflow';
     const color = comment.author === 'owner' ? ownerAccent : (agent?.accent_color ?? ATLAS_PALETTE.slate);
     const isAgent = comment.author === 'agent';
 
@@ -549,15 +551,13 @@ function EventRow({
         icon = <RestartAltRounded sx={{ fontSize: 16, color: ATLAS_PALETTE.brandBlue }} />;
         const subjectAgent = event.to_value ? agentsById.get(event.to_value) : null;
         const subjectName = subjectAgent?.name ?? 'the assigned agent';
-        const cap = subjectAgent?.max_rounds ?? null;
         const prev = event.from_value;
         body = (
             <>
                 <strong>{actorName}</strong> reset rounds for <strong>{subjectName}</strong>
                 {prev != null && (
                     <Box component="span" sx={{ ml: 1, fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
-                        (was {prev}
-                        {cap != null ? ` / ${cap}` : ''})
+                        (was {prev})
                     </Box>
                 )}
             </>
@@ -699,17 +699,18 @@ export function ConversationCard({
         propActivity,
         propAgents,
     );
-    // Mirrors the API's owner-reply auto-resume (commentsService): a parked,
-    // unassigned item goes back to the agent of its latest run, if active.
-    const resumeAgent = useMemo(() => {
-        if (status !== 'waiting_for_info' || assigneeAgentId) return null;
+    // Mirrors the API's owner-reply auto-resume (commentsService, ADR 0014): a
+    // reply on a parked item continues the workflow run its latest step
+    // belongs to. Which step runs next is the workflow's call, so the hint
+    // doesn't name an agent.
+    const resumesWorkflow = useMemo(() => {
+        if (status !== 'waiting_for_info' || assigneeAgentId) return false;
         const latest = (runs ?? []).reduce<IAgentRun | null>(
             (acc, r) => (!acc || r.created_at > acc.created_at ? r : acc),
             null,
         );
-        const agent = latest ? agentsById.get(latest.agent_id) : undefined;
-        return agent?.status === 'active' ? agent : null;
-    }, [status, assigneeAgentId, runs, agentsById]);
+        return Boolean(latest?.workflow_run_id);
+    }, [status, assigneeAgentId, runs]);
     const createComment = useCreateComment();
     const qc = useQueryClient();
     const [draft, setDraft] = useState('');
@@ -788,9 +789,7 @@ export function ConversationCard({
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     helperText={
-                        resumeAgent
-                            ? `Replying hands this back to ${resumeAgent.name} and sets it Ready.`
-                            : undefined
+                        resumesWorkflow ? 'Replying continues the waiting workflow run.' : undefined
                     }
                     slotProps={{
                         input: {

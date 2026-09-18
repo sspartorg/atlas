@@ -10,15 +10,13 @@ const BASE = 'http://localhost:3000/api';
 
 const baseKpis = {
     activeAgents: 0,
-    epics: 0,
-    storiesInProgress: 0,
     doneThisWeek: 0,
     projectCount: 0,
     agentStatsByCategory: {
-        'software-dev': { queued: 0, running: 0 },
-        marketing: { queued: 0, running: 0 },
-        content: { queued: 0, running: 0 },
-        design: { queued: 0, running: 0 },
+        'software-dev': { running: 0 },
+        marketing: { running: 0 },
+        content: { running: 0 },
+        design: { running: 0 },
     },
     todaysPass: { items: [], total: 0 },
 };
@@ -77,7 +75,7 @@ describe('DashboardPopulated', () => {
                 data={{
                     awaiting: [
                         {
-                            issue_type: 'story',
+                            issue_type: 'sub_task',
                             id: 'st-1',
                             title: 'Review login flow',
                             status: 'waiting_info',
@@ -102,9 +100,9 @@ describe('DashboardPopulated', () => {
                     awaiting: [],
                     queue: [
                         {
-                            issue_type: 'epic',
+                            issue_type: 'task',
                             id: 'ep-1',
-                            title: 'Launch campaign epic',
+                            title: 'Launch campaign task',
                             status: 'in_progress',
                             updated_at: '2026-06-25T00:00:00.000Z',
                             assignee_agent_id: null,
@@ -116,8 +114,8 @@ describe('DashboardPopulated', () => {
                 }}
             />,
         );
-        await screen.findByText('Launch campaign epic');
-        expect(screen.getByText('Launch campaign epic')).toBeInTheDocument();
+        await screen.findByText('Launch campaign task');
+        expect(screen.getByText('Launch campaign task')).toBeInTheDocument();
     });
 
     // Branch 3: costSummary30d non-null passed to KpiStrip — renders formatted cost

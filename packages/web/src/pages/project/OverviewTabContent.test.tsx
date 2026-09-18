@@ -9,21 +9,17 @@ import type { ProjectCounts } from '../../api/types.js';
 const BASE = 'http://localhost:3000/api';
 
 const emptyCounts: ProjectCounts = {
-    open_epics: 0,
-    epics_ready: 0,
-    stories_in_flight: 0,
-    stories_waiting_info: 0,
-    open_bugs: 0,
-    bugs_ready: 0,
+    open_tasks: 0,
+    tasks_ready: 0,
+    tasks_in_flight: 0,
+    tasks_waiting_info: 0,
 };
 
 const countsWith: ProjectCounts = {
-    open_epics: 5,
-    epics_ready: 2,
-    stories_in_flight: 3,
-    stories_waiting_info: 1,
-    open_bugs: 4,
-    bugs_ready: 2,
+    open_tasks: 5,
+    tasks_ready: 2,
+    tasks_in_flight: 3,
+    tasks_waiting_info: 1,
     costSummary: {
         total_cost_usd: 12.5,
         run_count: 8,
@@ -51,9 +47,8 @@ describe('OverviewTabContent', () => {
             />,
         );
         // KPI tiles rendered
-        await waitFor(() => expect(screen.getByText('Open Epics')).toBeInTheDocument());
-        expect(screen.getByText('Stories in flight')).toBeInTheDocument();
-        expect(screen.getByText('Open bugs')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByText('Open tasks')).toBeInTheDocument());
+        expect(screen.getByText('Tasks in flight')).toBeInTheDocument();
     });
 
     it('renders KPI tiles with counts', async () => {
@@ -64,7 +59,7 @@ describe('OverviewTabContent', () => {
                 onJumpToHistory={vi.fn()}
             />,
         );
-        await waitFor(() => expect(screen.getByText('Open Epics')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Open tasks')).toBeInTheDocument());
         // Check counts appear
         expect(screen.getAllByText('5').length).toBeGreaterThanOrEqual(1);
     });
@@ -103,9 +98,9 @@ describe('OverviewTabContent', () => {
                     {
                         id: 'run-1',
                         agent_id: 'agent-1',
-                        issue_type: 'story',
-                        issue_id: 'story-1',
-                        item_title: 'My Story',
+                        issue_type: 'sub_task',
+                        issue_id: 'ATL-2',
+                        item_title: 'My Sub-task',
                         status: 'completed',
                         created_at: '2026-06-22T10:00:00Z',
                         started_at: '2026-06-22T10:00:10Z',
@@ -125,10 +120,10 @@ describe('OverviewTabContent', () => {
         await waitFor(() => expect(screen.getByText('Recent activity')).toBeInTheDocument());
     });
 
-    it('shows epics_ready in epic caption', async () => {
+    it('shows tasks_ready in task caption', async () => {
         renderWithProviders(
             <OverviewTabContent
-                counts={{ ...emptyCounts, epics_ready: 3 }}
+                counts={{ ...emptyCounts, tasks_ready: 3 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
             />,
@@ -136,10 +131,10 @@ describe('OverviewTabContent', () => {
         await waitFor(() => expect(screen.getByText(/awaiting pickup/i)).toBeInTheDocument());
     });
 
-    it('shows "queue is empty" when no stories in flight', async () => {
+    it('shows "queue is empty" when no tasks in flight', async () => {
         renderWithProviders(
             <OverviewTabContent
-                counts={{ ...emptyCounts, stories_in_flight: 0 }}
+                counts={{ ...emptyCounts, tasks_in_flight: 0 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
             />,
@@ -160,7 +155,7 @@ describe('OverviewTabContent', () => {
         );
     });
 
-    it('renders RecentRunRow with sub_task issue type (issueRoute sub-task branch)', async () => {
+    it('renders RecentRunRow with sub_task issue type (itemPath sub-task branch)', async () => {
         server.use(
             http.get(`${BASE}/run`, () =>
                 HttpResponse.json([
@@ -190,39 +185,7 @@ describe('OverviewTabContent', () => {
         await waitFor(() => expect(screen.getByText('ST-42')).toBeInTheDocument());
         // The link should point to the sub-tasks route
         const link = screen.getByText('ST-42').closest('a');
-        expect(link).toHaveAttribute('href', '/issues/sub-tasks/ST-42');
-    });
-
-    it('renders RecentRunRow with sub_bug issue type (issueRoute sub-bug branch)', async () => {
-        server.use(
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([
-                    {
-                        id: 'run-sb',
-                        agent_id: 'agent-1',
-                        issue_type: 'sub_bug',
-                        issue_id: 'SB-7',
-                        item_title: 'Sub-bug item',
-                        status: 'error',
-                        created_at: '2026-06-22T10:00:00Z',
-                        started_at: '2026-06-22T10:00:10Z',
-                        completed_at: '2026-06-22T10:05:00Z',
-                        total_cost_usd: 0.01,
-                    },
-                ]),
-            ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-        );
-        renderWithProviders(
-            <OverviewTabContent
-                counts={emptyCounts}
-                projectId="proj-1"
-                onJumpToHistory={vi.fn()}
-            />,
-        );
-        await waitFor(() => expect(screen.getByText('SB-7')).toBeInTheDocument());
-        const link = screen.getByText('SB-7').closest('a');
-        expect(link).toHaveAttribute('href', '/issues/sub-bugs/SB-7');
+        expect(link).toHaveAttribute('href', '/sub-tasks/ST-42');
     });
 
     it('shows BoldKpi token count when costSummary.run_count > 0', async () => {
@@ -238,46 +201,38 @@ describe('OverviewTabContent', () => {
         expect(screen.getByText('125.0K')).toBeInTheDocument();
     });
 
-    it('shows "in motion" bug caption when open_bugs > 0 and bugs_ready === 0', async () => {
+    it('shows the waiting-info count when tasks are waiting on the Owner', async () => {
         renderWithProviders(
             <OverviewTabContent
-                counts={{ ...emptyCounts, open_bugs: 2, bugs_ready: 0 }}
+                counts={{ ...emptyCounts, tasks_in_flight: 4, tasks_waiting_info: 1 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
             />,
         );
-        await waitFor(() => expect(screen.getByText('in motion')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('1 waiting info')).toBeInTheDocument());
     });
 
-    it('shows stories in-progress and waiting info when storiesInFlight > 0', async () => {
+    it('shows "none waiting on you" when tasks are in flight but none wait for info', async () => {
         renderWithProviders(
             <OverviewTabContent
-                counts={{
-                    ...emptyCounts,
-                    stories_in_flight: 4,
-                    stories_waiting_info: 1,
-                }}
+                counts={{ ...emptyCounts, tasks_in_flight: 2 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
             />,
         );
-        // storyCaption = "3 in progress · 1 waiting info"
-        await waitFor(() =>
-            expect(screen.getByText(/in progress/i)).toBeInTheDocument(),
-        );
-        expect(screen.getByText(/waiting info/i)).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByText('none waiting on you')).toBeInTheDocument());
     });
 
-    it('issueRoute: renders epic type link correctly', async () => {
+    it('itemPath: renders task type link correctly', async () => {
         server.use(
             http.get(`${BASE}/run`, () =>
                 HttpResponse.json([
                     {
                         id: 'run-ep',
                         agent_id: 'agent-1',
-                        issue_type: 'epic',
+                        issue_type: 'task',
                         issue_id: 'EP-1',
-                        item_title: 'Epic item',
+                        item_title: 'Task item',
                         status: 'completed',
                         created_at: '2026-06-22T10:00:00Z',
                         started_at: '2026-06-22T10:00:10Z',
@@ -293,63 +248,7 @@ describe('OverviewTabContent', () => {
         );
         await waitFor(() => expect(screen.getByText('EP-1')).toBeInTheDocument());
         const link = screen.getByText('EP-1').closest('a');
-        expect(link).toHaveAttribute('href', '/epics/EP-1');
-    });
-
-    it('issueRoute: renders bug fallback link correctly', async () => {
-        server.use(
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([
-                    {
-                        id: 'run-bg',
-                        agent_id: 'agent-1',
-                        issue_type: 'bug',
-                        issue_id: 'BG-3',
-                        item_title: 'Bug item',
-                        status: 'error',
-                        created_at: '2026-06-22T10:00:00Z',
-                        started_at: '2026-06-22T10:00:10Z',
-                        completed_at: null,
-                        total_cost_usd: 0,
-                    },
-                ]),
-            ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-        );
-        renderWithProviders(
-            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />,
-        );
-        await waitFor(() => expect(screen.getByText('BG-3')).toBeInTheDocument());
-        const link = screen.getByText('BG-3').closest('a');
-        expect(link).toHaveAttribute('href', '/issues/bugs/BG-3');
-    });
-
-    it('issueRoute: renders story type link correctly', async () => {
-        server.use(
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([
-                    {
-                        id: 'run-st2',
-                        agent_id: 'agent-1',
-                        issue_type: 'story',
-                        issue_id: 'ST-99',
-                        item_title: 'Story item',
-                        status: 'queued',
-                        created_at: '2026-06-22T10:00:00Z',
-                        started_at: null,
-                        completed_at: null,
-                        total_cost_usd: 0,
-                    },
-                ]),
-            ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-        );
-        renderWithProviders(
-            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />,
-        );
-        await waitFor(() => expect(screen.getByText('ST-99')).toBeInTheDocument());
-        const link = screen.getByText('ST-99').closest('a');
-        expect(link).toHaveAttribute('href', '/issues/stories/ST-99');
+        expect(link).toHaveAttribute('href', '/tasks/EP-1');
     });
 
     it('RecentRunRow: renders "unknown" fallback when agent not in agentsById', async () => {
@@ -359,9 +258,9 @@ describe('OverviewTabContent', () => {
                     {
                         id: 'run-uk',
                         agent_id: 'agent-missing',
-                        issue_type: 'story',
+                        issue_type: 'sub_task',
                         issue_id: 'ST-10',
-                        item_title: 'Some story',
+                        item_title: 'Some sub-task',
                         status: 'in_progress',
                         created_at: '2026-06-22T10:00:00Z',
                         started_at: '2026-06-22T10:00:10Z',
@@ -385,7 +284,7 @@ describe('OverviewTabContent', () => {
                     {
                         id: 'run-nt',
                         agent_id: 'agent-1',
-                        issue_type: 'story',
+                        issue_type: 'sub_task',
                         issue_id: 'ST-11',
                         item_title: null,
                         status: 'cancelled',
@@ -413,9 +312,9 @@ describe('OverviewTabContent', () => {
                     {
                         id: 'run-sf',
                         agent_id: 'agent-1',
-                        issue_type: 'story',
+                        issue_type: 'sub_task',
                         issue_id: 'ST-12',
-                        item_title: 'Setup story',
+                        item_title: 'Setup sub-task',
                         status: 'setup_failed',
                         created_at: '2026-06-22T10:00:00Z',
                         started_at: null,
@@ -439,9 +338,9 @@ describe('OverviewTabContent', () => {
                     {
                         id: 'run-kn',
                         agent_id: 'agent-coder',
-                        issue_type: 'story',
+                        issue_type: 'sub_task',
                         issue_id: 'ST-20',
-                        item_title: 'Known agent story',
+                        item_title: 'Known agent sub-task',
                         status: 'completed',
                         created_at: '2026-06-22T10:00:00Z',
                         started_at: '2026-06-22T10:00:10Z',
@@ -463,30 +362,15 @@ describe('OverviewTabContent', () => {
                         framework: 'tdd',
                         prompt_md: '',
                         prompt_version: 1,
-                        handoff_prompt_md: '',
                         status: 'active',
                         sort_order: 1,
                         description: '',
                         designation: '',
                         role_id: null,
-                        max_rounds: 5,
-                        requires_item: true,
-                        schedule_hours: 6,
-                        schedule_preset: 'every_n_hours',
-                        schedule_time_of_day: null,
-                        schedule_weekdays: null,
-                        schedule_day_of_month: null,
-                        concurrent_runs: 1,
                         glyph: '',
-                        last_run_at: null,
-                        next_run_at: null,
                         memory_cadence: 1,
                         kind_slug: 'custom',
                         settings_json: {},
-                        cron_expr: null,
-                        raises_pr: false,
-                        push_code: false,
-                        requires_worktree: false,
                         marketplace_source_id: null,
                         marketplace_pulled_version: null,
                         created_at: '2026-01-01T00:00:00Z',

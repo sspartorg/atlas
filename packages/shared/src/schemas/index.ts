@@ -41,7 +41,7 @@ export const UpdateRoleSchema = z
         label: z.string().min(1).max(80).optional(),
     })
     .strict();
-export const IssueTypeSchema = z.enum(['epic', 'story', 'sub_task', 'sub_bug', 'bug']);
+export const IssueTypeSchema = z.enum(['task', 'sub_task']);
 // Must match the DB CHECK constraint on `agent_runs.status` (see migration
 // 005_environment_secrets_and_setup_runner.ts which added `setup_failed`)
 // AND the RunStatus type in ../types/index.ts. Previously the enum was
@@ -72,109 +72,14 @@ export const SubTaskStatusSchema = IssueStatusSchema;
 
 export const IssuePrioritySchema = z.enum(['low', 'normal', 'high', 'urgent']);
 
-export const BugFrequencySchema = z.enum(['always', 'sometimes', 'rare']);
-export const BugFailureScopeSchema = z.enum(['data-loss', 'functional', 'cosmetic', 'performance']);
-
-export const AgentHandoffKindSchema = z.enum(['on-pass', 'on-fail']);
-
-export const AgentSchedulePresetSchema = z.enum([
-    'every_n_hours',
-    'daily',
-    'weekly',
-    'monthly',
-]);
-
-// HH:MM in 24-hour, e.g. '09:00', '23:59'. Stored as text in PG.
-const TimeOfDayRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-// ISO weekdays 1..7 (Mon=1 .. Sun=7), 1-7 distinct entries.
-const AgentWeekdaysSchema = z
-    .array(z.number().int().min(1).max(7))
-    .min(1)
-    .max(7)
-    .refine((arr) => new Set(arr).size === arr.length, {
-        message: 'schedule_weekdays must be distinct',
-    });
-
-/**
- * Cross-field validation for the agent schedule combo. Accepts an object
- * with `schedule_preset` plus the preset-specific fields and enforces that
- * the right fields are present for the chosen preset:
- *
- * - every_n_hours: schedule_hours required (> 0 ≤ 168)
- * - daily:        schedule_time_of_day required
- * - weekly:       schedule_time_of_day + schedule_weekdays required
- * - monthly:      schedule_time_of_day + schedule_day_of_month required (1..31)
- *
- * Apply via `.superRefine(applyAgentScheduleRefinement)` on a parent schema
- * that carries all five fields as optional. Empty input (no preset given)
- * passes — the service layer defaults `schedule_preset='every_n_hours'`
- * and `schedule_hours=6` when both are absent.
- */
-export function applyAgentScheduleRefinement(
-    data: {
-        schedule_preset?: 'every_n_hours' | 'daily' | 'weekly' | 'monthly' | undefined;
-        schedule_hours?: number | undefined;
-        schedule_time_of_day?: string | null | undefined;
-        schedule_weekdays?: number[] | null | undefined;
-        schedule_day_of_month?: number | null | undefined;
-    },
-    ctx: z.RefinementCtx,
-): void {
-    const preset = data.schedule_preset;
-    if (preset === undefined) return;
-    if (preset === 'every_n_hours') {
-        if (data.schedule_hours === undefined || data.schedule_hours <= 0) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ['schedule_hours'],
-                message: 'schedule_hours required (>0) when preset is every_n_hours',
-            });
-        }
-        return;
-    }
-    if (!data.schedule_time_of_day || !TimeOfDayRegex.test(data.schedule_time_of_day)) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['schedule_time_of_day'],
-            message: `schedule_time_of_day required (HH:MM) when preset is ${preset}`,
-        });
-    }
-    if (preset === 'weekly') {
-        const days = data.schedule_weekdays;
-        const parsed = AgentWeekdaysSchema.safeParse(days);
-        if (!parsed.success) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ['schedule_weekdays'],
-                message: 'schedule_weekdays required (1-7 distinct ISO weekdays) when preset is weekly',
-            });
-        }
-    }
-    if (preset === 'monthly') {
-        const d = data.schedule_day_of_month;
-        if (d === undefined || d === null || !Number.isInteger(d) || d < 1 || d > 31) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ['schedule_day_of_month'],
-                message: 'schedule_day_of_month required (1..31) when preset is monthly',
-            });
-        }
-    }
-}
-
-export const AgentHandoffRuleInputSchema = z.object({
-    target_agent_id: z.string(),
-    kind: AgentHandoffKindSchema,
-    status: IssueStatusSchema,
-});
-
 export const AgentChecklistItemInputSchema = z.object({
     label: z.string().min(1).max(500),
     sort_order: z.number().int().default(0),
     required: z.boolean().default(true),
 });
 
+// ADR 0014 — an agent is prompt + memory + checklist + CLI config. Schedule,
+// routing and git delivery belong to the workflows that use it.
 const AgentCoreFieldsSchema = {
     name: z.string().min(1).max(100),
     category: AgentCategorySchema,
@@ -186,7 +91,6 @@ const AgentCoreFieldsSchema = {
     effort: AgentEffortSchema.default('medium'),
     framework: z.string().default(''),
     prompt_md: z.string().default(''),
-    handoff_prompt_md: z.string().default(''),
     status: AgentStatusSchema.optional(),
     accent_color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
     sort_order: z.number().int().default(0),
@@ -195,49 +99,20 @@ const AgentCoreFieldsSchema = {
     // A08 — Foreign key into the SDLC role catalog. Optional; autonomous
     // agents leave this null and rely on `kind_slug` instead.
     role_id: SdlcRoleSchema.nullable().optional(),
-    max_rounds: z.number().int().min(1).max(20).default(5),
-    requires_item: z.boolean().default(true),
-    schedule_hours: z.number().nonnegative().optional(),
-    schedule_preset: AgentSchedulePresetSchema.optional(),
-    schedule_time_of_day: z.string().regex(TimeOfDayRegex).nullable().optional(),
-    schedule_weekdays: AgentWeekdaysSchema.nullable().optional(),
-    schedule_day_of_month: z.number().int().min(1).max(31).nullable().optional(),
-    concurrent_runs: z.number().int().nonnegative().optional(),
     glyph: z.string().default(''),
-    // Plan E — when true, orchestrator opens a PR at run-end.
-    raises_pr: z.boolean().optional(),
-    // Plan #7 — when true, orchestrator pushes the worktree branch to
-    // origin at run-end. Independent of raises_pr.
-    push_code: z.boolean().optional(),
-    // When true, orchestrator provisions an isolated worktree before
-    // dispatch. Required for any agent that commits code OR needs branch
-    // isolation from the user's clone.
-    requires_worktree: z.boolean().optional(),
     // Theme 09 — autonomous-agent archetype tag. 'custom' for user-created.
     kind_slug: AgentKindSlugSchema.optional(),
     // Theme 09 — JSONB blob of per-archetype config. Unstructured at the
     // boundary; per-kind shape lives in @atlas/shared/agents/settings-schemas
     // and is validated by the service layer when appropriate.
     settings_json: z.record(z.string(), z.unknown()).optional(),
-    // Optional croner-compatible cron expression. When non-null and non-empty,
-    // overrides schedule_preset in the scheduler. Length-capped to 200 to keep
-    // the payload sane; the service layer parses the value via croner and
-    // rejects expressions that croner can't interpret.
-    cron_expr: z.string().max(200).nullable().optional(),
 };
 
-const AgentNestedChildrenSchema = {
-    handoff_rules: z.array(AgentHandoffRuleInputSchema).optional(),
+export const CreateAgentSchema = z.object({
+    id: z.string().min(1).optional(),
+    ...AgentCoreFieldsSchema,
     checklists: z.array(AgentChecklistItemInputSchema).optional(),
-};
-
-export const CreateAgentSchema = z
-    .object({
-        id: z.string().min(1).optional(),
-        ...AgentCoreFieldsSchema,
-        ...AgentNestedChildrenSchema,
-    })
-    .superRefine(applyAgentScheduleRefinement);
+});
 
 export const UpdateAgentSchema = z
     .object({
@@ -248,51 +123,25 @@ export const UpdateAgentSchema = z
         effort: AgentEffortSchema.optional(),
         framework: z.string().optional(),
         prompt_md: z.string().optional(),
-        handoff_prompt_md: z.string().optional(),
         status: AgentStatusSchema.optional(),
         accent_color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
         sort_order: z.number().int().optional(),
         description: z.string().optional(),
-        // T1 — Reviewer side of each SDLC role lives on its own dedicated
-        // agent record now; no bundled reviewer prompt field here.
         designation: z.string().optional(),
         // A08 — Re-pointing an agent at a different SDLC role. Set to null
         // to detach (treats the agent as autonomous-style with no role).
         role_id: SdlcRoleSchema.nullable().optional(),
-        max_rounds: z.number().int().min(1).max(20).optional(),
-        requires_item: z.boolean().optional(),
-        schedule_hours: z.number().nonnegative().optional(),
-        schedule_preset: AgentSchedulePresetSchema.optional(),
-        schedule_time_of_day: z.string().regex(TimeOfDayRegex).nullable().optional(),
-        schedule_weekdays: AgentWeekdaysSchema.nullable().optional(),
-        schedule_day_of_month: z.number().int().min(1).max(31).nullable().optional(),
-        concurrent_runs: z.number().int().nonnegative().optional(),
         glyph: z.string().optional(),
         // Theme 08 — per-agent memory regeneration cadence (run count
         // before automatic regen fires). DB CHECK enforces 1..100.
         memory_cadence: z.number().int().min(1).max(100).optional(),
-        // Plan E — toggle orchestrator-driven PR creation for this agent.
-        raises_pr: z.boolean().optional(),
-        // Plan #7 — toggle orchestrator-driven push at run-end.
-        push_code: z.boolean().optional(),
-        // Toggle worktree provisioning for this agent.
-        requires_worktree: z.boolean().optional(),
         // Theme 09 — autonomous-agent archetype tag. Boundary-unstructured.
         kind_slug: AgentKindSlugSchema.optional(),
         // Theme 09 — JSONB blob of per-archetype config; unstructured here.
         settings_json: z.record(z.string(), z.unknown()).optional(),
-        // Optional croner-compatible cron expression. When non-null and
-        // non-empty, overrides schedule_preset. Length-capped to 200; the
-        // service layer parses via croner and rejects unparseable values.
-        cron_expr: z.string().max(200).nullable().optional(),
-        ...AgentNestedChildrenSchema,
+        checklists: z.array(AgentChecklistItemInputSchema).optional(),
     })
-    .strict()
-    .superRefine(applyAgentScheduleRefinement);
-
-export const AgentHandoffRulesPutSchema = z.object({
-    rules: z.array(AgentHandoffRuleInputSchema),
-});
+    .strict();
 
 export const AgentChecklistsPutSchema = z.object({
     items: z.array(AgentChecklistItemInputSchema),
@@ -369,11 +218,12 @@ export const ItemLabelsOptionalSchema = z
     .max(20)
     .optional();
 
-export const CreateEpicSchema = z
+export const CreateTaskSchema = z
     .object({
         project_id: z.string().min(1),
         title: z.string().min(1).max(500),
         description: z.string().default(''),
+        acceptance_criteria: z.string().default(''),
         priority: IssuePrioritySchema.default('normal'),
         reporter_agent_id: z.string().nullable().default(null),
         assignee_agent_id: z.string().nullable().default(null),
@@ -381,51 +231,23 @@ export const CreateEpicSchema = z
     })
     .strict();
 
-export const UpdateEpicSchema = z
-    .object({
-        title: z.string().min(1).max(500).optional(),
-        description: z.string().optional(),
-        priority: IssuePrioritySchema.optional(),
-        reporter_agent_id: z.string().nullable().optional(),
-        labels: ItemLabelsOptionalSchema,
-    })
-    .strict();
-
-export const CreateStorySchema = z
-    .object({
-        epic_id: z.string().min(1),
-        title: z.string().min(1).max(500),
-        description: z.string().default(''),
-        acceptance_criteria: z.string().default(''),
-        priority: IssuePrioritySchema.default('normal'),
-        status: IssueStatusSchema.optional(),
-        assignee_agent_id: z.string().nullable().optional(),
-        reporter_agent_id: z.string().nullable().optional(),
-        labels: ItemLabelsSchema,
-    })
-    .strict();
-
-// T2 — `worktree_branch` follows the canonical `atlas/<role>/<id>`
-// shape PO Writer is contracted to write. The regex matches the same
-// pattern the orchestrator validates against in
-// `packages/api/src/services/worktree-orchestrator.ts` (kept in
-// lockstep — change one, change the other).
+// `worktree_branch` follows the canonical `atlas/<role>/<id>` shape. The
+// regex matches the pattern the orchestrator validates against in
+// `packages/api/src/services/worktree-orchestrator.ts` (kept in lockstep —
+// change one, change the other).
 export const WORKTREE_BRANCH_RE_SOURCE = '^atlas/[a-z][a-z0-9-]*/[A-Za-z0-9._-]+$';
 const WORKTREE_BRANCH_SCHEMA = z.string().regex(new RegExp(WORKTREE_BRANCH_RE_SOURCE));
 
-export const UpdateStorySchema = z
+export const UpdateTaskSchema = z
     .object({
         title: z.string().min(1).max(500).optional(),
         description: z.string().optional(),
         acceptance_criteria: z.string().optional(),
         priority: IssuePrioritySchema.optional(),
+        reporter_agent_id: z.string().nullable().optional(),
         spec_md: z.string().nullable().optional(),
         pr_url: z.string().nullable().optional(),
-        points: z.number().int().optional(),
-        // T2 — PO Writer fills this on every dev/QA story it creates so
-        // the non-AI worktree orchestrator can provision the on-disk
-        // checkout. Owner can override the value through the same
-        // PATCH; null clears it (legacy items).
+        // The Owner can point a Task at an existing branch; null clears it.
         worktree_branch: WORKTREE_BRANCH_SCHEMA.nullable().optional(),
         labels: ItemLabelsOptionalSchema,
     })
@@ -433,12 +255,12 @@ export const UpdateStorySchema = z
 
 export const CreateSubTaskSchema = z
     .object({
-        story_id: z.string().min(1),
+        task_id: z.string().min(1),
         title: z.string().min(1).max(500),
         description: z.string().default(''),
         acceptance_criteria: z.string().default(''),
         priority: IssuePrioritySchema.default('normal'),
-        status: SubTaskStatusSchema.optional(),
+        status: IssueStatusSchema.optional(),
         assignee_agent_id: z.string().nullable().optional(),
         reporter_agent_id: z.string().nullable().optional(),
         labels: ItemLabelsSchema,
@@ -455,77 +277,11 @@ export const UpdateSubTaskSchema = z
     })
     .strict();
 
-const BugFieldsSchema = {
-    acceptance_criteria: z.string().default(''),
-    steps_to_reproduce: z.string().default(''),
-    expected: z.string().default(''),
-    actual: z.string().default(''),
-    frequency: BugFrequencySchema.default('sometimes'),
-    failure_scope: BugFailureScopeSchema.default('cosmetic'),
-};
-
-const BugUpdateFieldsSchema = {
-    acceptance_criteria: z.string().optional(),
-    steps_to_reproduce: z.string().optional(),
-    expected: z.string().optional(),
-    actual: z.string().optional(),
-    frequency: BugFrequencySchema.optional(),
-    failure_scope: BugFailureScopeSchema.optional(),
-};
-
-export const CreateSubBugSchema = z
-    .object({
-        story_id: z.string().min(1),
-        title: z.string().min(1).max(500),
-        description: z.string().default(''),
-        ...BugFieldsSchema,
-        priority: IssuePrioritySchema.default('normal'),
-        status: IssueStatusSchema.optional(),
-        assignee_agent_id: z.string().nullable().optional(),
-        reporter_agent_id: z.string().nullable().optional(),
-        labels: ItemLabelsSchema,
-    })
-    .strict();
-
-export const UpdateSubBugSchema = z
-    .object({
-        title: z.string().min(1).max(500).optional(),
-        description: z.string().optional(),
-        priority: IssuePrioritySchema.optional(),
-        ...BugUpdateFieldsSchema,
-        labels: ItemLabelsOptionalSchema,
-    })
-    .strict();
-
-export const CreateBugSchema = z
-    .object({
-        epic_id: z.string().min(1),
-        title: z.string().min(1).max(500),
-        description: z.string().default(''),
-        ...BugFieldsSchema,
-        priority: IssuePrioritySchema.default('normal'),
-        status: IssueStatusSchema.optional(),
-        assignee_agent_id: z.string().nullable().optional(),
-        reporter_agent_id: z.string().nullable().optional(),
-        labels: ItemLabelsSchema,
-    })
-    .strict();
-
-export const UpdateBugSchema = z
-    .object({
-        title: z.string().min(1).max(500).optional(),
-        description: z.string().optional(),
-        priority: IssuePrioritySchema.optional(),
-        ...BugUpdateFieldsSchema,
-        labels: ItemLabelsOptionalSchema,
-    })
-    .strict();
-
 export const CreateIssueLinkSchema = z.object({
     to_type: IssueTypeSchema,
     to_id: z.string().min(1),
     // Optional in the body — route defaults to `relates_to` when omitted.
-    // `tested_by` is directed (from = QA story, to = dev story) and is
+    // `tested_by` is directed (from = QA sub-task, to = dev sub-task) and is
     // intended for PO Writer / agents, not the user-facing add-link picker.
     relation_type: z.enum(['relates_to', 'depends_on', 'tested_by']).optional(),
 });
@@ -619,6 +375,17 @@ export const TransitionStatusSchema = z.object({
         return normalized;
     }),
     requested_by_agent_id: z.string().min(1).optional(),
+    /**
+     * Tasks only: closing a Task (`done`) also closes its sub-tasks that are
+     * `in_review` — the Owner verified the one branch they all live on.
+     * Sub-tasks still open keep blocking the close.
+     */
+    close_sub_tasks: z.boolean().optional(),
+});
+
+/** PUT /api/tasks/:id/sub-tasks/order — every sub-task id of the Task, in run order. */
+export const ReorderSubTasksSchema = z.object({
+    ids: z.array(z.string().min(1)).min(1).max(500),
 });
 
 export const CredentialHostSchema = z.enum(['github']);

@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterAll, vi } from 'vitest';
+import type * as WorkflowEngineModule from '../services/workflow-engine.js';
 import type { FastifyInstance } from 'fastify';
 
 vi.mock('../routes/events.js', () => ({
@@ -38,6 +39,20 @@ vi.mock('../services/git-verify.js', () => ({
 }));
 vi.mock('../services/agent-runner.js', () => ({
     spawnAgentRun: vi.fn().mockResolvedValue('run-1'),
+    cancelRun: vi.fn(),
+    runOutputRegistry: new Map<string, string>(),
+}));
+// ADR 0014 — the scaffold button starts the project's AI Readiness workflow.
+vi.mock('../services/workflow-engine.js', async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkflowEngineModule>()),
+    startWorkflowRun: vi.fn().mockResolvedValue('wf-run-1'),
+}));
+vi.mock('../services/workflows.js', () => ({
+    workflowsService: {
+        listTemplates: vi.fn(() => [{ id: 'ai-readiness', name: 'AI Readiness' }]),
+        list: vi.fn(async () => []),
+        createFromTemplate: vi.fn(async () => ({ id: 'wf-ai' })),
+    },
 }));
 // Mock credentialsService so tests that reference credential_id don't need
 // real encrypted-token rows in the DB. Existing tests never set credential_id
@@ -991,13 +1006,13 @@ describe('POST /api/projects/:id/generate-ai-scaffold — success + error', () =
             url: '/api/projects/p-scaffold/generate-ai-scaffold',
         });
         expect(res.statusCode).toBe(202);
-        expect(JSON.parse(res.body)).toMatchObject({ run_id: expect.any(String) });
+        expect(JSON.parse(res.body)).toEqual({ run_id: 'wf-run-1', workflow_id: 'wf-ai' });
     });
 
-    it('returns 500 when spawnAgentRun throws', async () => {
+    it('returns 500 when the AI Readiness workflow cannot start', async () => {
         await insertTestCredential();
-        const { spawnAgentRun } = await import('../services/agent-runner.js');
-        (spawnAgentRun as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        const { startWorkflowRun } = await import('../services/workflow-engine.js');
+        (startWorkflowRun as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
             new Error('agent not found'),
         );
         await testDb

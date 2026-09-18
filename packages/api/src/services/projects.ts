@@ -250,7 +250,7 @@ export const projectsService = {
         // permanently retire `issue_key_prefix` — the prefix is free for
         // reuse the moment this DELETE commits.
         await db.deleteFrom('projects').where('id', '=', id).execute();
-        // CASCADE took this project's epics, issues and runs with it, so every
+        // CASCADE took this project's Tasks, sub-tasks and runs with it, so every
         // sidenav badge moves — not just `projects`.
         broadcastSSE({ type: 'counts_changed' });
     },

@@ -22,8 +22,8 @@ export interface ProjectRow {
     displayId: string;
     name: string;
     gitPath: string;
-    epics: number;
-    stories: number;
+    tasks: number;
+    subTasks: number;
     lastActivity: string;
     updatedAt: string;
 }
@@ -55,8 +55,8 @@ const COLUMNS: IColumn[] = [
     { key: 'displayId', label: 'ID' },
     { key: 'name', label: 'Project' },
     { key: 'gitPath', label: 'Repo URL' },
-    { key: 'epics', label: 'Epics' },
-    { key: 'stories', label: 'Stories' },
+    { key: 'tasks', label: 'Tasks' },
+    { key: 'subTasks', label: 'Sub-tasks' },
     { key: 'lastActivity', label: 'Last Activity' },
     { key: 'owner', label: 'Owner', sortable: false },
     { key: 'actions', label: '', sortable: false },
@@ -238,10 +238,10 @@ export function ProjectsTable({
                                 {row.gitPath || '—'}
                             </TableCell>
                             <TableCell sx={{ p: 4, fontSize: 14, color: ATLAS_PALETTE.slate }}>
-                                {row.epics}
+                                {row.tasks}
                             </TableCell>
                             <TableCell sx={{ p: 4, fontSize: 14, color: ATLAS_PALETTE.slate }}>
-                                {row.stories}
+                                {row.subTasks}
                             </TableCell>
                             <TableCell sx={{ p: 4, fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
                                 {row.lastActivity}

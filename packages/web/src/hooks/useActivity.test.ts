@@ -8,11 +8,11 @@ import { useActivity } from './useActivity.js';
 describe('useActivity', () => {
     it('fetches activity items for an issue', async () => {
         server.use(
-            http.get('http://localhost:3000/api/issues/story/S1/activity', () =>
+            http.get('http://localhost:3000/api/issues/task/S1/activity', () =>
                 HttpResponse.json([{ id: 1, kind: 'comment' }]),
             ),
         );
-        const { result } = renderHook(() => useActivity('story', 'S1'), {
+        const { result } = renderHook(() => useActivity('task', 'S1'), {
             wrapper: makeWrapper(),
         });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -20,14 +20,14 @@ describe('useActivity', () => {
     });
 
     it('is idle when issueId is empty', () => {
-        const { result } = renderHook(() => useActivity('story', ''), {
+        const { result } = renderHook(() => useActivity('task', ''), {
             wrapper: makeWrapper(),
         });
         expect(result.current.fetchStatus).toBe('idle');
     });
 
     it('respects opts.enabled=false', () => {
-        const { result } = renderHook(() => useActivity('story', 'S1', { enabled: false }), {
+        const { result } = renderHook(() => useActivity('task', 'S1', { enabled: false }), {
             wrapper: makeWrapper(),
         });
         expect(result.current.fetchStatus).toBe('idle');

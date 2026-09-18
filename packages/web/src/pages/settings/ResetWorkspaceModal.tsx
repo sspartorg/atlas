@@ -12,10 +12,8 @@ import CircularProgress from '@mui/material/CircularProgress';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import { useProjects } from '../../hooks/useProjects.js';
-import { useEpics } from '../../hooks/useEpics.js';
-import { useStories } from '../../hooks/useStories.js';
+import { useTasks } from '../../hooks/useTasks.js';
 import { useAgents } from '../../hooks/useAgents.js';
-import { useBugs } from '../../hooks/useBugs.js';
 import { useToast } from '../../hooks/useToast.js';
 import { api } from '../../api/api.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
@@ -33,10 +31,8 @@ export function ResetWorkspaceModal({ open, onClose }: Props) {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { data: projects = [] } = useProjects();
-    const { data: epics = [] } = useEpics();
-    const { data: stories = [] } = useStories();
+    const { data: tasks = [] } = useTasks();
     const { data: agents = [] } = useAgents();
-    const { data: bugs = [] } = useBugs();
     const toast = useToast();
     const [confirmInput, setConfirmInput] = useState('');
     const [resetting, setResetting] = useState(false);
@@ -73,9 +69,8 @@ export function ResetWorkspaceModal({ open, onClose }: Props) {
     const stats: Array<{ label: string; count: number }> = [
         { label: 'agents', count: agents.length },
         { label: 'projects', count: projects.length },
-        { label: 'epics', count: epics.length },
-        { label: 'stories', count: stories.length },
-        { label: 'bugs', count: bugs.length },
+        { label: 'tasks', count: tasks.length },
+        { label: 'sub-tasks', count: tasks.reduce((n, t) => n + t.sub_task_count, 0) },
     ];
 
     return (
@@ -131,8 +126,8 @@ export function ResetWorkspaceModal({ open, onClose }: Props) {
                         '& .MuiAlert-message': { fontSize: 12, lineHeight: 1.6 },
                     }}
                 >
-                    <strong>You will lose all content.</strong> Every project, epic, story, bug,
-                    sub-task, comment, agent run, notification, and saved schedule will be
+                    <strong>You will lose all content.</strong> Every project, task, sub-task,
+                    comment, agent run, notification, and saved schedule will be
                     permanently removed from the local database. Git repositories on disk are not
                     touched. The external notification channel and saved credentials will also be cleared.
                 </Alert>

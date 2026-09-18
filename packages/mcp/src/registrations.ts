@@ -9,8 +9,8 @@ import { REMINDER_TOOLS } from './tools/reminders.js';
 import { NOTIFICATION_TOOLS } from './tools/notifications.js';
 // Plan E (Owner request, 2026-06-01) — the `execGitHub` tool from
 // `./tools/github.ts` was removed. Agents no longer drive `git push` or
-// `gh pr create`; the orchestrator owns those, gated by
-// `agents.raises_pr`. Re-introducing a GitHub MCP surface here would
+// `gh pr create`; the workflow owns those (ADR 0014).
+// Re-introducing a GitHub MCP surface here would
 // take the audit trail and credential isolation back to the 2026-05
 // state — don't.
 

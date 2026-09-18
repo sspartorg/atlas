@@ -15,10 +15,11 @@ import {
     groupByType,
 } from './searchViewModel.js';
 import { getAgentView } from '../agents/agentViewModel.js';
+import { itemPath } from '../../utils/itemPath.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
-const TYPE_ORDER: SearchType[] = ['epic', 'story', 'bug', 'sub_task', 'sub_bug', 'prompt'];
+const TYPE_ORDER: SearchType[] = ['task', 'sub_task', 'prompt'];
 
 export type SortKey = 'updated_desc' | 'updated_asc' | 'type';
 
@@ -77,10 +78,7 @@ export function SearchResults({
     const grouped = groupByType(sortedHits);
 
     function open(h: SearchHit) {
-        if (h.type === 'story') navigate(`/issues/stories/${h.id}`);
-        else if (h.type === 'epic') navigate(`/epics/${h.id}`);
-        else if (h.type === 'prompt') navigate(`/agents/${h.id}`);
-        else navigate('/issues');
+        navigate(h.type === 'prompt' ? `/agents/${h.id}` : itemPath(h.type, h.id));
     }
 
     return (

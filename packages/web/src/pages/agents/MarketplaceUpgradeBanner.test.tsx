@@ -132,15 +132,13 @@ describe('MarketplaceUpgradeBanner', () => {
             is_linked: true,
             installed_agent_id: 'agent-coder',
         };
-        // All 5 FIELDS keys must be present in the diff response to avoid undefined access
+        // All 3 FIELDS keys must be present in the diff response to avoid undefined access
         const diffResponse = {
             marketplace_version: 2,
             local_pulled_version: 1,
             fields: {
                 prompt_md: { changed: true, marketplace: 'new prompt', local: 'old prompt' },
-                handoff_prompt_md: { changed: false, marketplace: '', local: '' },
                 settings_json: { changed: false, marketplace: '{}', local: '{}' },
-                handoff_rules: { changed: false, marketplace: '', local: '' },
                 checklists: { changed: false, marketplace: '', local: '' },
             },
         };
@@ -221,9 +219,7 @@ describe('MarketplaceUpgradeBanner', () => {
             local_pulled_version: 1,
             fields: {
                 prompt_md: { changed: true, marketplace: 'new prompt', local: 'old prompt' },
-                handoff_prompt_md: { changed: false, marketplace: '', local: '' },
                 settings_json: { changed: false, marketplace: '{}', local: '{}' },
-                handoff_rules: { changed: false, marketplace: '', local: '' },
                 checklists: { changed: false, marketplace: '', local: '' },
             },
         };
@@ -276,9 +272,7 @@ describe('MarketplaceUpgradeBanner', () => {
             local_pulled_version: 1,
             fields: {
                 prompt_md: { changed: false, marketplace: 'same', local: 'same' },
-                handoff_prompt_md: { changed: false, marketplace: '', local: '' },
                 settings_json: { changed: false, marketplace: '{}', local: '{}' },
-                handoff_rules: { changed: false, marketplace: '', local: '' },
                 checklists: { changed: false, marketplace: '', local: '' },
             },
         };

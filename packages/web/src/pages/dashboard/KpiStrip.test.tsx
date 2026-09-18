@@ -17,15 +17,19 @@ describe('KpiStrip', () => {
                 awaitingCount={3}
                 projectCount={5}
                 stats={{
-                    'software-dev': { queued: 1, running: 2 },
-                    marketing: { queued: 0, running: 0 },
-                    content: { queued: 0, running: 1 },
-                    design: { queued: 1, running: 0 },
+                    'software-dev': { running: 2 },
+                    marketing: { running: 0 },
+                    content: { running: 1 },
+                    design: { running: 0 },
                 }}
             />,
         );
         expect(container.textContent).toContain('Software dev');
         expect(container.textContent).toContain('Content + Design');
+        // dev (2) and marketing (0) read plural; content + design (1) singular.
+        expect(screen.getAllByText('live runs now')).toHaveLength(2);
+        expect(screen.getByText('live run now')).toBeInTheDocument();
+        expect(container.textContent).not.toContain('queued');
     });
 
     it('singular "project" when projectCount=1 (covers === 1 branch)', () => {
@@ -65,19 +69,19 @@ describe('KpiStrip', () => {
 
     it('stats defined but missing some keys — ?? fallback fires for each absent category', () => {
         // When stats is truthy but lacks 'marketing', 'content', 'design' keys,
-        // each `stats?.['key'] ?? { queued: 0, running: 0 }` takes the ?? path.
+        // each `stats?.['key']?.running ?? 0` takes the ?? path.
         renderWithProviders(
             <KpiStrip
                 awaitingCount={1}
                 projectCount={2}
                 stats={{
                     // Only software-dev provided; marketing/content/design are absent
-                    'software-dev': { queued: 3, running: 1 },
+                    'software-dev': { running: 1 },
                 } as Parameters<typeof KpiStrip>[0]['stats']}
             />,
         );
         expect(document.body.textContent).toContain('Software dev');
-        // Content + Design tile renders with 0/0 from the ?? fallback
+        // Content + Design tile renders 0 from the ?? fallback
         expect(document.body.textContent).toContain('Content + Design');
     });
 

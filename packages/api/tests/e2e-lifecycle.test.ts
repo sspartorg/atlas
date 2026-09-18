@@ -26,7 +26,7 @@ let app: FastifyInstance;
 async function countItems(typeOrParent: { type?: string; parent_id?: string; id?: string }): Promise<number> {
     let q = testDb.selectFrom('items').select(({ fn }) => fn.countAll<string>().as('n'));
     if (typeOrParent.id) q = q.where('id', '=', typeOrParent.id);
-    if (typeOrParent.type) q = q.where('type', '=', typeOrParent.type as 'epic');
+    if (typeOrParent.type) q = q.where('type', '=', typeOrParent.type as 'task');
     if (typeOrParent.parent_id) q = q.where('parent_id', '=', typeOrParent.parent_id);
     const row = await q.executeTakeFirstOrThrow();
     return Number(row.n);
@@ -54,42 +54,38 @@ afterAll(async () => {
     await closeTestDb();
 });
 
-describe('E2E lifecycle — epic', () => {
-    it('full epic cascade: assign → transitions → DELETE wipes story + sub-tree + bugs + logs', async () => {
+describe('E2E lifecycle — task', () => {
+    it('full task cascade: assign → transitions → DELETE wipes sub-tasks + logs', async () => {
         expect(await countItems({ id: 'ATL-1' })).toBe(1);
-        expect(await countItems({ parent_id: 'ATL-1', type: 'story' })).toBe(1);
-        expect(await countItems({ parent_id: 'ATL-2', type: 'sub_task' })).toBe(1);
-        expect(await countItems({ parent_id: 'ATL-2', type: 'sub_bug' })).toBe(1);
-        expect(await countItems({ parent_id: 'ATL-1', type: 'bug' })).toBe(1);
+        expect(await countItems({ parent_id: 'ATL-1', type: 'sub_task' })).toBe(2);
 
         const assignRes = await app.inject({
             method: 'PATCH',
-            url: '/api/epics/ATL-1/assign',
+            url: '/api/tasks/ATL-1/assign',
             payload: { assignee_agent_id: 'agent-coder' },
         });
         expect(assignRes.statusCode).toBe(200);
 
         const draftToReady = await app.inject({
             method: 'PATCH',
-            url: '/api/epics/ATL-1/status',
+            url: '/api/tasks/ATL-1/status',
             payload: { status: 'ready' },
         });
         expect(draftToReady.statusCode).toBe(200);
 
         const readyToInProgress = await app.inject({
             method: 'PATCH',
-            url: '/api/epics/ATL-1/status',
+            url: '/api/tasks/ATL-1/status',
             payload: { status: 'in_progress' },
         });
         expect(readyToInProgress.statusCode).toBe(200);
 
-        const deleteRes = await app.inject({ method: 'DELETE', url: '/api/epics/ATL-1' });
+        const deleteRes = await app.inject({ method: 'DELETE', url: '/api/tasks/ATL-1' });
         expect(deleteRes.statusCode).toBe(204);
 
         // Cascade verification — every dependent row is gone.
         expect(await countItems({ id: 'ATL-1' })).toBe(0);
         expect(await countItems({ parent_id: 'ATL-1' })).toBe(0);
-        expect(await countItems({ parent_id: 'ATL-2' })).toBe(0);
         // Comments + item_links cascade via the items FK ON DELETE CASCADE.
         const commentCount = await testDb
             .selectFrom('comments')
@@ -106,48 +102,12 @@ describe('E2E lifecycle — epic', () => {
     });
 });
 
-describe('E2E lifecycle — story', () => {
-    it('story DELETE cascades to its sub-tasks and sub-bugs', async () => {
-        expect(await countItems({ parent_id: 'ATL-2', type: 'sub_task' })).toBe(1);
-        expect(await countItems({ parent_id: 'ATL-2', type: 'sub_bug' })).toBe(1);
-
-        const res = await app.inject({ method: 'DELETE', url: '/api/stories/ATL-2' });
-        expect(res.statusCode).toBe(204);
-
-        expect(await countItems({ id: 'ATL-2' })).toBe(0);
-        expect(await countItems({ parent_id: 'ATL-2' })).toBe(0);
-        // Parent epic and sibling bug survive.
-        expect(await countItems({ id: 'ATL-1' })).toBe(1);
-        expect(await countItems({ id: 'ATL-5' })).toBe(1);
-    });
-});
-
 describe('E2E lifecycle — sub-task', () => {
     it('sub-task DELETE removes just the row', async () => {
         const res = await app.inject({ method: 'DELETE', url: '/api/sub-tasks/ATL-3' });
         expect(res.statusCode).toBe(204);
         expect(await countItems({ id: 'ATL-3' })).toBe(0);
-        expect(await countItems({ id: 'ATL-4' })).toBe(1);
         expect(await countItems({ id: 'ATL-2' })).toBe(1);
-    });
-});
-
-describe('E2E lifecycle — sub-bug', () => {
-    it('sub-bug DELETE removes just the row', async () => {
-        const res = await app.inject({ method: 'DELETE', url: '/api/sub-bugs/ATL-4' });
-        expect(res.statusCode).toBe(204);
-        expect(await countItems({ id: 'ATL-4' })).toBe(0);
-        expect(await countItems({ id: 'ATL-3' })).toBe(1);
-        expect(await countItems({ id: 'ATL-2' })).toBe(1);
-    });
-});
-
-describe('E2E lifecycle — bug', () => {
-    it('bug DELETE removes just the row; parent epic survives', async () => {
-        const res = await app.inject({ method: 'DELETE', url: '/api/bugs/ATL-5' });
-        expect(res.statusCode).toBe(204);
-        expect(await countItems({ id: 'ATL-5' })).toBe(0);
         expect(await countItems({ id: 'ATL-1' })).toBe(1);
-        expect(await countItems({ id: 'ATL-2' })).toBe(1);
     });
 });

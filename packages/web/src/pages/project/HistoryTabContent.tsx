@@ -14,19 +14,10 @@ import { AgentChip } from '../../components/AgentChip.js';
 import { KindIcon } from '../../components/KindIcon.js';
 import { relativeTime } from '../../utils/time.js';
 import { formatCostUsd } from '../../utils/formatCost.js';
-import type { IAgentRun, IssueType, RunStatus } from '@atlas/shared';
+import type { IAgentRun, RunStatus } from '@atlas/shared';
+import { itemPath } from '../../utils/itemPath.js';
 
 const MONO = '"JetBrains Mono", monospace';
-
-// Mirrors the route used by RelatedItemsCard so a clicked item lands on
-// the same detail page no matter which entry point the Owner came from.
-function issueRoute(type: IssueType, id: string): string {
-    if (type === 'epic') return `/epics/${id}`;
-    if (type === 'story') return `/issues/stories/${id}`;
-    if (type === 'sub_task') return `/issues/sub-tasks/${id}`;
-    if (type === 'sub_bug') return `/issues/sub-bugs/${id}`;
-    return `/issues/bugs/${id}`;
-}
 
 const RUN_STATUS_LABEL: Record<RunStatus, string> = {
     queued: 'Queued',
@@ -91,7 +82,7 @@ function RunRow({
             {/* Issue link: MON-N · title */}
             <Box
                 component={RouterLink}
-                to={issueRoute(run.issue_type, run.issue_id)}
+                to={itemPath(run.issue_type, run.issue_id)}
                 sx={{
                     display: 'flex',
                     alignItems: 'center',
@@ -329,9 +320,8 @@ export function HistoryTabContent({ projectId }: Props) {
                             mx: 'auto',
                         }}
                     >
-                        Every time an agent runs against an item in this project — epic, story,
-                        bug, sub-task or sub-bug — the run lands here with a link straight to the
-                        issue and the full run log.
+                        Every time an agent runs against a task or sub-task in this project, the
+                        run lands here with a link straight to the item and the full run log.
                     </Typography>
                 </Box>
             ) : (

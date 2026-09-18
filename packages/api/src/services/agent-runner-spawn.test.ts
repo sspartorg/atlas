@@ -7,7 +7,7 @@ import { agentRunEnv, claudeIsolationArgs } from './agent-runner.js';
 // `.claude/commands/atlas-*` still resolve) and the Atlas MCP server.
 describe('claudeIsolationArgs', () => {
     it('restricts settings to project+local and MCP to the Atlas HTTP server only', () => {
-        const args = claudeIsolationArgs({ requires_item: true });
+        const args = claudeIsolationArgs(true);
         expect(args.slice(0, 3)).toEqual(['--setting-sources', 'project,local', '--strict-mcp-config']);
         expect(args[3]).toBe('--mcp-config');
         expect(JSON.parse(args[4] ?? '')).toEqual({
@@ -17,7 +17,7 @@ describe('claudeIsolationArgs', () => {
     });
 
     it('leaves freedom-mode scouts on the Owner config so their Playwright / claude.ai connectors still load', () => {
-        expect(claudeIsolationArgs({ requires_item: false })).toEqual([]);
+        expect(claudeIsolationArgs(false)).toEqual([]);
     });
 });
 

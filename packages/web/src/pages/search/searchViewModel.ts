@@ -1,42 +1,24 @@
-import type {
-    IBug,
-    IEpic,
-    IStory,
-    ISubBug,
-    ISubTask,
-    IAgent,
-    IProject,
-    IssueStatus,
-} from '@atlas/shared';
+import type { IAgent, IProject, IssueStatus, IssueType } from '@atlas/shared';
 import type { SearchHitRow } from '../../hooks/useSearch.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 
-export type SearchType = 'epic' | 'story' | 'bug' | 'sub_task' | 'sub_bug' | 'prompt';
+export type SearchType = IssueType | 'prompt';
 
 export const TYPE_LABEL: Record<SearchType, string> = {
-    epic: 'Epic',
-    story: 'Story',
-    bug: 'Bug',
+    task: 'Task',
     sub_task: 'Sub-task',
-    sub_bug: 'Sub-bug',
     prompt: 'Prompt',
 };
 
 export const TYPE_ICON: Record<SearchType, string> = {
-    epic: 'flag',
-    story: 'layers',
-    bug: 'bug_report',
+    task: 'flag',
     sub_task: 'check_box',
-    sub_bug: 'pest_control',
     prompt: 'menu_book',
 };
 
 export const TYPE_COLOR: Record<SearchType, string> = {
-    epic: ATLAS_PALETTE.purple,
-    story: ATLAS_PALETTE.brandBlue,
-    bug: ATLAS_PALETTE.error,
+    task: ATLAS_PALETTE.purple,
     sub_task: ATLAS_PALETTE.emerald,
-    sub_bug: ATLAS_PALETTE.gold,
     prompt: ATLAS_PALETTE.slate,
 };
 
@@ -85,111 +67,6 @@ export const EMPTY_FILTERS: FilterState = {
     labels: [],
     text: '',
 };
-
-export function buildSearchCorpus(args: {
-    epics: IEpic[];
-    stories: IStory[];
-    bugs: IBug[];
-    subTasks: ISubTask[];
-    subBugs: ISubBug[];
-    agents: IAgent[];
-    projectIdByEpic: Map<string, string | null>;
-    projectIdByStory: Map<string, string | null>;
-}): SearchHit[] {
-    const out: SearchHit[] = [];
-    // Issue ids are already Jira-style human keys (CER-1, CER-2 …) — the
-    // displayId is the id itself; no synthesis needed.
-    for (const e of args.epics) {
-        out.push({
-            type: 'epic',
-            id: e.id,
-            displayId: e.id,
-            title: e.title,
-            description: e.description ?? '',
-            status: e.status,
-            assignee_agent_id: e.assignee_agent_id ?? null,
-            project_id: e.project_id ?? null,
-            updated_at: e.updated_at,
-        });
-    }
-    for (const s of args.stories) {
-        out.push({
-            type: 'story',
-            id: s.id,
-            displayId: s.id,
-            title: s.title,
-            description: s.description ?? '',
-            status: s.status,
-            assignee_agent_id: s.assignee_agent_id ?? null,
-            project_id: args.projectIdByEpic.get(s.epic_id) ?? null,
-            updated_at: s.updated_at,
-        });
-    }
-    for (const b of args.bugs) {
-        out.push({
-            type: 'bug',
-            id: b.id,
-            displayId: b.id,
-            title: b.title,
-            description: b.description ?? '',
-            status: b.status,
-            assignee_agent_id: b.assignee_agent_id ?? null,
-            project_id: args.projectIdByEpic.get(b.epic_id) ?? null,
-            updated_at: b.updated_at,
-        });
-    }
-    for (const t of args.subTasks) {
-        out.push({
-            type: 'sub_task',
-            id: t.id,
-            displayId: t.id,
-            title: t.title,
-            description: t.description ?? '',
-            status: t.status,
-            assignee_agent_id: t.assignee_agent_id ?? null,
-            project_id: args.projectIdByStory.get(t.story_id) ?? null,
-            updated_at: t.updated_at,
-        });
-    }
-    for (const t of args.subBugs) {
-        out.push({
-            type: 'sub_bug',
-            id: t.id,
-            displayId: t.id,
-            title: t.title,
-            description: t.description ?? '',
-            status: t.status,
-            assignee_agent_id: t.assignee_agent_id ?? null,
-            project_id: args.projectIdByStory.get(t.story_id) ?? null,
-            updated_at: t.updated_at,
-        });
-    }
-    for (const w of args.agents) {
-        const slug = w.id
-            .replace(/^agent-/, '')
-            .replace(/-/g, '_')
-            .slice(0, 3)
-            .toUpperCase();
-        out.push({
-            type: 'prompt',
-            id: w.id,
-            displayId: `PRM-${slug}-v${w.prompt_version}`,
-            title: `${w.name} · v${w.prompt_version}`,
-            description: (w.prompt_md ?? '')
-                .split('\n')
-                .filter(Boolean)
-                .slice(0, 2)
-                .join(' ')
-                .slice(0, 200),
-            status: w.status === 'active' ? 'draft' : 'inactive',
-            assignee_agent_id: w.id,
-            project_id: null,
-            updated_at: w.updated_at,
-            prompt_version: w.prompt_version,
-        });
-    }
-    return out;
-}
 
 function inRange(iso: string, range: UpdatedRange): boolean {
     if (range === 'any') return true;
@@ -548,17 +425,11 @@ export interface ExampleQuery {
 
 // Item types the server FTS index covers (everything except `prompt`,
 // which lives on the agents table and is filtered client-side).
-const SERVER_ITEM_TYPES: ReadonlyArray<SearchType> = [
-    'epic',
-    'story',
-    'sub_task',
-    'sub_bug',
-    'bug',
-];
+const SERVER_ITEM_TYPES: ReadonlyArray<SearchType> = ['task', 'sub_task'];
 
 export interface ServerSearchArgs {
     q?: string;
-    type?: Array<'epic' | 'story' | 'sub_task' | 'sub_bug' | 'bug'>;
+    type?: IssueType[];
     project_id?: string[];
     agent_id?: string[];
     status?: IssueStatus;
@@ -577,7 +448,7 @@ export function filtersToServerArgs(f: FilterState): ServerSearchArgs {
     const args: ServerSearchArgs = {};
     if (f.text.trim().length >= 2) args.q = f.text.trim();
     const serverTypes = f.types.filter(
-        (t): t is 'epic' | 'story' | 'sub_task' | 'sub_bug' | 'bug' =>
+        (t): t is IssueType =>
             t !== 'prompt' && SERVER_ITEM_TYPES.includes(t),
     );
     if (serverTypes.length > 0) args.type = serverTypes;

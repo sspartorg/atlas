@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import type { IssueType } from '@atlas/shared';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -18,7 +19,7 @@ interface IAwaitingYouPanelProps {
     total?: number;
 }
 
-type FilterValue = 'all' | 'epic' | 'story' | 'bug' | 'sub_task' | 'sub_bug';
+type FilterValue = 'all' | IssueType;
 
 const MONO_FONT = '"JetBrains Mono", monospace';
 
@@ -94,11 +95,8 @@ export function AwaitingYouPanel({ rows, isLoading, total }: IAwaitingYouPanelPr
                     }}
                 >
                     <MenuItem value="all">All types</MenuItem>
-                    <MenuItem value="epic">Epics</MenuItem>
-                    <MenuItem value="story">Stories</MenuItem>
-                    <MenuItem value="bug">Bugs</MenuItem>
+                    <MenuItem value="task">Tasks</MenuItem>
                     <MenuItem value="sub_task">Sub-tasks</MenuItem>
-                    <MenuItem value="sub_bug">Sub-bugs</MenuItem>
                 </Select>
             </Box>
 
@@ -152,7 +150,7 @@ export function AwaitingYouPanel({ rows, isLoading, total }: IAwaitingYouPanelPr
                                 textAlign: 'center',
                             }}
                         >
-                            Showing {rows.length} of {total} — open Issues to see the rest.
+                            Showing {rows.length} of {total} — open Tasks to see the rest.
                         </Typography>
                     )}
                 </Box>

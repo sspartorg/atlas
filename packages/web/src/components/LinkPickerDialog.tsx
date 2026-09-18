@@ -12,12 +12,9 @@ import {
     useIssueLinks,
     useCreateIssueLink,
 } from '../hooks/useIssueLinks.js';
-import { useEpics } from '../hooks/useEpics.js';
-import { useStories } from '../hooks/useStories.js';
-import { useBugs } from '../hooks/useBugs.js';
-import { useAllSubTasks, useAllSubBugs } from '../hooks/useSearchCorpus.js';
+import { useTasks } from '../hooks/useTasks.js';
+import { useAllSubTasks } from '../hooks/useSubTasks.js';
 import { useToast } from '../hooks/useToast.js';
-import { type IssueListKind } from '../hooks/useIssues.js';
 import { KindIcon } from './KindIcon.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 
@@ -41,12 +38,12 @@ interface LinkPickerDialogProps {
      *  `useIssueLinks`. */
     links?: IIssueLinkRow[];
     /**
-     * When `mode === 'tested_by'`, restrict candidates to items that live
-     * under this epic id. Mirrors PO Writer's contract that dev/QA twins
-     * are siblings under the same epic. Epics are dropped entirely from
-     * the candidate list when this is set.
+     * When `mode === 'tested_by'`, restrict candidates to sub-tasks of this
+     * task. Mirrors PO Writer's contract that dev/QA twins are siblings
+     * under the same task. Tasks are dropped from the candidate list when
+     * this is set.
      */
-    restrictToEpicId?: string | undefined;
+    restrictToTaskId?: string | undefined;
     onClose: () => void;
 }
 
@@ -57,9 +54,9 @@ interface LinkPickerDialogProps {
  * tables' in-section "Add dependency" / "Link an item" buttons mount the
  * same dialog with different `mode`s.
  *
- * Picker corpus (epics + stories + bugs + sub-tasks + sub-bugs) is gated
- * on `open=true` — five list queries only fire while the dialog is open,
- * so the dialog mount cost is just the dialog shell.
+ * Picker corpus (tasks + sub-tasks) is gated on `open=true` — the two list
+ * queries only fire while the dialog is open, so the dialog mount cost is
+ * just the dialog shell.
  */
 export function LinkPickerDialog({
     open,
@@ -67,7 +64,7 @@ export function LinkPickerDialog({
     fromIssueType,
     fromIssueId,
     links: propLinks,
-    restrictToEpicId,
+    restrictToTaskId,
     onClose,
 }: LinkPickerDialogProps) {
     // Only fetch when the parent did not pre-supply links.
@@ -80,13 +77,10 @@ export function LinkPickerDialog({
     const toast = useToast();
 
     // Corpus fetches. Lazy by construction: the parent only mounts this
-    // dialog when the picker is being opened, so these five list queries
-    // fire only on owner intent (not on every detail page render).
-    const { data: epics = [] } = useEpics();
-    const { data: stories = [] } = useStories();
-    const { data: bugs = [] } = useBugs();
+    // dialog when the picker is being opened, so these list queries fire
+    // only on owner intent (not on every detail page render).
+    const { data: tasks = [] } = useTasks();
     const { data: subTasks = [] } = useAllSubTasks();
-    const { data: subBugs = [] } = useAllSubBugs();
 
     const [query, setQuery] = useState('');
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -105,51 +99,17 @@ export function LinkPickerDialog({
         return keys;
     }, [links]);
 
-    // When restricting to a single epic (tested_by mode), build a
-    // storyId → epic_id map so sub-tasks and sub-bugs can be matched
-    // transitively through their parent story.
-    const storyEpicById = useMemo(() => {
-        if (!restrictToEpicId) return null;
-        const m = new Map<string, string>();
-        for (const s of stories) m.set(s.id, s.epic_id);
-        return m;
-    }, [restrictToEpicId, stories]);
-
     const candidates = useMemo<PickerCandidate[]>(() => {
-        const list: PickerCandidate[] = [];
-        const pushIssue = (kind: IssueListKind, id: string, title: string) => {
-            list.push({ type: kind as IssueType, id, shortId: id, title });
-        };
-        if (restrictToEpicId) {
-            // tested_by mode — drop epics entirely; keep only stories,
-            // bugs, sub-tasks, sub-bugs that belong to the restricted epic.
-            for (const s of stories) {
-                if (s.epic_id === restrictToEpicId) pushIssue('story', s.id, s.title);
-            }
-            for (const b of bugs) {
-                if (b.epic_id === restrictToEpicId) pushIssue('bug', b.id, b.title);
-            }
-            for (const t of subTasks) {
-                if (storyEpicById?.get(t.story_id) === restrictToEpicId) {
-                    pushIssue('sub_task', t.id, t.title);
-                }
-            }
-            for (const sb of subBugs) {
-                if (storyEpicById?.get(sb.story_id) === restrictToEpicId) {
-                    pushIssue('sub_bug', sb.id, sb.title);
-                }
-            }
-            return list;
-        }
-        for (const e of epics) {
-            list.push({ type: 'epic', id: e.id, shortId: e.id, title: e.title });
-        }
-        for (const s of stories) pushIssue('story', s.id, s.title);
-        for (const b of bugs) pushIssue('bug', b.id, b.title);
-        for (const t of subTasks) pushIssue('sub_task', t.id, t.title);
-        for (const b of subBugs) pushIssue('sub_bug', b.id, b.title);
-        return list;
-    }, [epics, stories, bugs, subTasks, subBugs, restrictToEpicId, storyEpicById]);
+        const sub = (restrictToTaskId
+            ? subTasks.filter((t) => t.task_id === restrictToTaskId)
+            : subTasks
+        ).map((t) => ({ type: 'sub_task' as const, id: t.id, shortId: t.id, title: t.title }));
+        if (restrictToTaskId) return sub;
+        return [
+            ...tasks.map((t) => ({ type: 'task' as const, id: t.id, shortId: t.id, title: t.title })),
+            ...sub,
+        ];
+    }, [tasks, subTasks, restrictToTaskId]);
 
     const matches = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -242,8 +202,8 @@ export function LinkPickerDialog({
                         {mode === 'depends_on'
                             ? 'This item will stay blocked until the picked target reaches done.'
                             : mode === 'tested_by'
-                              ? 'This item will be the test holder. Pick the item it tests (same epic only).'
-                              : 'Search for a related epic, story, bug, sub-task, or sub-bug to attach.'}
+                              ? 'This item will be the test holder. Pick the item it tests (same task only).'
+                              : 'Search for a related task or sub-task to attach.'}
                     </Typography>
                 </Box>
                 <IconButton

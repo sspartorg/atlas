@@ -17,7 +17,7 @@ function makeRun(over: Partial<IAgentRun> = {}): IAgentRun {
         agent_id: 'agent-coder',
         status: 'completed',
         issue_id: 'ATL-10',
-        issue_type: 'story',
+        issue_type: 'sub_task',
         project_id: 'p1',
         prompt_snapshot: null,
         output_text: null,
@@ -36,6 +36,8 @@ function makeRun(over: Partial<IAgentRun> = {}): IAgentRun {
         total_cost_usd: 0.012,
         credits: null,
         item_title: null,
+        workflow_run_id: null,
+        node_id: null,
         created_at: '2026-05-16T00:00:00.000Z',
         ...over,
     };
@@ -126,10 +128,10 @@ describe('RunsTabContent', () => {
         renderWithProviders(
             <RunsTabContent
                 agent={makeAgent()}
-                runs={[makeRun({ issue_id: 'ATL-10', issue_type: 'story' })]}
+                runs={[makeRun({ issue_id: 'ATL-10', issue_type: 'sub_task' })]}
             />
         );
-        expect(await screen.findByText('story/ATL-10')).toBeInTheDocument();
+        expect(await screen.findByText('sub_task/ATL-10')).toBeInTheDocument();
     });
 
     it('clicking "Run now" button in empty state shows toast', async () => {
@@ -141,7 +143,7 @@ describe('RunsTabContent', () => {
         );
         const btn = await screen.findByRole('button', { name: /Run now/i });
         fireEvent.click(btn);
-        expect(await screen.findByText(/Run now: pick an Epic or Story from the Queue/i)).toBeInTheDocument();
+        expect(await screen.findByText(/Run now: pick a Task from the Queue/i)).toBeInTheDocument();
     });
 
     it('delete button opens confirm dialog', async () => {
@@ -225,7 +227,7 @@ describe('RunsTabContent', () => {
         renderWithProviders(
             <RunsTabContent
                 agent={makeAgent()}
-                runs={[makeRun({ issue_id: 'ATL-99', issue_type: 'story' })]}
+                runs={[makeRun({ issue_id: 'ATL-99', issue_type: 'sub_task' })]}
             />
         );
         const deleteBtn = await screen.findByRole('button', { name: /Delete run/i });
@@ -233,7 +235,7 @@ describe('RunsTabContent', () => {
         await screen.findByText(/Delete run\?/i);
         // The dialog content area should contain the issue reference
         // (there may also be one in the row, so use getAllByText)
-        const refs = screen.getAllByText(/story\/ATL-99/i);
+        const refs = screen.getAllByText(/sub_task\/ATL-99/i);
         expect(refs.length).toBeGreaterThan(0);
     });
 

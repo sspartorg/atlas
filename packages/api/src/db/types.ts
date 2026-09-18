@@ -1,5 +1,12 @@
 import type { ColumnType, Generated } from 'kysely';
-import type { AgentCli } from '@atlas/shared';
+import type {
+    AgentCli,
+    IWorkflowGraph,
+    SchedulePreset,
+    WorkflowInputKind,
+    WorkflowRunStatus,
+    WorkflowTrigger,
+} from '@atlas/shared';
 
 // Helper aliases
 type TS = ColumnType<string, string | undefined, string>;
@@ -12,7 +19,7 @@ type Bool0or1 = ColumnType<number, number | undefined, number>;
 type CreatedAt = Generated<string>;
 type UpdatedAt = ColumnType<string, string | undefined, string | undefined>;
 
-export type ItemType = 'epic' | 'story' | 'sub_task' | 'sub_bug' | 'bug';
+export type ItemType = 'task' | 'sub_task';
 export type ItemRelation = 'relates_to' | 'depends_on' | 'tested_by';
 
 export interface SettingsTable {
@@ -61,7 +68,6 @@ export interface AgentsTable {
     framework: Str;
     prompt_md: Str;
     prompt_version: Int;
-    handoff_prompt_md: Str;
     status: 'active' | 'inactive';
     accent_color: Str;
     sort_order: Int;
@@ -70,25 +76,7 @@ export interface AgentsTable {
     // A08 — FK into the SDLC role catalog. Nullable: autonomous agents
     // (kind_slug != 'custom') stay NULL.
     role_id: StrN;
-    max_rounds: Int;
-    requires_item: ColumnType<boolean, boolean | undefined, boolean>;
-    schedule_hours: ColumnType<number, number | undefined, number>;
-    schedule_preset: ColumnType<
-        'every_n_hours' | 'daily' | 'weekly' | 'monthly',
-        'every_n_hours' | 'daily' | 'weekly' | 'monthly' | undefined,
-        'every_n_hours' | 'daily' | 'weekly' | 'monthly'
-    >;
-    schedule_time_of_day: StrN;
-    schedule_weekdays: ColumnType<
-        number[] | null,
-        number[] | null | undefined,
-        number[] | null | undefined
-    >;
-    schedule_day_of_month: IntN;
-    concurrent_runs: Int;
     glyph: Str;
-    last_run_at: TSn;
-    next_run_at: TSn;
     memory_cadence: Int;
     // Theme 09 — autonomous-agent fleet. `kind_slug` is a soft tag
     // (no CHECK constraint) so custom agents can carry their own.
@@ -101,17 +89,6 @@ export interface AgentsTable {
         Record<string, unknown> | undefined,
         Record<string, unknown>
     >;
-    cron_expr: StrN;
-    // Plan E — when true, the orchestrator opens a PR at run-end after
-    // a successful push. Default false at the DB level (migration 055).
-    raises_pr: ColumnType<boolean, boolean | undefined, boolean>;
-    // Plan #7 — when true, the orchestrator pushes the worktree branch
-    // to origin at run-end. When false, the branch lives locally only
-    // and is deleted at cleanup. Default false (migration 066).
-    push_code: ColumnType<boolean, boolean | undefined, boolean>;
-    // When true, the orchestrator provisions a worktree before dispatch.
-    // See IAgent.requires_worktree in shared/types for the full contract.
-    requires_worktree: ColumnType<boolean, boolean | undefined, boolean>;
     // Marketplace back-link. NULL on user-only agents and on agents that
     // were detached. Editing the local agent never clears these; the user
     // explicitly Detaches to opt out of upgrade-available indicators.
@@ -138,18 +115,12 @@ export interface MarketplaceAgentsTable {
     >;
     framework: Str;
     prompt_md: Str;
-    handoff_prompt_md: Str;
     description: Str;
     designation: Str;
     accent_color: Str;
     sort_order: Int;
     glyph: Str;
     role_id: StrN;
-    max_rounds: Int;
-    requires_item: ColumnType<boolean, boolean | undefined, boolean>;
-    requires_worktree: ColumnType<boolean, boolean | undefined, boolean>;
-    push_code: ColumnType<boolean, boolean | undefined, boolean>;
-    raises_pr: ColumnType<boolean, boolean | undefined, boolean>;
     status: 'active' | 'inactive';
     kind_slug: Str;
     settings_json: ColumnType<
@@ -157,21 +128,6 @@ export interface MarketplaceAgentsTable {
         Record<string, unknown> | undefined,
         Record<string, unknown>
     >;
-    schedule_hours: ColumnType<number, number | undefined, number>;
-    schedule_preset: ColumnType<
-        'every_n_hours' | 'daily' | 'weekly' | 'monthly',
-        'every_n_hours' | 'daily' | 'weekly' | 'monthly' | undefined,
-        'every_n_hours' | 'daily' | 'weekly' | 'monthly'
-    >;
-    schedule_time_of_day: StrN;
-    schedule_weekdays: ColumnType<
-        number[] | null,
-        number[] | null | undefined,
-        number[] | null | undefined
-    >;
-    schedule_day_of_month: IntN;
-    cron_expr: StrN;
-    concurrent_runs: Int;
     memory_cadence: Int;
     memory_template_md: Str;
     summary: Str;
@@ -179,14 +135,6 @@ export interface MarketplaceAgentsTable {
     content_hash: Str;
     published_at: TS;
     updated_at: UpdatedAt;
-}
-
-export interface MarketplaceAgentHandoffsTable {
-    id: Generated<number>;
-    marketplace_agent_id: string;
-    target_agent_id: Str;
-    kind: 'on-pass' | 'on-fail';
-    status: Str;
 }
 
 export interface MarketplaceAgentChecklistsTable {
@@ -210,14 +158,6 @@ export interface RolesTable {
     sort_order: Int;
     created_at: CreatedAt;
     updated_at: UpdatedAt;
-}
-
-export interface AgentHandoffRulesTable {
-    id: Generated<number>;
-    agent_id: string;
-    target_agent_id: Str;
-    kind: 'on-pass' | 'on-fail';
-    status: Str;
 }
 
 export interface AgentChecklistsTable {
@@ -437,7 +377,7 @@ export interface ProjectGuardrailScriptsTable {
 }
 
 // Phase 2 — `/commands` framework. Five artifact templates
-// (`spec`, `plan`, `tasks`, `story`, `qa-plan`) that the templates-
+// (`spec`, `plan`, `tasks`, `sub-task`, `qa-plan`) that the templates-
 // assembler writes to `<worktree>/.atlas/templates/<filename>` per
 // run. Same id-primary-key shape as `guardrail_scripts`. Owner-editable
 // via direct DB writes for now; a Settings tab follows.
@@ -471,29 +411,21 @@ export interface ItemsTable {
 
     acceptance_criteria: StrN;
 
-    steps_to_reproduce: StrN;
-    expected: StrN;
-    actual: StrN;
-    frequency: ColumnType<'always' | 'sometimes' | 'rare' | null, 'always' | 'sometimes' | 'rare' | null | undefined, 'always' | 'sometimes' | 'rare' | null | undefined>;
-    failure_scope: ColumnType<'data-loss' | 'functional' | 'cosmetic' | 'performance' | null, 'data-loss' | 'functional' | 'cosmetic' | 'performance' | null | undefined, 'data-loss' | 'functional' | 'cosmetic' | 'performance' | null | undefined>;
-    detected_at: TSn;
-    occurrence_count: IntN;
-    occurrence_total: IntN;
-
     started_at: TSn;
 
-    // T2 — per-item git worktree fields. PO Writer fills `worktree_branch`
-    // (format `atlas/dev/<storyId>` or `atlas/qa/<storyId>`); the
-    // non-AI `worktree-orchestrator` resolves the on-disk path and
-    // writes it back to `worktree_path` so re-runs reuse the same
-    // checkout. Both nullable to support legacy items + non-coding
-    // item kinds (epics, bugs without dev work, etc.).
+    // Per-item git worktree fields; both null until something provisions
+    // a checkout for the item.
     worktree_branch: StrN;
     worktree_path: StrN;
 
     // Task 1 — labels JSONB. Select returns string[]; insert/update
     // accept string[] | undefined (DB defaults to []).
     labels: ColumnType<string[], string[] | undefined, string[] | undefined>;
+
+    // ADR 0014 — the workflow this item is queued for.
+    workflow_id: StrN;
+    // Migration 040 — a sub-task's hand-set run order within its Task.
+    sort_order: IntN;
 
     created_at: CreatedAt;
     updated_at: UpdatedAt;
@@ -576,6 +508,15 @@ export interface AgentRunsTable {
     // UI can render it as a subscript under the dollar amount. Null on
     // Claude runs.
     credits: ColumnType<number | null, number | null | undefined, number | null | undefined>;
+    // ADR 0014 — workflow step linkage, plus the agent config the step ran
+    // with. Snapshotted at spawn so later agent edits don't rewrite history
+    // that model comparison reads.
+    workflow_run_id: StrN;
+    node_id: StrN;
+    cli: ColumnType<AgentCli | null, AgentCli | null | undefined, AgentCli | null | undefined>;
+    model: StrN;
+    effort: StrN;
+    prompt_version: IntN;
     created_at: CreatedAt;
 }
 
@@ -648,14 +589,6 @@ export interface IssueEventsTable {
     created_at: CreatedAt;
 }
 
-export interface AgentRoundCountsTable {
-    id: Generated<number>;
-    item_id: string;
-    performer_agent_id: string;
-    count: Int;
-    last_incremented_at: TS;
-}
-
 export interface RemindersTable {
     id: Generated<number>;
     label: Str;
@@ -694,14 +627,81 @@ export interface ScratchPadTable {
     updated_at: UpdatedAt;
 }
 
+// ADR 0014 — see migration 035_workflows.ts. JSONB columns select as parsed
+// objects; inserts / updates pass JSON.stringify'd strings (same convention
+// as agent_runs.outcome_checklist).
+export interface WorkflowsTable {
+    id: string;
+    project_id: StrN;
+    name: string;
+    description: StrN;
+    status: ColumnType<'active' | 'inactive', 'active' | 'inactive' | undefined, 'active' | 'inactive'>;
+    graph: ColumnType<IWorkflowGraph, string | undefined, string>;
+    input_kind: ColumnType<WorkflowInputKind, WorkflowInputKind | undefined, WorkflowInputKind>;
+    trigger: ColumnType<WorkflowTrigger, WorkflowTrigger | undefined, WorkflowTrigger>;
+    use_worktree: ColumnType<boolean, boolean | undefined, boolean>;
+    push_code: ColumnType<boolean, boolean | undefined, boolean>;
+    raises_pr: ColumnType<boolean, boolean | undefined, boolean>;
+    // ADR 0015 — migration 038_workflow_subtasks.ts.
+    push_to_default: ColumnType<boolean, boolean | undefined, boolean>;
+    max_loops: Int;
+    max_parallel_runs: Int;
+    schedule_preset: ColumnType<SchedulePreset | null, SchedulePreset | null | undefined, SchedulePreset | null | undefined>;
+    schedule_time_of_day: StrN;
+    schedule_weekday: IntN;
+    cron_expr: StrN;
+    next_run_at: TSn;
+    last_run_at: TSn;
+    created_at: CreatedAt;
+    updated_at: UpdatedAt;
+}
+
+export interface WorkflowRunsTable {
+    id: string;
+    workflow_id: string;
+    item_id: StrN;
+    project_id: StrN;
+    status: ColumnType<WorkflowRunStatus, WorkflowRunStatus | undefined, WorkflowRunStatus>;
+    graph_snapshot: ColumnType<IWorkflowGraph, string, string>;
+    // ADR 0015 — a sub-task's run points at the Task run that started it.
+    parent_workflow_run_id: StrN;
+    parent_node_id: StrN;
+    current_node_id: StrN;
+    parked_node_id: StrN;
+    park_reason: StrN;
+    loop_count: Int;
+    // Migration 040 — End sending the run back for a late sub-task.
+    gate_rounds: Int;
+    branch: StrN;
+    worktree_path: StrN;
+    setup_done: ColumnType<boolean, boolean | undefined, boolean>;
+    pr_url: StrN;
+    started_at: CreatedAt;
+    updated_at: UpdatedAt;
+    finished_at: TSn;
+}
+
+// Migration 041 — workflows published to the Marketplace. `bundle` is the
+// export zip (bytea selects as a Buffer).
+export interface PublishedWorkflowsTable {
+    id: string;
+    name: string;
+    description: StrN;
+    source_workflow_id: StrN;
+    bundle: Buffer;
+    published_at: CreatedAt;
+    updated_at: UpdatedAt;
+}
+
 export interface DB {
     settings: SettingsTable;
+    workflows: WorkflowsTable;
+    workflow_runs: WorkflowRunsTable;
+    published_workflows: PublishedWorkflowsTable;
     agents: AgentsTable;
     roles: RolesTable;
-    agent_round_counts: AgentRoundCountsTable;
     reminders: RemindersTable;
     scratch_pad: ScratchPadTable;
-    agent_handoff_rules: AgentHandoffRulesTable;
     agent_checklists: AgentChecklistsTable;
     agent_memory: AgentMemoryTable;
     agent_prompt_versions: AgentPromptVersionsTable;
@@ -726,7 +726,6 @@ export interface DB {
     memory_regenerations: MemoryRegenerationsTable;
     commit_verifications: CommitVerificationsTable;
     marketplace_agents: MarketplaceAgentsTable;
-    marketplace_agent_handoffs: MarketplaceAgentHandoffsTable;
     marketplace_agent_checklists: MarketplaceAgentChecklistsTable;
     guardrail_scripts: GuardrailScriptsTable;
     project_guardrail_scripts: ProjectGuardrailScriptsTable;

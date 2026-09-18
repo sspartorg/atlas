@@ -47,14 +47,8 @@ const DATA_KEY_TO_FIELD: Partial<Record<string, LoggableField>> = {
     description: 'description',
     spec_md: 'spec_md',
     pr_url: 'pr_url',
-    points: 'points',
     acceptance_criteria: 'acceptance_criteria',
     priority: 'priority',
-    steps_to_reproduce: 'steps_to_reproduce',
-    expected: 'expected',
-    actual: 'actual',
-    frequency: 'frequency',
-    failure_scope: 'failure_scope',
     reporter_agent_id: 'reporter',
 };
 
@@ -184,7 +178,7 @@ export const eventsLog = {
             })
             .returningAll()
             .executeTakeFirstOrThrow();
-        const type = input.item_type ?? (await lookupItemType(input.item_id)) ?? 'story';
+        const type = input.item_type ?? (await lookupItemType(input.item_id)) ?? 'task';
         return asIssueEvent(row as never, type);
     },
 
@@ -196,12 +190,12 @@ export const eventsLog = {
             .orderBy('created_at', 'asc')
             .orderBy('id', 'asc')
             .execute();
-        const type = issueType ?? (await lookupItemType(itemId)) ?? 'story';
+        const type = issueType ?? (await lookupItemType(itemId)) ?? 'task';
         return rows.map((r) => asIssueEvent(r as never, type));
     },
 
     async activity(itemId: string, issueType?: IssueType): Promise<IActivityItem[]> {
-        const type = issueType ?? (await lookupItemType(itemId)) ?? 'story';
+        const type = issueType ?? (await lookupItemType(itemId)) ?? 'task';
         const [events, comments] = await Promise.all([
             db
                 .selectFrom('issue_events')

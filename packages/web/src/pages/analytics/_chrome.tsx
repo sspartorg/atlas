@@ -1,10 +1,11 @@
 import { type ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import type { IssueType } from '@atlas/shared';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 
 // Shared chrome for the Analytics surface (overview + drill-down pages).
-// Lifted out of Analytics.tsx so AnalyticsProject and AnalyticsEpic stay
+// Lifted out of Analytics.tsx so AnalyticsProject and AnalyticsTask stay
 // visually identical without dragging the whole 1300-line file along.
 // Public surface: Card, Eyebrow, ChartTitle, MetricMarquee, MONO,
 // CHART_COLORS, AGENT_RING.
@@ -36,29 +37,17 @@ export const CHART_COLORS = {
     rail: 'rgba(127,127,127,.28)',
 };
 
-// Per-issue-type accents used by Top Runs, Project bars, etc. Five
-// distinct colours that read in both modes without relying on the now-
-// collapsed brand-hue palette.
-export const ITEM_TYPE_COLORS: Record<
-    'epic' | 'story' | 'bug' | 'sub_task' | 'sub_bug',
-    string
-> = {
-    epic: '#3B82F6',        // blue   — strategic
-    story: '#06B6D4',       // cyan   — feature
-    bug: '#F43F5E',         // rose   — defect
-    sub_task: '#10B981',    // emerald — task
-    sub_bug: '#A855F7',     // purple — sub-defect
+// Per-issue-type accents used by Top Runs, Project bars, etc. Distinct
+// colours that read in both modes without relying on the now-collapsed
+// brand-hue palette.
+export const ITEM_TYPE_COLORS: Record<IssueType, string> = {
+    task: '#3B82F6',        // blue
+    sub_task: '#10B981',    // emerald
 };
 
-export const ITEM_TYPE_LABEL: Record<
-    'epic' | 'story' | 'bug' | 'sub_task' | 'sub_bug',
-    string
-> = {
-    epic: 'Epic',
-    story: 'Story',
-    bug: 'Bug',
+export const ITEM_TYPE_LABEL: Record<IssueType, string> = {
+    task: 'Task',
     sub_task: 'Sub-task',
-    sub_bug: 'Sub-bug',
 };
 
 export function Eyebrow({

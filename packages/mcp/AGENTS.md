@@ -4,7 +4,7 @@
 
 Standalone MCP (Model Context Protocol) server. Owns:
 - A stdio JSON-RPC server that AI clients (Claude Code, Cursor, Claude Desktop) spawn as a child process.
-- A small **agent authoring** tool surface: list / get / create / update `agents`. The Owner connects this MCP to Claude to let Claude rewrite agent prompts, handoffs, checklists, and allowed-tools on their behalf — instead of hand-editing the web UI.
+- A small **agent authoring** tool surface: list / get / create / update `agents`. The Owner connects this MCP to Claude to let Claude rewrite agent prompts, checklists and memory on their behalf (routing and schedules live on workflows, which have no MCP tool) — instead of hand-editing the web UI.
 
 This package does **not** open a network port, does **not** access Postgres directly, and does **not** spawn agents. It is a thin tool layer that calls `@atlas/api` over HTTP.
 

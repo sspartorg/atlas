@@ -55,83 +55,22 @@ interface IFullResolved {
 }
 
 async function resolveFull(issueType: IssueType, id: string): Promise<IFullResolved | null> {
-    switch (issueType) {
-        case 'story': {
-            const r = await issueFullService.story(id);
-            if (!r) return null;
-            return {
-                item: {
-                    kind: 'story',
-                    id: r.story.id,
-                    title: r.story.title,
-                    status: r.story.status,
-                    summary: r.story.description || null,
-                },
-                project: r.project ? { id: r.project.id, name: r.project.name } : null,
-                activity: r.activity,
-            };
-        }
-        case 'epic': {
-            const r = await issueFullService.epic(id);
-            if (!r) return null;
-            return {
-                item: {
-                    kind: 'epic',
-                    id: r.epic.id,
-                    title: r.epic.title,
-                    status: r.epic.status,
-                    summary: r.epic.description || null,
-                },
-                project: r.project ? { id: r.project.id, name: r.project.name } : null,
-                activity: r.activity,
-            };
-        }
-        case 'bug': {
-            const r = await issueFullService.bug(id);
-            if (!r) return null;
-            return {
-                item: {
-                    kind: 'bug',
-                    id: r.bug.id,
-                    title: r.bug.title,
-                    status: r.bug.status,
-                    summary: r.bug.description || null,
-                },
-                project: r.project ? { id: r.project.id, name: r.project.name } : null,
-                activity: r.activity,
-            };
-        }
-        case 'sub_task': {
-            const r = await issueFullService.subTask(id);
-            if (!r) return null;
-            return {
-                item: {
-                    kind: 'sub_task',
-                    id: r.sub_task.id,
-                    title: r.sub_task.title,
-                    status: r.sub_task.status,
-                    summary: r.sub_task.description || null,
-                },
-                project: r.project ? { id: r.project.id, name: r.project.name } : null,
-                activity: r.activity,
-            };
-        }
-        case 'sub_bug': {
-            const r = await issueFullService.subBug(id);
-            if (!r) return null;
-            return {
-                item: {
-                    kind: 'sub_bug',
-                    id: r.sub_bug.id,
-                    title: r.sub_bug.title,
-                    status: r.sub_bug.status,
-                    summary: r.sub_bug.description || null,
-                },
-                project: r.project ? { id: r.project.id, name: r.project.name } : null,
-                activity: r.activity,
-            };
-        }
-    }
+    const r =
+        issueType === 'task'
+            ? await issueFullService.task(id).then((f) => f && { ...f, item: f.task })
+            : await issueFullService.subTask(id).then((f) => f && { ...f, item: f.sub_task });
+    if (!r) return null;
+    return {
+        item: {
+            kind: issueType,
+            id: r.item.id,
+            title: r.item.title,
+            status: r.item.status,
+            summary: r.item.description || null,
+        },
+        project: r.project ? { id: r.project.id, name: r.project.name } : null,
+        activity: r.activity,
+    };
 }
 
 interface IAssembleOptions {

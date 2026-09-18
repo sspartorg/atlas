@@ -2,12 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { sql } from 'kysely';
 import { db } from '../db/kysely-client.js';
 import { ApiError } from '../utils/errors.js';
-import { asAgentCli } from '@atlas/shared';
-import {
-    costRollupForRoot,
-    costRowsForRoot,
-    type ItemType,
-} from '../services/item-cost-tree.js';
+import { asAgentCli, ISSUE_TYPES } from '@atlas/shared';
+import { costRollupForRoot, costRowsForRoot } from '../services/item-cost-tree.js';
+import type { ItemType } from '../db/types.js';
 
 // Allow `Area/Location` style IANA names plus UTC. Anything else falls back to UTC.
 const TZ_RE = /^[A-Za-z_+\-/]{1,64}$/;
@@ -579,9 +576,9 @@ export async function analyticsRoutes(app: FastifyInstance) {
     });
 
     // ------------------------------------------------------------------
-    // Drill-down: cost by project → epic → child item. Aggregates only
+    // Drill-down: cost by project → task → sub-task. Aggregates only
     // ever return totals + byKind + (for project) a top-N list; full
-    // descendant rows are paginated through a sibling `/epics` or
+    // descendant rows are paginated through a sibling `/tasks` or
     // `/children` route so the response payload stays bounded even
     // after months of run history.
     // ------------------------------------------------------------------
@@ -599,9 +596,9 @@ export async function analyticsRoutes(app: FastifyInstance) {
 
         // One pass: every item in the project, joined to its completed
         // runs. Aggregating in SQL covers the project totals + the
-        // byKind breakdown; aggregating per-epic descendant trees in
-        // a separate CTE keeps `topEpics` truthful even when epics
-        // have hundreds of descendants. Terminal aggregates pivot on
+        // byKind breakdown; aggregating per-task descendant trees in
+        // a separate CTE keeps `topTasks` truthful even when tasks
+        // have many sub-tasks. Terminal aggregates pivot on
         // `cli_sessions` and are appended to the response so the
         // project drill-down surfaces manual sessions alongside agent
         // runs — a project funded only via terminal sessions would
@@ -609,7 +606,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
         // page reports combined spend.
         const [
             perItemRows,
-            epicRollupRows,
+            taskRollupRows,
             terminalSummaryRow,
             terminalByCliRows,
             topTerminalRows,
@@ -651,7 +648,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                 WITH RECURSIVE tree(root_id, id, parent_id, type, depth) AS (
                     SELECT e.id, e.id, e.parent_id, e.type, 0
                       FROM items e
-                     WHERE e.project_id = ${projectId} AND e.type = 'epic'
+                     WHERE e.project_id = ${projectId} AND e.type = 'task'
                     UNION ALL
                     SELECT t.root_id, i.id, i.parent_id, i.type, t.depth + 1
                       FROM items i
@@ -735,13 +732,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                 .execute(),
         ]);
 
-        const ITEM_TYPES: readonly ItemType[] = [
-            'epic',
-            'story',
-            'bug',
-            'sub_task',
-            'sub_bug',
-        ];
+        const ITEM_TYPES: readonly ItemType[] = ISSUE_TYPES;
         const isItemType = (s: string): s is ItemType =>
             (ITEM_TYPES as readonly string[]).includes(s);
 
@@ -785,8 +776,8 @@ export async function analyticsRoutes(app: FastifyInstance) {
             }
         }
 
-        const allEpics = epicRollupRows.rows;
-        const topEpics = allEpics.slice(0, 25).map((r) => ({
+        const allTasks = taskRollupRows.rows;
+        const topTasks = allTasks.slice(0, 25).map((r) => ({
             id: r.root_id,
             title: r.root_title,
             /* v8 ignore next */
@@ -813,8 +804,8 @@ export async function analyticsRoutes(app: FastifyInstance) {
                 const row = byKindMap.get(t);
                 return row ? [row] : [];
             }),
-            topEpics,
-            epic_count: allEpics.length,
+            topTasks,
+            task_count: allTasks.length,
             // Terminal-session aggregates for the same project. Zero-shaped
             // when no closed sessions exist so the FE can render the empty
             // state without nullable guards.
@@ -870,7 +861,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
         });
     });
 
-    app.get('/api/analytics/project/:projectId/epics', async (req, reply) => {
+    app.get('/api/analytics/project/:projectId/tasks', async (req, reply) => {
         reply.header('Cache-Control', ANALYTICS_CACHE_CONTROL);
         const { projectId } = req.params as { projectId: string };
         const q = req.query as { page?: string; limit?: string };
@@ -900,7 +891,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
             WITH RECURSIVE tree(root_id, id, parent_id, depth) AS (
                 SELECT e.id, e.id, e.parent_id, 0
                   FROM items e
-                 WHERE e.project_id = ${projectId} AND e.type = 'epic'
+                 WHERE e.project_id = ${projectId} AND e.type = 'task'
                 UNION ALL
                 SELECT t.root_id, i.id, i.parent_id, t.depth + 1
                   FROM items i
@@ -965,11 +956,11 @@ export async function analyticsRoutes(app: FastifyInstance) {
         return reply.send({ rows, total, page, limit });
     });
 
-    app.get('/api/analytics/epic/:epicId', async (req, reply) => {
+    app.get('/api/analytics/task/:taskId', async (req, reply) => {
         reply.header('Cache-Control', ANALYTICS_CACHE_CONTROL);
-        const { epicId } = req.params as { epicId: string };
+        const { taskId } = req.params as { taskId: string };
 
-        const epic = await db
+        const task = await db
             .selectFrom('items')
             .leftJoin('projects', 'projects.id', 'items.project_id')
             .select([
@@ -979,23 +970,23 @@ export async function analyticsRoutes(app: FastifyInstance) {
                 'items.project_id as project_id',
                 'projects.name as project_name',
             ])
-            .where('items.id', '=', epicId)
+            .where('items.id', '=', taskId)
             .executeTakeFirst();
-        if (!epic) throw new ApiError('not_found', 'Epic not found', 404);
-        if (epic.type !== 'epic') {
-            throw new ApiError('not_found', 'Item is not an epic', 404);
+        if (!task) throw new ApiError('not_found', 'Task not found', 404);
+        if (task.type !== 'task') {
+            throw new ApiError('not_found', 'Item is not a task', 404);
         }
 
-        const rollup = await costRollupForRoot(epicId);
+        const rollup = await costRollupForRoot(taskId);
 
         return reply.send({
-            epic: {
-                id: epic.id,
-                title: epic.title,
+            task: {
+                id: task.id,
+                title: task.title,
                 /* v8 ignore next */
-                project_id: epic.project_id ?? '',
+                project_id: task.project_id ?? '',
                 /* v8 ignore next */
-                project_name: epic.project_name ?? '',
+                project_name: task.project_name ?? '',
             },
             totals: rollup.totals,
             byKind: rollup.byKind,
@@ -1003,35 +994,29 @@ export async function analyticsRoutes(app: FastifyInstance) {
         });
     });
 
-    app.get('/api/analytics/epic/:epicId/children', async (req, reply) => {
+    app.get('/api/analytics/task/:taskId/children', async (req, reply) => {
         reply.header('Cache-Control', ANALYTICS_CACHE_CONTROL);
-        const { epicId } = req.params as { epicId: string };
+        const { taskId } = req.params as { taskId: string };
         const q = req.query as { page?: string; limit?: string; type?: string };
         const page = Math.max(1, parseInt(q.page ?? '1', 10) || 1);
         const limit = Math.min(100, Math.max(1, parseInt(q.limit ?? '25', 10) || 25));
 
-        const epic = await db
+        const task = await db
             .selectFrom('items')
             .select(['id', 'type'])
-            .where('id', '=', epicId)
+            .where('id', '=', taskId)
             .executeTakeFirst();
-        if (!epic) throw new ApiError('not_found', 'Epic not found', 404);
-        if (epic.type !== 'epic') {
-            throw new ApiError('not_found', 'Item is not an epic', 404);
+        if (!task) throw new ApiError('not_found', 'Task not found', 404);
+        if (task.type !== 'task') {
+            throw new ApiError('not_found', 'Item is not a task', 404);
         }
 
-        const ITEM_TYPES: readonly ItemType[] = [
-            'epic',
-            'story',
-            'bug',
-            'sub_task',
-            'sub_bug',
-        ];
+        const ITEM_TYPES: readonly ItemType[] = ISSUE_TYPES;
         const typeFilter = q.type && (ITEM_TYPES as readonly string[]).includes(q.type)
             ? (q.type as ItemType)
             : undefined;
 
-        const result = await costRowsForRoot(epicId, {
+        const result = await costRowsForRoot(taskId, {
             page,
             limit,
             ...(typeFilter !== undefined ? { type: typeFilter } : {}),

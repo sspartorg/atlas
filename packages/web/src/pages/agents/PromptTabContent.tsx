@@ -559,18 +559,20 @@ function VersionHistoryCard({
 }
 
 // 2026-06-12 — auto-prepended preamble that the agent-runner /
-// commands-assembler injects above every item-attached agent's prompt
+// commands-assembler injects above every agent's prompt
 // at run time. Kept in lockstep with `preamble-assembler.ts` so the UI
 // shows exactly what the agent will see. Owners don't need to (and
 // shouldn't) re-author these 6 lines in their custom prompt.
 function autoPrependedPreamble(agentId: string): string {
     return [
-        `You are agent \`${agentId}\`. Before doing anything else, read these files at the worktree root:`,
+        `You are agent \`${agentId}\`. Before doing anything else, read these files at the working-directory root:`,
         '',
         '1. `.atlas/constitution.md` — the project\'s rules of engagement',
-        '2. `.atlas/handoff.md` — your routing contract (what MCP calls to make on pass / fail)',
-        '3. `.atlas/current-task.md` — the item this run targets',
-        '4. `.atlas/self-memory.md` — your past course-corrections (append a one-liner at the end of this run if you learn something non-obvious)',
+        '2. `.atlas/current-task.md` — the item this run targets (absent when the run works on the project as a whole)',
+        '3. `.atlas/outcome.md` — how to report this run\'s result; the workflow routes on it',
+        '4. `.atlas/self-memory.md` — your past course-corrections',
+        '',
+        'You are one step in a workflow. Do your own job, commit your work, and end with the `atlas-outcome` block. Do not assign the item, change its status, push, or open pull requests — the workflow does that.',
     ].join('\n');
 }
 
@@ -673,7 +675,7 @@ export function PromptTabContent({ agent }: Props) {
 
     return (
         <Box>
-            {agent.requires_item ? <AutoPreambleBanner agentId={agent.id} /> : null}
+            <AutoPreambleBanner agentId={agent.id} />
 
             <PromptEditorCard
                 headerIcon="article"

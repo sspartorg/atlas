@@ -1,8 +1,8 @@
 import type { IssueStatus, IssueType, SubTaskStatus } from '../types/index.js';
 
-// Unified 6-status machine for every issue type (epic / story / bug / sub_bug
-// / sub_task). The state machine returns recommended next statuses for
-// buttons, agent auto-advancement, and bot automation. The owner can also
+// Unified 6-status machine for both issue types (task / sub_task). The state
+// machine returns recommended next statuses for buttons, agent
+// auto-advancement, and bot automation. The owner can also
 // manually override to any status via a dropdown on the detail page (handled
 // at the route layer via ?override=1) — that path bypasses this machine.
 //

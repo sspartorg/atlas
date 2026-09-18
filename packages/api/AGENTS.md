@@ -24,7 +24,9 @@ src/
 │   ├── agents.ts      → GET/POST /api/agents, GET/PATCH/DELETE /api/agents/:id
 │   └── ...
 └── services/           → Business logic. DB calls live here, not in routes.
-    ├── agent-runner.ts       → Phase 5: CLI spawning
+    ├── agent-runner.ts       → CLI spawning for one agent run; reports every terminal exit to the workflow engine
+    ├── workflow-engine.ts    → Workflow runs (ADR 0014): step chaining, park/resume, End push + PR, dispatch tick
+    ├── workflow-lock.ts      → Global preHandler: 409 on item status/assign while a workflow run holds the item
     ├── external-notifications.ts → Provider-agnostic dispatcher (gating + quiet hours)
     └── transports/*.ts       → Per-provider outbound senders (Telegram, Teams)
 ```
@@ -73,11 +75,9 @@ if (!isValidTransition(issueType, current.status, newStatus)) {
   return reply.status(400).send({ error: 'Invalid status transition' });
 }
 
-// In the reassign PATCH route — enforce agent-to-owner-only escalation:
-if (newAssigneeAgentId !== null && !isValidHandoff(agentId, issueType, current.status)) {
-  return reply.status(400).send({ error: 'Agent cannot be assigned at this status' });
-}
 ```
+
+The workflow engine (`services/workflow-engine.ts`) writes item status directly for workflow transitions (e.g. `in_progress → done` at End, which is not a status-machine edge) — never add that path to a route. While a `running` workflow run holds an item, `services/workflow-lock.ts` rejects `PATCH …/:id/status` and `…/:id/assign` with 409 for UI and MCP callers alike. Agents never route items; workflows escalate only to the Owner.
 
 ## SSE Rules
 
@@ -86,11 +86,11 @@ if (newAssigneeAgentId !== null && !isValidHandoff(agentId, issueType, current.s
 - Use Fastify's raw response to write SSE — no buffering
 - Event types match `SSEEvent` interface in `@atlas/shared`
 
-## Worktree Lifecycle (orchestrator-owned)
+## Worktree Lifecycle (workflow-owned)
 
-Worktrees are **ephemeral**. After every successful push (or `alreadyUpToDate`), the orchestrator runs `cleanupWorktreeAfterPush` to delete the local worktree folder, delete the local branch ref, and null out `items.worktree_path` / `items.worktree_branch`. The next run on the same item re-provisions from origin via `ensureWorktree` (Path 2: fetch + worktree add, or Path 3: net-new branch). Remote is the single source of truth; the local workspace is disposable. Same rule applies in the orphan reaper in `main.ts` after its rescue push.
+Worktrees belong to a **workflow run** (ADR 0014), not an item or an agent run. `startWorkflowRun` calls `ensureWorktree({ item: null, branch })` once; every step runs in that directory; End (or stop) makes a safety commit, pushes when `push_code`, opens one PR when `raises_pr`, then `cleanupWorktreeAfterPush` deletes the folder and local branch. The path lives only on `workflow_runs.worktree_path` — never `items.worktree_path` — so nothing else can push or delete it between steps. Remote is the source of truth; the local workspace is disposable.
 
-If push *fails*, cleanup is skipped so manual recovery is possible. `ensureWorktree`'s Path 1 (reuse existing worktree → `pull --ff-only`) stays as a defensive fallback for the rare case where filesystem cleanup silently failed (Windows file locks, AV).
+If push *fails*, cleanup is skipped so manual recovery is possible. A parked run keeps its worktree. The `main.ts` orphan reaper only flips dead runs to `error` and reports them to the engine; it never pushes or deletes. `ensureWorktree`, `pushWorktree`, `openPullRequest` and `cleanupWorktreeAfterPush` each take `withProjectGitLock`, which is not re-entrant — never wrap them in another lock. Terminal sessions (`routes/cli-sessions.ts`) use the same helpers with their own lifecycle.
 
 ## What NOT to Do
 

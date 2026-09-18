@@ -21,7 +21,7 @@ import { setThemeMode, type ThemeMode } from '../helpers/theme.js';
 // not abort the rest of the sweep. Each failure becomes a finding
 // entry rather than a stop-the-world test failure.
 //
-// Detail pages that need an id (epic/story/agent) are sampled by
+// Detail pages that need an id (task/agent) are sampled by
 // list-then-first-row; routes whose list is empty are recorded as
 // `<list-only>` so the findings doc shows the gap.
 
@@ -31,9 +31,9 @@ const TOP_LEVEL_ROUTES = [
     '/',
     '/scratch-pad',
     '/projects',
-    '/epics',
-    '/issues',
+    '/tasks',
     '/queue',
+    '/workflows',
     '/search',
     '/agents',
     '/agents/mcp-tools',
@@ -53,9 +53,9 @@ const TABS: Record<string, readonly string[]> = {
 
 // Detail pages: (list path → tabs to walk after entering first row)
 const DETAIL_WALKS: Array<{ list: string; tabs?: readonly string[]; label: string }> = [
-    { list: '/projects', tabs: ['overview', 'epics', 'issues', 'guardrails', 'setup', 'history'], label: 'project' },
-    { list: '/agents', tabs: ['overview', 'prompt', 'handoffs', 'test', 'runs', 'memory'], label: 'agent' },
-    { list: '/epics', label: 'epic' },
+    { list: '/projects', tabs: ['overview', 'tasks', 'guardrails', 'setup', 'history'], label: 'project' },
+    { list: '/agents', tabs: ['overview', 'prompt', 'test', 'runs', 'memory'], label: 'agent' },
+    { list: '/tasks', label: 'task' },
 ];
 
 const THEMES: ThemeMode[] = ['light', 'dark'];
@@ -172,7 +172,7 @@ async function firstDetailHref(page: Page, list: string, label: string): Promise
         const href = await link.getAttribute('href');
         if (href && !href.includes('/new') && !href.endsWith(list)) return href;
     }
-    // F-007 fix (2026-06-13): list views like /projects and /epics render
+    // F-007 fix (2026-06-13): list views like /projects and /tasks render
     // each row as a MUI Button with onClick + useNavigate (not <a href>).
     // Wait for any row button to appear, click the first one, then read the
     // URL the router landed on. Captures the same detail page that a real

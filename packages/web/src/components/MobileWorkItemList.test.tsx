@@ -8,7 +8,7 @@ import type { WorkItemTableRow } from './WorkItemTable.js';
 function makeRow(overrides: Partial<WorkItemTableRow> = {}): WorkItemTableRow {
     return {
         id: 'S1',
-        kind: 'story',
+        kind: 'task',
         shortId: 'S1',
         title: 'Hello',
         status: 'ready',
@@ -68,10 +68,10 @@ describe('MobileWorkItemList', () => {
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
-                title="Stories"
+                title="Sub-tasks"
             />,
         );
-        expect(screen.getByText('Stories')).toBeInTheDocument();
+        expect(screen.getByText('Sub-tasks')).toBeInTheDocument();
     });
 
     it('renders headerRight inside the title bar', () => {
@@ -82,7 +82,7 @@ describe('MobileWorkItemList', () => {
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
-                title="Stories"
+                title="Sub-tasks"
                 headerRight={<button>Add</button>}
             />,
         );
@@ -132,8 +132,8 @@ describe('MobileWorkItemList', () => {
         expect(screen.getByText('Hello')).toBeInTheDocument();
     });
 
-    it('covers all kindBg branches: bug, sub_task, sub_bug, epic (default)', () => {
-        const kinds = ['bug', 'sub_task', 'sub_bug', 'epic'] as const;
+    it('covers all kindBg branches: task, sub_task', () => {
+        const kinds = ['task', 'sub_task'] as const;
         for (const kind of kinds) {
             const { unmount } = renderWithProviders(
                 <MobileWorkItemList

@@ -237,7 +237,7 @@ test.describe('state transitions — non-destructive', () => {
 
     // 5. Project detail tabs — 6 tabs, click each, record URL update.
     // Navigates to /projects, picks first project link, then exercises
-    // overview/epics/issues/guardrails/setup/history.
+    // overview/tasks/guardrails/setup/history.
     test('project detail tabs: click each, record URL update', async ({ page }) => {
         await page.goto('/projects');
         // Wait long enough for the React Query + list-render to finish; the
@@ -260,21 +260,20 @@ test.describe('state transitions — non-destructive', () => {
         }
         const href = await firstProjectLink.getAttribute('href');
         if (!href) return;
-        const tabs = ['overview', 'epics', 'issues', 'guardrails', 'setup', 'history'] as const;
+        const tabs = ['overview', 'tasks', 'guardrails', 'setup', 'history'] as const;
         // Navigate ONCE to the detail page; the tab list renders after
-        // useEpics + useStories + useBugs fan-out. Wait for the
+        // project + issue-tree fetches. Wait for the
         // tablist before clicking individual tabs.
         await page.goto(href);
         await page.waitForSelector('[role="tab"]', { timeout: 10000 }).catch(() => undefined);
         // ProjectDetail Tabs render a Material-Symbols icon as a
         // <Box component="span"> whose textContent ("dashboard",
         // "flag", etc.) is included in the role=tab accessible name.
-        // So the actual name is "dashboard Overview", "flag Epics  3",
+        // So the actual name is "dashboard Overview", "flag Tasks  3",
         // etc. We match by substring rather than anchoring to start.
         const PROJECT_LABELS: Record<string, RegExp> = {
             overview: /Overview/i,
-            epics: /Epics/i,
-            issues: /Issues/i,
+            tasks: /Tasks/i,
             guardrails: /Guard-rails|Guardrails/i,
             setup: /Setup/i,
             history: /History/i,
@@ -333,13 +332,12 @@ test.describe('state transitions — non-destructive', () => {
             });
             return;
         }
-        const tabs = ['overview', 'prompt', 'handoffs', 'test', 'runs', 'memory'] as const;
+        const tabs = ['overview', 'prompt', 'test', 'runs', 'memory'] as const;
         // AgentDetail Tabs also render Material-Symbols icons; the
         // role=tab name includes the icon text. Match by substring.
         const AGENT_LABELS: Record<string, RegExp> = {
             overview: /Overview/i,
             prompt: /Prompt/i,
-            handoffs: /Handoffs/i,
             test: /Test run|Test/i,
             runs: /Runs/i,
             memory: /Memory/i,

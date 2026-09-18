@@ -4,9 +4,9 @@ import type { IRunOutcome } from '@atlas/shared';
 // Replaces both `decidePerformerCompletionRouting` and the reviewer-only
 // routing branches the runner used to carry. Inputs come from the
 // parser (`parseRunOutcome`) and the load of the agent's required
-// `agent_checklists` rows; output drives the runner's choice between
-// applying the on-pass handoff, applying the on-fail handoff, or
-// parking the item with the Owner.
+// `agent_checklists` rows; output drives the workflow engine's choice
+// between following the step's pass connection, its fail connection, or
+// parking the workflow run with the Owner.
 //
 // Pure function. No DB, no SSE, no side effects.
 
@@ -89,27 +89,6 @@ export function decideRunRouting(input: DecideRunRoutingInput): RoutingDecision 
         kind: 'apply_on_fail',
         detail: `checklist_failed: ${truncate(failedLabels.join(', '), 200)}`,
     };
-}
-
-export interface ShouldOpenPullRequestInput {
-    /** Item status read right after the CLI exits; null for project-scope runs. */
-    itemStatus: string | null;
-    outcome: IRunOutcome | null;
-}
-
-/**
- * PR creation runs before post-run routing, so a zero exit code alone
- * can't tell an approval from a rejection: reviewers reject by parking
- * the item via MCP and still exit 0. Open a PR only when the run
- * actually moved the work forward.
- */
-export function shouldOpenPullRequest(input: ShouldOpenPullRequestInput): boolean {
-    if (input.itemStatus === null) return true;
-    if (input.itemStatus === 'waiting_for_info') return false;
-    if (input.outcome) return input.outcome.kind === 'done';
-    // No outcome block: the agent routed via MCP if the item left in_progress;
-    // otherwise decideRunRouting will park it.
-    return input.itemStatus !== 'in_progress';
 }
 
 function truncate(s: string, max: number): string {

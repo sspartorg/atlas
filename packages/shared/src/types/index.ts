@@ -1,3 +1,5 @@
+import type { WorkflowRunStatus } from '../workflows/index.js';
+
 // `ollama` is Claude Code pointed at Ollama's Anthropic-compatible API — same
 // binary, same flags, different base URL. See `CLI_DIALECT` in ../cli/index.ts
 // before branching on this type anywhere.
@@ -85,19 +87,18 @@ export interface IRole {
  * fenced `atlas-outcome` block. Replaces the prior performer/reviewer
  * split — there's one contract for every agent regardless of role.
  *
- *   - 'done'           → work succeeded; orchestrator applies the agent's
- *                        on-pass handoff (advancing the chain).
+ *   - 'done'           → work succeeded; the workflow follows the step's
+ *                        pass connection.
  *   - 'rejected'       → the agent rejected the work (typically a
- *                        reviewer-style agent); orchestrator applies the
- *                        agent's on-fail handoff (usually back to the
- *                        paired performer or the Owner).
- *   - 'asked_question' → agent is blocked on Owner input and posted a
- *                        clarifying-question comment; orchestrator parks
- *                        the item in `waiting_for_info` (no handoff).
+ *                        reviewer-style agent); the workflow follows the
+ *                        step's fail connection.
+ *   - 'asked_question' → agent is blocked on Owner input; the workflow
+ *                        parks the item in `waiting_for_info` and re-runs
+ *                        the step when the Owner replies.
  *
  * NULL when the agent's output didn't contain a parseable `atlas-outcome`
- * block — the runner treats that as `'asked_question'` (Owner-bound) so
- * a silent agent never advances the chain.
+ * block — treated as `'asked_question'` (Owner-bound) so a silent agent
+ * never advances a workflow.
  */
 export type RunOutcomeKind = 'done' | 'rejected' | 'asked_question';
 
@@ -143,19 +144,9 @@ export type RunStatus =
     | 'error'
     | 'cancelled'
     | 'setup_failed';
-export type IssueType = 'epic' | 'story' | 'sub_task' | 'sub_bug' | 'bug';
+// ADR 0015 — the Owner works on Tasks; a Task's children are Sub-tasks.
+export type IssueType = 'task' | 'sub_task';
 export type IssuePriority = 'low' | 'normal' | 'high' | 'urgent';
-
-export type BugFrequency = 'always' | 'sometimes' | 'rare';
-export type BugFailureScope = 'data-loss' | 'functional' | 'cosmetic' | 'performance';
-
-export const BUG_FREQUENCIES: BugFrequency[] = ['always', 'sometimes', 'rare'];
-export const BUG_FAILURE_SCOPES: BugFailureScope[] = [
-    'data-loss',
-    'functional',
-    'cosmetic',
-    'performance',
-];
 
 export interface IAgent {
     id: string;
@@ -172,12 +163,6 @@ export interface IAgent {
     framework: string;
     prompt_md: string;
     prompt_version: number;
-    /**
-     * Markdown text the agent uses when handing the item off to the next agent
-     * (or back to the Owner). Persisted on the agent row; previously this was
-     * stashed in browser localStorage by the Handoffs tab — that hack is gone.
-     */
-    handoff_prompt_md: string;
     status: AgentStatus;
     accent_color: string;
     sort_order: number;
@@ -198,56 +183,7 @@ export interface IAgent {
      * the Role filter chip on the Agents page.
      */
     role_id: SdlcRole | null;
-    /**
-     * Cap on CLI invocations against (item, agent). The round counter
-     * (`agent_round_counts`) is keyed on `(item_id, agent_id)`; when the
-     * count exceeds this value, the orchestrator escalates the item to the
-     * Owner with `status: waiting_for_info` instead of re-spawning the
-     * agent on the same item. T1: with reviewer agents standalone, the
-     * cap applies to each agent independently — reviewer bounces are
-     * inter-agent handoffs, not intra-agent retries.
-     */
-    max_rounds: number;
-    /**
-     * When false, the scheduler dispatches this agent on its cadence even
-     * with an empty item queue ("freedom mode"). The resulting run has
-     * `item_id = null`.
-     */
-    requires_item: boolean;
-    schedule_hours: number;
-    /**
-     * Schedule shape. `every_n_hours` uses `schedule_hours`; the other
-     * three use `schedule_time_of_day` plus their preset-specific field
-     * (`schedule_weekdays` for weekly, `schedule_day_of_month` for monthly).
-     * Default at the DB level is `'every_n_hours'` so pre-migration rows
-     * keep firing on their existing cadence.
-     */
-    schedule_preset: AgentSchedulePreset;
-    /** 'HH:MM' in 24-hour process-local time. Used by daily/weekly/monthly. */
-    schedule_time_of_day: string | null;
-    /**
-     * ISO weekdays (Mon=1 .. Sun=7), 1-7 distinct entries. Used by weekly.
-     * Stored as a PG int[] column; nullable for non-weekly presets.
-     */
-    schedule_weekdays: number[] | null;
-    /**
-     * 1..31. Used by monthly. Months without that day clamp to the last
-     * day of the month at fire time (Jan 31 → Feb 28 / Feb 29 in leap).
-     */
-    schedule_day_of_month: number | null;
-    concurrent_runs: number;
     glyph: string;
-    /**
-     * Last time the clock-driven poller dispatched at least one ready
-     * item for this agent. Null until the first dispatch.
-     */
-    last_run_at: string | null;
-    /**
-     * Next scheduled fire, computed by `computeNextAgentSlot`. The poller
-     * fires the agent when `next_run_at <= now` AND the queue has at
-     * least one ready item. Null until the create/update path seeds it.
-     */
-    next_run_at: string | null;
     /**
      * Theme 08 — how many completed/errored runs trigger an automatic
      * `agent_memory` regeneration. Errored runs count double (errors
@@ -270,38 +206,6 @@ export interface IAgent {
      * route boundary.
      */
     settings_json: Record<string, unknown>;
-    /**
-     * Theme 09 — optional cron expression (croner-compatible). When
-     * non-null, overrides `schedule_hours` in the scheduler. Seeded
-     * ai-news agent uses '0 9 * * *' for 09:00 user-local.
-     */
-    cron_expr: string | null;
-    /**
-     * When true, the orchestrator opens a pull request on `origin` at run-end
-     * after a successful push. The agent itself never touches `gh`/`git push`
-     * — the API server's GitHub token + the worktree's `worktree_branch` are
-     * authoritative. Seeded `true` for the three reviewer agents that close
-     * out an SDLC chain (Coder Reviewer, QA Reviewer, Automation Reviewer);
-     * `false` for every performer agent and every non-SDLC autonomous agent.
-     * Flip on a new reviewer to grant it the PR machinery for free.
-     */
-    raises_pr: boolean;
-    /**
-     * Plan #7 — when true, the orchestrator pushes the worktree branch
-     * to origin at run-end. When false, the branch lives locally only
-     * and is deleted at cleanup. Independent of `raises_pr` (PR opening
-     * uses gh and may push via its own auth path; performer-leg
-     * pushes are controlled by this flag).
-     */
-    push_code: boolean;
-    /**
-     * When true, the orchestrator provisions an isolated git worktree before
-     * dispatching the run — using `item.worktree_branch` when item-attached,
-     * or a generated `atlas/<kind_slug|role_id|'run'>/<short-runId>` for
-     * project-scope. When false, the agent runs directly in
-     * `project.git_path` (or the workspace path when no project is set).
-     */
-    requires_worktree: boolean;
     /**
      * Marketplace back-link. Set when the agent was forked from a catalog
      * entry (either by the first-run auto-install or an explicit Add).
@@ -383,19 +287,6 @@ export interface IJiraToEpicSettings {
     dry_run?: boolean;
 }
 
-export type AgentSchedulePreset =
-    | 'every_n_hours'
-    | 'daily'
-    | 'weekly'
-    | 'monthly';
-
-/**
- * Which leg of the handoff a rule applies to. Each agent has at most one
- * `on-pass` rule (target + status when all checks pass) and one `on-fail`
- * rule (target + status when any check fails).
- */
-export type AgentHandoffKind = 'on-pass' | 'on-fail';
-
 export interface IProject {
     id: string;
     name: string;
@@ -418,7 +309,7 @@ export interface IProject {
     created_at: string;
     updated_at: string;
     // Most recent timestamp across the project row and any of its children
-    // (schedule runs, guardrail edits, epic/story/sub-task/sub-bug/bug edits).
+    // (schedule runs, guardrail edits, Task and sub-task edits).
     // Computed at read time in projectsService.list/get — never persisted.
     last_activity_at: string;
 }
@@ -464,135 +355,61 @@ export interface ICredential {
     updated_at: string;
 }
 
-export interface IEpic {
+export interface ITask {
     id: string;
     project_id: string;
     title: string;
     description: string;
     status: IssueStatus;
     assignee_agent_id: string | null;
+    /** ADR 0014 — the workflow this Task is queued for; null = unassigned. */
+    workflow_id: string | null;
     reporter_agent_id: string | null;
     priority: IssuePriority;
-    /** Task 1 — free-form labels for filtering. Max 20 per item / 40 chars each (enforced at Zod). */
-    labels: string[];
-    created_at: string;
-    updated_at: string;
-}
-
-export interface IEpicListItem extends IEpic {
-    story_count: number;
-}
-
-export interface IStory {
-    id: string;
-    epic_id: string;
-    title: string;
-    description: string;
-    status: IssueStatus;
-    assignee_agent_id: string | null;
-    reporter_agent_id: string | null;
-    priority: IssuePriority;
-    spec_md: string | null;
-    pr_url: string | null;
-    points: number;
     acceptance_criteria: string;
-    /** Task 1 — see IEpic. */
+    /** Architect's spec for the whole Task (ADR 0015). */
+    spec_md: string | null;
+    /** The one PR the Task's workflow run opened. */
+    pr_url: string | null;
+    /** Free-form labels for filtering. Max 20 per item / 40 chars each (enforced at Zod). */
     labels: string[];
-    // T2 — per-item git worktree association. PO Writer fills
-    // `worktree_branch` (`atlas/<role>/<id>`); the worktree-orchestrator
-    // resolves and writes back `worktree_path`. Both null on legacy items.
+    // The run branch (`atlas/wf/<id>`) and its on-disk checkout; both null
+    // until a workflow run provisions them.
     worktree_branch: string | null;
     worktree_path: string | null;
     created_at: string;
     updated_at: string;
 }
 
+export interface ITaskListItem extends ITask {
+    sub_task_count: number;
+}
+
 export interface ISubTask {
     id: string;
-    story_id: string;
+    task_id: string;
     title: string;
     description: string;
-    status: SubTaskStatus;
+    status: IssueStatus;
     assignee_agent_id: string | null;
     reporter_agent_id: string | null;
     priority: IssuePriority;
     acceptance_criteria: string;
     started_at: string | null;
-    /** Task 1 — see IEpic. */
+    /** A Sub-tasks workflow node picks the sub-tasks carrying its label (ADR 0015). */
     labels: string[];
-    // T2 — see IStory for semantics.
-    worktree_branch: string | null;
-    worktree_path: string | null;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface ISubBug {
-    id: string;
-    story_id: string;
-    title: string;
-    description: string;
-    status: IssueStatus;
-    assignee_agent_id: string | null;
-    reporter_agent_id: string | null;
-    priority: IssuePriority;
-    acceptance_criteria: string;
-    steps_to_reproduce: string;
-    expected: string;
-    actual: string;
-    frequency: BugFrequency;
-    failure_scope: BugFailureScope;
-    detected_at: string | null;
-    occurrence_count: number;
-    occurrence_total: number;
-    /** Task 1 — see IEpic. */
-    labels: string[];
-    // T2 — see IStory for semantics.
-    worktree_branch: string | null;
-    worktree_path: string | null;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface IBug {
-    id: string;
-    epic_id: string;
-    title: string;
-    description: string;
-    status: IssueStatus;
-    assignee_agent_id: string | null;
-    reporter_agent_id: string | null;
-    priority: IssuePriority;
-    acceptance_criteria: string;
-    steps_to_reproduce: string;
-    expected: string;
-    actual: string;
-    frequency: BugFrequency;
-    failure_scope: BugFailureScope;
-    detected_at: string | null;
-    occurrence_count: number;
-    occurrence_total: number;
-    /** Task 1 — see IEpic. */
-    labels: string[];
-    // T2 — see IStory for semantics.
-    worktree_branch: string | null;
-    worktree_path: string | null;
     created_at: string;
     updated_at: string;
 }
 
 // ── Issue tree (composite endpoint) ───────────────────────────────────────
-// One round-trip view of the workspace for the /issues page. The server
-// assembles it via SQL JOINs / batched IN-list reads; the client renders
-// the tree directly without per-resource fetches.
-export type IssueTreeKind = 'story' | 'bug' | 'sub_task' | 'sub_bug';
-
+// One round-trip view of the workspace: Tasks with their Sub-tasks nested.
 export interface IIssueTreeNode {
     id: string;
-    kind: IssueTreeKind;
+    kind: IssueType;
     short_id: string;
     title: string;
-    status: IssueStatus | SubTaskStatus;
+    status: IssueStatus;
     assignee_agent_id: string | null;
     reporter_agent_id: string | null;
     created_at: string;
@@ -601,11 +418,10 @@ export interface IIssueTreeNode {
     // render without follow-up lookups).
     project_id: string;
     project_name: string;
-    epic_id: string | null;
-    epic_title: string | null;
-    parent_story_id: string | null;
-    parent_story_title: string | null;
-    // Sub-tasks / sub-bugs nested under a story. Empty array for leaf rows.
+    /** The parent Task of a sub-task; null on a Task. */
+    task_id: string | null;
+    task_title: string | null;
+    // Sub-tasks nested under a Task. Empty array for sub-task rows.
     children: IIssueTreeNode[];
 }
 
@@ -613,94 +429,32 @@ export interface IIssueTreeResponse {
     projects: IProject[];
     agents: IAgent[];
     tree: IIssueTreeNode[];
-    // Raw rows for callers that need the full per-kind shape (Project
-    // Detail's EpicsTab, tab-count labels, derived `activeAgents`). The
-    // tree builder already loads every item in the scope, so populating
-    // these arrays is a project of the same query — no extra round-trip.
-    // For the Issues page (which only renders `tree`), they're a few
-    // extra bytes but already cached client-side, so net-net a single
-    // /api/issues/tree fetch replaces three separate /api/{epics,
-    // stories, bugs}?project_id=… calls on Project Detail.
-    epics: IEpic[];
-    stories: IStory[];
-    bugs: IBug[];
+    tasks: ITask[];
 }
 
 // ── Composite "full" responses for detail pages ──────────────────────────
-// Each detail page (story, bug, sub-task, sub-bug, epic) gets one of these
-// via `GET /api/<kind>/:id/full`. Ancestors, children, related items,
-// activity and the agent dictionary are all assembled server-side so the
-// page renders from one HTTP round-trip.
+// Each detail page gets one of these via `GET /api/<kind>/:id/full`.
+// Ancestors, children, related items, activity and the agent dictionary are
+// all assembled server-side so the page renders from one HTTP round-trip.
 
-export interface IStoryFullResponse {
-    story: IStory;
-    epic: IEpic | null;
+export interface ITaskFullResponse {
+    task: ITask;
     project: IProject | null;
     sub_tasks: ISubTask[];
-    sub_bugs: ISubBug[];
     related_links: IIssueLinkRow[];
     external_links: IItemExternalLink[];
     activity: IActivityItem[];
     agents: IAgent[];
-    /**
-     * A04 — CLI invocations the currently-assigned agent has run against
-     * this item. Null when no agent is assigned (Owner is the assignee)
-     * or when the agent has not yet kicked off its first CLI. UI compares
-     * against `agents[assignee].max_rounds` to render `Rounds: N / M` on
-     * the detail rail.
-     */
-    round_count: number | null;
-}
-
-export interface IBugFullResponse {
-    bug: IBug;
-    epic: IEpic | null;
-    project: IProject | null;
-    related_links: IIssueLinkRow[];
-    external_links: IItemExternalLink[];
-    activity: IActivityItem[];
-    agents: IAgent[];
-    /** A04 — see IStoryFullResponse.round_count for semantics. */
-    round_count: number | null;
 }
 
 export interface ISubTaskFullResponse {
     sub_task: ISubTask;
-    parent_story: IStory | null;
-    epic: IEpic | null;
+    task: ITask | null;
     project: IProject | null;
     related_links: IIssueLinkRow[];
     external_links: IItemExternalLink[];
     activity: IActivityItem[];
     agents: IAgent[];
-    /** A04 — see IStoryFullResponse.round_count for semantics. */
-    round_count: number | null;
-}
-
-export interface ISubBugFullResponse {
-    sub_bug: ISubBug;
-    parent_story: IStory | null;
-    epic: IEpic | null;
-    project: IProject | null;
-    related_links: IIssueLinkRow[];
-    external_links: IItemExternalLink[];
-    activity: IActivityItem[];
-    agents: IAgent[];
-    /** A04 — see IStoryFullResponse.round_count for semantics. */
-    round_count: number | null;
-}
-
-export interface IEpicFullResponse {
-    epic: IEpic;
-    project: IProject | null;
-    stories: IStory[];
-    bugs: IBug[];
-    related_links: IIssueLinkRow[];
-    external_links: IItemExternalLink[];
-    activity: IActivityItem[];
-    agents: IAgent[];
-    /** A04 — see IStoryFullResponse.round_count for semantics. */
-    round_count: number | null;
 }
 
 // ── A12 — Reply-to-item with linked context ──────────────────────────────
@@ -842,6 +596,10 @@ export interface IAgentRun {
      * runs (no attached item) and on rows whose item was deleted.
      */
     item_title: string | null;
+    /** ADR 0014 — the workflow run this step belongs to; null for ad-hoc runs. */
+    workflow_run_id: string | null;
+    /** ADR 0014 — the graph node this step executed. */
+    node_id: string | null;
 }
 
 export interface ICostSummary {
@@ -1208,20 +966,10 @@ export interface IProjectGuardrailScript {
     updated_at: string;
 }
 
-export interface IAgentHandoffRule {
-    id: number;
-    agent_id: string;
-    /** Empty string or `"owner"` means "hand back to the Owner". */
-    target_agent_id: string;
-    kind: AgentHandoffKind;
-    /** Status to set on the item once the handoff lands. */
-    status: IssueStatus;
-}
-
 /**
- * Pre-handoff checklist item. The agent must self-verify each `required: true`
- * item before invoking the handoff. Renderable as a checkbox in the Handoffs
- * tab; semantic enforcement is up to the agent runner.
+ * Quality-gate checklist item. The agent reports each row in its
+ * `atlas-outcome` block; a failed `required: true` row turns `done` into a
+ * fail for the workflow's routing.
  */
 export interface IAgentChecklistItem {
     id: number;
@@ -1345,8 +1093,17 @@ export interface SSEEvent {
         // 2026-06-22 — Terminal v1. Session lifecycle events.
         // PTY byte stream goes over a dedicated WebSocket, NOT over SSE.
         | 'cli_session_status'
-        | 'cli_session_closed';
+        | 'cli_session_closed'
+        // ADR 0014 — a workflow run changed status or moved to another node.
+        | 'workflow_run_updated';
     agentId?: string;
+    /** ADR 0014 — payload of `workflow_run_updated`. */
+    workflowId?: string;
+    workflowRunId?: string;
+    workflowRunStatus?: WorkflowRunStatus;
+    nodeId?: string | null;
+    /** Set when the run is a sub-task's run, so the Task run's view refreshes too. */
+    parentWorkflowRunId?: string;
     runId?: string;
     /** Theme 08 — payload field carried by `memory_regenerated`. */
     memoryRegenerationTrigger?: MemoryRegenerationTrigger;
@@ -1730,28 +1487,15 @@ export interface IMarketplaceAgent {
     effort: AgentEffort;
     framework: string;
     prompt_md: string;
-    handoff_prompt_md: string;
     description: string;
     designation: string;
     accent_color: string;
     sort_order: number;
     glyph: string;
     role_id: SdlcRole | null;
-    max_rounds: number;
-    requires_item: boolean;
-    requires_worktree: boolean;
-    push_code: boolean;
-    raises_pr: boolean;
     status: AgentStatus;
     kind_slug: AgentKindSlug;
     settings_json: Record<string, unknown>;
-    schedule_hours: number;
-    schedule_preset: AgentSchedulePreset;
-    schedule_time_of_day: string | null;
-    schedule_weekdays: number[] | null;
-    schedule_day_of_month: number | null;
-    cron_expr: string | null;
-    concurrent_runs: number;
     memory_cadence: number;
     /** Optional starter memory body. Most catalog entries ship empty. */
     memory_template_md: string;
@@ -1790,12 +1534,6 @@ export interface IMarketplaceAgentSummary {
     upgrade_available: boolean;
 }
 
-export interface IMarketplaceAgentHandoff {
-    target_agent_id: string;
-    kind: AgentHandoffKind;
-    status: IssueStatus;
-}
-
 export interface IMarketplaceAgentChecklist {
     label: string;
     sort_order: number;
@@ -1805,7 +1543,6 @@ export interface IMarketplaceAgentChecklist {
 /** Full composite returned by GET /api/marketplace/agents/:id + MCP. */
 export interface IMarketplaceAgentFull {
     agent: IMarketplaceAgent;
-    handoff_rules: IMarketplaceAgentHandoff[];
     checklists: IMarketplaceAgentChecklist[];
 }
 
@@ -1817,15 +1554,9 @@ export interface IMarketplaceUpgradeDiff {
     local_pulled_version: number | null;
     fields: {
         prompt_md: { from: string; to: string; changed: boolean };
-        handoff_prompt_md: { from: string; to: string; changed: boolean };
         settings_json: {
             from: Record<string, unknown>;
             to: Record<string, unknown>;
-            changed: boolean;
-        };
-        handoff_rules: {
-            from: IMarketplaceAgentHandoff[];
-            to: IMarketplaceAgentHandoff[];
             changed: boolean;
         };
         checklists: {
@@ -1838,9 +1569,7 @@ export interface IMarketplaceUpgradeDiff {
 
 export type MarketplaceUpgradeField =
     | 'prompt_md'
-    | 'handoff_prompt_md'
     | 'settings_json'
-    | 'handoff_rules'
     | 'checklists';
 
 /** Body of POST /api/agents/:id/accept-upgrade. */
@@ -1864,23 +1593,10 @@ export interface IAgentBundleManifest {
     sort_order: number;
     glyph: string;
     role_id: SdlcRole | null;
-    max_rounds: number;
-    requires_item: boolean;
-    requires_worktree: boolean;
-    push_code: boolean;
-    raises_pr: boolean;
     status: AgentStatus;
     kind_slug: AgentKindSlug;
     settings_json: Record<string, unknown>;
-    schedule_hours: number;
-    schedule_preset: AgentSchedulePreset;
-    schedule_time_of_day: string | null;
-    schedule_weekdays: number[] | null;
-    schedule_day_of_month: number | null;
-    cron_expr: string | null;
-    concurrent_runs: number;
     memory_cadence: number;
-    handoff_prompt_md: string;
     summary: string;
     version: number;
     published_at: string;

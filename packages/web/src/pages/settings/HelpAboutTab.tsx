@@ -198,7 +198,7 @@ export function HelpAboutTab() {
 
                     <FactRow label="Scope">
                         <Typography component="span" sx={{ fontSize: 13, color: ATLAS_PALETTE.slate }}>
-                            32 user-facing pages · 16 seeded agent roles · 13 consolidated MCP tools · full SDLC hierarchy (projects → epics → stories → sub-tasks · bugs → sub-bugs)
+                            32 user-facing pages · 16 seeded agent roles · 13 consolidated MCP tools · projects → tasks → sub-tasks
                         </Typography>
                     </FactRow>
                 </Box>

@@ -36,10 +36,10 @@ test.describe('perf baseline', () => {
     const staticRoutes = [
         '/',
         '/projects',
-        '/epics',
-        '/epics/new',
-        '/issues',
+        '/tasks',
+        '/tasks/new',
         '/queue',
+        '/workflows',
         '/search',
         '/terminal',
         '/terminal/layout',
@@ -137,7 +137,7 @@ test.describe('perf baseline', () => {
         }
         const href = await firstProjectLink.getAttribute('href');
         if (!href) return;
-        const tabs = ['overview', 'epics', 'issues', 'history', 'guardrails'] as const;
+        const tabs = ['overview', 'tasks', 'history', 'guardrails'] as const;
         for (const tab of tabs) {
             const record = await gotoWithPerf(page, `${href}?tab=${tab}`);
             assertApiBudget(record, `${href}?tab=${tab}`);
@@ -159,79 +159,15 @@ test.describe('perf baseline', () => {
     });
 
     // -----------------------------------------------------------------------
-    // Epics — detail page
+    // Task / Sub-task detail pages — the e2e seed creates Task ETM-1 and its
+    // sub-task ETM-2.
     // -----------------------------------------------------------------------
-    test('walk first epic detail', async ({ page }) => {
-        await gotoWithPerf(page, '/epics');
-        const firstEpicLink = page
-            .locator('a[href^="/epics/"]')
-            .filter({ hasNot: page.locator('[href="/epics/new"]') })
-            .first();
-        if ((await firstEpicLink.count()) === 0) {
-            test.skip(true, 'no seeded epic on /epics — skipping detail walk');
-            return;
-        }
-        const href = await firstEpicLink.getAttribute('href');
-        if (!href || href === '/epics/new') return;
-        const record = await gotoWithPerf(page, href);
-        assertApiBudget(record, href);
-    });
-
-    // -----------------------------------------------------------------------
-    // Issues — story/bug detail pages
-    // -----------------------------------------------------------------------
-    test('walk first story detail', async ({ page }) => {
-        await gotoWithPerf(page, '/issues');
-        // Stories appear as links with /issues/stories/:id
-        const storyLink = page.locator('a[href^="/issues/stories/"]').first();
-        if ((await storyLink.count()) === 0) {
-            test.skip(true, 'no seeded story — skipping story detail walk');
-            return;
-        }
-        const href = await storyLink.getAttribute('href');
-        if (!href) return;
-        const record = await gotoWithPerf(page, href);
-        assertApiBudget(record, href);
-    });
-
-    test('walk first bug detail', async ({ page }) => {
-        await gotoWithPerf(page, '/issues');
-        const bugLink = page.locator('a[href^="/issues/bugs/"]').first();
-        if ((await bugLink.count()) === 0) {
-            test.skip(true, 'no seeded bug — skipping bug detail walk');
-            return;
-        }
-        const href = await bugLink.getAttribute('href');
-        if (!href) return;
-        const record = await gotoWithPerf(page, href);
-        assertApiBudget(record, href);
-    });
-
-    test('walk first sub-task detail', async ({ page }) => {
-        await gotoWithPerf(page, '/issues');
-        const subtaskLink = page.locator('a[href^="/issues/sub-tasks/"]').first();
-        if ((await subtaskLink.count()) === 0) {
-            test.skip(true, 'no seeded sub-task — skipping sub-task detail walk');
-            return;
-        }
-        const href = await subtaskLink.getAttribute('href');
-        if (!href) return;
-        const record = await gotoWithPerf(page, href);
-        assertApiBudget(record, href);
-    });
-
-    test('walk first sub-bug detail', async ({ page }) => {
-        await gotoWithPerf(page, '/issues');
-        const subBugLink = page.locator('a[href^="/issues/sub-bugs/"]').first();
-        if ((await subBugLink.count()) === 0) {
-            test.skip(true, 'no seeded sub-bug — skipping sub-bug detail walk');
-            return;
-        }
-        const href = await subBugLink.getAttribute('href');
-        if (!href) return;
-        const record = await gotoWithPerf(page, href);
-        assertApiBudget(record, href);
-    });
+    for (const path of ['/tasks/ETM-1', '/sub-tasks/ETM-2']) {
+        test(`walk ${path}`, async ({ page }) => {
+            const record = await gotoWithPerf(page, path);
+            assertApiBudget(record, path);
+        });
+    }
 
     // -----------------------------------------------------------------------
     // Agents — detail page + agent run detail + marketplace agent detail
@@ -248,7 +184,7 @@ test.describe('perf baseline', () => {
         }
         const href = await firstAgentLink.getAttribute('href');
         if (!href) return;
-        const tabs = ['overview', 'prompt', 'handoffs', 'testrun', 'runs', 'memory'] as const;
+        const tabs = ['overview', 'prompt', 'testrun', 'runs', 'memory'] as const;
         for (const tab of tabs) {
             const record = await gotoWithPerf(page, `${href}?tab=${tab}`);
             assertApiBudget(record, `${href}?tab=${tab}`);
@@ -331,7 +267,7 @@ test.describe('perf baseline', () => {
     });
 
     // -----------------------------------------------------------------------
-    // Analytics — project-level and epic-level detail pages
+    // Analytics — project-level and task-level detail pages
     // -----------------------------------------------------------------------
     test('walk first analytics project detail', async ({ page }) => {
         await gotoWithPerf(page, '/analytics');
@@ -346,16 +282,8 @@ test.describe('perf baseline', () => {
         assertApiBudget(record, href);
     });
 
-    test('walk first analytics epic detail', async ({ page }) => {
-        await gotoWithPerf(page, '/analytics');
-        const epicLink = page.locator('a[href^="/analytics/epic/"]').first();
-        if ((await epicLink.count()) === 0) {
-            test.skip(true, 'no analytics epic links visible — skipping AnalyticsEpic walk');
-            return;
-        }
-        const href = await epicLink.getAttribute('href');
-        if (!href) return;
-        const record = await gotoWithPerf(page, href);
-        assertApiBudget(record, href);
+    test('walk seeded analytics task detail', async ({ page }) => {
+        const record = await gotoWithPerf(page, '/analytics/task/ETM-1');
+        assertApiBudget(record, '/analytics/task/ETM-1');
     });
 });

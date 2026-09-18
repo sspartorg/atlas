@@ -16,12 +16,10 @@ describe('Project OverviewTab', () => {
         renderWithProviders(
             <OverviewTab
                 counts={{
-                    open_epics: 3,
-                    epics_ready: 1,
-                    stories_in_flight: 5,
-                    stories_waiting_info: 2,
-                    open_bugs: 2,
-                    bugs_ready: 0,
+                    open_tasks: 3,
+                    tasks_ready: 1,
+                    tasks_in_flight: 5,
+                    tasks_waiting_info: 2,
                 }}
                 projectId="p1"
                 onJumpToHistory={vi.fn()}
@@ -30,6 +28,6 @@ describe('Project OverviewTab', () => {
 
         await waitFor(() => expect(screen.getByText('3')).toBeInTheDocument());
         expect(screen.getByText('5')).toBeInTheDocument();
-        expect(screen.getByText('2')).toBeInTheDocument();
+        expect(screen.getByText('2 waiting info')).toBeInTheDocument();
     });
 });

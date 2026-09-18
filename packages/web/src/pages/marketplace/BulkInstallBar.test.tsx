@@ -75,24 +75,4 @@ describe('BulkInstallBar', () => {
         );
         expect(screen.getByText('1 selected')).toBeInTheDocument();
     });
-
-    it('names uninstalled handoff targets of the selection and selects one on click', () => {
-        const onSelectTarget = vi.fn();
-        renderWithProviders(
-            <BulkInstallBar
-                count={1}
-                busy={false}
-                onClear={vi.fn()}
-                onSelectAll={vi.fn()}
-                onAdd={vi.fn()}
-                missingTargets={[{ id: 'agent-code-reviewer', name: 'Code Reviewer', sourceNames: ['Coder'] }]}
-                onSelectTarget={onSelectTarget}
-            />
-        );
-        expect(
-            screen.getByText("Coder hands off to Code Reviewer, which isn't installed."),
-        ).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: /Add Code Reviewer too/i }));
-        expect(onSelectTarget).toHaveBeenCalledWith('agent-code-reviewer');
-    });
 });

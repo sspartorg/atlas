@@ -6,11 +6,8 @@ import { startAgentSchedulerPoller } from './services/agent-schedule-registry.js
 import { syncToolCatalog } from './services/tool-catalog-sync.js';
 import { syncAgentDefaults } from './services/agent-defaults-sync.js';
 import { sweepOrphanSetupTmpfiles } from './services/project-setup-runner.js';
-import {
-    pushWorktree,
-    cleanupWorktreeAfterPush,
-} from './services/worktree-orchestrator.js';
 import { runOutputRegistry } from './services/agent-runner.js';
+import { onStepFinished } from './services/workflow-engine.js';
 import knexConfig from './db/knex-config.js';
 import { bootStep } from './utils/boot-errors.js';
 import { startMcpHost, stopMcpHost, type IMcpHostHandle } from './plugins/mcp-host.js';
@@ -53,6 +50,7 @@ process.on('unhandledRejection', (reason) => {
 // runs crossed the 60 s mark.
 const ORPHAN_REAPER_INTERVAL_MS = 60_000;
 const ORPHAN_REAPER_PERIODIC_CUTOFF_MS = 30 * 60_000;
+const PROCESS_STARTED_AT = Date.now();
 let orphanReaperTimer: NodeJS.Timeout | null = null;
 let orphanReaperRunning = false;
 
@@ -74,7 +72,7 @@ async function migrateLatest(): Promise<void> {
 // the underlying item in 'in_progress' and clogs the Queue UI. Mark any
 // row whose run started > cutoffMs ago and is still non-terminal as
 // 'error', append a note to output_text (no error_text column exists),
-// and free items that were stuck on those runs.
+// and report each to the workflow engine, which parks its workflow run.
 //
 // Two call sites with different cutoffMs:
 //   • Boot (`cutoffMs: 60_000`): runs once during bootStep. At boot the
@@ -102,33 +100,13 @@ async function failOrphanedRuns(opts: { cutoffMs: number }): Promise<void> {
         const cutoff = new Date(Date.now() - opts.cutoffMs).toISOString();
         const knex = Knex(knexConfig);
         try {
-            // Snapshot orphans WITH their item/project context BEFORE flipping
-            // status so the per-orphan recovery loop below can act on each
-            // one (best-effort push so committed work lands on origin). Pre-053
-            // the reaper only flipped run rows + freed `in_progress` items;
-            // it left committed-but-unpushed work stranded on disk and missed
-            // items an Owner had manually transitioned to `in_review` mid-run.
-            const candidates = await knex('agent_runs as r')
-                .leftJoin('items as i', 'i.id', 'r.item_id')
-                .leftJoin('projects as p', 'p.id', 'i.project_id')
-                .select(
-                    'r.id as run_id',
-                    'r.agent_id as agent_id',
-                    'r.item_id as item_id',
-                    'i.project_id as project_id',
-                    'i.worktree_path as worktree_path',
-                    'i.worktree_branch as worktree_branch',
-                    'p.credential_id as credential_id',
-                    'p.git_path as project_git_path',
-                )
-                .whereIn('r.status', ['queued', 'in_progress'])
-                .andWhere('r.started_at', '<', cutoff);
+            const candidates = await knex('agent_runs')
+                .select('id as run_id')
+                .whereIn('status', ['queued', 'in_progress'])
+                .andWhere('started_at', '<', cutoff);
 
-            // Filter out runs whose CLI is still alive in this process.
-            // Belt-and-suspenders: if Node knows the child process is
-            // running, the close handler hasn't fired, and reaping would
-            // race the in-flight `completeRun` / `errorRun` path AND
-            // could clobber a worktree that still has files open.
+            // Never reap a run whose CLI is still alive in this process: the
+            // close handler hasn't fired, and reaping would race completeRun.
             const orphans = candidates.filter((r) => !runOutputRegistry.has(r.run_id));
             if (candidates.length > orphans.length) {
                 console.log(
@@ -153,94 +131,15 @@ async function failOrphanedRuns(opts: { cutoffMs: number }): Promise<void> {
                 console.log(`[api] orphaned runs cleaned up: ${result}`);
             }
 
-            // Free items stuck on those runs. Widened from `in_progress`
-            // only to `in_progress` OR `in_review`: an Owner mid-run can
-            // manually transition the item (e.g. reacting to an
-            // aspirational "Spec ready" comment from a still-running
-            // agent — MON-2 2026-05-31). `ready` is intentionally excluded
-            // (a fresh ready item legitimately has no live run yet).
-            const orphanItemIds = orphans
-                .map((r) => r.item_id)
-                .filter((x): x is string => Boolean(x));
-            if (orphanItemIds.length > 0) {
-                const freed = await knex('items')
-                    .whereIn('id', orphanItemIds)
-                    .whereIn('status', ['in_progress', 'in_review'])
-                    .update({ status: 'waiting_for_info' });
-                if (freed > 0) {
-                    console.log(`[api] items freed from orphaned runs: ${freed}`);
-                }
-            }
-
-            // Per-orphan recovery: best-effort push so committed-but-
-            // unpushed work lands on origin even when the run died before
-            // completeRun fired. Non-fatal; failures log and continue.
-            //
-            // 2026-06-02 — Architect-specific `spec_md` backfill removed
-            // alongside the orchestrator-side helper. The boot reaper is
-            // a generic component over the agent fleet — agent-specific
-            // backfill belongs in agent prompts (which already exit
-            // `asked_question` when their persistence MCP call fails),
-            // not in a boot hook the rest of the fleet shares. Legacy
-            // strands can still be recovered via the agent-specific
-            // `scripts/recover-architect-stranded.ts` admin script.
-            for (const orphan of orphans) {
-                if (!orphan.worktree_path || !orphan.worktree_branch) continue;
-                try {
-                    // Phase 1.5b — legacy `.atlas-run/` cleanup
-                    // retired. The phase-1 `.atlas/` tree is wiped at
-                    // the start of every regen so no orphan cleanup is
-                    // needed here.
-                    const pushed = await pushWorktree(
-                        orphan.worktree_path,
-                        orphan.worktree_branch,
-                        orphan.credential_id ?? null,
-                        orphan.project_id,
-                    );
-                    if (pushed.pushed || pushed.alreadyUpToDate) {
-                        console.log(
-                            `[api] orphan recovery: ${pushed.alreadyUpToDate ? 'up-to-date' : 'pushed'} ${orphan.worktree_branch}`,
-                        );
-                        // Owner's "remote is source of truth"
-                        // lifecycle — after the rescue push lands,
-                        // delete the local worktree + branch so the
-                        // next run on this item re-provisions from
-                        // origin. Same gate as the main agent-runner
-                        // path: only when push succeeded, only when we
-                        // have the project's git_path to run
-                        // `git worktree remove` against.
-                        if (orphan.item_id && orphan.project_git_path) {
-                            const cleanup = await cleanupWorktreeAfterPush({
-                                itemId: orphan.item_id,
-                                projectId: orphan.project_id,
-                                projectGitPath: orphan.project_git_path,
-                                worktreePath: orphan.worktree_path,
-                                branch: orphan.worktree_branch,
-                                // GCM-safety: orphan recovery reuses the
-                                // same project credential as the rescue
-                                // push so Step 4's network fetch
-                                // authenticates without bouncing off GCM.
-                                credentialId: orphan.credential_id ?? null,
-                            });
-                            console.log(
-                                `[api] orphan recovery: cleanup ${orphan.worktree_branch} wt=${cleanup.worktreeRemoved} br=${cleanup.branchDeleted} db=${cleanup.dbCleared}`,
-                            );
-                            for (const w of cleanup.warnings) {
-                                console.warn(
-                                    `[api] orphan recovery: cleanup warn for ${orphan.worktree_branch}: ${w}`,
-                                );
-                            }
-                        }
-                    } else {
-                        console.warn(
-                            `[api] orphan recovery: push failed for ${orphan.worktree_branch}: ${pushed.error}`,
-                        );
-                    }
-                } catch (err) {
-                    console.warn(
-                        `[api] orphan recovery: push raised for ${orphan.worktree_branch}: ${(err as Error).message}`,
-                    );
-                }
+            // ADR 0014 — the workflow engine owns the item, the worktree and
+            // delivery. Reporting the dead step parks its workflow run with
+            // the Owner (worktree kept, committed work intact); pushing or
+            // deleting the shared worktree here would destroy other steps'
+            // work.
+            for (const runId of orphanRunIds) {
+                await onStepFinished(runId).catch((err: unknown) => {
+                    console.warn(`[api] orphan reaper: step report failed for ${runId}: ${(err as Error).message}`);
+                });
             }
         } finally {
             await knex.destroy();
@@ -310,12 +209,9 @@ async function main(): Promise<void> {
     const server = await buildApp();
     await bootSchedules();
     await catchUpMissedFires();
-    // The agent scheduler does NOT re-anchor next_run_at at boot. Cadence
-    // is owned by the create/modify path (anchored to the clock grid) and
-    // then walked forward by the dispatcher as last_run_at + cadence. Boot
-    // is silent on purpose: if the slot passed while the server was off
-    // and there is work, the first tick fires immediately; if there's no
-    // work, the agent stays "due" until work arrives.
+    // One-minute tick: stuck-run watchdog, reminders, token refresh, the
+    // workflow reconcile sweep and workflow dispatch. A scheduled workflow
+    // whose fire passed while the server was off starts on the first tick.
     startAgentSchedulerPoller();
 
     // Periodic orphan-run reaper. Boot already ran `failOrphanedRuns`
@@ -328,7 +224,13 @@ async function main(): Promise<void> {
         orphanReaperRunning = true;
         void (async () => {
             try {
-                await failOrphanedRuns({ cutoffMs: ORPHAN_REAPER_PERIODIC_CUTOFF_MS });
+                // A row that started before this process booted can't be one
+                // of its runs, so it's reaped on the first tick instead of
+                // waiting out the 30-min floor (the boot pass skips rows
+                // under 60 s old — a step killed in its first minute by an
+                // API restart would otherwise hold its workflow run for 30 min).
+                const sinceBoot = Date.now() - PROCESS_STARTED_AT;
+                await failOrphanedRuns({ cutoffMs: Math.min(ORPHAN_REAPER_PERIODIC_CUTOFF_MS, sinceBoot) });
             } finally {
                 orphanReaperRunning = false;
             }

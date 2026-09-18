@@ -1,171 +1,86 @@
-# Freedom-mode agents (`requires_item = false`)
+# Project-level runs (no item)
 
-Most Atlas agents are **item-driven**: they sit waiting for an epic / story / bug / sub-task / sub-bug to land on their assignee queue, the scheduler picks the oldest `ready` item, spawns a CLI against it, and the agent works the item. Some agents don't fit that model â€” they need to **wake up on a schedule and produce output without any item attached**. Those are *freedom-mode* agents.
-
-This doc explains how freedom mode is wired end-to-end (Theme 06 + Theme 09 + Theme 09b + A05 close-out), which built-in agents use it, and the rules for adding new ones.
+"Freedom mode" (`agents.requires_item = false`, per-agent schedules) no longer exists — migration `036_drop_agent_routing.ts` dropped it (ADR 0014). An agent that works on a project, or on nothing, instead runs as a step of a workflow with `input_kind = 'none'`. This doc covers how those runs are started, what the agent sees, and what happens to their output. The file name is kept for link stability.
 
 ---
 
-## The `requires_item` flag
+## Starting one
 
-`agents.requires_item` is a boolean column added by migration `008_agent_framework.ts`. Default `TRUE`. When the scheduler ticks an agent:
+| Trigger | How |
+|---|---|
+| Schedule | `workflows.trigger = 'schedule'`. `schedule_preset` (`hourly` / `every_4h` / `daily` / `weekly` / `custom`) + `schedule_time_of_day` + `schedule_weekday` (or a custom `cron_expr`) materialise to `cron_expr` + `next_run_at`. `tickWorkflowDispatch` starts one run when due, only while the workflow has fewer than `max_parallel_runs` (default 1) running runs. |
+| Manual | `POST /api/workflows/:id/runs` with no `item_id` (an `item_id` → 400). |
+| "Generate AI scaffold" | `POST /api/projects/:id/generate-ai-scaffold` creates the project's AI Readiness workflow from the `ai-readiness` template if missing, then starts it. |
+| Ad-hoc test | `POST /api/run { agent_id, project_id? }` (Run-now dialog). Not a workflow: temp dir, no worktree, no routing, no push. |
 
-- `requires_item = true` â†’ look up the `items` table for a `ready` item assigned to this agent. Dispatch with `(issue_type, issue_id)`. If no item is ready, the agent stays "due" silently (no log noise) until work arrives.
-- `requires_item = false` â†’ **skip the items lookup entirely**. Dispatch on every tick, capped by `concurrent_runs`. The resulting `agent_runs` row has `item_id = null`.
-
-The flag is editable on the Agent Detail page (Overview tab) and on `POST /api/agents` / `PATCH /api/agents/:id`. The decision branch lives in `agent-schedule-registry.ts::dispatchOneAgent`; the predicate is extracted as the pure `decideFreedomDispatch(input)` helper so the branch is unit-testable.
-
----
-
-## Dispatch flow
-
-```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚ startAgentSchedulerPoller()    â”‚   (interval timer; runs every minute)
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-               â–¼
-        â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-        â”‚ dispatchOne â”‚ â€” picks each agent whose next_run_at is past
-        â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜
-               â–¼
-   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-   â”‚ requires_item === true â”‚â”€â”€ true â”€â”€â–¶ items.where(assignee=agent, status='ready')
-   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                      â”‚
-              â”‚ false                              â–¼
-              â–¼                          spawnAgentRun({ agentId, issueType, issueId })
-   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                â”‚
-   â”‚ decideFreedomDispatch({...}) â”‚                â–¼
-   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜       runner builds prompt
-              â–¼                            with full item context
-       â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-       â”‚ kind=spawn?  â”‚
-       â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”˜
-              â–¼
-       spawnFreedomRun(agentId)
-       â”‚
-       â–¼
-       spawnAgentRun({ agentId, issueType: null, issueId: null })
-       â”‚
-       â–¼
-       runner builds prompt
-       WITHOUT any item context
-```
-
-`spawnAgentRun` is the same entry point in both branches â€” only the parameters differ. Subsequent stages (prompt builder, CLI spawn, output capture, completion handling) read `issueType` / `issueId` from the `agent_runs` row.
+`workflows.project_id` may be null only when `use_worktree = false` (a news digest). A workflow that works on a repo needs a project; its run gets branch `atlas/wf/<runId8>` and one worktree for all steps.
 
 ---
 
-## Prompt-builder contract
+## What the agent sees
 
-`prompt-builder.ts::buildPrompt(agent, issueType, issueId)` is where the two paths diverge.
+`spawnAgentRun({ agentId, projectId, workflowRun })` with no item. `buildPrompt` (`services/prompt-builder.ts`) has two no-item branches:
 
-When `!issueType || !issueId`, the builder emits a tight 4-block prompt:
+- **With a project** — constitution, `# Your Role` (`prompt_md` with `{{ key }}` placeholders filled from `settings_json`), outcome contract, `# Project Context` (id, name, repo path, description, guardrails, every Task + `spec_md`), `# Working Protocol`, commit discipline, output instructions, self-memory.
+- **Without a project** — constitution, `# Your Role`, outcome contract, `# Project-level Run` (no item attached; side effects via MCP are at the agent's discretion), output instructions, self-memory.
 
-1. **Atlas Constitution** â€” system rules (always included if non-empty).
-2. **Your Role** â€” the agent's `prompt_md` with `{{ key }}` placeholders substituted from `settings_json`.
-3. **Freedom Run** â€” a short paragraph reminding the agent that it was dispatched on schedule with no item, and that side effects (comments, notifications, agent memory) are at its discretion via the MCP tools its row grants.
-4. **Output Instructions** â€” what shape the output should take.
+The CLI never sees that built prompt directly — it is the audit `prompt_snapshot`. What the CLI reads is staged on disk by `stageCliWorktree(... includeOutcome)`: `.atlas/constitution.md`, `.atlas/outcome.md` (how to report the result), `.atlas/self-memory.md`, and the `.claude/commands/atlas-<agent>.md` / `.github/prompts/atlas-<agent>.prompt.md` body, whose preamble (`preamble-assembler.ts`) says: do your job, commit, end with the `atlas-outcome` block, never assign, change status, push or open PRs. `.atlas/current-task.md` is absent.
 
-The builder **never** queries items, comments, sub-items, related links, or the RAG index for a freedom run. There is nothing item-shaped to look up.
+Isolation: no-item runs skip `claudeIsolationArgs`, so they keep the Owner's user-level MCP servers (Playwright plugin, claude.ai Atlassian) that scouts depend on.
 
 ---
 
-## Runner contract â€” null-item guards
+## What happens after
 
-`agent-runner.ts::completeRun` / `errorRun` are the same code for both item-attached and freedom runs, but every item-scoped side effect is gated:
+- `completeRun` persists the parsed outcome (`outcome_*` columns) for every run shape, then reports to `workflow-engine.onStepFinished`. Pass / fail / park work exactly as for item runs.
+- A park on a project-level run has no item to comment on: the Owner gets a `needs_you` notification (`agent.run_finished_no_item` external key) and resumes with `POST /api/workflow-runs/:id/resume`.
+- **End** pushes and opens a PR when the workflow says so (`[<workflow name>] <project name>` title), cleans up the worktree, and sends one `update` notification.
+- **Items the agent creates** (Jira import, market research, regulations — all `create_item { issue_type: 'task' }`) are left as created, normally `draft`. Nothing routes them: End-node child routing and `items.created_by_workflow_run_id` were removed by ADR 0015 / migration 037. The Owner reviews them and queues the ones worth doing for a Task workflow. Passing `agent_id` to `create_item` still credits the agent as reporter.
+- Ad-hoc `POST /api/run` runs notify the Owner directly (`agent_completed_no_item` / `agent_error_no_item`); workflow steps don't notify per step.
 
-| Side effect | Item run | Freedom run |
+---
+
+## MCP tools from a no-item run
+
+All 13 consolidated tools (`mcp.md`) are available. Tools that need an item id (`get_item`, `update_item`, `delete_item`) work once the agent has one, e.g. from `search_item`. `create_item` covers both kinds: `task` (parent `project_id`) and `sub_task` (parent `task_id`). `update_item` `change_status` / `assign` return 409 only while a `running` workflow run holds that item.
+
+---
+
+## Built-in autonomous agents (marketplace catalog)
+
+| Agent ID | Name | Intended use |
 |---|---|---|
-| Round counter (`incrementRound`) | âœ“ bumped each CLI | **skipped** (`if (!issueId \|\| !issueType)`) |
-| `advanceIssueStatus` | âœ“ moves item to next status | **skipped** |
-| `applyOnPassHandoff` (reassign to next agent) | âœ“ | **skipped** |
-| `commitVerifier.snapshot` | âœ“ | **skipped** |
-| Item-detail SSE broadcast | âœ“ `issue_detail_changed` | **skipped** |
-| Run-scope SSE (`run_started`, `run_completed`, `run_error`) | âœ“ | âœ“ |
-| `agent_memory` upsert (procedural memory) | âœ“ | âœ“ (intentional â€” memory across runs is useful even without items) |
-| Comments + activity-log writes on the item | âœ“ | **skipped** (no item to attach to) |
-| Notifications | âœ“ with `item_id` set | âœ“ with `item_id = null` |
+| `agent-ai-news` | AI News Scout | daily scheduled workflow, no project; digest to the external channel |
+| `agent-market-research` | Competitive Analyst | weekly; competitors from `settings_json.competitors` |
+| `agent-regulations` | Legal Scout | weekly; sources from `settings_json.sources` |
+| `agent-jira-to-epic` | Jira Importer | every 4h; imports your Jira items as draft Tasks (dry-run by default) |
+| `agent-ai-readiness` | AI-Readiness Agent | `ai-readiness` template; scaffold files + spec-kit bootstrap, PR from End |
+| `agent-knowledge-base` | Knowledge Base Curator | manual project workflow; curates a `skills/` folder via PR |
 
-Output: a freedom run's only persistent artifact is `agent_runs.output_text` plus whatever the agent wrote via MCP tools (e.g., creating an epic, posting an external external notification). The Agent Detail Runs tab + the Agent Run Detail page are the canonical surfaces.
+All ship `status: 'inactive'` with `role_id: NULL`. Only `ai-readiness` has a starter workflow; the rest need a workflow built in the builder.
 
 ---
 
-## Which MCP tools work from a freedom run
+## Adding a new autonomous agent
 
-Freedom-mode agents share the same MCP server as item-driven agents, but a tool's usefulness depends on whether it needs an item id.
-
-**Always available (no item context required):**
-
-- `listAgents`, `getAgent`, `updateAgent` â€” read / update agent metadata
-- `getAgentMemory`, `updateAgentMemory` â€” read / write the agent's procedural memory
-- `listProjects`, `getProject` â€” read project state
-- `searchItems { query, top_k? }` â€” substring + FTS over titles and descriptions; how autonomous agents dedup against `Source: <key>` markers in prior imports
-- `getEpic`, `getItemFull` â€” read a specific item once you have its id (e.g. from `searchItems` result)
-- `createStory` / `createSubTask` / `createSubBug` / `createBug` â€” produce new child work
-- `setReminder`, `cancelReminder`, `listReminders` â€” schedule one-shot or recurring reminders
-- `sendExternalNotification` â€” push a digest to the Owner's external notification channel
-- Web / external API tools (External broadcast, fetch endpoints) â€” available from whatever MCP servers the Owner has registered at the user level (post-`253c43d` the spawned CLI inherits Owner's `~/.claude.json` wholesale)
-
-**Requires an item to be in scope (NOT usable from a freedom run):**
-
-- `addCommentToItem`, `replyToItem`, `updateItem`, `transitionItemStatus`, `assignItem`, `deleteItem` â€” all anchor on an issue id
-- `listItemLinks`, `createItemLink`, `deleteItemLink` â€” same
-- `submit_review` â€” only valid for two-persona reviewer legs
-
-**Known MCP gap:** there is no `createEpic` (or polymorphic `createItem`) MCP tool today. The Jira Importer prompt currently calls `createItem({ type: 'epic', ... })` which would fail at runtime against the live MCP surface. Filed for an MCP B-chunk follow-up. Until shipped, autonomous agents that need to create top-level epics must call the REST endpoint `POST /api/epics` directly via `Bash` + `curl` (the spawned CLI has shell access).
-
-This shape isn't a bug â€” freedom agents do **reporting / scanning / ingestion** work; mutating a specific item is item-driven by definition. A freedom agent that needs to act on an existing item should create one (via `createStory` for child work, or the REST `POST /api/epics` for top-level) and let the item-driven chain take over.
-
----
-
-## Built-in freedom agents (`seed.ts`)
-
-| Agent ID | Name | Cadence | Purpose |
-|---|---|---|---|
-| `agent-ai-news` | AI News Scout | daily 09:00 cron (`0 9 * * *`) | Pulls AI / ML news, summarises into `agent_memory` and posts to external notification. |
-| `agent-market-research` | Competitive Analyst | weekly | Tracks competitors from `settings_json.competitors`; produces a market report. |
-| `agent-regulations` | Legal Scout | weekly | Watches regulation feeds from `settings_json.sources`; flags changes. |
-| `agent-jira-to-epic` | Jira Importer | every 4h | Pulls Jira issues (dry-run on by default); proposes epics from imports. |
-| `agent-ai-readiness` | AI-Readiness Agent | manual (no cron) | Theme 09b â€” project-scope runs (`item_id = null`, `project_id` set); generates AGENTS.md + CLAUDE.md + `.agents/` scaffolding on a PR. |
-| `agent-knowledge-base` | Knowledge Base Curator | manual (no cron) | C08 â€” project-scope runs (`item_id = null`, `project_id` set); curates a `skills/` folder of Confluence-style technical docs about the application via a PR. |
-
-All 6 are seeded `status='inactive'` so they don't start running on a clean install. The Owner activates them per workspace via Agent Detail â†’ Overview â†’ Status switch.
-
-The first 4 are pure freedom mode (no item, no project). The last 2 (`agent-ai-readiness` and `agent-knowledge-base`) are the **project-scope** variant â€” same `requires_item = false` but the dispatcher attaches a `project_id` to the run row instead of leaving both nullable. Both are manual-trigger only (`schedule_hours: 0`, `cron_expr: null`) â€” Owner picks when to run them via the Agents â†’ Run-now flow.
-
----
-
-## UI surfaces
-
-- **Queue page (`/queue`)** â€” Queue reads from `items` filtered by `assignee_agent_id` + `status='ready'`. Freedom runs have no item, so they correctly never appear in the queue.
-- **Agent Detail â†’ Runs tab (`/agents/:id`)** â€” Lists every run (item-attached + freedom + project-scope). Item-attached rows show `story/ATL-12` (issue type + short id) in mono. Freedom-mode rows show a small **"Freedom run"** pill (clock glyph). Project-scope rows show **"Project scope"**.
-- **Agent Run Detail (`/agents/:id/runs/:runId`)** â€” Renders the prompt snapshot + output. When `issue_id` is empty / null, the parent-item link is omitted.
-- **Agent Detail â†’ Overview tab** â€” `requires_item` is a toggle. Editing it persists via `PATCH /api/agents/:id`.
-
----
-
-## Adding a new freedom agent
-
-1. **Seed it in `packages/api/src/db/seed.ts::AGENT_SEEDS`** with `requires_item: false`, an appropriate `schedule_preset` or `cron_expr`, and `status: 'inactive'` so installs don't auto-activate.
-2. **Write the prompt** as a generic role description in `prompt_md`. Reference `settings_json` via `{{ key }}` placeholders for any per-agent config the Owner can edit (sources, competitors, cron expr, etc.).
-3. **Grant tools** in `ALLOWED_TOOL_SEEDS` for whatever MCP calls the agent will make. Item-mutating tools won't be reachable; don't bother granting them.
-4. **Optionally add a per-`kind_slug` settings schema** in `packages/shared/src/agents/settings-schemas.ts` so the Agent Detail page renders a typed editor for `settings_json` â€” see `ai-news` / `market-research` for examples.
-5. **No new tables, no migrations.** The whole machinery is already in place; only `seed.ts` + (optionally) `settings-schemas.ts` change.
-6. **Boot to verify.** On a fresh install, `runSeed` inserts the row; `syncAgentDefaults` on every boot patches the prompt to the latest seed body **only while the Owner hasn't edited it** (`prompt_version === 1`).
+1. Add a catalog entry under `packages/api/src/marketplace/catalog/<id>/` (`manifest.json` with `status: 'inactive'`, `prompt.md`, optional `checklists.json`). No schedule or routing fields — `catalog-loader.ts` strips them.
+2. End the prompt with the `atlas-outcome` block; reference `settings_json` via `{{ key }}` placeholders.
+3. Optionally add a per-`kind_slug` settings schema in `packages/shared/src/agents/settings-schemas.ts`.
+4. Optionally ship a starter workflow in `packages/api/src/marketplace/workflows/<id>.json` (`input_kind: "none"`).
 
 ---
 
 ## Testing
 
-- `agent-schedule-registry.test.ts::decideFreedomDispatch` covers the gate predicate (not_freedom / spawn / at_capacity branches).
-- `prompt-builder.test.ts` covers the no-item preamble rendering.
-- The full dispatch â†’ spawn â†’ complete loop is exercised in `auto-fetch-runner.integration.test.ts` for the item-driven path; freedom-mode end-to-end currently relies on the pure decision tests + manual smoke against a seeded freedom agent.
+- `services/workflow-engine.integration.test.ts` — "stamps items an agent creates during a project-level run and routes them at End", "a scheduled project-level workflow starts when its cron fires".
+- `services/prompt-builder.test.ts` — no-item prompt branches.
+- `routes/projects.test.ts` — `generate-ai-scaffold` starts the AI Readiness workflow.
 
 ---
 
 ## Related docs
 
-- [`data-model.md`](data-model.md) â€” `agents.requires_item` field, `agent_runs` row shape (`item_id` nullable).
-- [`api-surface.md`](api-surface.md) â€” `POST /api/agents` and `PATCH /api/agents/:id` accept `requires_item`.
-- [`pages/16-agent-detail.md`](pages/16-agent-detail.md) â€” Overview tab edits.
-- [`pages/16a-agent-run-detail.md`](pages/16a-agent-run-detail.md) â€” the run-detail page.
+- [`data-model.md`](data-model.md) — `IWorkflow`, `IWorkflowRun`, `IAgentRun` lifecycle shapes.
+- [`api-surface.md`](api-surface.md) — `routes/workflows.ts`, `POST /api/run`, `services/agent-schedule-registry.ts`.
+- [`swarm-architecture.md`](swarm-architecture.md) — fleet + starter workflows.
+- [`pages/16a-agent-run-detail.md`](pages/16a-agent-run-detail.md) — the run-detail page.

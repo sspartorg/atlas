@@ -17,7 +17,7 @@ describe('StatusPickerPopover', () => {
                 anchorEl={null}
                 open={false}
                 onClose={vi.fn()}
-                issueType="story"
+                issueType="task"
                 current="ready"
                 onPick={vi.fn()}
             />,
@@ -31,7 +31,7 @@ describe('StatusPickerPopover', () => {
                 anchorEl={anchor}
                 open
                 onClose={vi.fn()}
-                issueType="story"
+                issueType="task"
                 current="ready"
                 onPick={vi.fn()}
             />,
@@ -50,12 +50,12 @@ describe('StatusPickerPopover', () => {
                 anchorEl={anchor}
                 open
                 onClose={vi.fn()}
-                issueType="story"
+                issueType="task"
                 current="ready"
                 onPick={vi.fn()}
             />,
         );
-        // getValidNextStatuses('story', 'ready') = ['in_progress', 'waiting_for_info']
+        // getValidNextStatuses('task', 'ready') = ['in_progress', 'waiting_for_info']
         await waitFor(() => {
             expect(screen.getByText('In Progress')).toBeInTheDocument();
             expect(screen.getByText('Waiting for Info')).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe('StatusPickerPopover', () => {
                 anchorEl={anchor}
                 open
                 onClose={onClose}
-                issueType="story"
+                issueType="task"
                 current="ready"
                 onPick={onPick}
             />,
@@ -94,7 +94,7 @@ describe('StatusPickerPopover', () => {
                 anchorEl={anchor}
                 open
                 onClose={vi.fn()}
-                issueType="story"
+                issueType="task"
                 current="ready"
                 onPick={vi.fn()}
             />,
@@ -115,7 +115,7 @@ describe('StatusPickerPopover', () => {
                 anchorEl={anchor}
                 open
                 onClose={onClose}
-                issueType="story"
+                issueType="task"
                 current="ready"
                 onPick={onPick}
             />,
@@ -128,19 +128,19 @@ describe('StatusPickerPopover', () => {
         expect(onClose).toHaveBeenCalled();
     });
 
-    it('issueType other than sub_task — "story" uses getValidNextStatuses("story", current)', async () => {
+    it('issueType other than sub_task — "task" uses getValidNextStatuses("task", current)', async () => {
         const anchor = makeAnchor();
         renderWithProviders(
             <StatusPickerPopover
                 anchorEl={anchor}
                 open
                 onClose={vi.fn()}
-                issueType="epic"
+                issueType="task"
                 current="in_progress"
                 onPick={vi.fn()}
             />,
         );
-        // getValidNextStatuses('epic', 'in_progress') = ['in_review', 'ready', 'waiting_for_info']
+        // getValidNextStatuses('task', 'in_progress') = ['in_review', 'ready', 'waiting_for_info']
         await waitFor(() => {
             expect(screen.getByText('In Review')).toBeInTheDocument();
             expect(screen.getByText('Ready')).toBeInTheDocument();
@@ -156,7 +156,7 @@ describe('StatusPickerPopover', () => {
                 anchorEl={anchor}
                 open
                 onClose={onClose}
-                issueType="bug"
+                issueType="task"
                 current="draft"
                 onPick={onPick}
             />,

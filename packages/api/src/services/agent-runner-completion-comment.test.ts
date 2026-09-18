@@ -12,15 +12,56 @@ import {
 // success-path comment.
 
 describe('buildOrchestratorRunCompletedBody', () => {
-    it('names the agent, the item kind, and the run id', () => {
+    it('carries a rejection reason and summary so the next workflow step can act on it', () => {
+        const body = buildOrchestratorRunCompletedBody({
+            agentId: 'agent-code-reviewer',
+            agentName: 'Code Reviewer',
+            runId: 'c641589b-8f12-4f11-b79f-130225e0eeb6',
+            issueType: 'story',
+            outcome: { kind: 'rejected', reason: 'No test covers `todo done 99`.', summary: 'Walked the checklist.' },
+        });
+        expect(body).toBe(
+            '**Code Reviewer** sent the work back (`rejected`).\n\n' +
+                '**Reason:** No test covers `todo done 99`.\n\n' +
+                'Walked the checklist.\n\n' +
+                'Run: [c641589b](/agents/agent-code-reviewer/runs/c641589b-8f12-4f11-b79f-130225e0eeb6)',
+        );
+    });
+
+    it('puts a multi-line question in its own block and does not repeat an identical summary', () => {
+        const reason = '## Brainstorm — open questions\n1. Who uses it?\n2. What is out of scope?';
+        const body = buildOrchestratorRunCompletedBody({
+            agentId: 'agent-po-writer',
+            agentName: 'PO Writer',
+            runId: 'r3',
+            issueType: 'epic',
+            outcome: { kind: 'asked_question', reason, summary: reason },
+        });
+        expect(body).toBe(`**PO Writer** needs an answer (\`asked_question\`).\n\n**Reason:**\n\n${reason}\n\nRun: [r3](/agents/agent-po-writer/runs/r3)`);
+    });
+
+    it('says so when the agent emitted no outcome block', () => {
+        const body = buildOrchestratorRunCompletedBody({
+            agentId: 'agent-coder',
+            agentName: 'Coder',
+            runId: 'r1',
+            issueType: 'story',
+            outcome: null,
+        });
+        expect(body).toBe('**Coder** — orchestrator: run completed on this story without an outcome block.\nRun: [r1](/agents/agent-coder/runs/r1)');
+    });
+
+    it('names the agent, the outcome, its summary, and the run id', () => {
         const body = buildOrchestratorRunCompletedBody({
             agentId: 'agent-po-reviewer',
             agentName: 'PO Reviewer',
             runId: 'c641589b-8f12-4f11-b79f-130225e0eeb6',
             issueType: 'epic',
+            outcome: { kind: 'done', summary: 'Split the epic into 3 stories.' },
         });
         expect(body).toBe(
-            '**PO Reviewer** — orchestrator: run completed on this epic.\n' +
+            '**PO Reviewer** finished (`done`).\n\n' +
+                'Split the epic into 3 stories.\n\n' +
                 'Run: [c641589b](/agents/agent-po-reviewer/runs/c641589b-8f12-4f11-b79f-130225e0eeb6)',
         );
     });
@@ -35,16 +76,6 @@ describe('buildOrchestratorRunCompletedBody', () => {
         expect(body).toContain('Run: [r1](/agents/agent-architect/runs/r1)');
     });
 
-    it('does not include any "completed work" phrasing or AI summary content', () => {
-        const body = buildOrchestratorRunCompletedBody({
-            agentId: 'agent-architect',
-            agentName: 'Architect',
-            runId: 'r2',
-            issueType: 'story',
-        });
-        expect(body).not.toContain('completed work on');
-        expect(body).not.toMatch(/What I (did|verified)/);
-    });
 });
 
 describe('buildCompletionCommentBody (error path)', () => {

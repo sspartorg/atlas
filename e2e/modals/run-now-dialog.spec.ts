@@ -1,47 +1,34 @@
 import { test, expect } from '@playwright/test';
 import { goto } from '../helpers/nav.js';
 
-// RunNowDialog is opened from the QueueAgentDrawer "Run now" button.
-// The e2e seed installs "PO Writer" from the marketplace, so the /queue
-// page always has at least one agent card to click.
+// RunNowDialog is opened from the AgentDetail hero "Run now" button. Since
+// ADR 0014 it only starts a project-level run (no item pickers) — item runs
+// belong to workflows. The e2e seed installs "PO Writer" from the marketplace.
+
+async function openDialog(page: Parameters<typeof goto>[0]) {
+    await goto(page, '/agents/agent-po-writer');
+    await page.getByRole('button', { name: /Run now/i }).first().click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    return dialog;
+}
 
 test.describe('RunNowDialog', () => {
-    test('open from /queue — click PO Writer card then Run now button', async ({ page }) => {
-        await goto(page, '/queue');
-        // Seed installs PO Writer — its card is always visible.
-        const card = page.getByText(/PO Writer/i).first();
-        await expect(card).toBeVisible();
-        await card.click();
-        // QueueAgentDrawer opens — wait for the Run now button.
-        const runNowBtn = page.getByRole('button', { name: /Run now/i });
-        await expect(runNowBtn).toBeVisible();
-        await runNowBtn.click();
-        // RunNowDialog renders as an MUI Dialog.
-        const dialog = page.getByRole('dialog');
-        await expect(dialog).toBeVisible();
-        // DialogTitle contains "Run PO Writer on an issue" (requires_item=true).
+    test('opens from the agent detail hero with the agent name in the title', async ({ page }) => {
+        const dialog = await openDialog(page);
         await expect(dialog.getByText(/Run PO Writer/i)).toBeVisible();
     });
 
-    test('form fields — Project, Issue type, and issue selects are visible', async ({ page }) => {
-        await goto(page, '/queue');
-        await page.getByText(/PO Writer/i).first().click();
-        await page.getByRole('button', { name: /Run now/i }).click();
-        const dialog = page.getByRole('dialog');
-        await expect(dialog).toBeVisible();
-        // Three labeled select fields must be present (PO Writer requires_item=true).
-        await expect(dialog.getByLabel('Project')).toBeVisible();
-        await expect(dialog.getByLabel('Issue type')).toBeVisible();
-        // Run now submit button is present (may be disabled — no DB mutation).
+    test('no item pickers — only Preview prompt and Run now actions', async ({ page }) => {
+        const dialog = await openDialog(page);
+        await expect(dialog.getByLabel('Project')).toHaveCount(0);
+        await expect(dialog.getByLabel('Issue type')).toHaveCount(0);
+        await expect(dialog.getByRole('button', { name: /Preview prompt/i })).toBeVisible();
         await expect(dialog.getByRole('button', { name: /Run now/i })).toBeVisible();
     });
 
     test('Esc closes the dialog without submitting', async ({ page }) => {
-        await goto(page, '/queue');
-        await page.getByText(/PO Writer/i).first().click();
-        await page.getByRole('button', { name: /Run now/i }).click();
-        const dialog = page.getByRole('dialog');
-        await expect(dialog).toBeVisible();
+        const dialog = await openDialog(page);
         await page.keyboard.press('Escape');
         await expect(dialog).not.toBeVisible();
     });

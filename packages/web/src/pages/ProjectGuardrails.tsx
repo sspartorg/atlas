@@ -350,7 +350,7 @@ export function ProjectGuardrailsBody({
                             mt: 0.5,
                         }}
                     >
-                        Every epic and story under {projectName ?? 'this project'} inherits these
+                        Every task and sub-task under {projectName ?? 'this project'} inherits these
                         rules. The{' '}
                         <Box
                             component="span"
@@ -375,7 +375,7 @@ export function ProjectGuardrailsBody({
                         lineHeight: 1.6,
                     }}
                 >
-                    Every epic and story under {projectName ?? 'this project'} inherits these
+                    Every task and sub-task under {projectName ?? 'this project'} inherits these
                     rules. The{' '}
                     <Box
                         component="span"

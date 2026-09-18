@@ -10,7 +10,7 @@ describe('useIssues', () => {
         server.use(
             http.get('http://localhost:3000/api/issues/tree', ({ request }) => {
                 expect(request.url).not.toContain('project_id');
-                return HttpResponse.json({ tree: [], projects: [], agents: [], epics: [], stories: [], bugs: [] });
+                return HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] });
             }),
         );
         const { result } = renderHook(() => useIssues(), { wrapper: makeWrapper() });
@@ -21,7 +21,7 @@ describe('useIssues', () => {
         server.use(
             http.get('http://localhost:3000/api/issues/tree', ({ request }) => {
                 expect(request.url).toContain('project_id=p1');
-                return HttpResponse.json({ tree: [], projects: [], agents: [], epics: [], stories: [], bugs: [] });
+                return HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] });
             }),
         );
         const { result } = renderHook(() => useIssues({ projectId: 'p1' }), {
@@ -35,7 +35,7 @@ describe('useIssues', () => {
         server.use(
             http.get('http://localhost:3000/api/issues/tree', ({ request }) => {
                 captured = new URL(request.url).search;
-                return HttpResponse.json({ tree: [], projects: [], agents: [], epics: [], stories: [], bugs: [] });
+                return HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] });
             }),
         );
         const { result } = renderHook(() => useIssues({ includeArchived: true }), {
@@ -50,22 +50,22 @@ describe('flattenIssueTree', () => {
     it('flattens parents then children inline', () => {
         const tree = [
             {
-                id: 'S1',
-                kind: 'story',
-                title: 'S1',
+                id: 'T1',
+                kind: 'task',
+                title: 'T1',
                 status: 'ready',
                 children: [
-                    { id: 'T1', kind: 'sub_task', parent_story_id: 'S1', title: '', status: '', children: [] },
+                    { id: 'ST1', kind: 'sub_task', task_id: 'T1', title: '', status: '', children: [] },
                 ],
             } as unknown as Parameters<typeof flattenIssueTree>[0][number],
         ];
         const out = flattenIssueTree(tree);
-        expect(out.map((n) => n.id)).toEqual(['S1', 'T1']);
+        expect(out.map((n) => n.id)).toEqual(['T1', 'ST1']);
     });
 });
 
 describe('makeShortId', () => {
     it('returns the id unchanged', () => {
-        expect(makeShortId('story', 'CER-5')).toBe('CER-5');
+        expect(makeShortId('task', 'CER-5')).toBe('CER-5');
     });
 });

@@ -6,7 +6,7 @@ import type { AwaitingItem } from '../../api/types.js';
 
 const makeRow = (overrides: Partial<AwaitingItem> = {}): AwaitingItem => ({
     id: 'CER-7',
-    issue_type: 'story',
+    issue_type: 'sub_task',
     title: 'A login flow',
     status: 'waiting_for_info',
     updated_at: new Date().toISOString(),
@@ -34,26 +34,26 @@ describe('AwaitingYouPanel', () => {
         expect(screen.getByText(/Nothing awaiting your review/i)).toBeInTheDocument();
     });
 
-    it('filter dropdown: selecting "Stories" filters to only story items (covers filter !== all branch)', async () => {
-        const epicRow = makeRow({ id: 'CER-E1', issue_type: 'epic', title: 'Epic item' });
-        const storyRow = makeRow({ id: 'CER-S1', issue_type: 'story', title: 'Story item' });
+    it('filter dropdown: selecting "Sub-tasks" filters to only sub-task items (covers filter !== all branch)', async () => {
+        const taskRow = makeRow({ id: 'CER-T1', issue_type: 'task', title: 'Task item' });
+        const subTaskRow = makeRow({ id: 'CER-S1', issue_type: 'sub_task', title: 'Sub-task item' });
         renderWithProviders(
-            <AwaitingYouPanel rows={[epicRow, storyRow]} isLoading={false} />,
+            <AwaitingYouPanel rows={[taskRow, subTaskRow]} isLoading={false} />,
         );
         // Both items visible initially (filter=all)
-        expect(screen.getByText('Epic item')).toBeInTheDocument();
-        expect(screen.getByText('Story item')).toBeInTheDocument();
+        expect(screen.getByText('Task item')).toBeInTheDocument();
+        expect(screen.getByText('Sub-task item')).toBeInTheDocument();
 
-        // Change filter to "Stories" — Select is a MUI Select, use fireEvent.change on the hidden input
         const select = document.querySelector('[role="combobox"]') as HTMLElement | null;
         if (select) {
             fireEvent.mouseDown(select);
-            await waitFor(() => screen.getByText('Stories'));
-            fireEvent.click(screen.getByText('Stories'));
+            await waitFor(() => screen.getByText('Sub-tasks'));
+            fireEvent.click(screen.getByText('Sub-tasks'));
         }
-        // After filtering, epic should be gone, story visible
+        // After filtering, the task should be gone, the sub-task visible
         await waitFor(() => {
-            expect(screen.queryByText('Epic item')).not.toBeInTheDocument();
+            expect(screen.queryByText('Task item')).not.toBeInTheDocument();
         });
+        expect(screen.getByText('Sub-task item')).toBeInTheDocument();
     });
 });

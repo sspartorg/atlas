@@ -6,6 +6,7 @@ import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import type { AwaitingItem } from '../../api/types.js';
 import { KindIcon } from '../../components/KindIcon.js';
 import { StatusPill } from './StatusPill.js';
+import { itemPath } from '../../utils/itemPath.js';
 
 interface IAwaitingYouRowProps {
     row: AwaitingItem;
@@ -14,14 +15,6 @@ interface IAwaitingYouRowProps {
 const MONO_FONT = '"JetBrains Mono", monospace';
 const OVERDUE_STATUSES = new Set(['waiting_for_info', 'in_review']);
 
-
-const DETAIL_PATH: Record<IssueType, (id: string) => string> = {
-    epic: (id) => `/epics/${id}`,
-    story: (id) => `/issues/stories/${id}`,
-    bug: (id) => `/issues/bugs/${id}`,
-    sub_task: (id) => `/issues/sub-tasks/${id}`,
-    sub_bug: (id) => `/issues/sub-bugs/${id}`,
-};
 
 function shortId(_type: IssueType, id: string): string {
     return id;
@@ -44,7 +37,7 @@ export function AwaitingYouRow({ row }: IAwaitingYouRowProps) {
     const duration = relativeDuration(row.updated_at);
 
     function go() {
-        navigate(DETAIL_PATH[row.issue_type](row.id));
+        navigate(itemPath(row.issue_type, row.id));
     }
 
     return (

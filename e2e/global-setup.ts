@@ -159,7 +159,10 @@ function startApi(): ChildProcess {
                 ATLAS_COPILOT_BINARY: copilotBinary,
             },
             shell: process.platform === 'win32',
-            detached: false,
+            // POSIX: lead a process group so teardown can stop pnpm AND the
+            // node / vite / fake-CLI processes under it (signalling pnpm
+            // alone left them listening). Windows uses taskkill /T instead.
+            detached: process.platform !== 'win32',
             stdio: ['ignore', 'pipe', 'pipe'],
         },
     );
@@ -201,7 +204,10 @@ function startWeb(): ChildProcess {
                 VITE_API_BASE_URL: `http://127.0.0.1:${API_PORT}`,
             },
             shell: process.platform === 'win32',
-            detached: false,
+            // POSIX: lead a process group so teardown can stop pnpm AND the
+            // node / vite / fake-CLI processes under it (signalling pnpm
+            // alone left them listening). Windows uses taskkill /T instead.
+            detached: process.platform !== 'win32',
             stdio: ['ignore', 'pipe', 'pipe'],
         },
     );

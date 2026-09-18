@@ -47,7 +47,7 @@ None.
 - Agent names come from the denormalized `agent_name` the API joins (`routes/analytics.ts:185`), not from a client-side agent lookup — so a deleted agent's historical spend still carries a name.
 
 ## Related pages
-- [`31-analytics-project.md`](31-analytics-project.md), [`32-analytics-epic.md`](32-analytics-epic.md) — drill-downs
+- [`31-analytics-project.md`](31-analytics-project.md), [`32-analytics-task.md`](32-analytics-task.md) — drill-downs
 - [`01-dashboard.md`](01-dashboard.md) — the KPI strip that must agree with this page
 
 ## Coming soon on this page

@@ -19,12 +19,12 @@ test.describe('/analytics/project/:projectId', () => {
         await goto(page, '/analytics/project/e2e-terminal-project');
         await expect(page.getByText('Total spend').first()).toBeVisible();
         await expect(page.getByText('Agentic runs').first()).toBeVisible();
-        await expect(page.getByText('Epics').first()).toBeVisible();
+        await expect(page.getByText('Tasks').first()).toBeVisible();
     });
 
-    test('top-epics card renders its header', async ({ page }) => {
+    test('top-tasks card renders its header', async ({ page }) => {
         await goto(page, '/analytics/project/e2e-terminal-project');
-        // ChartTitle for the top-epics ladder
-        await expect(page.getByText('Top epics by total cost').first()).toBeVisible();
+        // ChartTitle for the top-tasks ladder
+        await expect(page.getByText('Top tasks by total cost').first()).toBeVisible();
     });
 });

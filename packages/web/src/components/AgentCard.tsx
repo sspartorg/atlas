@@ -11,10 +11,10 @@ import {
     getAgentView,
     getRuntimeStats,
     relativeTime,
+    resolveAgentStatusLabel,
 } from '../pages/agents/agentViewModel.js';
 import { formatCostUsd } from '../utils/formatCost.js';
 import { LiveDot } from './LiveDot.js';
-import { resolveAgentStatusLabel } from '../pages/queue/queueViewModel.js';
 
 interface Props {
     agent: IAgent;
@@ -299,7 +299,7 @@ export function AgentCard({
                 {[
                     ['CLI', agent.cli],
                     ['Model', agent.model],
-                    ['Schedule', `${view.cadenceLabel.toLowerCase()} · next ${view.nextPassDelta}`],
+                    ['Effort', agent.effort],
                 ].map(([k, v]) => (
                     <Box key={k} sx={{ display: 'contents' }}>
                         <Typography

@@ -25,6 +25,7 @@ This folder is the **single source of truth for application behavior** — what 
 | "What do I actually verify on page X beyond it rendering?" | `functional-checklist.md` |
 | "How do I smoke-test the MCP server?" | `testing-mcp.md` |
 | "Which canonical SDLC roles exist? Which ship enabled?" | `role-catalog.md` |
+| "What are Tasks, Sub-tasks and workflows? How does a Task become one PR?" | `data-model.md` (IWorkflow / IWorkflowRun), `architecture.md` (Workflow runs), `docs/adr/0015-one-task-one-pr.md` |
 | "What's the long-term agent-swarm vision? What's shipped vs absent?" | `swarm-architecture.md` |
 
 ---
@@ -40,7 +41,7 @@ This folder is the **single source of truth for application behavior** — what 
 - [`glossary.md`](glossary.md) — domain terms in one place
 - [`conventions.md`](conventions.md) — how to use & maintain these docs
 - [`mcp.md`](mcp.md) — `@atlas/mcp` stdio server for AI item-context tools
-- [`freedom-agents.md`](freedom-agents.md) — schedule-driven, no-item agents (`requires_item=false`): wiring, prompt contract, runner guards, seed catalog
+- [`freedom-agents.md`](freedom-agents.md) — project-level workflow runs (`input_kind='none'`, no item): how they start, prompt contract, what happens to their output, autonomous catalog
 - [`role-catalog.md`](role-catalog.md) — A08 SDLC role catalog: the 10 canonical roles, disable-by-default policy, prompt-ownership rules, schema, how to add a role
 - [`swarm-architecture.md`](swarm-architecture.md) — C05 long-term swarm vision: capability matrix (shipped vs absent), current fleet, dispatch model overview, future capability gaps
 - [`functional-checklist.md`](functional-checklist.md) — per-route data-correctness checks (round-trip, attribution, list membership, transition legality, cross-page propagation, error states)
@@ -53,14 +54,10 @@ This folder is the **single source of truth for application behavior** — what 
 - [`pages/02-projects.md`](pages/02-projects.md) — `/projects`
 - [`pages/03-project-detail.md`](pages/03-project-detail.md) — `/projects/:id`
 - [`pages/04-project-guardrails.md`](pages/04-project-guardrails.md) — `/projects/:id/guard-rails`
-- [`pages/05-epics.md`](pages/05-epics.md) — `/epics`
-- [`pages/06-epic-new.md`](pages/06-epic-new.md) — `/epics/new`
-- [`pages/07-epic-detail.md`](pages/07-epic-detail.md) — `/epics/:id`
-- [`pages/08-issues.md`](pages/08-issues.md) — `/issues`
-- [`pages/09-story-detail.md`](pages/09-story-detail.md) — `/issues/stories/:id`
-- [`pages/10-sub-task-detail.md`](pages/10-sub-task-detail.md) — `/issues/sub-tasks/:id`
-- [`pages/11-bug-detail.md`](pages/11-bug-detail.md) — `/issues/bugs/:id`
-- [`pages/12-sub-bug-detail.md`](pages/12-sub-bug-detail.md) — `/issues/sub-bugs/:id`
+- [`pages/05-tasks.md`](pages/05-tasks.md) — `/tasks`
+- [`pages/06-task-new.md`](pages/06-task-new.md) — `/tasks/new`
+- [`pages/07-task-detail.md`](pages/07-task-detail.md) — `/tasks/:id`
+- [`pages/10-sub-task-detail.md`](pages/10-sub-task-detail.md) — `/sub-tasks/:id`
 - [`pages/13-queue.md`](pages/13-queue.md) — `/queue`
 - [`pages/14-search.md`](pages/14-search.md) — `/search`
 - [`pages/15-agents.md`](pages/15-agents.md) — `/agents`
@@ -78,10 +75,14 @@ This folder is the **single source of truth for application behavior** — what 
 - [`pages/26-terminal-standalone.md`](pages/26-terminal-standalone.md) — `/terminal/standalone`
 - [`pages/27-marketplace.md`](pages/27-marketplace.md) — `/agents/marketplace`
 - [`pages/28-marketplace-detail.md`](pages/28-marketplace-detail.md) — `/agents/marketplace/:id`
+- [`pages/28a-marketplace-workflow-detail.md`](pages/28a-marketplace-workflow-detail.md) — `/agents/marketplace/workflows/:templateId`, `/agents/marketplace/workflows/published/:publishedId`
 - [`pages/29-mcp-tools.md`](pages/29-mcp-tools.md) — `/agents/mcp-tools`
 - [`pages/30-analytics.md`](pages/30-analytics.md) — `/analytics`
 - [`pages/31-analytics-project.md`](pages/31-analytics-project.md) — `/analytics/project/:projectId`
-- [`pages/32-analytics-epic.md`](pages/32-analytics-epic.md) — `/analytics/epic/:epicId`
+- [`pages/32-analytics-task.md`](pages/32-analytics-task.md) — `/analytics/task/:taskId`
+- [`pages/33-workflows.md`](pages/33-workflows.md) — `/workflows`
+- [`pages/34-workflow-detail.md`](pages/34-workflow-detail.md) — `/workflows/:id`
+- [`pages/35-workflow-run.md`](pages/35-workflow-run.md) — `/workflows/:id/runs/:runId`
 
 ---
 

@@ -1,5 +1,4 @@
-import { Suspense, useMemo, useState } from 'react';
-import { lazyNamed } from '../utils/lazyNamed.js';
+import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
@@ -20,17 +19,12 @@ import {
     type AddRelatedMenuOption,
     type ParentLink,
 } from '../components/index.js';
-const NewIssueModal = lazyNamed(
-    () => import('../components/issues/NewIssueModal.js'),
-    'NewIssueModal',
-);
-import { useSubTaskFull, useDeleteSubTask } from '../hooks/useStories.js';
+import { useSubTaskFull, useDeleteSubTask } from '../hooks/useSubTasks.js';
 import { IssueDeleteAction } from '../components/ConfirmDeleteModal.js';
 import { useProjectLabels } from '../hooks/useProjectLabels.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useItemAgentRuns } from '../hooks/useAgents.js';
 import { api } from '../api/api.js';
-import { makeShortId } from '../hooks/useIssues.js';
 import type { ISubTask, IssueStatus } from '@atlas/shared';
 import { useSetPageTitle } from '../components/shell/index.js';
 
@@ -38,14 +32,10 @@ export function SubTaskDetail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const qc = useQueryClient();
-    const taskId = id ?? '';
-    useSetPageTitle(makeShortId('sub_task', taskId), 'Sub-task');
+    const subTaskId = id ?? '';
+    useSetPageTitle(subTaskId, 'Sub-task');
 
-    // Single composite fetch — sub-task + parent_story + epic + project +
-    // agents (and related_links + activity, consumed by inner cards in a
-    // follow-up). Replaces the prior multi-call fan-out and the
-    // qc.fetchQuery(['sub-tasks']) full-list scan.
-    const { data: full, isLoading } = useSubTaskFull(taskId);
+    const { data: full, isLoading } = useSubTaskFull(subTaskId);
     const { data: settings } = useSettings();
     const deleteSubTask = useDeleteSubTask();
 
@@ -53,30 +43,29 @@ export function SubTaskDetail() {
     const [pickerMode, setPickerMode] = useState<
         'relates_to' | 'depends_on' | 'tested_by' | null
     >(null);
-    const [cloning, setCloning] = useState(false);
 
-    const task = full?.sub_task;
-    const parentStory = full?.parent_story ?? null;
+    const subTask = full?.sub_task;
+    const parentTask = full?.task ?? null;
     const project = full?.project ?? null;
     const agents = full?.agents ?? [];
     const { data: projectLabels } = useProjectLabels(project?.id);
 
     const assignee = useMemo(
         () =>
-            task?.assignee_agent_id
-                ? (agents.find((w) => w.id === task.assignee_agent_id) ?? null)
+            subTask?.assignee_agent_id
+                ? (agents.find((w) => w.id === subTask.assignee_agent_id) ?? null)
                 : null,
-        [agents, task]
+        [agents, subTask]
     );
     const reporter = useMemo(
         () =>
-            task?.reporter_agent_id
-                ? (agents.find((w) => w.id === task.reporter_agent_id) ?? null)
+            subTask?.reporter_agent_id
+                ? (agents.find((w) => w.id === subTask.reporter_agent_id) ?? null)
                 : null,
-        [agents, task]
+        [agents, subTask]
     );
 
-    const { data: itemRuns } = useItemAgentRuns(taskId);
+    const { data: itemRuns } = useItemAgentRuns(subTaskId);
     const totalCostUsd = useMemo(() => {
         if (!itemRuns?.length) return null;
         let sum = 0;
@@ -87,14 +76,14 @@ export function SubTaskDetail() {
         return hasAny ? sum : null;
     }, [itemRuns]);
 
-    async function patchTask(data: Partial<ISubTask>) {
-        if (!task) return;
+    async function patchSubTask(data: Partial<ISubTask>) {
+        if (!subTask) return;
         setSaving(true);
         try {
-            await api.subTasks.update(task.id, data);
-            // ['sub-tasks'] prefix covers ['sub-tasks', taskId, 'full'];
-            // ['stories'] covers parent story's sub-task list.
-            await qc.invalidateQueries({ queryKey: ['stories'] });
+            await api.subTasks.update(subTask.id, data);
+            // ['sub-tasks'] prefix covers ['sub-tasks', subTaskId, 'full'];
+            // ['tasks'] covers the parent task's sub-task list.
+            await qc.invalidateQueries({ queryKey: ['tasks'] });
             await qc.invalidateQueries({ queryKey: ['sub-tasks'] });
             await qc.invalidateQueries({ queryKey: ['issues'] });
             await qc.invalidateQueries({ queryKey: ['labels'] });
@@ -104,58 +93,59 @@ export function SubTaskDetail() {
     }
 
     async function handleStatusPick(next: IssueStatus, override: boolean) {
-        if (!task) return;
-        await api.subTasks.transition(task.id, next, override);
-        await qc.invalidateQueries({ queryKey: ['stories'] });
+        if (!subTask) return;
+        await api.subTasks.transition(subTask.id, next, override);
+        await qc.invalidateQueries({ queryKey: ['tasks'] });
         await qc.invalidateQueries({ queryKey: ['sub-tasks'] });
         await qc.invalidateQueries({ queryKey: ['issues'] });
     }
 
     async function handleAssign(agentId: string | null) {
-        if (!task) return;
-        await api.subTasks.assign(task.id, agentId);
-        // ['stories'] is a prefix match — covers ['stories', :id, 'sub-tasks']
-        // which StoryDetail's useSubTasks() reads, so the parent story's
-        // sub-task list refreshes the next time it mounts.
-        await qc.invalidateQueries({ queryKey: ['stories'] });
+        if (!subTask) return;
+        await api.subTasks.assign(subTask.id, agentId);
+        await qc.invalidateQueries({ queryKey: ['tasks'] });
         await qc.invalidateQueries({ queryKey: ['sub-tasks'] });
         await qc.invalidateQueries({ queryKey: ['issues'] });
-    }
-
-    async function handleResetRounds() {
-        if (!task) return;
-        await api.subTasks.resetRounds(task.id);
-        await qc.invalidateQueries({ queryKey: ['sub-tasks', task.id, 'full'] });
     }
 
 
     if (isLoading) {
         return <IssueDetailLoading />;
     }
-    if (!task) {
+    if (!subTask) {
         return (
             <Box sx={{ px: { xs: 3, md: 8 }, py: 4, textAlign: 'center' }}>
                 <Typography sx={{ color: ATLAS_PALETTE.slate40 }}>Sub-task not found</Typography>
-                <Button sx={{ mt: 4 }} onClick={() => navigate('/issues')}>
-                    Back to Issues
+                <Button sx={{ mt: 4 }} onClick={() => navigate('/tasks')}>
+                    Back to Tasks
                 </Button>
             </Box>
         );
     }
 
-    const shortId = makeShortId('sub_task', task.id);
     const ownerName = settings?.owner_name ?? 'Owner';
     const ownerAccent = settings?.accent_color ?? ATLAS_PALETTE.slate;
 
-    const parents: ParentLink[] = parentStory
-        ? [
-              {
-                  label: 'Parent story',
-                  text: makeShortId('story', parentStory.id),
-                  href: `/issues/stories/${parentStory.id}`,
-              },
-          ]
+    const parents: ParentLink[] = parentTask
+        ? [{ label: 'Task', text: parentTask.id, href: `/tasks/${parentTask.id}` }]
         : [];
+
+    // Clone lands next to the source under the same task and links back to
+    // it; the Owner edits the copy on its own page.
+    async function handleClone() {
+        if (!subTask) return;
+        const created = await api.subTasks.create(subTask.task_id, {
+            title: `CLONE ${subTask.title}`,
+            description: subTask.description,
+            acceptance_criteria: subTask.acceptance_criteria,
+            labels: subTask.labels,
+        });
+        await api.issueLinks
+            .create('sub_task', created.id, 'sub_task', subTask.id, 'relates_to')
+            .catch(() => undefined);
+        await qc.invalidateQueries({ queryKey: ['tasks'] });
+        navigate(`/sub-tasks/${created.id}`);
+    }
 
     const addOptions: AddRelatedMenuOption[] = [
         {
@@ -174,72 +164,59 @@ export function SubTaskDetail() {
         <>
         <IssueDetailShell
             breadcrumbs={[
-                { label: 'Projects', href: '/projects' },
+                { label: 'Tasks', href: '/tasks' },
                 {
-                    label: project?.name ?? '—',
-                    href: project ? `/projects/${project.id}` : undefined,
-                },
-                { label: 'Issues', href: '/issues' },
-                {
-                    label: parentStory ? makeShortId('story', parentStory.id) : '—',
-                    href: parentStory ? `/issues/stories/${parentStory.id}` : undefined,
+                    label: parentTask?.id ?? '—',
+                    href: parentTask ? `/tasks/${parentTask.id}` : undefined,
                     mono: true,
                 },
-                { label: shortId, mono: true },
+                { label: subTask.id, mono: true },
             ]}
-            title={task.title}
-            onTitleSave={(next) => patchTask({ title: next })}
+            title={subTask.title}
+            onTitleSave={(next) => patchSubTask({ title: next })}
             titleSaving={saving}
             issueType="sub_task"
             headerExtras={<AddRelatedMenu options={addOptions} label="Add related item" />}
             actions={
                 <IssueDeleteAction
                     entityKind="sub_task"
-                    entityTitle={task.title}
+                    entityTitle={subTask.title}
                     onDelete={async () => {
-                        await deleteSubTask.mutateAsync(task.id);
+                        await deleteSubTask.mutateAsync(subTask.id);
                     }}
-                    redirectTo={
-                        parentStory ? `/issues/stories/${parentStory.id}` : '/issues'
-                    }
-                    onClone={() => setCloning(true)}
+                    redirectTo={parentTask ? `/tasks/${parentTask.id}` : '/tasks'}
+                    onClone={() => void handleClone()}
                 />
             }
             rightRail={
                 <>
                     <DetailsRailCard
                         issueType="sub_task"
-                        issueId={task.id}
+                        issueId={subTask.id}
                         externalLinks={full?.external_links}
-                        status={task.status}
+                        status={subTask.status}
                         onStatusPick={(next, override) => void handleStatusPick(next, override)}
-                        assigneeAgentId={task.assignee_agent_id}
+                        assigneeAgentId={subTask.assignee_agent_id}
                         onAssign={(agentId) => void handleAssign(agentId)}
                         assignee={assignee}
-                        reassignLocked={task.status === 'in_progress'}
+                        reassignLocked={subTask.status === 'in_progress'}
                         project={project}
                         parents={parents}
                         reporter={reporter}
                         ownerName={ownerName}
                         ownerAccent={ownerAccent}
-                        priority={task.priority}
-                        onPriorityPick={(next) => void patchTask({ priority: next })}
-                        labels={task.labels ?? []}
+                        priority={subTask.priority}
+                        onPriorityPick={(next) => void patchSubTask({ priority: next })}
+                        labels={subTask.labels ?? []}
                         labelSuggestions={projectLabels?.labels ?? []}
-                        onLabelsChange={(next) => patchTask({ labels: next })}
-                        createdAt={task.created_at}
-                        updatedAt={task.updated_at}
-                        roundCount={full?.round_count ?? null}
-                        maxRounds={assignee?.max_rounds ?? null}
-                        onResetRounds={() => void handleResetRounds()}
-                        assigneeName={assignee?.name ?? null}
+                        onLabelsChange={(next) => patchSubTask({ labels: next })}
+                        createdAt={subTask.created_at}
+                        updatedAt={subTask.updated_at}
                         totalCostUsd={totalCostUsd}
-                        worktreeBranch={task.worktree_branch}
-                        worktreePath={task.worktree_path}
                     />
                     <ActivityLogCard
                         issueType="sub_task"
-                        issueId={task.id}
+                        issueId={subTask.id}
                         activity={full?.activity}
                         agents={agents}
                     />
@@ -248,25 +225,25 @@ export function SubTaskDetail() {
         >
             <EditableMarkdownCard
                 title="Description"
-                value={task.description}
+                value={subTask.description}
                 placeholder="Describe what this sub-task does…"
                 emptyHint="Click to add a description…"
                 saving={saving}
-                onSave={(next) => patchTask({ description: next })}
+                onSave={(next) => patchSubTask({ description: next })}
             />
 
             <EditableMarkdownCard
                 title="Acceptance criteria"
-                value={task.acceptance_criteria}
+                value={subTask.acceptance_criteria}
                 placeholder={'- User can…\n- System ensures…'}
                 emptyHint="Click to add acceptance criteria, one per line…"
                 saving={saving}
-                onSave={(next) => patchTask({ acceptance_criteria: next })}
+                onSave={(next) => patchSubTask({ acceptance_criteria: next })}
             />
 
             <RelatedItemsCard
                 issueType="sub_task"
-                issueId={task.id}
+                issueId={subTask.id}
                 relatedLinks={full?.related_links}
                 externalLinks={full?.external_links}
                 agents={agents}
@@ -276,11 +253,11 @@ export function SubTaskDetail() {
 
             <ConversationCard
                 issueType="sub_task"
-                issueId={task.id}
+                issueId={subTask.id}
                 activity={full?.activity}
                 agents={agents}
-                status={task.status}
-                assigneeAgentId={task.assignee_agent_id}
+                status={subTask.status}
+                assigneeAgentId={subTask.assignee_agent_id}
                 runs={itemRuns}
             />
         </IssueDetailShell>
@@ -290,32 +267,11 @@ export function SubTaskDetail() {
                 open
                 mode={pickerMode}
                 fromIssueType="sub_task"
-                fromIssueId={task.id}
+                fromIssueId={subTask.id}
                 links={full?.related_links}
-                restrictToEpicId={
-                    pickerMode === 'tested_by' ? (parentStory?.epic_id ?? undefined) : undefined
-                }
+                restrictToTaskId={pickerMode === 'tested_by' ? subTask.task_id : undefined}
                 onClose={() => setPickerMode(null)}
             />
-        )}
-
-        {cloning && (
-            <Suspense fallback={null}>
-                <NewIssueModal
-                    open={cloning}
-                    onClose={() => setCloning(false)}
-                    initialKind="sub_task"
-                    initialProjectId={project?.id ?? null}
-                    initialParentStoryId={parentStory?.id ?? null}
-                    initialValues={{
-                        title: `CLONE ${task.title}`,
-                        description: task.description,
-                        acceptance_criteria: task.acceptance_criteria,
-                    }}
-                    cloneFromId={task.id}
-                    cloneFromType="sub_task"
-                />
-            </Suspense>
         )}
         </>
     );
