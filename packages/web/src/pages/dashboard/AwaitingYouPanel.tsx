@@ -81,6 +81,7 @@ export function AwaitingYouPanel({ rows, isLoading, total }: IAwaitingYouPanelPr
                     variant="outlined"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value as FilterValue)}
+                    inputProps={{ 'aria-label': 'Filter Awaiting You by type' }}
                     sx={{
                         borderRadius: '6px',
                         fontSize: 13,

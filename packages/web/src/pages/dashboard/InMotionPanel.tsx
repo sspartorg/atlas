@@ -91,6 +91,7 @@ export function InMotionPanel({ rows, agents, isLoading }: IInMotionPanelProps) 
                     variant="outlined"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value as FilterValue)}
+                    inputProps={{ 'aria-label': 'Filter In Motion by type' }}
                     sx={{
                         borderRadius: '6px',
                         fontSize: 13,

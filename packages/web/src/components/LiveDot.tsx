@@ -43,6 +43,7 @@ export function LiveDot({
     return (
         <Tooltip title={label} placement="top" arrow>
             <Box
+                role="img"
                 aria-label={label}
                 sx={{
                     position: 'relative',

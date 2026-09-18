@@ -37,8 +37,8 @@ type RunStatusPaletteKey = RunStatus | 'running' | 'failed';
 
 export const RUN_STATUS_PALETTE: Record<RunStatusPaletteKey, RunStatusPaletteEntry> = {
     queued: { bg: '#EEF1F4', fg: '#727A87', dot: '#94A0AE' }, // stone
-    in_progress: { bg: '#E5E8F4', fg: '#5E66B5', dot: '#7B83D4' }, // periwinkle
-    running: { bg: '#E5E8F4', fg: '#5E66B5', dot: '#7B83D4' }, // alias of in_progress
+    in_progress: { bg: '#E5E8F4', fg: '#5960AB', dot: '#7B83D4' }, // periwinkle
+    running: { bg: '#E5E8F4', fg: '#5960AB', dot: '#7B83D4' }, // alias of in_progress
     completed: { bg: '#DDECE2', fg: '#4A7C5C', dot: '#6EA67E' }, // sage
     error: { bg: '#F9DCD8', fg: '#A4504A', dot: '#D08580' }, // dusty rose
     failed: { bg: '#F9DCD8', fg: '#A4504A', dot: '#D08580' }, // alias of error

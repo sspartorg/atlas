@@ -91,6 +91,7 @@ export function ProjectCard({
                     </Box>
                     <Typography
                         variant="h3"
+                        component="h2"
                         sx={{
                             fontSize: 16,
                             fontWeight: 600,

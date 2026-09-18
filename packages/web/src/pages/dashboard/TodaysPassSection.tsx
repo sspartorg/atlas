@@ -58,19 +58,19 @@ export function TodaysPassSection({ todaysPass }: ITodaysPassSectionProps) {
             >
                 <TodaysPassCard
                     label="Software dev"
-                    color={devColor.border}
+                    color={devColor}
                     icon="code"
                     items={dev}
                 />
                 <TodaysPassCard
                     label="Content"
-                    color={contentColor.border}
+                    color={contentColor}
                     icon="menu_book"
                     items={content}
                 />
                 <TodaysPassCard
                     label="Design"
-                    color={designColor.border}
+                    color={designColor}
                     icon="brush"
                     items={design}
                 />

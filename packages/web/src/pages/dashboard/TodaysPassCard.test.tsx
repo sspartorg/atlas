@@ -16,10 +16,19 @@ const makeItem = (overrides: Partial<TodaysPassItem> = {}): TodaysPassItem => ({
     ...overrides,
 });
 
+const COLOR = { border: '#A5B4FC', fg: '#312E81' };
+
 describe('TodaysPassCard', () => {
     it('renders empty state', () => {
-        renderWithProviders(<TodaysPassCard label="Dev" color="#0A0A0A" icon="code" items={[]} />);
+        renderWithProviders(<TodaysPassCard label="Dev" color={COLOR} icon="code" items={[]} />);
         expect(screen.getByText(/No outputs yet today/)).toBeInTheDocument();
+    });
+
+    // The pale border shade fails WCAG contrast as 11px text; the label
+    // uses the palette's fg shade instead.
+    it('draws the label in the readable fg shade', () => {
+        renderWithProviders(<TodaysPassCard label="Dev" color={COLOR} icon="code" items={[]} />);
+        expect(screen.getByText('Dev')).toHaveStyle({ color: '#312E81' });
     });
 
     it.each([
@@ -29,7 +38,7 @@ describe('TodaysPassCard', () => {
         renderWithProviders(
             <TodaysPassCard
                 label="Dev"
-                color="#0A0A0A"
+                color={COLOR}
                 icon="code"
                 items={[makeItem({ issue_type, issue_id })]}
             />,

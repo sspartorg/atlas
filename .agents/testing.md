@@ -119,7 +119,7 @@ specs all survived unnoticed because every check was opt-in and manual.
 | `.github/workflows/gate.yml` → `fast` | push (main) · PR | `pnpm -r typecheck` → `pnpm -r lint` → shared / web / mcp tests. No service container, no browser download — the cheap job. |
 | `.github/workflows/gate.yml` → `api` | **nightly · manual** | `pnpm -F @atlas/api test` against a Postgres service container. |
 | `.github/workflows/gate.yml` → `e2e` | **nightly · manual** | `pnpm db:up` + Chromium + `pnpm e2e` across all three viewport projects (~9 min). |
-| `.github/workflows/lighthouse.yml` | nightly · manual | Lighthouse audit |
+| `.github/workflows/lighthouse.yml` | nightly · manual | Lighthouse audit of `/`, `/projects`, `/queue`, `/tasks`, `/analytics` × desktop / mobile / iPad on a seeded prod preview. Floors: perf ≥ 0.90 (mobile ≥ 0.55), a11y ≥ 0.95, best practices ≥ 0.95, SEO ≥ 0.90. Reports upload per job (`.lighthouseci`). |
 
 Two deliberate choices in `gate.yml`, both documented in its header comment:
 

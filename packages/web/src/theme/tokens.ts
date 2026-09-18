@@ -85,7 +85,7 @@ export const ATLAS_LIGHT = {
     sideBorder: '#E0E0E0',
     sideText: '#4A4A4A',
     sideTextStrong: '#0A0A0A',
-    sideMuted: '#888888',
+    sideMuted: '#6E6E6E', // 4.6:1 on sideBg (WCAG AA for 11px labels)
     sideActiveBg: '#EDEEFB',
     sideInfoBg: '#F0F0F0',
     sideInfoBorder: '#E0E0E0',
@@ -174,7 +174,7 @@ export const ATLAS_DARK = {
     sideBorder: '#1F1F1F',
     sideText: '#A8A8A8',
     sideTextStrong: '#FAFAFA',
-    sideMuted: '#5C5C5C',
+    sideMuted: '#787878', // 4.6:1 on sideBg (WCAG AA for 11px labels)
     sideActiveBg: '#232152',
     sideInfoBg: '#161616',
     sideInfoBorder: '#2A2A2A',
