@@ -114,7 +114,7 @@ jobs:
           FORM_FACTOR=$( [ "${{ matrix.viewport }}" = "mobile" ] && echo "mobile" || echo "desktop" )
           # Lighthouse's presets are perf / experimental / desktop; its
           # default config is already mobile, so mobile sets no preset.
-          PRESET=$( [ "$FORM_FACTOR" = "desktop" ] && echo "preset: 'desktop'," )
+          PRESET=$( [ "$FORM_FACTOR" = "desktop" ] && echo "preset: 'desktop'," || true )
           WIDTH=$(
             case "${{ matrix.viewport }}" in
               desktop) echo 1920 ;;
