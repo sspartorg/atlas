@@ -6,7 +6,7 @@ import type { TodaysPassItem } from '../../api/types.js';
 
 interface ITodaysPassCardProps {
     label: string;
-    color: string;
+    color: { border: string; fg: string };
     icon: string;
     items: TodaysPassItem[];
 }
@@ -22,7 +22,7 @@ export function TodaysPassCard({ label, color, icon, items }: ITodaysPassCardPro
                 borderRadius: '8px',
                 boxShadow: ELEVATION.low,
                 p: 5,
-                borderLeft: `4px solid ${color}`,
+                borderLeft: `4px solid ${color.border}`,
                 display: 'flex',
                 flexDirection: 'column',
             }}
@@ -31,7 +31,7 @@ export function TodaysPassCard({ label, color, icon, items }: ITodaysPassCardPro
                 <Box
                     component="span"
                     className="material-symbols-rounded"
-                    sx={{ fontSize: 20, color, lineHeight: 1 }}
+                    sx={{ fontSize: 20, color: color.border, lineHeight: 1 }}
                 >
                     {icon}
                 </Box>
@@ -41,7 +41,7 @@ export function TodaysPassCard({ label, color, icon, items }: ITodaysPassCardPro
                         fontWeight: 600,
                         letterSpacing: '0.08em',
                         textTransform: 'uppercase',
-                        color,
+                        color: color.fg,
                     }}
                 >
                     {label}
@@ -64,7 +64,7 @@ export function TodaysPassCard({ label, color, icon, items }: ITodaysPassCardPro
                                 className="material-symbols-rounded"
                                 sx={{
                                     fontSize: 14,
-                                    color,
+                                    color: color.border,
                                     lineHeight: 1,
                                     mt: '2px',
                                     flexShrink: 0,

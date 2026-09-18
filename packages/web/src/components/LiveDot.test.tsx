@@ -9,6 +9,13 @@ describe('LiveDot', () => {
         expect(screen.getByLabelText('In progress')).toBeInTheDocument();
     });
 
+    // aria-label is only allowed on an element with a role (axe
+    // aria-prohibited-attr); the dot is an image of a status.
+    it('exposes the label as an image role', () => {
+        renderWithProviders(<LiveDot />);
+        expect(screen.getByRole('img', { name: 'In progress' })).toBeInTheDocument();
+    });
+
     it('honours a custom label', () => {
         renderWithProviders(<LiveDot label="Streaming" size={10} />);
         expect(screen.getByLabelText('Streaming')).toBeInTheDocument();

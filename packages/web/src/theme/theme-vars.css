@@ -81,7 +81,7 @@
     --atlas-sideBorder: #e0e0e0;
     --atlas-sideText: #4a4a4a;
     --atlas-sideTextStrong: #0a0a0a;
-    --atlas-sideMuted: #888888;
+    --atlas-sideMuted: #6e6e6e;
     --atlas-sideActiveBg: #edeefb;
     --atlas-sideInfoBg: #f0f0f0;
     --atlas-sideInfoBorder: #e0e0e0;
@@ -142,7 +142,7 @@
     --atlas-status-ready-fg: #4d87b0;
     --atlas-status-ready-dot: #5fa3d0;
     --atlas-status-in_progress-bg: #e5e8f4;
-    --atlas-status-in_progress-fg: #5e66b5;
+    --atlas-status-in_progress-fg: #5960ab;
     --atlas-status-in_progress-dot: #7b83d4;
     --atlas-status-waiting_for_info-bg: #fbe5c9;
     --atlas-status-waiting_for_info-fg: #a06a30;
@@ -217,7 +217,7 @@
     --atlas-sideBorder: #1f1f1f;
     --atlas-sideText: #a8a8a8;
     --atlas-sideTextStrong: #fafafa;
-    --atlas-sideMuted: #5c5c5c;
+    --atlas-sideMuted: #787878;
     --atlas-sideActiveBg: #232152;
     --atlas-sideInfoBg: #161616;
     --atlas-sideInfoBorder: #2a2a2a;
@@ -274,7 +274,7 @@
     --atlas-status-ready-fg: #4d87b0;
     --atlas-status-ready-dot: #5fa3d0;
     --atlas-status-in_progress-bg: #e5e8f4;
-    --atlas-status-in_progress-fg: #5e66b5;
+    --atlas-status-in_progress-fg: #5960ab;
     --atlas-status-in_progress-dot: #7b83d4;
     --atlas-status-waiting_for_info-bg: #fbe5c9;
     --atlas-status-waiting_for_info-fg: #a06a30;

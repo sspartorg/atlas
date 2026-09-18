@@ -18,6 +18,11 @@ const makeRow = (overrides: Partial<QueueItem> = {}): QueueItem => ({
 });
 
 describe('InMotionPanel', () => {
+    it('names its type filter for screen readers', () => {
+        renderWithProviders(<InMotionPanel rows={[]} agents={[]} isLoading={false} />);
+        expect(screen.getByRole('combobox', { name: 'Filter In Motion by type' })).toBeInTheDocument();
+    });
+
     it('renders loading state', () => {
         renderWithProviders(<InMotionPanel rows={[]} agents={[]} isLoading />);
         expect(document.body.textContent?.length).toBeGreaterThan(0);
