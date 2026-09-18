@@ -5,7 +5,7 @@ name: Lighthouse
 #   perf ≥ 90, a11y ≥ 95, best-practices ≥ 95, SEO ≥ 90.
 #
 # Matrix: 3 viewports (desktop 1920x1080, mobile 390x844, ipad 834x1194)
-# × 5 hot routes: /, /projects, /queue, /issues, /analytics.
+# × 5 hot routes: /, /projects, /queue, /tasks, /analytics.
 #
 # The `perf-prod` job in perf.yml already handles the p95 <200ms
 # runtime perf floors via `check-perf-floors.mjs`. This complements it
@@ -40,7 +40,7 @@ jobs:
       fail-fast: false
       matrix:
         viewport: [desktop, mobile, ipad]
-        route: ["/", "/projects", "/queue", "/issues", "/analytics"]
+        route: ["/", "/projects", "/queue", "/tasks", "/analytics"]
     env:
       DATABASE_URL: postgres://atlas:atlas@localhost:5500/atlas_e2e
       ATLAS_LOG_LEVEL: error
@@ -89,10 +89,14 @@ jobs:
 
       - name: Start API + Web (prod preview)
         run: |
-          # Same env-vars the e2e:perf:prod pipeline uses. Migrations
-          # + seed run inside the prod boot; the web preview is vite
-          # preview against dist/.
+          # Same env-vars the e2e:perf:prod pipeline uses; the web preview is
+          # vite preview against dist/. docker compose creates only the
+          # `atlas` DB, so create the one DATABASE_URL points at first.
+          docker compose exec -T postgres createdb -U atlas atlas_e2e
           pnpm -F @atlas/api db:migrate
+          # Without a seed every route redirects to /onboarding, so each job
+          # audited the onboarding page instead of its route.
+          pnpm e2e:seed
           nohup pnpm -F @atlas/api start > api.log 2>&1 &
           nohup pnpm -F @atlas/web preview -- --host --port 4000 > web.log 2>&1 &
           for i in $(seq 1 40); do
@@ -108,6 +112,9 @@ jobs:
           # Viewport / device selection is passed via lhci config. Emit
           # a temporary config that targets exactly one URL per job.
           FORM_FACTOR=$( [ "${{ matrix.viewport }}" = "mobile" ] && echo "mobile" || echo "desktop" )
+          # Lighthouse's presets are perf / experimental / desktop; its
+          # default config is already mobile, so mobile sets no preset.
+          PRESET=$( [ "$FORM_FACTOR" = "desktop" ] && echo "preset: 'desktop'," )
           WIDTH=$(
             case "${{ matrix.viewport }}" in
               desktop) echo 1920 ;;
@@ -129,7 +136,7 @@ jobs:
                 url: ['http://127.0.0.1:4000${{ matrix.route }}'],
                 numberOfRuns: 3,
                 settings: {
-                  preset: '${FORM_FACTOR}',
+                  ${PRESET}
                   screenEmulation: {
                     mobile: '${FORM_FACTOR}' === 'mobile',
                     width: ${WIDTH},
