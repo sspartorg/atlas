@@ -91,6 +91,7 @@ jobs:
     # projects (~9 min). Nightly + on demand only — see COST above.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -113,10 +114,11 @@ jobs:
         env:
           DATABASE_URL: postgres://atlas:atlas@localhost:5500/atlas
       - run: pnpm exec playwright install --with-deps chromium
-      # The visual-snapshot specs are skipped by design (Linux-only baselines
-      # are not committed — see e2e/visual/README.md), so this is the
-      # behavioural suite across all three viewport projects.
-      - run: pnpm e2e
+      # The visual-snapshot specs are left out: they switch on under CI=true,
+      # but no Linux baselines are committed (see e2e/visual/README.md), so
+      # each one times out and retries. This is the behavioural suite across
+      # all three viewport projects.
+      - run: pnpm e2e --grep-invert "visual baseline"
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
