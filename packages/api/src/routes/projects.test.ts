@@ -1642,6 +1642,21 @@ describe('project repos (ADR 0017)', () => {
         expect(repos[0]?.id).toBe('p1');
     });
 
+    it('lists every repo of every project with its project', async () => {
+        await insertProject('p1', 'ATL', { git_path: '/ws/core' });
+        await insertProject('p2', 'OTH', { git_path: '/ws/other' });
+        await insertTestCredential();
+        expect((await connectRepo('web')).statusCode).toBe(201);
+
+        const res = await app.inject({ method: 'GET', url: '/api/repos' });
+        const repos = JSON.parse(res.body) as Array<{ project_id: string; name: string }>;
+        expect(repos.map((r) => [r.project_id, r.name]).sort()).toEqual([
+            ['p1', 'core'],
+            ['p1', 'web'],
+            ['p2', 'other'],
+        ]);
+    });
+
     it('rejects a duplicate name and a folder another project or repo already uses', async () => {
         await insertProject('p1', 'ATL', { git_path: '/ws/core' });
         await insertTestCredential();

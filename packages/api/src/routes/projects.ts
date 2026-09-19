@@ -351,6 +351,10 @@ export async function projectsRoutes(app: FastifyInstance) {
     });
 
     // ADR 0017 — a project's repos: the primary (its own git fields) + extras.
+    app.get('/api/repos', async (_req, reply) => {
+        return reply.send(await projectReposService.listAll());
+    });
+
     app.get('/api/projects/:id/repos', async (req, reply) => {
         const { id } = req.params as { id: string };
         return reply.send(await projectReposService.list(id));

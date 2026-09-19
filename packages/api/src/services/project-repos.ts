@@ -71,6 +71,23 @@ async function list(projectId: string): Promise<IProjectRepo[]> {
     return [primaryRepo(project), ...(await extraRows(projectId)).map(fromRow)];
 }
 
+/** Every project's repos (its primary, then its extras), for pickers that span projects. */
+async function listAll(): Promise<IProjectRepo[]> {
+    const [projects, extras] = await Promise.all([
+        projectsService.list(),
+        db
+            .selectFrom('project_repos')
+            .selectAll()
+            .orderBy('position', 'asc')
+            .orderBy('created_at', 'asc')
+            .execute(),
+    ]);
+    return projects.flatMap((p) => [
+        primaryRepo(p),
+        ...extras.filter((r) => r.project_id === p.id).map(fromRow),
+    ]);
+}
+
 /** The repos a Task works on, in its order; `[]` (or only unknown ids) = the primary. */
 async function forTask(task: { project_id: string; repo_ids: string[] }): Promise<IProjectRepo[]> {
     const all = await list(task.project_id);
@@ -173,6 +190,7 @@ function ownerOfPath(gitPath: string): Promise<{ id: string; name: string } | un
 export const projectReposService = {
     ownerOfPath,
     list,
+    listAll,
     forTask,
     validateIds,
     assertNameFree,

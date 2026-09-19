@@ -25,6 +25,7 @@ import type {
     IJiraConfig,
     IJiraSyncResult,
     IJiraTestResult,
+    IProjectRepo,
     ISettings,
     IComment,
     INotification,
@@ -156,7 +157,7 @@ async function requestRaw<T>(
 
 /** PUT /integrations/jira body: any config field; `api_token` is write-only (omit or '' keeps the stored one). */
 export type JiraConfigUpdate = Partial<
-    Pick<IJiraConfig, 'enabled' | 'site_url' | 'email' | 'jql' | 'project_id' | 'poll_interval_minutes' | 'extra_fields' | 'label_workflows'>
+    Pick<IJiraConfig, 'enabled' | 'site_url' | 'email' | 'poll_interval_minutes' | 'extra_fields' | 'sources'>
 > & { api_token?: string };
 
 const get = <T>(path: string) => request<T>(path);
@@ -286,6 +287,11 @@ export const api = {
         test: (data: { site_url?: string; email?: string; api_token?: string } = {}) =>
             post<IJiraTestResult>('/integrations/jira/test', data),
         sync: () => post<IJiraSyncResult>('/integrations/jira/sync', {}),
+    },
+
+    /** Every repo of every project (ADR 0017). */
+    repos: {
+        listAll: () => get<IProjectRepo[]>('/repos'),
     },
 
     settings: {

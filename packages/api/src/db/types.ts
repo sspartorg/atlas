@@ -1,6 +1,7 @@
 import type { ColumnType, Generated } from 'kysely';
 import type {
     AgentCli,
+    IJiraSource,
     IWorkflowGraph,
     SchedulePreset,
     WorkflowInputKind,
@@ -472,16 +473,10 @@ export interface JiraConfigTable {
     site_url: StrN;
     email: StrN;
     api_token_encrypted: StrN;
-    jql: StrN;
-    project_id: StrN;
     poll_interval_minutes: Int;
     extra_fields: ColumnType<string[], string | undefined, string>;
-    // Rules saved before routing carried a project have no project_id.
-    label_workflows: ColumnType<
-        { label: string; project_id?: string | null; workflow_id: string | null }[],
-        string | undefined,
-        string
-    >;
+    // Migration 044 (ADR 0017) — one JQL per repo, replacing jql / project_id / label_workflows.
+    sources: ColumnType<IJiraSource[], string | undefined, string>;
     last_sync_at: TSD;
     last_sync_ok: ColumnType<boolean | null, boolean | null | undefined, boolean | null>;
     last_sync_message: StrN;
