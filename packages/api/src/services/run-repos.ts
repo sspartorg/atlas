@@ -1,4 +1,4 @@
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import type { IProjectRepo } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
 import { projectReposService } from './project-repos.js';
@@ -62,7 +62,16 @@ export async function runRepos(run: {
         'ws',
         run.branch.replace(/\//g, '__')
     );
-    return { repos: repos.map((repo) => ({ repo, path: join(workspace, repo.name) })), workspace };
+    // Names are unique per project, but the primary's comes from its folder, so
+    // a later git_path change could collide with an extra repo: keep folders apart.
+    const used = new Set<string>();
+    const folder = (name: string): string => {
+        let f = name;
+        for (let n = 2; used.has(f); n++) f = `${name}-${n}`;
+        used.add(f);
+        return f;
+    };
+    return { repos: repos.map((repo) => ({ repo, path: join(workspace, folder(repo.name)) })), workspace };
 }
 
 /**
@@ -80,12 +89,12 @@ export function repositoriesMarkdown(repos: RunRepo[], branch: string | null): s
         '| Folder | Remote | Base branch |',
         '|---|---|---|',
         ...repos.map(
-            (r, i) => `| \`./${r.repo.name}\`${i === 0 ? ' (first)' : ''} | ${r.repo.git_url || '-'} | \`${r.repo.default_branch}\` |`
+            (r, i) => `| \`./${basename(r.path)}\`${i === 0 ? ' (first)' : ''} | ${r.repo.git_url || '-'} | \`${r.repo.default_branch}\` |`
         ),
         '',
         '- This folder is not a git repo. Change each file in the repo it belongs to, and commit inside that repo (`git -C ./<repo> ...`).',
         '- Run every checklist script from inside each repo you changed: `(cd ./<repo> && bash ./.atlas/scripts/bash/<script>.sh)`.',
-        `- Put Task-wide files (specs, QA CSVs) in the first repo, \`./${first?.repo.name ?? ''}\`.`,
+        `- Put Task-wide files (specs, QA CSVs) in the first repo, \`./${first ? basename(first.path) : ''}\`.`,
         '- When the workflow ends, Atlas pushes the branch and opens one pull request per repo you changed.',
         '',
     ].join('\n');

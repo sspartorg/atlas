@@ -42,7 +42,15 @@ describe('runRepos', () => {
         ]);
 
         const md = repositoriesMarkdown(r.repos, BRANCH);
+        expect(md).toContain('| `./core` | https://github.com/o/core | `main` |');
         expect(md).toContain('| `./web` (first) | https://github.com/o/web | `main` |');
         expect(md).toContain('Put Task-wide files (specs, QA CSVs) in the first repo, `./web`');
+    });
+
+    it('gives each repo its own folder even if the primary is renamed onto an extra repo name', async () => {
+        await testDb.updateTable('projects').set({ git_path: '/ws/web' }).where('id', '=', 'p1').execute();
+        await testDb.updateTable('items').set({ repo_ids: JSON.stringify(['p1', 'repo-web']) }).where('id', '=', 'ATL-1').execute();
+        const r = await runRepos({ project_id: 'p1', item_id: 'ATL-1', branch: BRANCH });
+        expect(r.repos.map((x) => x.path.split('/').pop())).toEqual(['web', 'web-2']);
     });
 });
