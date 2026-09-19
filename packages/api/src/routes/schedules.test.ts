@@ -55,25 +55,25 @@ describe('GET /api/schedules', () => {
     });
 });
 
-describe('GET /api/projects/:id/schedule', () => {
+describe('GET /api/projects/:id/repos/:repoId/schedule', () => {
     it('returns 200 with default schedule for existing project', async () => {
-        const res = await app.inject({ method: 'GET', url: '/api/projects/p1/schedule' });
+        const res = await app.inject({ method: 'GET', url: '/api/projects/p1/repos/p1/schedule' });
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body);
         expect(body).toHaveProperty('enabled');
     });
 
     it('returns 404 for missing project', async () => {
-        const res = await app.inject({ method: 'GET', url: '/api/projects/no-such/schedule' });
+        const res = await app.inject({ method: 'GET', url: '/api/projects/no-such/repos/no-such/schedule' });
         expect(res.statusCode).toBe(404);
     });
 });
 
-describe('PUT /api/projects/:id/schedule', () => {
+describe('PUT /api/projects/:id/repos/:repoId/schedule', () => {
     it('creates/updates schedule and returns 200', async () => {
         const res = await app.inject({
             method: 'PUT',
-            url: '/api/projects/p1/schedule',
+            url: '/api/projects/p1/repos/p1/schedule',
             payload: VALID_SCHEDULE,
         });
         expect(res.statusCode).toBe(200);
@@ -85,7 +85,7 @@ describe('PUT /api/projects/:id/schedule', () => {
     it('returns 404 for missing project', async () => {
         const res = await app.inject({
             method: 'PUT',
-            url: '/api/projects/no-such/schedule',
+            url: '/api/projects/no-such/repos/no-such/schedule',
             payload: VALID_SCHEDULE,
         });
         expect(res.statusCode).toBe(404);
@@ -94,7 +94,7 @@ describe('PUT /api/projects/:id/schedule', () => {
     it('returns 400 for invalid preset', async () => {
         const res = await app.inject({
             method: 'PUT',
-            url: '/api/projects/p1/schedule',
+            url: '/api/projects/p1/repos/p1/schedule',
             payload: { ...VALID_SCHEDULE, preset: 'not-valid' },
         });
         expect(res.statusCode).toBe(400);
@@ -104,13 +104,13 @@ describe('PUT /api/projects/:id/schedule', () => {
         // First enable
         await app.inject({
             method: 'PUT',
-            url: '/api/projects/p1/schedule',
+            url: '/api/projects/p1/repos/p1/schedule',
             payload: VALID_SCHEDULE,
         });
         // Then disable
         const res = await app.inject({
             method: 'PUT',
-            url: '/api/projects/p1/schedule',
+            url: '/api/projects/p1/repos/p1/schedule',
             payload: { ...VALID_SCHEDULE, enabled: false },
         });
         expect(res.statusCode).toBe(200);
@@ -121,7 +121,7 @@ describe('PUT /api/projects/:id/schedule', () => {
         // materializeCron throws for invalid custom cron expressions
         const res = await app.inject({
             method: 'PUT',
-            url: '/api/projects/p1/schedule',
+            url: '/api/projects/p1/repos/p1/schedule',
             payload: {
                 ...VALID_SCHEDULE,
                 preset: 'custom',
@@ -137,7 +137,7 @@ describe('PUT /api/projects/:id/schedule', () => {
         // materializeCron throws when preset=weekly and weekday is null
         const res = await app.inject({
             method: 'PUT',
-            url: '/api/projects/p1/schedule',
+            url: '/api/projects/p1/repos/p1/schedule',
             payload: {
                 ...VALID_SCHEDULE,
                 preset: 'weekly',
@@ -150,17 +150,17 @@ describe('PUT /api/projects/:id/schedule', () => {
     });
 });
 
-describe('DELETE /api/projects/:id/schedule', () => {
+describe('DELETE /api/projects/:id/repos/:repoId/schedule', () => {
     it('deletes schedule and returns 200 ok', async () => {
         // Create first
         await app.inject({
             method: 'PUT',
-            url: '/api/projects/p1/schedule',
+            url: '/api/projects/p1/repos/p1/schedule',
             payload: VALID_SCHEDULE,
         });
         const res = await app.inject({
             method: 'DELETE',
-            url: '/api/projects/p1/schedule',
+            url: '/api/projects/p1/repos/p1/schedule',
         });
         expect(res.statusCode).toBe(200);
         expect(JSON.parse(res.body)).toMatchObject({ ok: true });
@@ -169,17 +169,17 @@ describe('DELETE /api/projects/:id/schedule', () => {
     it('returns 404 for missing project', async () => {
         const res = await app.inject({
             method: 'DELETE',
-            url: '/api/projects/no-such/schedule',
+            url: '/api/projects/no-such/repos/no-such/schedule',
         });
         expect(res.statusCode).toBe(404);
     });
 });
 
-describe('POST /api/projects/:id/schedule/fire', () => {
+describe('POST /api/projects/:id/repos/:repoId/schedule/fire', () => {
     it('fires auto-fetch and returns 202', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/projects/p1/schedule/fire',
+            url: '/api/projects/p1/repos/p1/schedule/fire',
         });
         expect(res.statusCode).toBe(202);
         const body = JSON.parse(res.body);
@@ -189,7 +189,7 @@ describe('POST /api/projects/:id/schedule/fire', () => {
     it('returns 404 for missing project', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/projects/no-such/schedule/fire',
+            url: '/api/projects/no-such/repos/no-such/schedule/fire',
         });
         expect(res.statusCode).toBe(404);
     });

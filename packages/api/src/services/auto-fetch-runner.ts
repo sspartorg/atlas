@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { schedulesService } from './schedules.js';
 import { projectsService } from './projects.js';
+import { projectReposService } from './project-repos.js';
 import { credentialsService } from './credentials.js';
 import { isAnyAgentActiveForProject } from './agent-activity.js';
 import { broadcastSSE } from '../routes/events.js';
@@ -64,12 +65,12 @@ interface GuardSkip {
 
 async function checkGuards(
     schedule: IProjectSchedule,
-    project: { git_path: string },
+    repo: { git_path: string },
 ): Promise<GuardSkip | null> {
     if (
         schedule.skip_if_dirty &&
         schedule.conflict_policy === 'skip' &&
-        (await isWorkingTreeDirty(project.git_path))
+        (await isWorkingTreeDirty(repo.git_path))
     ) {
         return { detail: 'working tree has uncommitted changes' };
     }
@@ -79,71 +80,75 @@ async function checkGuards(
     return null;
 }
 
-export async function runAutoFetch(projectId: string): Promise<void> {
+// ADR 0018 — auto-fetch runs on one repo of a project.
+export async function runAutoFetch(repoId: string): Promise<void> {
     const autofetchId = randomUUID();
-    const schedule = await schedulesService.getOrDefault(projectId);
+    const repo = await projectReposService.get(repoId);
+    if (!repo) return;
+    const schedule = await schedulesService.getOrDefault(repoId, repo.project_id);
     if (!schedule.enabled) return;
-    const project = await projectsService.get(projectId);
+    const project = await projectsService.get(repo.project_id);
     if (!project) return;
+    const projectId = repo.project_id;
 
-    broadcastSSE({ type: 'autofetch_status', autofetchId, projectId, status: 'starting' });
+    broadcastSSE({ type: 'autofetch_status', autofetchId, projectId, repoId, status: 'starting' });
 
-    if (!project.credential_id) {
-        await schedulesService.recordRun(projectId, 'failure', 'no credential attached', schedule.next_run_at);
+    if (!repo.credential_id) {
+        await schedulesService.recordRun(repoId, 'failure', 'no credential attached', schedule.next_run_at);
         await notificationsService.create({
             event_type: 'autofetch_failed',
             project_id: projectId,
-            message: `Auto-fetch skipped on "${project.name}": no credential attached.`,
+            message: `Auto-fetch skipped on "${project.name}/${repo.name}": no credential attached.`,
         });
-        broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, result: 'failure', detail: 'no credential attached' });
+        broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, repoId, result: 'failure', detail: 'no credential attached' });
         return;
     }
-    const cred = await credentialsService.get(project.credential_id);
+    const cred = await credentialsService.get(repo.credential_id);
     if (!cred) {
-        await schedulesService.recordRun(projectId, 'failure', 'credential missing', schedule.next_run_at);
+        await schedulesService.recordRun(repoId, 'failure', 'credential missing', schedule.next_run_at);
         await notificationsService.create({
             event_type: 'autofetch_failed',
             project_id: projectId,
-            message: `Auto-fetch failed on "${project.name}": credential missing.`,
+            message: `Auto-fetch failed on "${project.name}/${repo.name}": credential missing.`,
         });
-        broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, result: 'failure', detail: 'credential missing' });
+        broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, repoId, result: 'failure', detail: 'credential missing' });
         return;
     }
     let token: string;
     try {
-        token = await credentialsService.getToken(project.credential_id);
+        token = await credentialsService.getToken(repo.credential_id);
     } catch {
-        await schedulesService.recordRun(projectId, 'failure', 'token unreadable', schedule.next_run_at);
+        await schedulesService.recordRun(repoId, 'failure', 'token unreadable', schedule.next_run_at);
         await notificationsService.create({
             event_type: 'autofetch_failed',
             project_id: projectId,
-            message: `Auto-fetch failed on "${project.name}": token unreadable.`,
+            message: `Auto-fetch failed on "${project.name}/${repo.name}": token unreadable.`,
         });
-        broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, result: 'failure', detail: 'token unreadable' });
+        broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, repoId, result: 'failure', detail: 'token unreadable' });
         return;
     }
 
-    const guard = await checkGuards(schedule, project);
+    const guard = await checkGuards(schedule, repo);
     if (guard) {
-        await schedulesService.recordRun(projectId, 'skipped', guard.detail, schedule.next_run_at);
+        await schedulesService.recordRun(repoId, 'skipped', guard.detail, schedule.next_run_at);
         await notificationsService.create({
             event_type: 'autofetch_skipped',
             project_id: projectId,
-            message: `Auto-fetch skipped on "${project.name}": ${guard.detail}.`,
+            message: `Auto-fetch skipped on "${project.name}/${repo.name}": ${guard.detail}.`,
         });
-        broadcastSSE({ type: 'autofetch_status', autofetchId, projectId, status: 'skipped' });
-        broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, result: 'skipped', detail: guard.detail });
+        broadcastSSE({ type: 'autofetch_status', autofetchId, projectId, repoId, status: 'skipped' });
+        broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, repoId, result: 'skipped', detail: guard.detail });
         return;
     }
 
     const authB64 = Buffer.from(`${cred.username}:${token}`, 'utf8').toString('base64');
-    broadcastSSE({ type: 'autofetch_status', autofetchId, projectId, status: 'fetching' });
+    broadcastSSE({ type: 'autofetch_status', autofetchId, projectId, repoId, status: 'fetching' });
 
     const redact = (line: string) => line.split(authB64).join('***').split(token).join('***');
     const fetchResult = await performAutoFetch({
-        destination: project.git_path,
-        branch: project.default_branch,
-        remoteUrl: project.git_url,
+        destination: repo.git_path,
+        branch: repo.default_branch,
+        remoteUrl: repo.git_url,
         authB64,
         conflictPolicy: schedule.conflict_policy,
         onLine: (raw) => {
@@ -154,6 +159,7 @@ export async function runAutoFetch(projectId: string): Promise<void> {
                     type: 'autofetch_output',
                     autofetchId,
                     projectId,
+                    repoId,
                     output: redact(line),
                 });
             }
@@ -163,11 +169,11 @@ export async function runAutoFetch(projectId: string): Promise<void> {
     const { result, detail } = mapCode(fetchResult.code, fetchResult.detail);
 
     if (fetchResult.code === 'AUTH_FAILED') {
-        const count = await schedulesService.incrementAuthFailure(projectId);
+        const count = await schedulesService.incrementAuthFailure(repoId);
         if (count >= AUTH_FAIL_DISABLE_THRESHOLD) {
-            await schedulesService.disable(projectId);
+            await schedulesService.disable(repoId);
             await schedulesService.recordRun(
-                projectId,
+                repoId,
                 'failure',
                 `${detail} - auto-disabled after ${count} failures`,
                 null,
@@ -176,36 +182,37 @@ export async function runAutoFetch(projectId: string): Promise<void> {
                 event_type: 'autofetch_disabled',
                 kind: 'needs_you',
                 project_id: projectId,
-                message: `Auto-fetch disabled on "${project.name}": credential rejected ${count} times in a row. Re-attach credential and re-enable.`,
+                message: `Auto-fetch disabled on "${project.name}/${repo.name}": credential rejected ${count} times in a row. Re-attach credential and re-enable.`,
             });
             sendExternalNotification(
-                `Auto-fetch disabled on "${project.name}" after ${count} auth failures.`,
+                `Auto-fetch disabled on "${project.name}/${repo.name}" after ${count} auth failures.`,
             ).catch(() => {});
             broadcastSSE({
                 type: 'autofetch_error',
                 autofetchId,
                 projectId,
+                repoId,
                 errorDetail: `${detail} - auto-disabled`,
             });
             return;
         }
     } else if (result === 'success') {
-        await schedulesService.resetAuthFailure(projectId);
+        await schedulesService.resetAuthFailure(repoId);
     }
 
-    await schedulesService.recordRun(projectId, result, detail, schedule.next_run_at);
+    await schedulesService.recordRun(repoId, result, detail, schedule.next_run_at);
 
     const evt = `autofetch_${result === 'success' ? 'success' : result === 'skipped' ? 'skipped' : result === 'conflict' ? 'conflict' : 'failed'}`;
     await notificationsService.create({
         event_type: evt,
         kind: 'system',
         project_id: projectId,
-        message: `Auto-fetch on "${project.name}": ${detail}.`,
+        message: `Auto-fetch on "${project.name}/${repo.name}": ${detail}.`,
     });
     if (result === 'failure' || (result === 'conflict' && schedule.conflict_policy === 'abort')) {
-        sendExternalNotification(`Auto-fetch on "${project.name}": ${detail}.`).catch(() => {});
+        sendExternalNotification(`Auto-fetch on "${project.name}/${repo.name}": ${detail}.`).catch(() => {});
     }
-    broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, result, detail });
+    broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, repoId, result, detail });
 }
 
 export const __internal = { isWorkingTreeDirty, checkGuards, mapCode };

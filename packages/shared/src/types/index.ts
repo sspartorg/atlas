@@ -1183,12 +1183,14 @@ export interface SSEEvent {
     stream?: 'stdout' | 'stderr';
     exitCode?: number;
     projectId?: string;
+    /** ADR 0018 — which repo of the project an auto-fetch / reclone event is about. */
+    repoId?: string;
     mode?: 'unregister' | 'purge';
     stashPath?: string | null;
     result?: ScheduleRunStatus;
     detail?: string | null;
     project?: IProject;
-    /** ADR 0017 — set on `clone_completed` when the clone added a repo to a project. */
+    /** Set on `clone_completed`: the repo the clone registered. */
     repo?: IProjectRepo;
     errorDetail?: string;
     /** W4 — typed kind on `run_error` SSE events. Lets the UI render a

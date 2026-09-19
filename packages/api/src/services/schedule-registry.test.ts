@@ -12,6 +12,7 @@ import type { IProjectSchedule } from '@atlas/shared';
 
 function schedule(over: Partial<IProjectSchedule>): IProjectSchedule {
     return {
+        repo_id: over.repo_id ?? over.project_id ?? 'p1',
         project_id: over.project_id ?? 'p1',
         enabled: true,
         preset: 'custom',

@@ -3,6 +3,7 @@ import type { IProjectSchedule } from '@atlas/shared';
 
 function rowToSchedule(r: Record<string, unknown>): IProjectSchedule {
     return {
+        repo_id: r['repo_id'] as string,
         project_id: r['project_id'] as string,
         enabled: (r['enabled'] as number) === 1,
         preset: r['preset'] as IProjectSchedule['preset'],
@@ -26,8 +27,9 @@ function rowToSchedule(r: Record<string, unknown>): IProjectSchedule {
     };
 }
 
-function defaultSchedule(projectId: string): IProjectSchedule {
+function defaultSchedule(repoId: string, projectId: string): IProjectSchedule {
     return {
+        repo_id: repoId,
         project_id: projectId,
         enabled: false,
         preset: 'daily',
@@ -48,6 +50,7 @@ function defaultSchedule(projectId: string): IProjectSchedule {
 }
 
 export interface UpsertScheduleInput {
+    repo_id: string;
     project_id: string;
     enabled: boolean;
     preset: IProjectSchedule['preset'];
@@ -61,19 +64,22 @@ export interface UpsertScheduleInput {
 }
 
 export const schedulesService = {
-    async getOrDefault(projectId: string): Promise<IProjectSchedule> {
+    // ADR 0018 — a schedule belongs to a repo. `projectId` only seeds the
+    // default row for a repo that has never been scheduled.
+    async getOrDefault(repoId: string, projectId: string): Promise<IProjectSchedule> {
         const row = await db
             .selectFrom('project_schedules')
             .selectAll()
-            .where('project_id', '=', projectId)
+            .where('repo_id', '=', repoId)
             .executeTakeFirst();
-        return row ? rowToSchedule(row as never) : defaultSchedule(projectId);
+        return row ? rowToSchedule(row as never) : defaultSchedule(repoId, projectId);
     },
 
     async upsert(input: UpsertScheduleInput): Promise<IProjectSchedule> {
         await db
             .insertInto('project_schedules')
             .values({
+                repo_id: input.repo_id,
                 project_id: input.project_id,
                 enabled: input.enabled ? 1 : 0,
                 preset: input.preset,
@@ -86,7 +92,7 @@ export const schedulesService = {
                 next_run_at: input.next_run_at,
             })
             .onConflict((oc) =>
-                oc.column('project_id').doUpdateSet((eb) => ({
+                oc.column('repo_id').doUpdateSet((eb) => ({
                     enabled: eb.ref('excluded.enabled'),
                     preset: eb.ref('excluded.preset'),
                     cron_expression: eb.ref('excluded.cron_expression'),
@@ -99,11 +105,11 @@ export const schedulesService = {
                 })),
             )
             .execute();
-        return this.getOrDefault(input.project_id);
+        return this.getOrDefault(input.repo_id, input.project_id);
     },
 
-    async delete(projectId: string): Promise<void> {
-        await db.deleteFrom('project_schedules').where('project_id', '=', projectId).execute();
+    async delete(repoId: string): Promise<void> {
+        await db.deleteFrom('project_schedules').where('repo_id', '=', repoId).execute();
     },
 
     async listEnabled(): Promise<IProjectSchedule[]> {
@@ -116,7 +122,7 @@ export const schedulesService = {
     },
 
     async recordRun(
-        projectId: string,
+        repoId: string,
         status: IProjectSchedule['last_run_status'],
         detail: string | null,
         nextRunAt: string | null,
@@ -129,37 +135,37 @@ export const schedulesService = {
                 last_run_detail: detail,
                 next_run_at: nextRunAt,
             })
-            .where('project_id', '=', projectId)
+            .where('repo_id', '=', repoId)
             .execute();
     },
 
-    async incrementAuthFailure(projectId: string): Promise<number> {
+    async incrementAuthFailure(repoId: string): Promise<number> {
         await db
             .updateTable('project_schedules')
             .set((eb) => ({ auth_failure_count: eb('auth_failure_count', '+', 1) }))
-            .where('project_id', '=', projectId)
+            .where('repo_id', '=', repoId)
             .execute();
         const row = await db
             .selectFrom('project_schedules')
             .select('auth_failure_count')
-            .where('project_id', '=', projectId)
+            .where('repo_id', '=', repoId)
             .executeTakeFirst();
         return row?.auth_failure_count ?? 0;
     },
 
-    async resetAuthFailure(projectId: string): Promise<void> {
+    async resetAuthFailure(repoId: string): Promise<void> {
         await db
             .updateTable('project_schedules')
             .set({ auth_failure_count: 0 })
-            .where('project_id', '=', projectId)
+            .where('repo_id', '=', repoId)
             .execute();
     },
 
-    async disable(projectId: string): Promise<void> {
+    async disable(repoId: string): Promise<void> {
         await db
             .updateTable('project_schedules')
             .set({ enabled: 0, next_run_at: null })
-            .where('project_id', '=', projectId)
+            .where('repo_id', '=', repoId)
             .execute();
     },
 };
