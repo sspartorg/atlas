@@ -314,6 +314,26 @@ export interface IProject {
     last_activity_at: string;
 }
 
+/**
+ * ADR 0017 — a git repo of a Project. The project's own git fields are its
+ * PRIMARY repo (`primary: true`, `id` = the project id); extra repos live in
+ * `project_repos`.
+ */
+export interface IProjectRepo {
+    id: string;
+    project_id: string;
+    /** Folder name in a multi-repo workspace; lowercase slug, unique per project. */
+    name: string;
+    primary: boolean;
+    git_url: string;
+    git_path: string;
+    credential_id: string | null;
+    default_branch: string;
+    clone_status: CloneStatus;
+    setup_sh_body: string;
+    setup_ps1_body: string;
+}
+
 export interface ICredential {
     id: string;
     label: string;
@@ -373,6 +393,11 @@ export interface ITask {
     pr_url: string | null;
     /** Free-form labels for filtering. Max 20 per item / 40 chars each (enforced at Zod). */
     labels: string[];
+    /**
+     * ADR 0017 — the project repos this Task changes, in order (the first
+     * holds Task-wide files). Empty = the project's primary repo only.
+     */
+    repo_ids: string[];
     // The run branch (`atlas/wf/<id>`) and its on-disk checkout; both null
     // until a workflow run provisions them.
     worktree_branch: string | null;
@@ -1173,6 +1198,8 @@ export interface SSEEvent {
     result?: ScheduleRunStatus;
     detail?: string | null;
     project?: IProject;
+    /** ADR 0017 — set on `clone_completed` when the clone added a repo to a project. */
+    repo?: IProjectRepo;
     errorDetail?: string;
     /** W4 — typed kind on `run_error` SSE events. Lets the UI render a
      *  kind-aware banner (e.g. "claude CLI not on PATH") instead of dumping

@@ -1611,3 +1611,118 @@ describe('POST /api/projects/connect — readHead non-null branch (PROJ-CONN-HEA
         expect(capturedArgs?.default_branch).toBe('develop');
     });
 });
+
+
+describe('project repos (ADR 0017)', () => {
+    async function connectRepo(name: string, folder = `/ws/${name}`) {
+        return app.inject({
+            method: 'POST',
+            url: '/api/projects/p1/repos',
+            payload: {
+                mode: 'connect',
+                name,
+                folder_path: folder,
+                repo_url: 'https://github.com/org/repo',
+                credential_id: 'cred-1',
+            },
+        });
+    }
+
+    it('lists the project as its primary repo, then the extras in order', async () => {
+        await insertProject('p1', 'ATL', { git_path: '/ws/Atlas Core', git_url: 'https://github.com/org/core' });
+        await insertTestCredential();
+        expect((await connectRepo('web')).statusCode).toBe(201);
+
+        const res = await app.inject({ method: 'GET', url: '/api/projects/p1/repos' });
+        const repos = JSON.parse(res.body) as Array<{ id: string; name: string; primary: boolean }>;
+        expect(repos.map((r) => [r.name, r.primary])).toEqual([
+            ['atlas-core', true],
+            ['web', false],
+        ]);
+        expect(repos[0]?.id).toBe('p1');
+    });
+
+    it('rejects a duplicate name and a folder another project or repo already uses', async () => {
+        await insertProject('p1', 'ATL', { git_path: '/ws/core' });
+        await insertTestCredential();
+        expect((await connectRepo('web')).statusCode).toBe(201);
+        expect((await connectRepo('web', '/ws/other')).statusCode).toBe(409);
+        expect((await connectRepo('core', '/ws/x')).statusCode).toBe(409); // the primary's name
+        const again = await connectRepo('web2', '/ws/web');
+        expect(again.statusCode).toBe(400);
+        expect(JSON.parse(again.body).error_kind).toBe('already_registered');
+    });
+
+    it('clones a new repo next to the workspace and registers it when the clone finishes', async () => {
+        await insertProject('p1', 'ATL', { name: 'Dhe Quest', git_path: '/ws/dhe' });
+        await insertTestCredential();
+        await testDb.updateTable('settings').set({ workspace_path: '/ws' }).where('id', '=', 1).execute();
+        const { startClone } = await import('../services/clone-runner.js');
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/projects/p1/repos',
+            payload: { mode: 'clone', name: 'api', repo_url: 'https://github.com/org/api', credential_id: 'cred-1' },
+        });
+        expect(res.statusCode).toBe(202);
+        const call = (startClone as ReturnType<typeof vi.fn>).mock.calls.at(-1) as [
+            { destination: string },
+            (c: { git_url: string; git_path: string }) => Promise<{ repo?: { name: string } }>,
+        ];
+        expect(call[0].destination).toMatch(/dhe-quest-api$/);
+        const done = await call[1]({ git_url: 'https://github.com/org/api', git_path: call[0].destination });
+        expect(done.repo?.name).toBe('api');
+    });
+
+    it('edits and removes extra repos only, and drops a removed repo from Tasks', async () => {
+        await insertProject('p1', 'ATL', { git_path: '/ws/core' });
+        await insertTestCredential();
+        const web = JSON.parse((await connectRepo('web')).body) as { id: string };
+        const patched = await app.inject({
+            method: 'PATCH',
+            url: `/api/projects/p1/repos/${web.id}`,
+            payload: { setup_sh_body: 'npm ci' },
+        });
+        expect(JSON.parse(patched.body).setup_sh_body).toBe('npm ci');
+        expect((await app.inject({ method: 'PATCH', url: '/api/projects/p1/repos/p1', payload: {} })).statusCode).toBe(404);
+
+        const task = await app.inject({
+            method: 'POST',
+            url: '/api/tasks',
+            payload: { project_id: 'p1', title: 'Both', repo_ids: ['p1', web.id] },
+        });
+        const taskId = (JSON.parse(task.body) as { id: string }).id;
+        expect((await app.inject({ method: 'DELETE', url: `/api/projects/p1/repos/${web.id}` })).statusCode).toBe(204);
+        const after = JSON.parse((await app.inject({ method: 'GET', url: `/api/tasks/${taskId}` })).body);
+        expect(after.repo_ids).toEqual(['p1']);
+        expect((await app.inject({ method: 'DELETE', url: '/api/projects/p1/repos/p1' })).statusCode).toBe(404);
+    });
+
+    it("keeps a Task's repos inside its project and frozen while a run holds it", async () => {
+        await insertProject('p1', 'ATL', { git_path: '/ws/core' });
+        await insertProject('p2', 'OTH', { git_path: '/ws/other' });
+        await insertTestCredential();
+        const web = JSON.parse((await connectRepo('web')).body) as { id: string };
+
+        const foreign = await app.inject({
+            method: 'POST',
+            url: '/api/tasks',
+            payload: { project_id: 'p1', title: 'Bad', repo_ids: ['p2'] },
+        });
+        expect(foreign.statusCode).toBe(400);
+
+        const task = JSON.parse(
+            (await app.inject({ method: 'POST', url: '/api/tasks', payload: { project_id: 'p1', title: 'T' } })).body
+        ) as { id: string; repo_ids: string[] };
+        expect(task.repo_ids).toEqual([]);
+        await testDb
+            .insertInto('workflows')
+            .values({ id: 'wf1', project_id: 'p1', name: 'WF', graph: JSON.stringify({ nodes: [], edges: [] }) } as never)
+            .execute();
+        await testDb
+            .insertInto('workflow_runs')
+            .values({ id: 'run1', workflow_id: 'wf1', item_id: task.id, project_id: 'p1', status: 'running', graph_snapshot: '{}' } as never)
+            .execute();
+        const locked = await app.inject({ method: 'PATCH', url: `/api/tasks/${task.id}`, payload: { repo_ids: [web.id] } });
+        expect(locked.statusCode).toBe(409);
+    });
+});

@@ -80,6 +80,7 @@ export function makeTask(overrides: Partial<ITask> = {}): ITask {
         spec_md: null,
         pr_url: null,
         labels: [],
+        repo_ids: [],
         worktree_branch: null,
         worktree_path: null,
         created_at: ISO,

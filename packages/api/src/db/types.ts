@@ -244,6 +244,26 @@ export interface CredentialsTable {
     updated_at: UpdatedAt;
 }
 
+// Migration 043 (ADR 0017) — a project's repos beyond its primary one.
+export interface ProjectReposTable {
+    id: string;
+    project_id: string;
+    name: string;
+    git_url: string;
+    git_path: string;
+    credential_id: StrN;
+    default_branch: Str;
+    clone_status: ColumnType<
+        'pending' | 'cloning' | 'ready' | 'error',
+        'pending' | 'cloning' | 'ready' | 'error' | undefined,
+        'pending' | 'cloning' | 'ready' | 'error'
+    >;
+    setup_sh_body: Str;
+    setup_ps1_body: Str;
+    position: Int;
+    created_at: CreatedAt;
+}
+
 export interface ProjectsTable {
     id: string;
     name: string;
@@ -421,6 +441,8 @@ export interface ItemsTable {
     // Task 1 — labels JSONB. Select returns string[]; insert/update
     // accept string[] | undefined (DB defaults to []).
     labels: ColumnType<string[], string[] | undefined, string[] | undefined>;
+    // Migration 043 (ADR 0017) — the project repos a Task works on; [] = primary.
+    repo_ids: ColumnType<string[], string | undefined, string | undefined>;
 
     // ADR 0014 — the workflow this item is queued for.
     workflow_id: StrN;
@@ -749,6 +771,7 @@ export interface DB {
     agent_prompt_versions: AgentPromptVersionsTable;
     credentials: CredentialsTable;
     projects: ProjectsTable;
+    project_repos: ProjectReposTable;
     project_issue_counters: ProjectIssueCountersTable;
     project_schedules: ProjectSchedulesTable;
     project_guardrails: ProjectGuardrailsTable;
