@@ -26,7 +26,6 @@ import type {
     IJiraConfig,
     IJiraSyncResult,
     IJiraTestResult,
-    IProjectRepo,
     ISettings,
     IComment,
     INotification,
