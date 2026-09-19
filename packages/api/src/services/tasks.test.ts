@@ -44,7 +44,7 @@ vi.mock('./events-log.js', () => {
 import { tasksService } from './tasks.js';
 import { eventsLog } from './events-log.js';
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
-import { insertProject, insertAgent, insertItem } from '../../tests/_items.js';
+import { insertProject, insertAgent, insertItem, insertProjectRepo } from '../../tests/_items.js';
 
 beforeEach(async () => {
     await truncateAll();
@@ -342,5 +342,41 @@ describe('tasksService', () => {
                 .executeTakeFirstOrThrow();
             expect(Number(remaining.n)).toBe(0);
         });
+    });
+});
+
+// ADR 0018 — a Task always names at least one repo.
+describe('tasksService repos (ADR 0018)', () => {
+    it('fills repo_ids when the project has exactly one repo', async () => {
+        const task = await tasksService.create({ project_id: 'p1', title: 'T' });
+        expect(task.repo_ids).toEqual(['p1']);
+    });
+
+    it('400s when a multi-repo project gets a Task with no repos', async () => {
+        await insertProjectRepo('p1', { name: 'web' });
+        await expect(tasksService.create({ project_id: 'p1', title: 'T' })).rejects.toMatchObject({
+            status: 400,
+        });
+    });
+
+    it('400s when the project has no repos at all', async () => {
+        await insertProject('p-bare', 'BAR', { no_repo: true });
+        await expect(tasksService.create({ project_id: 'p-bare', title: 'T' })).rejects.toMatchObject({
+            status: 400,
+        });
+    });
+
+    it('400s when an update empties repo_ids on a multi-repo project', async () => {
+        const web = await insertProjectRepo('p1', { name: 'web' });
+        const task = await tasksService.create({ project_id: 'p1', title: 'T', repo_ids: [web] });
+        await expect(tasksService.update(task.id, { repo_ids: [] })).rejects.toMatchObject({
+            status: 400,
+        });
+    });
+
+    it('re-fills an emptied repo_ids when the project has only one repo', async () => {
+        const task = await tasksService.create({ project_id: 'p1', title: 'T' });
+        const updated = await tasksService.update(task.id, { repo_ids: [] });
+        expect(updated.repo_ids).toEqual(['p1']);
     });
 });

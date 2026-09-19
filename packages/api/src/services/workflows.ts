@@ -443,9 +443,18 @@ export const workflowsService = {
 
     /** Queue (or unqueue) an item for a workflow. */
     async setItemWorkflow(itemId: string, workflowId: string | null): Promise<void> {
-        const item = await db.selectFrom('items').select(['id', 'type', 'project_id', 'status']).where('id', '=', itemId).executeTakeFirst();
+        const item = await db
+            .selectFrom('items')
+            .select(['id', 'type', 'project_id', 'status', 'repo_ids'])
+            .where('id', '=', itemId)
+            .executeTakeFirst();
         if (!item) throw new ApiError('not_found', 'Item not found', 404);
         if (workflowId) {
+            // ADR 0018 — a Task's repos can be removed out from under it; a run
+            // with nothing to check out would fail at worktree provisioning.
+            if ((item.repo_ids ?? []).length === 0) {
+                throw new ApiError('conflict', 'This Task has no repos — add one to the project first', 409);
+            }
             // Sub-tasks run inside their Task's workflow run (ADR 0015).
             if (item.type !== 'task') throw new ApiError('validation_error', 'Only Tasks are queued for workflows', 400);
             const wf = await this.get(workflowId);

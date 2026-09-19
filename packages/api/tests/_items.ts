@@ -175,7 +175,13 @@ export async function insertItem(input: InsertItemInput): Promise<string> {
             parent_id: input.parent_id ?? null,
             parent_type: input.parent_type ?? null,
             title: input.title ?? 'Item',
-            ...(input.repo_ids ? { repo_ids: JSON.stringify(input.repo_ids) } : {}),
+            // ADR 0018 — a Task always names at least one repo; the fixture's
+            // repo carries the project's id, exactly as migration 045 leaves it.
+            ...(input.repo_ids
+                ? { repo_ids: JSON.stringify(input.repo_ids) }
+                : input.type === 'task'
+                  ? { repo_ids: JSON.stringify([input.project_id]) }
+                  : {}),
             description: input.description ?? '',
             status: input.status ?? 'draft',
             priority: input.priority ?? 'normal',
