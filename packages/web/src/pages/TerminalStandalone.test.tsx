@@ -23,6 +23,7 @@ function makeStandaloneSession(overrides: Partial<ICliSession> = {}): ICliSessio
     return {
         id: 'sess-standalone-1',
         project_id: null,
+        repo_id: null,
         title: 'atlas',
         status: 'active',
         cli: 'claude',

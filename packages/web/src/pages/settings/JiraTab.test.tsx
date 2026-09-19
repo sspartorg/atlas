@@ -24,7 +24,7 @@ const CONFIG: IJiraConfig = {
 };
 
 const repo = (id: string, project_id: string, name: string) =>
-    ({ id, project_id, name, primary: id === project_id }) as IProjectRepo;
+    ({ id, project_id, name }) as IProjectRepo;
 
 const workflow = (
     id: string,

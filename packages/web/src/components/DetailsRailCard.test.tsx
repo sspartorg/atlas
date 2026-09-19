@@ -279,9 +279,9 @@ describe('DetailsRailCard', () => {
         });
     });
 
-    describe('Repos row (ADR 0017)', () => {
+    describe('Repos row (ADR 0018)', () => {
         const BASE = 'http://localhost:3000/api';
-        const WEB = makeProjectRepo({ id: 'r-web', name: 'web', primary: false });
+        const WEB = makeProjectRepo({ id: 'r-web', name: 'web' });
 
         function renderRepos(
             repoIds: string[],

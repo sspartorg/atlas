@@ -22,6 +22,7 @@ function makeSession(overrides: Partial<ICliSession> = {}): ICliSession {
     return {
         id: 'sess-1',
         project_id: 'proj-1',
+        repo_id: 'proj-1',
         title: 'Test Session',
         status: 'active',
         cli: 'claude',

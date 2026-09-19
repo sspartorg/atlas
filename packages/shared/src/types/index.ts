@@ -802,7 +802,7 @@ export interface IItemExternalLink {
 
 /**
  * Jira bridge source (ADR 0017): issues matching `jql` are work for the repo
- * `repo_id` (a primary repo's id is its project's id). An issue matching
+ * `repo_id`. An issue matching
  * several sources becomes one Task in the first match's project, spanning the
  * matched repos of that project; the first of those sources with a
  * `workflow_id` queues it.
@@ -1356,6 +1356,8 @@ export interface ICliSession {
 
 export interface CliSessionCreateInput {
     project_id: string;
+    /** ADR 0018 — which repo to check out. Optional only for a single-repo project. */
+    repo_id?: string;
     /** Defaults to `Session <short-id>` server-side if omitted. */
     title?: string;
     /** Defaults to `atlas/terminal/<short-id>` server-side if omitted. */

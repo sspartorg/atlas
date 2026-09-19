@@ -18,6 +18,7 @@ import { DEFAULT_MODEL_BY_CLI } from '@atlas/shared';
 import { CLI_OPTIONS } from '../utils/cliPresentation.js';
 import { useCreateCliSession } from '../hooks/useCliSessions.js';
 import { useProjects } from '../hooks/useProjects.js';
+import { useProjectRepos } from '../hooks/useProjectRepos.js';
 import { useCliModels } from '../hooks/useCliModels.js';
 import { flattenIssueTree, useIssues } from '../hooks/useIssues.js';
 import { useToast } from '../hooks/useToast.js';
@@ -58,6 +59,9 @@ export function StartSessionDialog({
     const toast = useToast();
 
     const [projectId, setProjectId] = useState(defaultProjectId ?? '');
+    // ADR 0018 — a session opens on one repo of the project. Empty = the first
+    // one, which is also the only choice for a single-repo project.
+    const [repoId, setRepoId] = useState('');
     const [itemId, setItemId] = useState('');
     const [title, setTitle] = useState('');
     const [branchName, setBranchName] = useState('');
@@ -76,6 +80,8 @@ export function StartSessionDialog({
         }
     }, [open, defaultProjectId]);
 
+    const { data: repos = [] } = useProjectRepos(projectId);
+    const effectiveRepoId = repoId || repos[0]?.id || '';
     const { data: issuesData } = useIssues(projectId ? { projectId } : undefined);
     const itemOptions = useMemo<ItemPickerOption[]>(() => {
         if (!projectId || !issuesData) return [];
@@ -99,6 +105,7 @@ export function StartSessionDialog({
 
     function reset() {
         setProjectId(defaultProjectId ?? '');
+        setRepoId('');
         setItemId('');
         setTitle('');
         setBranchName('');
@@ -132,6 +139,7 @@ export function StartSessionDialog({
             cli,
             model: model || defaultModelForCli,
         };
+        if (effectiveRepoId) input.repo_id = effectiveRepoId;
         if (trimmedTitle) input.title = trimmedTitle;
         if (trimmedBranch) input.branch_name = trimmedBranch;
         if (trimmedPrompt) input.initial_prompt = trimmedPrompt;
@@ -250,6 +258,7 @@ export function StartSessionDialog({
                         value={projectId}
                         onChange={(e) => {
                             setProjectId(e.target.value);
+                            setRepoId('');
                             setItemId('');
                         }}
                         required
@@ -263,6 +272,25 @@ export function StartSessionDialog({
                             </MenuItem>
                         ))}
                     </TextField>
+                    {repos.length > 1 && (
+                        <TextField
+                            select
+                            size="small"
+                            label="Repo"
+                            value={effectiveRepoId}
+                            onChange={(e) => setRepoId(e.target.value)}
+                            required
+                            fullWidth
+                            disabled={isPending}
+                            helperText="Which repo this terminal opens on"
+                        >
+                            {repos.map((r) => (
+                                <MenuItem key={r.id} value={r.id}>
+                                    {r.name}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    )}
                     <TextField
                         select
                         size="small"
