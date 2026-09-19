@@ -19,6 +19,9 @@ vi.mock('../services/external-notifications.js', () => ({
 
 import { buildApp, isValidLogLevel } from '../server.js';
 import { truncateAll, closeTestDb, testDb } from '../../tests/_pg-db.js';
+// ADR 0018 — the project row no longer carries git fields; the shared fixture
+// inserts the project, its counter row and its repo.
+import { insertProject } from '../../tests/_items.js';
 import { testExternalNotification } from '../services/external-notifications.js';
 
 let app: FastifyInstance;
@@ -346,23 +349,7 @@ describe('POST /api/settings/reset — destructive isolation', () => {
             .set({ onboarding_complete: 1, owner_name: 'Seeded' })
             .where('id', '=', 1)
             .execute();
-        await testDb
-            .insertInto('projects')
-            .values({
-                id: 'reset-proj',
-                name: 'Reset Project',
-                issue_key_prefix: 'RST',
-                git_path: '',
-                git_url: '',
-                default_branch: 'main',
-                status: 'active',
-                clone_status: 'ready',
-            })
-            .execute();
-        await testDb
-            .insertInto('project_issue_counters')
-            .values({ project_id: 'reset-proj', last_seq: 0 })
-            .execute();
+        await insertProject('reset-proj', 'RST', { name: 'Reset Project' });
 
         // Verify precondition.
         const before = await testDb

@@ -21,7 +21,7 @@ vi.mock('../services/notifications.js', () => ({
 
 import { buildApp } from '../server.js';
 import { truncateAll, closeTestDb, testDb } from '../../tests/_pg-db.js';
-import { seedFullTree, insertItem } from '../../tests/_items.js';
+import { seedFullTree, insertItem, insertProject } from '../../tests/_items.js';
 
 let app: FastifyInstance;
 
@@ -162,19 +162,7 @@ describe('GET /api/analytics/project/:projectId — drill-down (W2)', () => {
             })
             .execute();
         // A session in another project — must NOT show up in p1's response.
-        await testDb
-            .insertInto('projects')
-            .values({
-                id: 'p-other',
-                name: 'Project Other',
-                issue_key_prefix: 'OTH',
-                git_path: '',
-                git_url: '',
-                default_branch: 'main',
-                status: 'active',
-                clone_status: 'ready',
-            })
-            .execute();
+        await insertProject('p-other', 'OTH', { name: 'Project Other' });
         await testDb
             .insertInto('cli_sessions')
             .values({
@@ -587,23 +575,7 @@ describe('GET /api/analytics/project/:projectId/tasks — pagination NaN fallbac
 
     it('returns total=0 when project has no tasks (result.rows.length === 0 branch)', async () => {
         // Create a project with no tasks at all
-        await testDb
-            .insertInto('projects')
-            .values({
-                id: 'p-no-tasks',
-                name: 'Project No Tasks',
-                issue_key_prefix: 'NOE',
-                git_path: '',
-                git_url: '',
-                default_branch: 'main',
-                status: 'active',
-                clone_status: 'ready',
-            })
-            .execute();
-        await testDb
-            .insertInto('project_issue_counters')
-            .values({ project_id: 'p-no-tasks', last_seq: 0 })
-            .execute();
+        await insertProject('p-no-tasks', 'NOE', { name: 'Project No Tasks' });
 
         const res = await app.inject({
             method: 'GET',
@@ -956,23 +928,7 @@ describe('GET /api/analytics — terminal aggregation', () => {
 describe('GET /api/analytics/project/:projectId — zero data project', () => {
     it('returns 200 with zeroed totals when no items or runs exist', async () => {
         // Create a project with no items or runs.
-        await testDb
-            .insertInto('projects')
-            .values({
-                id: 'p-empty',
-                name: 'Empty Project',
-                issue_key_prefix: 'EMP',
-                git_path: '',
-                git_url: '',
-                default_branch: 'main',
-                status: 'active',
-                clone_status: 'ready',
-            })
-            .execute();
-        await testDb
-            .insertInto('project_issue_counters')
-            .values({ project_id: 'p-empty', last_seq: 0 })
-            .execute();
+        await insertProject('p-empty', 'EMP', { name: 'Empty Project' });
 
         const res = await app.inject({
             method: 'GET',

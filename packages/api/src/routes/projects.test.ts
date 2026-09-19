@@ -1636,10 +1636,24 @@ describe('project repos (ADR 0018)', () => {
         });
         expect(foreign.statusCode).toBe(400);
 
+        // ADR 0018 — with several repos to choose from, not choosing is an error.
+        const unpicked = await app.inject({
+            method: 'POST',
+            url: '/api/tasks',
+            payload: { project_id: 'p1', title: 'No repo' },
+        });
+        expect(unpicked.statusCode).toBe(400);
+
         const task = JSON.parse(
-            (await app.inject({ method: 'POST', url: '/api/tasks', payload: { project_id: 'p1', title: 'T' } })).body
+            (
+                await app.inject({
+                    method: 'POST',
+                    url: '/api/tasks',
+                    payload: { project_id: 'p1', title: 'T', repo_ids: ['p1'] },
+                })
+            ).body
         ) as { id: string; repo_ids: string[] };
-        expect(task.repo_ids).toEqual([]);
+        expect(task.repo_ids).toEqual(['p1']);
         await testDb
             .insertInto('workflows')
             .values({ id: 'wf1', project_id: 'p1', name: 'WF', graph: JSON.stringify({ nodes: [], edges: [] }) } as never)

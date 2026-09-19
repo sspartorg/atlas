@@ -1,17 +1,9 @@
 import { describe, expect, it, beforeEach, afterAll } from 'vitest';
 import { allocateIssueKey } from './_keys.js';
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
-
-async function seedProject(id = 'p1', prefix = 'ATL'): Promise<void> {
-    await testDb
-        .insertInto('projects')
-        .values({ id, name: 'Project ' + id, issue_key_prefix: prefix, git_path: '', status: 'active' })
-        .execute();
-    await testDb
-        .insertInto('project_issue_counters')
-        .values({ project_id: id, last_seq: 0 })
-        .execute();
-}
+// ADR 0018 — the project row no longer carries git fields; the shared fixture
+// inserts the project, its counter row and its repo.
+import { insertProject as seedProject } from '../../tests/_items.js';
 
 beforeEach(async () => {
     await truncateAll();

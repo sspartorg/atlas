@@ -1304,6 +1304,8 @@ export interface ICliSession {
      * staging. `project_id === null` is the discriminator for that whole mode.
      */
     project_id: string | null;
+    /** ADR 0018 — the repo of that project the session is checked out on. Null on a standalone session. */
+    repo_id: string | null;
     title: string;
     status: CliSessionStatus;
     /** Which CLI this session is running. The claude dialect (`claude`, `ollama`) supports `--resume`; `copilot` does not. */

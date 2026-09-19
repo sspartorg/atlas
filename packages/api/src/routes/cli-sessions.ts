@@ -31,6 +31,7 @@ import { getTrustedBrowserOrigins } from '../utils/lan-origins.js';
 import { requireMcpToken, tokensMatch } from '../plugins/mcp-auth.js';
 import { credentialsService } from '../services/credentials.js';
 import { projectsService } from '../services/projects.js';
+import { projectReposService } from '../services/project-repos.js';
 import {
     ensureWorktree,
     pushWorktree,
@@ -176,6 +177,7 @@ function rowToSession(row: Record<string, unknown>): ICliSession {
         // Null on standalone sessions (migration 030) — do NOT String() it,
         // that would turn null into the literal "null".
         project_id: (row['project_id'] as string | null) ?? null,
+        repo_id: (row['repo_id'] as string | null) ?? null,
         title: String(row['title']),
         status: row['status'] as ICliSession['status'],
         cli,
@@ -319,10 +321,29 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         const body = CliSessionCreateSchema.parse(req.body);
         const project = await projectsService.get(body.project_id);
         if (!project) return reply.status(404).send({ error: 'project not found', kind: 'not_found' });
-        if (!project.git_path) {
+        // ADR 0018 — a session is checked out on one repo of the project. With
+        // a single repo the caller can leave it out; with several it must pick.
+        const repos = await projectReposService.list(body.project_id);
+        const repo = body.repo_id
+            ? repos.find((r) => r.id === body.repo_id)
+            : repos.length === 1
+              ? repos[0]
+              : undefined;
+        if (!repo) {
+            return reply.status(400).send({
+                error:
+                    repos.length === 0
+                        ? 'project has no repos; add one before opening a terminal'
+                        : body.repo_id
+                          ? 'repo_id is not a repo of this project'
+                          : 'repo_id is required when the project has several repos',
+                kind: 'validation_error',
+            });
+        }
+        if (!repo.git_path) {
             return reply
                 .status(400)
-                .send({ error: 'project has no git_path; cannot provision worktree', kind: 'validation_error' });
+                .send({ error: 'repo has no git_path; cannot provision worktree', kind: 'validation_error' });
         }
 
         // Validate the optional item link BEFORE we touch git -- a stale
@@ -377,11 +398,11 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             const result = await ensureWorktree({
                 item: null,
                 branch: branchName,
-                project: {
-                    id: project.id,
-                    git_path: project.git_path,
-                    credential_id: project.credential_id,
-                    default_branch: project.default_branch,
+                repo: {
+                    id: repo.id,
+                    git_path: repo.git_path,
+                    credential_id: repo.credential_id,
+                    default_branch: repo.default_branch,
                 },
                 pushUpstream: false,
             });
@@ -421,10 +442,10 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             await cleanupWorktreeAfterPush({
                 itemId: null,
                 projectId: project.id,
-                repoGitPath: project.git_path,
+                repoGitPath: repo.git_path,
                 worktreePath,
                 branch: branchName,
-                credentialId: project.credential_id,
+                credentialId: repo.credential_id,
             }).catch(() => { /* best-effort */ });
             return reply.status(500).send({
                 error: `worktree staging failed: ${(err as Error).message}`,
@@ -448,6 +469,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         // project has no setup_sh_body / setup_ps1_body.
         const setupResult = await runProjectSetup({
             projectId: project.id,
+            repoId: repo.id,
             worktreePath,
             runId: sessionId,
         });
@@ -455,10 +477,10 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             await cleanupWorktreeAfterPush({
                 itemId: null,
                 projectId: project.id,
-                repoGitPath: project.git_path,
+                repoGitPath: repo.git_path,
                 worktreePath,
                 branch: branchName,
-                credentialId: project.credential_id,
+                credentialId: repo.credential_id,
             }).catch(() => { /* best-effort */ });
             return reply.status(400).send({
                 /* v8 ignore next */
@@ -481,7 +503,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         // transient GitHub 5xx during lazy mint; degrade to no-auth so
         // the session can still start (git commit is local, git push
         // will surface its own auth error) rather than 500-ing.
-        const gitAuth = await safeBuildGitAuth(project.credential_id);
+        const gitAuth = await safeBuildGitAuth(repo.credential_id);
         const gitConfigPath = gitAuth?.configPath ?? null;
         const ghToken = gitAuth?.token ?? null;
 
@@ -498,6 +520,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
                 .values({
                     id: sessionId,
                     project_id: project.id,
+                    repo_id: repo.id,
                     title,
                     status: 'active',
                     cli,
@@ -557,10 +580,10 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             await cleanupWorktreeAfterPush({
                 itemId: null,
                 projectId: project.id,
-                repoGitPath: project.git_path,
+                repoGitPath: repo.git_path,
                 worktreePath,
                 branch: branchName,
-                credentialId: project.credential_id,
+                credentialId: repo.credential_id,
             }).catch(() => { /* best-effort */ });
             return reply.status(500).send({
                 error: `PTY spawn failed: ${(err as Error).message}`,
@@ -813,8 +836,8 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         // project session resolves the project's. `session.credential_id`
         // wins either way so the Owner's explicit pick is never silently
         // replaced by a project default.
-        const project = session.project_id ? await projectsService.get(session.project_id) : null;
-        const resumeCredentialId = session.credential_id ?? project?.credential_id ?? null;
+        const sessionRepo = session.repo_id ? await projectReposService.get(session.repo_id) : null;
+        const resumeCredentialId = session.credential_id ?? sessionRepo?.credential_id ?? null;
         const gitAuthResume = await safeBuildGitAuth(resumeCredentialId);
         const gitConfigPath = gitAuthResume?.configPath ?? null;
         const ghToken = gitAuthResume?.token ?? null;
@@ -881,11 +904,11 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             return reply.status(409).send({ error: 'session has no worktree_path', kind: 'conflict' });
         }
         if (isStandalone(session)) return replyStandaloneConflict(reply);
-        const project = await projectsService.get(session.project_id as string);
+        const diffRepo = session.repo_id ? await projectReposService.get(session.repo_id) : null;
         try {
             return await getWorktreeDiffSummary({
                 worktreePath: session.worktree_path,
-                defaultBranch: project?.default_branch ?? null,
+                defaultBranch: diffRepo?.default_branch ?? null,
             });
         } catch (err) {
             if (err instanceof WorktreeDiffError) {
@@ -907,11 +930,11 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         }
         if (isStandalone(session)) return replyStandaloneConflict(reply);
         const q = DiffFileQuerySchema.parse(req.query);
-        const project = await projectsService.get(session.project_id as string);
+        const fileRepo = session.repo_id ? await projectReposService.get(session.repo_id) : null;
         try {
             const patch = await getWorktreeFilePatch({
                 worktreePath: session.worktree_path,
-                defaultBranch: project?.default_branch ?? null,
+                defaultBranch: fileRepo?.default_branch ?? null,
                 scope: q.scope as CliSessionDiffScopeName,
                 path: q.path,
                 context: q.context,
@@ -1021,8 +1044,11 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         // reason: the standalone short-circuit above returned for every row
         // with a null project_id, so this cast is sound from here down.
         const project = await projectsService.get(session.project_id as string);
-        const finalizeAuth = project
-            ? await safeBuildGitAuth(session.credential_id ?? project.credential_id)
+        // ADR 0018 — the push, the PR base and the teardown all belong to the
+        // repo the session was checked out on.
+        const stopRepo = session.repo_id ? await projectReposService.get(session.repo_id) : null;
+        const finalizeAuth = stopRepo
+            ? await safeBuildGitAuth(session.credential_id ?? stopRepo.credential_id)
             : null;
         const finalizeEnv = gitInvokeEnv(
             finalizeAuth?.configPath ?? null,
@@ -1075,8 +1101,8 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             }
 
             // Push the branch (no-op when the branch has nothing new to ship).
-            if (project && project.git_path) {
-                const pushResult = await pushWorktree(worktreePath, branch, project.credential_id, project.id);
+            if (stopRepo && stopRepo.git_path) {
+                const pushResult = await pushWorktree(worktreePath, branch, stopRepo.credential_id, stopRepo.id);
             pushed = pushResult.pushed;
             // pushResult.error is non-fatal here -- worktree teardown still runs
             // so we don't leak dirs.
@@ -1108,15 +1134,15 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
                     worktreePath,
                     branch,
                     /* v8 ignore next */
-                    base: project.default_branch || 'main',
+                    base: stopRepo.default_branch || 'main',
                     title: `Terminal: ${session.title}`,
                     body:
                         `Created from Atlas Terminal session \`${session.id}\`.\n\n` +
                         (session.item_id ? `Linked item: \`${session.item_id}\`\n\n` : '') +
                         (body.commit_message ? `Commit message:\n\n> ${body.commit_message}\n\n` : '') +
                         `Branch: \`${branch}\``,
-                    credentialId: project.credential_id,
-                    projectId: project.id,
+                    credentialId: stopRepo.credential_id,
+                    projectId: stopRepo.id,
                 });
                 finalizePrUrl = prResult.url;
 
@@ -1201,12 +1227,12 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         // the client — the user can always manually delete a stranded dir.
         void cleanupWorktreeAfterPush({
             itemId: null,
-            projectId: session.project_id as string,
+            projectId: stopRepo?.id ?? (session.project_id as string),
             /* v8 ignore next */
-            repoGitPath: project?.git_path ?? '',
+            repoGitPath: stopRepo?.git_path ?? '',
             worktreePath,
             branch,
-            credentialId: project?.credential_id ?? null,
+            credentialId: stopRepo?.credential_id ?? null,
         }).catch((err: unknown) => {
             req.log.warn({ err, sessionId: id }, 'worktree cleanup failed after session close');
         });

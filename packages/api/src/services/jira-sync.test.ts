@@ -386,7 +386,9 @@ describe('jira bridge pull', () => {
         expect(result).toMatchObject({ imported: 0, updated: 1 });
         const t1 = await taskFor('DHEQ-1');
         expect(t1.repo_ids).toEqual(['p1', 'r-web']);
-        expect(t1.description).toContain('- **Repos:** project-p1, web');
+        // The shared fixture names a project's own repo `repo` (ADR 0018 / migration
+        // 045 gives it the project's id); the assertion is that BOTH repo names are listed.
+        expect(t1.description).toContain('- **Repos:** repo, web');
         expect(await testDb.selectFrom('items').select('id').execute()).toHaveLength(1);
 
         // A new issue matching both is queued on the first matched source with a workflow.
@@ -426,7 +428,7 @@ describe('jira bridge pull', () => {
             .select('message')
             .where('item_id', '=', t1.id)
             .executeTakeFirstOrThrow();
-        expect(note.message).toContain('also matches Project p1 / project-p1 in another project');
+        expect(note.message).toContain('also matches Project p1 / repo in another project');
     });
 
     it('never re-imports a Task the Owner deleted', async () => {

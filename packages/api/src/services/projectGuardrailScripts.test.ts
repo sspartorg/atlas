@@ -3,23 +3,20 @@ import {
     projectGuardrailScriptsService,
     ProjectGuardrailScriptIdConflictError,
 } from './projectGuardrailScripts.js';
-import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
+import { truncateAll, closeTestDb } from '../../tests/_pg-db.js';
+// ADR 0018 — git_url lives on the project's repo row now; the shared fixture
+// puts it there (the repo takes the project's own id).
+import { insertProject as insertProjectFixture } from '../../tests/_items.js';
 
 // Phase 1.5b — Per-project guardrail SCRIPTS service. Same Owner-
 // supplied slug contract as the org-wide service; conflict raises
 // `ProjectGuardrailScriptIdConflictError` so the route can return 409.
 
 async function insertProject(id: string): Promise<string> {
-    await testDb
-        .insertInto('projects')
-        .values({
-            id,
-            name: id,
-            issue_key_prefix: 'TST',
-            git_url: 'https://example.com/repo.git',
-        })
-        .execute();
-    return id;
+    return insertProjectFixture(id, 'TST', {
+        name: id,
+        git_url: 'https://example.com/repo.git',
+    });
 }
 
 beforeEach(async () => {
