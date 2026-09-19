@@ -27,12 +27,9 @@ List all projects with cards or table view; create new ones; trigger reclone, de
 - **Open →** link → `RouterLink` to `/projects/:id`
 - **Menu** button → opens `ProjectRowMenu`
 
-**Project row menu (`ProjectRowMenu`)**
-- **Open project** → `POST /projects/:id/reveal` (reveals folder in OS file manager) — *hidden below md, no local file system on mobile*
-- **Copy repo URL** → `navigator.clipboard.writeText(git_url)`
-- **Reclone** → opens `RecloneProjectModal` — *hidden below md, requires a local workstation*
-- **Schedule fetch** → opens `AutoFetchScheduleModal`
-- **Delete** → opens `DeleteProjectModal`
+**Project row menu (`ProjectRowMenu`)** — **ADR 0018:** reveal, re-clone and auto-fetch are per repo and moved to Project Detail's **Repos** tab.
+- **Copy repo URL** → `navigator.clipboard.writeText(<first repo's git_url>)` (`''` when the project has no repos)
+- **Delete** → opens `DeleteProjectModal` (its chip lists every repo folder, or "No repos")
 
 **Table view (`ProjectsTable`)** — same actions, plus row-click navigates to `/projects/:id`.
 
@@ -63,16 +60,14 @@ These four modals are rendered outside the empty/populated branches (Projects.ts
 - `useProjectsPaged({ page, limit })` (Projects.tsx:58) — paged project fetch; `rows` populates the visible grid/table and `total` drives the footer + empty-vs-populated branch.
 - `useProjects()` (line 65) — full unpaged list, kept as a fallback so the empty-state branch can tell "no projects on this page" from "no projects anywhere".
 - `useTasks`, `useAgents`, `useSettings`, `useToast`
-- `useEnabledSchedules()` — map of projectId → schedule info (for the calendar indicator)
+- `useAllRepos()` — every repo of every project in ONE `GET /api/repos`, grouped by `project_id` (ADR 0018). A per-card fetch would be an N+1 and trips `e2e/no-dup-fetches.spec.ts`. Cards show `No repos` / `1 repo` / `N repos` plus the first repo's remote; the table's Repo URL column adds ` +N`.
+- `useEnabledSchedules()` — map of **repoId** → schedule info; the card's calendar indicator lights when any repo of the project is scheduled
 - `useIsMobile()` — flips the layout to single-column cards + the `PageFab`.
 
 ## API endpoints touched
-- `GET /api/projects`, `GET /api/tasks`, `GET /api/agents`, `GET /api/settings`
-- `POST /api/projects/:id/reveal`
-- `POST /api/projects/clone` (via `NewProjectModal`)
-- `POST /api/projects/:id/reclone` (via `RecloneProjectModal`)
+- `GET /api/projects`, `GET /api/repos`, `GET /api/tasks`, `GET /api/agents`, `GET /api/settings`
+- `POST /api/projects/clone` (via `NewProjectModal`, which also reads `GET /api/projects/:id/repos/:repoId/head` for its summary)
 - `DELETE /api/projects/:id` (via `DeleteProjectModal`)
-- `PUT /api/projects/:id/schedule` (via `AutoFetchScheduleModal`)
 
 ## Permissions / guards
 - Post-onboarding only.
@@ -86,7 +81,7 @@ These four modals are rendered outside the empty/populated branches (Projects.ts
 
 ## Connectivity
 - **Pages**: [Project Detail](03-project-detail.md) — card/row click target; [Credentials](20-credentials.md) — empty-state alert deep-links here so first-clone can pick a credential; [Dashboard](01-dashboard.md) — its empty state opens this page's NewProjectModal.
-- **Routes**: `POST /api/projects/clone` — long-running, emits `clone_status`/`clone_output` SSE so the card reflects clone progress instead of hanging; `POST /api/projects/:id/reveal` — OS-only desktop affordance; hidden on mobile because phones don't have a local file manager.
+- **Routes**: `POST /api/projects/clone` — long-running, emits `clone_status`/`clone_output` SSE so the card reflects clone progress instead of hanging; reveal lives on the Repos tab now (ADR 0018) because a project has no folder of its own — its repos do.
 - **Entities**: `project`, `credential` (for the picker), `project_schedule` (auto-fetch indicator).
 
 ## Coming soon on this page

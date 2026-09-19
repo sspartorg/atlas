@@ -20,7 +20,7 @@ Single-page form to draft a Task and either save it as a draft or submit it (`re
 - **Title** — required, autoFocus; inline error on blur / submit.
 - **Description** — multiline, required.
 - **Project** — Select, required; pre-filled from `?project=`.
-- **Repos** — only when the picked project has more than one repo (ADR 0017): `RepoSelect` multi-select, primary preselected, order = pick order, helper "First repo holds specs and other Task-wide files." At least one stays picked; changing the project resets it. Sent as `repo_ids`; omitted for a single-repo project (`[]` = the primary).
+- **Repos** — shown whenever the picked project has any repo (ADR 0018): `RepoSelect` multi-select, the project's **first** repo preselected, order = pick order, helper "First repo holds specs and other Task-wide files." Always sent as `repo_ids`. With a project selected and nothing picked, Save/Submit are disabled; a project with no repos shows an info alert pointing at its Repos tab instead of the picker.
 - **Priority** — `low | normal | high | urgent`; default `low`.
 - **Reporter** — default `OWNER`; options Owner + active agents.
 - **Assignee** — defaults to `agent-po-writer` when installed and active (`TaskNew.tsx:98`), else `OWNER`; `AgentSelect suggestedRole="po"` lists PO-role agents first under **Suggested**.

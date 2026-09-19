@@ -40,15 +40,17 @@ function makeRepo(): void {
     git('-C', WEB_CLONE, 'push', '-u', 'origin', 'main');
 }
 
-test.describe('multi-repo Task (ADR 0017)', () => {
+test.describe('multi-repo Task (ADR 0017/0018)', () => {
     let taskId = '';
     let workflowId = '';
 
     test.beforeAll(() => {
         makeRepo();
+        // ADR 0018 — the seed's own repo carries the project's id; this is
+        // the project's second repo.
         psql(
-            `INSERT INTO project_repos (id, project_id, name, git_url, git_path) ` +
-                `VALUES ('${REPO_ID}', '${PROJECT_ID}', 'web', 'https://github.com/e2e/web', '${WEB_CLONE}')`
+            `INSERT INTO project_repos (id, project_id, name, git_url, git_path, position) ` +
+                `VALUES ('${REPO_ID}', '${PROJECT_ID}', 'web', 'https://github.com/e2e/web', '${WEB_CLONE}', 1)`
         );
     });
 
@@ -66,12 +68,13 @@ test.describe('multi-repo Task (ADR 0017)', () => {
     }) => {
         test.setTimeout(120_000);
 
-        // The project's Repos tab lists the primary and the extra repo.
+        // The project's Repos tab lists both repos, neither of them special.
         await goto(page, `/projects/${PROJECT_ID}?tab=repos`);
-        await expect(page.getByText('Primary').first()).toBeVisible();
+        await expect(page.getByText('project', { exact: true }).first()).toBeVisible();
         await expect(page.getByText('web', { exact: true }).first()).toBeVisible();
+        await expect(page.getByText('Primary')).toHaveCount(0);
 
-        // New Task: the picker shows because the project has two repos.
+        // New Task: the picker is always there; the first repo comes preselected.
         await goto(page, '/tasks/new');
         await page.getByLabel('Title').fill('E2E change across api and web');
         await page.getByLabel('Description').fill('An endpoint and the client that calls it.');

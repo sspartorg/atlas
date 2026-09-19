@@ -31,7 +31,7 @@ Domain terms used throughout Atlas. One line each. When in doubt, this file wins
 | **Outcome block** | The fenced `atlas-outcome` block every agent ends with (`done` / `rejected` / `asked_question`, plus `summary`, `reason`, `checklist`). Contract staged as `.atlas/outcome.md`; the engine routes on it. |
 | **Handoff / Round / Freedom mode / Child workflow** | Retired terms. Per-agent on-pass / on-fail routing, the per-item run cap and no-item agents on a schedule went with ADR 0014 (migration 036) — now pass / fail connections, `max_loops`, and a workflow with `input_kind='none'`. End-node child routing (`child_workflow_id`) went with ADR 0015 — now Sub-tasks steps inside the Task's run. |
 | **Tool catalog** | Read-only directory of the Atlas MCP tools (`tool_catalog`), re-synced from `@atlas/mcp` registrations on every boot. No per-agent enforcement. |
-| **Auto-fetch** | A scheduled `git fetch` per project. Configured via the AutoFetchScheduleModal; jobs registered in `services/schedule-registry.ts`. |
+| **Auto-fetch** | A scheduled `git fetch` per **repo** (ADR 0018). Configured from Project Detail's Repos tab via the AutoFetchScheduleModal; jobs registered per repo id in `services/schedule-registry.ts`. |
 | **Conflict policy / dirty guard / idle guard / agents guard** | Per-schedule rules that decide whether to skip a fire if the worktree is dirty / an agent is running / etc. |
 | **Reclone** | Wipe the worktree and re-clone the same git URL with the same credential. Useful after auth-credential rotation. |
 | **Workspace** | The root folder selected during onboarding. Holds the SQLite DB (`atlas.db`) and every project's worktree. |

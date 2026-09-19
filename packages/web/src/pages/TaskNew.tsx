@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -115,9 +116,10 @@ export function TaskNew() {
 
     const ownerName = settings?.owner_name ?? 'Owner';
     const projectMissing = projects.length === 0;
-    // ADR 0018 — a Task always names at least one repo, so an empty pick (or a
-    // project with no repos at all) cannot be submitted.
-    const reposMissing = repoIds.length === 0;
+    // ADR 0018 — a Task always names at least one repo. Only gate once a
+    // project is chosen: before that the form's own "X is required" validation
+    // is what should fire.
+    const reposMissing = Boolean(projectId) && repoIds.length === 0;
 
     const errors = useMemo(() => {
         const e: Partial<Record<FieldKey, string>> = {};
@@ -433,6 +435,13 @@ export function TaskNew() {
                         </Typography>
                         <RepoSelect repos={repos} value={repoIds} onChange={setRepoChoice} />
                     </Box>
+                )}
+
+                {projectId && repos.length === 0 && (
+                    <Alert severity="info" sx={{ mb: 4 }}>
+                        This project has no repos yet. Add one on the project&apos;s Repos tab
+                        before creating a Task for it.
+                    </Alert>
                 )}
 
                 <Box
