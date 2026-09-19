@@ -119,7 +119,7 @@ For full MUI/data-fetching/status-display patterns, see `packages/web/AGENTS.md`
 - Never hardcode a list of statuses in a component — always derive from the status machine
 
 ### No invented data
-- No fields not in the `@atlas/shared` types (no priority, story points, tracker links)
+- No fields not in the `@atlas/shared` types (no priority, story points, tracker links). The one exception is the `jira_issue` external link, which only the Jira bridge writes (ADR 0016)
 - Empty states use spec-compliant copy — do not invent placeholder text
 - Counts, dates, and IDs use `JetBrains Mono` font via `sx={{ fontFamily: 'mono' }}`
 

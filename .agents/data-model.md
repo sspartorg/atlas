@@ -205,12 +205,32 @@ Since 2026-09-12 `create()` resolves a missing `agent_id` from the item's live r
 **Owner reply resumes a parked workflow run (ADR 0014).** When the Owner comments on an item whose workflow run is `waiting_for_owner`, `create()` claims the run inside the comment's transaction (run → `running`, item → `in_progress`, `status_changed` event with `detail='resumed_by_owner_reply'`), broadcasts `counts_changed` after commit, and calls `workflow-engine.continueResumedRun` in the background: a run parked on an Owner node follows its pass connection; a run parked on an agent node re-runs that step with `loop_count` reset. With Sub-tasks steps (ADR 0015) a parked sub-task parks both runs: a reply on the sub-task resumes its child run and flips the Task run back to `running`; a reply on the Task resumes the Task run, which resumes the waiting child. Agent comments never trigger it; an item without a parked run is left alone.
 
 ### IItemExternalLink
-Off-platform URL attached to an item (today only `link_kind='pull_request'`). Table `item_external_links` (migration 020), UNIQUE `(item_id, url)`, cascades on item delete.
+Off-platform URL attached to an item: `link_kind='pull_request'`, or `'jira_issue'` (migration 042; written only by the Jira bridge, with `external_ref` = the Jira key and `title` = its summary). Table `item_external_links` (migration 020), UNIQUE `(item_id, url)`, cascades on item delete. `EXTERNAL_LINK_KINDS` (what the UI and MCP may add by hand) stays `['pull_request']`.
 
 Fields: `id, item_id, link_kind, url, title, external_ref, created_at, created_by_run_id, pr_state`.
 
 - `pr_state` ∈ `'open' | 'merged' | 'closed' | null` (migration 033, CHECK constraint) — last GitHub state observed for a PR link; null until the first successful lookup, and forever on a project with no credential.
 - `pr_state_checked_at` (DB only, not on the wire) — stamped on every lookup attempt, success or failure. Reading the links (`GET …/external-links`, every `/full` envelope) refreshes PR links older than 5 min in the background; `POST /api/issues/:type/:id/external-links/refresh` refreshes synchronously.
+
+### IJiraConfig / jira_issues (ADR 0016, migration 042)
+`jira_config` is a singleton row holding the Jira bridge config. `IJiraConfig` returns every column except the token, and adds `api_token_set: boolean`:
+- `enabled`, `site_url`, `email`, `jql`
+- `project_id`: the default project, for issues no routing rule sends elsewhere
+- `poll_interval_minutes`
+- `extra_fields` (string[])
+- `label_workflows` (`IJiraLabelWorkflow[]`, routing rules `{label, project_id, workflow_id}`; either may be null, not both; first match wins)
+- `last_sync_at`, `last_sync_ok`, `last_sync_message`
+
+`jira_issues` is DB-only, one row per imported Jira issue:
+- `jira_key` is the PK.
+- `item_id` → the Task. It is SET NULL when the Task is deleted, and such a key is never re-imported.
+- `raw`: the last full issue JSON.
+- `seen_comment_ids`: Jira comments already reflected in Atlas.
+- `posted_comment_ids`: comments the bridge posted to Jira.
+- `imported_comment_ids`: Atlas comments that came from Jira.
+- `pushed_comment_id`: the digest watermark over `comments.id`.
+- `pushed_status`: the last status announced to Jira.
+- `done_synced_at`: set once the final comment is posted.
 
 ### IIssueEvent (audit log)
 **Why this entity exists**: Status and assignment changes need an audit trail the UI can render alongside comments â€” otherwise the Owner sees "this is in_dev" but can't tell who moved it there or when. Structured fields (event_type, field, from_value, to_value) make events queryable and machine-renderable in a way that free-text comments can't be. Kept distinct from IComment so the activity feed can render status pills differently from quoted text.

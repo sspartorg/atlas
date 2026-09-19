@@ -10,6 +10,7 @@ import KeyRounded from '@mui/icons-material/KeyRounded';
 import HubOutlined from '@mui/icons-material/HubOutlined';
 import NotificationsRounded from '@mui/icons-material/NotificationsRounded';
 import HelpOutlineRounded from '@mui/icons-material/HelpOutlineRounded';
+import SyncRounded from '@mui/icons-material/SyncRounded';
 import { useSettings } from '../hooks/useSettings.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { ProfileTab } from './settings/ProfileTab.js';
@@ -18,9 +19,10 @@ import { SharedSecretsTab } from './settings/SharedSecretsTab.js';
 import { ModelRegistryTab } from './settings/ModelRegistryTab.js';
 import { NotificationsTab } from './settings/NotificationsTab.js';
 import { HelpAboutTab } from './settings/HelpAboutTab.js';
+import { JiraTab } from './settings/JiraTab.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 
-const TAB_KEYS = ['profile', 'environment', 'secrets', 'models', 'notifications', 'help'] as const;
+const TAB_KEYS = ['profile', 'environment', 'secrets', 'models', 'notifications', 'jira', 'help'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 function isTabKey(value: string | null): value is TabKey {
@@ -138,6 +140,12 @@ export function Settings() {
                         icon={<NotificationsRounded sx={{ fontSize: 18 }} />}
                     />
                     <Tab
+                        value="jira"
+                        label="Jira"
+                        iconPosition="start"
+                        icon={<SyncRounded sx={{ fontSize: 18 }} />}
+                    />
+                    <Tab
                         value="help"
                         label="Help & About"
                         iconPosition="start"
@@ -152,6 +160,7 @@ export function Settings() {
             {tab === 'secrets' && <SharedSecretsTab />}
             {tab === 'models' && <ModelRegistryTab />}
             {tab === 'notifications' && <NotificationsTab />}
+            {tab === 'jira' && <JiraTab />}
             {tab === 'help' && <HelpAboutTab />}
         </Box>
     );

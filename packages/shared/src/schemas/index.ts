@@ -609,6 +609,58 @@ export const UpdateNotificationsSchema = z.object({
     terminal_idle_notify_seconds: z.coerce.number().int().min(60).max(3_600).optional(),
 });
 
+// The bridge sends Basic-auth credentials to this origin, so plain http is
+// allowed only on loopback (a local Jira or a test double).
+const JiraSiteUrlSchema = z
+    .string()
+    .url()
+    .max(500)
+    .refine(
+        (u) =>
+            /^https:\/\//i.test(u) ||
+            /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(u),
+        'Use an https:// Jira URL'
+    )
+    .transform((u) => u.replace(/\/+$/, ''));
+
+/** PUT /api/integrations/jira — partial; an omitted or empty api_token keeps the stored one. */
+export const UpdateJiraConfigSchema = z
+    .object({
+        enabled: z.boolean(),
+        site_url: JiraSiteUrlSchema.nullable(),
+        email: z.string().email().max(320).nullable(),
+        api_token: z.string().max(2_000),
+        jql: z.string().max(5_000).nullable(),
+        project_id: z.string().min(1).nullable(),
+        poll_interval_minutes: z.number().int().min(5).max(10_080),
+        extra_fields: z.array(z.string().trim().min(1).max(200)).max(50),
+        label_workflows: z
+            .array(
+                z
+                    .object({
+                        label: z.string().trim().min(1).max(255),
+                        project_id: z.string().min(1).nullable().default(null),
+                        workflow_id: z.string().min(1).nullable().default(null),
+                    })
+                    .refine((r) => r.project_id !== null || r.workflow_id !== null, {
+                        message: 'A label rule needs a project, a workflow, or both',
+                    })
+            )
+            .max(100),
+    })
+    .partial()
+    .strict();
+
+/** POST /api/integrations/jira/test — omitted fields fall back to the saved config. */
+export const TestJiraConnectionSchema = z
+    .object({
+        site_url: JiraSiteUrlSchema,
+        email: z.string().email().max(320),
+        api_token: z.string().min(1).max(2_000),
+    })
+    .partial()
+    .strict();
+
 export const GuardrailCategorySchema = z.enum([
     'file_system',
     'secrets_credentials',
