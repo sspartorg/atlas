@@ -3,12 +3,12 @@ import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { broadcastSSE } from '../routes/events.js';
-import { projectsService } from './projects.js';
+import { projectReposService } from './project-repos.js';
 import { credentialsService } from './credentials.js';
 import { gitInvokeEnv } from './git-env.js';
 
 export interface StartRecloneInput {
-    projectId: string;
+    repoId: string;
     destination: string;
     branch: string;
 }
@@ -69,15 +69,15 @@ function runGit(
 }
 
 export async function startReclone(input: StartRecloneInput): Promise<string> {
-    const project = await projectsService.get(input.projectId);
-    if (!project) throw new Error(`Project ${input.projectId} not found`);
+    const repo = await projectReposService.get(input.repoId);
+    if (!repo) throw new Error(`Repo ${input.repoId} not found`);
 
-    if (!project.credential_id) {
+    if (!repo.credential_id) {
         throw new Error(
             'Original credential was deleted. Re-attach a credential in Settings -> Credentials.',
         );
     }
-    const credentialId = project.credential_id;
+    const credentialId = repo.credential_id;
     const cred = await credentialsService.get(credentialId);
     if (!cred) {
         throw new Error(
@@ -188,7 +188,7 @@ export async function startReclone(input: StartRecloneInput): Promise<string> {
                     'fetch',
                     '--prune',
                     '--',
-                    project.git_url,
+                    repo.git_url,
                     input.branch,
                 ],
                 input.destination,
@@ -223,7 +223,7 @@ export async function startReclone(input: StartRecloneInput): Promise<string> {
                     'pull',
                     '--ff-only',
                     '--',
-                    project.git_url,
+                    repo.git_url,
                     input.branch,
                 ],
                 input.destination,

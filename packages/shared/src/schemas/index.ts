@@ -541,6 +541,14 @@ export const DeleteProjectSchema = z.object({
 
 export const RecloneProjectSchema = z.object({}).strict().optional().default({});
 
+// ADR 0018 — the AI-readiness scaffold reads a checkout, so it names a repo.
+// Omitted means the project's first repo.
+export const GenerateAiScaffoldSchema = z
+    .object({ repo_id: z.string().min(1).max(200).optional() })
+    .strict()
+    .optional()
+    .default({});
+
 export const ConnectExistingProjectSchema = z.object({
     folder_path: z.string().min(1),
     repo_url: GithubRepoUrlSchema,

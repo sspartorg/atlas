@@ -8,7 +8,6 @@ import { broadcastSSE } from '../routes/events.js';
 
 export interface StartDeleteInput {
     projectId: string;
-    destination: string;
     mode: 'unregister' | 'purge';
 }
 
@@ -52,69 +51,37 @@ export function startDelete(input: StartDeleteInput): string {
                     (resolvedTarget === workspaceRoot || resolvedTarget.startsWith(workspaceRoot + sep))
                 );
             };
-            // ADR 0017 — the project's extra repos go with it. Read before the
-            // project row (and, by cascade, theirs) is deleted.
-            const extraPaths = (await projectReposService.list(input.projectId).catch(() => []))
-                .filter((r) => !r.primary)
-                .map((r) => r.git_path);
-            if (!insideWorkspace(input.destination)) {
-                const msg = `Refused to purge ${input.destination}: not under workspace root ${workspaceRoot || '<unset>'}`;
-                emit(deleteId, msg);
-                broadcastSSE({
-                    type: 'delete_error',
-                    deleteId,
-                    status: 'error',
-                    errorDetail: msg,
-                });
-                return;
-            }
-            for (const extra of extraPaths) {
-                if (!insideWorkspace(extra)) {
-                    emit(deleteId, `Kept repo folder ${extra}: not under workspace root`);
+            // ADR 0018 — every repo of the project goes with it. Read before
+            // the project row (and, by cascade, its repos) is deleted.
+            const repoPaths = (await projectReposService.list(input.projectId).catch(() => []))
+                .map((r) => r.git_path)
+                .filter((path) => path.trim().length > 0);
+            for (const repoPath of repoPaths) {
+                if (!insideWorkspace(repoPath)) {
+                    emit(deleteId, `Kept repo folder ${repoPath}: not under workspace root ${workspaceRoot || '<unset>'}`);
                     continue;
                 }
-                await rm(extra, { recursive: true, force: true })
-                    .then(() => emit(deleteId, `Removing repo folder ${extra} ... ok`))
-                    .catch((err: unknown) =>
-                        emit(deleteId, `Removing repo folder ${extra} failed: ${err instanceof Error ? err.message : String(err)}`)
-                    );
-            }
-            emit(deleteId, `Removing workspace folder ${input.destination} ...`);
-            try {
-                await access(input.destination);
-            } catch {
-                emit(deleteId, `Workspace folder not found at ${input.destination} ... skipped`);
+                emit(deleteId, `Removing repo folder ${repoPath} ...`);
                 try {
-                    await projectsService.delete(input.projectId);
-                    broadcastSSE({
-                        type: 'delete_completed',
-                        deleteId,
-                        status: 'ready',
-                        mode: input.mode,
-                    });
+                    await access(repoPath);
+                } catch {
+                    emit(deleteId, `Repo folder not found at ${repoPath} ... skipped`);
+                    continue;
+                }
+                try {
+                    await rm(repoPath, { recursive: true, force: true });
+                    emit(deleteId, `Removing repo folder ${repoPath} ... ok`);
                 } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    emit(deleteId, `Removing repo folder failed: ${msg}`);
                     broadcastSSE({
                         type: 'delete_error',
                         deleteId,
                         status: 'error',
-                        errorDetail: err instanceof Error ? err.message : String(err),
+                        errorDetail: msg,
                     });
+                    return;
                 }
-                return;
-            }
-            try {
-                await rm(input.destination, { recursive: true, force: true });
-                emit(deleteId, `Removing workspace folder ${input.destination} ... ok`);
-            } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                emit(deleteId, `Removing workspace folder failed: ${msg}`);
-                broadcastSSE({
-                    type: 'delete_error',
-                    deleteId,
-                    status: 'error',
-                    errorDetail: msg,
-                });
-                return;
             }
         } else {
             emit(deleteId, 'Workspace folder kept on disk.');

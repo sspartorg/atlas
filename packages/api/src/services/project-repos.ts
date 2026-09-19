@@ -63,6 +63,16 @@ async function list(projectId: string): Promise<IProjectRepo[]> {
     return (await repoRows(projectId)).map(fromRow);
 }
 
+/** One repo by id, whichever project it belongs to. */
+async function get(repoId: string): Promise<IProjectRepo | undefined> {
+    const row = await db
+        .selectFrom('project_repos')
+        .selectAll()
+        .where('id', '=', repoId)
+        .executeTakeFirst();
+    return row ? fromRow(row) : undefined;
+}
+
 /** Every repo of every project, for pickers and lists that span projects. */
 async function listAll(): Promise<IProjectRepo[]> {
     const rows = await db
@@ -180,6 +190,7 @@ function ownerOfPath(gitPath: string): Promise<{ id: string; name: string } | un
 
 export const projectReposService = {
     ownerOfPath,
+    get,
     list,
     listAll,
     forTask,

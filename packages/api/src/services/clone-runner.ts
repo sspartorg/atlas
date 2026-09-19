@@ -137,17 +137,17 @@ export async function startClone(input: StartCloneInput, onCloned?: OnCloned): P
                 ).catch(() => undefined);
                 await credentialsService.markUsed(input.credential_id);
                 const clone = { git_url: cleanUrl(input.repo_url), git_path: input.destination };
+                // ADR 0018 — creating a project creates its first repo too, and
+                // the event carries both: the UI shows the repo's path and branch.
                 const registered = onCloned
                     ? await onCloned(clone)
-                    : {
-                          project: (await projectsService.createFromClone({
-                              name: input.project_name,
-                              issue_key_prefix: input.issue_key_prefix,
-                              ...clone,
-                              credential_id: input.credential_id,
-                              default_branch: input.default_branch,
-                          })) satisfies IProject,
-                      };
+                    : await projectsService.createFromClone({
+                          name: input.project_name,
+                          issue_key_prefix: input.issue_key_prefix,
+                          ...clone,
+                          credential_id: input.credential_id,
+                          default_branch: input.default_branch,
+                      });
                 broadcastSSE({ type: 'clone_completed', cloneId, status: 'ready', ...registered });
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
