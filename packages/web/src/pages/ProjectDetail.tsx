@@ -23,6 +23,7 @@ import { TasksTab } from './project/TasksTab.js';
 import { GuardrailsTab } from './project/GuardrailsTab.js';
 import { HistoryTab } from './project/HistoryTab.js';
 import { SetupTab } from './project/SetupTab.js';
+import { ProjectReposCard } from './project/ProjectReposCard.js';
 const DeleteProjectModal = lazyNamed(
     () => import('./projects/DeleteProjectModal.js'),
     'DeleteProjectModal',
@@ -37,8 +38,8 @@ import { useSetPageTitle } from '../components/shell/index.js';
 
 import { relativeTime } from '../utils/time.js';
 
-type TabKey = 'overview' | 'tasks' | 'guardrails' | 'setup' | 'history';
-const TAB_KEYS = ['overview', 'tasks', 'guardrails', 'setup', 'history'] as const;
+type TabKey = 'overview' | 'tasks' | 'guardrails' | 'repos' | 'setup' | 'history';
+const TAB_KEYS = ['overview', 'tasks', 'guardrails', 'repos', 'setup', 'history'] as const;
 
 export function ProjectDetail() {
     const { id = '' } = useParams<{ id: string }>();
@@ -236,6 +237,20 @@ export function ProjectDetail() {
                     label="Guard-rails"
                 />
                 <Tab
+                    value="repos"
+                    icon={
+                        <Box
+                            component="span"
+                            className="material-symbols-rounded"
+                            sx={{ fontSize: 16 }}
+                        >
+                            source
+                        </Box>
+                    }
+                    iconPosition="start"
+                    label="Repos"
+                />
+                <Tab
                     value="setup"
                     icon={
                         <Box
@@ -294,6 +309,7 @@ export function ProjectDetail() {
                         />
                     )}
                     {currentTab === 'guardrails' && <GuardrailsTab project={project} />}
+                    {currentTab === 'repos' && <ProjectReposCard projectId={id} />}
                     {currentTab === 'setup' && <SetupTab projectId={id} />}
                     {currentTab === 'history' && <HistoryTab projectId={id} />}
                 </Box>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { IProject } from '@atlas/shared';
+import type { IProject, IProjectRepo } from '@atlas/shared';
 import { subscribeToEvents } from './sse-hub.js';
 
 export interface CloneState {
@@ -7,6 +7,8 @@ export interface CloneState {
     lines: string[];
     errorDetail: string | null;
     project: IProject | null;
+    /** Set instead of `project` when the clone added a repo to a project (ADR 0017). */
+    repo: IProjectRepo | null;
 }
 
 const INITIAL: CloneState = {
@@ -14,6 +16,7 @@ const INITIAL: CloneState = {
     lines: [],
     errorDetail: null,
     project: null,
+    repo: null,
 };
 
 /**
@@ -36,9 +39,10 @@ export function useCloneJob(cloneId: string | null): CloneState {
             if (payload.type === 'clone_output' && payload.output) {
                 const line = payload.output;
                 setState((s) => ({ ...s, lines: [...s.lines, line] }));
-            } else if (payload.type === 'clone_completed' && payload.project) {
-                const project = payload.project;
-                setState((s) => ({ ...s, status: 'ready', project }));
+            } else if (payload.type === 'clone_completed' && (payload.project || payload.repo)) {
+                const project = payload.project ?? null;
+                const repo = payload.repo ?? null;
+                setState((s) => ({ ...s, status: 'ready', project, repo }));
             } else if (payload.type === 'clone_error') {
                 const errorDetail = payload.errorDetail ?? 'Clone failed';
                 setState((s) => ({ ...s, status: 'error', errorDetail }));

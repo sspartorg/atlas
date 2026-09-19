@@ -291,6 +291,10 @@ export function TaskDetail() {
                         onLabelsChange={(next) =>
                             updateTask.mutateAsync({ id: task.id, data: { labels: next } })
                         }
+                        repoIds={task.repo_ids ?? []}
+                        onRepoIdsChange={(next) =>
+                            updateTask.mutateAsync({ id: task.id, data: { repo_ids: next } })
+                        }
                         createdAt={task.created_at}
                         updatedAt={task.updated_at}
                         totalCostUsd={totalCostUsd}

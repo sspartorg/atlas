@@ -26,7 +26,8 @@ Full view of one Task (ADR 0015): its brief (description, acceptance criteria), 
 - `ConversationCard` — thread + composer. While the Task is `waiting_for_info` with no assignee and its latest run belongs to a workflow, helper text reads "Replying continues the waiting workflow run." (`ActivityCard.tsx:706`).
 
 **Right rail**
-- `DetailsRailCard`: Project, Status (`StatusPickerPopover`, with Override), Assignee (`AssigneePickerPopover`, PO-role agents under **Suggested**; locked while `in_progress`), **Workflow** + **Workflow run** rows (below), Reporter, Priority, Labels (`useProjectLabels`), Total cost (sum of `useItemAgentRuns`), **Branch** / **Path** (`worktree_branch` / `worktree_path`), Created, Updated.
+- `DetailsRailCard`: Project, **Repos**, Status (`StatusPickerPopover`, with Override), Assignee (`AssigneePickerPopover`, PO-role agents under **Suggested**; locked while `in_progress`), **Workflow** + **Workflow run** rows (below), Reporter, Priority, Labels (`useProjectLabels`), Total cost (sum of `useItemAgentRuns`), **Branch** / **Path** (`worktree_branch` / `worktree_path`), Created, Updated.
+- **Repos** row (`TaskReposRow`, ADR 0017) — the Task's `repo_ids` as mono chips in order (`[]` → the primary). Clickable only when the project has more than one repo: opens a small **Repos** dialog (`RepoSelect`; the first repo holds Task-wide files) → **Save** → `PATCH /api/tasks/:id {repo_ids}`. A 409 (a workflow run holds the Task) toasts "Stop the workflow run to change repos". With more than one repo, **Path** gets an info icon with the tooltip "Workspace folder — one checkout per repo".
 - `ItemWorkflowPanel` (`pages/workflows/ItemWorkflowPanel.tsx`, Tasks only): **Workflow** select — None + the project's `input_kind='item'` workflows → `PUT /api/items/:id/workflow`; "Create a workflow" link when the project has none. **Workflow run** — latest run's status chip (→ `/workflows/:id/runs/:runId`) + **Start now** (`POST /api/workflows/:id/runs`) when a workflow is set and no run is live. **Continue · N open** (contained button, tooltip "Runs the open sub-tasks on the same branch and updates the pull request") when the latest run `completed`, the Task has open sub-tasks (not `in_review`/`done`) and the workflow has a Sub-tasks step → `POST /api/workflows/:id/runs { item_id, from_subtasks: true }`. This is the rework loop: after checking the branch, add a fix sub-task (or move one back to In Progress) and continue. Picking a workflow for a **Draft** Task also moves it to **Ready** (queued).
 - Status → **Done** while any `pull_request` link isn't `merged`: `POST /api/issues/task/:id/external-links/refresh` first; still unmerged → **Mark done anyway?** (`ConfirmActionModal`) listing the PRs.
 - `ActivityLogCard` — status / assignment / field events.
@@ -40,11 +41,13 @@ Full view of one Task (ADR 0015): its brief (description, acceptance criteria), 
 - `useTaskFull(id)` — `['tasks', id, 'full']` → `GET /api/tasks/:id/full`
 - `useTransitionTask`, `useAssignTask`, `useUpdateTask`, `useDeleteTask` (`hooks/useTasks.ts`); `useCreateSubTask` (`hooks/useSubTasks.ts`)
 - `useItemAgentRuns(id)`, `useProjectLabels(projectId)`, `useSettings`, `useDraftGuard`
+- Repos row: `useProjectRepos(projectId)`, `useToast`
 - `ItemWorkflowPanel`: `useWorkflows(projectId)`, `useItemWorkflowRuns(id)`, `useSetItemWorkflow`, `useStartWorkflowRun`
 
 ## API endpoints touched
 - `GET /api/tasks/:id/full`
-- `PATCH /api/tasks/:id` (title, description, acceptance_criteria, priority, labels), `PATCH /api/tasks/:id/status`, `PATCH /api/tasks/:id/assign`, `DELETE /api/tasks/:id`
+- `PATCH /api/tasks/:id` (title, description, acceptance_criteria, priority, labels, repo_ids)
+- `GET /api/projects/:id/repos` (Repos row), `PATCH /api/tasks/:id/status`, `PATCH /api/tasks/:id/assign`, `DELETE /api/tasks/:id`
 - `POST /api/tasks/:id/sub-tasks`
 - `PUT /api/items/:id/workflow`, `GET /api/items/:id/workflow-runs`, `POST /api/workflows/:id/runs`, `GET /api/workflows?project_id=`
 - `POST /api/issues/task/:id/links`, `POST /api/issues/task/:id/external-links/refresh`

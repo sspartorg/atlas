@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import LockOutlined from '@mui/icons-material/LockOutlined';
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
 import CheckRounded from '@mui/icons-material/CheckRounded';
+import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import type {
     IProject,
     IAgent,
@@ -23,6 +24,7 @@ import { StatusPickerPopover } from './StatusPickerPopover.js';
 import { PriorityPickerPopover } from './PriorityPickerPopover.js';
 import { InfoPanel, InfoRow } from './InfoPanel.js';
 import { LabelsRailRow } from './LabelsRailRow.js';
+import { TaskReposRow } from './TaskReposRow.js';
 import { ConfirmActionModal } from './ConfirmActionModal.js';
 import { useRefreshIssueExternalLinks } from '../hooks/useIssueExternalLinks.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
@@ -86,6 +88,13 @@ interface Props {
     labels?: string[] | undefined;
     onLabelsChange?: ((next: string[]) => Promise<unknown> | void) | undefined;
     labelSuggestions?: string[] | undefined;
+
+    /**
+     * ADR 0017 — the Task's repos in order (`[]` = the project's primary).
+     * With `onRepoIdsChange` the Repos row renders; Tasks only.
+     */
+    repoIds?: string[] | undefined;
+    onRepoIdsChange?: ((next: string[]) => Promise<unknown>) | undefined;
 }
 
 function CopyValueButton({ value }: { value: string }) {
@@ -150,6 +159,8 @@ export function DetailsRailCard({
     labels,
     onLabelsChange,
     labelSuggestions,
+    repoIds,
+    onRepoIdsChange,
 }: Props) {
     const showWorktree = worktreeBranch !== undefined || worktreePath !== undefined;
     const navigate = useNavigate();
@@ -201,6 +212,10 @@ export function DetailsRailCard({
                     <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate40 }}>—</Typography>
                 )}
             </InfoRow>
+
+            {project && repoIds !== undefined && onRepoIdsChange && (
+                <TaskReposRow projectId={project.id} repoIds={repoIds} onChange={onRepoIdsChange} />
+            )}
 
             {parents?.map((p) => (
                 <InfoRow key={`${p.label}-${p.href}`} label={p.label}>
@@ -401,6 +416,16 @@ export function DetailsRailCard({
                             >
                                 {worktreePath}
                             </Typography>
+                            {(repoIds?.length ?? 0) > 1 && (
+                                <Tooltip
+                                    title="Workspace folder — one checkout per repo"
+                                    placement="top"
+                                >
+                                    <InfoOutlined
+                                        sx={{ fontSize: 14, color: ATLAS_PALETTE.slate40 }}
+                                    />
+                                </Tooltip>
+                            )}
                             <CopyValueButton value={worktreePath} />
                         </>
                     ) : (
