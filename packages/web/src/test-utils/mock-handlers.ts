@@ -8,6 +8,7 @@ import type {
     ITaskListItem,
     IWorkflowQueue,
 } from '@atlas/shared';
+import { makeProjectRepo } from './factories.js';
 
 const BASE = 'http://localhost:3000/api';
 
@@ -51,9 +52,12 @@ export const defaultHandlers = [
     http.get(`${BASE}/agents/:id/checklists`, () => HttpResponse.json([])),
     // The Queue page.
     http.get(`${BASE}/workflow-queue`, ok<IWorkflowQueue>({ workflows: [], unassigned: [] })),
-    // New Task and the Task rail read a project's repos (ADR 0017); none =
-    // single-repo behaviour (no Repos picker).
-    http.get(`${BASE}/projects/:id/repos`, () => HttpResponse.json([])),
+    // New Task, the Task rail and Project Detail read a project's repos
+    // (ADR 0018). Default to the one repo the project factory describes;
+    // tests that need several override via server.use(...).
+    http.get(`${BASE}/projects/:id/repos`, () => HttpResponse.json([makeProjectRepo()])),
+    // The projects list reads every repo in one round trip.
+    http.get(`${BASE}/repos`, () => HttpResponse.json([makeProjectRepo()])),
 ];
 
 // Convenience factories so tests can express "this endpoint returns X" in one line.

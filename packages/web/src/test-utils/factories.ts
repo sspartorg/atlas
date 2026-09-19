@@ -20,16 +20,9 @@ export function makeProject(overrides: Partial<IProject> = {}): IProject {
         id: 'p1',
         name: 'Atlas',
         issue_key_prefix: 'ATL',
-        git_path: '/tmp/atlas',
-        git_url: 'https://github.com/example/atlas',
-        credential_id: null,
-        default_branch: 'main',
-        clone_status: 'ready',
         description: '',
         status: 'active',
         guardrails_md: '',
-        setup_sh_body: '',
-        setup_ps1_body: '',
         created_at: ISO,
         updated_at: ISO,
         last_activity_at: ISO,
@@ -37,13 +30,12 @@ export function makeProject(overrides: Partial<IProject> = {}): IProject {
     };
 }
 
-/** Defaults to project p1's primary repo (its id is the project id). */
+/** Defaults to project p1's first repo (which carries the project's id, as migration 045 leaves it). */
 export function makeProjectRepo(overrides: Partial<IProjectRepo> = {}): IProjectRepo {
     return {
         id: 'p1',
         project_id: 'p1',
         name: 'atlas',
-        primary: true,
         git_url: 'https://github.com/example/atlas',
         git_path: '/tmp/atlas',
         credential_id: null,

@@ -514,37 +514,46 @@ export const api = {
             }>(`/projects/prefix-available?prefix=${encodeURIComponent(prefix)}`),
         deleteJob: (id: string, data: { mode: 'unregister' | 'purge'; confirm_name?: string }) =>
             post<{ delete_id: string }>(`/projects/${id}/delete`, data),
-        reclone: (id: string) => post<{ reclone_id: string }>(`/projects/${id}/reclone`, {}),
-        status: (id: string) =>
+        // ADR 0018 — every git action names the repo it acts on.
+        reclone: (id: string, repoId: string) =>
+            post<{ reclone_id: string }>(`/projects/${id}/repos/${repoId}/reclone`, {}),
+        status: (id: string, repoId: string) =>
             get<{ local_head: string; remote_head: string; behind: number; uncommitted: number }>(
-                `/projects/${id}/status`
+                `/projects/${id}/repos/${repoId}/status`
             ),
-        reveal: (id: string) => post<{ ok: true; path: string }>(`/projects/${id}/reveal`, {}),
+        reveal: (id: string, repoId: string) =>
+            post<{ ok: true; path: string }>(`/projects/${id}/repos/${repoId}/reveal`, {}),
         folderOrigin: (path: string) =>
             get<{ origin: string | null }>(
                 `/projects/folder-origin?path=${encodeURIComponent(path)}`
             ),
-        head: (id: string) =>
+        head: (id: string, repoId: string) =>
             get<{ short_sha: string | null; subject: string | null; relative_time: string | null }>(
-                `/projects/${id}/head`
+                `/projects/${id}/repos/${repoId}/head`
             ),
-        // Theme 09b — AI-Readiness Agent trigger + chip backing.
-        generateAiScaffold: (id: string) =>
-            post<{ run_id: string; workflow_id: string }>(`/projects/${id}/generate-ai-scaffold`, {}),
+        // Theme 09b — AI-Readiness Agent trigger + chip backing. The scaffold
+        // reads a checkout, so it names the repo to analyse.
+        generateAiScaffold: (id: string, repoId?: string) =>
+            post<{ run_id: string; workflow_id: string }>(
+                `/projects/${id}/generate-ai-scaffold`,
+                repoId ? { repo_id: repoId } : {}
+            ),
         connect: (data: {
             folder_path: string;
             repo_url: string;
             credential_id: string;
             issue_key_prefix: string;
         }) =>
-            requestRaw<IProject | ConnectError>('/projects/connect', {
+            requestRaw<{ project: IProject; repo: IProjectRepo } | ConnectError>('/projects/connect', {
                 method: 'POST',
                 body: JSON.stringify(data),
             }),
-        // ADR 0017 — a project's repos (primary first). Adding one clones it
-        // (202 + clone_* SSE, like /projects/clone) or registers a local clone
-        // (the /projects/connect checks: 400 carries a ConnectError).
+        // ADR 0018 — a project's repos, in order; they are all equal. Adding
+        // one clones it (202 + clone_* SSE, like /projects/clone) or registers
+        // a local clone (the /projects/connect checks: 400 carries a ConnectError).
         repos: (id: string) => get<IProjectRepo[]>(`/projects/${id}/repos`),
+        /** Every repo of every project, in one round trip — the projects list uses it. */
+        allRepos: () => get<IProjectRepo[]>('/repos'),
         cloneRepo: (
             id: string,
             data: { name: string; repo_url: string; credential_id: string; default_branch: string },
@@ -616,9 +625,12 @@ export const api = {
 
     schedules: {
         listEnabled: () => get<IProjectSchedule[]>('/schedules'),
-        get: (projectId: string) => get<IProjectSchedule>(`/projects/${projectId}/schedule`),
+        // ADR 0018 — auto-fetch is per repo.
+        get: (projectId: string, repoId: string) =>
+            get<IProjectSchedule>(`/projects/${projectId}/repos/${repoId}/schedule`),
         save: (
             projectId: string,
+            repoId: string,
             data: {
                 enabled: boolean;
                 preset: SchedulePreset;
@@ -629,10 +641,11 @@ export const api = {
                 pause_while_agents_active: boolean;
                 conflict_policy: ScheduleConflictPolicy;
             }
-        ) => put<IProjectSchedule>(`/projects/${projectId}/schedule`, data),
-        delete: (projectId: string) => del(`/projects/${projectId}/schedule`),
-        fire: (projectId: string) =>
-            post<{ autofetch_id: string }>(`/projects/${projectId}/schedule/fire`, {}),
+        ) => put<IProjectSchedule>(`/projects/${projectId}/repos/${repoId}/schedule`, data),
+        delete: (projectId: string, repoId: string) =>
+            del(`/projects/${projectId}/repos/${repoId}/schedule`),
+        fire: (projectId: string, repoId: string) =>
+            post<{ autofetch_id: string }>(`/projects/${projectId}/repos/${repoId}/schedule/fire`, {}),
     },
 
     credentials: {
