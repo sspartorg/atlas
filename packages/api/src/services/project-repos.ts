@@ -21,7 +21,7 @@ function slug(s: string): string {
     );
 }
 
-export function primaryRepo(p: IProject): IProjectRepo {
+function primaryRepo(p: IProject): IProjectRepo {
     return {
         id: p.id,
         project_id: p.id,
