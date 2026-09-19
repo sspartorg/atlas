@@ -261,7 +261,7 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
                         {cfg.last_sync_at ? (
                             <>
                                 Last sync{' '}
-                                <Box component="span" sx={{ fontFamily: 'mono' }}>
+                                <Box component="span" sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono }}>
                                     {new Date(cfg.last_sync_at).toLocaleString()}
                                 </Box>
                                 {cfg.last_sync_message ? ` · ${cfg.last_sync_message}` : ''}
