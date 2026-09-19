@@ -1,7 +1,7 @@
 # 0016. Jira Bridge
 
 **Date:** 2026-09-19
-**Status:** Accepted. Routing amended by ADR 0017 (multi-repo projects): **sources** replaced the single JQL, the default project and the label rules. See "Amendment: sources per repo" below.
+**Status:** Accepted. Routing amended by [ADR 0017](0017-multi-repo-projects.md) (multi-repo projects): **sources** replaced the single JQL, the default project and the label rules. See "Amendment: sources per repo" below.
 
 ## Context
 
@@ -52,7 +52,7 @@ Atlas is self-hosted and is an extension to Jira, not a replacement. The existin
 - An import is capped at 500 issues per source per sync. Jira sub-tasks are listed in their parent's description, not imported.
 - Credentials: an API token encrypted at rest (`v1:` + AES-GCM, as for settings secrets), write-only over the API.
 
-## Amendment: sources per repo (ADR 0017)
+## Amendment: sources per repo ([ADR 0017](0017-multi-repo-projects.md))
 
 A project can hold several repos, and a Task can span several of them. One JQL routed by labels could not say which repo an issue is for, so the config became an ordered list of **sources**, `{repo_id, jql, workflow_id}`, one JQL per repo:
 - Every sync runs each source's JQL. An issue matching several sources becomes **one** Task in the project of the first source it matched, with `repo_ids` = the matched repos of that project (source order).
