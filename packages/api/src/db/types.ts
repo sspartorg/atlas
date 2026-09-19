@@ -269,18 +269,9 @@ export interface ProjectsTable {
     id: string;
     name: string;
     issue_key_prefix: string;
-    git_path: Str;
-    git_url: Str;
-    credential_id: StrN;
-    default_branch: Str;
-    clone_status: 'pending' | 'cloning' | 'ready' | 'error';
     description: Str;
     status: Str;
     guardrails_md: Str;
-    // Per-project setup scripts the orchestrator runs at worktree
-    // provisioning time. Added by migration 004. NOT NULL DEFAULT ''.
-    setup_sh_body: Str;
-    setup_ps1_body: Str;
     created_at: CreatedAt;
     updated_at: UpdatedAt;
 }
@@ -291,6 +282,8 @@ export interface ProjectIssueCountersTable {
 }
 
 export interface ProjectSchedulesTable {
+    // Migration 045 — the key: auto-fetch is per repo, not per project.
+    repo_id: string;
     project_id: string;
     enabled: Bool0or1;
     preset: Str;
@@ -806,6 +799,8 @@ export interface CliSessionsTable {
     // worktree, and no `.atlas/` staging. Every standalone branch in
     // `routes/cli-sessions.ts` keys off this being null.
     project_id: StrN;
+    // Migration 045 — the repo of that project the session is checked out on.
+    repo_id: StrN;
     title: Str;
     status: ColumnType<
         'active' | 'paused' | 'closed' | 'errored',

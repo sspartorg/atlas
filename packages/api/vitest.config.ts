@@ -192,6 +192,8 @@ export default defineConfig({
             'src/db/published-workflows-migration.test.ts',
             // Migration 044 — Jira sources per repo (ADR 0017).
             'src/db/jira-sources-migration.test.ts',
+            // Migration 045 — repos without a primary (ADR 0018).
+            'src/db/repos-without-primary-migration.test.ts',
             // W2 chunk N — subprocess wrappers + boot files.
             'src/services/git-status.test.ts',
             'src/services/git-verify.test.ts',
