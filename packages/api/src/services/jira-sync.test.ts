@@ -80,7 +80,14 @@ const fakeFetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
     if (url.pathname === '/rest/api/2/myself') return json({ displayName: 'Sam Owner' });
     if (url.pathname === '/rest/api/2/field')
         return json([{ id: 'customfield_1', name: 'Acceptance Criteria' }]);
-    if (url.pathname === '/rest/api/2/search/jql') return json({ issues: structuredClone(issues) });
+    if (url.pathname === '/rest/api/2/search/jql') {
+        // The only JQL the fake understands: `labels = x` narrows, anything else matches all.
+        const label = /labels = "?([\w-]+)"?/.exec(url.searchParams.get('jql') ?? '')?.[1];
+        const hits = issues.filter(
+            (i) => !label || (i.fields['labels'] as string[]).includes(label)
+        );
+        return json({ issues: structuredClone(hits) });
+    }
     const m = url.pathname.match(/^\/rest\/api\/[23]\/issue\/([^/]+)\/(comment|transitions)$/);
     if (m) {
         const key = decodeURIComponent(m[1] ?? '');
@@ -114,12 +121,12 @@ const fakeFetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
     return json({ errorMessages: [`unexpected ${method} ${url.pathname}`] }, 404);
 });
 
-async function insertWorkflow(id: string, inputKind: 'item' | 'none' = 'item') {
+async function insertWorkflow(id: string, inputKind: 'item' | 'none' = 'item', projectId = 'p1') {
     await testDb
         .insertInto('workflows')
         .values({
             id,
-            project_id: 'p1',
+            project_id: projectId,
             name: `WF ${id}`,
             input_kind: inputKind,
             graph: JSON.stringify({ nodes: [], edges: [] }),
@@ -133,11 +140,30 @@ async function configure() {
         site_url: SITE,
         email: 'me@acme.test',
         api_token: 'secret-token',
-        jql: 'project = DHEQ',
-        project_id: 'p1',
         extra_fields: ['Acceptance Criteria'],
-        label_workflows: [{ label: 'development', project_id: null, workflow_id: 'wf-dev' }],
+        sources: [
+            {
+                repo_id: 'p1',
+                jql: 'project = DHEQ AND labels = development',
+                workflow_id: 'wf-dev',
+            },
+            { repo_id: 'p1', jql: 'project = DHEQ', workflow_id: null },
+        ],
     });
+}
+
+async function insertRepo(id: string, projectId: string, name: string) {
+    await testDb
+        .insertInto('project_repos')
+        .values({
+            id,
+            project_id: projectId,
+            name,
+            git_url: `https://github.com/acme/${name}`,
+            git_path: `/ws/${name}`,
+            position: 1,
+        })
+        .execute();
 }
 
 async function taskFor(key: string) {
@@ -191,14 +217,18 @@ describe('jira bridge config', () => {
         expect(row.api_token_encrypted).not.toContain('secret-token');
     });
 
-    it('rejects a mapping to a workflow that does not take Tasks', async () => {
+    it('rejects a source whose repo is unknown or whose workflow does not take Tasks', async () => {
         await insertWorkflow('wf-news', 'none');
         await expect(
             jiraSync.saveConfig({
-                project_id: 'p1',
-                label_workflows: [{ label: 'news', project_id: null, workflow_id: 'wf-news' }],
+                sources: [{ repo_id: 'p1', jql: 'project = NEWS', workflow_id: 'wf-news' }],
             })
         ).rejects.toThrow(/does not take Tasks/);
+        await expect(
+            jiraSync.saveConfig({
+                sources: [{ repo_id: 'nope', jql: 'project = NEWS', workflow_id: null }],
+            })
+        ).rejects.toThrow(/Source 1: repo not found/);
     });
 
     it('drops the stored token when the site or email changes, and never sends it elsewhere', async () => {
@@ -295,20 +325,16 @@ describe('jira bridge pull', () => {
         expect((await taskFor('DHEQ-1')).description).not.toContain('queued on');
     });
 
-    it('routes a labelled issue to its own project, and waits for a workflow when the rule has none', async () => {
+    it('routes each issue to its first matching source, waiting for a workflow when it has none', async () => {
         await insertProject('p2', 'WEB');
-        await insertWorkflow('wf-web');
-        await testDb
-            .updateTable('workflows')
-            .set({ project_id: 'p2' })
-            .where('id', '=', 'wf-web')
-            .execute();
+        await insertWorkflow('wf-web', 'item', 'p2');
         issues = [issue('DHEQ-1', ['web']), issue('DHEQ-2', ['infra']), issue('DHEQ-3', ['other'])];
         await configure();
         await jiraSync.saveConfig({
-            label_workflows: [
-                { label: 'web', project_id: 'p2', workflow_id: 'wf-web' },
-                { label: 'infra', project_id: 'p2', workflow_id: null },
+            sources: [
+                { repo_id: 'p2', jql: 'labels = web', workflow_id: 'wf-web' },
+                { repo_id: 'p2', jql: 'labels = infra', workflow_id: null },
+                { repo_id: 'p1', jql: 'project = DHEQ', workflow_id: null },
             ],
         });
 
@@ -318,6 +344,7 @@ describe('jira bridge pull', () => {
             project_id: 'p2',
             workflow_id: 'wf-web',
             status: 'ready',
+            repo_ids: ['p2'],
         });
         expect(await taskFor('DHEQ-2')).toMatchObject({
             project_id: 'p2',
@@ -331,14 +358,75 @@ describe('jira bridge pull', () => {
         });
     });
 
-    it('rejects a rule whose workflow belongs to another project', async () => {
+    it('rejects a source whose workflow belongs to another project', async () => {
         await insertProject('p2', 'WEB');
         await expect(
             jiraSync.saveConfig({
-                project_id: 'p1',
-                label_workflows: [{ label: 'web', project_id: 'p2', workflow_id: 'wf-dev' }],
+                sources: [{ repo_id: 'p2', jql: 'labels = web', workflow_id: 'wf-dev' }],
             })
-        ).rejects.toThrow(/belongs to a different project/);
+        ).rejects.toThrow(/Source 1: WF wf-dev belongs to a different project/);
+    });
+
+    it("makes an issue matching two repos' JQL one Task spanning both, and follows later matches", async () => {
+        await insertRepo('r-web', 'p1', 'web');
+        issues = [issue('DHEQ-1', ['api'])];
+        await configure();
+        await jiraSync.saveConfig({
+            sources: [
+                { repo_id: 'p1', jql: 'labels = api', workflow_id: null },
+                { repo_id: 'r-web', jql: 'labels = web', workflow_id: 'wf-dev' },
+            ],
+        });
+        await jiraSync.syncNow();
+        expect(await taskFor('DHEQ-1')).toMatchObject({ repo_ids: ['p1'], status: 'draft' });
+
+        // Picked up by the second repo's JQL before work starts: the Task now spans both.
+        (issues[0]?.fields['labels'] as string[]).push('web');
+        const result = await jiraSync.syncNow();
+        expect(result).toMatchObject({ imported: 0, updated: 1 });
+        const t1 = await taskFor('DHEQ-1');
+        expect(t1.repo_ids).toEqual(['p1', 'r-web']);
+        expect(t1.description).toContain('- **Repos:** project-p1, web');
+        expect(await testDb.selectFrom('items').select('id').execute()).toHaveLength(1);
+
+        // A new issue matching both is queued on the first matched source with a workflow.
+        issues.push(issue('DHEQ-2', ['api', 'web']));
+        await jiraSync.syncNow();
+        expect(await taskFor('DHEQ-2')).toMatchObject({
+            project_id: 'p1',
+            repo_ids: ['p1', 'r-web'],
+            workflow_id: 'wf-dev',
+            status: 'ready',
+        });
+    });
+
+    it("puts an issue matching repos of two projects in the first source's project", async () => {
+        await insertProject('p2', 'WEB');
+        await insertRepo('r-site', 'p2', 'site');
+        issues = [issue('DHEQ-1', ['api', 'site'])];
+        await configure();
+        await jiraSync.saveConfig({
+            sources: [
+                { repo_id: 'r-site', jql: 'labels = site', workflow_id: null },
+                { repo_id: 'p1', jql: 'labels = api', workflow_id: 'wf-dev' },
+            ],
+        });
+
+        await jiraSync.syncNow();
+
+        const t1 = await taskFor('DHEQ-1');
+        expect(t1).toMatchObject({
+            project_id: 'p2',
+            repo_ids: ['r-site'],
+            workflow_id: null,
+            status: 'draft',
+        });
+        const note = await testDb
+            .selectFrom('notifications')
+            .select('message')
+            .where('item_id', '=', t1.id)
+            .executeTakeFirstOrThrow();
+        expect(note.message).toContain('also matches Project p1 / project-p1 in another project');
     });
 
     it('never re-imports a Task the Owner deleted', async () => {
@@ -469,6 +557,47 @@ describe('jira bridge push', () => {
         expect(posted).toHaveLength(1);
         expect(posted[0]?.body).toContain(`Atlas ${t1.id}: done.`);
         expect(transitioned).toEqual(['DHEQ-1']);
+    });
+
+    it('lists every pull request of a multi-repo Task with its state', async () => {
+        issues = [issue('DHEQ-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        const t1 = await taskFor('DHEQ-1');
+        await testDb
+            .insertInto('item_external_links')
+            .values([
+                {
+                    item_id: t1.id,
+                    link_kind: 'pull_request',
+                    url: 'https://github.com/acme/app/pull/7',
+                    pr_state: 'open',
+                },
+                {
+                    item_id: t1.id,
+                    link_kind: 'pull_request',
+                    url: 'https://github.com/acme/web/pull/3',
+                    pr_state: null,
+                },
+            ])
+            .execute();
+        posted = [];
+
+        await setStatus(t1.id, 'in_review');
+        await jiraSync.tick(new Date());
+        await testDb
+            .updateTable('item_external_links')
+            .set({ pr_state: 'merged' })
+            .where('item_id', '=', t1.id)
+            .where('link_kind', '=', 'pull_request')
+            .execute();
+        await setStatus(t1.id, 'done');
+        await jiraSync.tick(new Date());
+
+        expect(posted.map((p) => p.body)).toEqual([
+            `Atlas ${t1.id}: ready for review. Pull requests: https://github.com/acme/app/pull/7 (open), https://github.com/acme/web/pull/3`,
+            `Atlas ${t1.id}: done. Pull requests: https://github.com/acme/app/pull/7 (merged), https://github.com/acme/web/pull/3 (merged)`,
+        ]);
     });
 });
 

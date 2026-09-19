@@ -8,10 +8,11 @@ import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
-import type { IJiraConfig, IJiraLabelWorkflow } from '@atlas/shared';
+import type { IJiraConfig, IJiraSource } from '@atlas/shared';
 import type { JiraConfigUpdate } from '../../api/api.js';
 import { FormRow } from '../../components/FormSection.js';
 import {
+    useAllRepos,
     useJiraConfig,
     useSyncJira,
     useTestJira,
@@ -35,27 +36,31 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
     const sync = useSyncJira();
     const toast = useToast();
     const { data: projects = [] } = useProjects();
+    const { data: repos = [] } = useAllRepos();
     const { data: workflows = [] } = useWorkflows();
 
     const [siteUrl, setSiteUrl] = useState(cfg.site_url ?? '');
     const [email, setEmail] = useState(cfg.email ?? '');
     const [token, setToken] = useState('');
-    const [jql, setJql] = useState(cfg.jql ?? '');
     const [interval, setIntervalMinutes] = useState(String(cfg.poll_interval_minutes));
     const [extra, setExtra] = useState(cfg.extra_fields.join(', '));
-    const [newLabel, setNewLabel] = useState('');
-    const [newProject, setNewProject] = useState('');
+    const [newRepo, setNewRepo] = useState('');
+    const [newJql, setNewJql] = useState('');
     const [newWorkflow, setNewWorkflow] = useState('');
 
-    // A rule's workflow must be global or live in the project the rule sends the issue to.
-    const ruleProject = newProject || cfg.project_id;
+    // A source's workflow must be global or live in the project of the source's repo.
+    const newRepoProject = repos.find((r) => r.id === newRepo)?.project_id;
     const options = workflows.filter(
-        (w) => w.input_kind === 'item' && (!w.project_id || w.project_id === ruleProject)
+        (w) => w.input_kind === 'item' && (!w.project_id || w.project_id === newRepoProject)
     );
     const workflowName = (id: string | null) =>
         id ? (workflows.find((w) => w.id === id)?.name ?? id) : 'No workflow: you pick one';
-    const projectName = (id: string | null) =>
-        id ? (projects.find((p) => p.id === id)?.name ?? id) : 'Default project';
+    const repoLabel = (id: string) => {
+        const repo = repos.find((r) => r.id === id);
+        if (!repo) return id;
+        const project = projects.find((p) => p.id === repo.project_id)?.name ?? repo.project_id;
+        return `${project} / ${repo.name}`;
+    };
 
     function save(patch: JiraConfigUpdate, message = 'Jira settings saved') {
         update.mutate(patch, {
@@ -64,7 +69,7 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
         });
     }
 
-    function commitText(field: 'site_url' | 'email' | 'jql', value: string) {
+    function commitText(field: 'site_url' | 'email', value: string) {
         const next = value.trim() || null;
         if (next !== cfg[field]) save({ [field]: next });
     }
@@ -101,19 +106,19 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
         if (fields.join('\n') !== cfg.extra_fields.join('\n')) save({ extra_fields: fields });
     }
 
-    function saveMappings(next: IJiraLabelWorkflow[]) {
-        save({ label_workflows: next }, 'Label mapping saved');
+    function saveSources(next: IJiraSource[], message: string) {
+        save({ sources: next }, message);
     }
 
-    function addMapping() {
-        const label = newLabel.trim();
-        if (!label || (!newProject && !newWorkflow)) return;
-        saveMappings([
-            ...cfg.label_workflows.filter((m) => m.label !== label),
-            { label, project_id: newProject || null, workflow_id: newWorkflow || null },
-        ]);
-        setNewLabel('');
-        setNewProject('');
+    function addSource() {
+        const jql = newJql.trim();
+        if (!newRepo || !jql) return;
+        saveSources(
+            [...cfg.sources, { repo_id: newRepo, jql, workflow_id: newWorkflow || null }],
+            'Jira source added'
+        );
+        setNewRepo('');
+        setNewJql('');
         setNewWorkflow('');
     }
 
@@ -193,7 +198,7 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
 
             <SettingsSection
                 title="Import"
-                subtitle="Every poll runs the JQL and turns each new issue into a Task, with its description, comments and fields. Progress and the final PR are posted back as Jira comments; a Task reaching Done moves its issue to Done."
+                subtitle="Every poll runs each source's JQL and turns each new issue into a Task, with its description, comments and fields. Progress and the final PRs are posted back as Jira comments; a Task reaching Done moves its issue to Done."
                 rightAdornment={
                     <Switch
                         checked={cfg.enabled}
@@ -207,47 +212,6 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
                     />
                 }
             >
-                <FormRow label="Default project">
-                    <Select
-                        size="small"
-                        fullWidth
-                        displayEmpty
-                        // Until the projects list loads, an id with no matching option is out of range for MUI.
-                        value={
-                            projects.some((p) => p.id === cfg.project_id)
-                                ? (cfg.project_id ?? '')
-                                : ''
-                        }
-                        onChange={(e) => save({ project_id: e.target.value || null })}
-                        inputProps={{ 'aria-label': 'Default project' }}
-                    >
-                        <MenuItem value="">Pick where unrouted issues go</MenuItem>
-                        {projects.map((p) => (
-                            <MenuItem key={p.id} value={p.id}>
-                                {p.name}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </FormRow>
-                <FormRow label="JQL">
-                    <TextField
-                        fullWidth
-                        size="small"
-                        multiline
-                        minRows={2}
-                        value={jql}
-                        placeholder='project = DHEQ AND status = "Selected for Development"'
-                        onChange={(e) => setJql(e.target.value)}
-                        onBlur={() => commitText('jql', jql)}
-                        slotProps={{ htmlInput: { 'aria-label': 'JQL' } }}
-                        sx={{
-                            '& .MuiInputBase-input': {
-                                fontFamily: TYPOGRAPHY.fontFamilyMono,
-                                fontSize: 13,
-                            },
-                        }}
-                    />
-                </FormRow>
                 <FormRow label="Poll every">
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                         <TextField
@@ -318,28 +282,34 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
             </SettingsSection>
 
             <SettingsSection
-                title="Label → project and workflow"
-                subtitle="An imported issue carrying one of these labels becomes a Task in that project and is queued on that workflow. The first matching rule wins. Issues matching no rule go to the default project. Issues without a workflow wait as drafts and notify you to pick one."
+                title="Sources"
+                subtitle="One JQL per repo. An issue matching several sources becomes one Task spanning those repos, in the project of the first source it matches; its repos in other projects are named in the notification. The first matching source with a workflow queues it; without one it waits as a draft and notifies you to pick one."
             >
-                {cfg.label_workflows.map((m) => (
-                    <FormRow key={m.label} label={m.label}>
-                        <Box
-                            sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: 2,
-                            }}
-                        >
-                            <Typography sx={{ fontSize: 13 }}>
-                                {projectName(m.project_id)} · {workflowName(m.workflow_id)}
-                            </Typography>
+                {cfg.sources.map((s, i) => (
+                    <FormRow key={`${i}:${s.repo_id}:${s.jql}`} label={repoLabel(s.repo_id)}>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography
+                                    sx={{
+                                        fontFamily: TYPOGRAPHY.fontFamilyMono,
+                                        fontSize: 13,
+                                        whiteSpace: 'pre-wrap',
+                                        overflowWrap: 'anywhere',
+                                    }}
+                                >
+                                    {s.jql}
+                                </Typography>
+                                <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate60 }}>
+                                    {workflowName(s.workflow_id)}
+                                </Typography>
+                            </Box>
                             <IconButton
                                 size="small"
-                                aria-label={`Remove mapping for ${m.label}`}
+                                aria-label={`Remove source ${i + 1}`}
                                 onClick={() =>
-                                    saveMappings(
-                                        cfg.label_workflows.filter((x) => x.label !== m.label)
+                                    saveSources(
+                                        cfg.sources.filter((_, j) => j !== i),
+                                        'Jira source removed'
                                     )
                                 }
                             >
@@ -348,56 +318,66 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
                         </Box>
                     </FormRow>
                 ))}
-                <Box sx={{ display: 'flex', gap: 2, pt: 1, flexWrap: 'wrap' }}>
-                    <TextField
-                        size="small"
-                        value={newLabel}
-                        placeholder="Jira label"
-                        onChange={(e) => setNewLabel(e.target.value)}
-                        slotProps={{ htmlInput: { 'aria-label': 'Jira label' } }}
-                        sx={{ flex: 1, minWidth: 160 }}
-                    />
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: 1 }}>
                     <Select
                         size="small"
+                        fullWidth
                         displayEmpty
-                        value={newProject}
+                        value={newRepo}
                         onChange={(e) => {
-                            setNewProject(e.target.value);
+                            setNewRepo(e.target.value);
                             setNewWorkflow('');
                         }}
-                        inputProps={{ 'aria-label': 'Project for label' }}
-                        sx={{ flex: 1, minWidth: 180 }}
+                        inputProps={{ 'aria-label': 'Source repo' }}
                     >
-                        <MenuItem value="">Default project</MenuItem>
-                        {projects.map((p) => (
-                            <MenuItem key={p.id} value={p.id}>
-                                {p.name}
+                        <MenuItem value="">Pick a repo</MenuItem>
+                        {repos.map((r) => (
+                            <MenuItem key={r.id} value={r.id}>
+                                {repoLabel(r.id)}
                             </MenuItem>
                         ))}
                     </Select>
-                    <Select
+                    <TextField
+                        fullWidth
                         size="small"
-                        displayEmpty
-                        value={newWorkflow}
-                        onChange={(e) => setNewWorkflow(e.target.value)}
-                        inputProps={{ 'aria-label': 'Workflow for label' }}
-                        sx={{ flex: 1, minWidth: 180 }}
-                    >
-                        <MenuItem value="">No workflow: I pick</MenuItem>
-                        {options.map((w) => (
-                            <MenuItem key={w.id} value={w.id}>
-                                {w.name}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                    <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={addMapping}
-                        disabled={!newLabel.trim() || (!newProject && !newWorkflow)}
-                    >
-                        Add
-                    </Button>
+                        multiline
+                        minRows={2}
+                        value={newJql}
+                        placeholder='project = DHEQ AND status = "Selected for Development"'
+                        onChange={(e) => setNewJql(e.target.value)}
+                        slotProps={{ htmlInput: { 'aria-label': 'Source JQL' } }}
+                        sx={{
+                            '& .MuiInputBase-input': {
+                                fontFamily: TYPOGRAPHY.fontFamilyMono,
+                                fontSize: 13,
+                            },
+                        }}
+                    />
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Select
+                            size="small"
+                            displayEmpty
+                            value={newWorkflow}
+                            onChange={(e) => setNewWorkflow(e.target.value)}
+                            inputProps={{ 'aria-label': 'Source workflow' }}
+                            sx={{ flex: 1, minWidth: 0 }}
+                        >
+                            <MenuItem value="">No workflow: I pick</MenuItem>
+                            {options.map((w) => (
+                                <MenuItem key={w.id} value={w.id}>
+                                    {w.name}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={addSource}
+                            disabled={!newRepo || !newJql.trim()}
+                        >
+                            Add source
+                        </Button>
+                    </Box>
                 </Box>
             </SettingsSection>
         </Box>

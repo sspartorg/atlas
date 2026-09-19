@@ -223,13 +223,12 @@ Fields: `id, item_id, link_kind, url, title, external_ref, created_at, created_b
 - `pr_state` ∈ `'open' | 'merged' | 'closed' | null` (migration 033, CHECK constraint) — last GitHub state observed for a PR link; null until the first successful lookup, and forever on a project with no credential.
 - `pr_state_checked_at` (DB only, not on the wire) — stamped on every lookup attempt, success or failure. Reading the links (`GET …/external-links`, every `/full` envelope) refreshes PR links older than 5 min in the background; `POST /api/issues/:type/:id/external-links/refresh` refreshes synchronously.
 
-### IJiraConfig / jira_issues (ADR 0016, migration 042)
+### IJiraConfig / jira_issues (ADR 0016, migrations 042 + 044)
 `jira_config` is a singleton row holding the Jira bridge config. `IJiraConfig` returns every column except the token, and adds `api_token_set: boolean`:
-- `enabled`, `site_url`, `email`, `jql`
-- `project_id`: the default project, for issues no routing rule sends elsewhere
+- `enabled`, `site_url`, `email`
 - `poll_interval_minutes`
 - `extra_fields` (string[])
-- `label_workflows` (`IJiraLabelWorkflow[]`, routing rules `{label, project_id, workflow_id}`; either may be null, not both; first match wins)
+- `sources` (`IJiraSource[]`, ordered, ADR 0017 / migration 044; replaced `jql`, `project_id` and `label_workflows`): `{repo_id, jql, workflow_id | null}`. `repo_id` is a project repo (a primary repo's id is its project's id). An issue matching several sources becomes one Task in the first match's project with `repo_ids` = the matched repos of that project; the first of those sources with a workflow queues it
 - `last_sync_at`, `last_sync_ok`, `last_sync_message`
 
 `jira_issues` is DB-only, one row per imported Jira issue:

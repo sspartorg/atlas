@@ -1,9 +1,10 @@
 import type { z } from 'zod';
 import type {
     IJiraConfig,
-    IJiraLabelWorkflow,
+    IJiraSource,
     IJiraSyncResult,
     IJiraTestResult,
+    IProjectRepo,
     IssuePriority,
     IssueStatus,
     TestJiraConnectionSchema,
@@ -15,18 +16,19 @@ import { commentsService } from './comments.js';
 import { decrypt, encrypt } from './crypto.js';
 import { externalLinks } from './external-links.js';
 import { notificationsService } from './notifications.js';
+import { projectReposService } from './project-repos.js';
 import { projectsService } from './projects.js';
 import { tasksService } from './tasks.js';
 import { workflowsService } from './workflows.js';
 
-// Jira bridge (ADR 0016). No AI anywhere: the one-minute scheduler tick polls
-// the JQL every `poll_interval_minutes`, snapshots each issue into a Task, and
-// mirrors Task progress back as Jira comments. REST v2 on purpose — it speaks
-// wiki-markup strings, so no ADF conversion either way.
+// Jira bridge (ADR 0016, sources per repo from ADR 0017). No AI anywhere: the
+// one-minute scheduler tick runs each source's JQL every `poll_interval_minutes`,
+// snapshots each issue into a Task, and mirrors Task progress back as Jira
+// comments. Reads use REST v2 on purpose: it speaks wiki-markup strings.
 
 const V1_PREFIX = 'v1:';
 const PAGE_SIZE = 100;
-// ponytail: one sync imports at most 500 issues; narrow the JQL if a backlog is bigger.
+// ponytail: each source reads at most 500 issues per sync; narrow its JQL if a backlog is bigger.
 const MAX_ISSUES_PER_SYNC = 500;
 const DIGEST_LINE_CHARS = 500;
 // Jira rejects comments over 32,767 characters.
@@ -124,15 +126,9 @@ function rowToConfig(row: ConfigRow | undefined): IJiraConfig {
         site_url: row?.site_url ?? null,
         email: row?.email ?? null,
         api_token_set: Boolean(row?.api_token_encrypted),
-        jql: row?.jql ?? null,
-        project_id: row?.project_id ?? null,
         poll_interval_minutes: row?.poll_interval_minutes ?? 60,
         extra_fields: row?.extra_fields ?? [],
-        label_workflows: (row?.label_workflows ?? []).map((m) => ({
-            label: m.label,
-            project_id: m.project_id ?? null,
-            workflow_id: m.workflow_id ?? null,
-        })),
+        sources: row?.sources ?? [],
         last_sync_at: toIso(row?.last_sync_at),
         last_sync_ok: row?.last_sync_ok ?? null,
         last_sync_message: row?.last_sync_message ?? null,
@@ -155,21 +151,18 @@ function credsOf(row: ConfigRow | undefined): Creds {
     };
 }
 
-async function validateMappings(
-    mappings: IJiraLabelWorkflow[],
-    defaultProjectId: string | null
-): Promise<void> {
-    for (const m of mappings) {
+async function validateSources(sources: IJiraSource[]): Promise<void> {
+    const repos = new Map((await projectReposService.listAll()).map((r) => [r.id, r]));
+    for (const [i, s] of sources.entries()) {
         const bad = (why: string) =>
-            new ApiError('validation_error', `Label "${m.label}": ${why}`, 400);
-        if (m.project_id && !(await projectsService.get(m.project_id)))
-            throw bad('project not found');
-        if (!m.workflow_id) continue;
-        const wf = await workflowsService.get(m.workflow_id);
+            new ApiError('validation_error', `Source ${i + 1}: ${why}`, 400);
+        const repo = repos.get(s.repo_id);
+        if (!repo) throw bad('repo not found');
+        if (!s.workflow_id) continue;
+        const wf = await workflowsService.get(s.workflow_id);
         if (!wf) throw bad('workflow not found');
         if (wf.input_kind !== 'item') throw bad(`${wf.name} does not take Tasks`);
-        const projectId = m.project_id ?? defaultProjectId;
-        if (wf.project_id && wf.project_id !== projectId)
+        if (wf.project_id && wf.project_id !== repo.project_id)
             throw bad(`${wf.name} belongs to a different project`);
     }
 }
@@ -180,13 +173,7 @@ async function getConfig(): Promise<IJiraConfig> {
 
 async function saveConfig(patch: ConfigPatch): Promise<IJiraConfig> {
     const current = rowToConfig(await loadRow());
-    const projectId = patch.project_id !== undefined ? patch.project_id : current.project_id;
-    if (patch.project_id && !(await projectsService.get(patch.project_id))) {
-        throw new ApiError('validation_error', 'Project not found', 400);
-    }
-    if (patch.label_workflows !== undefined || patch.project_id !== undefined) {
-        await validateMappings(patch.label_workflows ?? current.label_workflows, projectId);
-    }
+    if (patch.sources !== undefined) await validateSources(patch.sources);
     const values = {
         ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
         ...(patch.site_url !== undefined ? { site_url: patch.site_url } : {}),
@@ -199,17 +186,13 @@ async function saveConfig(patch: ConfigPatch): Promise<IJiraConfig> {
                 (patch.email !== undefined && patch.email !== current.email)
               ? { api_token_encrypted: null }
               : {}),
-        ...(patch.jql !== undefined ? { jql: patch.jql } : {}),
-        ...(patch.project_id !== undefined ? { project_id: patch.project_id } : {}),
         ...(patch.poll_interval_minutes !== undefined
             ? { poll_interval_minutes: patch.poll_interval_minutes }
             : {}),
         ...(patch.extra_fields !== undefined
             ? { extra_fields: JSON.stringify(patch.extra_fields) }
             : {}),
-        ...(patch.label_workflows !== undefined
-            ? { label_workflows: JSON.stringify(patch.label_workflows) }
-            : {}),
+        ...(patch.sources !== undefined ? { sources: JSON.stringify(patch.sources) } : {}),
         updated_at: new Date().toISOString(),
     };
     await db
@@ -342,10 +325,12 @@ export function composeTaskDescription(
     issue: JiraIssue,
     siteUrl: string,
     extraFields: { id: string; name: string }[] = [],
-    excludeCommentIds: ReadonlySet<string> = new Set()
+    excludeCommentIds: ReadonlySet<string> = new Set(),
+    repoNames: string[] = []
 ): string {
     const f = issue.fields;
     const meta = [
+        ['Repos', repoNames.join(', ')],
         ['Type', text(f['issuetype'])],
         ['Status', text(f['status'])],
         ['Priority', text(f['priority'])],
@@ -424,25 +409,47 @@ function taskTitle(issue: JiraIssue): string {
 
 // ── Pull: Jira → Atlas ───────────────────────────────────────────────────────
 
+/** A source that matched an issue, with its repo resolved. */
+interface Match {
+    repo: IProjectRepo;
+    workflow_id: string | null;
+}
+
+/** The distinct repos of `matches` that `keep` accepts, in source order. */
+function distinctRepos(matches: Match[], keep: (r: IProjectRepo) => boolean): IProjectRepo[] {
+    const kept = matches.filter((m) => keep(m.repo));
+    return [...new Map(kept.map((m) => [m.repo.id, m.repo])).values()];
+}
+
 async function importIssue(
-    cfg: IJiraConfig,
-    defaultProjectId: string,
     siteUrl: string,
     issue: JiraIssue,
-    description: string,
+    first: Match,
+    matches: Match[],
+    extra: { id: string; name: string }[],
     result: IJiraSyncResult
 ) {
-    const issueLabels = (issue.fields['labels'] as string[] | undefined) ?? [];
-    const labels = issueLabels.filter((l) => l.length <= 40);
-    const mapping = cfg.label_workflows.find((m) => issueLabels.includes(m.label));
-    const projectId = mapping?.project_id ?? defaultProjectId;
+    const labels = ((issue.fields['labels'] as string[] | undefined) ?? []).filter(
+        (l) => l.length <= 40
+    );
+    const projectId = first.repo.project_id;
+    const repos = distinctRepos(matches, (r) => r.project_id === projectId);
+    const workflowId =
+        matches.find((m) => m.repo.project_id === projectId && m.workflow_id)?.workflow_id ?? null;
     const url = `${siteUrl}/browse/${issue.key}`;
     const task = await tasksService.create({
         project_id: projectId,
         title: taskTitle(issue),
-        description,
+        description: composeTaskDescription(
+            issue,
+            siteUrl,
+            extra,
+            new Set(),
+            repos.map((r) => r.name)
+        ),
         priority: PRIORITIES[text(issue.fields['priority']).toLowerCase()] ?? 'normal',
         labels: labels.slice(0, 20),
+        repo_ids: repos.map((r) => r.id),
     });
     await db
         .insertInto('jira_issues')
@@ -466,22 +473,32 @@ async function importIssue(
     result.imported++;
 
     let queuedOn: string | null = null;
-    if (mapping?.workflow_id) {
+    if (workflowId) {
         try {
-            await workflowsService.setItemWorkflow(task.id, mapping.workflow_id);
-            queuedOn =
-                (await workflowsService.get(mapping.workflow_id))?.name ?? mapping.workflow_id;
+            await workflowsService.setItemWorkflow(task.id, workflowId);
+            queuedOn = (await workflowsService.get(workflowId))?.name ?? workflowId;
         } catch {
-            /* the mapping went stale (workflow deleted/changed): fall through to "pick one" */
+            /* the source went stale (workflow deleted/changed): fall through to "pick one" */
         }
     }
     if (queuedOn) result.queued++;
     else result.needs_workflow++;
+    // A Task lives in one project: matches elsewhere are named so the Owner can split the work.
+    const elsewhereNames = await Promise.all(
+        distinctRepos(matches, (r) => r.project_id !== projectId).map(
+            async (r) =>
+                `${(await projectsService.get(r.project_id))?.name ?? r.project_id} / ${r.name}`
+        )
+    );
     await notificationsService.create({
         event_type: 'jira_sync',
-        message: queuedOn
-            ? `${issue.key} imported as ${task.id} and queued on ${queuedOn}`
-            : `${issue.key} imported as ${task.id}: pick a workflow for it`,
+        message:
+            (queuedOn
+                ? `${issue.key} imported as ${task.id} and queued on ${queuedOn}`
+                : `${issue.key} imported as ${task.id}: pick a workflow for it`) +
+            (elsewhereNames.length > 0
+                ? `. It also matches ${elsewhereNames.join(', ')} in another project.`
+                : ''),
         kind: queuedOn ? 'update' : 'needs_you',
         issue_type: 'task',
         issue_id: task.id,
@@ -501,6 +518,7 @@ async function refreshIssue(
     issue: JiraIssue,
     siteUrl: string,
     extra: { id: string; name: string }[],
+    matches: Match[],
     result: IJiraSyncResult
 ) {
     const patch: {
@@ -518,11 +536,26 @@ async function refreshIssue(
         const seen = new Set(row.seen_comment_ids);
         const fresh = commentsOf(issue).filter((c) => !seen.has(c.id) && !posted.has(c.id));
         if (task.status === 'draft' || task.status === 'ready') {
-            // Not started yet: the description is still the whole prompt, so refresh it in place.
+            // Not started yet: the description is still the whole prompt, so refresh it
+            // in place, and the repos follow the sources that match now (the Task
+            // keeps its repos when none of them are in its project any more).
+            const matched = distinctRepos(matches, (r) => r.project_id === task.project_id);
+            const repoIds = matched.length > 0 ? matched.map((r) => r.id) : task.repo_ids;
             const title = taskTitle(issue);
-            const description = composeTaskDescription(issue, siteUrl, extra, posted);
-            if (title !== task.title || description !== task.description) {
-                await tasksService.update(task.id, { title, description });
+            const description = composeTaskDescription(
+                issue,
+                siteUrl,
+                extra,
+                posted,
+                matched.map((r) => r.name)
+            );
+            const reposChanged = repoIds.join('\n') !== task.repo_ids.join('\n');
+            if (title !== task.title || description !== task.description || reposChanged) {
+                await tasksService.update(task.id, {
+                    title,
+                    description,
+                    ...(reposChanged ? { repo_ids: repoIds } : {}),
+                });
                 result.updated++;
             }
         } else {
@@ -550,32 +583,37 @@ async function refreshIssue(
     await db.updateTable('jira_issues').set(patch).where('jira_key', '=', row.jira_key).execute();
 }
 
-async function pull(row: ConfigRow, creds: Creds, result: IJiraSyncResult): Promise<void> {
+/** Returns notes for the sync message (sources skipped because their repo is gone). */
+async function pull(row: ConfigRow, creds: Creds, result: IJiraSyncResult): Promise<string[]> {
     const cfg = rowToConfig(row);
-    if (!cfg.jql?.trim()) throw new ApiError('validation_error', 'Enter a JQL query first', 400);
-    if (!cfg.project_id)
-        throw new ApiError(
-            'validation_error',
-            'Pick the default Atlas project for Jira issues',
-            400
-        );
+    if (cfg.sources.length === 0)
+        throw new ApiError('validation_error', 'Add a source (a repo and its JQL) first', 400);
+    const repos = new Map((await projectReposService.listAll()).map((r) => [r.id, r]));
+    const notes: string[] = [];
+    const found = new Map<string, { issue: JiraIssue; first: Match; matches: Match[] }>();
+    for (const [i, source] of cfg.sources.entries()) {
+        const repo = repos.get(source.repo_id);
+        if (!repo) {
+            notes.push(`Source ${i + 1} skipped: its repo no longer exists.`);
+            continue;
+        }
+        const match = { repo, workflow_id: source.workflow_id };
+        for (const issue of await searchAll(creds, source.jql)) {
+            // Jira sub-tasks are listed inside their parent's description, not imported on their own.
+            if ((issue.fields['issuetype'] as { subtask?: boolean } | undefined)?.subtask) continue;
+            const seen = found.get(issue.key);
+            if (seen) seen.matches.push(match);
+            else found.set(issue.key, { issue, first: match, matches: [match] });
+        }
+    }
     const extra = await resolveExtraFields(creds, cfg.extra_fields);
-    for (const issue of await searchAll(creds, cfg.jql)) {
-        // Jira sub-tasks are listed inside their parent's description, not imported on their own.
-        if ((issue.fields['issuetype'] as { subtask?: boolean } | undefined)?.subtask) continue;
+    for (const { issue, first, matches } of found.values()) {
         await fillComments(creds, issue);
         const existing = await loadIssueRow(issue.key);
-        if (existing) await refreshIssue(existing, issue, creds.site_url, extra, result);
-        else
-            await importIssue(
-                cfg,
-                cfg.project_id,
-                creds.site_url,
-                issue,
-                composeTaskDescription(issue, creds.site_url, extra),
-                result
-            );
+        if (existing) await refreshIssue(existing, issue, creds.site_url, extra, matches, result);
+        else await importIssue(creds.site_url, issue, first, matches, extra, result);
     }
+    return notes;
 }
 
 // ── Push: Atlas → Jira ───────────────────────────────────────────────────────
@@ -669,20 +707,25 @@ async function digestSince(taskId: string, pushedCommentId: number, imported: Re
     return { items, maxId };
 }
 
-async function latestPr(taskId: string, fallbackUrl: string | null): Promise<AdfText[]> {
-    const pr = await db
+// A multi-repo Task opens one PR per repo (ADR 0017): list them all.
+async function pullRequests(taskId: string, fallbackUrl: string | null): Promise<AdfText[]> {
+    const links = await db
         .selectFrom('item_external_links')
         .select(['url', 'pr_state'])
         .where('item_id', '=', taskId)
         .where('link_kind', '=', 'pull_request')
-        .orderBy('id', 'desc')
-        .executeTakeFirst();
-    const url = pr?.url ?? fallbackUrl;
-    if (!url) return [];
+        .orderBy('id', 'asc')
+        .execute();
+    const prs =
+        links.length > 0 ? links : fallbackUrl ? [{ url: fallbackUrl, pr_state: null }] : [];
+    if (prs.length === 0) return [];
     return [
-        plain(' Pull request: '),
-        link(url),
-        ...(pr?.pr_state ? [plain(` (${pr.pr_state})`)] : []),
+        plain(prs.length > 1 ? ' Pull requests: ' : ' Pull request: '),
+        ...prs.flatMap((pr, i) => [
+            ...(i > 0 ? [plain(', ')] : []),
+            link(pr.url),
+            ...(pr.pr_state ? [plain(` (${pr.pr_state})`)] : []),
+        ]),
     ];
 }
 
@@ -697,9 +740,7 @@ async function headline(
         case 'draft':
             return [
                 who,
-                plain(
-                    ': imported. No workflow is mapped to its labels yet; the owner will pick one.'
-                ),
+                plain(': imported. No workflow is set for it yet; the owner will pick one.'),
             ];
         case 'ready': {
             const wf = workflowId ? await workflowsService.get(workflowId) : null;
@@ -710,9 +751,9 @@ async function headline(
         case 'waiting_for_info':
             return [who, plain(': waiting on the owner.')];
         case 'in_review':
-            return [who, plain(': ready for review.'), ...(await latestPr(taskId, prUrl))];
+            return [who, plain(': ready for review.'), ...(await pullRequests(taskId, prUrl))];
         case 'done':
-            return [who, plain(': done.'), ...(await latestPr(taskId, prUrl))];
+            return [who, plain(': done.'), ...(await pullRequests(taskId, prUrl))];
     }
 }
 
@@ -856,10 +897,14 @@ async function fullSync(): Promise<IJiraSyncResult> {
         const row = await loadRow();
         const creds = credsOf(row);
         // credsOf proved the row exists.
-        await pull(row as ConfigRow, creds, result);
+        const notes = await pull(row as ConfigRow, creds, result);
         const { posted, errors } = await push(creds, true);
         result.comments_posted = posted;
-        await recordSync(errors.length === 0, [summarize(result), ...errors].join(' '), true);
+        await recordSync(
+            errors.length === 0 && notes.length === 0,
+            [summarize(result), ...notes, ...errors].join(' '),
+            true
+        );
         return result;
     } catch (err) {
         await recordSync(false, errMsg(err), true);

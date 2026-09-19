@@ -53,7 +53,9 @@ describe('/api/integrations/jira', () => {
             { site_url: 'http://acme.atlassian.net' },
             { site_url: 'file:///etc/passwd' },
             { poll_interval_minutes: 1 },
-            { label_workflows: [{ label: 'x', project_id: null, workflow_id: null }] },
+            { sources: [{ repo_id: 'p1', jql: '  ' }] },
+            // Replaced by sources (ADR 0017).
+            { jql: 'project = X' },
         ]) {
             const res = await app.inject({ method: 'PUT', url: '/api/integrations/jira', payload });
             expect(res.statusCode).toBe(400);

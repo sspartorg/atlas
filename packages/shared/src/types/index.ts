@@ -811,13 +811,15 @@ export interface IItemExternalLink {
 }
 
 /**
- * Jira bridge routing rule: an issue carrying `label` becomes a Task in
- * `project_id` (null = the config's default project) and, when set, is
- * queued on `workflow_id`. The first matching rule wins.
+ * Jira bridge source (ADR 0017): issues matching `jql` are work for the repo
+ * `repo_id` (a primary repo's id is its project's id). An issue matching
+ * several sources becomes one Task in the first match's project, spanning the
+ * matched repos of that project; the first of those sources with a
+ * `workflow_id` queues it.
  */
-export interface IJiraLabelWorkflow {
-    label: string;
-    project_id: string | null;
+export interface IJiraSource {
+    repo_id: string;
+    jql: string;
     workflow_id: string | null;
 }
 
@@ -827,13 +829,11 @@ export interface IJiraConfig {
     site_url: string | null;
     email: string | null;
     api_token_set: boolean;
-    jql: string | null;
-    /** Default Atlas project: where issues matching no routing rule (or a rule without a project) go. */
-    project_id: string | null;
     poll_interval_minutes: number;
     /** Extra Jira fields (names or ids) copied into the Task description. */
     extra_fields: string[];
-    label_workflows: IJiraLabelWorkflow[];
+    /** In order: the first matching source picks the Task's project. */
+    sources: IJiraSource[];
     last_sync_at: string | null;
     last_sync_ok: boolean | null;
     last_sync_message: string | null;
