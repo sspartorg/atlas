@@ -294,18 +294,9 @@ export interface IProject {
     // issue id in this project (e.g. CER → CER-1, CER-2, ...). Frozen once
     // set; retired into retired_prefixes when the project is deleted.
     issue_key_prefix: string;
-    git_path: string;
-    git_url: string;
-    credential_id: string | null;
-    default_branch: string;
-    clone_status: CloneStatus;
     description: string;
     status: string;
     guardrails_md: string;
-    // 2026-06-10 — Per-project setup scripts. Edited via the Setup tab on
-    // Project Detail; execution wiring is a separate follow-up.
-    setup_sh_body: string;
-    setup_ps1_body: string;
     created_at: string;
     updated_at: string;
     // Most recent timestamp across the project row and any of its children
@@ -315,16 +306,15 @@ export interface IProject {
 }
 
 /**
- * ADR 0017 — a git repo of a Project. The project's own git fields are its
- * PRIMARY repo (`primary: true`, `id` = the project id); extra repos live in
- * `project_repos`.
+ * ADR 0018 — a git repo of a Project. Every repo is an ordinary
+ * `project_repos` row; there is no primary. A repo that predates 0018 carries
+ * its project's id, which is what kept its worktrees and Jira sources valid.
  */
 export interface IProjectRepo {
     id: string;
     project_id: string;
     /** Folder name in a multi-repo workspace; lowercase slug, unique per project. */
     name: string;
-    primary: boolean;
     git_url: string;
     git_path: string;
     credential_id: string | null;
@@ -1229,6 +1219,9 @@ export type ScheduleConflictPolicy = 'skip' | 'stash' | 'abort';
 export type ScheduleRunStatus = 'success' | 'skipped' | 'failure' | 'conflict';
 
 export interface IProjectSchedule {
+    // ADR 0018 — auto-fetch is per repo; project_id rides along so the
+    // "pause while agents are active" guard resolves without a join.
+    repo_id: string;
     project_id: string;
     enabled: boolean;
     preset: SchedulePreset;

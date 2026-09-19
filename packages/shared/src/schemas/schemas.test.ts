@@ -235,7 +235,6 @@ describe('CreateProjectSchema / UpdateProjectSchema', () => {
         const out = CreateProjectSchema.parse({ name: 'Atlas', issue_key_prefix: 'ATL' });
         expect(out.name).toBe('Atlas');
         expect(out.issue_key_prefix).toBe('ATL');
-        expect(out.git_path).toBe('');
         expect(out.status).toBe('active');
     });
 
