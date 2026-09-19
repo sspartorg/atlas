@@ -11,6 +11,8 @@ import {
     rowToTask,
 } from './items.js';
 import { eventsLog } from './events-log.js';
+import { projectReposService } from './project-repos.js';
+import { ApiError } from '../utils/errors.js';
 
 interface CreateInput {
     project_id: string;
@@ -21,6 +23,7 @@ interface CreateInput {
     reporter_agent_id?: string | null;
     assignee_agent_id?: string | null;
     labels?: string[];
+    repo_ids?: string[];
 }
 
 interface UpdateInput {
@@ -33,6 +36,7 @@ interface UpdateInput {
     pr_url?: string | null | undefined;
     worktree_branch?: string | null | undefined;
     labels?: string[] | undefined;
+    repo_ids?: string[] | undefined;
 }
 
 async function subTaskCounts(taskIds: string[]): Promise<Map<string, number>> {
@@ -74,6 +78,7 @@ export const tasksService = {
     },
 
     async create(data: CreateInput, actorAgentId: string | null = null): Promise<ITask> {
+        const repoIds = await projectReposService.validateIds(data.project_id, data.repo_ids ?? []);
         const row = await createItem({
             project_id: data.project_id,
             type: 'task',
@@ -84,6 +89,7 @@ export const tasksService = {
             reporter_agent_id: data.reporter_agent_id ?? null,
             assignee_agent_id: data.assignee_agent_id ?? null,
             labels: data.labels ?? [],
+            repo_ids: repoIds,
         });
         const task = rowToTask(row);
         await eventsLog.record({
@@ -102,6 +108,19 @@ export const tasksService = {
         if (!before) throw new Error('Task not found');
         const keys = Object.keys(data).filter((k) => data[k as keyof UpdateInput] !== undefined);
         if (keys.length === 0) return before;
+        if (data.repo_ids !== undefined) {
+            // The run's workspace was built for the repos it started with (ADR 0017).
+            const live = await db
+                .selectFrom('workflow_runs')
+                .select('id')
+                .where('item_id', '=', id)
+                .where('status', 'in', ['running', 'waiting_for_owner'])
+                .executeTakeFirst();
+            if (live) {
+                throw new ApiError('conflict', 'Stop the workflow run on this Task before changing its repos', 409);
+            }
+            data = { ...data, repo_ids: await projectReposService.validateIds(before.project_id, data.repo_ids) };
+        }
         await patchItem(id, data);
         // `worktree_branch` isn't logged: it's operational metadata, not
         // user-visible content, and IssueEventField doesn't carry it.

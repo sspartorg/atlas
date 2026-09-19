@@ -15,6 +15,7 @@ import type {
     IAgentPromptVersion,
     IAgentChecklistItem,
     IProject,
+    IProjectRepo,
     ITask,
     ITaskListItem,
     ISubTask,
@@ -156,7 +157,7 @@ async function requestRaw<T>(
 
 /** PUT /integrations/jira body: any config field; `api_token` is write-only (omit or '' keeps the stored one). */
 export type JiraConfigUpdate = Partial<
-    Pick<IJiraConfig, 'enabled' | 'site_url' | 'email' | 'jql' | 'project_id' | 'poll_interval_minutes' | 'extra_fields' | 'label_workflows'>
+    Pick<IJiraConfig, 'enabled' | 'site_url' | 'email' | 'poll_interval_minutes' | 'extra_fields' | 'sources'>
 > & { api_token?: string };
 
 const get = <T>(path: string) => request<T>(path);
@@ -286,6 +287,11 @@ export const api = {
         test: (data: { site_url?: string; email?: string; api_token?: string } = {}) =>
             post<IJiraTestResult>('/integrations/jira/test', data),
         sync: () => post<IJiraSyncResult>('/integrations/jira/sync', {}),
+    },
+
+    /** Every repo of every project (ADR 0017). */
+    repos: {
+        listAll: () => get<IProjectRepo[]>('/repos'),
     },
 
     settings: {
@@ -535,6 +541,32 @@ export const api = {
                 method: 'POST',
                 body: JSON.stringify(data),
             }),
+        // ADR 0017 — a project's repos (primary first). Adding one clones it
+        // (202 + clone_* SSE, like /projects/clone) or registers a local clone
+        // (the /projects/connect checks: 400 carries a ConnectError).
+        repos: (id: string) => get<IProjectRepo[]>(`/projects/${id}/repos`),
+        cloneRepo: (
+            id: string,
+            data: { name: string; repo_url: string; credential_id: string; default_branch: string },
+        ) =>
+            post<{ clone_id: string; destination: string }>(`/projects/${id}/repos`, {
+                mode: 'clone',
+                ...data,
+            }),
+        connectRepo: (
+            id: string,
+            data: { name: string; folder_path: string; repo_url: string; credential_id: string },
+        ) =>
+            requestRaw<IProjectRepo | ConnectError | ApiErrorBody>(`/projects/${id}/repos`, {
+                method: 'POST',
+                body: JSON.stringify({ mode: 'connect', ...data }),
+            }),
+        updateRepo: (
+            id: string,
+            repoId: string,
+            data: { default_branch?: string; setup_sh_body?: string; setup_ps1_body?: string },
+        ) => patch<IProjectRepo>(`/projects/${id}/repos/${repoId}`, data),
+        removeRepo: (id: string, repoId: string) => del(`/projects/${id}/repos/${repoId}`),
         // Batch-9 enterprise-secrets read model: list returns metadata
         // only (`{key, updated_at, has_value}`); revealEnv fetches the
         // plaintext for a single key on demand. save() still accepts

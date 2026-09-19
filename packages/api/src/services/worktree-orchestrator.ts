@@ -161,6 +161,11 @@ export interface EnsureWorktreeInput {
      * preserve the legacy behavior for every other caller.
      */
     pushUpstream?: boolean;
+    /**
+     * ADR 0017 — where to check the repo out instead of the canonical
+     * sibling path: a multi-repo Task nests each repo in one workspace.
+     */
+    path?: string;
 }
 
 // 2026-06-02 — `ROLE_BRANCH_OVERRIDES` and the per-agent `agent.role_id`
@@ -500,7 +505,7 @@ async function ensureWorktreeInner(
     }
 
     const branch = branchName;
-    const worktreePath = computeWorktreePath(project.git_path, project.id, branch);
+    const worktreePath = input.path ?? computeWorktreePath(project.git_path, project.id, branch);
     const defaultBranch =
         project.default_branch && project.default_branch.trim() ? project.default_branch : 'main';
 

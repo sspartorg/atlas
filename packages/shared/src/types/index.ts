@@ -314,6 +314,26 @@ export interface IProject {
     last_activity_at: string;
 }
 
+/**
+ * ADR 0017 — a git repo of a Project. The project's own git fields are its
+ * PRIMARY repo (`primary: true`, `id` = the project id); extra repos live in
+ * `project_repos`.
+ */
+export interface IProjectRepo {
+    id: string;
+    project_id: string;
+    /** Folder name in a multi-repo workspace; lowercase slug, unique per project. */
+    name: string;
+    primary: boolean;
+    git_url: string;
+    git_path: string;
+    credential_id: string | null;
+    default_branch: string;
+    clone_status: CloneStatus;
+    setup_sh_body: string;
+    setup_ps1_body: string;
+}
+
 export interface ICredential {
     id: string;
     label: string;
@@ -373,6 +393,11 @@ export interface ITask {
     pr_url: string | null;
     /** Free-form labels for filtering. Max 20 per item / 40 chars each (enforced at Zod). */
     labels: string[];
+    /**
+     * ADR 0017 — the project repos this Task changes, in order (the first
+     * holds Task-wide files). Empty = the project's primary repo only.
+     */
+    repo_ids: string[];
     // The run branch (`atlas/wf/<id>`) and its on-disk checkout; both null
     // until a workflow run provisions them.
     worktree_branch: string | null;
@@ -786,13 +811,15 @@ export interface IItemExternalLink {
 }
 
 /**
- * Jira bridge routing rule: an issue carrying `label` becomes a Task in
- * `project_id` (null = the config's default project) and, when set, is
- * queued on `workflow_id`. The first matching rule wins.
+ * Jira bridge source (ADR 0017): issues matching `jql` are work for the repo
+ * `repo_id` (a primary repo's id is its project's id). An issue matching
+ * several sources becomes one Task in the first match's project, spanning the
+ * matched repos of that project; the first of those sources with a
+ * `workflow_id` queues it.
  */
-export interface IJiraLabelWorkflow {
-    label: string;
-    project_id: string | null;
+export interface IJiraSource {
+    repo_id: string;
+    jql: string;
     workflow_id: string | null;
 }
 
@@ -802,13 +829,11 @@ export interface IJiraConfig {
     site_url: string | null;
     email: string | null;
     api_token_set: boolean;
-    jql: string | null;
-    /** Default Atlas project: where issues matching no routing rule (or a rule without a project) go. */
-    project_id: string | null;
     poll_interval_minutes: number;
     /** Extra Jira fields (names or ids) copied into the Task description. */
     extra_fields: string[];
-    label_workflows: IJiraLabelWorkflow[];
+    /** In order: the first matching source picks the Task's project. */
+    sources: IJiraSource[];
     last_sync_at: string | null;
     last_sync_ok: boolean | null;
     last_sync_message: string | null;
@@ -1173,6 +1198,8 @@ export interface SSEEvent {
     result?: ScheduleRunStatus;
     detail?: string | null;
     project?: IProject;
+    /** ADR 0017 — set on `clone_completed` when the clone added a repo to a project. */
+    repo?: IProjectRepo;
     errorDetail?: string;
     /** W4 — typed kind on `run_error` SSE events. Lets the UI render a
      *  kind-aware banner (e.g. "claude CLI not on PATH") instead of dumping

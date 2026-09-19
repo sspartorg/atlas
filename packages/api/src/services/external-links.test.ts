@@ -428,6 +428,67 @@ describe('PR state refresh', () => {
             expect(await statusOf('ATL-EPIC')).toBe('done');
         });
 
+        it('with a PR per repo, the Task closes only when the last one merges (ADR 0017)', async () => {
+            const webPr = 'https://github.com/foo/web/pull/3';
+            await externalLinks.create({ itemId: 'ATL-EPIC', url: webPr, linkKind: 'pull_request' });
+            let webMerged = false;
+            fetchMock.mockImplementation(
+                async (u: string) =>
+                    new Response(
+                        JSON.stringify(
+                            u.includes('/web/') && !webMerged
+                                ? { state: 'open', merged_at: null }
+                                : { state: 'closed', merged_at: '2026-09-01T00:00:00Z' }
+                        ),
+                        { status: 200 }
+                    )
+            );
+            await externalLinks.refreshPrStates('ATL-EPIC');
+            expect(await statusOf('ATL-EPIC')).toBe('in_review');
+
+            webMerged = true;
+            await externalLinks.refreshPrStates('ATL-EPIC');
+            expect(await statusOf('ATL-EPIC')).toBe('done');
+        });
+
+        it("checks each PR with the credential of the repo it belongs to", async () => {
+            await testDb
+                .insertInto('credentials')
+                .values({
+                    id: 'cred-web',
+                    label: 'Web PAT',
+                    host: 'github',
+                    kind: 'pat',
+                    username: 'octocat',
+                    token_encrypted: 'enc',
+                    token_fingerprint: 'fp2',
+                    scope: 'repo',
+                    expires_at: null,
+                })
+                .execute();
+            await testDb
+                .insertInto('project_repos')
+                .values({
+                    id: 'repo-web',
+                    project_id: 'p1',
+                    name: 'web',
+                    git_url: 'https://github.com/foo/web.git',
+                    git_path: '/tmp/web',
+                    credential_id: 'cred-web',
+                })
+                .execute();
+            vi.mocked(credentialsService.getToken).mockImplementation(async (id: string) => (id === 'cred-web' ? 'tok-web' : 'tok'));
+            await externalLinks.create({ itemId: 'ATL-EPIC', url: 'https://github.com/foo/web/pull/3', linkKind: 'pull_request' });
+
+            await externalLinks.refreshPrStates('ATL-EPIC');
+
+            const auth = (needle: string) =>
+                (fetchMock.mock.calls.find(([u]) => String(u).includes(needle))?.[1] as { headers: Record<string, string> })
+                    .headers['Authorization'];
+            expect(auth('/foo/web/pulls/3')).toBe('Bearer tok-web');
+            expect(auth('/foo/bar/pulls/12')).toBe('Bearer tok');
+        });
+
         it('an open PR closes nothing', async () => {
             fetchMock.mockResolvedValue(new Response(JSON.stringify({ state: 'open', merged_at: null }), { status: 200 }));
             await externalLinks.syncReviewedTaskPrs();

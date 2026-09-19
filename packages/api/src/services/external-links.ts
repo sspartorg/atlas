@@ -99,14 +99,29 @@ function isStalePr(row: ExternalLinkRow): boolean {
 // `onlyStale` limits it to links unchecked for PR_STATE_TTL_MS. No project
 // credential → nothing is fetched and pr_state stays null. checked_at is
 // stamped even on a failed lookup so a broken link isn't retried per read.
+// ADR 0017 — a Task's PRs can live in several repos of its project, each
+// with its own credential. Keyed by `owner/repo`, lowercased.
+async function repoCredentials(projectId: string): Promise<Map<string, string>> {
+    const [project, extras] = await Promise.all([
+        db.selectFrom('projects').select(['git_url', 'credential_id']).where('id', '=', projectId).executeTakeFirst(),
+        db.selectFrom('project_repos').select(['git_url', 'credential_id']).where('project_id', '=', projectId).execute(),
+    ]);
+    const byRepo = new Map<string, string>();
+    for (const r of [...extras, ...(project ? [project] : [])]) {
+        const m = /github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(r.git_url ?? '');
+        if (m && r.credential_id) byRepo.set(`${m[1]}/${m[2]}`.toLowerCase(), r.credential_id);
+    }
+    return byRepo;
+}
+
 async function syncPrStates(itemId: string, onlyStale: boolean): Promise<void> {
     const item = await db
         .selectFrom('items')
         .innerJoin('projects', 'projects.id', 'items.project_id')
-        .select(['items.type', 'projects.credential_id'])
+        .select(['items.type', 'items.project_id', 'projects.credential_id'])
         .where('items.id', '=', itemId)
         .executeTakeFirst();
-    if (!item?.credential_id) return;
+    if (!item) return;
     const rows = await db
         .selectFrom('item_external_links')
         .selectAll()
@@ -115,14 +130,22 @@ async function syncPrStates(itemId: string, onlyStale: boolean): Promise<void> {
         .execute();
     const due = onlyStale ? rows.filter(isStalePr) : rows;
     if (due.length === 0) return;
-    let token: string;
-    try {
-        token = await credentialsService.getToken(item.credential_id);
-    } catch {
-        return;
-    }
+    const byRepo = await repoCredentials(item.project_id);
+    const tokens = new Map<string, string | null>();
+    const tokenFor = async (url: string): Promise<string | null> => {
+        const pr = parseGithubPrUrl(url);
+        const credentialId = (pr && byRepo.get(`${pr.owner}/${pr.repo}`.toLowerCase())) ?? item.credential_id;
+        if (!credentialId) return null;
+        if (!tokens.has(credentialId)) {
+            tokens.set(credentialId, await credentialsService.getToken(credentialId).catch(() => null));
+        }
+        return tokens.get(credentialId) ?? null;
+    };
     let changed = false;
+    let newlyMerged = false;
     for (const row of due) {
+        const token = await tokenFor(row.url);
+        if (!token) continue;
         const state = await fetchGithubPrState(row.url, token);
         await db
             .updateTable('item_external_links')
@@ -133,7 +156,18 @@ async function syncPrStates(itemId: string, onlyStale: boolean): Promise<void> {
             .where('id', '=', row.id)
             .execute();
         if (state && state !== row.pr_state) changed = true;
-        if (state === 'merged' && row.pr_state !== 'merged' && item.type === 'task') await closeMergedTask(itemId);
+        if (state === 'merged' && row.pr_state !== 'merged') newlyMerged = true;
+    }
+    // One PR per repo (ADR 0017): the Task closes once the last of them merges.
+    if (newlyMerged && item.type === 'task') {
+        const unmerged = await db
+            .selectFrom('item_external_links')
+            .select('id')
+            .where('item_id', '=', itemId)
+            .where('link_kind', '=', 'pull_request')
+            .where((eb) => eb.or([eb('pr_state', 'is', null), eb('pr_state', '!=', 'merged')]))
+            .executeTakeFirst();
+        if (!unmerged) await closeMergedTask(itemId);
     }
     // counts_changed is what the item detail + list queries already refetch on.
     if (changed) broadcastSSE({ type: 'counts_changed', issueType: item.type, issueId: itemId });

@@ -77,12 +77,12 @@ Configures the Jira bridge. Every field saves on blur (or on change for selects 
   - **Test connection** button → `POST /api/integrations/jira/test`. It toasts "Connected to Jira as <name>" or the error, and is disabled until a token is stored.
 - **Import**
   - Header switch **Jira sync enabled**: the minute tick only syncs while it is on.
-  - **Default project** select (from `useProjects`; where issues no rule routes go), **JQL** (multiline, monospace), **Poll every** N minutes (≥ 5; an invalid value reverts), and **Extra fields** (comma-separated Jira field names or ids).
+  - **Poll every** N minutes (≥ 5; an invalid value reverts), and **Extra fields** (comma-separated Jira field names or ids).
   - A footer line shows "Last sync <time> · <message>" (danger colour when the last sync failed) or "Not synced yet".
   - **Sync now** button → `POST /api/integrations/jira/sync`. It toasts the counts, invalidates every query, and is disabled until a token is stored.
-- **Label → project and workflow** (routing rules)
-  - One row per rule: the label, "<project> · <workflow>" ("Default project" / "No workflow: you pick one" when unset), and a remove button.
-  - An add row: Jira label text field + **Project for label** select (Default project or any project) + **Workflow for label** select ("No workflow: I pick" or an `input_kind='item'` workflow that is global or in the rule's project; changing the project clears it) + **Add** (needs a label and a project or workflow). Adding a label that already exists replaces its rule.
+- **Sources** (one JQL per repo, ADR 0017; replaced the Default project select, the single JQL and the label rules)
+  - One row per source, in order: "<project> / <repo>" as the row label, the JQL (monospace), the workflow name ("No workflow: you pick one" when unset), and a **Remove source N** button (toast "Jira source removed").
+  - An add row: **Source repo** select (every repo from `GET /api/repos`, labelled "<project> / <repo>") + **Source JQL** (multiline, monospace) + **Source workflow** select ("No workflow: I pick" or an `input_kind='item'` workflow that is global or in the chosen repo's project; changing the repo clears it) + **Add source** (needs a repo and a JQL; appends, toast "Jira source added").
 
 ## Tab 6 — Help & About (`HelpAboutTab`)
 **About Atlas** — app version + repository link. **Report a bug** — surfaces the current `ATLAS_FEEDBACK_URL` (from `useEnv()`), an **Open GitHub Issues** button (falls back to the hardcoded upstream URL if the env var is blank), and a **Restore recommended URL** button that PATCHes `/api/settings/env` with the default `https://github.com/sspartorg/atlas/issues`.
@@ -108,8 +108,8 @@ The same feedback URL powers the **Report a bug** link in the sidenav footer (`p
 - `useCliModels`, `useCreateCliModel`, `useRemoveCliModel`
 - `useUpdateExternalNotification`, `useUpdateNotifications`
 - `useCredentials` (Profile tab)
-- `useProjects` (for the workspace-change warning and the Jira project select)
-- `useJiraConfig`, `useUpdateJiraConfig`, `useTestJira`, `useSyncJira`, `useWorkflows` (Jira tab)
+- `useProjects` (for the workspace-change warning and the Jira source labels)
+- `useJiraConfig`, `useUpdateJiraConfig`, `useTestJira`, `useSyncJira`, `useAllRepos`, `useWorkflows` (Jira tab)
 - `useToast`
 
 ## API endpoints touched
@@ -119,7 +119,7 @@ The same feedback URL powers the **Report a bug** link in the sidenav footer (`p
 - `GET/POST/DELETE /api/cli-models`
 - `PATCH /api/settings/external-notification`, `POST /api/settings/external-notification/test`
 - `PATCH /api/settings/notifications`
-- `GET/PUT /api/integrations/jira`, `POST /api/integrations/jira/test`, `POST /api/integrations/jira/sync`, `GET /api/workflows`
+- `GET/PUT /api/integrations/jira`, `POST /api/integrations/jira/test`, `POST /api/integrations/jira/sync`, `GET /api/repos`, `GET /api/workflows`
 - `POST /api/settings/reset` (also wipes the Jira config and sync state)
 
 ## Permissions / guards

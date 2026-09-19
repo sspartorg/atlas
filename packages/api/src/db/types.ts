@@ -1,6 +1,7 @@
 import type { ColumnType, Generated } from 'kysely';
 import type {
     AgentCli,
+    IJiraSource,
     IWorkflowGraph,
     SchedulePreset,
     WorkflowInputKind,
@@ -244,6 +245,26 @@ export interface CredentialsTable {
     updated_at: UpdatedAt;
 }
 
+// Migration 043 (ADR 0017) — a project's repos beyond its primary one.
+export interface ProjectReposTable {
+    id: string;
+    project_id: string;
+    name: string;
+    git_url: string;
+    git_path: string;
+    credential_id: StrN;
+    default_branch: Str;
+    clone_status: ColumnType<
+        'pending' | 'cloning' | 'ready' | 'error',
+        'pending' | 'cloning' | 'ready' | 'error' | undefined,
+        'pending' | 'cloning' | 'ready' | 'error'
+    >;
+    setup_sh_body: Str;
+    setup_ps1_body: Str;
+    position: Int;
+    created_at: CreatedAt;
+}
+
 export interface ProjectsTable {
     id: string;
     name: string;
@@ -421,6 +442,8 @@ export interface ItemsTable {
     // Task 1 — labels JSONB. Select returns string[]; insert/update
     // accept string[] | undefined (DB defaults to []).
     labels: ColumnType<string[], string[] | undefined, string[] | undefined>;
+    // Migration 043 (ADR 0017) — the project repos a Task works on; [] = primary.
+    repo_ids: ColumnType<string[], string | undefined, string | undefined>;
 
     // ADR 0014 — the workflow this item is queued for.
     workflow_id: StrN;
@@ -450,16 +473,10 @@ export interface JiraConfigTable {
     site_url: StrN;
     email: StrN;
     api_token_encrypted: StrN;
-    jql: StrN;
-    project_id: StrN;
     poll_interval_minutes: Int;
     extra_fields: ColumnType<string[], string | undefined, string>;
-    // Rules saved before routing carried a project have no project_id.
-    label_workflows: ColumnType<
-        { label: string; project_id?: string | null; workflow_id: string | null }[],
-        string | undefined,
-        string
-    >;
+    // Migration 044 (ADR 0017) — one JQL per repo, replacing jql / project_id / label_workflows.
+    sources: ColumnType<IJiraSource[], string | undefined, string>;
     last_sync_at: TSD;
     last_sync_ok: ColumnType<boolean | null, boolean | null | undefined, boolean | null>;
     last_sync_message: StrN;
@@ -749,6 +766,7 @@ export interface DB {
     agent_prompt_versions: AgentPromptVersionsTable;
     credentials: CredentialsTable;
     projects: ProjectsTable;
+    project_repos: ProjectReposTable;
     project_issue_counters: ProjectIssueCountersTable;
     project_schedules: ProjectSchedulesTable;
     project_guardrails: ProjectGuardrailsTable;

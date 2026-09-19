@@ -31,6 +31,8 @@ export interface IItemRow {
     worktree_path: string | null;
     // Task 1 — free-form labels for filtering. DB default `[]`; never null.
     labels: string[];
+    // ADR 0017 — a Task's repos; DB default `[]` (= the primary repo).
+    repo_ids: string[];
     created_at: string;
     updated_at: string;
 }
@@ -60,6 +62,8 @@ export function rowToTask(r: IItemRow): ITask {
         // DB column default is `[]`; never null in practice.
         /* v8 ignore next */
         labels: r.labels ?? [],
+        /* v8 ignore next */
+        repo_ids: r.repo_ids ?? [],
         worktree_branch: r.worktree_branch,
         worktree_path: r.worktree_path,
         created_at: r.created_at,
@@ -109,6 +113,7 @@ export interface CreateItemInput {
 
     // Task 1 — free-form labels for filtering.
     labels?: string[] | undefined;
+    repo_ids?: string[] | undefined;
 }
 
 export async function createItem(input: CreateItemInput): Promise<IItemRow> {
@@ -164,6 +169,7 @@ export async function createItem(input: CreateItemInput): Promise<IItemRow> {
                 // Postgres array syntax (`{a,b}`), not JSONB. Stringify
                 // explicitly so PG accepts it as a JSONB value.
                 labels: JSON.stringify(input.labels ?? []) as never,
+                repo_ids: JSON.stringify(input.repo_ids ?? []),
             })
             .returningAll()
             .executeTakeFirstOrThrow();
@@ -204,6 +210,7 @@ export interface PatchFields {
     worktree_path?: string | null | undefined;
     // Task 1 — labels.
     labels?: string[] | undefined;
+    repo_ids?: string[] | undefined;
 }
 
 export async function patchItem(
@@ -216,6 +223,9 @@ export async function patchItem(
         if (v !== undefined) clean[k] = v;
     }
     // Task 1 — same stringify-for-JSONB note as createItem above.
+    if (clean['repo_ids'] !== undefined) {
+        clean['repo_ids'] = JSON.stringify(clean['repo_ids']);
+    }
     if (clean['labels'] !== undefined) {
         clean['labels'] = JSON.stringify(clean['labels']);
     }

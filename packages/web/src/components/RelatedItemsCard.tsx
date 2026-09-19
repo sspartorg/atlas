@@ -28,7 +28,7 @@ import { useSettings } from '../hooks/useSettings.js';
 import { useToast } from '../hooks/useToast.js';
 import { WorkItemTable, type WorkItemTableRow } from './WorkItemTable.js';
 import { AddPrLinkDialog } from './AddPrLinkDialog.js';
-import { ATLAS_PALETTE } from '../theme/tokens.js';
+import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 
 import { relativeTime } from '../utils/time.js';
 import { itemPath } from '../utils/itemPath.js';
@@ -518,7 +518,7 @@ export function RelatedItemsCard({
                         >
                             <Box
                                 component="span"
-                                sx={{ fontFamily: 'mono', fontSize: 12, fontWeight: 600, color: ATLAS_PALETTE.slate60 }}
+                                sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono, fontSize: 12, fontWeight: 600, color: ATLAS_PALETTE.slate60 }}
                             >
                                 {l.external_ref}
                             </Box>

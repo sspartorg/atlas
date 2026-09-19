@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { rm, access } from 'node:fs/promises';
 import { resolve as resolvePath, sep } from 'node:path';
 import { projectsService } from './projects.js';
+import { projectReposService } from './project-repos.js';
 import { settingsService } from './settings.js';
 import { broadcastSSE } from '../routes/events.js';
 
@@ -44,12 +45,19 @@ export function startDelete(input: StartDeleteInput): string {
             const workspaceRoot = settings.workspace_path
                 ? resolvePath(settings.workspace_path)
                 : '';
-            const resolvedTarget = resolvePath(input.destination);
-            const insideWorkspace =
-                workspaceRoot.length > 0 &&
-                (resolvedTarget === workspaceRoot ||
-                    resolvedTarget.startsWith(workspaceRoot + sep));
-            if (!insideWorkspace) {
+            const insideWorkspace = (target: string): boolean => {
+                const resolvedTarget = resolvePath(target);
+                return (
+                    workspaceRoot.length > 0 &&
+                    (resolvedTarget === workspaceRoot || resolvedTarget.startsWith(workspaceRoot + sep))
+                );
+            };
+            // ADR 0017 — the project's extra repos go with it. Read before the
+            // project row (and, by cascade, theirs) is deleted.
+            const extraPaths = (await projectReposService.list(input.projectId).catch(() => []))
+                .filter((r) => !r.primary)
+                .map((r) => r.git_path);
+            if (!insideWorkspace(input.destination)) {
                 const msg = `Refused to purge ${input.destination}: not under workspace root ${workspaceRoot || '<unset>'}`;
                 emit(deleteId, msg);
                 broadcastSSE({
@@ -59,6 +67,17 @@ export function startDelete(input: StartDeleteInput): string {
                     errorDetail: msg,
                 });
                 return;
+            }
+            for (const extra of extraPaths) {
+                if (!insideWorkspace(extra)) {
+                    emit(deleteId, `Kept repo folder ${extra}: not under workspace root`);
+                    continue;
+                }
+                await rm(extra, { recursive: true, force: true })
+                    .then(() => emit(deleteId, `Removing repo folder ${extra} ... ok`))
+                    .catch((err: unknown) =>
+                        emit(deleteId, `Removing repo folder ${extra} failed: ${err instanceof Error ? err.message : String(err)}`)
+                    );
             }
             emit(deleteId, `Removing workspace folder ${input.destination} ...`);
             try {

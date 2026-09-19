@@ -1,7 +1,7 @@
 # 0016. Jira Bridge
 
 **Date:** 2026-09-19
-**Status:** Accepted
+**Status:** Accepted. Routing amended by [ADR 0017](0017-multi-repo-projects.md) (multi-repo projects): **sources** replaced the single JQL, the default project and the label rules. See "Amendment: sources per repo" below.
 
 ## Context
 
@@ -48,6 +48,17 @@ Atlas is self-hosted and is an extension to Jira, not a replacement. The existin
 
 - `packages/shared` gains `IJiraConfig`, `IJiraSyncResult`, `IJiraTestResult`, `UpdateJiraConfigSchema`, `TestJiraConnectionSchema`, and the `jira_issue` external-link kind. The Owner sanctioned these edits for this feature.
 - The AGENTS.md "no tracker links" rule now allows the one Jira link the bridge writes.
-- One Jira site and one JQL; the target project comes from the routing rules, with a default. A second site or project would move `jira_config` from a singleton to rows.
-- An import is capped at 500 issues per sync. Jira sub-tasks are listed in their parent's description, not imported.
+- One Jira site. A second site would move `jira_config` from a singleton to rows. (The single JQL and default project gave way to per-repo sources; see the amendment below.)
+- An import is capped at 500 issues per source per sync. Jira sub-tasks are listed in their parent's description, not imported.
 - Credentials: an API token encrypted at rest (`v1:` + AES-GCM, as for settings secrets), write-only over the API.
+
+## Amendment: sources per repo ([ADR 0017](0017-multi-repo-projects.md))
+
+A project can hold several repos, and a Task can span several of them. One JQL routed by labels could not say which repo an issue is for, so the config became an ordered list of **sources**, `{repo_id, jql, workflow_id}`, one JQL per repo:
+- Every sync runs each source's JQL. An issue matching several sources becomes **one** Task in the project of the first source it matched, with `repo_ids` = the matched repos of that project (source order).
+- The first matched source in that project with a workflow queues the Task; otherwise it waits as a draft with a `needs_you` notification. Matches in other projects are named in the import notification, because a Task lives in one project.
+- While a Task is draft or ready, a sync also updates its repos to the sources that match now. The description header gains a `Repos` line.
+- The "ready for review" and "done" comments list every pull request of the Task with its state (one PR per repo).
+- Migration 044 converts the old config without changing where issues go. Each label rule becomes `(<jql>) AND labels = "<label>"` for the rule's project, in rule order. The plain JQL for the default project then catches the rest. The first matching source picks the project, as the first matching rule did.
+
+The trust-boundary advice still holds, now per source: keep each JQL to issues your team controls, and leave a source's workflow empty if you want to review each Task before it runs.

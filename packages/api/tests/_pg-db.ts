@@ -81,6 +81,8 @@ const TRUNCATE_TABLES = [
     'jira_issues',
     'jira_config',
     'items',
+    // Migration 043 — a project's extra repos (ADR 0017).
+    'project_repos',
     'projects',
     'credentials',
     'agent_checklists',

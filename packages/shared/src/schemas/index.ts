@@ -218,6 +218,9 @@ export const ItemLabelsOptionalSchema = z
     .max(20)
     .optional();
 
+// A Task's repos (ADR 0017); [] = the project's primary repo.
+const TaskRepoIdsSchema = z.array(z.string().min(1)).max(20);
+
 export const CreateTaskSchema = z
     .object({
         project_id: z.string().min(1),
@@ -228,6 +231,7 @@ export const CreateTaskSchema = z
         reporter_agent_id: z.string().nullable().default(null),
         assignee_agent_id: z.string().nullable().default(null),
         labels: ItemLabelsSchema,
+        repo_ids: TaskRepoIdsSchema.default([]),
     })
     .strict();
 
@@ -250,6 +254,7 @@ export const UpdateTaskSchema = z
         // The Owner can point a Task at an existing branch; null clears it.
         worktree_branch: WORKTREE_BRANCH_SCHEMA.nullable().optional(),
         labels: ItemLabelsOptionalSchema,
+        repo_ids: TaskRepoIdsSchema.optional(),
     })
     .strict();
 
@@ -521,13 +526,15 @@ export const UpdateCredentialSchema = z.object({
         .optional(),
 });
 
+const GithubRepoUrlSchema = z
+    .string()
+    .url()
+    .refine((u) => u.startsWith('https://github.com/'), {
+        message: 'Only https://github.com URLs are supported',
+    });
+
 export const CloneProjectSchema = z.object({
-    repo_url: z
-        .string()
-        .url()
-        .refine((u) => u.startsWith('https://github.com/'), {
-            message: 'Only https://github.com URLs are supported',
-        }),
+    repo_url: GithubRepoUrlSchema,
     credential_id: z.string().min(1),
     project_name: z.string().min(1).max(200),
     issue_key_prefix: IssueKeyPrefixSchema,
@@ -543,15 +550,47 @@ export const RecloneProjectSchema = z.object({}).strict().optional().default({})
 
 export const ConnectExistingProjectSchema = z.object({
     folder_path: z.string().min(1),
-    repo_url: z
-        .string()
-        .url()
-        .refine((u) => u.startsWith('https://github.com/'), {
-            message: 'Only https://github.com URLs are supported',
-        }),
+    repo_url: GithubRepoUrlSchema,
     credential_id: z.string().min(1),
     issue_key_prefix: IssueKeyPrefixSchema,
 });
+
+// ADR 0017 — a repo's folder name in a multi-repo workspace, so it must be
+// a safe path segment.
+export const RepoNameSchema = z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,39}$/, 'Use lowercase letters, digits and dashes (max 40)');
+
+/** POST /api/projects/:id/repos — clone a new repo into the workspace, or register a local clone. */
+export const CreateProjectRepoSchema = z.discriminatedUnion('mode', [
+    z
+        .object({
+            mode: z.literal('clone'),
+            name: RepoNameSchema,
+            repo_url: GithubRepoUrlSchema,
+            credential_id: z.string().min(1),
+            default_branch: z.string().min(1).default('main'),
+        })
+        .strict(),
+    z
+        .object({
+            mode: z.literal('connect'),
+            name: RepoNameSchema,
+            folder_path: z.string().min(1),
+            repo_url: GithubRepoUrlSchema,
+            credential_id: z.string().min(1),
+        })
+        .strict(),
+]);
+
+/** PATCH /api/projects/:id/repos/:repoId — extra repos only; the primary is edited on the project. */
+export const UpdateProjectRepoSchema = z
+    .object({
+        default_branch: z.string().min(1).optional(),
+        setup_sh_body: z.string().optional(),
+        setup_ps1_body: z.string().optional(),
+    })
+    .strict();
 
 const HexColorSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Expected hex color like #2E2E2E');
 const HHMMSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'HH:MM 24-hour required');
@@ -630,23 +669,17 @@ export const UpdateJiraConfigSchema = z
         site_url: JiraSiteUrlSchema.nullable(),
         email: z.string().email().max(320).nullable(),
         api_token: z.string().max(2_000),
-        jql: z.string().max(5_000).nullable(),
-        project_id: z.string().min(1).nullable(),
         poll_interval_minutes: z.number().int().min(5).max(10_080),
         extra_fields: z.array(z.string().trim().min(1).max(200)).max(50),
-        label_workflows: z
+        sources: z
             .array(
-                z
-                    .object({
-                        label: z.string().trim().min(1).max(255),
-                        project_id: z.string().min(1).nullable().default(null),
-                        workflow_id: z.string().min(1).nullable().default(null),
-                    })
-                    .refine((r) => r.project_id !== null || r.workflow_id !== null, {
-                        message: 'A label rule needs a project, a workflow, or both',
-                    })
+                z.object({
+                    repo_id: z.string().min(1),
+                    jql: z.string().trim().min(1).max(5_000),
+                    workflow_id: z.string().min(1).nullable().default(null),
+                })
             )
-            .max(100),
+            .max(50),
     })
     .partial()
     .strict();

@@ -1,7 +1,11 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ExternalLinksModule from './external-links.js';
 import type * as WorktreeOrchestratorModule from './worktree-orchestrator.js';
 import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { IssueStatus, IWorkflowGraph, RunOutcomeKind, RunStatus } from '@atlas/shared';
 
 // The engine is exercised against the real DB; only the parts that would
@@ -357,6 +361,105 @@ describe('workflow engine — stop, reconcile, dispatch', () => {
         expect(new Date(wf.next_run_at ?? 0).getTime()).toBeGreaterThan(Date.now());
         expect(spawned.at(-1)?.nodeId).toBe('scout');
         expect(git.ensureWorktree).not.toHaveBeenCalled();
+    });
+});
+
+// A real repo whose origin/main is its first commit plus atlas's own
+// .gitignore commit — so "no changes" is decided by real git.
+function initRepo(dir: string): void {
+    mkdirSync(dir, { recursive: true });
+    const g = (...args: string[]) => execFileSync('git', ['-C', dir, ...args], { stdio: 'ignore' });
+    g('init', '-q', '-b', 'main');
+    g('config', 'user.email', 'test@atlas.local');
+    g('config', 'user.name', 'Atlas Test');
+    writeFileSync(join(dir, 'README.md'), 'repo\n');
+    g('add', '-A');
+    g('commit', '-qm', 'init');
+    g('update-ref', 'refs/remotes/origin/main', 'HEAD');
+    writeFileSync(join(dir, '.gitignore'), '.atlas/\n');
+    g('add', '-A');
+    g('commit', '-qm', 'chore(atlas): ignore Atlas scratch paths');
+}
+
+describe('workflow engine — multi-repo Tasks (ADR 0017)', () => {
+    let base = '';
+    let ws = '';
+    const defaults = {
+        ensureWorktree: git.ensureWorktree.getMockImplementation(),
+        openPullRequest: git.openPullRequest.getMockImplementation(),
+    };
+
+    beforeEach(async () => {
+        base = mkdtempSync(join(tmpdir(), 'atlas-multi-'));
+        ws = join(base, 'worktrees', 'p1', 'ws', 'atlas__wf__ATL-2');
+        await testDb.updateTable('projects').set({ git_path: join(base, 'core') }).where('id', '=', 'p1').execute();
+        await testDb
+            .insertInto('project_repos')
+            .values({ id: 'repo-web', project_id: 'p1', name: 'web', git_url: 'https://github.com/o/web', git_path: join(base, 'web') })
+            .execute();
+        await testDb.updateTable('items').set({ repo_ids: JSON.stringify(['p1', 'repo-web']) }).where('id', '=', 'ATL-2').execute();
+        git.ensureWorktree.mockImplementation((async (input: { path?: string; branch?: string }) => {
+            if (input.path && !existsSync(input.path)) initRepo(input.path);
+            return { path: input.path ?? '/tmp/atlas-wf-test', branch: input.branch ?? '', freshlyCreated: true };
+        }) as never);
+        git.openPullRequest.mockImplementation((async (o: { worktreePath: string }) => ({
+            opened: true,
+            url: o.worktreePath.endsWith('web') ? 'https://github.com/o/web/pull/2' : 'https://github.com/o/core/pull/1',
+            alreadyExists: false,
+        })) as never);
+    });
+
+    afterEach(() => {
+        git.ensureWorktree.mockImplementation(defaults.ensureWorktree as never);
+        git.openPullRequest.mockImplementation(defaults.openPullRequest as never);
+        rmSync(base, { recursive: true, force: true });
+    });
+
+    const linksOf = async () =>
+        (await testDb.selectFrom('item_external_links').select('url').where('item_id', '=', 'ATL-2').orderBy('id').execute()).map((l) => l.url);
+
+    it('works every repo side by side in one workspace and opens one cross-linked PR per repo', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        expect(git.ensureWorktree).toHaveBeenCalledWith(
+            expect.objectContaining({ path: join(ws, 'core'), project: expect.objectContaining({ id: 'p1' }) })
+        );
+        expect(git.ensureWorktree).toHaveBeenCalledWith(
+            expect.objectContaining({ path: join(ws, 'web'), project: expect.objectContaining({ id: 'repo-web' }) })
+        );
+        expect((await runOf(runId)).worktree_path).toBe(ws);
+
+        // The agents changed both repos (left uncommitted; End commits leftovers).
+        writeFileSync(join(ws, 'core', 'api.txt'), 'endpoint\n');
+        writeFileSync(join(ws, 'web', 'client.txt'), 'client\n');
+        await finishStep('completed', 'done');
+        await finishStep('completed', 'done');
+
+        expect(git.pushWorktree).toHaveBeenCalledWith(join(ws, 'core'), 'atlas/wf/ATL-2', null, 'p1');
+        expect(git.pushWorktree).toHaveBeenCalledWith(join(ws, 'web'), 'atlas/wf/ATL-2', null, 'repo-web');
+        // One PR per repo, then a second pass that lists each PR's sibling.
+        expect(git.openPullRequest).toHaveBeenCalledTimes(4);
+        const relinked = git.openPullRequest.mock.calls.slice(2).map((c) => (c as unknown as [{ body: string }])[0].body);
+        expect(relinked[0]).toContain('- web: https://github.com/o/web/pull/2');
+        expect(relinked[1]).toContain('- core: https://github.com/o/core/pull/1');
+        expect(git.cleanupWorktreeAfterPush).toHaveBeenCalledTimes(2);
+        expect(existsSync(ws)).toBe(false);
+
+        expect(await runOf(runId)).toMatchObject({ status: 'completed', pr_url: 'https://github.com/o/core/pull/1' });
+        expect(await linksOf()).toEqual(['https://github.com/o/core/pull/1', 'https://github.com/o/web/pull/2']);
+        expect(await itemOf('ATL-2')).toMatchObject({ status: 'in_review' });
+    });
+
+    it('skips a repo the Task did not change', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        writeFileSync(join(ws, 'core', 'api.txt'), 'endpoint\n');
+        await finishStep('completed', 'done');
+        await finishStep('completed', 'done');
+
+        expect(git.pushWorktree).toHaveBeenCalledTimes(1);
+        expect(git.pushWorktree).toHaveBeenCalledWith(join(ws, 'core'), 'atlas/wf/ATL-2', null, 'p1');
+        expect(git.openPullRequest).toHaveBeenCalledTimes(1);
+        expect(await linksOf()).toEqual(['https://github.com/o/core/pull/1']);
+        expect(await runOf(runId)).toMatchObject({ status: 'completed' });
     });
 });
 

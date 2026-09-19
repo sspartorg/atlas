@@ -14,13 +14,14 @@ class LiveRunOnItemError extends Error {
 }
 import { spawn as nodeSpawn, execFile as nodeExecFile } from 'child_process';
 import { promisify } from 'node:util';
-import { unlinkSync, mkdtempSync, rmSync } from 'node:fs';
+import { unlinkSync, mkdtempSync, rmSync, mkdirSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { db } from '../db/kysely-client.js';
 import { broadcastSSE } from '../routes/events.js';
 import { buildPrompt } from './prompt-builder.js';
 import { stageCliWorktree } from './worktree-stage.js';
+import { runRepos, repositoriesMarkdown } from './run-repos.js';
 import { sendExternalForNotification } from './external-notifications.js';
 import { notificationsService } from './notifications.js';
 import { agentMemoryService } from './agent-memory.js';
@@ -690,10 +691,33 @@ async function runCommitVerifier(
     const run = await db
         .selectFrom('agent_runs as r')
         .leftJoin('workflow_runs as w', 'w.id', 'r.workflow_run_id')
-        .select(['r.started_at', 'w.worktree_path'])
+        .select(['r.started_at', 'w.worktree_path', 'w.project_id', 'w.item_id', 'w.branch'])
         .where('r.id', '=', runId)
         .executeTakeFirst();
     if (!run?.started_at) return;
+    // ADR 0017 — a multi-repo workspace isn't a repo itself (the verifier
+    // would record it `clean`); verify each repo's commits instead.
+    if (run.worktree_path) {
+        const { repos, workspace } = await runRepos({
+            project_id: run.project_id ?? null,
+            item_id: run.item_id ?? null,
+            branch: run.branch ?? null,
+            worktree_path: run.worktree_path,
+        });
+        if (workspace) {
+            for (const { path } of repos) {
+                await verifyRunCommits({
+                    runId,
+                    agentId,
+                    itemId: issueId,
+                    cwd: path,
+                    runStartedAtIso: run.started_at,
+                    itemType: issueType,
+                });
+            }
+            return;
+        }
+    }
     const settings = await db
         .selectFrom('settings')
         .select(['workspace_path'])
@@ -1445,6 +1469,31 @@ export async function spawnAgentRun(
     const constitutionMd = stageResult.constitutionMarkdown;
     const copilotUserAgentPath: string | null = stageResult.copilotUserAgentPath ?? null;
 
+    // ADR 0017 — a multi-repo Task's cwd is a workspace holding one checkout
+    // per repo. Each repo gets its own `.atlas/` (checklist scripts expect a
+    // repo at their cwd), and current-task.md tells agents how to work them.
+    const checkouts =
+        worktreePath && effectiveProjectId
+            ? await runRepos({
+                  project_id: effectiveProjectId,
+                  item_id: issueId ?? null,
+                  branch: worktreeBranch,
+                  worktree_path: worktreePath,
+              })
+            : null;
+    const multiRepo = checkouts?.workspace ? checkouts.repos : null;
+    if (multiRepo) {
+        for (const { path } of multiRepo) {
+            await stageCliWorktree({
+                worktreePath: path,
+                projectId: effectiveProjectId,
+                ...(issueType && issueId ? { item: { type: issueType, id: issueId } } : {}),
+            });
+        }
+        mkdirSync(join(cwd, '.atlas'), { recursive: true });
+        appendFileSync(join(cwd, '.atlas', 'current-task.md'), repositoriesMarkdown(multiRepo, worktreeBranch));
+    }
+
     // Per-run git auth (http.extraheader + bot identity) so `git commit`
     // inside the CLI is attributed to the App, not the developer's
     // ~/.gitconfig. buildGitAuth is the ONLY correct way to build this file.
@@ -1592,11 +1641,17 @@ export async function spawnAgentRun(
                 // the run is `setup_failed`, the CLI never spawns, and the
                 // engine parks the workflow run with the Owner.
                 if (effectiveProjectId && worktreePath && !workflowRun?.skipSetup) {
-                    const setupResult = await runProjectSetup({
-                        projectId: effectiveProjectId,
-                        worktreePath,
-                        runId,
-                    });
+                    // One setup per repo, in order; the first failure stops the run.
+                    let setupResult: Awaited<ReturnType<typeof runProjectSetup>> = { ok: true };
+                    for (const target of multiRepo ?? [null]) {
+                        setupResult = await runProjectSetup({
+                            projectId: effectiveProjectId,
+                            worktreePath: target?.path ?? worktreePath,
+                            runId,
+                            ...(target ? { repoId: target.repo.id } : {}),
+                        });
+                        if (!setupResult.ok) break;
+                    }
                     if (!setupResult.ok) {
                         const current = await db
                             .selectFrom('agent_runs')

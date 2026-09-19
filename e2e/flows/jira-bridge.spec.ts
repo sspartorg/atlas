@@ -5,7 +5,7 @@ import { API, PROJECT_NAME, apiGet, chainGraph, createWorkflow } from '../helper
 
 // Jira bridge end to end (ADR 0016): the Owner configures Jira in Settings,
 // Sync now imports an issue from a fake Jira (a real HTTP server the e2e API
-// calls), the label queues the Task on a workflow, the run finishes (AI is
+// calls), the source queues the Task on a workflow, the run finishes (AI is
 // off in e2e: agent steps are simulated passes), and the next sync posts the
 // final comment and moves the Jira issue to Done.
 
@@ -89,7 +89,7 @@ test.afterAll(async ({ request }) => {
     server.close();
     // Leave the singleton config clean for other specs.
     await request.put(`${API}/api/integrations/jira`, {
-        data: { enabled: false, site_url: null, email: null, jql: null, label_workflows: [] },
+        data: { enabled: false, site_url: null, email: null, sources: [] },
     });
 });
 
@@ -128,16 +128,17 @@ test.describe('Jira bridge', () => {
         await page.getByRole('button', { name: 'Test connection' }).click();
         await expect(page.getByText('Connected to Jira as Fake Owner')).toBeVisible();
 
-        // Import settings + label mapping.
-        await page.getByLabel('Default project').click();
-        await page.getByRole('option', { name: PROJECT_NAME }).click();
-        await page.getByLabel('JQL').fill('project = FAKE');
-        await page.getByLabel('JQL').blur();
-        await page.getByLabel('Jira label').fill('e2e-jira');
-        await page.getByLabel('Workflow for label').click();
+        // One source: the seeded project's primary repo (listed first for its project).
+        await page.getByLabel('Source repo').click();
+        await page
+            .getByRole('option', { name: new RegExp(`^${PROJECT_NAME} / `) })
+            .first()
+            .click();
+        await page.getByLabel('Source JQL').fill('project = FAKE');
+        await page.getByLabel('Source workflow').click();
         await page.getByRole('option', { name: 'E2E Jira delivery' }).click();
-        await page.getByRole('button', { name: 'Add' }).click();
-        await expect(page.getByText('Label mapping saved')).toBeVisible();
+        await page.getByRole('button', { name: 'Add source' }).click();
+        await expect(page.getByText('Jira source added')).toBeVisible();
 
         // The token never comes back from the API.
         const cfgRes = await request.get(`${API}/api/integrations/jira`);

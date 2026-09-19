@@ -75,6 +75,17 @@ describe('useCloneJob', () => {
         expect(result.current.project).toEqual({ id: 'p1', name: 'p' });
     });
 
+    it('flips to ready on clone_completed with a repo (a repo added to a project)', () => {
+        const { result } = renderHook(() => useCloneJob('c1'));
+        const es = StubEventSource.instances[0]!;
+        act(() =>
+            es.fire({ type: 'clone_completed', cloneId: 'c1', repo: { id: 'r1', name: 'web' } }),
+        );
+        expect(result.current.status).toBe('ready');
+        expect(result.current.repo).toEqual({ id: 'r1', name: 'web' });
+        expect(result.current.project).toBeNull();
+    });
+
     it('flips to error on clone_error with detail', () => {
         const { result } = renderHook(() => useCloneJob('c1'));
         const es = StubEventSource.instances[0]!;

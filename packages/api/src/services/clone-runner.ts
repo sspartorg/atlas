@@ -5,7 +5,7 @@ import { credentialsService } from './credentials.js';
 import { projectsService } from './projects.js';
 import { broadcastSSE } from '../routes/events.js';
 import { gitInvokeEnv } from './git-env.js';
-import type { IProject } from '@atlas/shared';
+import type { IProject, SSEEvent } from '@atlas/shared';
 
 const execFileP = promisify(execFile);
 
@@ -32,7 +32,14 @@ export interface StartCloneInput {
     destination: string;
 }
 
-export async function startClone(input: StartCloneInput): Promise<string> {
+/**
+ * What a finished clone registers. Default: a new project (the clone is its
+ * primary repo). Adding a repo to an existing project passes its own
+ * (ADR 0017).
+ */
+export type OnCloned = (clone: { git_url: string; git_path: string }) => Promise<Pick<SSEEvent, 'project' | 'repo'>>;
+
+export async function startClone(input: StartCloneInput, onCloned?: OnCloned): Promise<string> {
     const cred = await credentialsService.get(input.credential_id);
     if (!cred) throw new Error(`Credential ${input.credential_id} not found`);
 
@@ -129,15 +136,19 @@ export async function startClone(input: StartCloneInput): Promise<string> {
                     { env: gitInvokeEnv(null) },
                 ).catch(() => undefined);
                 await credentialsService.markUsed(input.credential_id);
-                const project: IProject = await projectsService.createFromClone({
-                    name: input.project_name,
-                    issue_key_prefix: input.issue_key_prefix,
-                    git_url: cleanUrl(input.repo_url),
-                    git_path: input.destination,
-                    credential_id: input.credential_id,
-                    default_branch: input.default_branch,
-                });
-                broadcastSSE({ type: 'clone_completed', cloneId, status: 'ready', project });
+                const clone = { git_url: cleanUrl(input.repo_url), git_path: input.destination };
+                const registered = onCloned
+                    ? await onCloned(clone)
+                    : {
+                          project: (await projectsService.createFromClone({
+                              name: input.project_name,
+                              issue_key_prefix: input.issue_key_prefix,
+                              ...clone,
+                              credential_id: input.credential_id,
+                              default_branch: input.default_branch,
+                          })) satisfies IProject,
+                      };
+                broadcastSSE({ type: 'clone_completed', cloneId, status: 'ready', ...registered });
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 broadcastSSE({ type: 'clone_error', cloneId, status: 'error', errorDetail: redact(msg) });

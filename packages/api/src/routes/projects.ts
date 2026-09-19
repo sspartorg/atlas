@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { workflowsService } from '../services/workflows.js';
 import { startWorkflowRun } from '../services/workflow-engine.js';
 import { projectsService, PrefixCollisionError } from '../services/projects.js';
+import { projectReposService } from '../services/project-repos.js';
 import { IssueKeyPrefixSchema } from '@atlas/shared';
 import { settingsService } from '../services/settings.js';
 import { startClone, injectToken } from '../services/clone-runner.js';
@@ -23,6 +24,8 @@ import {
 } from '../services/git-verify.js';
 import {
     CreateProjectSchema,
+    CreateProjectRepoSchema,
+    UpdateProjectRepoSchema,
     CloneProjectSchema,
     DeleteProjectSchema,
     ConnectExistingProjectSchema,
@@ -256,31 +259,31 @@ export async function projectsRoutes(app: FastifyInstance) {
         return reply.send({ origin });
     });
 
-    app.post('/api/projects/connect', { preHandler: requireMcpToken }, async (req, reply) => {
-        const body = ConnectExistingProjectSchema.parse(req.body);
-
+    // Folder → git → not already registered → origin matches → credential can
+    // reach the remote. Shared by connecting a project and adding a repo to one.
+    async function checkLocalClone(body: { folder_path: string; repo_url: string; credential_id: string }) {
         const checks = {
             folder_exists: folderExists(body.folder_path),
             has_git: false,
             origin_matches: false,
             ls_remote_ok: false,
         };
-        if (!checks.folder_exists) {
-            return reply.status(400).send({ ok: false, checks, error_kind: 'missing_folder' });
-        }
+        if (!checks.folder_exists) return { error: { ok: false, checks, error_kind: 'missing_folder' } };
         checks.has_git = hasGitDir(body.folder_path);
-        if (!checks.has_git) {
-            return reply.status(400).send({ ok: false, checks, error_kind: 'not_git' });
-        }
+        if (!checks.has_git) return { error: { ok: false, checks, error_kind: 'not_git' } };
 
-        const existing = (await projectsService.list()).find((p) => p.git_path === body.folder_path);
+        const existing =
+            (await projectsService.list()).find((p) => p.git_path === body.folder_path) ??
+            (await projectReposService.ownerOfPath(body.folder_path));
         if (existing) {
-            return reply.status(400).send({
-                ok: false,
-                checks: { ...checks, origin_matches: true, ls_remote_ok: true },
-                error_kind: 'already_registered',
-                existing_project: { id: existing.id, name: existing.name },
-            });
+            return {
+                error: {
+                    ok: false,
+                    checks: { ...checks, origin_matches: true, ls_remote_ok: true },
+                    error_kind: 'already_registered',
+                    existing_project: { id: existing.id, name: existing.name },
+                },
+            };
         }
 
         const folderOrigin = await readFolderOrigin(body.folder_path);
@@ -288,33 +291,38 @@ export async function projectsRoutes(app: FastifyInstance) {
             !!folderOrigin && normalizeRepoUrl(folderOrigin) === normalizeRepoUrl(body.repo_url);
         if (!checks.origin_matches) {
             const head = await readHead(body.folder_path);
-            return reply.status(400).send({
-                ok: false,
-                checks,
-                folder_origin: folderOrigin,
-                head_branch: head?.branch ?? null,
-                head_sha: head?.sha ?? null,
-                error_kind: 'origin_mismatch',
-            });
+            return {
+                error: {
+                    ok: false,
+                    checks,
+                    folder_origin: folderOrigin,
+                    head_branch: head?.branch ?? null,
+                    head_sha: head?.sha ?? null,
+                    error_kind: 'origin_mismatch',
+                },
+            };
         }
 
         const cred = await credentialsService.get(body.credential_id);
-        if (!cred) {
-            return reply.status(400).send({ ok: false, checks, error_kind: 'credential_missing' });
-        }
+        if (!cred) return { error: { ok: false, checks, error_kind: 'credential_missing' } };
         let token: string;
         try {
             token = await credentialsService.getToken(body.credential_id);
         } catch {
-            return reply.status(400).send({ ok: false, checks, error_kind: 'credential_missing' });
+            return { error: { ok: false, checks, error_kind: 'credential_missing' } };
         }
         const authedUrl = injectToken(body.repo_url, cred.username, token);
         checks.ls_remote_ok = await lsRemote(authedUrl);
-        if (!checks.ls_remote_ok) {
-            return reply.status(400).send({ ok: false, checks, error_kind: 'auth_failed' });
-        }
+        if (!checks.ls_remote_ok) return { error: { ok: false, checks, error_kind: 'auth_failed' } };
 
-        const head = await readHead(body.folder_path);
+        return { checks, head: await readHead(body.folder_path) };
+    }
+
+    app.post('/api/projects/connect', { preHandler: requireMcpToken }, async (req, reply) => {
+        const body = ConnectExistingProjectSchema.parse(req.body);
+        const verified = await checkLocalClone(body);
+        if ('error' in verified) return reply.status(400).send(verified.error);
+        const { checks, head } = verified;
         try {
             const project = await projectsService.createFromClone({
                 name: deriveProjectName(body.folder_path),
@@ -340,6 +348,77 @@ export async function projectsRoutes(app: FastifyInstance) {
             /* v8 ignore next */
             throw err;
         }
+    });
+
+    // ADR 0017 — a project's repos: the primary (its own git fields) + extras.
+    app.get('/api/repos', async (_req, reply) => {
+        return reply.send(await projectReposService.listAll());
+    });
+
+    app.get('/api/projects/:id/repos', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        return reply.send(await projectReposService.list(id));
+    });
+
+    app.post('/api/projects/:id/repos', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const body = CreateProjectRepoSchema.parse(req.body);
+        await projectReposService.assertNameFree(id, body.name);
+        if (body.mode === 'connect') {
+            const verified = await checkLocalClone(body);
+            if ('error' in verified) return reply.status(400).send(verified.error);
+            const repo = await projectReposService.insert({
+                project_id: id,
+                name: body.name,
+                git_url: body.repo_url,
+                git_path: body.folder_path,
+                credential_id: body.credential_id,
+                default_branch: verified.head?.branch ?? 'main',
+            });
+            await credentialsService.markUsed(body.credential_id);
+            return reply.status(201).send(repo);
+        }
+        const settings = await settingsService.get();
+        if (!settings.workspace_path) {
+            return reply.status(400).send({ error: 'Workspace path is not set. Finish onboarding first.' });
+        }
+        const project = await projectsService.get(id);
+        /* v8 ignore next -- assertNameFree already 404s a missing project */
+        if (!project) return reply.status(404).send({ error: 'Project not found' });
+        // Both parts are slugs, so the folder can't escape the workspace.
+        const destination = join(settings.workspace_path, `${projectReposService.slug(project.name)}-${body.name}`);
+        const cloneId = await startClone(
+            {
+                repo_url: body.repo_url,
+                credential_id: body.credential_id,
+                project_name: project.name,
+                issue_key_prefix: project.issue_key_prefix,
+                default_branch: body.default_branch,
+                destination,
+            },
+            async (clone) => ({
+                repo: await projectReposService.insert({
+                    project_id: id,
+                    name: body.name,
+                    ...clone,
+                    credential_id: body.credential_id,
+                    default_branch: body.default_branch,
+                }),
+            })
+        );
+        return reply.status(202).send({ clone_id: cloneId, destination });
+    });
+
+    app.patch('/api/projects/:id/repos/:repoId', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id, repoId } = req.params as { id: string; repoId: string };
+        const body = UpdateProjectRepoSchema.parse(req.body);
+        return reply.send(await projectReposService.update(id, repoId, body));
+    });
+
+    app.delete('/api/projects/:id/repos/:repoId', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id, repoId } = req.params as { id: string; repoId: string };
+        await projectReposService.remove(id, repoId);
+        return reply.status(204).send();
     });
 
     app.post('/api/projects/:id/delete', { preHandler: requireMcpToken }, async (req, reply) => {

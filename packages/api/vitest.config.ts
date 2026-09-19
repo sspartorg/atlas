@@ -176,6 +176,7 @@ export default defineConfig({
             // A5 coverage backfill — services missing from include.
             'src/services/item-cost-tree.test.ts',
             'src/services/jira-sync.test.ts',
+            'src/services/run-repos.test.ts',
             'src/routes/jira.test.ts',
             'src/marketplace/catalog-loader.test.ts',
             'src/utils/errors.test.ts',
@@ -189,6 +190,8 @@ export default defineConfig({
             'src/db/graphs-vertical-migration.test.ts',
             // Migration 041 — workflows published to the Marketplace.
             'src/db/published-workflows-migration.test.ts',
+            // Migration 044 — Jira sources per repo (ADR 0017).
+            'src/db/jira-sources-migration.test.ts',
             // W2 chunk N — subprocess wrappers + boot files.
             'src/services/git-status.test.ts',
             'src/services/git-verify.test.ts',

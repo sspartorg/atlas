@@ -160,13 +160,24 @@ Fields: `id, name, git_path, git_url, credential_id, default_branch, clone_statu
 - `clone_status` âˆˆ `pending | cloning | cloned | error | deleting`
 - `credential_id` FK to `credentials.id`; nullable for public repos
 - `guardrails_md` is free-form markdown (project guardrails are a separate table â€” see below)
+- **ADR 0017:** these git fields are the project's **primary repo**. Extra repos live in `project_repos`; `GET /api/projects/:id/repos` returns them all as `IProjectRepo`.
+
+### IProjectRepo (ADR 0017, migration 043)
+A git repo of a project. Fields: `id, project_id, name, primary, git_url, git_path, credential_id, default_branch, clone_status, setup_sh_body, setup_ps1_body`.
+- The primary is virtual: built from the project row, with `id` = the project id and `name` = the slug of its folder name. It can't be edited here or removed.
+- Extra repos are `project_repos` rows. `name` is a slug that is unique in the project (the primary's included), and it is the repo's folder name in a multi-repo workspace. Each extra repo has its own credential, default branch and setup scripts.
 
 ### ITask (ADR 0015)
 **Why this entity exists**: The Task is the unit the Owner schedules and verifies. One Task = one workflow run = one branch = one PR (or one push to the default branch): its workflow does everything the Task needs, including creating and working its sub-tasks, and the Owner verifies the one result. It replaced the epic (migration 037).
 
 Top-level item, scoped to a project. `items.type = 'task'`, no parent.
 
-Fields (`ITask`): `id, project_id, title, description, status, assignee_agent_id, workflow_id, reporter_agent_id, priority, acceptance_criteria, spec_md, pr_url, labels, worktree_branch, worktree_path, created_at, updated_at`. `ITaskListItem` adds `sub_task_count`.
+Fields (`ITask`): `id, project_id, title, description, status, assignee_agent_id, workflow_id, reporter_agent_id, priority, acceptance_criteria, spec_md, pr_url, labels, repo_ids, worktree_branch, worktree_path, created_at, updated_at`. `ITaskListItem` adds `sub_task_count`.
+
+- `repo_ids` (ADR 0017, migration 043): the project repos the Task works on, in order.
+  - The first repo holds Task-wide files such as specs and QA CSVs. `[]` means the primary only.
+  - The list is validated against the project, and changing it returns 409 while a workflow run (running or parked) holds the Task.
+  - With several repos, the run works them side by side in one workspace and opens one PR per changed repo, all listed as `item_external_links`. `pr_url` is the first PR, and the Task closes when the **last** PR merges.
 
 - `workflow_id` (FK → `workflows`, SET NULL; migration 035) — the Task workflow it is queued for (`PUT /api/items/:id/workflow`, Tasks only).
 - `spec_md` — the Architect step's spec for the whole Task; `pr_url` — the one PR its run opened (also an `item_external_links` row).
@@ -212,13 +223,12 @@ Fields: `id, item_id, link_kind, url, title, external_ref, created_at, created_b
 - `pr_state` ∈ `'open' | 'merged' | 'closed' | null` (migration 033, CHECK constraint) — last GitHub state observed for a PR link; null until the first successful lookup, and forever on a project with no credential.
 - `pr_state_checked_at` (DB only, not on the wire) — stamped on every lookup attempt, success or failure. Reading the links (`GET …/external-links`, every `/full` envelope) refreshes PR links older than 5 min in the background; `POST /api/issues/:type/:id/external-links/refresh` refreshes synchronously.
 
-### IJiraConfig / jira_issues (ADR 0016, migration 042)
+### IJiraConfig / jira_issues (ADR 0016, migrations 042 + 044)
 `jira_config` is a singleton row holding the Jira bridge config. `IJiraConfig` returns every column except the token, and adds `api_token_set: boolean`:
-- `enabled`, `site_url`, `email`, `jql`
-- `project_id`: the default project, for issues no routing rule sends elsewhere
+- `enabled`, `site_url`, `email`
 - `poll_interval_minutes`
 - `extra_fields` (string[])
-- `label_workflows` (`IJiraLabelWorkflow[]`, routing rules `{label, project_id, workflow_id}`; either may be null, not both; first match wins)
+- `sources` (`IJiraSource[]`, ordered, ADR 0017 / migration 044; replaced `jql`, `project_id` and `label_workflows`): `{repo_id, jql, workflow_id | null}`. `repo_id` is a project repo (a primary repo's id is its project's id). An issue matching several sources becomes one Task in the first match's project with `repo_ids` = the matched repos of that project; the first of those sources with a workflow queues it
 - `last_sync_at`, `last_sync_ok`, `last_sync_message`
 
 `jira_issues` is DB-only, one row per imported Jira issue:

@@ -24,3 +24,4 @@ Add a new ADR whenever a choice is expensive to undo: a database engine, a query
 | 0014 | Workflows Replace Per-Agent Schedules and Handoffs | 2026-09-14 | Accepted — a ReactFlow-built workflow graph runs agents back-to-back in one worktree with one PR; agents lose schedules, handoff rules and git flags |
 | 0015 | One Task, One Branch, One PR | 2026-09-18 | Accepted — Tasks and Sub-tasks replace epics/stories/bugs; a Task's run works its sub-tasks on one branch and delivers one PR |
 | 0016 | Jira Bridge | 2026-09-19 | Accepted — the scheduler imports Jira issues by JQL into Tasks (label → workflow) and mirrors progress and Done back as orchestrator comments, with no AI |
+| 0017 | Multi-repo Projects and Tasks | 2026-09-19 | Accepted — a Project holds several repos (its own git fields are the primary); a Task spans one or more, worked side by side in one run, with one PR per changed repo; the Task closes when the last PR merges |
