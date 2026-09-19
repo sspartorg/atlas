@@ -119,7 +119,7 @@ export class WorktreeProvisioningError extends Error {
 
 export type WorktreeErrorCode =
     | 'missing_worktree_branch'
-    | 'missing_project_git_path'
+    | 'missing_repo_git_path'
     | 'git_command_failed'
     | 'invalid_branch_name'
     | 'worktree_diverged_from_main';
@@ -146,7 +146,8 @@ export interface EnsureWorktreeInput {
      * (`atlas/<role>/<id>`).
      */
     branch?: string;
-    project: {
+    /** ADR 0018 — the repo to branch from. Its id keys the worktree folder and the git lock. */
+    repo: {
         id: string;
         git_path: string | null;
         credential_id: string | null;
@@ -192,14 +193,14 @@ function isValidBranchName(branch: string): boolean {
     return WORKTREE_BRANCH_RE.test(branch);
 }
 
-// Compute the canonical on-disk worktree path. Sibling-of-the-project
-// layout: `<project.git_path>/../worktrees/<projectSlug>/<branchSlug>`.
-// Sibling vs in-repo avoids polluting the project working tree with
-// nested `.git/worktrees` entries the agent CLI might stumble over.
-export function computeWorktreePath(projectGitPath: string, projectId: string, branch: string): string {
-    const projectParent = dirname(resolve(projectGitPath));
+// Compute the canonical on-disk worktree path. Sibling-of-the-repo layout:
+// `<repo.git_path>/../worktrees/<repoId>/<branchSlug>`. Sibling vs in-repo
+// avoids polluting the repo working tree with nested `.git/worktrees` entries
+// the agent CLI might stumble over.
+export function computeWorktreePath(repoGitPath: string, repoId: string, branch: string): string {
+    const repoParent = dirname(resolve(repoGitPath));
     const branchSlug = branch.replace(/\//g, '__');
-    return join(projectParent, 'worktrees', projectId, branchSlug);
+    return join(repoParent, 'worktrees', repoId, branchSlug);
 }
 
 interface GitInvokeContext {
@@ -326,13 +327,13 @@ async function runGit(
 // in-place. Idempotent (the `--unset-all` is a no-op when the key is
 // absent). Wrapped in try/catch because git also exits non-zero on
 // `--unset-all` of a missing key on some versions.
-async function scrubSharedConfigDuplicateAuth(projectGitPath: string): Promise<void> {
+async function scrubSharedConfigDuplicateAuth(repoGitPath: string): Promise<void> {
     const baseEnv = gitInvokeEnv(null);
     for (const key of ['http.extraheader', 'credential.helper']) {
         try {
             await exec(
                 'git',
-                ['-C', projectGitPath, 'config', '--local', '--unset-all', key],
+                ['-C', repoGitPath, 'config', '--local', '--unset-all', key],
                 { env: baseEnv, timeout: 15_000 },
             );
         } catch {
@@ -350,7 +351,7 @@ async function scrubSharedConfigDuplicateAuth(projectGitPath: string): Promise<v
     try {
         await exec(
             'git',
-            ['-C', projectGitPath, 'config', '--local', 'core.longpaths', 'true'],
+            ['-C', repoGitPath, 'config', '--local', 'core.longpaths', 'true'],
             { env: baseEnv, timeout: 15_000 },
         );
     } catch {
@@ -464,13 +465,13 @@ export async function ensureWorktree(
 ): Promise<EnsureWorktreeResult> {
     // Workstream #3 — serialize git operations per project so concurrent
     // agent runs don't race on `fetch` / `worktree add` / `branch -D`.
-    return withProjectGitLock(input.project.id, () => ensureWorktreeInner(input));
+    return withProjectGitLock(input.repo.id, () => ensureWorktreeInner(input));
 }
 
 async function ensureWorktreeInner(
     input: EnsureWorktreeInput,
 ): Promise<EnsureWorktreeResult> {
-    const { item, project } = input;
+    const { item, repo } = input;
     const pushUpstream = input.pushUpstream !== false;
 
     // Resolve the branch name: item-attached uses item.worktree_branch (must
@@ -496,28 +497,27 @@ async function ensureWorktreeInner(
                 : { worktree_branch: branchName },
         );
     }
-    if (!project.git_path || !project.git_path.trim()) {
+    if (!repo.git_path || !repo.git_path.trim()) {
         throw new WorktreeProvisioningError(
-            'missing_project_git_path',
-            `Project ${project.id} has no git_path — worktree orchestrator needs the cloned repo on disk to spawn a worktree from.`,
-            { project_id: project.id },
+            'missing_repo_git_path',
+            `Repo ${repo.id} has no git_path — worktree orchestrator needs the cloned repo on disk to spawn a worktree from.`,
+            { repo_id: repo.id },
         );
     }
 
     const branch = branchName;
-    const worktreePath = input.path ?? computeWorktreePath(project.git_path, project.id, branch);
-    const defaultBranch =
-        project.default_branch && project.default_branch.trim() ? project.default_branch : 'main';
+    const worktreePath = input.path ?? computeWorktreePath(repo.git_path, repo.id, branch);
+    const defaultBranch = repo.default_branch && repo.default_branch.trim() ? repo.default_branch : 'main';
 
     // D1 — scrub stale http.extraheader / credential.helper from the
     // project's shared `.git/config` before any git op. Cleans up the
     // C-era leftover that was producing duplicate-Authorization 400s.
     // Idempotent; safe on fresh installs that never ran C.
-    await scrubSharedConfigDuplicateAuth(project.git_path);
+    await scrubSharedConfigDuplicateAuth(repo.git_path);
 
-    const { configPath: gitConfigPath } = await buildGitConfig(project.credential_id);
+    const { configPath: gitConfigPath } = await buildGitConfig(repo.credential_id);
     const projectCtx: GitInvokeContext = {
-        cwd: project.git_path,
+        cwd: repo.git_path,
         gitConfigPath,
     };
 
@@ -1149,7 +1149,7 @@ export async function cleanupWorktreeAfterPush(opts: {
      */
     itemId: string | null;
     projectId: string;
-    projectGitPath: string;
+    repoGitPath: string;
     worktreePath: string;
     branch: string;
     credentialId: string | null;
@@ -1159,7 +1159,7 @@ export async function cleanupWorktreeAfterPush(opts: {
 
 async function cleanupWorktreeAfterPushInner(opts: {
     itemId: string | null;
-    projectGitPath: string;
+    repoGitPath: string;
     worktreePath: string;
     branch: string;
     credentialId: string | null;
@@ -1206,7 +1206,7 @@ async function cleanupWorktreeAfterPushInner(opts: {
         try {
             await exec(
                 'git',
-                ['-C', opts.projectGitPath, 'worktree', 'remove', '--force', opts.worktreePath],
+                ['-C', opts.repoGitPath, 'worktree', 'remove', '--force', opts.worktreePath],
                 { env: gitInvokeEnv(null), timeout: 60_000, maxBuffer: 4 * 1024 * 1024 },
             );
             worktreeRemoved = true;
@@ -1268,7 +1268,7 @@ async function cleanupWorktreeAfterPushInner(opts: {
             try {
                 await exec(
                     'git',
-                    ['-C', opts.projectGitPath, 'worktree', 'prune'],
+                    ['-C', opts.repoGitPath, 'worktree', 'prune'],
                     { env: gitInvokeEnv(null), timeout: 30_000, maxBuffer: 1 * 1024 * 1024 },
                 );
             } catch (pruneErr) {
@@ -1289,7 +1289,7 @@ async function cleanupWorktreeAfterPushInner(opts: {
         try {
             await exec(
                 'git',
-                ['-C', opts.projectGitPath, 'branch', '-D', opts.branch],
+                ['-C', opts.repoGitPath, 'branch', '-D', opts.branch],
                 { env: gitInvokeEnv(null), timeout: 30_000, maxBuffer: 1 * 1024 * 1024 },
             );
             branchDeleted = true;
@@ -1353,7 +1353,7 @@ async function cleanupWorktreeAfterPushInner(opts: {
         try {
             await exec(
                 'git',
-                ['-C', opts.projectGitPath, 'fetch', 'origin', '--prune'],
+                ['-C', opts.repoGitPath, 'fetch', 'origin', '--prune'],
                 { env: gitInvokeEnv(gitConfigPath), timeout: 60_000, maxBuffer: 4 * 1024 * 1024 },
             );
         } catch (err) {

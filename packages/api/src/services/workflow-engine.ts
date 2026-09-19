@@ -339,7 +339,7 @@ async function prepareWorktree(run: RunRow, pushUpstream: boolean): Promise<stri
             const wt = await ensureWorktree({
                 item: null,
                 branch,
-                project: {
+                repo: {
                     id: repo.id,
                     git_path: repo.git_path,
                     credential_id: repo.credential_id,
@@ -873,7 +873,7 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
             const cleanup = await cleanupWorktreeAfterPush({
                 itemId: null,
                 projectId: repo.id,
-                projectGitPath: repo.git_path,
+                repoGitPath: repo.git_path,
                 worktreePath: path,
                 branch,
                 credentialId: repo.credential_id,

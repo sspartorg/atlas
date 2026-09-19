@@ -50,28 +50,23 @@ export async function runRepos(run: {
         const path = run.worktree_path ?? computeWorktreePath(only.git_path, only.id, run.branch);
         return { repos: [{ repo: only, path }], workspace: null };
     }
-    const [primary] = await projectReposService.list(run.project_id);
-    /* v8 ignore next -- list() always starts with the primary */
-    if (!primary) return { repos: [], workspace: null };
-    // `ws/` keeps a multi-repo workspace apart from any single-repo checkout
-    // of the same branch left next to it.
+    const [first] = repos;
+    /* v8 ignore next -- forTask returns at least one repo unless the project has none */
+    if (!first) return { repos: [], workspace: null };
+    // ADR 0018 — no primary to hang the workspace off, so it sits next to the
+    // Task's first repo (every clone lands in the Atlas workspace folder, so
+    // that is the same place as before). `ws/` keeps it apart from any
+    // single-repo checkout of the same branch left next to it.
     const workspace = join(
-        dirname(resolve(primary.git_path)),
+        dirname(resolve(first.git_path)),
         'worktrees',
         run.project_id,
         'ws',
         run.branch.replace(/\//g, '__')
     );
-    // Names are unique per project, but the primary's comes from its folder, so
-    // a later git_path change could collide with an extra repo: keep folders apart.
-    const used = new Set<string>();
-    const folder = (name: string): string => {
-        let f = name;
-        for (let n = 2; used.has(f); n++) f = `${name}-${n}`;
-        used.add(f);
-        return f;
-    };
-    return { repos: repos.map((repo) => ({ repo, path: join(workspace, folder(repo.name)) })), workspace };
+    // Repo names are unique per project (project_repos_project_name_unique),
+    // so the folder names inside the workspace are too.
+    return { repos: repos.map((repo) => ({ repo, path: join(workspace, repo.name) })), workspace };
 }
 
 /**

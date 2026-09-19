@@ -421,7 +421,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             await cleanupWorktreeAfterPush({
                 itemId: null,
                 projectId: project.id,
-                projectGitPath: project.git_path,
+                repoGitPath: project.git_path,
                 worktreePath,
                 branch: branchName,
                 credentialId: project.credential_id,
@@ -455,7 +455,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             await cleanupWorktreeAfterPush({
                 itemId: null,
                 projectId: project.id,
-                projectGitPath: project.git_path,
+                repoGitPath: project.git_path,
                 worktreePath,
                 branch: branchName,
                 credentialId: project.credential_id,
@@ -557,7 +557,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             await cleanupWorktreeAfterPush({
                 itemId: null,
                 projectId: project.id,
-                projectGitPath: project.git_path,
+                repoGitPath: project.git_path,
                 worktreePath,
                 branch: branchName,
                 credentialId: project.credential_id,
@@ -1203,7 +1203,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             itemId: null,
             projectId: session.project_id as string,
             /* v8 ignore next */
-            projectGitPath: project?.git_path ?? '',
+            repoGitPath: project?.git_path ?? '',
             worktreePath,
             branch,
             credentialId: project?.credential_id ?? null,
