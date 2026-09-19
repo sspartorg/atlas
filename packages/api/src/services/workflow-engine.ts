@@ -17,6 +17,7 @@
 // the lock is not re-entrant — never wrap them in another lock here.
 
 import { randomUUID } from 'node:crypto';
+import { rmSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Cron } from 'croner';
@@ -28,6 +29,7 @@ import {
     type IssueType,
     type WorkflowRunStatus,
 } from '@atlas/shared';
+import { sql } from 'kysely';
 import { db } from '../db/kysely-client.js';
 import { broadcastSSE } from '../routes/events.js';
 import { eventsLog } from './events-log.js';
@@ -46,6 +48,7 @@ import {
 } from './worktree-orchestrator.js';
 import { buildGitAuth, cleanupGitConfig } from './git-credentials.js';
 import { gitInvokeEnv } from './git-env.js';
+import { runRepos } from './run-repos.js';
 import { spawnAgentRun, cancelRun } from './agent-runner.js';
 
 const exec = promisify(execFile);
@@ -320,30 +323,40 @@ function pushesRunBranch(workflow: { push_code: boolean; push_to_default: boolea
  */
 async function prepareWorktree(run: RunRow, pushUpstream: boolean): Promise<string | null> {
     if (!run.branch || !run.project_id) return null;
-    const project = await db
-        .selectFrom('projects')
-        .select(['id', 'git_path', 'credential_id', 'default_branch'])
-        .where('id', '=', run.project_id)
-        .executeTakeFirst();
+    const branch = run.branch;
     try {
-        if (!project?.git_path) throw new Error('Project has no cloned repository on disk');
-        if (run.worktree_path) await commitPending(run.worktree_path, project.credential_id, run.id);
-        // item: null — the path lives on workflow_runs only. Writing it to
-        // items.worktree_path would let the boot orphan reaper push and
-        // delete the shared worktree between steps.
-        const wt = await ensureWorktree({
-            item: null,
-            branch: run.branch,
-            project: {
-                id: project.id,
-                git_path: project.git_path,
-                credential_id: project.credential_id,
-                default_branch: project.default_branch,
-            },
-            pushUpstream,
-        });
-        await db.updateTable('workflow_runs').set({ worktree_path: wt.path }).where('id', '=', run.id).execute();
-        run.worktree_path = wt.path;
+        // ADR 0017 — one checkout per repo of the Task; several sit side by
+        // side in one workspace, which becomes the run's worktree_path (cwd).
+        const { repos, workspace } = await runRepos(run);
+        for (const { repo, path } of repos) {
+            if (!repo.git_path) {
+                throw new Error(workspace ? `Repo ${repo.name} has no cloned repository on disk` : 'Project has no cloned repository on disk');
+            }
+            if (run.worktree_path) await commitPending(path, repo.credential_id, run.id);
+            // item: null — the path lives on workflow_runs only. Writing it to
+            // items.worktree_path would let the boot orphan reaper push and
+            // delete the shared worktree between steps.
+            const wt = await ensureWorktree({
+                item: null,
+                branch,
+                project: {
+                    id: repo.id,
+                    git_path: repo.git_path,
+                    credential_id: repo.credential_id,
+                    default_branch: repo.default_branch,
+                },
+                pushUpstream,
+                ...(workspace ? { path } : {}),
+            });
+            run.worktree_path = workspace ?? wt.path;
+            // Written per repo: preparing several can outlast the reconciler's
+            // idle window, and updated_at is what it watches.
+            await db
+                .updateTable('workflow_runs')
+                .set({ worktree_path: run.worktree_path, updated_at: new Date().toISOString() })
+                .where('id', '=', run.id)
+                .execute();
+        }
         return null;
     } catch (err) {
         return (err as Error).message;
@@ -738,92 +751,136 @@ interface DeliveryResult {
     log: string[];
 }
 
+/** False only when git proves the branch has nothing beyond the atlas .gitignore commit. */
+async function hasChanges(worktreePath: string, base: string): Promise<boolean> {
+    try {
+        await exec('git', ['-C', worktreePath, 'diff', '--quiet', `origin/${base}`, 'HEAD', '--', '.', ':!.gitignore'], {
+            env: gitInvokeEnv(null),
+            timeout: 60_000,
+        });
+        return false;
+    } catch {
+        return true;
+    }
+}
+
 async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<DeliveryResult> {
     const log: string[] = [];
     const result: DeliveryResult = { pushed: false, prUrl: null, failure: null, log };
     const workflow = await loadWorkflow(run.workflow_id);
     if (!workflow || !run.worktree_path || !run.branch || !run.project_id) return result;
-    const project = await db
-        .selectFrom('projects')
-        .select(['id', 'name', 'git_path', 'credential_id', 'default_branch'])
-        .where('id', '=', run.project_id)
-        .executeTakeFirst();
+    const project = await db.selectFrom('projects').select(['id', 'name']).where('id', '=', run.project_id).executeTakeFirst();
     if (!project) return result;
+    const branch = run.branch;
+    const { repos, workspace } = await runRepos(run);
+    const item = run.item_id ? await loadItem(run.item_id) : undefined;
+    const title = item ? `[${item.id}] ${String(item.title).slice(0, 80)}` : `[${workflow.name}] ${project.name}`;
+    const body = [
+        `Opened by the **${workflow.name}** workflow.`,
+        '',
+        ...(item ? [`- Task: ${item.id}`] : [`- Project: ${project.name}`]),
+        `- Workflow run: \`${run.id}\``,
+        ...(await subtaskSummaryLines(run)),
+    ].join('\n');
+    const opened: { repo: (typeof repos)[number]['repo']; path: string; base: string; url: string }[] = [];
 
-    const defaultBranch = project.default_branch?.trim() ? project.default_branch : 'main';
-    let pushOk = !workflow.push_code;
-    if (workflow.push_code) {
-        const committed = await commitPending(run.worktree_path, project.credential_id, run.id);
-        if (committed) log.push(committed);
-        // push_to_default publishes straight onto the default branch; on a
-        // non-fast-forward pushWorktree rebases onto it and retries once.
-        const target = workflow.push_to_default ? defaultBranch : run.branch;
-        const push = await pushWorktree(run.worktree_path, target, project.credential_id, project.id);
-        pushOk = push.pushed || push.alreadyUpToDate;
-        result.pushed = push.pushed;
-        log.push(pushOk ? `pushed ${target}` : `push failed: ${push.error ?? 'unknown'}`);
-        if (!pushOk) result.failure = `Push failed: ${push.error ?? 'unknown error'}`;
-    }
-
-    if (opts.openPr && workflow.raises_pr && workflow.push_code && !workflow.push_to_default && pushOk) {
-        const item = run.item_id ? await loadItem(run.item_id) : undefined;
-        const title = item ? `[${item.id}] ${String(item.title).slice(0, 80)}` : `[${workflow.name}] ${project.name}`;
-        const body = [
-            `Opened by the **${workflow.name}** workflow.`,
-            '',
-            ...(item ? [`- Task: ${item.id}`] : [`- Project: ${project.name}`]),
-            `- Workflow run: \`${run.id}\``,
-            ...(await subtaskSummaryLines(run)),
-        ].join('\n');
-        const pr = await openPullRequest({
-            worktreePath: run.worktree_path,
-            branch: run.branch,
-            base: defaultBranch,
-            title,
-            body,
-            credentialId: project.credential_id,
-            projectId: project.id,
-        });
-        if (pr.url) {
-            result.prUrl = pr.url;
-            log.push(`pr: ${pr.url}`);
-            if (item) {
-                // Agents read the PR from `pr_url` (Automation checks the dev PR is merged).
-                await db.updateTable('items').set({ pr_url: pr.url }).where('id', '=', item.id).execute();
-                try {
-                    const parsed = parseGithubPrUrl(pr.url);
-                    await externalLinks.create({
-                        itemId: item.id,
-                        url: pr.url,
-                        linkKind: 'pull_request',
-                        title: await fetchGithubPrTitle(pr.url).catch(() => null),
-                        externalRef: parsed?.number ?? null,
-                        createdByRunId: null,
-                        actorAgentId: null,
-                    });
-                } catch (err) {
-                    log.push(`could not link the PR: ${(err as Error).message}`);
-                }
+    // ADR 0017 — each repo of the Task delivers on its own; a multi-repo Task
+    // skips the repos it did not change (their PR would be empty).
+    for (const { repo, path } of repos) {
+        const tag = workspace ? `${repo.name}: ` : '';
+        const base = repo.default_branch?.trim() ? repo.default_branch : 'main';
+        let pushOk = !workflow.push_code;
+        if (workflow.push_code) {
+            const committed = await commitPending(path, repo.credential_id, run.id);
+            if (committed) log.push(tag + committed);
+            if (workspace && !(await hasChanges(path, base))) {
+                log.push(`${tag}no changes`);
+                continue;
             }
-        } else {
-            log.push(`pr failed: ${pr.error ?? 'unknown'}`);
-            result.failure = `Pull request failed: ${pr.error ?? 'unknown error'}`;
+            // push_to_default publishes straight onto the default branch; on a
+            // non-fast-forward pushWorktree rebases onto it and retries once.
+            const target = workflow.push_to_default ? base : branch;
+            const push = await pushWorktree(path, target, repo.credential_id, repo.id);
+            pushOk = push.pushed || push.alreadyUpToDate;
+            if (push.pushed) result.pushed = true;
+            log.push(pushOk ? `${tag}pushed ${target}` : `${tag}push failed: ${push.error ?? 'unknown'}`);
+            if (!pushOk) result.failure ??= `${tag}Push failed: ${push.error ?? 'unknown error'}`;
+            if (workspace) await db.updateTable('workflow_runs').set({ updated_at: new Date().toISOString() }).where('id', '=', run.id).execute();
+        }
+
+        if (opts.openPr && workflow.raises_pr && workflow.push_code && !workflow.push_to_default && pushOk) {
+            const pr = await openPullRequest({
+                worktreePath: path,
+                branch,
+                base,
+                title,
+                body,
+                credentialId: repo.credential_id,
+                projectId: repo.id,
+            });
+            if (pr.url) {
+                opened.push({ repo, path, base, url: pr.url });
+                log.push(`${tag}pr: ${pr.url}`);
+                if (item) {
+                    // Agents read the PR from `pr_url` (Automation checks the dev PR is merged).
+                    if (opened.length === 1) await db.updateTable('items').set({ pr_url: pr.url }).where('id', '=', item.id).execute();
+                    try {
+                        const parsed = parseGithubPrUrl(pr.url);
+                        await externalLinks.create({
+                            itemId: item.id,
+                            url: pr.url,
+                            linkKind: 'pull_request',
+                            title: await fetchGithubPrTitle(pr.url).catch(() => null),
+                            externalRef: parsed?.number ?? null,
+                            createdByRunId: null,
+                            actorAgentId: null,
+                        });
+                    } catch (err) {
+                        log.push(`${tag}could not link the PR: ${(err as Error).message}`);
+                    }
+                }
+            } else {
+                log.push(`${tag}pr failed: ${pr.error ?? 'unknown'}`);
+                result.failure ??= `${tag}Pull request failed: ${pr.error ?? 'unknown error'}`;
+            }
+        }
+    }
+    result.prUrl = opened[0]?.url ?? null;
+
+    // Each PR names its siblings: they only make sense merged together. An
+    // existing PR gets its body edited, so this second pass is safe to repeat.
+    if (opened.length > 1) {
+        for (const o of opened) {
+            const siblings = opened.filter((x) => x !== o).map((x) => `- ${x.repo.name}: ${x.url}`);
+            await openPullRequest({
+                worktreePath: o.path,
+                branch,
+                base: o.base,
+                title,
+                body: [body, '', '**Also part of this Task:**', ...siblings].join('\n'),
+                credentialId: o.repo.credential_id,
+                projectId: o.repo.id,
+            });
         }
     }
 
-    // Any delivery failure keeps the worktree so a resumed run can retry
+    // Any delivery failure keeps the worktrees so a resumed run can retry
     // from exactly this state. Without a push the worktree and its branch are
     // the only copy of the work ("keep local"), so they stay too.
-    if (workflow.push_code && pushOk && !result.failure && project.git_path) {
-        const cleanup = await cleanupWorktreeAfterPush({
-            itemId: null,
-            projectId: project.id,
-            projectGitPath: project.git_path,
-            worktreePath: run.worktree_path,
-            branch: run.branch,
-            credentialId: project.credential_id,
-        });
-        log.push(...cleanup.warnings);
+    if (workflow.push_code && !result.failure) {
+        for (const { repo, path } of repos) {
+            if (!repo.git_path) continue;
+            const cleanup = await cleanupWorktreeAfterPush({
+                itemId: null,
+                projectId: repo.id,
+                projectGitPath: repo.git_path,
+                worktreePath: path,
+                branch,
+                credentialId: repo.credential_id,
+            });
+            log.push(...cleanup.warnings);
+        }
+        if (workspace) rmSync(workspace, { recursive: true, force: true });
     }
     return result;
 }
@@ -928,11 +985,10 @@ async function sendBackToSubtasks(run: RunRow, endNode: IWorkflowNode): Promise<
 
 /** A sub-task's run never delivers: its work stays on the Task's branch. */
 async function finishChildRun(run: RunRow, endNode: IWorkflowNode): Promise<void> {
-    const project = run.project_id
-        ? await db.selectFrom('projects').select('credential_id').where('id', '=', run.project_id).executeTakeFirst()
-        : undefined;
-    // The next sub-task starts from a clean tree.
-    if (run.worktree_path) await commitPending(run.worktree_path, project?.credential_id ?? null, run.id);
+    // The next sub-task starts from a clean tree, in every repo of the Task.
+    if (run.worktree_path) {
+        for (const { repo, path } of (await runRepos(run)).repos) await commitPending(path, repo.credential_id, run.id);
+    }
     await db
         .updateTable('workflow_runs')
         .set({ status: 'completed', finished_at: new Date().toISOString(), current_node_id: endNode.id })
@@ -1106,7 +1162,7 @@ async function schedulingTimezone(): Promise<string | undefined> {
     return row?.quiet_hours_timezone ?? undefined;
 }
 
-async function oldestReadyItem(workflowId: string, readyBy: string | null): Promise<string | null> {
+async function oldestReadyItem(workflowId: string, readyByLastFire: boolean): Promise<string | null> {
     let q = db
         .selectFrom('items as i')
         .select('i.id')
@@ -1138,7 +1194,9 @@ async function oldestReadyItem(workflowId: string, readyBy: string | null): Prom
         )
         .orderBy('i.updated_at', 'asc')
         .limit(1);
-    if (readyBy) q = q.where('i.updated_at', '<=', readyBy);
+    if (readyByLastFire) {
+        q = q.where(sql<boolean>`i.updated_at <= (SELECT w.last_run_at FROM workflows w WHERE w.id = ${workflowId})`);
+    }
     const row = await q.executeTakeFirst();
     return row?.id ?? null;
 }
@@ -1173,9 +1231,12 @@ export async function tickWorkflowDispatch(now: Date = new Date()): Promise<numb
                 const due = wf.next_run_at !== null && new Date(wf.next_run_at).getTime() <= now.getTime();
                 if (due) {
                     const next = wf.cron_expr ? computeNextWorkflowFire(wf.cron_expr, now, tz) : null;
+                    // The DB clock stamps the fire: "ready at the fire" is then
+                    // compared against items.updated_at on one clock (the
+                    // Postgres VM's clock can run ms ahead of the host's).
                     await db
                         .updateTable('workflows')
-                        .set({ next_run_at: next?.toISOString() ?? null, last_run_at: now.toISOString() })
+                        .set({ next_run_at: next?.toISOString() ?? null, last_run_at: sql`now()` as never })
                         .where('id', '=', wf.id)
                         .execute();
                     wf.last_run_at = now.toISOString();
@@ -1195,7 +1256,7 @@ export async function tickWorkflowDispatch(now: Date = new Date()): Promise<numb
                 // at its last fire; later arrivals wait for the next fire.
                 if (!wf.last_run_at || wf.input_kind !== 'item') continue;
                 for (; free > 0; free--) {
-                    const itemId = await oldestReadyItem(wf.id, wf.last_run_at);
+                    const itemId = await oldestReadyItem(wf.id, true);
                     if (!itemId) break;
                     await startWorkflowRun(wf.id, itemId);
                     started++;
@@ -1205,7 +1266,7 @@ export async function tickWorkflowDispatch(now: Date = new Date()): Promise<numb
 
             if (wf.input_kind !== 'item') continue;
             for (; free > 0; free--) {
-                const itemId = await oldestReadyItem(wf.id, null);
+                const itemId = await oldestReadyItem(wf.id, false);
                 if (!itemId) break;
                 await startWorkflowRun(wf.id, itemId);
                 started++;

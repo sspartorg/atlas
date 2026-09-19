@@ -176,6 +176,7 @@ export default defineConfig({
             // A5 coverage backfill — services missing from include.
             'src/services/item-cost-tree.test.ts',
             'src/services/jira-sync.test.ts',
+            'src/services/run-repos.test.ts',
             'src/routes/jira.test.ts',
             'src/marketplace/catalog-loader.test.ts',
             'src/utils/errors.test.ts',

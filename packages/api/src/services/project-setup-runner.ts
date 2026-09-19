@@ -64,6 +64,8 @@ export async function runProjectSetup(opts: {
     projectId: string;
     worktreePath: string;
     runId: string;
+    /** ADR 0017 — an extra repo runs its own script; the primary's is the project's. */
+    repoId?: string;
 }): Promise<SetupResult> {
     const project = await db
         .selectFrom('projects')
@@ -79,13 +81,17 @@ export async function runProjectSetup(opts: {
     if (!project) {
         return { ok: false, kind: 'spawn_failed', output: 'project not found' };
     }
+    const repo =
+        opts.repoId && opts.repoId !== opts.projectId
+            ? await db.selectFrom('project_repos').selectAll().where('id', '=', opts.repoId).executeTakeFirst()
+            : undefined;
+    if (opts.repoId && opts.repoId !== opts.projectId && !repo) {
+        return { ok: false, kind: 'spawn_failed', output: 'repo not found' };
+    }
+    const source = (repo ?? project) as Record<string, unknown>;
 
     const isWindows = process.platform === 'win32';
-    const blob = (
-        isWindows
-            ? (project as Record<string, unknown>)['setup_ps1_body']
-            : (project as Record<string, unknown>)['setup_sh_body']
-    ) as string | null | undefined;
+    const blob = (isWindows ? source['setup_ps1_body'] : source['setup_sh_body']) as string | null | undefined;
 
     if (!blob || blob.trim() === '') {
         return { ok: true };
