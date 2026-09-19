@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { TaskNew, taskNewBannerCopy } from './TaskNew.js';
-import { makeAgent, makeProject } from '../test-utils/factories.js';
+import { makeAgent, makeProject, makeProjectRepo, makeTask } from '../test-utils/factories.js';
 
 const BASE = 'http://localhost:3000/api';
 
@@ -846,5 +846,62 @@ describe('TaskNew — unsaved draft guard', () => {
 
         fireEvent.change(title, { target: { value: '' } });
         expect(fireUnload()).toBe(false);
+    });
+});
+
+describe('TaskNew — repo picker (ADR 0017)', () => {
+    const WEB = makeProjectRepo({ id: 'r-web', name: 'web', primary: false });
+
+    async function pickProject() {
+        const project = await screen.findByRole('combobox', { name: 'Project' });
+        // Disabled until the project list loads.
+        await waitFor(() => expect(project).not.toHaveAttribute('aria-disabled'));
+        fireEvent.mouseDown(project);
+        fireEvent.click(await screen.findByRole('option', { name: 'Atlas' }));
+    }
+
+    it('stays hidden for a single-repo project', async () => {
+        let fetched = false;
+        server.use(
+            http.get(`${BASE}/projects/p1/repos`, () => {
+                fetched = true;
+                return HttpResponse.json([makeProjectRepo()]);
+            }),
+            ...baseHandlers(),
+        );
+        renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new'] });
+        await pickProject();
+        await waitFor(() => expect(fetched).toBe(true));
+        expect(screen.queryByRole('combobox', { name: 'Repos' })).toBeNull();
+    });
+
+    it('preselects the primary and sends the picked repos in pick order', async () => {
+        let body: { repo_ids?: string[] } = {};
+        server.use(
+            http.get(`${BASE}/projects/p1/repos`, () =>
+                HttpResponse.json([makeProjectRepo(), WEB]),
+            ),
+            http.post(`${BASE}/tasks`, async ({ request }) => {
+                body = (await request.json()) as { repo_ids?: string[] };
+                return HttpResponse.json(makeTask({ id: 'ATL-9' }));
+            }),
+            ...baseHandlers(),
+        );
+        renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new'] });
+        fireEvent.change(await screen.findByLabelText('Title'), { target: { value: 'Two repos' } });
+        fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'desc' } });
+        await pickProject();
+
+        const repos = await screen.findByRole('combobox', { name: 'Repos' });
+        expect(within(repos).getByText('atlas')).toBeInTheDocument();
+        expect(
+            screen.getByText('First repo holds specs and other Task-wide files.'),
+        ).toBeInTheDocument();
+        fireEvent.mouseDown(repos);
+        fireEvent.click(await screen.findByRole('option', { name: 'web' }));
+        fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
+
+        fireEvent.click(screen.getByRole('button', { name: /Save as draft/i }));
+        await waitFor(() => expect(body.repo_ids).toEqual(['p1', 'r-web']));
     });
 });

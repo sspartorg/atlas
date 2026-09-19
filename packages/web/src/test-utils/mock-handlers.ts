@@ -51,6 +51,9 @@ export const defaultHandlers = [
     http.get(`${BASE}/agents/:id/checklists`, () => HttpResponse.json([])),
     // The Queue page.
     http.get(`${BASE}/workflow-queue`, ok<IWorkflowQueue>({ workflows: [], unassigned: [] })),
+    // New Task and the Task rail read a project's repos (ADR 0017); none =
+    // single-repo behaviour (no Repos picker).
+    http.get(`${BASE}/projects/:id/repos`, () => HttpResponse.json([])),
 ];
 
 // Convenience factories so tests can express "this endpoint returns X" in one line.

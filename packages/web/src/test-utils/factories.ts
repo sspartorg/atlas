@@ -3,6 +3,7 @@ import type {
     IComment,
     INotification,
     IProject,
+    IProjectRepo,
     ISubTask,
     ITask,
     ITaskListItem,
@@ -32,6 +33,24 @@ export function makeProject(overrides: Partial<IProject> = {}): IProject {
         created_at: ISO,
         updated_at: ISO,
         last_activity_at: ISO,
+        ...overrides,
+    };
+}
+
+/** Defaults to project p1's primary repo (its id is the project id). */
+export function makeProjectRepo(overrides: Partial<IProjectRepo> = {}): IProjectRepo {
+    return {
+        id: 'p1',
+        project_id: 'p1',
+        name: 'atlas',
+        primary: true,
+        git_url: 'https://github.com/example/atlas',
+        git_path: '/tmp/atlas',
+        credential_id: null,
+        default_branch: 'main',
+        clone_status: 'ready',
+        setup_sh_body: '',
+        setup_ps1_body: '',
         ...overrides,
     };
 }

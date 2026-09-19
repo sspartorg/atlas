@@ -3,10 +3,12 @@ import { screen, waitFor, within } from '@testing-library/react';
 import type { IItemExternalLink } from '@atlas/shared';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
-import { makeAgent, makeProject } from '../test-utils/factories.js';
+import { makeAgent, makeProject, makeProjectRepo } from '../test-utils/factories.js';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { DetailsRailCard } from './DetailsRailCard.js';
+import { Toast } from './Toast.js';
+import { AtlasApiError } from '../api/api.js';
 
 describe('DetailsRailCard', () => {
     it('renders the details panel', () => {
@@ -274,6 +276,89 @@ describe('DetailsRailCard', () => {
             await user.click(await screen.findByRole('menuitem', { name: 'Done' }));
             await waitFor(() => expect(onStatusPick).toHaveBeenCalledWith('done', false));
             expect(screen.queryByText('Mark done anyway?')).not.toBeInTheDocument();
+        });
+    });
+
+    describe('Repos row (ADR 0017)', () => {
+        const BASE = 'http://localhost:3000/api';
+        const WEB = makeProjectRepo({ id: 'r-web', name: 'web', primary: false });
+
+        function renderRepos(
+            repoIds: string[],
+            onRepoIdsChange: (next: string[]) => Promise<unknown>,
+            worktreePath: string | null = null,
+        ) {
+            server.use(
+                http.get(`${BASE}/projects/p1/repos`, () =>
+                    HttpResponse.json([makeProjectRepo(), WEB]),
+                ),
+            );
+            renderWithProviders(
+                <>
+                    <DetailsRailCard
+                        issueType="task"
+                        status="ready"
+                        onStatusPick={vi.fn()}
+                        assigneeAgentId={null}
+                        onAssign={vi.fn()}
+                        assignee={null}
+                        project={makeProject()}
+                        ownerName="Bob"
+                        ownerAccent="#0A0A0A"
+                        createdAt="2026-05-15T00:00:00.000Z"
+                        updatedAt="2026-05-16T00:00:00.000Z"
+                        worktreeBranch="atlas/wf/1"
+                        worktreePath={worktreePath}
+                        repoIds={repoIds}
+                        onRepoIdsChange={onRepoIdsChange}
+                    />
+                    <Toast />
+                </>,
+            );
+        }
+
+        it('shows the primary for a Task with no picked repos and saves a new pick', async () => {
+            const user = userEvent.setup();
+            const onChange = vi.fn().mockResolvedValue(undefined);
+            renderRepos([], onChange);
+
+            expect(await screen.findByText('atlas')).toBeInTheDocument();
+            await user.click(screen.getByText('Repos'));
+            const dialog = await screen.findByRole('dialog');
+            await user.click(within(dialog).getByRole('combobox', { name: 'Repos' }));
+            await user.click(await screen.findByRole('option', { name: 'web' }));
+            await user.keyboard('{Escape}');
+            await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+            await waitFor(() => expect(onChange).toHaveBeenCalledWith(['p1', 'r-web']));
+        });
+
+        it('explains a 409 from a running workflow in a toast', async () => {
+            const user = userEvent.setup();
+            const onChange = vi
+                .fn()
+                .mockRejectedValue(new AtlasApiError('locked', 'conflict', 409));
+            renderRepos(['p1'], onChange);
+
+            await user.click(await screen.findByText('Repos'));
+            const dialog = await screen.findByRole('dialog');
+            await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+            expect(
+                await screen.findByText('Stop the workflow run to change repos')
+            ).toBeInTheDocument();
+        });
+
+        it('lists the repos in order and marks the path as the multi-repo workspace', async () => {
+            renderRepos(['r-web', 'p1'], vi.fn(), '/ws/.atlas/wt/ATL-1');
+            const web = await screen.findByText('web');
+            const atlas = screen.getByText('atlas');
+            expect(
+                web.compareDocumentPosition(atlas) & Node.DOCUMENT_POSITION_FOLLOWING
+            ).toBeTruthy();
+            expect(
+                screen.getByLabelText('Workspace folder — one checkout per repo')
+            ).toBeInTheDocument();
         });
     });
 });

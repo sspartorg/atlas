@@ -20,6 +20,7 @@ Single-page form to draft a Task and either save it as a draft or submit it (`re
 - **Title** — required, autoFocus; inline error on blur / submit.
 - **Description** — multiline, required.
 - **Project** — Select, required; pre-filled from `?project=`.
+- **Repos** — only when the picked project has more than one repo (ADR 0017): `RepoSelect` multi-select, primary preselected, order = pick order, helper "First repo holds specs and other Task-wide files." At least one stays picked; changing the project resets it. Sent as `repo_ids`; omitted for a single-repo project (`[]` = the primary).
 - **Priority** — `low | normal | high | urgent`; default `low`.
 - **Reporter** — default `OWNER`; options Owner + active agents.
 - **Assignee** — defaults to `agent-po-writer` when installed and active (`TaskNew.tsx:98`), else `OWNER`; `AgentSelect suggestedRole="po"` lists PO-role agents first under **Suggested**.
@@ -40,11 +41,12 @@ Single-page form to draft a Task and either save it as a draft or submit it (`re
 
 ## Hooks used
 - `useCreateTask()`, `useTransitionTask()` (`hooks/useTasks.ts`)
-- `useProjects`, `useAgents`, `useSettings`, `useToast`
+- `useProjects`, `useProjectRepos(projectId)`, `useAgents`, `useSettings`, `useToast`
 - `useDraftGuard(dirty)` — dirty while Title or Description has text (`TaskNew.tsx:108`); also arms `beforeunload`.
 
 ## API endpoints touched
-- `POST /api/tasks`
+- `GET /api/projects/:id/repos` — once a project is picked
+- `POST /api/tasks` (`repo_ids` when the project has several repos)
 - `PATCH /api/tasks/:id/status`
 
 ## Permissions / guards

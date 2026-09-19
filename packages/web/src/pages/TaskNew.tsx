@@ -11,8 +11,10 @@ import InputLabel from '@mui/material/InputLabel';
 import type { IAgent, IssuePriority } from '@atlas/shared';
 import { Breadcrumb } from '../components/index.js';
 import { AgentSelect } from '../components/AgentSelect.js';
+import { RepoSelect } from '../components/RepoSelect.js';
 import { useCreateTask, useTransitionTask } from '../hooks/useTasks.js';
 import { useProjects } from '../hooks/useProjects.js';
+import { useProjectRepos } from '../hooks/useProjectRepos.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useToast } from '../hooks/useToast.js';
@@ -88,6 +90,10 @@ export function TaskNew() {
     const [description, setDescription] = useState('');
     const [projectId, setProjectId] = useState(defaultProjectId);
     const [priority, setPriority] = useState<IssuePriority>('low');
+    const { data: repos = [] } = useProjectRepos(projectId);
+    // null = untouched: the primary repo, preselected.
+    const [repoChoice, setRepoChoice] = useState<string[] | null>(null);
+    const repoIds = repoChoice ?? repos.filter((r) => r.primary).map((r) => r.id);
     const [reporterId, setReporterId] = useState<string>('OWNER');
     // The PO Writer is the agent that breaks an task down, so it is the default
     // when installed and active; otherwise the Owner routes it. Derived rather
@@ -134,6 +140,7 @@ export function TaskNew() {
                 priority,
                 reporter_agent_id: reporterId === 'OWNER' ? null : reporterId,
                 assignee_agent_id: assigneeId === 'OWNER' ? null : assigneeId,
+                ...(repos.length > 1 ? { repo_ids: repoIds } : {}),
             });
             if (mode === 'submit') {
                 try {
@@ -345,6 +352,7 @@ export function TaskNew() {
                                 value={projectId}
                                 onChange={(e) => {
                                     setProjectId(e.target.value);
+                                    setRepoChoice(null);
                                     touch('project');
                                 }}
                                 onBlur={() => touch('project')}
@@ -401,6 +409,28 @@ export function TaskNew() {
                         </FormControl>
                     </Box>
                 </Box>
+
+                {repos.length > 1 && (
+                    <Box sx={{ mb: 4 }}>
+                        <Typography
+                            sx={{
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: ATLAS_PALETTE.slate60,
+                                mb: 1.5,
+                            }}
+                        >
+                            Repos{' '}
+                            <Box
+                                component="span"
+                                sx={{ color: ATLAS_PALETTE.slate40, fontWeight: 400 }}
+                            >
+                                — what this Task changes
+                            </Box>
+                        </Typography>
+                        <RepoSelect repos={repos} value={repoIds} onChange={setRepoChoice} />
+                    </Box>
+                )}
 
                 <Box
                     sx={{

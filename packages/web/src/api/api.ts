@@ -15,6 +15,7 @@ import type {
     IAgentPromptVersion,
     IAgentChecklistItem,
     IProject,
+    IProjectRepo,
     ITask,
     ITaskListItem,
     ISubTask,
@@ -541,6 +542,32 @@ export const api = {
                 method: 'POST',
                 body: JSON.stringify(data),
             }),
+        // ADR 0017 — a project's repos (primary first). Adding one clones it
+        // (202 + clone_* SSE, like /projects/clone) or registers a local clone
+        // (the /projects/connect checks: 400 carries a ConnectError).
+        repos: (id: string) => get<IProjectRepo[]>(`/projects/${id}/repos`),
+        cloneRepo: (
+            id: string,
+            data: { name: string; repo_url: string; credential_id: string; default_branch: string },
+        ) =>
+            post<{ clone_id: string; destination: string }>(`/projects/${id}/repos`, {
+                mode: 'clone',
+                ...data,
+            }),
+        connectRepo: (
+            id: string,
+            data: { name: string; folder_path: string; repo_url: string; credential_id: string },
+        ) =>
+            requestRaw<IProjectRepo | ConnectError | ApiErrorBody>(`/projects/${id}/repos`, {
+                method: 'POST',
+                body: JSON.stringify({ mode: 'connect', ...data }),
+            }),
+        updateRepo: (
+            id: string,
+            repoId: string,
+            data: { default_branch?: string; setup_sh_body?: string; setup_ps1_body?: string },
+        ) => patch<IProjectRepo>(`/projects/${id}/repos/${repoId}`, data),
+        removeRepo: (id: string, repoId: string) => del(`/projects/${id}/repos/${repoId}`),
         // Batch-9 enterprise-secrets read model: list returns metadata
         // only (`{key, updated_at, has_value}`); revealEnv fetches the
         // plaintext for a single key on demand. save() still accepts
