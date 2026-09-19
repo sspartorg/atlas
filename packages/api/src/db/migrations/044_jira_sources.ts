@@ -21,6 +21,20 @@ interface OldRule {
 
 const jqlString = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 
+// JQL allows ORDER BY only at the very end, outside any parentheses, so it is
+// split off before a query is wrapped and put back after.
+function splitOrderBy(jql: string): { where: string; order: string } {
+    const m = /\s*\bORDER\s+BY\b[\s\S]*$/i.exec(jql);
+    return m
+        ? { where: jql.slice(0, m.index).trim(), order: m[0].trim() }
+        : { where: jql.trim(), order: '' };
+}
+
+function withClause(jql: string, clause: string): string {
+    const { where, order } = splitOrderBy(jql);
+    return [where ? `(${where}) AND ${clause}` : clause, order].filter(Boolean).join(' ');
+}
+
 function sourcesFromOldConfig(
     jql: string | null,
     projectId: string | null,
@@ -34,7 +48,7 @@ function sourcesFromOldConfig(
         if (!repoId) continue;
         out.push({
             repo_id: repoId,
-            jql: `(${base}) AND labels = ${jqlString(r.label)}`,
+            jql: withClause(base, `labels = ${jqlString(r.label)}`),
             workflow_id: r.workflow_id ?? null,
         });
     }
@@ -88,7 +102,14 @@ export async function down(knex: Knex): Promise<void> {
         await knex('jira_config')
             .where('id', 1)
             .update({
-                jql: row.sources.map((s) => `(${s.jql})`).join(' OR '),
+                jql: [
+                    row.sources
+                        .map((s) => `(${splitOrderBy(s.jql).where || 'created IS NOT EMPTY'})`)
+                        .join(' OR '),
+                    splitOrderBy(first.jql).order,
+                ]
+                    .filter(Boolean)
+                    .join(' '),
                 project_id: owner.rows[0]?.project_id ?? null,
             });
     }

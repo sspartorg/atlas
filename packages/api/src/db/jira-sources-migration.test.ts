@@ -69,6 +69,39 @@ describe('migration 044 — Jira sources', () => {
         }
     });
 
+    it('keeps ORDER BY at the end when it wraps a JQL for a label rule', async () => {
+        const trx = await knex.transaction();
+        try {
+            await down(trx);
+            await trx('jira_config').insert({
+                id: 1,
+                jql: 'project = DHEQ AND labels = atlas ORDER BY created ASC',
+                project_id: 'p1',
+                label_workflows: JSON.stringify([
+                    { label: 'web', project_id: 'p2', workflow_id: null },
+                ]),
+            });
+
+            await up(trx);
+
+            const row = (await trx('jira_config').where('id', 1).first()) as { sources: unknown };
+            expect(row.sources).toEqual([
+                {
+                    repo_id: 'p2',
+                    jql: '(project = DHEQ AND labels = atlas) AND labels = "web" ORDER BY created ASC',
+                    workflow_id: null,
+                },
+                {
+                    repo_id: 'p1',
+                    jql: 'project = DHEQ AND labels = atlas ORDER BY created ASC',
+                    workflow_id: null,
+                },
+            ]);
+        } finally {
+            await trx.rollback();
+        }
+    });
+
     it('converts a config without a JQL to no sources', async () => {
         const trx = await knex.transaction();
         try {
