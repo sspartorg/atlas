@@ -41,7 +41,8 @@ await db
 // `e2e/pages/terminal.spec.ts` drives a real cli-session lifecycle
 // (Start → Pause → Resume → Stop) which requires:
 //
-//   * a `projects` row with a usable `git_path`
+//   * a repo row with a usable `git_path` (ADR 0018 — a project has no
+//     folder of its own; its repos do)
 //   * that git_path to be a clone of a remote that accepts push (so
 //     Stop's push-and-cleanup step doesn't strand the worktree)
 //
@@ -77,15 +78,27 @@ await db
         id: PROJECT_ID,
         name: 'E2E Terminal',
         issue_key_prefix: 'ETM',
-        git_path: CLONE_PATH,
-        default_branch: 'main',
-        clone_status: 'ready',
         description: 'Hermetic fixture project for the Terminal Playwright spec.',
     })
     .execute();
 await db
     .insertInto('project_issue_counters')
     .values({ project_id: PROJECT_ID, last_seq: 0 })
+    .execute();
+// ADR 0018 — the project's repo carries its id, exactly as migration 045
+// leaves a project that predates the change.
+await db
+    .insertInto('project_repos')
+    .values({
+        id: PROJECT_ID,
+        project_id: PROJECT_ID,
+        name: 'project',
+        git_path: CLONE_PATH,
+        git_url: '',
+        default_branch: 'main',
+        clone_status: 'ready',
+        position: 0,
+    })
     .execute();
 
 // Seed one Task (Terminal v2 item-linkage spec picks it from the Start

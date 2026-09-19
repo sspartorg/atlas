@@ -151,21 +151,20 @@ The autonomous catalog entries (`agent-ai-news`, `agent-market-research`, `agent
 **Installable agents** come from `packages/api/src/marketplace/catalog/*/{manifest.json,prompt.md,checklists.json}` (synced into `marketplace_agents` by `runSeed`): 10 SDLC agents (PO Writer, PO Reviewer, Architect, Architect Reviewer, Coder, Code Reviewer, QA Writer, QA Reviewer, Automation Engineer, Automation Reviewer) + 6 autonomous agents. The starter workflows that wire them live in `packages/api/src/marketplace/workflows/*.json` — see `swarm-architecture.md`.
 
 ### IProject
-**Why this entity exists**: Projects are the top-level work container â€” every issue tunnels through `project_id`. They're modeled as one cloned git repo because agents operate on code, and `git_path` is the working directory each spawned subprocess inherits. Holding `credential_id` here (vs. inferring per clone) lets the Owner rotate credentials without re-attaching them to every project.
+**Why this entity exists**: Projects are the top-level work container â€” every issue tunnels through `project_id`. **ADR 0018:** a project is a *container*, not a repo — it holds 0..N repos, all equal, and the git fields it used to carry moved onto them (migration 045).
 
-A cloned git repo under the workspace.
+Fields: `id, name, issue_key_prefix, description, status, guardrails_md, created_at, updated_at, last_activity_at`
 
-Fields: `id, name, git_path, git_url, credential_id, default_branch, clone_status, description, status, guardrails_md, created_at, updated_at`
-
-- `clone_status` âˆˆ `pending | cloning | cloned | error | deleting`
-- `credential_id` FK to `credentials.id`; nullable for public repos
 - `guardrails_md` is free-form markdown (project guardrails are a separate table â€” see below)
-- **ADR 0017:** these git fields are the project's **primary repo**. Extra repos live in `project_repos`; `GET /api/projects/:id/repos` returns them all as `IProjectRepo`.
+- Env secrets, guardrails and the constitution stay project-level and are staged into every repo.
+- A project with **no** repos is a normal state (its last repo was removed, or it was created before one was added): it can hold Tasks but cannot queue them.
 
-### IProjectRepo (ADR 0017, migration 043)
-A git repo of a project. Fields: `id, project_id, name, primary, git_url, git_path, credential_id, default_branch, clone_status, setup_sh_body, setup_ps1_body`.
-- The primary is virtual: built from the project row, with `id` = the project id and `name` = the slug of its folder name. It can't be edited here or removed.
-- Extra repos are `project_repos` rows. `name` is a slug that is unique in the project (the primary's included), and it is the repo's folder name in a multi-repo workspace. Each extra repo has its own credential, default branch and setup scripts.
+### IProjectRepo (ADR 0017, migrations 043 + 045)
+A git repo of a project. Fields: `id, project_id, name, git_url, git_path, credential_id, default_branch, clone_status, setup_sh_body, setup_ps1_body`.
+- Every repo is an ordinary `project_repos` row; **there is no primary**. A repo that predates ADR 0018 carries its project's id, which is what kept its worktrees, git-lock key and Jira sources valid through migration 045.
+- `name` is a slug unique within the project and is the repo's folder name in a multi-repo workspace. Each repo has its own credential, default branch, clone status, setup scripts and auto-fetch schedule.
+- **Order matters**: `position, created_at`. The *first* repo of a Task holds Task-wide files, hosts the multi-repo workspace folder, and lends its credential to the agents as `GH_TOKEN`.
+- `clone_status` âˆˆ `pending | cloning | ready | error`
 
 ### ITask (ADR 0015)
 **Why this entity exists**: The Task is the unit the Owner schedules and verifies. One Task = one workflow run = one branch = one PR (or one push to the default branch): its workflow does everything the Task needs, including creating and working its sub-tasks, and the Owner verifies the one result. It replaced the epic (migration 037).
@@ -174,8 +173,9 @@ Top-level item, scoped to a project. `items.type = 'task'`, no parent.
 
 Fields (`ITask`): `id, project_id, title, description, status, assignee_agent_id, workflow_id, reporter_agent_id, priority, acceptance_criteria, spec_md, pr_url, labels, repo_ids, worktree_branch, worktree_path, created_at, updated_at`. `ITaskListItem` adds `sub_task_count`.
 
-- `repo_ids` (ADR 0017, migration 043): the project repos the Task works on, in order.
-  - The first repo holds Task-wide files such as specs and QA CSVs. `[]` means the primary only.
+- `repo_ids` (ADR 0017/0018, migrations 043 + 045): the project repos the Task works on, in order.
+  - The first repo holds Task-wide files such as specs and QA CSVs.
+  - A Task always names at least one repo: create fills in the only repo of a single-repo project and 400s when there are several to choose from. Queueing a Task whose repos were all removed 409s.
   - The list is validated against the project, and changing it returns 409 while a workflow run (running or parked) holds the Task.
   - With several repos, the run works them side by side in one workspace and opens one PR per changed repo, all listed as `item_external_links`. `pr_url` is the first PR, and the Task closes when the **last** PR merges.
 
@@ -228,7 +228,7 @@ Fields: `id, item_id, link_kind, url, title, external_ref, created_at, created_b
 - `enabled`, `site_url`, `email`
 - `poll_interval_minutes`
 - `extra_fields` (string[])
-- `sources` (`IJiraSource[]`, ordered, ADR 0017 / migration 044; replaced `jql`, `project_id` and `label_workflows`): `{repo_id, jql, workflow_id | null}`. `repo_id` is a project repo (a primary repo's id is its project's id). An issue matching several sources becomes one Task in the first match's project with `repo_ids` = the matched repos of that project; the first of those sources with a workflow queues it
+- `sources` (`IJiraSource[]`, ordered, ADR 0017 / migration 044; replaced `jql`, `project_id` and `label_workflows`): `{repo_id, jql, workflow_id | null}`. `repo_id` is a project repo id. An issue matching several sources becomes one Task in the first match's project with `repo_ids` = the matched repos of that project; the first of those sources with a workflow queues it
 - `last_sync_at`, `last_sync_ok`, `last_sync_message`
 
 `jira_issues` is DB-only, one row per imported Jira issue:
