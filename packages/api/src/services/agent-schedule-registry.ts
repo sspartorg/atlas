@@ -2,11 +2,13 @@ import { db } from '../db/kysely-client.js';
 import { remindersService } from './reminders.js';
 import { refreshExpiring as refreshExpiringAppTokens } from './github-app-tokens.js';
 import { externalLinks } from './external-links.js';
+import { jiraSync } from './jira-sync.js';
 import { onStepFinished, reconcileWorkflowRuns, tickWorkflowDispatch } from './workflow-engine.js';
 
 // Single clock-driven poller. One setInterval ticks every minute and runs,
 // in order: the stuck-run watchdog, due reminders, GitHub App token
-// pre-warm, the workflow-run reconcile sweep, and workflow dispatch.
+// pre-warm, the workflow-run reconcile sweep, PR-state sync, the Jira
+// bridge, and workflow dispatch.
 //
 // ADR 0014 — agents no longer have schedules or queues. Workflows do: the
 // engine starts runs for `item_ready` workflows whenever a ready item waits
@@ -74,6 +76,13 @@ export async function tickAgentScheduler(): Promise<void> {
         await externalLinks.syncReviewedTaskPrs();
     } catch (err) {
         schedLog(`[pr-state] tick failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // Before dispatch, so a Task the Jira bridge just queued starts this tick.
+    try {
+        await jiraSync.tick(now);
+    } catch (err) {
+        schedLog(`[jira] tick failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     try {

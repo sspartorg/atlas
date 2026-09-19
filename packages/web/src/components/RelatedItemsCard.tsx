@@ -86,7 +86,18 @@ export function RelatedItemsCard({
     });
     const { data: fetchedAgents = [] } = useAgents({ enabled: !propAgents });
     const links: IIssueLinkRow[] = propLinks ?? fetchedLinks;
-    const extLinks: IItemExternalLink[] = propExtLinks ?? fetchedExtLinks;
+    const allExtLinks: IItemExternalLink[] = propExtLinks ?? fetchedExtLinks;
+    // Client-side scheme allowlist defence-in-depth: AddPrLinkDialog rejects
+    // non-GitHub-PR URLs at ADD time, but if the server-side validator is ever
+    // loosened OR a marketplace import writes a row directly, we don't want an
+    // XSS-capable `javascript:` / `data:` URL to render as an anchor.
+    const extLinks = allExtLinks.filter(
+        (l) => l.link_kind === 'pull_request' && /^https:\/\//i.test(l.url)
+    );
+    // The Jira site URL is validated server-side (https, or http on loopback only).
+    const jiraLinks = allExtLinks.filter(
+        (l) => l.link_kind === 'jira_issue' && /^https?:\/\//i.test(l.url)
+    );
     const agents: IAgent[] = propAgents ?? fetchedAgents;
 
     const deleteLink = useDeleteIssueLink(issueType, issueId);
@@ -382,16 +393,7 @@ export function RelatedItemsCard({
                 </Typography>
             ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                    {extLinks
-                        // Client-side scheme allowlist defence-in-depth:
-                        // AddPrLinkDialog rejects non-GitHub-PR URLs at ADD
-                        // time, but if the server-side validator is ever
-                        // loosened OR a marketplace import writes a row
-                        // directly, we don't want an XSS-capable
-                        // `javascript:` / `data:` URL to render as an
-                        // anchor. Skip anything that isn't `https://`.
-                        .filter((l) => typeof l.url === 'string' && /^https:\/\//i.test(l.url))
-                        .map((l) => (
+                    {extLinks.map((l) => (
                         <Box
                             key={l.id}
                             sx={{
@@ -480,6 +482,57 @@ export function RelatedItemsCard({
 
     return (
         <>
+            {jiraLinks.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                    <Typography
+                        sx={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: ATLAS_PALETTE.slate60,
+                            letterSpacing: '0.06em',
+                            textTransform: 'uppercase',
+                            pb: 0.5,
+                        }}
+                    >
+                        Jira
+                    </Typography>
+                    {jiraLinks.map((l) => (
+                        <Box
+                            key={l.id}
+                            component="a"
+                            href={l.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                                py: 0.5,
+                                px: 1,
+                                borderRadius: 1,
+                                fontSize: 13,
+                                color: ATLAS_PALETTE.brandBlue,
+                                textDecoration: 'none',
+                                '&:hover': { background: ATLAS_PALETTE.cloud, textDecoration: 'underline' },
+                            }}
+                        >
+                            <Box
+                                component="span"
+                                sx={{ fontFamily: 'mono', fontSize: 12, fontWeight: 600, color: ATLAS_PALETTE.slate60 }}
+                            >
+                                {l.external_ref}
+                            </Box>
+                            <Box
+                                component="span"
+                                sx={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            >
+                                {l.title ?? l.url}
+                            </Box>
+                            <OpenInNewRounded sx={{ fontSize: 14, flexShrink: 0 }} />
+                        </Box>
+                    ))}
+                </Box>
+            )}
             <Box sx={{ mb: 3 }}>{prSection}</Box>
 
             <WorkItemTable

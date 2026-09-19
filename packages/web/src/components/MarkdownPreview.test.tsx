@@ -96,4 +96,11 @@ describe('MarkdownPreview', () => {
         expect(screen.getByText('Title')).toBeInTheDocument();
         expect(screen.getByText('Subsection')).toBeInTheDocument();
     });
+
+    it('renders > lines as one quote block that keeps its line breaks', () => {
+        const { container } = renderWithProviders(<MarkdownPreview source={'> first line\n>\n> **Owner** · now\nafter'} />);
+        const quote = container.querySelector('blockquote');
+        expect(quote?.textContent).toBe('first line\n\nOwner · now');
+        expect(screen.getByText('after').closest('blockquote')).toBeNull();
+    });
 });

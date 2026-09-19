@@ -213,6 +213,10 @@ export async function settingsRoutes(app: FastifyInstance) {
             await trx.deleteFrom('comments').execute();
             await trx.deleteFrom('notifications').execute();
             await trx.deleteFrom('agent_runs').execute();
+            // Jira sync state and the Jira token go with the items and credentials;
+            // left behind, item-less rows would block those issues from re-importing.
+            await trx.deleteFrom('jira_issues').execute();
+            await trx.deleteFrom('jira_config').execute();
             await trx.deleteFrom('items').execute();
             await trx.deleteFrom('projects').execute();
             await trx.deleteFrom('credentials').execute();

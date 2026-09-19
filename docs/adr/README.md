@@ -22,3 +22,5 @@ Add a new ADR whenever a choice is expensive to undo: a database engine, a query
 | 0012 | Prod-Mode Perf Gate at <200ms p95 TTI | 2026-07-01 | Accepted — `ATLAS_E2E_PROD=1` runs perf specs against the production bundle with a strict 200ms ceiling |
 | 0013 | Initial-Chunk Budget 264 KB gz | 2026-08-04 | Accepted — raised 260 → 264 KB after the third CLI (`ollama`) grew the app shell past 0.1 KB of headroom |
 | 0014 | Workflows Replace Per-Agent Schedules and Handoffs | 2026-09-14 | Accepted — a ReactFlow-built workflow graph runs agents back-to-back in one worktree with one PR; agents lose schedules, handoff rules and git flags |
+| 0015 | One Task, One Branch, One PR | 2026-09-18 | Accepted — Tasks and Sub-tasks replace epics/stories/bugs; a Task's run works its sub-tasks on one branch and delivers one PR |
+| 0016 | Jira Bridge | 2026-09-19 | Accepted — the scheduler imports Jira issues by JQL into Tasks (label → workflow) and mirrors progress and Done back as orchestrator comments, with no AI |

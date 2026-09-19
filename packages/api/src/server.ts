@@ -8,6 +8,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import websocket from '@fastify/websocket';
 import { settingsRoutes } from './routes/settings.js';
+import { jiraRoutes } from './routes/jira.js';
 import { agentsRoutes } from './routes/agents.js';
 import { marketplaceRoutes } from './routes/marketplace.js';
 import { rolesRoutes } from './routes/roles.js';
@@ -359,6 +360,7 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
 
     registerWorkflowItemLock(server);
     await server.register(settingsRoutes);
+    await server.register(jiraRoutes);
     await server.register(agentsRoutes);
     await server.register(workflowsRoutes);
     await server.register(workflowQueueRoutes);

@@ -104,6 +104,8 @@ export const commentsService = {
         issue_type: IssueType;
         issue_id: string;
         body: string;
+        /** Speaks as "Workflow" even while an agent runs on the item (e.g. Jira-imported comments). */
+        system?: boolean;
     }): Promise<IComment> {
         // FK constraint ensures the item exists, and lookupItemType's own
         // `row?.type` fallback is unreachable (see its /* v8 ignore */
@@ -129,7 +131,7 @@ export const commentsService = {
         // agent-dispatcher — that import cycles back through agent-runner to
         // this file.
         let agentId = data.agent_id ?? null;
-        if (data.author === 'agent' && !agentId) {
+        if (data.author === 'agent' && !agentId && !data.system) {
             const liveRun = await db
                 .selectFrom('agent_runs')
                 .select('agent_id')

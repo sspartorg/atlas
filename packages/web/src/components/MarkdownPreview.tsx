@@ -109,7 +109,7 @@ function renderInline(text: string): ReactNode[] {
 }
 
 interface Block {
-    kind: 'h1' | 'h2' | 'h3' | 'p' | 'ul' | 'blank';
+    kind: 'h1' | 'h2' | 'h3' | 'p' | 'ul' | 'quote' | 'blank';
     content: string;
     items?: string[];
 }
@@ -119,11 +119,19 @@ function parseBlocks(md: string): Block[] {
     const blocks: Block[] = [];
     let bulletBuffer: string[] = [];
     let paraBuffer: string[] = [];
+    let quoteBuffer: string[] = [];
 
     function flushBullets() {
         if (bulletBuffer.length === 0) return;
         blocks.push({ kind: 'ul', content: '', items: bulletBuffer });
         bulletBuffer = [];
+    }
+    // Quoted lines keep their line breaks: imported Jira text (ADR 0016) is
+    // quoted line by line and reads as wiki markup, not reflowed prose.
+    function flushQuote() {
+        if (quoteBuffer.length === 0) return;
+        blocks.push({ kind: 'quote', content: quoteBuffer.join('\n') });
+        quoteBuffer = [];
     }
     function flushPara() {
         if (paraBuffer.length === 0) return;
@@ -133,6 +141,14 @@ function parseBlocks(md: string): Block[] {
 
     for (const raw of lines) {
         const line = raw;
+        const quote = line.match(/^>\s?(.*)$/);
+        if (quote) {
+            flushBullets();
+            flushPara();
+            quoteBuffer.push(quote[1] ?? '');
+            continue;
+        }
+        flushQuote();
         if (line.trim() === '') {
             flushBullets();
             flushPara();
@@ -170,6 +186,7 @@ function parseBlocks(md: string): Block[] {
     }
     flushBullets();
     flushPara();
+    flushQuote();
 
     return blocks;
 }
@@ -269,6 +286,26 @@ export function MarkdownPreview({ source }: { source: string }) {
                                 </Box>
                             ))}
                         </Box>
+                    );
+                }
+                if (b.kind === 'quote') {
+                    return (
+                        <Typography
+                            key={idx}
+                            component="blockquote"
+                            sx={{
+                                m: 0,
+                                mb: 2,
+                                pl: 2,
+                                borderLeft: `3px solid ${ATLAS_PALETTE.slate10}`,
+                                fontSize: 13.5,
+                                lineHeight: 1.7,
+                                color: ATLAS_PALETTE.slate80,
+                                whiteSpace: 'pre-wrap',
+                            }}
+                        >
+                            {renderInline(b.content)}
+                        </Typography>
                     );
                 }
                 return (

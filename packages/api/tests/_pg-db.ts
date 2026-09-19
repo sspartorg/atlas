@@ -77,6 +77,9 @@ const TRUNCATE_TABLES = [
     'project_guardrails',
     'project_schedules',
     'project_issue_counters',
+    // Migration 042 — Jira bridge. jira_config is a singleton the service upserts.
+    'jira_issues',
+    'jira_config',
     'items',
     'projects',
     'credentials',

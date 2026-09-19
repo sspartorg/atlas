@@ -440,10 +440,52 @@ export interface ItemLinksTable {
     created_at: CreatedAt;
 }
 
+// Migration 042 — Jira bridge. node-postgres returns timestamptz as Date and
+// bigint as string; the service normalizes both.
+type TSD = ColumnType<Date | null, string | null | undefined, string | null | undefined>;
+
+export interface JiraConfigTable {
+    id: Generated<number>;
+    enabled: ColumnType<boolean, boolean | undefined, boolean>;
+    site_url: StrN;
+    email: StrN;
+    api_token_encrypted: StrN;
+    jql: StrN;
+    project_id: StrN;
+    poll_interval_minutes: Int;
+    extra_fields: ColumnType<string[], string | undefined, string>;
+    // Rules saved before routing carried a project have no project_id.
+    label_workflows: ColumnType<
+        { label: string; project_id?: string | null; workflow_id: string | null }[],
+        string | undefined,
+        string
+    >;
+    last_sync_at: TSD;
+    last_sync_ok: ColumnType<boolean | null, boolean | null | undefined, boolean | null>;
+    last_sync_message: StrN;
+    updated_at: UpdatedAt;
+}
+
+export interface JiraIssuesTable {
+    jira_key: string;
+    item_id: StrN;
+    jira_id: string;
+    url: string;
+    raw: ColumnType<unknown, string, string>;
+    jira_updated_at: TSD;
+    seen_comment_ids: ColumnType<string[], string | undefined, string>;
+    posted_comment_ids: ColumnType<string[], string | undefined, string>;
+    imported_comment_ids: ColumnType<number[], string | undefined, string>;
+    pushed_comment_id: ColumnType<string, number | undefined, number>;
+    pushed_status: StrN;
+    done_synced_at: TSD;
+    created_at: CreatedAt;
+}
+
 export interface ItemExternalLinksTable {
     id: Generated<number>;
     item_id: string;
-    link_kind: 'pull_request';
+    link_kind: 'pull_request' | 'jira_issue';
     url: string;
     title: StrN;
     external_ref: StrN;
@@ -718,6 +760,8 @@ export interface DB {
     items: ItemsTable;
     item_links: ItemLinksTable;
     item_external_links: ItemExternalLinksTable;
+    jira_config: JiraConfigTable;
+    jira_issues: JiraIssuesTable;
     agent_runs: AgentRunsTable;
     comments: CommentsTable;
     notifications: NotificationsTable;

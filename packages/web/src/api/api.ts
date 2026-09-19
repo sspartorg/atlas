@@ -22,6 +22,9 @@ import type {
     ITaskFullResponse,
     ISubTaskFullResponse,
     IAgentRun,
+    IJiraConfig,
+    IJiraSyncResult,
+    IJiraTestResult,
     ISettings,
     IComment,
     INotification,
@@ -151,6 +154,11 @@ async function requestRaw<T>(
     return { ok: res.ok, status: res.status, body };
 }
 
+/** PUT /integrations/jira body: any config field; `api_token` is write-only (omit or '' keeps the stored one). */
+export type JiraConfigUpdate = Partial<
+    Pick<IJiraConfig, 'enabled' | 'site_url' | 'email' | 'jql' | 'project_id' | 'poll_interval_minutes' | 'extra_fields' | 'label_workflows'>
+> & { api_token?: string };
+
 const get = <T>(path: string) => request<T>(path);
 const post = <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'POST', body: JSON.stringify(body) });
@@ -270,6 +278,14 @@ export const api = {
                 `/analytics/task/${encodeURIComponent(taskId)}/children${qs ? `?${qs}` : ''}`,
             );
         },
+    },
+
+    jira: {
+        get: () => get<IJiraConfig>('/integrations/jira'),
+        update: (data: JiraConfigUpdate) => put<IJiraConfig>('/integrations/jira', data),
+        test: (data: { site_url?: string; email?: string; api_token?: string } = {}) =>
+            post<IJiraTestResult>('/integrations/jira/test', data),
+        sync: () => post<IJiraSyncResult>('/integrations/jira/sync', {}),
     },
 
     settings: {

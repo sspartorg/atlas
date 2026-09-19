@@ -760,10 +760,11 @@ export interface IIssueLink {
     created_at: string;
 }
 
-// External (off-platform) link attached to an item. Today only PR URLs land
-// here; the schema's CHECK constraint will be relaxed to add new kinds.
-export type ExternalLinkKind = 'pull_request';
+// External (off-platform) link attached to an item: PR URLs, and the Jira
+// issue a Task was imported from (written only by the Jira bridge).
+export type ExternalLinkKind = 'pull_request' | 'jira_issue';
 
+// Kinds a caller may add by hand (UI, MCP). Jira links come only from the bridge.
 export const EXTERNAL_LINK_KINDS: ExternalLinkKind[] = ['pull_request'];
 
 /** GitHub PR lifecycle as last observed by the API (null = not yet checked or lookup failed). */
@@ -782,6 +783,50 @@ export interface IItemExternalLink {
     created_by_run_id: string | null;
     /** Pull-request links only: last observed GitHub state; null when unknown. */
     pr_state?: ExternalPrState | null;
+}
+
+/**
+ * Jira bridge routing rule: an issue carrying `label` becomes a Task in
+ * `project_id` (null = the config's default project) and, when set, is
+ * queued on `workflow_id`. The first matching rule wins.
+ */
+export interface IJiraLabelWorkflow {
+    label: string;
+    project_id: string | null;
+    workflow_id: string | null;
+}
+
+/** Jira bridge config (singleton). The API token is never returned, only whether one is set. */
+export interface IJiraConfig {
+    enabled: boolean;
+    site_url: string | null;
+    email: string | null;
+    api_token_set: boolean;
+    jql: string | null;
+    /** Default Atlas project: where issues matching no routing rule (or a rule without a project) go. */
+    project_id: string | null;
+    poll_interval_minutes: number;
+    /** Extra Jira fields (names or ids) copied into the Task description. */
+    extra_fields: string[];
+    label_workflows: IJiraLabelWorkflow[];
+    last_sync_at: string | null;
+    last_sync_ok: boolean | null;
+    last_sync_message: string | null;
+}
+
+export interface IJiraTestResult {
+    ok: boolean;
+    /** The Jira account the token belongs to. */
+    display_name: string;
+}
+
+export interface IJiraSyncResult {
+    imported: number;
+    queued: number;
+    needs_workflow: number;
+    updated: number;
+    comments_imported: number;
+    comments_posted: number;
 }
 
 /** A link enriched with the target item's display info, for the UI list. */
