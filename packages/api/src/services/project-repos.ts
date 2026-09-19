@@ -11,7 +11,7 @@ import { ApiError } from '../utils/errors.js';
 // 045 folded in. Everything that works on "the repos of a project / Task"
 // goes through here.
 
-export type ReposExecutor = Kysely<DB> | Transaction<DB>;
+type ReposExecutor = Kysely<DB> | Transaction<DB>;
 
 function slug(s: string): string {
     return (

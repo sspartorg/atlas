@@ -1041,11 +1041,8 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         // of picking up the developer's `~/.gitconfig`. Without this, PRs
         // opened by the bot still end up with commits authored by the
         // developer, which regresses the whole point of the App identity.
-        // reason: the standalone short-circuit above returned for every row
-        // with a null project_id, so this cast is sound from here down.
-        const project = await projectsService.get(session.project_id as string);
         // ADR 0018 — the push, the PR base and the teardown all belong to the
-        // repo the session was checked out on.
+        // repo the session was checked out on, not to the project.
         const stopRepo = session.repo_id ? await projectReposService.get(session.repo_id) : null;
         const finalizeAuth = stopRepo
             ? await safeBuildGitAuth(session.credential_id ?? stopRepo.credential_id)

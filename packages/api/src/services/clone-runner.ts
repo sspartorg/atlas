@@ -5,7 +5,7 @@ import { credentialsService } from './credentials.js';
 import { projectsService } from './projects.js';
 import { broadcastSSE } from '../routes/events.js';
 import { gitInvokeEnv } from './git-env.js';
-import type { IProject, SSEEvent } from '@atlas/shared';
+import type { SSEEvent } from '@atlas/shared';
 
 const execFileP = promisify(execFile);
 
