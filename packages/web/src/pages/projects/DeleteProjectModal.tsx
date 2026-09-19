@@ -20,6 +20,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { IProject } from '@atlas/shared';
 import { api } from '../../api/api.js';
 import { useDeleteJob } from '../../hooks/useDeleteJob.js';
+import { useProjectRepos } from '../../hooks/useProjectRepos.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { FormHeading } from '../../components/FormHeading.js';
 
@@ -86,6 +87,8 @@ const ConfirmChips = ({ items }: { items: string[] }) => (
 );
 
 function ProjectChip({ project, displayId }: { project: IProject; displayId: string }) {
+    // ADR 0018 — the folders at stake are the project's repos, 0..N of them.
+    const { data: repos = [] } = useProjectRepos(project.id);
     return (
         <Box
             sx={{
@@ -119,19 +122,35 @@ function ProjectChip({ project, displayId }: { project: IProject; displayId: str
                         {displayId}
                     </Box>
                 </Box>
-                <Typography
-                    sx={{
-                        fontFamily: MONO,
-                        fontSize: 11,
-                        color: ATLAS_PALETTE.slate70,
-                        mt: 0.5,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                    }}
-                >
-                    {project.git_path}
-                </Typography>
+                {repos.length === 0 ? (
+                    <Typography
+                        sx={{
+                            fontFamily: MONO,
+                            fontSize: 11,
+                            color: ATLAS_PALETTE.slate70,
+                            mt: 0.5,
+                        }}
+                    >
+                        No repos
+                    </Typography>
+                ) : (
+                    repos.map((repo) => (
+                        <Typography
+                            key={repo.id}
+                            sx={{
+                                fontFamily: MONO,
+                                fontSize: 11,
+                                color: ATLAS_PALETTE.slate70,
+                                mt: 0.5,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            {repo.git_path}
+                        </Typography>
+                    ))
+                )}
             </Box>
         </Box>
     );

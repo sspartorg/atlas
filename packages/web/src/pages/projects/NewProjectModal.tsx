@@ -268,6 +268,7 @@ export function NewProjectModal({ open, onClose }: Props) {
         if (job.status === 'ready') {
             setView('success');
             void qc.invalidateQueries({ queryKey: ['projects'] });
+            void qc.invalidateQueries({ queryKey: ['repos'] });
         } else if (job.status === 'error') {
             setView('error');
         }
@@ -285,13 +286,16 @@ export function NewProjectModal({ open, onClose }: Props) {
         subject: string | null;
         relative_time: string | null;
     } | null>(null);
+    // ADR 0018 — HEAD belongs to the repo the clone created, not the project.
     useEffect(() => {
-        if (!job.project) return;
+        const project = job.project;
+        const repo = job.repo;
+        if (!project || !repo) return;
         void api.projects
-            .head(job.project.id)
+            .head(project.id, repo.id)
             .then((r) => setHeadInfo(r))
             .catch(() => setHeadInfo(null));
-    }, [job.project]);
+    }, [job.project, job.repo]);
 
     // Auto-scroll terminal.
     useEffect(() => {
@@ -392,7 +396,10 @@ export function NewProjectModal({ open, onClose }: Props) {
                 issue_key_prefix: issueKeyPrefix,
             });
             if (res.ok) {
+                // ADR 0018 — connect answers with { project, repo }; the
+                // projects list reads every repo from ['repos'].
                 void qc.invalidateQueries({ queryKey: ['projects'] });
+                void qc.invalidateQueries({ queryKey: ['repos'] });
                 void qc.invalidateQueries({ queryKey: ['sidenav-counts'] });
                 onClose();
             } else {
@@ -1192,7 +1199,7 @@ export function NewProjectModal({ open, onClose }: Props) {
                                     mt: 0.5,
                                 }}
                             >
-                                {job.project.git_path}
+                                {job.repo?.git_path ?? '—'}
                             </Box>
                         </Alert>
 
@@ -1207,7 +1214,7 @@ export function NewProjectModal({ open, onClose }: Props) {
                             {(
                                 [
                                 ['Project ID', job.project.id.slice(0, 8)],
-                                ['Default branch', job.project.default_branch],
+                                ['Default branch', job.repo?.default_branch ?? '—'],
                                 [
                                     'Latest commit',
                                     headInfo && headInfo.short_sha

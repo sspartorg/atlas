@@ -8,7 +8,7 @@ import Tooltip from '@mui/material/Tooltip';
 import FolderOpenRounded from '@mui/icons-material/FolderOpenRounded';
 import LinkRounded from '@mui/icons-material/LinkRounded';
 import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
-import type { IProject } from '@atlas/shared';
+import type { IProject, IProjectRepo } from '@atlas/shared';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { ProjectRowMenu } from './ProjectRowMenu.js';
 
@@ -17,14 +17,23 @@ const MONO_FONT = '"JetBrains Mono", monospace';
 interface IProjectCardProps {
     project: IProject;
     displayId: string;
+    /** ADR 0018 — every repo of this project, in order; the list page fetches them all at once. */
+    repos: IProjectRepo[];
     taskCount: number;
     subTaskCount: number;
     scheduleInfo?: { preset: string; next_run_at: string | null } | undefined;
-    onOpen: () => void;
     onCopyUrl: () => void;
-    onReclone: () => void;
     onDelete: () => void;
-    onScheduleFetch: () => void;
+}
+
+/** Host + path only — drops the protocol and the .git suffix. */
+export function shortRemote(gitUrl: string): string {
+    return gitUrl.replace(/^https?:\/\//, '').replace(/\.git\/?$/, '');
+}
+
+function repoCountLabel(n: number): string {
+    if (n === 0) return 'No repos';
+    return n === 1 ? '1 repo' : `${n} repos`;
 }
 
 import { relativeTime } from '../../utils/time.js';
@@ -43,15 +52,14 @@ function Counter({ value, label }: { value: number | null; label: string }) {
 export function ProjectCard({
     project,
     displayId,
+    repos,
     taskCount,
     subTaskCount,
     scheduleInfo,
-    onOpen,
     onCopyUrl,
-    onReclone,
     onDelete,
-    onScheduleFetch,
 }: IProjectCardProps) {
+    const first = repos[0];
     return (
         <Paper
             elevation={0}
@@ -133,18 +141,12 @@ export function ProjectCard({
                             '& .MuiChip-label': { px: 1.5 },
                         }}
                     />
-                    <ProjectRowMenu
-                        onOpen={onOpen}
-                        onCopyUrl={onCopyUrl}
-                        onReclone={onReclone}
-                        onDelete={onDelete}
-                        onScheduleFetch={onScheduleFetch}
-                    />
+                    <ProjectRowMenu onCopyUrl={onCopyUrl} onDelete={onDelete} />
                 </Box>
             </Box>
 
-            {/* Repo URL (host + path only — drops https://, .git) */}
-            <Tooltip title={project.git_path || ''}>
+            {/* First repo's remote + how many repos the project has (ADR 0018) */}
+            <Tooltip title={first?.git_path ?? ''}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 4, minWidth: 0 }}>
                     <LinkRounded
                         sx={{ fontSize: 14, color: ATLAS_PALETTE.slate60, flexShrink: 0 }}
@@ -159,9 +161,18 @@ export function ProjectCard({
                             whiteSpace: 'nowrap',
                         }}
                     >
-                        {project.git_url
-                            ? project.git_url.replace(/^https?:\/\//, '').replace(/\.git\/?$/, '')
-                            : '—'}
+                        {first?.git_url ? shortRemote(first.git_url) : '—'}
+                    </Typography>
+                    <Typography
+                        sx={{
+                            fontFamily: MONO_FONT,
+                            fontSize: 12,
+                            color: ATLAS_PALETTE.slate40,
+                            flexShrink: 0,
+                            ml: 'auto',
+                        }}
+                    >
+                        {repoCountLabel(repos.length)}
                     </Typography>
                 </Box>
             </Tooltip>

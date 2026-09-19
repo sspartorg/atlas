@@ -21,6 +21,7 @@ export interface ProjectRow {
     id: string;
     displayId: string;
     name: string;
+    /** First repo's remote, with a `+N` suffix when the project has more (ADR 0018). */
     gitPath: string;
     tasks: number;
     subTasks: number;
@@ -36,11 +37,8 @@ interface IProjectsTableProps {
     ownerName: string;
     scheduleMap?: Map<string, { preset: string; next_run_at: string | null }>;
     onRowClick: (id: string) => void;
-    onOpen: (id: string) => void;
     onCopyUrl: (id: string) => void;
-    onReclone: (id: string) => void;
     onDelete: (id: string) => void;
-    onScheduleFetch: (id: string) => void;
 }
 
 type ColumnKey = SortKey | 'owner' | 'actions';
@@ -84,11 +82,8 @@ export function ProjectsTable({
     ownerName,
     scheduleMap,
     onRowClick,
-    onOpen,
     onCopyUrl,
-    onReclone,
     onDelete,
-    onScheduleFetch,
 }: IProjectsTableProps) {
     const [sortKey, setSortKey] = useState<SortKey>('lastActivity');
     const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -265,11 +260,8 @@ export function ProjectsTable({
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 <ProjectRowMenu
-                                    onOpen={() => onOpen(row.id)}
                                     onCopyUrl={() => onCopyUrl(row.id)}
-                                    onReclone={() => onReclone(row.id)}
                                     onDelete={() => onDelete(row.id)}
-                                    onScheduleFetch={() => onScheduleFetch(row.id)}
                                 />
                             </TableCell>
                         </TableRow>

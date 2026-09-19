@@ -5,7 +5,7 @@ import { http, HttpResponse } from 'msw';
 import { QueryClient } from '@tanstack/react-query';
 import { server } from '../../test-setup.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
-import { makeProject } from '../../test-utils/factories.js';
+import { makeProject, makeProjectRepo } from '../../test-utils/factories.js';
 import { defaultHandlers } from '../../test-utils/mock-handlers.js';
 import { DeleteProjectModal } from './DeleteProjectModal.js';
 
@@ -197,12 +197,30 @@ describe('DeleteProjectModal — confirm view', () => {
         expect(screen.getByText('ACM-42')).toBeInTheDocument();
     });
 
-    it('renders the git_path in ProjectChip', () => {
-        const proj = makeProject({ id: 'p2', name: 'Gadget', git_path: '/repos/gadget' });
+    it("renders every repo folder in ProjectChip", async () => {
+        const proj = makeProject({ id: 'p2', name: 'Gadget' });
+        server.use(
+            http.get(`${BASE}/projects/p2/repos`, () =>
+                HttpResponse.json([
+                    makeProjectRepo({ id: 'r1', project_id: 'p2', git_path: '/repos/gadget' }),
+                    makeProjectRepo({ id: 'r2', project_id: 'p2', git_path: '/repos/gadget-docs' }),
+                ]),
+            ),
+        );
         renderWithProviders(
             <DeleteProjectModal open project={proj} displayId="GAD" onClose={vi.fn()} />,
         );
-        expect(screen.getByText('/repos/gadget')).toBeInTheDocument();
+        expect(await screen.findByText('/repos/gadget')).toBeInTheDocument();
+        expect(screen.getByText('/repos/gadget-docs')).toBeInTheDocument();
+    });
+
+    it('renders "No repos" in ProjectChip when the project has none', async () => {
+        const proj = makeProject({ id: 'p3', name: 'Bare' });
+        server.use(http.get(`${BASE}/projects/p3/repos`, () => HttpResponse.json([])));
+        renderWithProviders(
+            <DeleteProjectModal open project={proj} displayId="BAR" onClose={vi.fn()} />,
+        );
+        expect(await screen.findByText('No repos')).toBeInTheDocument();
     });
 
     it('re-opening (open false → true) resets view back to confirm', async () => {

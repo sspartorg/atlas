@@ -4,17 +4,20 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../test-setup.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
-import { makeProject } from '../../test-utils/factories.js';
+import { makeProject, makeProjectRepo } from '../../test-utils/factories.js';
 import { defaultHandlers } from '../../test-utils/mock-handlers.js';
 import { AutoFetchScheduleModal } from './AutoFetchScheduleModal.js';
 import type { IProjectSchedule } from '@atlas/shared';
 
 const BASE = 'http://localhost:3000/api';
-const project = makeProject({ id: 'p1', name: 'Acme', default_branch: 'main' });
+const project = makeProject({ id: 'p1', name: 'Acme' });
+// ADR 0018 — the schedule belongs to a repo, and pulls THAT repo's branch.
+const repo = makeProjectRepo({ id: 'r1', name: 'api', default_branch: 'main' });
 
 const ISO = '2026-06-25T00:00:00.000Z';
 
 const defaultSchedule: IProjectSchedule = {
+    repo_id: 'r1',
     project_id: 'p1',
     enabled: false,
     preset: 'daily',
@@ -41,7 +44,7 @@ const enabledSchedule: IProjectSchedule = {
 beforeEach(() => {
     server.use(
         ...defaultHandlers,
-        http.get(`${BASE}/projects/p1/schedule`, () => HttpResponse.json(defaultSchedule)),
+        http.get(`${BASE}/projects/p1/repos/r1/schedule`, () => HttpResponse.json(defaultSchedule)),
     );
 });
 
@@ -50,7 +53,14 @@ beforeEach(() => {
 describe('AutoFetchScheduleModal — closed (project null)', () => {
     it('renders nothing when project is null', () => {
         const { container } = renderWithProviders(
-            <AutoFetchScheduleModal open project={null} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={null} repo={repo} onClose={vi.fn()} />,
+        );
+        expect(container).toBeEmptyDOMElement();
+    });
+
+    it('renders nothing when repo is null', () => {
+        const { container } = renderWithProviders(
+            <AutoFetchScheduleModal open project={project} repo={null} onClose={vi.fn()} />,
         );
         expect(container).toBeEmptyDOMElement();
     });
@@ -61,14 +71,34 @@ describe('AutoFetchScheduleModal — closed (project null)', () => {
 describe('AutoFetchScheduleModal — open clean render', () => {
     it('renders the dialog heading', async () => {
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         expect(screen.getByText('Auto-fetch schedule')).toBeInTheDocument();
     });
 
+    it('pulls the REPO’s branch, not the project’s', async () => {
+        server.use(
+            http.get(`${BASE}/projects/p1/repos/r2/schedule`, () =>
+                HttpResponse.json({ ...defaultSchedule, repo_id: 'r2' }),
+            ),
+        );
+        renderWithProviders(
+            <AutoFetchScheduleModal
+                open
+                project={project}
+                repo={makeProjectRepo({ id: 'r2', name: 'web', default_branch: 'develop' })}
+                onClose={vi.fn()}
+            />,
+        );
+        await waitFor(() => expect(screen.getByText(/origin\/develop/i)).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getAllByDisplayValue('develop')[0]).toHaveAttribute('readonly'),
+        );
+    });
+
     it('shows project name and branch in the subtitle', async () => {
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         // The subtitle contains "Acme · pulls" (project.name in mixed content)
         // and then a nested <Box component="span">origin/main</Box>.
@@ -84,7 +114,7 @@ describe('AutoFetchScheduleModal — open clean render', () => {
 
     it('shows preset cards once schedule loads', async () => {
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         await waitFor(() =>
             expect(screen.getByText('Every hour')).toBeInTheDocument(),
@@ -96,7 +126,7 @@ describe('AutoFetchScheduleModal — open clean render', () => {
 
     it('shows conflict policy cards', async () => {
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         await waitFor(() =>
             expect(screen.getByText('Skip & notify')).toBeInTheDocument(),
@@ -107,10 +137,10 @@ describe('AutoFetchScheduleModal — open clean render', () => {
 
     it('shows enabled heading when schedule is enabled', async () => {
         server.use(
-            http.get(`${BASE}/projects/p1/schedule`, () => HttpResponse.json(enabledSchedule)),
+            http.get(`${BASE}/projects/p1/repos/r1/schedule`, () => HttpResponse.json(enabledSchedule)),
         );
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         await waitFor(() =>
             expect(screen.getByText('Auto-fetch enabled')).toBeInTheDocument(),
@@ -126,12 +156,12 @@ describe('AutoFetchScheduleModal — submit success', () => {
     it('calls PUT schedule and closes on Save schedule', async () => {
         const onClose = vi.fn();
         server.use(
-            http.put(`${BASE}/projects/p1/schedule`, () =>
+            http.put(`${BASE}/projects/p1/repos/r1/schedule`, () =>
                 HttpResponse.json({ ...defaultSchedule, enabled: true }),
             ),
         );
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={onClose} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={onClose} />,
         );
         await waitFor(() => screen.getByText('Save schedule'));
         await userEvent.click(screen.getByRole('button', { name: /Save schedule/i }));
@@ -140,14 +170,14 @@ describe('AutoFetchScheduleModal — submit success', () => {
 
     it('calls PUT with enabled=false when Turn off is clicked', async () => {
         server.use(
-            http.get(`${BASE}/projects/p1/schedule`, () => HttpResponse.json(enabledSchedule)),
-            http.put(`${BASE}/projects/p1/schedule`, () =>
+            http.get(`${BASE}/projects/p1/repos/r1/schedule`, () => HttpResponse.json(enabledSchedule)),
+            http.put(`${BASE}/projects/p1/repos/r1/schedule`, () =>
                 HttpResponse.json({ ...enabledSchedule, enabled: false }),
             ),
         );
         const onClose = vi.fn();
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={onClose} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={onClose} />,
         );
         await waitFor(() => screen.getByRole('button', { name: /Turn off/i }));
         await userEvent.click(screen.getByRole('button', { name: /Turn off/i }));
@@ -161,12 +191,12 @@ describe('AutoFetchScheduleModal — submit error', () => {
     it('shows error and does not close when save fails', async () => {
         const onClose = vi.fn();
         server.use(
-            http.put(`${BASE}/projects/p1/schedule`, () =>
+            http.put(`${BASE}/projects/p1/repos/r1/schedule`, () =>
                 HttpResponse.json({ error: 'DB error' }, { status: 500 }),
             ),
         );
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={onClose} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={onClose} />,
         );
         await waitFor(() => screen.getByText('Save schedule'));
         await userEvent.click(screen.getByRole('button', { name: /Save schedule/i }));
@@ -182,7 +212,7 @@ describe('AutoFetchScheduleModal — cancel', () => {
     it('Cancel button calls onClose', async () => {
         const onClose = vi.fn();
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={onClose} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={onClose} />,
         );
         await waitFor(() => screen.getByRole('button', { name: /^Cancel$/ }));
         await userEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
@@ -192,7 +222,7 @@ describe('AutoFetchScheduleModal — cancel', () => {
     it('Close icon calls onClose', async () => {
         const onClose = vi.fn();
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={onClose} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={onClose} />,
         );
         // The icon button contains CloseRounded — it is the only icon button at
         // the top of the dialog.
@@ -211,12 +241,12 @@ describe('AutoFetchScheduleModal — overriddenByPolicy guard', () => {
         // When conflict_policy !== 'skip', the skip_if_dirty guard row is
         // disabled and its sub-text changes to the "overridden" message.
         server.use(
-            http.get(`${BASE}/projects/p1/schedule`, () =>
+            http.get(`${BASE}/projects/p1/repos/r1/schedule`, () =>
                 HttpResponse.json({ ...defaultSchedule, conflict_policy: 'stash' }),
             ),
         );
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         // The GuardRow sub-text becomes 'overridden — "Stash & merge" handles dirty trees'
         await screen.findByText(/overridden/i);
@@ -225,12 +255,12 @@ describe('AutoFetchScheduleModal — overriddenByPolicy guard', () => {
 
     it('shows overridden sub-text for skip_if_dirty when conflict_policy is abort', async () => {
         server.use(
-            http.get(`${BASE}/projects/p1/schedule`, () =>
+            http.get(`${BASE}/projects/p1/repos/r1/schedule`, () =>
                 HttpResponse.json({ ...defaultSchedule, conflict_policy: 'abort' }),
             ),
         );
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         await screen.findByText(/overridden/i);
         expect(screen.getByText(/overridden/i)).toBeInTheDocument();
@@ -239,7 +269,7 @@ describe('AutoFetchScheduleModal — overriddenByPolicy guard', () => {
     it('does NOT show overridden text when conflict_policy is skip', async () => {
         // defaultSchedule already has conflict_policy: 'skip'
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         // Wait for the guard row to appear
         await screen.findByText("we won't pull when you have uncommitted edits");
@@ -252,7 +282,7 @@ describe('AutoFetchScheduleModal — handleSave early return (!f || !projectId)'
         // Simulate a very slow response — the modal renders the spinner while
         // the schedule loads; the Save button is not yet visible.
         server.use(
-            http.get(`${BASE}/projects/p1/schedule`, async () => {
+            http.get(`${BASE}/projects/p1/repos/r1/schedule`, async () => {
                 // Delay response to keep isLoading=true long enough to assert
                 await new Promise((r) => setTimeout(r, 5000));
                 return HttpResponse.json(defaultSchedule);
@@ -260,7 +290,7 @@ describe('AutoFetchScheduleModal — handleSave early return (!f || !projectId)'
         );
         const onClose = vi.fn();
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={onClose} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={onClose} />,
         );
         // The spinner should be visible while loading; the form body (Save button) must be absent
         const spinner = await screen.findByRole('progressbar');
@@ -273,13 +303,13 @@ describe('AutoFetchScheduleModal — isLoading spinner', () => {
     it('renders CircularProgress while the schedule is loading', async () => {
         // Use a handler that never resolves so isLoading stays true
         server.use(
-            http.get(`${BASE}/projects/p1/schedule`, async () => {
+            http.get(`${BASE}/projects/p1/repos/r1/schedule`, async () => {
                 await new Promise((r) => setTimeout(r, 5000));
                 return HttpResponse.json(defaultSchedule);
             }),
         );
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         const spinner = await screen.findByRole('progressbar');
         expect(spinner).toBeInTheDocument();
@@ -293,7 +323,7 @@ describe('AutoFetchScheduleModal — isLoading spinner', () => {
 describe('AutoFetchScheduleModal — form interactions', () => {
     it('clicking a preset card selects it', async () => {
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('Every hour'));
         // Click "Every hour" preset
@@ -305,7 +335,7 @@ describe('AutoFetchScheduleModal — form interactions', () => {
 
     it('selecting Weekly preset shows weekday select', async () => {
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('Weekly'));
         await userEvent.click(screen.getByText('Weekly'));
@@ -314,7 +344,7 @@ describe('AutoFetchScheduleModal — form interactions', () => {
 
     it('selecting Custom cron preset shows cron expression field', async () => {
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('Custom cron'));
         await userEvent.click(screen.getByText('Custom cron'));
@@ -325,7 +355,7 @@ describe('AutoFetchScheduleModal — form interactions', () => {
 
     it('toggling the enable switch fires the onChange handler (covers L365 branch)', async () => {
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         // Wait for the schedule to load so the switches render
         await waitFor(() => screen.getByText('Enable scheduled auto-fetch'));
@@ -342,7 +372,7 @@ describe('AutoFetchScheduleModal — form interactions', () => {
 
     it('branch field is read-only and shows the default branch', async () => {
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('Branch'));
         // The branch labeled field contains the default_branch value
@@ -353,14 +383,14 @@ describe('AutoFetchScheduleModal — form interactions', () => {
     it('clicking a conflict policy card persists into the PUT body', { timeout: 30_000 }, async () => {
         let body: Record<string, unknown> | null = null;
         server.use(
-            http.get(`${BASE}/projects/p1/schedule`, () => HttpResponse.json(defaultSchedule)),
-            http.put(`${BASE}/projects/p1/schedule`, async ({ request }) => {
+            http.get(`${BASE}/projects/p1/repos/r1/schedule`, () => HttpResponse.json(defaultSchedule)),
+            http.put(`${BASE}/projects/p1/repos/r1/schedule`, async ({ request }) => {
                 body = (await request.json()) as Record<string, unknown>;
                 return HttpResponse.json({ ...defaultSchedule, conflict_policy: 'stash' });
             }),
         );
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('Stash & merge'));
         await userEvent.click(screen.getByText('Stash & merge'));
@@ -370,7 +400,7 @@ describe('AutoFetchScheduleModal — form interactions', () => {
 
     it('typing in cron expression updates state when Custom is selected', { timeout: 30_000 }, async () => {
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('Custom cron'));
         await userEvent.click(screen.getByText('Custom cron'));
@@ -382,7 +412,7 @@ describe('AutoFetchScheduleModal — form interactions', () => {
 
     it('changing the weekday select updates state when Weekly is selected', { timeout: 30_000 }, async () => {
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('Weekly'));
         await userEvent.click(screen.getByText('Weekly'));
@@ -400,14 +430,14 @@ describe('AutoFetchScheduleModal — form interactions', () => {
     it('toggling the pause-while-agents-active guard flips it in the PUT body', { timeout: 30_000 }, async () => {
         let body: Record<string, unknown> | null = null;
         server.use(
-            http.get(`${BASE}/projects/p1/schedule`, () => HttpResponse.json(defaultSchedule)),
-            http.put(`${BASE}/projects/p1/schedule`, async ({ request }) => {
+            http.get(`${BASE}/projects/p1/repos/r1/schedule`, () => HttpResponse.json(defaultSchedule)),
+            http.put(`${BASE}/projects/p1/repos/r1/schedule`, async ({ request }) => {
                 body = (await request.json()) as Record<string, unknown>;
                 return HttpResponse.json(defaultSchedule);
             }),
         );
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         // Wait for the guard switches to render
         await waitFor(() => screen.getByText('Pause fetch while agents are active'));
@@ -427,7 +457,7 @@ describe('AutoFetchScheduleModal — form interactions', () => {
 
     it('time-of-day field updates form state', { timeout: 30_000 }, async () => {
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         // LabeledField uses its label text as a tag, and renders a native input.
         // Find the time-of-day input via its initial value '06:00' and type a new value.
@@ -442,18 +472,18 @@ describe('AutoFetchScheduleModal — form interactions', () => {
 describe('AutoFetchScheduleModal — open→close→reopen (useEffect !open reset)', () => {
     it('resets form state when modal closes (exercises the !open useEffect)', async () => {
         const { rerender } = renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('Daily'));
         // Trigger the useEffect(()=>{ if(!open) reset }, [open]) by setting open=false
         rerender(
-            <AutoFetchScheduleModal open={false} project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open={false} project={project} repo={repo} onClose={vi.fn()} />,
         );
         // After close, modal becomes invisible but the useEffect has run setForm(null)
         await new Promise((r) => setTimeout(r, 50));
         // Reopen — useEffect(()=>{ if(server) setForm(server) }, [server]) fires
         rerender(
-            <AutoFetchScheduleModal open project={project} onClose={vi.fn()} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('Daily'));
     });
@@ -463,7 +493,7 @@ describe('AutoFetchScheduleModal — save.isPending spinner', () => {
     it('shows a spinner in the Save button while the PUT is in-flight (isPending branch)', async () => {
         let resolveSave: ((v: Response) => void) | null = null;
         server.use(
-            http.put(`${BASE}/projects/p1/schedule`, () =>
+            http.put(`${BASE}/projects/p1/repos/r1/schedule`, () =>
                 new Promise((resolve) => {
                     resolveSave = resolve as (v: Response) => void;
                 }),
@@ -471,7 +501,7 @@ describe('AutoFetchScheduleModal — save.isPending spinner', () => {
         );
         const onClose = vi.fn();
         renderWithProviders(
-            <AutoFetchScheduleModal open project={project} onClose={onClose} />,
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={onClose} />,
         );
         await waitFor(() => screen.getByText('Daily'));
         const saveBtn = screen.getByRole('button', { name: /Save schedule/ });

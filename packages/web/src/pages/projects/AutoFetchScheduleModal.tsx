@@ -13,16 +13,19 @@ import CheckCircleOutline from '@mui/icons-material/CheckCircleOutline';
 import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
 import type {
     IProject,
+    IProjectRepo,
     IProjectSchedule,
     ScheduleConflictPolicy,
 } from '@atlas/shared';
-import { useProjectSchedule, useSaveProjectSchedule } from '../../hooks/useProjectSchedule.js';
+import { useRepoSchedule, useSaveRepoSchedule } from '../../hooks/useProjectSchedule.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { SchedulePresetFields, SelectableCard } from '../../components/SchedulePresetFields.js';
 
 interface Props {
     open: boolean;
     project: IProject | null;
+    /** ADR 0018 — auto-fetch is per repo; the branch it pulls is this repo's. */
+    repo: IProjectRepo | null;
     onClose: () => void;
 }
 
@@ -169,10 +172,11 @@ function GuardRow({ label, sub, checked, onChange, disabled }: GuardRowProps) {
     );
 }
 
-export function AutoFetchScheduleModal({ open, project, onClose }: Props) {
+export function AutoFetchScheduleModal({ open, project, repo, onClose }: Props) {
     const projectId = project?.id ?? null;
-    const { data: server, isLoading } = useProjectSchedule(projectId);
-    const save = useSaveProjectSchedule(projectId ?? '');
+    const repoId = repo?.id ?? null;
+    const { data: server, isLoading } = useRepoSchedule(projectId, repoId);
+    const save = useSaveRepoSchedule(projectId ?? '', repoId ?? '');
 
     const [form, setForm] = useState<IProjectSchedule | null>(null);
     const [saveError, setSaveError] = useState<string | null>(null);
@@ -186,7 +190,7 @@ export function AutoFetchScheduleModal({ open, project, onClose }: Props) {
         }
     }, [open]);
 
-    if (!project) return null;
+    if (!project || !repo) return null;
     const f = form ?? server;
     const enabled = f?.enabled ?? false;
 
@@ -195,7 +199,7 @@ export function AutoFetchScheduleModal({ open, project, onClose }: Props) {
     }
 
     async function handleSave(nextEnabled: boolean) {
-        if (!f || !projectId) return;
+        if (!f || !projectId || !repoId) return;
         setSaveError(null);
         try {
             await save.mutateAsync({
@@ -264,12 +268,16 @@ export function AutoFetchScheduleModal({ open, project, onClose }: Props) {
                         <Typography
                             sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 0.5 }}
                         >
-                            {project.name} · pulls{' '}
+                            {project.name} ·{' '}
+                            <Box component="span" sx={{ fontFamily: MONO, fontWeight: 600 }}>
+                                {repo.name}
+                            </Box>{' '}
+                            pulls{' '}
                             <Box
                                 component="span"
                                 sx={{ fontFamily: MONO, fontWeight: 600 }}
                             >
-                                origin/{project.default_branch}
+                                origin/{repo.default_branch}
                             </Box>{' '}
                             in the background
                         </Typography>
@@ -360,9 +368,9 @@ export function AutoFetchScheduleModal({ open, project, onClose }: Props) {
                             />
                             <LabeledField
                                 label="Branch"
-                                hint="locked to default branch"
+                                hint="locked to the repo's default branch"
                                 tag="git_branch"
-                                value={project.default_branch}
+                                value={repo.default_branch}
                                 readOnly
                             />
                         </Box>

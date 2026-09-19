@@ -289,7 +289,7 @@ export const api = {
         sync: () => post<IJiraSyncResult>('/integrations/jira/sync', {}),
     },
 
-    /** Every repo of every project (ADR 0017). */
+    /** Every repo of every project (ADR 0018). */
     repos: {
         listAll: () => get<IProjectRepo[]>('/repos'),
     },
@@ -552,8 +552,6 @@ export const api = {
         // one clones it (202 + clone_* SSE, like /projects/clone) or registers
         // a local clone (the /projects/connect checks: 400 carries a ConnectError).
         repos: (id: string) => get<IProjectRepo[]>(`/projects/${id}/repos`),
-        /** Every repo of every project, in one round trip — the projects list uses it. */
-        allRepos: () => get<IProjectRepo[]>('/repos'),
         cloneRepo: (
             id: string,
             data: { name: string; repo_url: string; credential_id: string; default_branch: string },

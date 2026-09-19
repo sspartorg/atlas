@@ -7,16 +7,18 @@ import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
-import IconButton from '@mui/material/IconButton';
 import Skeleton from '@mui/material/Skeleton';
 import TextField from '@mui/material/TextField';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import AddRounded from '@mui/icons-material/AddRounded';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import EditRounded from '@mui/icons-material/EditRounded';
+import FolderOpenRounded from '@mui/icons-material/FolderOpenRounded';
+import RefreshRounded from '@mui/icons-material/RefreshRounded';
+import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
 import SourceRounded from '@mui/icons-material/SourceRounded';
-import type { CloneStatus, IProjectRepo } from '@atlas/shared';
+import type { CloneStatus, IProject, IProjectRepo } from '@atlas/shared';
+import { api } from '../../api/api.js';
 import {
     useProjectRepos,
     useRemoveProjectRepo,
@@ -25,6 +27,9 @@ import {
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { ConfirmActionModal } from '../../components/ConfirmActionModal.js';
+import { RowActionMenu } from '../../components/RowActionMenu.js';
+import { RecloneProjectModal } from '../projects/RecloneProjectModal.js';
+import { AutoFetchScheduleModal } from '../projects/AutoFetchScheduleModal.js';
 import { AddRepoDialog } from './AddRepoDialog.js';
 
 const MONO = '"JetBrains Mono", monospace';
@@ -41,17 +46,21 @@ function repoLabel(url: string): string {
 }
 
 interface Props {
-    projectId: string;
+    project: IProject;
+    displayId: string;
 }
 
-/** ADR 0017 — the project's repos: the primary (the project's own) + extras. */
-export function ProjectReposCard({ projectId }: Props) {
+/** ADR 0018 — the project's repos. All equal; every one can be removed. */
+export function ProjectReposCard({ project, displayId }: Props) {
+    const projectId = project.id;
     const { data: repos, isLoading, error } = useProjectRepos(projectId);
     const remove = useRemoveProjectRepo(projectId);
     const toast = useToast();
     const [adding, setAdding] = useState(false);
     const [editing, setEditing] = useState<IProjectRepo | null>(null);
     const [removing, setRemoving] = useState<IProjectRepo | null>(null);
+    const [recloning, setRecloning] = useState<IProjectRepo | null>(null);
+    const [scheduling, setScheduling] = useState<IProjectRepo | null>(null);
 
     async function confirmRemove() {
         if (!removing) return;
@@ -62,6 +71,18 @@ export function ProjectReposCard({ projectId }: Props) {
             toast.show({ message: e instanceof Error ? e.message : 'Could not remove the repo' });
         }
         setRemoving(null);
+    }
+
+    async function openFolder(repo: IProjectRepo) {
+        try {
+            const res = await api.projects.reveal(projectId, repo.id);
+            toast.show({ message: 'Opened in File Explorer', detail: res.path });
+        } catch (e) {
+            toast.show({
+                message: 'Could not open File Explorer',
+                detail: e instanceof Error ? e.message : 'Unknown error',
+            });
+        }
     }
 
     return (
@@ -90,8 +111,8 @@ export function ProjectReposCard({ projectId }: Props) {
                     </Typography>
                     <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
                         A Task works on the repos it picks; each gets its own checkout on the
-                        Task&apos;s branch. The primary is the project&apos;s own repo — edit its
-                        setup scripts on the Setup tab.
+                        Task&apos;s branch. Every repo carries its own branch, schedule and setup
+                        scripts — the scripts live on the Setup tab.
                     </Typography>
                 </Box>
                 <Button
@@ -112,6 +133,17 @@ export function ProjectReposCard({ projectId }: Props) {
                 <Alert severity="error">
                     {error instanceof Error ? error.message : 'Could not load the repos'}
                 </Alert>
+            )}
+
+            {repos?.length === 0 && (
+                <Box sx={{ py: 5, textAlign: 'center' }}>
+                    <Typography sx={{ fontSize: 14, fontWeight: 600, color: ATLAS_PALETTE.slate }}>
+                        No repos yet
+                    </Typography>
+                    <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
+                        Add a repo to give this project&apos;s Tasks something to check out.
+                    </Typography>
+                </Box>
             )}
 
             {repos?.map((repo) => (
@@ -141,7 +173,6 @@ export function ProjectReposCard({ projectId }: Props) {
                             >
                                 {repo.name}
                             </Typography>
-                            {repo.primary && <Chip label="Primary" size="small" color="primary" />}
                             <Chip
                                 label={repo.default_branch}
                                 size="small"
@@ -175,28 +206,38 @@ export function ProjectReposCard({ projectId }: Props) {
                             </Box>
                         )}
                     </Box>
-                    {!repo.primary && (
-                        <>
-                            <Tooltip title="Edit">
-                                <IconButton
-                                    size="small"
-                                    aria-label={`Edit ${repo.name}`}
-                                    onClick={() => setEditing(repo)}
-                                >
-                                    <EditRounded sx={{ fontSize: 18 }} />
-                                </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Remove">
-                                <IconButton
-                                    size="small"
-                                    aria-label={`Remove ${repo.name}`}
-                                    onClick={() => setRemoving(repo)}
-                                >
-                                    <DeleteOutlineRounded sx={{ fontSize: 18 }} />
-                                </IconButton>
-                            </Tooltip>
-                        </>
-                    )}
+                    <RowActionMenu
+                        ariaLabel={`Actions for ${repo.name}`}
+                        items={[
+                            {
+                                label: 'Edit',
+                                icon: <EditRounded fontSize="small" />,
+                                onClick: () => setEditing(repo),
+                            },
+                            {
+                                label: 'Auto-fetch schedule…',
+                                icon: <ScheduleRounded fontSize="small" />,
+                                onClick: () => setScheduling(repo),
+                            },
+                            {
+                                label: 'Re-clone from remote',
+                                icon: <RefreshRounded fontSize="small" />,
+                                onClick: () => setRecloning(repo),
+                            },
+                            {
+                                label: 'Open folder',
+                                icon: <FolderOpenRounded fontSize="small" />,
+                                onClick: () => void openFolder(repo),
+                            },
+                            {
+                                label: 'Remove',
+                                icon: <DeleteOutlineRounded fontSize="small" />,
+                                onClick: () => setRemoving(repo),
+                                danger: true,
+                                dividerAbove: true,
+                            },
+                        ]}
+                    />
                 </Box>
             ))}
 
@@ -206,6 +247,23 @@ export function ProjectReposCard({ projectId }: Props) {
                     projectId={projectId}
                     repo={editing}
                     onClose={() => setEditing(null)}
+                />
+            )}
+            {recloning && (
+                <RecloneProjectModal
+                    open
+                    project={project}
+                    repo={recloning}
+                    displayId={displayId}
+                    onClose={() => setRecloning(null)}
+                />
+            )}
+            {scheduling && (
+                <AutoFetchScheduleModal
+                    open
+                    project={project}
+                    repo={scheduling}
+                    onClose={() => setScheduling(null)}
                 />
             )}
             <ConfirmActionModal
@@ -234,22 +292,15 @@ function EditRepoDialog({
     const update = useUpdateProjectRepo(projectId);
     const toast = useToast();
     const [branch, setBranch] = useState(repo.default_branch);
-    const [sh, setSh] = useState(repo.setup_sh_body);
-    const [ps1, setPs1] = useState(repo.setup_ps1_body);
 
     async function save() {
-        await update.mutateAsync({
-            repoId: repo.id,
-            data: { default_branch: branch.trim(), setup_sh_body: sh, setup_ps1_body: ps1 },
-        });
+        await update.mutateAsync({ repoId: repo.id, data: { default_branch: branch.trim() } });
         toast.show({ message: `Saved ${repo.name}` });
         onClose();
     }
 
-    const scriptSx = { fontFamily: MONO, fontSize: 12.5, alignItems: 'flex-start' };
-
     return (
-        <Dialog open onClose={update.isPending ? undefined : onClose} maxWidth="md" fullWidth>
+        <Dialog open onClose={update.isPending ? undefined : onClose} maxWidth="sm" fullWidth>
             <DialogTitle sx={{ fontWeight: 600 }}>
                 Edit{' '}
                 <Box component="span" sx={{ fontFamily: MONO }}>
@@ -263,40 +314,11 @@ function EditRepoDialog({
                     label="Default branch"
                     value={branch}
                     onChange={(e) => setBranch(e.target.value)}
-                    sx={{ mt: 1, mb: 3 }}
+                    sx={{ mt: 1 }}
                 />
-                <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate60, mb: 2 }}>
-                    Setup scripts run in this repo&apos;s checkout before the agent CLI starts — the
-                    PowerShell body on Windows, the shell body elsewhere.
+                <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate60, mt: 2 }}>
+                    This repo&apos;s setup scripts live on the Setup tab.
                 </Typography>
-                <Box
-                    sx={{
-                        display: 'grid',
-                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-                        gap: 3,
-                    }}
-                >
-                    <TextField
-                        fullWidth
-                        multiline
-                        minRows={10}
-                        maxRows={24}
-                        label=".sh"
-                        value={sh}
-                        onChange={(e) => setSh(e.target.value)}
-                        InputProps={{ sx: scriptSx }}
-                    />
-                    <TextField
-                        fullWidth
-                        multiline
-                        minRows={10}
-                        maxRows={24}
-                        label=".ps1"
-                        value={ps1}
-                        onChange={(e) => setPs1(e.target.value)}
-                        InputProps={{ sx: scriptSx }}
-                    />
-                </Box>
                 {update.isError && (
                     <Alert severity="error" sx={{ mt: 2 }}>
                         {update.error instanceof Error ? update.error.message : 'Could not save'}

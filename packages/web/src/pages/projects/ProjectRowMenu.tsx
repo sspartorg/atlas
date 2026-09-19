@@ -1,45 +1,24 @@
-import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
-import RefreshRounded from '@mui/icons-material/RefreshRounded';
-import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import { RowActionMenu } from '../../components/RowActionMenu.js';
-import { useIsMobile } from '../../hooks/useIsMobile.js';
 
 interface Props {
-    onOpen: () => void;
     onCopyUrl: () => void;
-    onReclone: () => void;
-    onScheduleFetch: () => void;
     onDelete: () => void;
 }
 
-export function ProjectRowMenu({ onOpen, onCopyUrl, onReclone, onScheduleFetch, onDelete }: Props) {
-    const isMobile = useIsMobile();
-
+// ADR 0018 — re-clone, auto-fetch and reveal all act on one repo, and a
+// project has 0..N equal repos, so they live on Project Detail's Repos tab.
+// What is left here works project-wide.
+export function ProjectRowMenu({ onCopyUrl, onDelete }: Props) {
     return (
         <RowActionMenu
             ariaLabel="Project actions"
             items={[
-                !isMobile && {
-                    label: 'Open project',
-                    icon: <OpenInNewRounded fontSize="small" />,
-                    onClick: onOpen,
-                },
                 {
                     label: 'Copy repo URL',
                     icon: <ContentCopyRounded fontSize="small" />,
                     onClick: onCopyUrl,
-                },
-                !isMobile && {
-                    label: 'Re-clone from remote',
-                    icon: <RefreshRounded fontSize="small" />,
-                    onClick: onReclone,
-                },
-                {
-                    label: 'Auto-fetch schedule…',
-                    icon: <ScheduleRounded fontSize="small" />,
-                    onClick: onScheduleFetch,
                 },
                 {
                     label: 'Delete project…',

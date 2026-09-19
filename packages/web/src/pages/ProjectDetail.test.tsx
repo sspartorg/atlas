@@ -7,7 +7,7 @@ import { server } from '../test-setup.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import type { IIssueTreeNode } from '@atlas/shared';
-import { makeProject, makeTask, makeAgent } from '../test-utils/factories.js';
+import { makeProject, makeProjectRepo, makeTask, makeAgent } from '../test-utils/factories.js';
 
 function subTaskNode(overrides: Partial<IIssueTreeNode> = {}): IIssueTreeNode {
     return {
@@ -51,15 +51,6 @@ function registerProjectMocks(
         ...extra,
         ...defaultHandlers,
         http.get('http://localhost:3000/api/projects/p1', () => HttpResponse.json(project)),
-        http.get('http://localhost:3000/api/projects/p1/head', () =>
-            HttpResponse.json({ short_sha: null, subject: null, relative_time: null }),
-        ),
-        http.get('http://localhost:3000/api/projects/p1/status', () =>
-            HttpResponse.json({ local_head: '', remote_head: '', behind: 0, uncommitted: 0 }),
-        ),
-        http.get('http://localhost:3000/api/projects/p1/schedule', () =>
-            HttpResponse.json({}),
-        ),
         http.get('http://localhost:3000/api/projects/p1/guardrails', () =>
             HttpResponse.json([]),
         ),
@@ -604,8 +595,17 @@ describe('ProjectDetail page', () => {
         });
     });
 
-    it('aiScaffoldEnabled is true when clone_status === "ready" — menu item is enabled', async () => {
-        registerProjectMocks(makeProject({ id: 'p1', name: 'Atlas', clone_status: 'ready' }));
+    it('aiScaffoldEnabled is true when a repo is cloned (clone_status "ready") — menu item is enabled', async () => {
+        // ADR 0018 — readiness is a property of the repos, not the project.
+        registerProjectMocks(
+            undefined,
+            http.get('http://localhost:3000/api/projects/p1/repos', () =>
+                HttpResponse.json([
+                    makeProjectRepo({ id: 'r1', clone_status: 'cloning' }),
+                    makeProjectRepo({ id: 'r2', clone_status: 'ready' }),
+                ]),
+            ),
+        );
         renderWithProviders(
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
@@ -624,8 +624,13 @@ describe('ProjectDetail page', () => {
         }
     });
 
-    it('aiScaffoldEnabled is false when clone_status !== "ready" — menu item is disabled', async () => {
-        registerProjectMocks(makeProject({ id: 'p1', name: 'Atlas', clone_status: 'cloning' }));
+    it('aiScaffoldEnabled is false when no repo is cloned — menu item is disabled', async () => {
+        registerProjectMocks(
+            undefined,
+            http.get('http://localhost:3000/api/projects/p1/repos', () =>
+                HttpResponse.json([makeProjectRepo({ id: 'r1', clone_status: 'cloning' })]),
+            ),
+        );
         renderWithProviders(
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />

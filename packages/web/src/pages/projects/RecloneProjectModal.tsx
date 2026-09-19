@@ -17,7 +17,7 @@ import FolderOutlined from '@mui/icons-material/FolderOutlined';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import ArrowForward from '@mui/icons-material/ArrowForward';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { IProject } from '@atlas/shared';
+import type { IProject, IProjectRepo } from '@atlas/shared';
 import { api } from '../../api/api.js';
 import { useRecloneJob } from '../../hooks/useRecloneJob.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
@@ -30,6 +30,8 @@ type View = 'confirm' | 'running' | 'success' | 'error';
 interface Props {
     open: boolean;
     project: IProject | null;
+    /** ADR 0018 — a re-clone acts on one repo of the project. */
+    repo: IProjectRepo | null;
     displayId: string;
     onClose: () => void;
 }
@@ -55,7 +57,15 @@ function deriveStepIndex(lines: string[]): number {
     return idx;
 }
 
-function ProjectChip({ project, displayId }: { project: IProject; displayId: string }) {
+function ProjectChip({
+    project,
+    repo,
+    displayId,
+}: {
+    project: IProject;
+    repo: IProjectRepo;
+    displayId: string;
+}) {
     return (
         <Box
             sx={{
@@ -74,6 +84,9 @@ function ProjectChip({ project, displayId }: { project: IProject; displayId: str
                     <Typography sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate }}>
                         {project.name}
                     </Typography>
+                    <Box sx={{ fontFamily: MONO, fontSize: 11, color: ATLAS_PALETTE.slate70 }}>
+                        {repo.name}
+                    </Box>
                     <Box
                         sx={{
                             fontFamily: MONO,
@@ -100,9 +113,7 @@ function ProjectChip({ project, displayId }: { project: IProject; displayId: str
                         whiteSpace: 'nowrap',
                     }}
                 >
-                    {project.git_url
-                        ? `${project.git_url} · ${project.git_path}`
-                        : project.git_path}
+                    {repo.git_url ? `${repo.git_url} · ${repo.git_path}` : repo.git_path}
                 </Typography>
             </Box>
         </Box>
@@ -116,7 +127,7 @@ const KV_ROW_SX = {
     py: 2,
 };
 
-export function RecloneProjectModal({ open, project, displayId, onClose }: Props) {
+export function RecloneProjectModal({ open, project, repo, displayId, onClose }: Props) {
     const qc = useQueryClient();
     const navigate = useNavigate();
     const [view, setView] = useState<View>('confirm');
@@ -129,9 +140,11 @@ export function RecloneProjectModal({ open, project, displayId, onClose }: Props
     const job = useRecloneJob(recloneId);
 
     const statusQuery = useQuery({
-        queryKey: ['project-status', project?.id],
-        queryFn: () => api.projects.status(project!.id),
-        enabled: open && view === 'confirm' && Boolean(project),
+        // ADR 0018 — one status per repo, so the repo id is part of the key.
+        queryKey: ['project-status', project?.id, repo?.id],
+        // `enabled` gates on both ids being present.
+        queryFn: () => api.projects.status(project!.id, repo!.id),
+        enabled: open && view === 'confirm' && Boolean(project && repo),
         staleTime: 0,
     });
 
@@ -149,11 +162,11 @@ export function RecloneProjectModal({ open, project, displayId, onClose }: Props
         if (job.status === 'ready') {
             setView('success');
             void qc.invalidateQueries({ queryKey: ['projects'] });
-            void qc.invalidateQueries({ queryKey: ['project-status', project?.id] });
+            void qc.invalidateQueries({ queryKey: ['project-status', project?.id, repo?.id] });
         } else if (job.status === 'error') {
             setView('error');
         }
-    }, [job.status, qc, project?.id]);
+    }, [job.status, qc, project?.id, repo?.id]);
 
     useEffect(() => {
         if (view !== 'running' || !startedAt) return;
@@ -187,10 +200,10 @@ export function RecloneProjectModal({ open, project, displayId, onClose }: Props
     }
 
     async function startReclone() {
-        if (!project) return;
+        if (!project || !repo) return;
         setSubmitError(null);
         try {
-            const res = await api.projects.reclone(project.id);
+            const res = await api.projects.reclone(project.id, repo.id);
             setRecloneId(res.reclone_id);
             setStartedAt(Date.now());
             setElapsedMs(0);
@@ -206,7 +219,7 @@ export function RecloneProjectModal({ open, project, displayId, onClose }: Props
         navigate(`/projects/${project.id}`);
     }
 
-    if (!project) return null;
+    if (!project || !repo) return null;
 
     const statusData = statusQuery.data;
     const uncommitted = statusData?.uncommitted ?? 0;
@@ -276,7 +289,7 @@ export function RecloneProjectModal({ open, project, displayId, onClose }: Props
             </Box>
 
             <Box sx={{ p: 5, pt: 4 }}>
-                <ProjectChip project={project} displayId={displayId} />
+                <ProjectChip project={project} repo={repo} displayId={displayId} />
 
                 {view === 'confirm' && (
                     <>

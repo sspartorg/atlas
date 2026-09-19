@@ -11,8 +11,9 @@ import { Toast } from '../../components/Toast.js';
 
 const BASE = 'http://localhost:3000/api';
 
-const project = makeProject({ id: 'p1', name: 'Acme', git_path: '/tmp/acme' });
-const projectNoWorkspace = makeProject({ id: 'p2', name: 'NoWs', git_path: '' });
+const project = makeProject({ id: 'p1', name: 'Acme' });
+// ADR 0018 — "no workspace" is now "no repos"; p2 serves an empty repo list.
+const projectNoWorkspace = makeProject({ id: 'p2', name: 'NoWs' });
 
 const existingVars = {
     vars: [
@@ -23,6 +24,9 @@ const existingVars = {
 
 beforeEach(() => {
     server.use(
+        // Before `defaultHandlers` — its `/projects/:id/repos` stub would
+        // otherwise answer for p2 too (first match wins).
+        http.get(`${BASE}/projects/p2/repos`, () => HttpResponse.json([])),
         ...defaultHandlers,
         http.get(`${BASE}/projects/p1/env`, () => HttpResponse.json(existingVars)),
         http.get(`${BASE}/projects/p2/env`, () => HttpResponse.json({ vars: [] })),
@@ -66,7 +70,7 @@ describe('ProjectEnvSecretsModal — open clean', () => {
         );
     });
 
-    it('shows no-workspace warning for a project without git_path', async () => {
+    it('shows the no-workspace warning for a project with no repos', async () => {
         renderWithProviders(
             <ProjectEnvSecretsModal
                 open
@@ -76,7 +80,7 @@ describe('ProjectEnvSecretsModal — open clean', () => {
             />,
         );
         await waitFor(() =>
-            expect(screen.getByText(/no folder on disk yet/i)).toBeInTheDocument(),
+            expect(screen.getByText(/no repos yet/i)).toBeInTheDocument(),
         );
     });
 

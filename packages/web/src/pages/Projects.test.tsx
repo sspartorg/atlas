@@ -4,10 +4,14 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
-import * as apiModule from '../api/api.js';
 import { Projects } from './Projects.js';
 import { Toast } from '../components/Toast.js';
-import { makeProject, makeAgent, makeTaskListItem } from '../test-utils/factories.js';
+import {
+    makeProject,
+    makeAgent,
+    makeProjectRepo,
+    makeTaskListItem,
+} from '../test-utils/factories.js';
 
 // Mutable flag so individual tests can force the mobile card-view fallback
 // branch (`view === 'cards' || isMobileLayout`) independently of `view`.
@@ -17,6 +21,10 @@ vi.mock('../hooks/useIsMobile.js', () => ({
 }));
 
 const BASE = 'http://localhost:3000/api';
+
+function reposAre(...repos: ReturnType<typeof makeProjectRepo>[]) {
+    return http.get(`${BASE}/repos`, () => HttpResponse.json(repos));
+}
 
 function baseHandlers(projects = [makeProject()]) {
     return [
@@ -133,19 +141,6 @@ describe('Projects page', () => {
         fireEvent.click(btn);
     });
 
-    it('clicks a project card by its title (onOpen handler fires via handleOpen)', async () => {
-        // Mock the reveal endpoint so handleOpen succeeds.
-        server.use(
-            ...baseHandlers(),
-            http.post(`${BASE}/projects/p1/reveal`, () =>
-                HttpResponse.json({ path: '/tmp/atlas' }),
-            ),
-        );
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        const title = await screen.findByText('Atlas');
-        fireEvent.click(title);
-    });
-
     it('clicks the copy-URL icon to invoke handleCopyUrl', async () => {
         // navigator.clipboard not in jsdom; jest will fall through to the toast catch.
         server.use(...baseHandlers());
@@ -189,47 +184,18 @@ describe('Projects page', () => {
         });
     });
 
-    it('exercises card menu actions: onReclone, onScheduleFetch, onDelete', async () => {
-        server.use(
-            ...baseHandlers(),
-            http.get(`${BASE}/schedules`, () => HttpResponse.json([])),
-        );
+    it('card menu offers only project-wide actions — repo actions moved to Project Detail', async () => {
+        // ADR 0018: re-clone, auto-fetch and reveal each need one repo, and a
+        // project has 0..N — the list page can't pick one, so it doesn't offer them.
+        server.use(...baseHandlers());
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('Atlas');
-        // Click the project actions menu trigger (aria-label="Project actions")
-        const menuBtn = screen.getByRole('button', { name: /Project actions/i });
-        fireEvent.click(menuBtn);
-        // The menu should open with items
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        // Click "Auto-fetch schedule…" to invoke onScheduleFetch → handleScheduleFetch
-        const scheduleItem = screen.queryByText(/Auto-fetch schedule/i);
-        if (scheduleItem) fireEvent.click(scheduleItem);
-        // Re-open menu for reclone
         fireEvent.click(screen.getByRole('button', { name: /Project actions/i }));
         await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const recloneItem = screen.queryByText(/Re-clone/i);
-        if (recloneItem) fireEvent.click(recloneItem);
-        // Re-open menu for delete
-        fireEvent.click(screen.getByRole('button', { name: /Project actions/i }));
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const deleteItem = screen.queryByText(/Delete project/i);
-        if (deleteItem) fireEvent.click(deleteItem);
-    });
-
-    it('exercises card menu onOpen (Open project) in card view', async () => {
-        server.use(
-            ...baseHandlers(),
-            http.post(`${BASE}/projects/p1/reveal`, () =>
-                HttpResponse.json({ path: '/tmp/atlas' }),
-            ),
-        );
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        const menuBtn = screen.getByRole('button', { name: /Project actions/i });
-        fireEvent.click(menuBtn);
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const openItem = screen.queryByText(/Open project/i);
-        if (openItem) fireEvent.click(openItem);
+        const labels = screen.getAllByRole('menuitem').map((i) => i.textContent ?? '');
+        expect(labels.some((l) => l.includes('Copy repo URL'))).toBe(true);
+        expect(labels.some((l) => l.includes('Delete project'))).toBe(true);
+        expect(labels.some((l) => /Re-clone|Auto-fetch|Open project/.test(l))).toBe(false);
     });
 
     it('exercises card menu onCopyUrl (Copy repo URL) in card view', async () => {
@@ -245,22 +211,6 @@ describe('Projects page', () => {
         if (copyItem) fireEvent.click(copyItem);
     });
 
-    it('exercises onReclone from table view row actions', async () => {
-        server.use(...baseHandlers());
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        // Switch to table view
-        fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
-        // Open menu in table view
-        const menuBtn = screen.getAllByRole('button', { name: /Project actions/i })[0];
-        if (menuBtn) {
-            fireEvent.click(menuBtn);
-            await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-            const recloneItem = screen.queryByText(/Re-clone/i);
-            if (recloneItem) fireEvent.click(recloneItem);
-        }
-    });
-
     it('exercises onDelete from table view row actions', async () => {
         server.use(...baseHandlers());
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
@@ -272,20 +222,6 @@ describe('Projects page', () => {
             await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
             const deleteItem = screen.queryByText(/Delete project/i);
             if (deleteItem) fireEvent.click(deleteItem);
-        }
-    });
-
-    it('exercises the schedule fetch table menu action', async () => {
-        server.use(...baseHandlers());
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
-        const menuBtns = screen.getAllByRole('button', { name: /Project actions/i });
-        if (menuBtns[0]) {
-            fireEvent.click(menuBtns[0]);
-            await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-            const scheduleItem = screen.queryByText(/Auto-fetch schedule/i);
-            if (scheduleItem) fireEvent.click(scheduleItem);
         }
     });
 
@@ -308,24 +244,6 @@ describe('Projects page', () => {
         await waitFor(() => expect(screen.getByText('Atlas')).toBeInTheDocument());
         // Switch back to All
         fireEvent.click(screen.getAllByText('All')[0]!);
-    });
-
-    it('exercises handleOpen error path (reveal fails)', async () => {
-        server.use(
-            ...baseHandlers(),
-            http.post(`${BASE}/projects/p1/reveal`, () =>
-                HttpResponse.json({ error: 'not found' }, { status: 500 }),
-            ),
-        );
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        const menuBtn = screen.getByRole('button', { name: /Project actions/i });
-        fireEvent.click(menuBtn);
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const openItem = screen.queryByText(/Open project/i);
-        if (openItem) fireEvent.click(openItem);
-        // Allow the error toast to fire
-        await waitFor(() => {}, { timeout: 500 });
     });
 
     it('sums sub_task_count across tasks for the sub-task totals', async () => {
@@ -366,28 +284,6 @@ describe('Projects page', () => {
         const option10 = screen.queryByRole('option', { name: '10' });
         if (option10) fireEvent.click(option10);
     });
-
-    it('exercises table-view onOpen via Open project menu item (fn#18)', async () => {
-        server.use(
-            ...baseHandlers(),
-            http.post(`${BASE}/projects/p1/reveal`, () =>
-                HttpResponse.json({ path: '/tmp/atlas' }),
-            ),
-        );
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        // Switch to table view
-        fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
-        // Find project-actions menu in the table row
-        const menuBtns = screen.getAllByRole('button', { name: /Project actions/i });
-        if (menuBtns[0]) {
-            fireEvent.click(menuBtns[0]);
-            await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-            const openItem = screen.queryByText(/Open project/i);
-            if (openItem) fireEvent.click(openItem);
-        }
-        expect(document.body).toBeTruthy();
-    }, 30000);
 
     it('exercises table-view onCopyUrl via Copy repo URL menu item (fn#19)', async () => {
         Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
@@ -458,54 +354,6 @@ describe('Projects page', () => {
         expect(document.body).toBeTruthy();
     }, 30000);
 
-    it('opens RecloneProjectModal and closes it — exercises onClose at line 485 (fn#28)', async () => {
-        server.use(...baseHandlers());
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        const menuBtn = screen.getByRole('button', { name: /Project actions/i });
-        fireEvent.click(menuBtn);
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const recloneItem = screen.queryByText(/Re-clone/i);
-        if (recloneItem) {
-            fireEvent.click(recloneItem);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 5000 }).catch(() => {});
-            const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
-            if (cancelBtn) {
-                fireEvent.click(cancelBtn);
-            } else {
-                const dialog = document.querySelector('[role="dialog"]');
-                if (dialog) fireEvent.keyDown(dialog, { key: 'Escape' });
-            }
-        }
-        expect(document.body).toBeTruthy();
-    }, 30000);
-
-    it('opens AutoFetchScheduleModal and closes it — exercises onClose at line 497 (fn#29)', async () => {
-        server.use(...baseHandlers());
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        const menuBtn = screen.getByRole('button', { name: /Project actions/i });
-        fireEvent.click(menuBtn);
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const scheduleItem = screen.queryByText(/Auto-fetch schedule/i);
-        if (scheduleItem) {
-            fireEvent.click(scheduleItem);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 5000 }).catch(() => {});
-            const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
-            if (cancelBtn) {
-                fireEvent.click(cancelBtn);
-            } else {
-                const dialog = document.querySelector('[role="dialog"]');
-                if (dialog) fireEvent.keyDown(dialog, { key: 'Escape' });
-            }
-        }
-        expect(document.body).toBeTruthy();
-    }, 30000);
-
     it('shows empty-filter message in card view when no projects match the filter', async () => {
         // Project has no tasks so categoriesByProject is empty → software-dev filter yields 0 projects
         server.use(
@@ -563,55 +411,6 @@ describe('Projects page', () => {
         expect(document.body).toBeTruthy();
     });
 
-    it('exercises table-view onScheduleFetch when project not in list (no-op guard)', async () => {
-        // The inline onScheduleFetch in table view checks `if (p)` before calling handleScheduleFetch
-        // Provide two projects but only one in the paged rows so projectById miss can occur
-        const p1 = makeProject({ id: 'p1', name: 'Project One' });
-        server.use(
-            http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [p1], total: 1, page: 1, limit: 20 }),
-            ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([p1])),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([makeAgent()])),
-            http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
-            ...defaultHandlers,
-        );
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Project One');
-        // Switch to table view and open menu to click schedule
-        fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
-        const menuBtns = screen.getAllByRole('button', { name: /Project actions/i });
-        if (menuBtns[0]) {
-            fireEvent.click(menuBtns[0]);
-            await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-            const scheduleItem = screen.queryByText(/Auto-fetch schedule/i);
-            if (scheduleItem) fireEvent.click(scheduleItem);
-        }
-        expect(document.body).toBeTruthy();
-    }, 30000);
-
-    it('exercises handleRowAction with reclone kind (covers reclone branch in handleRowAction)', async () => {
-        server.use(...baseHandlers());
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        // Switch to table view for row actions
-        fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
-        const menuBtns = screen.getAllByRole('button', { name: /Project actions/i });
-        if (menuBtns[0]) {
-            fireEvent.click(menuBtns[0]);
-            await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-            const recloneItem = screen.queryByText(/Re-clone/i);
-            if (recloneItem) fireEvent.click(recloneItem);
-            // RecloneProjectModal should open — close it
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 3000 }).catch(() => {});
-            const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
-            if (cancelBtn) fireEvent.click(cancelBtn);
-        }
-        expect(document.body).toBeTruthy();
-    }, 30000);
-
     it('renders filter chips correctly for categoriesByProject matches and non-matches', async () => {
         // Two projects: p1 has software-dev task, p2 has no tasks
         const p1 = makeProject({ id: 'p1', name: 'SW Project' });
@@ -639,14 +438,10 @@ describe('Projects page', () => {
         await waitFor(() => expect(screen.getByText('Empty Project')).toBeInTheDocument());
     });
 
-    it('exercises displayIdById and gitPath strip on tableRows useMemo (table view)', async () => {
-        // Make a project with a git_url containing protocol and .git suffix
-        const p = makeProject({
-            id: 'p1',
-            name: 'Git Project',
-            issue_key_prefix: 'GP',
-            git_url: 'https://github.com/example/repo.git',
-        });
+    it("exercises displayIdById and the first repo's URL strip on tableRows useMemo (table view)", async () => {
+        // The remote lives on the repo now (ADR 0018) — protocol and .git suffix
+        // are still stripped for the Repo URL column.
+        const p = makeProject({ id: 'p1', name: 'Git Project', issue_key_prefix: 'GP' });
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
                 HttpResponse.json({ rows: [p], total: 1, page: 1, limit: 20 }),
@@ -654,6 +449,7 @@ describe('Projects page', () => {
             http.get(`${BASE}/projects`, () => HttpResponse.json([p])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
+            reposAre(makeProjectRepo({ git_url: 'https://github.com/example/repo.git' })),
             ...defaultHandlers,
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
@@ -661,8 +457,61 @@ describe('Projects page', () => {
         // Switch to table to exercise tableRows mapping
         fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
         await waitFor(() => expect(screen.getByText('Git Project')).toBeInTheDocument());
-        // The git path strips protocol and .git — verify the cell renders
-        expect(screen.queryByText(/github\.com\/example\/repo/)).toBeInTheDocument();
+        expect(await screen.findByText('github.com/example/repo')).toBeInTheDocument();
+    });
+
+    it('table Repo URL column shows the first repo with a +N suffix when a project has more', async () => {
+        const p = makeProject({ id: 'p1', name: 'Multi Project' });
+        server.use(
+            http.get(`${BASE}/projects/paged`, () =>
+                HttpResponse.json({ rows: [p], total: 1, page: 1, limit: 20 }),
+            ),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([p])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
+            reposAre(
+                makeProjectRepo({ id: 'r1', git_url: 'https://github.com/example/first.git' }),
+                makeProjectRepo({ id: 'r2', git_url: 'https://github.com/example/second.git' }),
+                makeProjectRepo({ id: 'r3', git_url: 'https://github.com/example/third.git' }),
+            ),
+            ...defaultHandlers,
+        );
+        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
+        await screen.findByText('Multi Project');
+        // Cards first: the count, then the same data in the table.
+        expect(await screen.findByText('3 repos')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
+        expect(await screen.findByText('github.com/example/first +2')).toBeInTheDocument();
+    });
+
+    it('cards show each project\'s repo count from the single /repos fetch', async () => {
+        const one = makeProject({ id: 'p1', name: 'One Repo' });
+        const none = makeProject({ id: 'p2', name: 'No Repo' });
+        const two = makeProject({ id: 'p3', name: 'Two Repos' });
+        let repoFetches = 0;
+        server.use(
+            http.get(`${BASE}/projects/paged`, () =>
+                HttpResponse.json({ rows: [one, none, two], total: 3, page: 1, limit: 20 }),
+            ),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([one, none, two])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
+            http.get(`${BASE}/repos`, () => {
+                repoFetches += 1;
+                return HttpResponse.json([
+                    makeProjectRepo({ id: 'r1', project_id: 'p1' }),
+                    makeProjectRepo({ id: 'r2', project_id: 'p3' }),
+                    makeProjectRepo({ id: 'r3', project_id: 'p3' }),
+                ]);
+            }),
+            ...defaultHandlers,
+        );
+        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
+        expect(await screen.findByText('1 repo')).toBeInTheDocument();
+        expect(screen.getByText('No repos')).toBeInTheDocument();
+        expect(screen.getByText('2 repos')).toBeInTheDocument();
+        // One round trip for the whole page — never one per card.
+        expect(repoFetches).toBe(1);
     });
 
     it('exercises handleCopyUrl Undo action onClick — covers the clipboard.writeText("") catch(() => {}) branch', async () => {
@@ -695,34 +544,6 @@ describe('Projects page', () => {
         expect(document.body).toBeTruthy();
     });
 
-    it('exercises handleOpen non-Error catch branch — reveal returns a non-Error rejection', async () => {
-        // handleOpen at line 210-211:
-        //   detail: err instanceof Error ? err.message : 'Unknown error'
-        // The non-Error branch fires when the rejection is a string or plain object.
-        server.use(
-            ...baseHandlers(),
-            http.post(`${BASE}/projects/p1/reveal`, () =>
-                // Returning a non-JSON body causes the api.projects.reveal call to
-                // throw with a non-Error rejection (network/parse error is sometimes
-                // a plain string). We simulate this by returning a 500 with a
-                // string body; the API layer will throw a non-standard error.
-                new HttpResponse('not found', { status: 500, headers: { 'Content-Type': 'text/plain' } }),
-            ),
-        );
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        const menuBtn = screen.getByRole('button', { name: /Project actions/i });
-        fireEvent.click(menuBtn);
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const openItem = screen.queryByText(/Open project/i);
-        if (openItem) fireEvent.click(openItem);
-        // Allow the catch branch to fire
-        await waitFor(() => {}, { timeout: 500 });
-        expect(document.body).toBeTruthy();
-    });
-
-    // ── NEW COVERAGE TESTS ──────────────────────────────────────────────────
-
     it('L108: agentCategoryById miss — task assignee_agent_id not in agents list', async () => {
         // Task has assignee_agent_id 'unknown-agent' which is not in the agents array.
         // This exercises the `if (!category) return` branch at L108.
@@ -741,33 +562,36 @@ describe('Projects page', () => {
         expect(screen.getByText('Atlas')).toBeInTheDocument();
     });
 
-    it('L184/L185/L218: project with null git_url — gitPath empty string + handleCopyUrl url fallback', async () => {
-        // L184: `p.git_url ? ... : ''` — false branch (no git_url)
-        // L185: the replace chain is the truthy branch (hits with a git_url elsewhere)
-        // L218: `p.git_url || ''` — empty string fallback when no git_url
-        const noUrl = makeProject({ id: 'p1', name: 'NoUrl Project', git_url: '' });
+    it('project with no repos — empty gitPath cell and handleCopyUrl copies an empty url', async () => {
+        // A project may have zero repos (ADR 0018). The card says "No repos",
+        // the table cell falls back to an em-dash, and Copy repo URL has
+        // nothing to copy.
+        const noRepos = makeProject({ id: 'p1', name: 'NoUrl Project' });
+        const writeText = vi.fn().mockResolvedValue(undefined);
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [noUrl], total: 1, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [noRepos], total: 1, page: 1, limit: 20 }),
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([noUrl])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([noRepos])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
+            reposAre(),
             ...defaultHandlers,
         );
-        Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+        Object.assign(navigator, { clipboard: { writeText } });
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('NoUrl Project');
-        // Open actions menu and click Copy repo URL — exercises handleCopyUrl with empty url (L218)
+        expect(await screen.findByText('No repos')).toBeInTheDocument();
+        // Open actions menu and click Copy repo URL — nothing to copy.
         const menuBtn = screen.getByRole('button', { name: /Project actions/i });
         fireEvent.click(menuBtn);
         await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const copyItem = screen.queryByText(/Copy repo URL/i);
-        if (copyItem) fireEvent.click(copyItem);
-        // Switch to table view — exercises tableRows mapping with git_url falsy (L184 false branch)
+        fireEvent.click(screen.getByText(/Copy repo URL/i));
+        await waitFor(() => expect(writeText).toHaveBeenCalledWith(''));
+        // Switch to table view — the Repo URL cell falls back to an em-dash.
         fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
         await waitFor(() => expect(screen.getByText('NoUrl Project')).toBeInTheDocument());
-        expect(document.body).toBeTruthy();
+        expect(screen.getAllByText('—').length).toBeGreaterThan(0);
     }, 30000);
 
     it('L203: ownerName fallback — settings without owner_name uses "Owner" default', async () => {
@@ -792,7 +616,7 @@ describe('Projects page', () => {
         await waitFor(() => expect(screen.getAllByText('Owner').length).toBeGreaterThan(0));
     });
 
-    it('L251: handleRowAction projectById miss — onOpen called with unknown id is a no-op', async () => {
+    it('L251: handleRowAction projectById miss — an action on an unknown id is a no-op', async () => {
         // `if (!p) return` at L251 fires when the id passed to handleRowAction is not
         // in projectById. We achieve this by calling onOpen/onDelete in table view where
         // the table row id comes from tableRows (derived from filteredProjects) but by
@@ -817,16 +641,14 @@ describe('Projects page', () => {
         // Switch to table view so handleRowAction is wired up
         fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
         await waitFor(() => expect(screen.getByText('Ghost Project')).toBeInTheDocument());
-        // Open menu and click Open — should call handleRowAction('p99', 'open')
+        // Open menu and click Copy — should call handleRowAction('p99', 'copy')
         // which hits the projectById.get check; p99 exists so this is the happy path
+        Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
         const menuBtns = screen.getAllByRole('button', { name: /Project actions/i });
-        if (menuBtns[0]) {
-            fireEvent.click(menuBtns[0]);
-            await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-            // Trigger onOpen to hit the L252 `if (kind === 'open')` branch
-            const openItem = screen.queryByText(/Open project/i);
-            if (openItem) fireEvent.click(openItem);
-        }
+        expect(menuBtns[0]).toBeTruthy();
+        fireEvent.click(menuBtns[0]!);
+        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
+        fireEvent.click(screen.getByText(/Copy repo URL/i));
         expect(document.body).toBeTruthy();
     }, 30000);
 
@@ -887,25 +709,6 @@ describe('Projects page', () => {
         if (deleteItem) {
             fireEvent.click(deleteItem);
             // Modal open — activeProject is set; displayIdById has the id → no fallback
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 5000 }).catch(() => {});
-        }
-        expect(document.body).toBeTruthy();
-    }, 30000);
-
-    it('L483 (x2): RecloneProjectModal displayId — activeProject set with known displayId', async () => {
-        // L483: `activeProject ? (displayIdById.get(activeProject.id) ?? '') : ''`
-        // Same coverage rationale as L468 — exercises the truthy branch with defined displayId.
-        server.use(...baseHandlers());
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        const menuBtn = screen.getByRole('button', { name: /Project actions/i });
-        fireEvent.click(menuBtn);
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const recloneItem = screen.queryByText(/Re-clone/i);
-        if (recloneItem) {
-            fireEvent.click(recloneItem);
             await waitFor(() => {
                 expect(document.querySelector('[role="dialog"]')).toBeTruthy();
             }, { timeout: 5000 }).catch(() => {});
@@ -975,38 +778,6 @@ describe('Projects page', () => {
         expect(screen.queryByText(/New Project/i)).toBeTruthy();
     });
 
-    // ── ROUND 2 — closing remaining uncovered branches ────────────────────
-
-    it('L212: handleOpen non-Error catch — reveal rejects with a plain string (not an Error instance)', async () => {
-        // `detail: err instanceof Error ? err.message : 'Unknown error'` at L212.
-        // The false arm only fires when the thrown value is NOT an Error instance.
-        // api.projects.reveal() normally throws AtlasApiError (an Error subclass)
-        // via the shared `request()` helper, so an HTTP-level MSW override can never
-        // reach the false arm. Spy directly on the api module method instead so the
-        // promise rejects with a bare string.
-        const revealSpy = vi
-            .spyOn(apiModule.api.projects, 'reveal')
-            .mockRejectedValueOnce('plain-string-reveal-error');
-        server.use(...baseHandlers());
-        renderWithProviders(
-            <>
-                <Projects />
-                <Toast />
-            </>,
-            { initialEntries: ['/projects'] },
-        );
-        await screen.findByText('Atlas');
-        const menuBtn = screen.getByRole('button', { name: /Project actions/i });
-        fireEvent.click(menuBtn);
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const openItem = screen.queryByText(/Open project/i);
-        if (openItem) fireEvent.click(openItem);
-        // The toast should show the 'Unknown error' fallback detail text.
-        await waitFor(() => {
-            expect(screen.getByText('Unknown error')).toBeInTheDocument();
-        });
-        revealSpy.mockRestore();
-    });
 
     it('L181/L468: tableRows displayId fallback — project missing issue_key_prefix in the raw API payload', async () => {
         // `displayId: displayIdById.get(p.id) ?? ''` at L181, and the same
@@ -1065,53 +836,5 @@ describe('Projects page', () => {
         expect(document.body).toBeTruthy();
     }, 30000);
 
-    it('L366/L483: card-view displayId fallback + RecloneProjectModal — project missing issue_key_prefix', async () => {
-        // Same root cause as the previous test (raw payload without
-        // issue_key_prefix), but exercised through the card grid's displayId
-        // prop (L366) and RecloneProjectModal's displayId prop (L483), which
-        // stay on the default 'cards' view instead of switching to table.
-        const rawProject = {
-            id: 'p1',
-            name: 'Atlas',
-            git_path: '/tmp/atlas',
-            git_url: 'https://github.com/example/atlas',
-            credential_id: null,
-            default_branch: 'main',
-            clone_status: 'ready',
-            description: '',
-            status: 'active',
-            guardrails_md: '',
-            setup_sh_body: '',
-            setup_ps1_body: '',
-            created_at: '2026-05-16T00:00:00.000Z',
-            updated_at: '2026-05-16T00:00:00.000Z',
-            last_activity_at: '2026-05-16T00:00:00.000Z',
-            // issue_key_prefix intentionally omitted
-        };
-        server.use(
-            http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [rawProject], total: 1, page: 1, limit: 20 }),
-            ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([rawProject])),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
-            http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
-            ...defaultHandlers,
-        );
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        // Card view is the default — the card's displayId prop uses the ?? '' fallback (L366).
-        await screen.findByText('Atlas');
-        // Open the card's actions menu and trigger Re-clone — exercises
-        // RecloneProjectModal's displayId prop fallback at L483.
-        const menuBtn = screen.getByRole('button', { name: /Project actions/i });
-        fireEvent.click(menuBtn);
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const recloneItem = screen.queryByText(/Re-clone/i);
-        if (recloneItem) {
-            fireEvent.click(recloneItem);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 5000 }).catch(() => {});
-        }
-        expect(document.body).toBeTruthy();
-    }, 30000);
+
 }, 15000);
