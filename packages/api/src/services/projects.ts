@@ -1,7 +1,9 @@
 import { sql } from 'kysely';
 import path from 'node:path';
+import { basename } from 'node:path';
 import { db } from '../db/kysely-client.js';
-import type { IProject } from '@atlas/shared';
+import type { IProject, IProjectRepo } from '@atlas/shared';
+import { projectReposService } from './project-repos.js';
 import { randomUUID } from 'crypto';
 import { broadcastSSE } from '../routes/events.js';
 
@@ -29,7 +31,9 @@ export function rejectTraversalPath(p: string | undefined, field = 'git_path'): 
 const LAST_ACTIVITY_SQL = sql<string>`
     GREATEST(
       p.updated_at,
-      COALESCE((SELECT MAX(last_run_at) FROM project_schedules ps WHERE ps.project_id = p.id), p.updated_at),
+      COALESCE((SELECT MAX(ps.last_run_at) FROM project_schedules ps
+                JOIN project_repos pr ON pr.id = ps.repo_id
+                WHERE pr.project_id = p.id), p.updated_at),
       COALESCE((SELECT MAX(updated_at) FROM project_guardrails pg WHERE pg.project_id = p.id), p.updated_at),
       COALESCE((SELECT MAX(updated_at) FROM items i WHERE i.project_id = p.id), p.updated_at)
     )
@@ -67,16 +71,9 @@ function projectFromRow(r: Record<string, unknown>): IProject {
         id: r['id'] as string,
         name: r['name'] as string,
         issue_key_prefix: r['issue_key_prefix'] as string,
-        git_path: r['git_path'] as string,
-        git_url: r['git_url'] as string,
-        credential_id: (r['credential_id'] as string | null) ?? null,
-        default_branch: r['default_branch'] as string,
-        clone_status: r['clone_status'] as IProject['clone_status'],
         description: r['description'] as string,
         status: r['status'] as string,
         guardrails_md: r['guardrails_md'] as string,
-        setup_sh_body: (r['setup_sh_body'] as string | null) ?? '',
-        setup_ps1_body: (r['setup_ps1_body'] as string | null) ?? '',
         created_at: r['created_at'] as string,
         updated_at: r['updated_at'] as string,
         last_activity_at:
@@ -92,16 +89,9 @@ export const projectsService = {
                 'p.id',
                 'p.name',
                 'p.issue_key_prefix',
-                'p.git_path',
-                'p.git_url',
-                'p.credential_id',
-                'p.default_branch',
-                'p.clone_status',
                 'p.description',
                 'p.status',
                 'p.guardrails_md',
-                'p.setup_sh_body',
-                'p.setup_ps1_body',
                 'p.created_at',
                 'p.updated_at',
                 LAST_ACTIVITY_SQL.as('last_activity_at'),
@@ -129,16 +119,9 @@ export const projectsService = {
                     'p.id',
                     'p.name',
                     'p.issue_key_prefix',
-                    'p.git_path',
-                    'p.git_url',
-                    'p.credential_id',
-                    'p.default_branch',
-                    'p.clone_status',
                     'p.description',
                     'p.status',
                     'p.guardrails_md',
-                    'p.setup_sh_body',
-                    'p.setup_ps1_body',
                     'p.created_at',
                     'p.updated_at',
                     LAST_ACTIVITY_SQL.as('last_activity_at'),
@@ -165,16 +148,9 @@ export const projectsService = {
                 'p.id',
                 'p.name',
                 'p.issue_key_prefix',
-                'p.git_path',
-                'p.git_url',
-                'p.credential_id',
-                'p.default_branch',
-                'p.clone_status',
                 'p.description',
                 'p.status',
                 'p.guardrails_md',
-                'p.setup_sh_body',
-                'p.setup_ps1_body',
                 'p.created_at',
                 'p.updated_at',
                 LAST_ACTIVITY_SQL.as('last_activity_at'),
@@ -189,10 +165,8 @@ export const projectsService = {
     async create(data: {
         name: string;
         issue_key_prefix: string;
-        git_path?: string;
         description?: string;
     }): Promise<IProject> {
-        rejectTraversalPath(data.git_path);
         const id = randomUUID();
         await db.transaction().execute(async (trx) => {
             const check = await checkPrefixAvailable(data.issue_key_prefix);
@@ -205,9 +179,7 @@ export const projectsService = {
                     id,
                     name: data.name,
                     issue_key_prefix: data.issue_key_prefix,
-                    git_path: data.git_path ?? '',
                     description: data.description ?? '',
-                    clone_status: 'ready',
                 })
                 .execute();
             await trx
@@ -226,15 +198,11 @@ export const projectsService = {
         id: string,
         data: {
             name?: string | undefined;
-            git_path?: string | undefined;
             description?: string | undefined;
             status?: string | undefined;
             guardrails_md?: string | undefined;
-            setup_sh_body?: string | undefined;
-            setup_ps1_body?: string | undefined;
         },
     ): Promise<IProject> {
-        rejectTraversalPath(data.git_path);
         const keys = Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined);
         if (keys.length === 0) return (await this.get(id))!;
         await db.updateTable('projects').set(data as never).where('id', '=', id).execute();
@@ -268,11 +236,13 @@ export const projectsService = {
         issue_key_prefix: string;
         git_url: string;
         git_path: string;
-        credential_id: string;
+        credential_id: string | null;
         default_branch: string;
         description?: string;
-    }): Promise<IProject> {
+    }): Promise<{ project: IProject; repo: IProjectRepo }> {
+        rejectTraversalPath(data.git_path);
         const id = randomUUID();
+        let repo: IProjectRepo;
         await db.transaction().execute(async (trx) => {
             const check = await checkPrefixAvailable(data.issue_key_prefix);
             if (!check.available) {
@@ -284,11 +254,6 @@ export const projectsService = {
                     id,
                     name: data.name,
                     issue_key_prefix: data.issue_key_prefix,
-                    git_path: data.git_path,
-                    git_url: data.git_url,
-                    credential_id: data.credential_id,
-                    default_branch: data.default_branch,
-                    clone_status: 'ready',
                     description: data.description ?? '',
                 })
                 .execute();
@@ -296,11 +261,23 @@ export const projectsService = {
                 .insertInto('project_issue_counters')
                 .values({ project_id: id, last_seq: 0 })
                 .execute();
+            repo = await projectReposService.insert(
+                {
+                    project_id: id,
+                    name: projectReposService.slug(basename(data.git_path) || data.name),
+                    git_url: data.git_url,
+                    git_path: data.git_path,
+                    credential_id: data.credential_id,
+                    default_branch: data.default_branch,
+                },
+                trx
+            );
         });
         // Same as create — the folder-attach route and the clone runner both
         // land here. The runner also emits `clone_completed`; the route emitted
         // nothing at all.
         broadcastSSE({ type: 'counts_changed' });
-        return (await this.get(id))!;
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the transaction above always assigns it or throws
+        return { project: (await this.get(id))!, repo: repo! };
     },
 };

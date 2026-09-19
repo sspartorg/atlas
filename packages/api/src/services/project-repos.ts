@@ -1,15 +1,17 @@
-import { basename } from 'node:path';
 import { sql } from 'kysely';
+import type { Kysely, Transaction } from 'kysely';
 import { randomUUID } from 'node:crypto';
-import type { IProject, IProjectRepo } from '@atlas/shared';
+import type { IProjectRepo } from '@atlas/shared';
+import type { DB } from '../db/types.js';
 import { db } from '../db/kysely-client.js';
 import { ApiError } from '../utils/errors.js';
-import { projectsService } from './projects.js';
 
-// ADR 0017 — a Project's repos: its own git columns are the PRIMARY repo
-// (id = project id, so its worktree paths and git lock stay what they were);
-// `project_repos` holds the extras. Everything that works on "the repos of a
-// project / Task" goes through here.
+// ADR 0018 — a Project's repos. Every repo is a `project_repos` row and they
+// are all equal; the rows carrying a project's own id are the ones migration
+// 045 folded in. Everything that works on "the repos of a project / Task"
+// goes through here.
+
+export type ReposExecutor = Kysely<DB> | Transaction<DB>;
 
 function slug(s: string): string {
     return (
@@ -21,26 +23,12 @@ function slug(s: string): string {
     );
 }
 
-function primaryRepo(p: IProject): IProjectRepo {
-    return {
-        id: p.id,
-        project_id: p.id,
-        name: slug(basename(p.git_path || p.name)),
-        primary: true,
-        git_url: p.git_url,
-        git_path: p.git_path,
-        credential_id: p.credential_id,
-        default_branch: p.default_branch,
-        clone_status: p.clone_status,
-        setup_sh_body: p.setup_sh_body,
-        setup_ps1_body: p.setup_ps1_body,
-    };
-}
+type RepoRow = Awaited<ReturnType<typeof repoRows>>[number];
 
-type RepoRow = Awaited<ReturnType<typeof extraRows>>[number];
-
-function extraRows(projectId: string) {
-    return db
+// Order is load-bearing: the first repo of a Task holds its Task-wide files
+// and lends its credential to the agents (ADR 0018).
+function repoRows(projectId: string, exec: ReposExecutor = db) {
+    return exec
         .selectFrom('project_repos')
         .selectAll()
         .where('project_id', '=', projectId)
@@ -54,7 +42,6 @@ function fromRow(r: RepoRow): IProjectRepo {
         id: r.id,
         project_id: r.project_id,
         name: r.name,
-        primary: false,
         git_url: r.git_url,
         git_path: r.git_path,
         credential_id: r.credential_id,
@@ -65,30 +52,30 @@ function fromRow(r: RepoRow): IProjectRepo {
     };
 }
 
+/** A project's repos, in order. Empty when it has none; 404 when it is gone. */
 async function list(projectId: string): Promise<IProjectRepo[]> {
-    const project = await projectsService.get(projectId);
+    const project = await db
+        .selectFrom('projects')
+        .select('id')
+        .where('id', '=', projectId)
+        .executeTakeFirst();
     if (!project) throw new ApiError('not_found', 'Project not found', 404);
-    return [primaryRepo(project), ...(await extraRows(projectId)).map(fromRow)];
+    return (await repoRows(projectId)).map(fromRow);
 }
 
-/** Every project's repos (its primary, then its extras), for pickers that span projects. */
+/** Every repo of every project, for pickers and lists that span projects. */
 async function listAll(): Promise<IProjectRepo[]> {
-    const [projects, extras] = await Promise.all([
-        projectsService.list(),
-        db
-            .selectFrom('project_repos')
-            .selectAll()
-            .orderBy('position', 'asc')
-            .orderBy('created_at', 'asc')
-            .execute(),
-    ]);
-    return projects.flatMap((p) => [
-        primaryRepo(p),
-        ...extras.filter((r) => r.project_id === p.id).map(fromRow),
-    ]);
+    const rows = await db
+        .selectFrom('project_repos')
+        .selectAll()
+        .orderBy('project_id', 'asc')
+        .orderBy('position', 'asc')
+        .orderBy('created_at', 'asc')
+        .execute();
+    return rows.map(fromRow);
 }
 
-/** The repos a Task works on, in its order; `[]` (or only unknown ids) = the primary. */
+/** The repos a Task works on, in its order. Pre-0018 rows with `[]` get the first repo. */
 async function forTask(task: { project_id: string; repo_ids: string[] }): Promise<IProjectRepo[]> {
     const all = await list(task.project_id);
     const picked = task.repo_ids.flatMap((id) => all.filter((r) => r.id === id));
@@ -112,16 +99,20 @@ async function assertNameFree(projectId: string, name: string): Promise<void> {
     }
 }
 
-async function insert(input: {
-    project_id: string;
-    name: string;
-    git_url: string;
-    git_path: string;
-    credential_id: string;
-    default_branch: string;
-}): Promise<IProjectRepo> {
-    const position = (await extraRows(input.project_id)).length + 1;
-    const row = await db
+async function insert(
+    input: {
+        project_id: string;
+        name: string;
+        git_url: string;
+        git_path: string;
+        credential_id: string | null;
+        default_branch: string;
+    },
+    exec: ReposExecutor = db
+): Promise<IProjectRepo> {
+    const existing = await repoRows(input.project_id, exec);
+    const position = existing.reduce((max, r) => Math.max(max, r.position), -1) + 1;
+    const row = await exec
         .insertInto('project_repos')
         .values({ id: randomUUID(), ...input, clone_status: 'ready', position })
         .returningAll()
@@ -145,11 +136,11 @@ async function update(
                   .where('id', '=', repoId)
                   .where('project_id', '=', projectId)
                   .executeTakeFirst();
-    if (!row) throw new ApiError('not_found', 'Repo not found (the primary repo is edited on the project)', 404);
+    if (!row) throw new ApiError('not_found', 'Repo not found', 404);
     return fromRow(row);
 }
 
-/** Unregisters an extra repo (its folder stays on disk) and drops it from every Task of the project. */
+/** Unregisters a repo (its folder stays on disk) and drops it from every Task of the project. */
 async function remove(projectId: string, repoId: string): Promise<void> {
     const live = await db
         .selectFrom('workflow_runs as r')
@@ -168,7 +159,7 @@ async function remove(projectId: string, repoId: string): Promise<void> {
         .where('project_id', '=', projectId)
         .executeTakeFirst();
     if (Number(deleted.numDeletedRows) === 0) {
-        throw new ApiError('not_found', 'Repo not found (the primary repo cannot be removed)', 404);
+        throw new ApiError('not_found', 'Repo not found', 404);
     }
     await db
         .updateTable('items')
@@ -177,7 +168,7 @@ async function remove(projectId: string, repoId: string): Promise<void> {
         .execute();
 }
 
-/** The project an extra repo at this path belongs to, if any. */
+/** The project a repo at this path belongs to, if any. */
 function ownerOfPath(gitPath: string): Promise<{ id: string; name: string } | undefined> {
     return db
         .selectFrom('project_repos as r')

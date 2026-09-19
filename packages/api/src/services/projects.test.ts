@@ -7,6 +7,7 @@ vi.mock('./events-log.js', () => ({
 }));
 
 import { projectsService, PrefixCollisionError, rejectTraversalPath } from './projects.js';
+import { projectReposService } from './project-repos.js';
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
 import { broadcastSSE } from '../routes/events.js';
 import { insertProject, insertItem } from '../../tests/_items.js';
@@ -74,7 +75,7 @@ describe('projectsService', () => {
         it('returns reason=in_use when a live project owns the prefix', async () => {
             await testDb
                 .insertInto('projects')
-                .values({ id: 'p1', name: 'Existing', issue_key_prefix: 'ATL', git_path: '', status: 'active', clone_status: 'ready' })
+                .values({ id: 'p1', name: 'Existing', issue_key_prefix: 'ATL', status: 'active' })
                 .execute();
             await testDb.insertInto('project_issue_counters').values({ project_id: 'p1', last_seq: 0 }).execute();
             const result = await projectsService.checkPrefix('ATL');
@@ -120,7 +121,6 @@ describe('projectsService', () => {
                 name: 'Default Fields',
                 issue_key_prefix: 'DEF',
             });
-            expect(proj.git_path).toBe('');
             expect(proj.description).toBe('');
         });
 
@@ -175,20 +175,20 @@ describe('projectsService', () => {
         });
 
         // Regression: setup_sh_body / setup_ps1_body were written by UPDATE
-        // but missing from the get()/list() SELECT lists, so the Setup tab
-        // appeared empty after save.
-        it('round-trips setup script bodies through update + get', async () => {
+        // but missing from the SELECT lists, so the Setup tab appeared empty
+        // after save. ADR 0018 moved both onto the repo.
+        it('round-trips setup script bodies through the repo', async () => {
             const sh = '#!/usr/bin/env bash\necho hello\n';
             const ps1 = "Write-Host 'hi'\n";
-            const updated = await projectsService.update('p1', {
+            const updated = await projectReposService.update('p1', 'p1', {
                 setup_sh_body: sh,
                 setup_ps1_body: ps1,
             });
             expect(updated.setup_sh_body).toBe(sh);
             expect(updated.setup_ps1_body).toBe(ps1);
-            const refetched = (await projectsService.get('p1'))!;
-            expect(refetched.setup_sh_body).toBe(sh);
-            expect(refetched.setup_ps1_body).toBe(ps1);
+            const [refetched] = await projectReposService.list('p1');
+            expect(refetched?.setup_sh_body).toBe(sh);
+            expect(refetched?.setup_ps1_body).toBe(ps1);
         });
     });
 
@@ -232,8 +232,8 @@ describe('projectsService', () => {
                 .execute();
         });
 
-        it('inserts a project with clone metadata and creates the counter row', async () => {
-            const proj = await projectsService.createFromClone({
+        it('inserts a project with its repo and creates the counter row', async () => {
+            const { project: proj, repo } = await projectsService.createFromClone({
                 name: 'Cloned',
                 issue_key_prefix: 'CLN',
                 git_url: 'https://github.com/x/y.git',
@@ -243,11 +243,13 @@ describe('projectsService', () => {
                 description: 'cloned repo',
             });
             expect(proj.name).toBe('Cloned');
-            expect(proj.git_url).toBe('https://github.com/x/y.git');
-            expect(proj.git_path).toBe('C:/tmp/cln');
-            expect(proj.credential_id).toBe('cred-1');
-            expect(proj.default_branch).toBe('main');
-            expect(proj.clone_status).toBe('ready');
+            expect(repo.project_id).toBe(proj.id);
+            expect(repo.name).toBe('cln');
+            expect(repo.git_url).toBe('https://github.com/x/y.git');
+            expect(repo.git_path).toBe('C:/tmp/cln');
+            expect(repo.credential_id).toBe('cred-1');
+            expect(repo.default_branch).toBe('main');
+            expect(repo.clone_status).toBe('ready');
             const counter = await testDb
                 .selectFrom('project_issue_counters')
                 .select('last_seq')
@@ -257,7 +259,7 @@ describe('projectsService', () => {
         });
 
         it('defaults description to "" when omitted', async () => {
-            const proj = await projectsService.createFromClone({
+            const { project: proj } = await projectsService.createFromClone({
                 name: 'Cloned2',
                 issue_key_prefix: 'CLZ',
                 git_url: 'https://github.com/x/y.git',
@@ -285,7 +287,7 @@ describe('projectsService', () => {
         it('allows cloning into a prefix freed by a previous project delete', async () => {
             await insertProject('p-prev', 'RET', { name: 'Prev' });
             await projectsService.delete('p-prev');
-            const proj = await projectsService.createFromClone({
+            const { project: proj } = await projectsService.createFromClone({
                 name: 'Fresh',
                 issue_key_prefix: 'RET',
                 git_url: 'u',

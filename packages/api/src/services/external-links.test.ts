@@ -360,7 +360,12 @@ describe('PR state refresh', () => {
                 expires_at: null,
             })
             .execute();
-        await testDb.updateTable('projects').set({ credential_id: 'cred-1' }).where('id', '=', 'p1').execute();
+        // ADR 0018 — the remote and its credential live on the repo.
+        await testDb
+            .updateTable('project_repos')
+            .set({ credential_id: 'cred-1', git_url: 'https://github.com/foo/bar.git' })
+            .where('id', '=', 'p1')
+            .execute();
         vi.spyOn(credentialsService, 'getToken').mockResolvedValue('tok');
         fetchMock = vi.fn(async () =>
             new Response(JSON.stringify({ state: 'closed', merged_at: '2026-09-01T00:00:00Z' }), {
@@ -514,8 +519,8 @@ describe('PR state refresh', () => {
         expect((await storedState()).pr_state_checked_at).not.toBeNull();
     });
 
-    it('skips GitHub entirely when the project has no credential', async () => {
-        await testDb.updateTable('projects').set({ credential_id: null }).where('id', '=', 'p1').execute();
+    it('skips GitHub entirely when the repo has no credential', async () => {
+        await testDb.updateTable('project_repos').set({ credential_id: null }).where('id', '=', 'p1').execute();
         const links = await externalLinks.refreshPrStates('ATL-1');
         expect(links[0]?.pr_state).toBeNull();
         expect(fetchMock).not.toHaveBeenCalled();
