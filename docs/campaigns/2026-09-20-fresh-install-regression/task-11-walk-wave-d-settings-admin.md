@@ -84,9 +84,9 @@ install, the row's state is a finding worth recording even if it is intended.
       entirely; settings returns `external_notification_token: null`
 - [x] 4 `{tag:'secret_reveal'}` lines in the API log across the campaign's
       reveals
-- [ ] **Deferred to [task-22](task-22-final-regression-and-close.md)**, which
-      executes the reset against a disposable second install. Reading the copy
-      against the truncate list without running it is still outstanding
+- [x] **Resolved in [task-22](task-22-final-regression-and-close.md), and the
+      concern was unfounded.** The modal's copy is accurate — see the
+      correction there
 - [x] `GET /api/integrations/jira` returns `sources` (plural, per-repo) —
       ADR 0017/0018 shape confirmed at the API
 - [ ] **Not done** — the credential delete test is deferred to
@@ -128,8 +128,13 @@ by agents over MCP, where a 200 on a no-op teaches the agent its write landed.
 
 ### Deferred with reason
 
-- **Reset Workspace** copy-vs-behaviour comparison → task-22, which runs the
-  reset against a disposable install rather than destroying this fixture.
+- **Reset Workspace** copy-vs-behaviour → resolved in task-22. ⚠️ This task
+  recorded that the reset "does **not** touch `project_repos`, `workflows`,
+  `cli_sessions`, `environment_secrets` or `project_env_vars`". That was
+  **wrong for four of the five** — the claim came from reading the explicit
+  delete list without checking the foreign keys. All but
+  `environment_secrets` are removed by `ON DELETE CASCADE` from `projects`.
+  The modal's copy is correct. Corrected in task-22.
 - **Credential delete** → task-13 (X-7), which needs a throwaway credential on
   a throwaway repo; deleting `sspartorg (gh)` would break every later task.
 

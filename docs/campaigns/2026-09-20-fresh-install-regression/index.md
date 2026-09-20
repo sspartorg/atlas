@@ -1,9 +1,8 @@
 # fresh-install-regression — the board
 
-> **PLANNED, NOT STARTED — 2026-09-20.** Every task below is `todo`. Nothing has
-> been wiped, booted or changed. Read this file, then
-> [`checklists/reset-inventory.md`](checklists/reset-inventory.md), before any
-> execution session begins.
+> **CLOSED — 2026-09-20. All 22 rows done.** Atlas was reset twice, installed
+> from nothing both times, and walked end to end. 21 findings, 12 fixed.
+> Read *Closing* at the foot of this file first.
 
 Atlas is reset to a first-ship state and then proved, page by page, to work
 from zero. Disk and Docker are wiped Atlas-only, 45 migrations collapse into
@@ -41,7 +40,7 @@ Opened 2026-09-20 on the Owner's ruling. Authoring plan:
 | 19 | [Security audit — evidence-based, targeted](task-19-security-audit.md) | api · infra | done — "0 vulns" not achieved |
 | 20 | [Refresh the user guide and its screenshots](task-20-docs-guide-refresh.md) | docs | done — 12 inherited images still need recapture |
 | 21 | [Sync `.agents/` and write the ADRs](task-21-agents-sync-and-adrs.md) | docs | done |
-| 22 | [Final regression and close the campaign](task-22-final-regression-and-close.md) | all | todo |
+| 22 | [Final regression and close the campaign](task-22-final-regression-and-close.md) | all | done |
 
 Row numbers are permanent. A row's status and its task file's `**Status:**`
 line flip in the same commit. Checkboxes live in the task files, never here.
@@ -128,3 +127,65 @@ reaching `/onboarding` with no console error.
 Multi-user auth, hosted deployment, Windows parity testing of the setup-script
 PowerShell path, and any fix whose blast radius exceeds the page it was found
 on — those get their own campaign.
+
+---
+
+## Closing — 2026-09-20
+
+**The claim the campaign was opened to make is proven.** Atlas installs from
+nothing, twice, with no manual intervention. The second reset produced seed
+counts identical to the first — roles 5, cli_models 19, guardrail_rules 14,
+guardrail_scripts 7, agent_templates 5, tool_catalog 13, marketplace_agents 16,
+agents 0. `pnpm e2e` is green at 224 passed / 315 skipped.
+
+**45 agent runs across three graded Tasks cost $17.03** and produced four pull
+requests — one each for the small and medium Tasks, and two from the single
+multi-repo Task, cross-linked, on one branch. The multi-repo path works
+end to end: `ws/` workspace, per-repo setup scripts, one Task many PRs.
+
+**21 findings. 12 fixed, 1 withdrawn, 8 open.** Two P1s were fixed mid-campaign
+at the Owner's direction; the rest landed in tasks 14, 15, 18, 20 and 21.
+
+The three worth knowing about:
+
+- **F-012** — every reviewer agent shipped an empty `checklists.json`, and
+  `agent-runner-outcome-routing.ts:72` treats an empty required checklist as an
+  automatic pass. The agents whose only job is verification had no gate, so
+  ATL-5 shipped two PRs with red suites while every reviewer reported green.
+  Fixed; the deeper issue — rows are self-reported and no script exit code is
+  ever consulted — is documented and left to the Owner.
+- **F-014** — rapid input into any MUI `multiline` field throws
+  `Maximum update depth exceeded` and silently drops characters. Reproduced on
+  two unrelated pages. It corrupts the text agents read as their prompt.
+- **F-020** — 43 dependency advisories, 20 of them high. The campaign's
+  "0 vulnerabilities" goal is **not met**.
+
+**Three times the evidence contradicted the campaign's own assumptions**, and
+those are the most useful results:
+
+1. **Task-16.** Seven index gaps were flagged during authoring, with
+   `workflows.project_id` called "the worst". Measured at 40k rows, exactly one
+   was real — `items.repo_ids`, 5.151 ms to 0.261 ms — and it was not that one.
+   The other six would have been permanent write-throughput cost bought with
+   nothing.
+2. **Task-18.** Ruling D-5 said raise web coverage from 70% to 80%. Web
+   measures **95.43%**; ADR 0009's floor table was stale by twenty-five points.
+   The real defect was `@atlas/shared` failing its own 100% gate, now fixed.
+3. **Task-22.** The campaign claimed for four tasks that the workspace reset
+   spares `project_repos`, `workflows` and `cli_sessions`. Every one of those
+   is `ON DELETE CASCADE` from `projects`. The modal's copy was right and the
+   campaign was wrong.
+
+**`pnpm -w run gate` is red, and was red before this campaign.** It fails at
+`knip` — verified identically on `main` — and would also fail on the `api` and
+`web` coverage thresholds. Neither was introduced here; one was fixed
+(`shared`).
+
+**What needs the Owner.** Three items are one line each in `packages/shared`,
+which hard rule 1 protects: `accent_color` on `OnboardingSchema`, `.strict()`
+on `UpdateExternalNotificationSchema`. Two are judgement calls an agent should
+not make alone: whether to lower the ADR 0009 thresholds to measured values,
+and whether to make checklist gates machine-verified rather than self-reported.
+And `ATLAS_MCP_TOKEN` is empty — every write route is open to any local
+process, which Atlas warns about at boot and which must change before any
+deployment.
