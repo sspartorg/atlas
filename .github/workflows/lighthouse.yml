@@ -48,6 +48,7 @@ jobs:
       DATABASE_URL: postgres://atlas:atlas@localhost:5500/atlas_e2e
       ATLAS_LOG_LEVEL: error
       ATLAS_MCP_TOKEN: ""
+      ATLAS_MCP_TOKEN_OPEN: "1"
       ATLAS_E2E_PROD: "1"
     steps:
       - uses: actions/checkout@v4

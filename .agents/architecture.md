@@ -121,7 +121,7 @@ The API has exactly one auth gate: a global Fastify `onRequest` hook (`server.ts
 
 **What is allowed**
 
-1. **Empty token (`ATLAS_MCP_TOKEN=""`)** â€” gate is bypassed entirely. First-run / single-user local mode. Unsafe for anything reachable beyond loopback.
+1. **Empty token (`ATLAS_MCP_TOKEN=""`)** â€” gate is bypassed entirely. **Reaching this state now takes `ATLAS_MCP_TOKEN_OPEN=1`**: `main.ts` generates a 48-byte token at boot when the var is empty and persists it to the root env file, so a fresh install is closed by default (F-021). Only the e2e suite and the Lighthouse workflow opt out, because they write over plain HTTP with no browser headers.
 2. **Trusted browser origin** â€” `Origin` header matches the static set (`http://localhost:${WEB_PORT}`, `http://127.0.0.1:${WEB_PORT}` â€” dev 4000 / prod 5000) plus, when `ATLAS_LAN_ACCESS=true`, the host's non-loopback IPv4s.
 3. **Matching token header** â€” `X-Atlas-Token` equals `ATLAS_MCP_TOKEN`. This is the path the MCP server uses for write-side calls.
 

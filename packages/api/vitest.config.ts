@@ -17,6 +17,7 @@ export default defineConfig({
             // level tests can call POST/PATCH/DELETE without supplying a
             // token. The real .env's token must NOT leak in here.
             ATLAS_MCP_TOKEN: '',
+            ATLAS_MCP_TOKEN_OPEN: '1',
             // Pin the timezone. `computeNextFire` in services/reminders.ts
             // deliberately schedules in LOCAL time — a "09:00" reminder fires
             // at 09:00 for the Owner, which is the right behaviour for a

@@ -62,7 +62,7 @@ None on this route. The rename-on-conflict flow lives on the detail page.
 
 ## Permissions / guards
 - Auth: post-onboarding only.
-- Writes go through `requireMcpToken`, which is open when `ATLAS_MCP_TOKEN` is empty (dev default).
+- Writes go through `requireMcpToken`. The token is generated at API boot when unset, so the gate is closed by default; the browser passes it on `Sec-Fetch-Site: same-origin`, not the token.
 
 ## Edge cases / quirks
 - **Failure reasons are the point.** `bulkInstall.ts` carries `{id, status, reason}` per rejection. It used to return a bare `{ok:false}`, so the toast could only say "2 couldn't be added" — which is exactly why a pruned-model FK violation stayed invisible for as long as it did. Do not collapse this back to a count.

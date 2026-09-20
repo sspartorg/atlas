@@ -5,11 +5,17 @@ import { getTrustedBrowserOrigins } from '../utils/lan-origins.js';
 
 /**
  * Shared secret expected on every write request that originates outside the
- * local web UI. Reads (GET) are never gated. When the env var is empty (the
- * default in fresh dev environments), the gate is fully open — this preserves
- * out-of-the-box developer experience without requiring config.
+ * local web UI. Reads (GET) are never gated.
+ *
+ * Read per request, not captured at module load. `main.ts` mints a token when
+ * the env var is empty, and it does so after this module has been imported
+ * (`server.js` pulls it in transitively), so a module-level constant would
+ * freeze the empty value and leave the gate open for the process lifetime.
+ * A per-request read costs nothing and removes the ordering trap.
  */
-const EXPECTED_TOKEN = process.env['ATLAS_MCP_TOKEN'] ?? '';
+function expectedToken(): string {
+    return (process.env['ATLAS_MCP_TOKEN'] ?? '').trim();
+}
 
 /**
  * Constant-time equality on the token bytes. V8's `===` short-circuits at
@@ -33,7 +39,9 @@ export function tokensMatch(provided: string, expected: string): boolean {
  * Returns 401 if the token is required and missing/mismatched.
  *
  * Resolution order:
- *   1. If ATLAS_MCP_TOKEN is unset/empty → allow (degraded / first-run mode).
+ *   1. If ATLAS_MCP_TOKEN is unset/empty → allow (fully-open mode). Reaching
+ *      this through `main.ts` now requires ATLAS_MCP_TOKEN_OPEN=1, since an
+ *      empty token is otherwise replaced with a generated one at boot.
  *   2. Else if `Sec-Fetch-Site: same-origin` is present (Sec-Fetch-* are
  *      forbidden headers — set by the browser, cannot be set by JS or a
  *      non-browser client) AND either
@@ -51,7 +59,8 @@ export async function requireMcpToken(
     req: FastifyRequest,
     reply: FastifyReply
 ): Promise<void> {
-    if (!EXPECTED_TOKEN) return;
+    const expected = expectedToken();
+    if (!expected) return;
 
     const origin = (req.headers['origin'] as string | undefined) ?? '';
     const secFetchSite = (req.headers['sec-fetch-site'] as string | undefined) ?? '';
@@ -64,7 +73,7 @@ export async function requireMcpToken(
     }
 
     const provided = (req.headers['x-atlas-token'] as string | undefined) ?? '';
-    if (tokensMatch(provided, EXPECTED_TOKEN)) return;
+    if (tokensMatch(provided, expected)) return;
 
     // W4 — typed envelope. Legacy `detail` field kept for any external MCP
     // client that was reading it; the new `kind: 'unauthorized'` is what the

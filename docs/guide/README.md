@@ -348,9 +348,12 @@ Atlas follows your system theme and can be pinned from `Settings → Profile`.
 
 ## Appendix — running Atlas safely
 
-- **Set `ATLAS_MCP_TOKEN`.** It is empty by default, and while empty *any* local process can POST,
-  PATCH and DELETE against the API. Atlas warns loudly about this at boot. Set it to a long random
-  value before running Atlas anywhere you would not run an unauthenticated service.
+- **`ATLAS_MCP_TOKEN` is generated for you.** If it is empty when the API boots, Atlas mints a
+  48-byte random token, writes it to your `.env`, and logs that the write gate is closed. You do not
+  need to set it by hand. The browser UI never sends it — it is admitted by `Sec-Fetch-Site`, a
+  header no non-browser client can forge — so the token only matters to the MCP shim and to any
+  script you write against the API. Setting `ATLAS_MCP_TOKEN_OPEN=1` disables the gate entirely;
+  only the test suites should do that.
 - `ATLAS_LAN_ACCESS` is `false` by default, and the MCP listener binds loopback only. Changing either
   widens what can reach the API.
 - Atlas is single-owner by design. There are no accounts, roles or audit trails beyond the activity log.

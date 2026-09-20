@@ -1,7 +1,7 @@
 # fresh-install-regression — the board
 
 > **CLOSED — 2026-09-20. All 22 rows done.** Atlas was reset twice, installed
-> from nothing both times, and walked end to end. 21 findings, 12 fixed.
+> from nothing both times, and walked end to end. 22 findings, 14 fixed.
 > Read *Closing* at the foot of this file first.
 
 Atlas is reset to a first-ship state and then proved, page by page, to work
@@ -143,10 +143,11 @@ requests — one each for the small and medium Tasks, and two from the single
 multi-repo Task, cross-linked, on one branch. The multi-repo path works
 end to end: `ws/` workspace, per-repo setup scripts, one Task many PRs.
 
-**21 findings. 12 fixed, 1 withdrawn, 8 open.** Two P1s were fixed mid-campaign
-at the Owner's direction; the rest landed in tasks 14, 15, 18, 20 and 21.
+**22 findings. 14 fixed, 1 withdrawn, 7 open.** Two P1s were fixed mid-campaign
+at the Owner's direction; the rest landed in tasks 14, 15, 18, 20, 21 — and two
+more on the pre-publication pass below.
 
-The three worth knowing about:
+The four worth knowing about:
 
 - **F-012** — every reviewer agent shipped an empty `checklists.json`, and
   `agent-runner-outcome-routing.ts:72` treats an empty required checklist as an
@@ -159,6 +160,11 @@ The three worth knowing about:
   two unrelated pages. It corrupts the text agents read as their prompt.
 - **F-020** — 43 dependency advisories, 20 of them high. The campaign's
   "0 vulnerabilities" goal is **not met**.
+- **F-022** — every environment variable saved from Settings → Environment was
+  written to `packages/api/.env`, which nothing loads, and silently lost. The
+  orphan file was sitting on disk holding this campaign's own test probe.
+  Found while fixing F-021, because the generated token needed somewhere real
+  to live. Both are fixed.
 
 **Three times the evidence contradicted the campaign's own assumptions**, and
 those are the most useful results:
@@ -186,6 +192,9 @@ which hard rule 1 protects: `accent_color` on `OnboardingSchema`, `.strict()`
 on `UpdateExternalNotificationSchema`. Two are judgement calls an agent should
 not make alone: whether to lower the ADR 0009 thresholds to measured values,
 and whether to make checklist gates machine-verified rather than self-reported.
-And `ATLAS_MCP_TOKEN` is empty — every write route is open to any local
-process, which Atlas warns about at boot and which must change before any
-deployment.
+`ATLAS_MCP_TOKEN` is **no longer among them.** It was closed on
+2026-09-20 before this branch was published: the API mints a token when the
+var is empty and persists it, so a fresh install is gated by default. The root
+cause was that `scripts/bootstrap.ps1` is the only setup script that ever
+generated one and there is no `bootstrap.sh` — every macOS and Linux install
+started open. See F-021 and F-022.
