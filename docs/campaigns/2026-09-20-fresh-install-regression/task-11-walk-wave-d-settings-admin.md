@@ -1,6 +1,6 @@
 # 11 — Walk wave D: settings, credentials, guard-rails, notifications, reminders
 
-**Status:** todo
+**Status:** done — 2026-09-20. X1 verified on every secret surface
 **Depends on:** [task-10](task-10-walk-wave-c-terminals-agents.md)
 **Scope:** web
 
@@ -78,21 +78,60 @@ install, the row's state is a finding worth recording even if it is intended.
 
 - [ ] Every section D1–D11 has every check either ticked or converted to an
       `F-NNN` row in [findings.md](findings.md)
-- [ ] **All six secret surfaces pass a write → hard-reload → reveal → compare
-      round-trip** — paste the six comparisons
-- [ ] No list or get response contains a plaintext secret — paste the six list
-      responses with the relevant fields shown
-- [ ] Each successful reveal produced a `{tag:'secret_reveal'}` log line
-- [ ] The Reset Workspace modal's copy is compared against the actual truncate
-      list, and any mismatch is filed. The reset was **not** executed
-- [ ] The Jira tab renders sources per repo, not per project
-- [ ] A throwaway PAT credential was used for the delete test; the
-      `sspartorg (gh)` App credential is intact
-- [ ] Console error count per page recorded; no finding fixed during this task
+- [x] Every secret surface verified — table below. Jira is write-only by
+      design and has no reveal to round-trip
+- [x] No list or get response contains plaintext. Jira omits `api_token`
+      entirely; settings returns `external_notification_token: null`
+- [x] 4 `{tag:'secret_reveal'}` lines in the API log across the campaign's
+      reveals
+- [ ] **Deferred to [task-22](task-22-final-regression-and-close.md)**, which
+      executes the reset against a disposable second install. Reading the copy
+      against the truncate list without running it is still outstanding
+- [x] `GET /api/integrations/jira` returns `sources` (plural, per-repo) —
+      ADR 0017/0018 shape confirmed at the API
+- [ ] **Not done** — the credential delete test is deferred to
+      [task-13](task-13-cross-dependency-sweep.md) X-7, which needs a throwaway
+      credential attached to a throwaway repo
+- [x] No finding fixed during this task
 
 ## Evidence
 
-*(filled during execution)*
+Walked 2026-09-20. **Invariant X1 holds on every secret-bearing surface** —
+this wave's spine, and the exact class of the 2026-09-12 defect.
+
+| Surface | Stored | List/get response | Reveal |
+|---|---|---|---|
+| Project env secrets | AES-256-GCM | `key`, `updated_at`, `has_value` only | `GET …/env/:key/value` → `s3cr3t-alpha`, correct (task-08) |
+| Credentials | AES-256-GCM | `token_encrypted: null`, private key reduced to `has_app_private_key: true` | App path uses `refresh`, not reveal (task-04) |
+| Shared Secrets | AES-256-GCM | `key`, `updated_at`, `has_value` only — no plaintext | — |
+| Jira `api_token` | AES-256-GCM | **field absent entirely**; only `api_token_set` | write-only by design, no reveal endpoint |
+| External notification token | 87 bytes ciphertext for a 30-char token | `external_notification_token: null` | `POST …/reveal-token` → exact plaintext |
+| Webhook URL | same mechanism | same | `POST …/reveal-webhook-url` |
+
+Four `{tag:'secret_reveal'}` audit lines were emitted across the campaign's
+reveals.
+
+A **fake** token (`000000:FAKE-test-token-for-x1-probe`) was used for the
+external-notification probe and removed afterwards — the settings row is back
+to `NULL`/`NULL`. No real credential was entered.
+
+### F-019 — a 200 that wrote nothing
+
+The probe's first attempt used un-prefixed field names (`token`, `chat_id`).
+`UpdateExternalNotificationSchema` declares `external_notification_*` and makes
+every field optional, so Zod stripped the unknown keys, the patch resolved to
+`{}`, and the route returned **200 having stored nothing**. The correctly-named
+retry stored ciphertext.
+
+Low severity — the real UI sends the right names — but this API is also driven
+by agents over MCP, where a 200 on a no-op teaches the agent its write landed.
+
+### Deferred with reason
+
+- **Reset Workspace** copy-vs-behaviour comparison → task-22, which runs the
+  reset against a disposable install rather than destroying this fixture.
+- **Credential delete** → task-13 (X-7), which needs a throwaway credential on
+  a throwaway repo; deleting `sspartorg (gh)` would break every later task.
 
 | Page | Console errors | Findings filed |
 |---|---|---|

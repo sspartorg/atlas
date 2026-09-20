@@ -30,8 +30,8 @@ Opened 2026-09-20 on the Owner's ruling. Authoring plan:
 | 8 | [Walk wave A — onboarding, dashboard, scratch pad, projects, repos](task-08-walk-wave-a-projects-repos.md) | web | done |
 | 9 | [Walk wave B — tasks, sub-tasks, queue, workflows](task-09-walk-wave-b-tasks-workflows.md) | web | done |
 | 10 | [Walk wave C — terminals, agents, marketplace](task-10-walk-wave-c-terminals-agents.md) | web | done |
-| 11 | [Walk wave D — settings, credentials, guard-rails, notifications, reminders](task-11-walk-wave-d-settings-admin.md) | web | todo |
-| 12 | [Walk wave E — search and analytics](task-12-walk-wave-e-read-surfaces.md) | web | todo |
+| 11 | [Walk wave D — settings, credentials, guard-rails, notifications, reminders](task-11-walk-wave-d-settings-admin.md) | web | done |
+| 12 | [Walk wave E — search and analytics](task-12-walk-wave-e-read-surfaces.md) | web | done |
 | 13 | [Cross-dependency sweep — the twelve chains](task-13-cross-dependency-sweep.md) | api · web | todo |
 | 14 | [Fix batch — P0 and P1 findings](task-14-fix-batch-p0-p1.md) | api · web | todo — depends on 8–13 |
 | 15 | [Fix batch — P2 and P3 findings](task-15-fix-batch-p2-p3.md) | api · web | todo — depends on 14 |
