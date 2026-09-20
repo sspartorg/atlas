@@ -384,3 +384,50 @@ describe('Onboarding — swatch keyboard wrap-around', () => {
         });
     });
 });
+
+// ── F-001: the accent swatch must actually persist ─────────────────────────
+//
+// The picker was live UI writing nowhere: `api.settings.onboard` sends only
+// owner_name and workspace_path, and `services/settings.ts` writes only those
+// plus onboarding_complete. The Owner picked a colour during onboarding and it
+// was silently discarded — verified end to end on 2026-09-20 by selecting the
+// third swatch and finding accent_color still at its seed default.
+//
+// OnboardingSchema lives in packages/shared, which is protected (AGENTS.md
+// hard rule 1), so the colour rides on a follow-up PATCH to the profile
+// endpoint whose schema already accepts accent_color.
+describe('Onboarding — accent colour persists (F-001)', () => {
+    it('sends the picked accent to the profile endpoint after onboarding', async () => {
+        const seen: Array<Record<string, unknown>> = [];
+        server.use(
+            ...fsFsHandlers,
+            http.post(`${BASE}/settings/onboard`, async ({ request }) => {
+                seen.push({ url: 'onboard', ...(await request.json() as object) });
+                return HttpResponse.json({ id: 1, owner_name: 'Ada', onboarding_complete: 1 });
+            }),
+            http.patch(`${BASE}/settings/profile`, async ({ request }) => {
+                seen.push({ url: 'profile', ...(await request.json() as object) });
+                return HttpResponse.json({ id: 1, owner_name: 'Ada', onboarding_complete: 1 });
+            }),
+        );
+
+        renderOnboarding();
+        await screen.findByText('Welcome to Atlas.');
+
+        const swatches = screen.getAllByRole('radio');
+        fireEvent.click(swatches[2]!);
+
+        await userEvent.type(screen.getByLabelText(/display name/i), 'Ada');
+        fireEvent.click(screen.getByRole('button', { name: /next/i }));
+
+        const folder = await screen.findByLabelText(/workspace folder/i);
+        await userEvent.type(folder, '/tmp/ws');
+        fireEvent.click(screen.getByRole('button', { name: /finish setup/i }));
+
+        await waitFor(() => {
+            const profile = seen.find((s) => s['url'] === 'profile');
+            if (!profile) throw new Error('no PATCH /settings/profile was sent — the accent colour is still discarded');
+            expect(typeof profile['accent_color']).toBe('string');
+        });
+    });
+});

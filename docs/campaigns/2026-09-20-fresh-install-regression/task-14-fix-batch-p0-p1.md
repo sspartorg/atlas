@@ -1,6 +1,6 @@
 # 14 — Fix batch: P0 and P1 findings
 
-**Status:** todo — depends on 8–13
+**Status:** done — 2026-09-20. All four P1s fixed; no P0s found
 **Depends on:** [task-13](task-13-cross-dependency-sweep.md)
 **Scope:** api · web
 
@@ -71,8 +71,50 @@ silently. Everything else waits for
 
 ## Evidence
 
-*(filled during execution)*
+**No P0 was found by the campaign.** Every destructive path that could have
+been one was tested and holds: the standalone terminal guard (task-10), the
+`purge` containment check (task-13), and secret redaction across all six
+surfaces (tasks 08, 11, 13).
 
-| F-NNN | sev | fix sha | test file | mutation-proved |
+Four P1s, all fixed:
+
+| F-NNN | What | Fix | Test | Mutation-proved |
 |---|---|---|---|---|
-| | | | | |
+| F-012 | reviewer `done` auto-passed; PRs shipped with red suites | required checklists for all 5 reviewers + manifest version bumps | `reviewer-checklists.test.ts` | yes — 6 failures naming each reviewer → 12/12 |
+| F-013 | `ws/` workspace induced cross-repo relative imports | `repositoriesMarkdown` now warns the parent folder is temporary | `run-repos.test.ts` | assertion added to the existing spec |
+| F-001 | onboarding accent swatch wrote nowhere | follow-up `PATCH /settings/profile` carries the colour | `Onboarding.test.tsx` | yes — red *"no PATCH /settings/profile was sent"* → green |
+| F-002 | Add Agent swallowed every API error | added the missing `catch`, surfacing `err.message` | `Agents.test.tsx` | yes — removed the catch → *"nothing was shown to the Owner"*; restored → green |
+
+**Gates after the batch:** `pnpm -F @atlas/web test` 327 files / 4152 tests
+green; `pnpm -F @atlas/api test` 153 files / 2634 tests green; `pnpm typecheck`
+clean across all four packages; `pnpm lint` exits 0 (one pre-existing warning
+in `useProjectSchedule.ts`, a file this batch never touched).
+
+### F-001 was fixed around the protected package, not through it
+
+The clean fix is to add `accent_color` to `OnboardingSchema` so one call
+carries all three fields. That schema lives in `packages/shared`, which
+AGENTS.md hard rule 1 protects, and the campaign's own standing constraints
+repeat. So the colour rides on a follow-up `PATCH /api/settings/profile`
+instead — `UpdateProfileSchema` already accepts `accent_color`, and it is the
+same endpoint Settings uses to change it later.
+
+The tradeoff is real and is commented in the code: two calls mean a window
+where onboarding succeeds and the colour patch fails. That is why the patch is
+deliberately non-fatal — onboarding has already completed at that point, and
+losing a colour must not strand the Owner outside the app.
+
+**For the Owner:** the single-call version needs one line in
+`packages/shared/src/schemas/index.ts`. It is a better fix and it needs your
+approval, not mine.
+
+### A test-harness trap worth recording
+
+`ToastProvider` supplies context and **renders nothing** — `<Toast />` is
+mounted separately in AppShell, which `renderWithProviders` does not include.
+Any test asserting toast text through the DOM therefore passes regardless of
+what the code does. The neighbouring pre-existing spec
+(`Agents.test.tsx:669`, *"shows error toast when delete API call fails"*) ends
+in `expect(document.body).toBeTruthy()` — it asserts nothing, almost certainly
+for this reason. F-002's test spies on the hook instead, which is why it could
+be mutation-proved.
