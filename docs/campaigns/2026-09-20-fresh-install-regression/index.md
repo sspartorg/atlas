@@ -23,7 +23,7 @@ Opened 2026-09-20 on the Owner's ruling. Authoring plan:
 | 1 | [Squash 45 migrations into one fresh baseline](task-01-migration-squash.md) | api | done |
 | 2 | [Factory reset — disk and Docker, Atlas-only](task-02-factory-reset.md) | infra | done |
 | 3 | [First boot and onboarding from zero](task-03-first-boot-onboarding.md) | infra | done |
-| 4 | [Register the sspart-bot GitHub App credential](task-04-bot-credential.md) | infra | todo |
+| 4 | [Register the sspart-bot GitHub App credential](task-04-bot-credential.md) | infra | done |
 | 5 | [Seed two throwaway repos under sspartorg](task-05-seed-throwaway-repos.md) | infra | todo |
 | 6 | [Create the project, add both repos, setup scripts and secrets](task-06-project-two-repos-setup-secrets.md) | infra | todo |
 | 7 | [Run three graded sample Tasks: small, medium, large](task-07-sample-tasks-small-medium-large.md) | infra | todo |

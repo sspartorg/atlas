@@ -1,6 +1,6 @@
 # 04 — Register the sspart-bot GitHub App credential
 
-**Status:** todo
+**Status:** done — 2026-09-20
 **Depends on:** [task-03](task-03-first-boot-onboarding.md)
 **Scope:** infra
 
@@ -93,20 +93,93 @@ this task checks the commit trailer rather than trusting the save.
 ## Done when
 
 - [x] The installation id was obtained from the Owner: `62910480` (2026-09-20)
-- [ ] The credential row exists with `kind = github_app`, `app_id = 4332243`,
-      `app_slug = sspart-bot` — paste the row with the encrypted columns elided
-- [ ] `POST /api/credentials/:id/refresh` mints an installation token
-- [ ] `GET /api/credentials` returns **no** token or private key — paste the
-      response
-- [ ] `GET /api/credentials/:id/token` reveals it, and the reveal is logged
-      with `{tag:'secret_reveal'}`
-- [ ] The API log carries **no** "falling back to host gitconfig" warning
-- [ ] No `AUTHORIZATION`-bearing file is left in `$TMPDIR` after the refresh
-- [ ] The PEM at `~/Work/workspace/bots-info/sspart-bot.pem` is unmodified —
-      compare its checksum against a pre-task capture
+- [x] Row exists with `kind = github_app`, `app_id = 4332243`,
+      `app_slug = sspart-bot` — pasted below
+- [x] `POST /api/credentials/:id/refresh` minted a new token — fingerprint
+      changed `bOVg` → `ff1Q`, expiry moved 09:07:09 → 09:08:20
+- [x] `GET /api/credentials` returns `token_encrypted: null` and reduces the
+      private key to `has_app_private_key: true`. No `ghs_` or `BEGIN` string
+      anywhere in the payload
+- [ ] ⚠️ **Not applicable to an App credential — the checkbox was wrong.**
+      `GET /api/credentials/:id/token` returns `400 validation_error`, *"Only
+      pat credentials can be revealed"*. Correct by design: an App has no
+      static token, only short-lived installation tokens minted on demand.
+      The reveal round-trip belongs to the PAT path and is exercised in
+      [task-11](task-11-walk-wave-d-settings-admin.md); `refresh` is the App
+      equivalent and passed
+- [x] Zero gitconfig-fallback warnings in the API log — `app_slug` and
+      `app_id` both landed, so the `[user]` block will be written
+- [x] Zero `AUTHORIZATION`-bearing files in `$TMPDIR` after the refresh, and
+      zero `ghs_` strings in `ps aux` — the token never reaches argv
+- [x] PEM sha256 matches the task-02 capture exactly; still mode 0600,
+      1679 bytes, mtime 11 Aug
 
 ## Evidence
 
-*(filled during execution)*
+Executed 2026-09-20 through the UI at `/settings/credentials`.
 
-App installation id: `62910480` (supplied by the Owner, 2026-09-20)
+**Credential row** (encrypted columns elided):
+
+```
+label                  sspartorg (gh)
+host                   github
+kind                   github_app
+username               x-access-token
+app_id                 4332243          <- read from app-config.json
+app_slug               sspart-bot       <- read from app-config.json
+app_installation_id    147420481        <- DISCOVERED by Atlas, see below
+app_installation_owner sspartorg
+human_name / email     sspart / sspart.org@gmail.com
+human_gh_login         sspartorg
+token_encrypted        set(548)
+app_private_key_enc.   set(2276)
+token_fingerprint      tok_****************bOVg
+```
+
+**`workspace.key` was created here, not at boot** — 32 bytes, mode 0600,
+generated on the first `encrypt()` call. This closes the checkbox deferred from
+[task-03](task-03-first-boot-onboarding.md) and confirms `loadOrCreateKey()` is
+lazy.
+
+**X1 holds.** `GET /api/credentials` returns 20 keys; `token_encrypted` is
+`null` and the private key is reduced to `has_app_private_key: true`. A scan of
+the payload for `ghs_`, `BEGIN` and `PRIVATE KEY` found nothing. Note that
+`token_fingerprint` **is** populated — the 2026-09-12 defect where the API
+nulled it on every read is not present here.
+
+**Refresh works.**
+
+```
+expires_at  2026-09-20 09:07:09+00  ->  2026-09-20 09:08:20+00
+fingerprint tok_****bOVg            ->  tok_****ff1Q
+```
+
+The response still nulls `token_encrypted`.
+
+**No token exposure.** Zero `AUTHORIZATION`-bearing files in `$TMPDIR`, zero
+`ghs_` strings in `ps aux` — consistent with `buildGitAuth` handing the token
+to git via `GIT_CONFIG_GLOBAL` rather than argv.
+
+**PEM untouched.** `3d9dab455e6fd15f79e11a38571b37de6119e8cae9d33c346e553bbe1ceb34aa`,
+identical to the task-02 capture.
+
+### Two corrections
+
+1. **The form has no App ID or Installation ID field.** The task's field table
+   listed both. In reality the modal takes Host, Label, Bot info folder,
+   Installation owner, optional human attribution and Repo scope — Atlas reads
+   `app_id` and `app_slug` from `app-config.json` in that folder and
+   **discovers the installation id itself** from the owner.
+
+2. ⚠️ **The discovered installation id is `147420481`, not the `62910480` the
+   Owner supplied.** The supplied value was never entered, because there is no
+   field for it. Atlas's discovered id demonstrably works — it minted two live
+   installation tokens. `62910480` could not be cross-checked:
+   `GET /app/installations` needs an App JWT and
+   `GET /orgs/sspartorg/installations` needs the `admin:org` scope, neither of
+   which this `gh` session has. **Raised with the Owner rather than assumed
+   wrong** — it may be a second installation on a personal account.
+
+**The deferred identity proof** (bot as author, human as `Co-Authored-By`
+trailer) still cannot run here — it needs a repo. It is asserted in
+[task-06](task-06-project-two-repos-setup-secrets.md) step 6.
