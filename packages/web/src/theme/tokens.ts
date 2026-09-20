@@ -419,11 +419,6 @@ export interface LabelColorPair {
     border: string;
 }
 
-export interface LabelColorEntry {
-    light: LabelColorPair;
-    dark: LabelColorPair;
-}
-
 export const LABEL_COLORS = {
     slate: {
         light: { bg: '#F1F5F9', fg: '#0F172A', border: '#CBD5E1' },

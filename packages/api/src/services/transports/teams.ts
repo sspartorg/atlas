@@ -13,7 +13,7 @@ const TEAMS_ENDPOINT_LABEL = 'Microsoft Teams (Power Automate)';
 // Adaptive Cards v1.4 is the widest-supported version in Teams as of 2026.
 // `wrap: true` is required — otherwise multi-line messages from callers like
 // auto-fetch-runner get truncated to one line in the Teams chat.
-export function buildAdaptiveCard(message: string): object {
+function buildAdaptiveCard(message: string): object {
     return {
         type: 'AdaptiveCard',
         $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',

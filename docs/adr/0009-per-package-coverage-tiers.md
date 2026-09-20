@@ -74,8 +74,33 @@ functions). The single gap was `schemas/index.ts:660-664`, the `site_url`
 origin rule that permits plain http only on loopback. It is now covered, and
 the package is back at 100%.
 
-**Unresolved, and deliberately left to the Owner:** whether to lower `api` and
-`web` to measured-minus-a-buffer (restoring this ADR's honest-floor intent) or
-to leave them high and do the work to reach them. Both are defensible; picking
-one is a product decision about where test effort goes, not a mechanical fix,
-and lowering a gate is not something an agent should do unasked.
+**Resolved by the Owner, 2026-09-20: rebaseline as a ratchet.** The enforced
+number is once again the measured number, which is what "honest floor" meant in
+the first place. Thresholds are set to measured-minus-0.5pp (a v8
+instrumentation jitter allowance) and are raised whenever coverage genuinely
+improves — never ahead of a measurement.
+
+The reasoning was that a threshold nobody meets is not a gate. `pnpm gate`
+failed on `api` and `web` every single run, which does not protect the codebase;
+it trains everyone to ignore a red build, and a genuine coverage regression then
+lands invisibly underneath the pre-existing failure. A green gate that breaks on
+a real drop is worth more than a red one that asserts an ambition.
+
+Measured on a clean run (shared 246 tests, mcp 167, api 2645, web 4152) and now
+enforced:
+
+| Package | Measured (lines / stmts / funcs / branches) | Enforced |
+|---|---|---|
+| `@atlas/shared` | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 |
+| `@atlas/mcp` | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 |
+| `@atlas/api` | 94.81 / 93.77 / 94.55 / 86.63 | 94.3 / 93.2 / 94 / 86.1 |
+| `@atlas/web` | 95.40 / 94.14 / 91.58 / 90.53 | 94.9 / 93.6 / 91 / 90 |
+
+`mcp` moved **up**: it measured 100 while gating at 95, so five points of real
+coverage were unprotected. A ratchet locks gains in as well as catching losses.
+
+The targets in the Decision table above remain targets — `api` branches at
+86.63 is genuinely below where this package should sit, and the gap is still
+concentrated in defensive null-coalesce and platform-specific branches. The
+difference is that the ambition now lives in prose, where it belongs, instead
+of in a CI gate that fails regardless of whether anyone regressed anything.

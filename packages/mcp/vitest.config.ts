@@ -27,11 +27,15 @@ export default defineConfig({
             // point: 99.56 lines / 99.44 branches / 100 funcs / 99.56
             // statements. The 0.44 branch gap is the autorun guard in
             // index.ts which carries a v8 ignore annotation.
+            // 2026-09-20 (ADR 0009 ratchet) — measured 100/100/100/100 on
+            // 12 files / 167 tests while the gate sat at 95, so five points of
+            // real coverage were unprotected. A ratchet locks gains in as well
+            // as catching losses: any drop from 100 now fails.
             thresholds: {
-                lines: 95,
-                branches: 95,
-                functions: 95,
-                statements: 95,
+                lines: 100,
+                branches: 100,
+                functions: 100,
+                statements: 100,
             },
         },
     },

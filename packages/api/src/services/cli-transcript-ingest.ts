@@ -44,7 +44,7 @@ const MAX_TRANSCRIPT_BYTES = 10 * 1024 * 1024;
 // The on-disk transcript FORMAT, i.e. the CLI dialect — not the `cli` column.
 // Ollama sessions run the Claude binary, so they write Claude's JSONL into
 // `~/.claude/projects` and are ingested as `claude` here.
-export type CliKind = CliDialect;
+type CliKind = CliDialect;
 
 export interface TranscriptResult {
     jsonl_content: string | null;
