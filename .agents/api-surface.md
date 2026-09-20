@@ -645,6 +645,7 @@ The intentionally **unexposed** surfaces:
 |---|---|
 | `001_baseline.ts` | Loads and executes `001_baseline.sql`. `down()` is a deliberate no-op. |
 | `001_baseline.sql` | Full schema - 43 tables, 125 indexes, 46 foreign keys, plus triggers, enums and functions - followed by 39 reference-data rows: `cli_models` (19), `guardrail_rules` (14), `roles` (5) and the `settings` singleton (defaults only, no Owner PII, every secret column null). |
+| `002_items_repo_ids_gin.ts` | GIN (`jsonb_path_ops`) on `items.repo_ids`. ADR 0018 made the column a first-class query path — `project-repos.ts:161` runs `repo_ids @> '[...]'::jsonb` on every repo delete — while its sibling `items.labels` has had one since the baseline. Measured at 40k items: 847 buffers / 5.151 ms seq scan → 53 buffers / 0.261 ms bitmap. Six other suspected index gaps were **rejected by measurement**; read the migration's own comment before re-proposing them. |
 
 **Regenerating the baseline.** Not needed when a new numbered migration lands - knex tracks each independently in `_knex_migrations`. Only on a deliberate re-squash. Apply every migration to a clean DB, then:
 

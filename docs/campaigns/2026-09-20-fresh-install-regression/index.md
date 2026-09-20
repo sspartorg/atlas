@@ -40,7 +40,7 @@ Opened 2026-09-20 on the Owner's ruling. Authoring plan:
 | 18 | [Coverage lift against the ADR 0009 tiers](task-18-coverage-lift.md) | api · web · mcp | done — api/web gates need an Owner ruling |
 | 19 | [Security audit — evidence-based, targeted](task-19-security-audit.md) | api · infra | done — "0 vulns" not achieved |
 | 20 | [Refresh the user guide and its screenshots](task-20-docs-guide-refresh.md) | docs | done — 12 inherited images still need recapture |
-| 21 | [Sync `.agents/` and write the ADRs](task-21-agents-sync-and-adrs.md) | docs | todo |
+| 21 | [Sync `.agents/` and write the ADRs](task-21-agents-sync-and-adrs.md) | docs | done |
 | 22 | [Final regression and close the campaign](task-22-final-regression-and-close.md) | all | todo |
 
 Row numbers are permanent. A row's status and its task file's `**Status:**`

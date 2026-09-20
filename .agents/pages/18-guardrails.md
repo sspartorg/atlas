@@ -72,7 +72,7 @@ Default tab is `rules`. Switching tabs is purely local state; there is no URL ch
 
 ## Edge cases / quirks
 - **Discard** only clears the *session dirty counter*; it does NOT roll back actual mutations. This is a known quirk (see coming-soon list) — be careful if a user expects Discard to undo.
-- The dirty counter increments on add / edit / delete but doesn't decrement on Save — it only clears via Discard. So immediately after a Save you'll still see "{N} dirty" until you click Discard.
+- The dirty counter increments on add / edit / delete and **is cleared on Save** — `Guardrails.tsx:92` calls `setDirtyCount(0)` inside `handleSaveAll`. (This doc previously claimed the opposite; corrected 2026-09-20.) **Discard** is the genuine quirk: it clears the counter without rolling back mutations.
 - `relativeTime()` for the "saved at" label is a local helper (lines 23-35), not the shared one.
 
 ## Connectivity

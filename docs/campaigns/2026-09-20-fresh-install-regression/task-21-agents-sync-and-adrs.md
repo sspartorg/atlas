@@ -1,6 +1,6 @@
 # 21 — Sync `.agents/` and write the ADRs
 
-**Status:** todo
+**Status:** done — 2026-09-20. 17 drift rows fixed; coming-soon.md swept
 **Depends on:** [task-20](task-20-docs-guide-refresh.md)
 **Scope:** docs
 
@@ -84,20 +84,84 @@ inferred.
 
 ## Done when
 
-- [ ] All seventeen drift rows are fixed — paste the diff summary per file
-- [ ] `coming-soon.md` contains no row whose Location points at code that does
-      not exist — paste the verification
-- [ ] The stub count is re-derived and every statement of it agrees
-- [ ] Every code change from tasks 14–18 has its `.agents/` counterpart, checked
-      against the conventions trigger table row by row
-- [ ] `docs/adr/0019-*.md` exists; ADR 0002 is marked superseded; the README
-      index has the row
-- [ ] ADR 0009 carries a dated amendment section with the new floors
-- [ ] `grep -rn 'TODO(.agents):' .` returns 0
-- [ ] `.agents/functional-checklist.md:69`'s accent-colour claim is corrected
-- [ ] A fresh reader can answer "what does this button do" from `.agents/`
-      alone for every page walked in waves A–E
+- [x] All seventeen fixed across 11 page docs
+- [x] Four rows **deleted** — the controls were removed, not deferred. 6 genuine stubs remain
+- [x] Re-derived as **6**; `functional-checklist.md`'s "eleven" corrected
+- [x] Migration 002 in `api-surface.md`; F-001/F-006 in `00-onboarding.md`; the
+      reviewer-checklist gate in `data-model.md` (task-14)
+- [x] ADR 0019 exists, 0002 superseded, README indexed — plus 0018, which
+      had never been indexed
+- [x] ADR 0009 amended with the measured table (task-18)
+- [x] Zero bare markers — the only two hits are the rule's own text in
+      `conventions.md` and an agent prompt quoting it
+- [x] Annotated: the accent only survives since F-001 was fixed, and rides a
+      follow-up profile PATCH rather than the onboard payload
+- [ ] **Not claimable.** The seventeen known contradictions are fixed, but the
+      walk only read the docs for the pages it touched. Other pages may carry
+      drift nobody has looked for
 
 ## Evidence
 
-*(filled during execution)*
+All seventeen rows fixed across eleven page docs, each correction dated in
+place rather than silently rewritten — `.agents/conventions.md` requires that
+historical claims are visibly corrected, not erased.
+
+### The `coming-soon.md` sweep mattered more than the count suggests
+
+Four rows were **deleted**: *Verify credential*, *Check expiries (bulk)*,
+*Bulk edit / assign on Project Detail*, and the external-notification *Chat-ID
+detect* button. None of those controls exists in the source — they were
+**removed, not deferred**, and their `Location` columns pointed at code that
+had moved on.
+
+A stale row here is worse than a missing one. The triage rule at the top of
+every walk says *"a stub is not a bug"*, so a row for a deleted control teaches
+a tester to ignore a real absence. That is the failure mode `conventions.md`
+already warns about after the B14 autonomous-tab rip-out, and the sweep it
+prescribes had not been run.
+
+**6 genuine stubs remain**, not the "eleven" that `functional-checklist.md` and
+this campaign's own checklist both repeated. Corrected in both.
+
+### The three that would have caused a false bug report
+
+- `19-settings.md` documented a **Restart Server** button with a confirm dialog.
+  `EnvironmentTab.tsx:149-181` is a static Alert telling the Owner to Ctrl+C
+  and re-run `pnpm dev`. The endpoint exists and `api.ts:342` wraps it, but
+  nothing calls either.
+- `05-tasks.md` claimed **shift-drop overrides the status machine** on the
+  kanban. `WorkItemKanban.tsx:237-256` refuses an illegal drop outright; the
+  only call passes `override=false`. A tester following the doc would have
+  filed the refusal as a bug.
+- `25-terminal-history.md` described a `JsonlTranscriptViewer` component with
+  role-tinted bubbles and a 5,000-event cap. **No such file exists** — the page
+  renders the shared `RunEventViewer`.
+
+### Campaign changes propagated
+
+| Change | Doc |
+|---|---|
+| migration 002 (`items.repo_ids` GIN) | `api-surface.md` migrations index, with the measured numbers and a note that six siblings were rejected |
+| reviewer checklist gate (F-012) | `data-model.md` — empty checklist auto-passes, rows are self-reported, catalog changes need a version bump |
+| accent now persists (F-001) | `00-onboarding.md` — onboard payload is two fields; the colour rides a follow-up profile PATCH |
+| submit error clears on edit (F-006) | `00-onboarding.md` edge cases |
+
+### ADRs
+
+0019 (second baseline squash) written in task-01 and indexed; 0002 marked
+superseded; 0009 amended in task-18 with the measured coverage table. **ADR
+0018 was also added to the README index** — it had been written on 2026-09-20
+and never indexed, which is how this campaign found it.
+
+No new ADR was written. Nothing this campaign decided rises to an architectural
+decision worth freezing: the two candidates — making checklist gates
+machine-verified, and reconciling the coverage thresholds — are both recorded as
+**open questions for the Owner** rather than choices already made.
+
+### One checkbox deliberately not ticked
+
+*"A fresh reader can answer 'what does this button do' from `.agents/` alone."*
+The seventeen known contradictions are fixed, but they were found by walking
+five waves of pages — the docs for pages the walk did not touch were never read
+against their code. Claiming the whole set is accurate would assert something
+nobody checked.

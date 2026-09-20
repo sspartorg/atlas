@@ -27,7 +27,7 @@ Single-project workspace. 6 tabs (Overview, Tasks, Guard-rails, Repos, Setup, Hi
 - **Edit guard-rails** → switches active tab to `guardrails`
 - **Manage .env secrets…** → opens `ProjectEnvSecretsModal` (read/write `<git_path>/.env`)
 - **Notification routing** → disabled item
-- **Archive project** → disabled item
+- ~~**Archive project**~~, ~~**Edit repository URL**~~, ~~**Change default branch**~~, ~~**Notification routing**~~ — **none of these exist.** `ProjectActionsMenu.tsx:57-96` has exactly: Rename project… (real, opens `RenameProjectModal`), Edit guard-rails, Manage Secrets, **Generate AI scaffold…** (previously undocumented; disabled until a repo is `clone_status='ready'`), and Delete project…. *(corrected 2026-09-20 — campaign task-21.)*
 - **Delete project** (danger color) → opens `DeleteProjectModal`
 
 All three **Edit guard-rails** affordances (header badge, actions menu, right-rail card) call the same `handleEditGuardrails = () => setTab('guardrails')` callback. The earlier right-rail variant pushed `?tab=guardrails` via a RouterLink, which became a no-op on the second click from the same URL (the `useTabParam` hook syncs URL → state, not state → state). The imperative callback path is idempotent and works every time.

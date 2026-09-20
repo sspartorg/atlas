@@ -17,7 +17,7 @@ Re-open a *closed* or *errored* terminal session's transcript by reading the JSO
 - **Loading transcript**: terminal-state session loaded, `useCliSessionTranscript().isLoading` → centered spinner.
 - **Transcript fetch error**: red Alert with the error message.
 - **Transcript unavailable** (file missing on disk + DB null): info Alert "Transcript unavailable — the CLI may have removed its on-disk copy".
-- **Populated**: `<JsonlTranscriptViewer>` renders role-tinted bubbles.
+- **Populated**: the shared `<RunEventViewer>` renders the transcript with `source='claude-pty' | 'copilot'` (`TerminalHistory.tsx:16,177-185`), plus an `AiUsagePanel` cost card (`:195-201`). **There is no `JsonlTranscriptViewer` component** — it does not exist in the codebase. *(corrected 2026-09-20 — campaign task-21.)*
 
 ## UI elements
 
@@ -31,13 +31,13 @@ Re-open a *closed* or *errored* terminal session's transcript by reading the JSO
 
 **Finalize PR alert** (success) — when `session.finalize_pr_url` is set, links to the PR opened by the Stop flow.
 
-**Transcript viewer (`JsonlTranscriptViewer`)** — see component doc below.
+**Transcript viewer** — the shared `RunEventViewer`, not a bespoke component.
 
 ## Why these affordances exist
 - **Closed/errored only** — Owner explicitly carved out paused sessions: a paused session is "still alive, just sleeping"; history surface is for sessions you're done with.
 - **DB-cached transcripts** — Claude and Copilot each rotate their on-disk state independently. Once a session is finished, we slurp the file into `cli_sessions.transcript_jsonl` so subsequent views work even after the user wipes `~/.claude`.
 
-## Transcript viewer component (`JsonlTranscriptViewer.tsx`)
+## Transcript viewer — `components/RunEventViewer.tsx` (shared with agent runs)
 - Generic JSONL viewer with three dispatch branches: `claude` (interactive on-disk JSONL), `copilot` (events.jsonl), and `agent-stream-json` (matches the `AgentRunDetail` viewer's existing shape). Dispatch is on the CLI **dialect**, not the `cli` value — Ollama sessions write Claude's own JSONL, so they take the `claude` branch.
 - One row per JSONL line. Each row carries a role chip (You / Assistant / Tool / System / Meta), a typed event header in monospace, and a per-source preview. Clicking expands the raw JSON.
 - Caps at 5 000 events to keep the DOM tractable; any further lines are summarised at the bottom.
