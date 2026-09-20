@@ -11,7 +11,7 @@ const makeItem = (overrides: Partial<TodaysPassItem> = {}): TodaysPassItem => ({
     agent_category: 'software-dev',
     agent_accent_color: '#0A0A0A',
     issue_type: 'sub_task',
-    issue_id: 'CER-12',
+    issue_id: 'ATL-12',
     completed_at: '2026-05-16T00:00:00.000Z',
     ...overrides,
 });

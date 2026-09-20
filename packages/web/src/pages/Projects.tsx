@@ -96,7 +96,7 @@ export function Projects() {
         [projects]
     );
     // Project display id is the issue key prefix picked at create time
-    // (e.g. "CER"), so it lines up with the issue ids (CER-1, CER-2, …).
+    // (e.g. "ATL"), so it lines up with the issue ids (ATL-1, ATL-2, …).
     const displayIdById = useMemo(() => {
         const map = new Map<string, string>();
         for (const p of sortedProjects) map.set(p.id, p.issue_key_prefix);

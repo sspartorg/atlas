@@ -36,7 +36,7 @@ const MONO = '"JetBrains Mono", monospace';
 
 export interface ParentLink {
     label: string; // "Task", "Project"
-    text: string; // Display string, typically the issue id (e.g. "CER-7")
+    text: string; // Display string, typically the issue id (e.g. "ATL-7")
     href: string;
 }
 

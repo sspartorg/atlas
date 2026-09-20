@@ -291,7 +291,7 @@ export interface IProject {
     id: string;
     name: string;
     // Jira-style 3-letter uppercase prefix used as the namespace for every
-    // issue id in this project (e.g. CER → CER-1, CER-2, ...). Frozen once
+    // issue id in this project (e.g. ATL → ATL-1, ATL-2, ...). Frozen once
     // set; retired into retired_prefixes when the project is deleted.
     issue_key_prefix: string;
     description: string;

@@ -22,12 +22,16 @@ describe('allocateIssueKey', () => {
     });
 
     it('scopes counters per project — separate prefixes increment independently', async () => {
+        // The two prefixes must DIFFER — that is the whole assertion. The
+        // 2026-09-20 rename (CER -> ATL) briefly collapsed both to 'ATL',
+        // which the suite caught: with one prefix the test proves nothing
+        // about per-project scoping.
         await seedProject('p1', 'ATL');
-        await seedProject('p2', 'CER');
+        await seedProject('p2', 'ZED');
         expect(await allocateIssueKey('p1')).toBe('ATL-1');
-        expect(await allocateIssueKey('p2')).toBe('CER-1');
+        expect(await allocateIssueKey('p2')).toBe('ZED-1');
         expect(await allocateIssueKey('p1')).toBe('ATL-2');
-        expect(await allocateIssueKey('p2')).toBe('CER-2');
+        expect(await allocateIssueKey('p2')).toBe('ZED-2');
     });
 
     it('persists last_seq in project_issue_counters', async () => {

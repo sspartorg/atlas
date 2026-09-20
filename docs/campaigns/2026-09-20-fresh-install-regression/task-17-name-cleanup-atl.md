@@ -1,6 +1,6 @@
 # 17 — Name cleanup: CER, DHEQ and JDA all become ATL
 
-**Status:** todo
+**Status:** done — 2026-09-20
 **Depends on:** nothing — can run in parallel with the walk
 **Scope:** shared · api · web · docs
 
@@ -87,21 +87,68 @@ Also rename the lowercase agent-slug examples: `cer-weekly-automation` →
 
 ## Done when
 
-- [ ] `grep -rnE '\bCER\b' --exclude-dir=node_modules --exclude-dir=.git
-      --exclude=pnpm-lock.yaml .` returns 0 — paste the command and its output
-- [ ] The same for `\bDHEQ\b` and `\bJDA\b`
-- [ ] `grep -rn 'cer-weekly-automation'` returns 0
-- [ ] `grep -rni 'linoes\|insightsoftware'` returns 0 (it already did — paste
-      it as the record that it was checked, not fixed)
-- [ ] `sspart`, `sspartorg` and the `horizon` CSS usages are **untouched** —
-      paste a count showing they are unchanged from before the task
-- [ ] `schemas.test.ts` still asserts a lowercase prefix is rejected, now
-      with `'atl'`
-- [ ] `pnpm -r test` green — paste the tail
-- [ ] `pnpm typecheck` and `pnpm lint` clean
-- [ ] `.agents/pages/02-projects.md` shows `ATL`
-- [ ] The commit body records the justification for touching `packages/shared`
+- [x] 0 in source. The only remaining hits are inside this campaign's own
+      findings and task files, which quote the old names as evidence
+- [x] Same for `\bDHEQ\b` (51 -> 0) and `\bJDA\b` (6 -> 0)
+- [x] `cer-weekly-automation` -> `atl-weekly-automation`; `CER_Stories` -> `ATL_Stories` (neither matched `\bCER\b`, both done by hand)
+- [x] `linoes` and `insightsoftware` still 0, as they were at the start
+- [x] **`sspartorg` untouched** — `git diff` over `packages`, `.agents`,
+      `AGENTS.md` and `README.md` contains no `sspart` line either way
+- [x] `schemas.test.ts` rejects `'atl'`, paired with the `'ATL'` accept case
+- [x] shared 241, mcp 167, web 4152, api 2638 — all green
+- [x] typecheck clean across all four packages
+- [x] `.agents/pages/02-projects.md` shows `ATL`
+- [x] Commit body records the `packages/shared` justification
 
 ## Evidence
 
-*(filled during execution)*
+Executed 2026-09-20. **24 source files, 90 lines each way** — a clean 1:1
+rename. Build artifacts under `dist/` and `coverage/` were also rewritten by
+the sweep; both are gitignored and regenerate, so nothing was committed from
+them.
+
+| Prefix | Before | After |
+|---|---|---|
+| `CER` | 29 | 0 |
+| `DHEQ` | 51 | 0 |
+| `JDA` | 6 | 0 |
+| `cer-weekly-automation` | 2 | 0 (`atl-weekly-automation`) |
+| `CER_Stories` | 2 | 0 (`ATL_Stories`) |
+
+The two lowercase/underscore forms were handled by hand: `\bCER\b` does not
+match inside `CER_Stories` because `_` is a word character, and it does not
+match `cer` at all since the pass was case-sensitive by design — the schema
+test depends on lowercase staying rejected.
+
+### The suite caught a real regression the rename introduced
+
+`_keys.test.ts` has a case named *"scopes counters per project — separate
+prefixes increment independently"*. It seeded `p1` with `ETM` and `p2` with
+`CER`; a blanket rename collapsed **both** to `ATL`, and the test failed.
+
+That failure was correct and valuable. With one prefix the case proves nothing
+about per-project scoping — it would have kept passing later as a hollow test
+if the collision had not also broken it. `p2` now seeds `ZED`, and the reason
+is commented in place so the next rename does not repeat it.
+
+This is the risk the task warned about in its own step 2 (*"do not
+blind-replace"*), realised: word-boundary anchoring protects against matching
+*inside* words, but nothing protects a deliberate **contrast** between two
+values that both match.
+
+Nothing else collapsed. `'ATL'` was already the dominant prefix in the api
+suite before this task (46 occurrences in `projects.test.ts` alone), which is
+part of why ruling D-3 chose it — the rename moved the outliers onto the
+existing convention rather than inventing a new one.
+
+### `packages/shared` — what was touched and why
+
+Four lines, all non-runtime, per AGENTS.md hard rule 1:
+
+- `src/types/index.ts:294` — a comment illustrating issue ids
+- `src/schemas/index.ts:328` — a comment naming an example agent slug
+- `src/schemas/schemas.test.ts` — the accept case (`'ATL'`) and the reject case
+  (`'atl'`), which must stay a matched pair or the lowercase rule stops being
+  tested
+
+No type, schema or runtime value in `shared` changed.

@@ -343,7 +343,7 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
                         multiline
                         minRows={2}
                         value={newJql}
-                        placeholder='project = DHEQ AND status = "Selected for Development"'
+                        placeholder='project = ATL AND status = "Selected for Development"'
                         onChange={(e) => setNewJql(e.target.value)}
                         slotProps={{ htmlInput: { 'aria-label': 'Source JQL' } }}
                         sx={{

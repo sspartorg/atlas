@@ -5,7 +5,7 @@ import { api } from '../api/api.js';
 // Type aliases for the row-list view of the issue tree.
 export type IssueListKind = IssueType;
 
-// Issue ids are Jira-style human keys (e.g. CER-7); the displayed short id is
+// Issue ids are Jira-style human keys (e.g. ATL-7); the displayed short id is
 // the id itself. Stable indirection so the short-id derivation can change
 // without rewriting call-sites.
 export function makeShortId(_kind: IssueListKind, id: string): string {

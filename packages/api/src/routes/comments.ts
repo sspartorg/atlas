@@ -107,7 +107,7 @@ export async function commentsRoutes(app: FastifyInstance) {
     // `history_pruned` audit event inside the same transaction so the
     // destructive operation is always traceable.
     //
-    // Used by long-running agents (e.g. `cer-weekly-automation`) to trim
+    // Used by long-running agents (e.g. `atl-weekly-automation`) to trim
     // their own noise off a permanent tracking Task. Called from the MCP
     // `update_item` tool with `action: 'remove_history'`.
     //

@@ -5,7 +5,7 @@ import { AwaitingYouPanel } from './AwaitingYouPanel.js';
 import type { AwaitingItem } from '../../api/types.js';
 
 const makeRow = (overrides: Partial<AwaitingItem> = {}): AwaitingItem => ({
-    id: 'CER-7',
+    id: 'ATL-7',
     issue_type: 'sub_task',
     title: 'A login flow',
     status: 'waiting_for_info',
@@ -35,8 +35,8 @@ describe('AwaitingYouPanel', () => {
     });
 
     it('filter dropdown: selecting "Sub-tasks" filters to only sub-task items (covers filter !== all branch)', async () => {
-        const taskRow = makeRow({ id: 'CER-T1', issue_type: 'task', title: 'Task item' });
-        const subTaskRow = makeRow({ id: 'CER-S1', issue_type: 'sub_task', title: 'Sub-task item' });
+        const taskRow = makeRow({ id: 'ATL-T1', issue_type: 'task', title: 'Task item' });
+        const subTaskRow = makeRow({ id: 'ATL-S1', issue_type: 'sub_task', title: 'Sub-task item' });
         renderWithProviders(
             <AwaitingYouPanel rows={[taskRow, subTaskRow]} isLoading={false} />,
         );

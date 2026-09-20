@@ -176,10 +176,10 @@ describe('A08 — role_id on agent schemas', () => {
 
 describe('IssueKeyPrefixSchema', () => {
     it('accepts 3 uppercase letters', () => {
-        expect(IssueKeyPrefixSchema.parse('CER')).toBe('CER');
+        expect(IssueKeyPrefixSchema.parse('ATL')).toBe('ATL');
     });
     it('rejects lowercase', () => {
-        expect(IssueKeyPrefixSchema.safeParse('cer').success).toBe(false);
+        expect(IssueKeyPrefixSchema.safeParse('atl').success).toBe(false);
     });
     it('rejects wrong length', () => {
         expect(IssueKeyPrefixSchema.safeParse('CE').success).toBe(false);

@@ -66,6 +66,6 @@ describe('flattenIssueTree', () => {
 
 describe('makeShortId', () => {
     it('returns the id unchanged', () => {
-        expect(makeShortId('task', 'CER-5')).toBe('CER-5');
+        expect(makeShortId('task', 'ATL-5')).toBe('ATL-5');
     });
 });

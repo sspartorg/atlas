@@ -17,7 +17,7 @@ const CONFIG: IJiraConfig = {
     api_token_set: true,
     poll_interval_minutes: 60,
     extra_fields: [],
-    sources: [{ repo_id: 'p1', jql: 'project = DHEQ', workflow_id: 'wf-dev' }],
+    sources: [{ repo_id: 'p1', jql: 'project = ATL', workflow_id: 'wf-dev' }],
     last_sync_at: null,
     last_sync_ok: null,
     last_sync_message: null,
@@ -75,7 +75,7 @@ describe('JiraTab', () => {
         expect(screen.getByLabelText('Jira API token')).toHaveValue('');
         expect(screen.getByPlaceholderText('Stored. Type to replace.')).toBeInTheDocument();
         expect(await screen.findByText('Sandbox / core')).toBeInTheDocument();
-        expect(screen.getByText('project = DHEQ')).toBeInTheDocument();
+        expect(screen.getByText('project = ATL')).toBeInTheDocument();
         expect(await screen.findByText('Development')).toBeInTheDocument();
     });
 
@@ -99,7 +99,7 @@ describe('JiraTab', () => {
         await waitFor(() =>
             expect(puts).toContainEqual({
                 sources: [
-                    { repo_id: 'p1', jql: 'project = DHEQ', workflow_id: 'wf-dev' },
+                    { repo_id: 'p1', jql: 'project = ATL', workflow_id: 'wf-dev' },
                     { repo_id: 'r-web', jql: 'labels = web', workflow_id: 'wf-qa' },
                 ],
             })

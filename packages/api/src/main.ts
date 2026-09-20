@@ -27,7 +27,7 @@ process.on('unhandledRejection', (reason) => {
     console.error(`[api] unhandled promise rejection (kept alive): ${msg}`);
 });
 
-// CER-2 follow-up — failOrphanedRuns historically only ran as a
+// ATL-2 follow-up — failOrphanedRuns historically only ran as a
 // bootStep, which meant a run that died mid-stream (CLI crash, agent
 // exits without calling performer_done, etc.) would sit in_progress
 // forever as long as the API stayed up. This timer fires the reaper on
@@ -46,7 +46,7 @@ process.on('unhandledRejection', (reason) => {
 //     10-30 min. The 30 min floor is comfortably above those ceilings.
 //
 // Pre-2026-06-01 the cutoff was 60 s on the periodic path too — that
-// killed CER-4 / CER-5 mid-stream when their Architect / QA Writer
+// killed ATL-4 / ATL-5 mid-stream when their Architect / QA Writer
 // runs crossed the 60 s mark.
 const ORPHAN_REAPER_INTERVAL_MS = 60_000;
 const ORPHAN_REAPER_PERIODIC_CUTOFF_MS = 30 * 60_000;
@@ -94,7 +94,7 @@ async function migrateLatest(): Promise<void> {
 //
 // Pre-2026-06-01 this function used a single 60 s cutoff and ran only
 // at boot; making it periodic without the registry filter killed
-// healthy 60-second-plus runs mid-stream (CER-4, CER-5 incident).
+// healthy 60-second-plus runs mid-stream (ATL-4, ATL-5 incident).
 async function failOrphanedRuns(opts: { cutoffMs: number }): Promise<void> {
     try {
         const cutoff = new Date(Date.now() - opts.cutoffMs).toISOString();

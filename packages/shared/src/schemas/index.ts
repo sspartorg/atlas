@@ -325,7 +325,7 @@ export const ReplyToItemSchema = z
     });
 
 // POST /api/issues/:type/:id/history/prune body. Agents that manage a
-// long-lived tracking item (e.g. cer-weekly-automation on JDA-1) invoke
+// long-lived tracking item (e.g. atl-weekly-automation on ATL-1) invoke
 // this via the MCP `update_item` action `remove_history` to drop stale
 // comments + issue_events older than a cutoff timestamp. `before_time`
 // is an ISO 8601 datetime — everything strictly before it is deleted,

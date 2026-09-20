@@ -484,7 +484,7 @@ export function NewProjectModal({ open, onClose }: Props) {
                         e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)
                     )
                 }
-                placeholder="CER"
+                placeholder="ATL"
                 slotProps={{
                     htmlInput: {
                         maxLength: 3,

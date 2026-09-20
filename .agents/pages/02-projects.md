@@ -20,7 +20,7 @@ List all projects with cards or table view; create new ones; trigger reclone, de
 
 **Card grid (`ProjectCard`)** — for each project:
 - Folder icon + name + schedule indicator (`ProjectCard:120-133` shows when auto-fetch is configured)
-- Display ID chip (e.g., `CER`) — taken straight from `p.issue_key_prefix` (Projects.tsx:86-92), the prefix picked at project-create time, NOT derived from creation order. This is what keeps the project tag aligned with the issue ids it produces (CER-1, CER-2, …).
+- Display ID chip (e.g., `ATL`) — taken straight from `p.issue_key_prefix` (Projects.tsx:86-92), the prefix picked at project-create time, NOT derived from creation order. This is what keeps the project tag aligned with the issue ids it produces (ATL-1, ATL-2, …).
 - **Repo URL** link — `git_url`, opens externally (ProjectCard:161-181)
 - Counters: tasks, sub-tasks
 - Last activity timestamp
