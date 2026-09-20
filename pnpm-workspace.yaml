@@ -12,7 +12,26 @@ allowBuilds:
   msw: true
   node-pty: true
 overrides:
-  qs: '^6.15.3'
-  hono: '^4.12.27'
-  undici: '^7.28.0'
-  js-yaml: '^4.3.0'
+  # Security floors for transitive advisories (campaign finding F-020).
+  # Every module below resolves to exactly ONE version in this tree, so a
+  # plain caret override is safe - there is no other major to strand.
+  # Re-derive after a dependency bump with `pnpm audit --json`; drop an entry
+  # once the direct dependency ships a patched range on its own.
+  '@fastify/static': '^10.1.2'
+  '@hono/node-server': '^1.19.15'
+  '@vitest/mocker': '^4.1.11'
+  body-parser: '^2.3.0'
+  brace-expansion: '^5.0.9'
+  fast-uri: '^3.1.6'
+  fastify: '^5.12.1'
+  find-my-way: '^9.6.1'
+  hono: '^4.13.5'
+  ip-address: '^10.3.1'
+  js-yaml: '^4.3.2'
+  nanoid: '^3.3.18'
+  postcss: '^8.5.23'
+  qs: '^6.16.0'
+  react-router: '^7.18.2'
+  smol-toml: '^1.7.1'
+  undici: '^7.29.0'
+  vitest: '^4.1.11'
