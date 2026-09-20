@@ -1,85 +1,78 @@
-# 05 — Seed two throwaway repos under sspartorg
+# 05 — Verify the two sandbox repos
 
-**Status:** todo
+**Status:** done — 2026-09-20
 **Depends on:** [task-04](task-04-bot-credential.md)
 **Scope:** infra
 
+> ⚠️ **Rewritten 2026-09-20. This task originally created two new repos.**
+> Ruling D-2 was amended by the Owner once `sspartorg` was listed and found to
+> already hold a matching pair. No repos were created. The original steps
+> (create `atlas-demo-api` / `atlas-demo-web` via `gh`, seed them with
+> Express+vitest and Vite+vitest) are superseded, not merely skipped.
+
 ## Why
 
-The campaign needs two repos that the sspart-bot App can read and write, and
-that contain **real** Node projects — a setup script running `npm ci` against
-an empty repo proves nothing, and the large sample Task in
-[task-07](task-07-sample-tasks-small-medium-large.md) needs a shared contract
-to span.
+The campaign needs two repos the sspart-bot App can read and write, containing
+**real** Node projects — a setup script running against an empty repo proves
+nothing, and the large sample Task in
+[task-07](task-07-sample-tasks-small-medium-large.md) needs two repos to span.
 
-Throwaway, because the campaign will push branches, open PRs, and re-clone
-them repeatedly.
+`sspartorg` already has exactly that pair. Using it beats creating new repos on
+three counts: no new permanent artifacts in the Owner's org, no risk that the
+App installation is scoped to selected repositories and excludes the new ones
+(which would need an Owner admin action to fix), and one less task.
 
-## What to do
+## The pair
 
-1. **Check `gh` is authenticated and has org create rights:**
-   `gh auth status`, then `gh api /orgs/sspartorg -q .login`. If the account
-   cannot create repos in the org, stop and ask the Owner — creating them
-   under a personal account changes the App installation scope.
+| Repo | Default branch | Size | Contents |
+|---|---|---|---|
+| `sspartorg/atlas-sdlc-sandbox` | `main` | 35 KB | `package.json`, `src`, `test`, `tests`, `specs`, `docs` |
+| `sspartorg/atlas-sdlc-sandbox-web` | `main` | 6 KB | `package.json`, `src`, `test` |
 
-2. **Create the two repos, private:**
-   ```
-   gh repo create sspartorg/atlas-demo-api --private --add-readme
-   gh repo create sspartorg/atlas-demo-web --private --add-readme
-   ```
-
-3. **Seed `atlas-demo-api`** — a minimal Express service with vitest, so
-   `npm ci` and `npm test` both do real work:
-   - `package.json` with `express`, `vitest`, scripts `dev`, `test`, `build`
-   - `src/server.ts` exporting an app with one route
-   - `src/server.test.ts` with one passing assertion
-   - `tsconfig.json`
-   - `.gitignore` covering `node_modules`, `dist`, `.env`
-
-4. **Seed `atlas-demo-web`** — a Vite + React app with vitest:
-   - `package.json` with `vite`, `react`, `vitest`, same script names
-   - `src/main.tsx`, `src/App.tsx`
-   - `src/App.test.tsx` with one passing assertion
-   - `.gitignore` as above
-
-5. **Give both a shared contract to span.** Add the same
-   `src/contract.ts` to each, exporting a single `Item` type. The large sample
-   Task's job is to extend it in both repos at once — that is what forces the
-   multi-repo workspace.
-
-6. **Verify both build and test cleanly from a fresh clone**, because that is
-   exactly what the setup script will do inside a worktree:
-   ```
-   git clone … /tmp/verify-api && cd /tmp/verify-api && npm ci && npm test
-   ```
-   Repeat for the web repo. Delete the verification clones afterwards —
-   Atlas's own clone must be the first one in the workspace.
-
-7. **Confirm the App installation covers both.** The sspart-bot App must be
-   installed on the org with access to these two repos, or every clone in
-   [task-06](task-06-project-two-repos-setup-secrets.md) fails with an auth
-   error that looks like a bug. Check
-   `gh api /orgs/sspartorg/installations` or the App's installation settings.
-
-8. **Record the default branch name** each repo got — `main` or `master`
-   changes what goes into the project's repo rows and what `ensureWorktree`
-   rebases onto.
+Both pushed 2026-09-19. Both have `"test": "node --test"`; the web repo also
+has `"start": "node src/server.js"`. Neither declares dependencies, so
+`npm ci` is a no-op and a setup script must do something else observable —
+see the note in [task-06](task-06-project-two-repos-setup-secrets.md).
 
 ## Done when
 
-- [ ] Both repos exist and are private — paste `gh repo list sspartorg --limit 20`
-- [ ] Each has a real `package.json` with `dev`, `test` and `build` scripts
-- [ ] `npm ci && npm test` passes from a fresh clone of each — paste both tails
-- [ ] Both carry an identical `src/contract.ts`
-- [ ] The sspart-bot App installation lists both repos — paste the check
-- [ ] The default branch name of each is recorded below
-- [ ] The two verification clones under `/tmp` are deleted
-- [ ] Nothing was created inside `~/Work/workspace` by this task — Atlas clones
+- [x] Both repos exist and are private — confirmed via `gh repo list sspartorg`
+- [x] Each has a real `package.json` with a working `test` script
+- [x] `npm test` passes from a fresh shallow clone of each — 43 tests and 10
+      tests respectively, both zero failures
+- [x] The sspart-bot App installation covers them — proven in task-04 by
+      minting two live installation tokens against owner `sspartorg`, and by
+      the previous Atlas install having cloned `atlas-sdlc-sandbox`
+- [x] Default branch of each recorded below
+- [x] The verification clones under `/tmp` are deleted
+- [x] Nothing was created inside `~/Work/workspace` by this task — Atlas clones
       them itself in task-06
+- [x] **No repos were created in the Owner's org**
 
 ## Evidence
 
-*(filled during execution)*
+Executed 2026-09-20.
 
-`atlas-demo-api` default branch: ____
-`atlas-demo-web` default branch: ____
+```
+=== atlas-sdlc-sandbox: npm test ===    === atlas-sdlc-sandbox-web: npm test ===
+1..43                                   1..10
+# tests 43   # pass 43   # fail 0       # tests 10   # pass 10   # fail 0
+# duration_ms 313.789125                # duration_ms 81.938959
+```
+
+`atlas-sdlc-sandbox` default branch: **main**
+`atlas-sdlc-sandbox-web` default branch: **main**
+
+Both verification clones removed from `/tmp` afterwards, so Atlas's own clone
+in task-06 is the first one in the workspace.
+
+### Why the shared contract was dropped
+
+The original task added an identical `src/contract.ts` to both repos so the
+large sample Task would have a genuine cross-repo change to make. The Owner
+chose the plain "use the existing pair" option over the variant that added one.
+[Task-07](task-07-sample-tasks-small-medium-large.md)'s large task therefore
+has to find its own cross-repo change — it must still touch **both** repos to
+exercise the `ws/` workspace and the two-PR path (ruling D-8), so its
+description is reworked against what these two repos actually contain rather
+than against a contract file that was never added.

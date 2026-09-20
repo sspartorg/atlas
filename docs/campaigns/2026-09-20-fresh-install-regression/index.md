@@ -24,7 +24,7 @@ Opened 2026-09-20 on the Owner's ruling. Authoring plan:
 | 2 | [Factory reset — disk and Docker, Atlas-only](task-02-factory-reset.md) | infra | done |
 | 3 | [First boot and onboarding from zero](task-03-first-boot-onboarding.md) | infra | done |
 | 4 | [Register the sspart-bot GitHub App credential](task-04-bot-credential.md) | infra | done |
-| 5 | [Seed two throwaway repos under sspartorg](task-05-seed-throwaway-repos.md) | infra | todo |
+| 5 | [Verify the two sandbox repos](task-05-seed-throwaway-repos.md) | infra | done |
 | 6 | [Create the project, add both repos, setup scripts and secrets](task-06-project-two-repos-setup-secrets.md) | infra | todo |
 | 7 | [Run three graded sample Tasks: small, medium, large](task-07-sample-tasks-small-medium-large.md) | infra | todo |
 | 8 | [Walk wave A — onboarding, dashboard, scratch pad, projects, repos](task-08-walk-wave-a-projects-repos.md) | web | todo |
@@ -74,7 +74,7 @@ without a new ruling recorded here.
 | # | Ruling |
 |---|---|
 | D-1 | The wipe is **Atlas-scoped only**. `dhequest1-*`, `dhequest2-*`, `dhequest-backup-*`, `shopping-site_*` and `neel-postgres` are untouchable. `docker system prune` is forbidden in every form. |
-| D-2 | Two throwaway repos are created under `sspartorg`, seeded with real Node projects so the setup script does real work. |
+| D-2 | ~~Two throwaway repos are created under `sspartorg`~~ - **amended 2026-09-20**: the org already holds `atlas-sdlc-sandbox` and `atlas-sdlc-sandbox-web`, both real Node projects whose tests pass (43 and 10). The pair is reused and **no repos are created**, avoiding permanent artifacts in the org and the risk of an App installation scoped to selected repositories. |
 | D-3 | `CER`, `DHEQ` and `JDA` all become `ATL`. "Linoes" and "insightsoftware" do not exist in this repo — searched across the working tree, every gitignored directory, all commit messages and every blob in `git rev-list --all`. |
 | D-4 | The campaign lives in git under `docs/campaigns/`, not in `.agents/` (barred by `.agents/conventions.md`) and not in `.claude/plans/` (untracked). |
 | D-5 | ADR 0009's coverage tiers stand. `shared`/`api`/`mcp` hold at 95%+; `web` rises 70 → 80 lines with the real gap closed by e2e. ADR 0009 is amended, not overturned. |
