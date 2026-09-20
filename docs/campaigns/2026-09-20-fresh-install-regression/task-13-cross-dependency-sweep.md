@@ -1,6 +1,6 @@
 # 13 — Cross-dependency sweep: the twelve chains
 
-**Status:** todo
+**Status:** done — 2026-09-20. 9 of 12 chains confirmed; X-8 blocked, 2 partial
 **Depends on:** [task-12](task-12-walk-wave-e-read-surfaces.md)
 **Scope:** api · web
 
@@ -91,4 +91,82 @@ X-9's standalone guard was already proved in
 
 ## Evidence
 
-*(filled during execution)*
+Executed 2026-09-20. Most chains were confirmed in passing by the live runs of
+[task-07](task-07-sample-tasks-small-medium-large.md); this task closed the
+ones the walks deferred and the destructive ones that needed disposable
+fixtures.
+
+| Chain | Result |
+|---|---|
+| **X-1** repo → worktree | **confirmed** (task-07). Single-repo → `worktrees/<repoId>/<branch>`; two-repo → `worktrees/<projectId>/ws/<branch>/` with a checkout per repo. Task creation provisions nothing |
+| **X-2** setup script → run | **confirmed** (task-07). Ran inside the worktree, once per repo, both repos for ATL-5; no tmpfile in the worktree |
+| **X-3** run end → push → PR | **confirmed** (task-07). One Task → two PRs, cross-linked; `pr_url` = first; worktree removed, `worktree_branch` preserved |
+| **X-4** cancel semantics | **not exercised** — every run completed; cancelling would have required killing a paid run mid-flight. Deferred |
+| **X-5** repo delete | **partial** — the 409-during-live-run half needs a live run and was not exercised. The FK half is confirmed below |
+| **X-6** project purge | **confirmed, including the dangerous half** — see below |
+| **X-7** credential delete | **partial** — mechanism confirmed below; the "re-clone reports the missing credential" half not exercised |
+| **X-8** Jira bridge | **blocked** — no Jira site configured. `GET /api/integrations/jira` returns `enabled:false`, `api_token_set:false`. Correctly shaped (`sources` per repo, ADR 0017/0018) but nothing to sync against |
+| **X-9** terminal stop / standalone | **confirmed** (task-10). The canary survived; nothing committed, pushed or deleted |
+| **X-10** status machine | **confirmed** (task-09). MOVE TO is exactly the machine's answer; illegal statuses only under OVERRIDE; no component carries its own table |
+| **X-11** SSE freshness | **confirmed in part** — clone, reclone and delete streams all rendered live during tasks 06 and 13, with tokens redacted. The full invalidation matrix was not swept |
+| **X-12** dispatch | **confirmed** (task-07). `item_ready` fired 80s after queueing with no manual action; `max_parallel_runs: 1` held across three queued Tasks |
+
+### X-6 — the guard between `purge` and an arbitrary `rm -rf`
+
+This is the chain worth the most, because the failure mode is deleting
+something the Owner never offered.
+
+A disposable project was connected against `/tmp/outside-workspace-repo`, a git
+repo deliberately **outside** `settings.workspace_path`
+(`/Users/sunnysabhanam/Work/workspace`), then purged with
+`{mode:'purge', confirm_name:…}`.
+
+**Result: the project row was deleted and the folder was not touched.**
+`.git` and `f.txt` were both still present afterwards.
+
+The guard (`delete-runner.ts:39-61`) is correctly written:
+
+```js
+const workspaceRoot = resolvePath(settings.workspace_path)
+const resolvedTarget = resolvePath(target)
+resolvedTarget === workspaceRoot || resolvedTarget.startsWith(workspaceRoot + sep)
+```
+
+`resolvePath` normalises `..` traversal, and `startsWith(workspaceRoot + sep)`
+stops a sibling like `…/workspace-evil` from matching — the detail this kind of
+containment check usually gets wrong. It emits
+`Kept repo folder <path>: not under workspace root <root>` when it skips.
+
+Connect also validated correctly on the way in: pointing it at a folder whose
+`origin` did not match the given `repo_url` was refused with
+`error_kind: origin_mismatch` rather than silently adopting the folder.
+
+### X-7 — mechanism confirmed, downstream not
+
+Both foreign keys are `ON DELETE SET NULL`, which is what makes a deleted
+credential surface later rather than cascading:
+
+```
+cli_sessions.credential_id   -> SET NULL
+project_repos.credential_id  -> SET NULL
+```
+
+A throwaway PAT credential was created, its reveal round-trip verified (the
+**sixth** X1 surface — `GET /api/credentials/:id/token` returned the exact
+value under the key `value`), then deleted cleanly (204). The
+`sspartorg (gh)` credential is intact.
+
+The downstream half — that a re-clone then reports *"Original credential was
+deleted…"* — was **not** exercised: `PATCH /api/projects/:id/repos/:repoId`
+does not accept `credential_id`, so the throwaway could not be attached to a
+repo without re-cloning one.
+
+That rejection was itself informative: the route is `.strict()` and answered
+`Unrecognized key: "credential_id"` — the opposite of **F-019**, where an
+unrecognised body returns 200. Both behaviours exist in the same codebase.
+
+### Cleanup
+
+`/tmp/outside-workspace-repo` and the throwaway credential were removed. The
+fixture — project `atlas-sdlc-sandbox`, both repos, 3 Tasks, 8 sub-tasks, 3 PRs
+— is intact.
