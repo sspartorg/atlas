@@ -1,6 +1,6 @@
 # 02 — Factory reset, disk and Docker, Atlas-only
 
-**Status:** todo
+**Status:** done — 2026-09-20
 **Depends on:** [task-01](task-01-migration-squash.md)
 **Scope:** infra
 
@@ -91,26 +91,68 @@ literally. It is the authority; this file is the procedure.
 
 ## Done when
 
-- [ ] `diff /tmp/containers-before.txt /tmp/containers-after.txt` shows **only**
-      the removed Atlas container names — paste the diff
-- [ ] `diff /tmp/volumes-before.txt /tmp/volumes-after.txt` shows only
-      `atlas-pg` (and `atlas-pg-prod` if it existed) — paste it
-- [ ] `diff /tmp/images-before.txt /tmp/images-after.txt` is **empty** — no
-      image was removed
-- [ ] Every `dhequest*`, `shopping-site*` and `neel-postgres` container and
-      volume is still present — paste `docker ps -a` and `docker volume ls`
-- [ ] `ls ~/Work/workspace/` shows only `bots-info`, `bots-info.zip`, `.DS_Store`
-- [ ] `ls ~/.config/Atlas/` is empty or the directory is absent
-- [ ] `ls -1 "$TMPDIR"/atlas-setup-* 2>/dev/null | wc -l` returns 0, and the
-      pre-deletion count is recorded below
-- [ ] `git status --porcelain` shows no tracked file deleted
-- [ ] `docker ps -a | grep atlas` returns nothing
-- [ ] No `docker system prune`, `volume prune`, `container prune` or
-      `network prune` appears anywhere in this task's shell history
+- [x] Container diff shows only `atlas-postgres`
+- [x] Volume diff shows only `atlas-pg`; `atlas-pg-prod` never existed
+- [x] Image diff is empty — no image removed
+- [x] All 10 non-Atlas containers and all 10 non-Atlas volumes still present
+- [x] `ls -A ~/Work/workspace/` shows only `bots-info`, `bots-info.zip`, `.DS_Store`
+- [x] `~/.config/Atlas/` is empty
+- [x] 0 orphans, and the pre-deletion count was also 0
+- [x] `git status --porcelain` is clean
+- [x] No atlas-named container or volume remains
+- [x] No prune of any kind was run — every removal named its target
 
 ## Evidence
 
-*(filled during execution)*
+Executed 2026-09-20.
 
-Orphan `atlas-setup-*` count before deletion: ____
-Orphan git-config temp dir count before deletion: ____
+Orphan `atlas-setup-*` count before deletion: **0**
+Orphan git-config temp dir count before deletion: **0**
+
+Both zero, so no crashed run had left decrypted secrets or a live token on
+disk. Nothing to file.
+
+**Docker diffs.** Before/after captures of containers, volumes, networks and
+images:
+
+```
+=== CONTAINER DIFF ===       === VOLUME DIFF ===
+1d0                          1d0
+< atlas-postgres              < atlas-pg
+
+=== NETWORK DIFF ===         === IMAGE DIFF (must be empty) ===
+1d0                          IMAGES UNCHANGED
+< atlas_default
+```
+
+Exactly three resources removed, each by explicit name. 10 containers and 10
+volumes remain, all non-Atlas:
+`dhequest1-*` (4), `dhequest2-*` (4), `dhequest-backup-clickhouse`,
+`neel-postgres`, and their volumes plus `shopping-site_neel-pgdata`.
+
+`atlas-postgres-prod` and `atlas-pg-prod` did not exist, so the conditional
+branches were no-ops.
+
+**Six databases died with the volume**, as intended: `atlas`, `atlas_e2e`,
+`atlas_test`, `atlas_test_a`, `atlas_test_engine`, `atlas_wf_real`.
+
+**Key deletion ordering held.** The volume removal was confirmed gone before
+`rm ~/.config/Atlas/workspace.key` ran, so no ciphertext was stranded. The
+directory is now empty; `crypto.ts` will generate a fresh key on first boot —
+a path this machine has not exercised since 11 Aug.
+
+**Preserved.** `~/Work/workspace/bots-info/` intact, PEM mode 0600 and
+unmodified:
+
+```
+PEM sha256: 3d9dab455e6fd15f79e11a38571b37de6119e8cae9d33c346e553bbe1ceb34aa
+```
+
+That checksum is the baseline for [task-04](task-04-bot-credential.md)'s final
+check. `.env` and `.env.prod` untouched; `node_modules/` untouched.
+
+**Repo scratch removed** (33.3 MB): `logs/` 200K, `.atlas-dump/` 3.3M,
+`e2e-logs/` 18M, `test-results/` 12K, `playwright-report/` 780K,
+`.playwright-mcp/` 12M, plus `packages/api/mcp-config.generated.json`.
+`git ls-files` confirmed none held a tracked file before deletion, and
+`git status --porcelain` is clean after.
