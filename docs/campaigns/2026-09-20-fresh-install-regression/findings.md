@@ -4,13 +4,13 @@ Everything the walk finds lands here. Nothing is fixed inline (ruling D-9) —
 fixes happen in [task-14](task-14-fix-batch-p0-p1.md) and
 [task-15](task-15-fix-batch-p2-p3.md), severity-ordered.
 
-**Six rows as of 2026-09-20.** F-001 to F-005 were pre-filed while authoring
+**Ten rows as of 2026-09-20.** F-001 to F-005 were pre-filed while authoring
 [`checklists/per-page.md`](checklists/per-page.md), by reading code rather than
 by using the app — recorded so the walk confirms them rather than rediscovering
 them. **F-001 is now confirmed empirically** in
 [task-03](task-03-first-boot-onboarding.md). F-006 was found during that same
-first-boot pass. F-002 to F-005 remain unconfirmed at runtime; their pages are
-walked in tasks 10 and 11.
+first-boot pass, and F-007 to F-010 during task-06's project setup. F-002 to
+F-005 remain unconfirmed at runtime; their pages are walked in tasks 10 and 11.
 
 ---
 
@@ -63,6 +63,10 @@ consequence wins.
 | F-004 | P2 | D10 · `/notifications` | The sidenav notifications badge can exceed what the In-App Feed will ever display, with no label explaining the gap. | badge counts every unread row with no staleness join (`services/counts.ts:136-140`); the feed drops stale `needs_you` / `agent_completed` rows (`services/notifications.ts:69-78`) | 5 cross-page, X4 | open |
 | F-005 | P2 | D10 · `/notifications` | A notification referencing a deleted agent renders as the literal `Atlas`, indistinguishable from a genuine system row. | `InAppFeedTabContent.tsx:169` is `agent?.name ?? 'Atlas'` | 2 attribution, X3 | open |
 | F-006 | P3 | A1 · `/onboarding` | A rejected submit leaves its error on screen while the user fixes the input; the stale message only clears on the next submit. | `Onboarding.tsx:202-211` `handleWorkspacePathChange` clears `errors.workspacePath` but not `submitError`; `submitError` is reset only inside `handleFinish` at `:233`. Reproduced 2026-09-20: submitted `relative/path`, got "Workspace folder must be an absolute path: relative/path", then replaced the field with a valid absolute path — the error persisted through a 2s wait. | 6 error | open |
+| F-007 | P3 | A2/A4 · `/` and `/projects` | Both empty states tell the Owner "No credentials yet?" unconditionally, including when credentials exist. The Projects copy also says to add a "Personal Access Token" when the saved credential is a GitHub App. | `ProjectsEmptyState.tsx:56` and `DashboardEmptyState.tsx:80` render the Alert with no credential check and receive no credentials prop. The same Dashboard component **does** condition its agents hint on a `noAgents` prop, so the pattern exists and was simply not applied here. Reproduced 2026-09-20 after a full page load with one saved App credential; the New Project modal on the same page correctly reported "Git credential · 1 saved". | 5 cross-page | open |
+| F-008 | P3 | A5 · `/projects/:id?tab=repos` | The Add repo modal subtitle reads "Tasks in this project can then work on it next to the **primary repo**". ADR 0018 removed the primary repo. | `pages/project/AddRepoDialog.tsx` subtitle. It contradicts the Repos tab copy rendered directly behind it — "A Task works on the repos it picks; each gets its own checkout on the Task's branch" — and contradicts `docs/adr/0018-repos-without-a-primary.md`. | 2 attribution | open |
+| F-009 | P3 | A5 · `/projects/:id?tab=repos` | A repo added after project creation clones into `<project-slug>-<repo-name>`, so a repo whose name already starts with the project name stutters on disk. | `routes/projects.ts:408` builds `join(workspace_path, slug(project.name) + '-' + body.name)`; project-create at `:126` uses `join(workspace_path, body.project_name)`. The two repos of one project therefore follow different naming schemes. Observed 2026-09-20: `~/Work/workspace/atlas-sdlc-sandbox` and `~/Work/workspace/atlas-sdlc-sandbox-atlas-sdlc-sandbox-web`. Functionally harmless — `dirname(git_path)` is identical for both, so worktrees co-locate correctly. | 1 round-trip | open |
+| F-010 | P2 | C9 · `/agents/marketplace` | Installing a workflow template installs agents whose default CLI is absent from the machine, with no warning. The failure surfaces only mid-run. | Creating the `delivery` workflow installed 10 agents, 6 of them `cli = copilot`: Coder, Code Reviewer, Automation Engineer, Automation Reviewer (plus their reviewers). `which copilot` returns not-found, and `pnpm doctor` had already reported `[skip] copilot: not found (optional)` at boot. `Build sub-task` runs `agent-coder` and `agent-code-reviewer`, so the first real Task would have died at the build step. Nothing in the install path consults the prerequisite check. | 3 list membership, 6 error | open |
 
 ---
 

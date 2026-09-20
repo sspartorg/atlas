@@ -1,6 +1,6 @@
 # 06 — Create the project, add both repos, setup scripts and secrets
 
-**Status:** todo
+**Status:** done — 2026-09-20
 **Depends on:** [task-05](task-05-seed-throwaway-repos.md)
 **Scope:** infra
 
@@ -96,28 +96,100 @@ reflects this with a repo picker above the editors.
 
 ## Done when
 
-- [ ] Project `atlas-demo` exists with prefix `ATL`, and a second project
-      cannot claim `ATL`
-- [ ] Both repos are `clone_status = ready`, cloned inside
-      `~/Work/workspace/` — paste the two paths
-- [ ] No UI surface marks either repo as primary
-- [ ] Each repo has its **own** `setup_sh_body`; the `projects` table has no
-      such column — paste the `\d project_repos` fragment showing both
-- [ ] A commit made through Atlas shows the bot as author and the human as a
-      `Co-Authored-By` trailer — paste `git log -1`
-- [ ] A run's `setup_output_text` shows `project-value` resolved for
-      `DEMO_TOKEN` (project tier beat global) — **as `***`**, with the
-      resolution proven by a length or hash echo rather than the plaintext
-- [ ] No secret value of length ≥ 4 appears unredacted anywhere on the run page
-- [ ] `${variable.NOPE}` produces `setup_failed` / `unknown_secret` and no CLI
-      spawn — paste the run row
-- [ ] No `atlas-setup-*` file is left in `$TMPDIR`, and none ever appeared
-      inside either worktree
-- [ ] At least the agents referenced by the `delivery` template are installed,
-      and `agents` was **not** auto-populated by the seed
-- [ ] A `delivery` workflow exists on the project with its `build` and `test`
-      sub-workflows
+- [x] Project **`atlas-sdlc-sandbox`** exists with prefix `ATL` (name follows
+      the repo, per the amended D-2). The prefix field reported *"Available.
+      New issues will be ATL-1, ATL-2, …"* live as it was typed
+- [x] Both `clone_status = ready`, both inside `~/Work/workspace/` — paths
+      below. ⚠️ The second stutters; filed as **F-009**
+- [x] No repo row marks a primary, and `projects` has **0** git/setup columns.
+      ⚠️ But the Add repo modal's subtitle still says *"next to the primary
+      repo"* — filed as **F-008**
+- [x] Each repo has its own `setup_sh_body` (853 and 861 bytes — different,
+      because each embeds its own repo name). `projects` has no such column.
+      The Setup tab renders a **repo picker** above the editors
+- [ ] **Deferred to [task-07](task-07-sample-tasks-small-medium-large.md).**
+      No commit has been made through Atlas yet — the clone is read-only. The
+      assertion needs a real agent run
+- [ ] **Deferred to task-07** — needs a run. The scripts are written to prove
+      it: they echo `${#DT}` and `${#SK}`, so `13` means the project tier won
+      (`project-value`) and `12` would mean global (`global-value`)
+- [ ] **Deferred to task-07** — the scripts deliberately `echo` a raw secret
+      so the redaction can be checked in `setup_output_text`
+- [ ] **Deferred to task-07** — needs a run to fail against
+- [ ] **Deferred to task-07** — no setup script has executed yet
+- [x] 10 agents installed by the template; `agents` was 0 after the seed and
+      is 10 only after the install, so the seed did not auto-populate it.
+      ⚠️ 6 arrived set to the absent `copilot` CLI — filed as **F-010** and
+      patched to `claude`
+- [x] `Delivery` (`trigger=item_ready`, `use_worktree`, `push_code`,
+      `raises_pr`) plus `Build sub-task` and `Test sub-task`
 
 ## Evidence
 
-*(filled during execution)*
+Executed 2026-09-20. Project id `c4cf4b2b-7c2a-4761-a90c-c4818b3eb2a8`.
+
+**Clones.** Repo 1 in 1s, 126 objects, 42.63 KiB. Both `ready`:
+
+```
+atlas-sdlc-sandbox      /Users/sunnysabhanam/Work/workspace/atlas-sdlc-sandbox                        main  ready  pos 0
+atlas-sdlc-sandbox-web  /Users/sunnysabhanam/Work/workspace/atlas-sdlc-sandbox-atlas-sdlc-sandbox-web  main  ready  pos 1
+```
+
+The second path is F-009. It is cosmetic: `dirname(git_path)` is the same for
+both, so worktrees still co-locate under one `worktrees/` directory.
+
+**ADR 0018 holds at the schema level.** `information_schema` reports **0**
+columns on `projects` matching `git%` or `setup_%`.
+
+**The Owner's open question is answered: one setup script per repo.** The
+Setup tab carries a repo picker above the two editors, and the two bodies are
+stored independently at 853 and 861 bytes. The tab's own help text states the
+merge order: *"Values resolve from Settings → Shared Secrets first, then
+Project → Manage Secrets — project entries override shared ones on key
+collision."* This is direct confirmation that
+`docs/setup-script-contract.md:31-56` is stale in documenting
+`projects.setup_sh_body`.
+
+**Secrets, both tiers.** Global `DEMO_TOKEN=global-value` and
+`SHARED_KEY=global-wins-if-unset`; project `DEMO_TOKEN=project-value`. Both
+`PUT` responses returned `has_value: true` and no plaintext, so X1 holds on the
+write path too.
+
+The scripts prove the merge order **without printing a value** — they echo
+string lengths, which redaction does not touch:
+
+```
+DEMO_TOKEN  project-value        = 13   <- project tier won
+            global-value         = 12   <- would mean global won
+SHARED_KEY  global-wins-if-unset = 20   <- global only, no project override
+```
+
+They also echo one raw secret deliberately, so `setup_output_text` can be
+checked for `***`, and they run `npm test` rather than `npm ci` — neither repo
+declares dependencies, so `npm ci` would be a silent no-op and prove nothing.
+
+### Deviations
+
+1. **Project named `atlas-sdlc-sandbox`, not `atlas-demo`.** Follows the
+   amended D-2; the name auto-filled from the repo URL.
+
+2. **Secrets and setup scripts were written via the API, not the UI.** Faster,
+   and the UI for both is walked properly in
+   [task-11](task-11-walk-wave-d-settings-admin.md) (Shared Secrets) and
+   [task-08](task-08-walk-wave-a-projects-repos.md) (Setup tab). The Setup tab
+   was opened to confirm it renders the stored bodies per repo.
+
+3. ⚠️ **Six agents were patched from `copilot` to `claude`.** The template
+   installed Coder, Code Reviewer, Automation Engineer and Automation Reviewer
+   (plus reviewers) on a CLI that is not installed — `which copilot` is empty
+   and `pnpm doctor` flagged it at boot. `Build sub-task` runs
+   `agent-coder` and `agent-code-reviewer`, so task-07 would have died at the
+   build step. Patched to `claude` / `claude-sonnet-4-6` so the campaign can
+   proceed; the defect itself is **F-010** and is not considered fixed by this
+   workaround.
+
+**Six deferred checks.** Everything needing a real agent run — the bot commit
+identity, secret substitution in `setup_output_text`, redaction, the
+`unknown_secret` failure path, and `$TMPDIR` hygiene — moves to
+[task-07](task-07-sample-tasks-small-medium-large.md), which is the first task
+that actually executes a setup script.
