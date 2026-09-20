@@ -379,7 +379,7 @@ export interface ITask {
     acceptance_criteria: string;
     /** Architect's spec for the whole Task (ADR 0015). */
     spec_md: string | null;
-    /** The one PR the Task's workflow run opened. */
+    /** The FIRST PR the Task's workflow run opened; see `pr_urls` for all of them. */
     pr_url: string | null;
     /** Free-form labels for filtering. Max 20 per item / 40 chars each (enforced at Zod). */
     labels: string[];
@@ -1582,6 +1582,14 @@ export interface IMarketplaceAgent {
 export interface IMarketplaceAgentSummary {
     id: string;
     name: string;
+    /**
+     * F-010 — the CLI this catalog agent runs on. Carried on the SUMMARY, not
+     * just the full record, so an install surface can warn that the binary is
+     * missing BEFORE installing. Without it a workflow template happily
+     * installed ten agents for a CLI that is not on the machine, and the
+     * failure only surfaced mid-run.
+     */
+    cli: AgentCli;
     category: AgentCategory;
     kind_slug: AgentKindSlug;
     summary: string;

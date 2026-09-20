@@ -106,3 +106,41 @@ describe('projectReposService', () => {
         expect(all.map((r) => r.project_id).sort()).toEqual(['p1', 'p2']);
     });
 });
+
+// F-009 — the workspace folder a repo added after project creation clones into.
+//
+// Project create clones to `<project_name>` bare (`routes/projects.ts` clone
+// handler); adding a repo later prefixed unconditionally, so a repo named
+// after its project stuttered on disk. Observed 2026-09-20 as
+// `atlas-sdlc-sandbox-atlas-sdlc-sandbox-web`.
+//
+// Mutation proof: restore the old unconditional
+// `${slug(project.name)}-${body.name}` and the first two cases fail.
+describe('repoFolderName (F-009)', () => {
+    it('does not repeat the project name when the repo already carries it', () => {
+        expect(
+            projectReposService.repoFolderName('atlas-sdlc-sandbox', 'atlas-sdlc-sandbox-web'),
+        ).toBe('atlas-sdlc-sandbox-web');
+    });
+
+    it('does not repeat when the repo name IS the project slug', () => {
+        expect(projectReposService.repoFolderName('atlas-sdlc-sandbox', 'atlas-sdlc-sandbox')).toBe(
+            'atlas-sdlc-sandbox',
+        );
+    });
+
+    it('still prefixes a generic repo name, which would otherwise collide across projects', () => {
+        expect(projectReposService.repoFolderName('Atlas SDLC Sandbox', 'web')).toBe(
+            'atlas-sdlc-sandbox-web',
+        );
+        expect(projectReposService.repoFolderName('Other Project', 'web')).toBe('other-project-web');
+    });
+
+    it('only skips on a slug-boundary match, not a bare prefix', () => {
+        // `atlas-sdlc-sandboxen` merely starts with the letters; it is a
+        // different repo and must still be namespaced.
+        expect(
+            projectReposService.repoFolderName('atlas-sdlc-sandbox', 'atlas-sdlc-sandboxen'),
+        ).toBe('atlas-sdlc-sandbox-atlas-sdlc-sandboxen');
+    });
+});

@@ -1,7 +1,8 @@
 # fresh-install-regression — the board
 
 > **CLOSED — 2026-09-20. All 22 rows done.** Atlas was reset twice, installed
-> from nothing both times, and walked end to end. 22 findings, 14 fixed.
+> from nothing both times, and walked end to end. 22 findings, 20 fixed,
+> 2 withdrawn, **none open**.
 > Read *Closing* at the foot of this file first.
 
 Atlas is reset to a first-ship state and then proved, page by page, to work
@@ -143,9 +144,9 @@ requests — one each for the small and medium Tasks, and two from the single
 multi-repo Task, cross-linked, on one branch. The multi-repo path works
 end to end: `ws/` workspace, per-repo setup scripts, one Task many PRs.
 
-**22 findings. 14 fixed, 1 withdrawn, 7 open.** Two P1s were fixed mid-campaign
-at the Owner's direction; the rest landed in tasks 14, 15, 18, 20, 21 — and two
-more on the pre-publication pass below.
+**22 findings. 20 fixed, 2 withdrawn, none open.** Two P1s were fixed
+mid-campaign at the Owner's direction; the rest landed in tasks 14, 15, 18, 20,
+21, and the remainder on the post-publication pass of 2026-09-20.
 
 The four worth knowing about:
 
@@ -155,11 +156,17 @@ The four worth knowing about:
   ATL-5 shipped two PRs with red suites while every reviewer reported green.
   Fixed; the deeper issue — rows are self-reported and no script exit code is
   ever consulted — is documented and left to the Owner.
-- **F-014** — rapid input into any MUI `multiline` field throws
-  `Maximum update depth exceeded` and silently drops characters. Reproduced on
-  two unrelated pages. It corrupts the text agents read as their prompt.
-- **F-020** — 43 dependency advisories, 20 of them high. The campaign's
-  "0 vulnerabilities" goal is **not met**.
+- **F-014 — withdrawn, and the withdrawal is the finding.** It was filed
+  twice as an MUI `multiline` defect. Re-tested with an actual control — same
+  string, same dialog, one variable — the dialog's *plain* `<input>` dropped
+  exactly the same characters, which no `TextareaAutosize` resize loop can
+  explain, and the same text typed in chunks a second apart arrived intact with
+  a clean console. It was the harness all along. The earlier "controlled
+  comparison" had compared two fields in different dialogs at different
+  moments, which is not a control.
+- **F-020** — 43 dependency advisories, 20 of them high. **Now 0**, via 18
+  security floors pinned in `pnpm-workspace.yaml`. The campaign's
+  "0 vulnerabilities" goal is met and, unlike before, can be claimed.
 - **F-022** — every environment variable saved from Settings → Environment was
   written to `packages/api/.env`, which nothing loads, and silently lost. The
   orphan file was sitting on disk holding this campaign's own test probe.
@@ -198,3 +205,12 @@ var is empty and persists it, so a fresh install is gated by default. The root
 cause was that `scripts/bootstrap.ps1` is the only setup script that ever
 generated one and there is no `bootstrap.sh` — every macOS and Linux install
 started open. See F-021 and F-022.
+
+**`packages/shared` was edited on the closing pass**, under the Owner's explicit
+"fix everything" instruction — hard rule 1 otherwise protects it. Two additive
+fields, no behaviour removed: `IWorkflowRun.pr_urls` (F-018, so a multi-repo run
+can report every PR it opened rather than only the first) and
+`IMarketplaceAgentSummary.cli` (F-010, so an install surface can warn about a
+missing CLI before installing rather than after a run dies). `accent_color` on
+`OnboardingSchema` and `.strict()` on `UpdateExternalNotificationSchema` are
+still untouched and still the Owner's call.

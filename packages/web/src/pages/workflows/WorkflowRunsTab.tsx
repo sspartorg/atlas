@@ -43,7 +43,7 @@ export function WorkflowRunsTab({ workflowId }: { workflowId: string }) {
                         <TableCell sx={HEAD_SX}>Status</TableCell>
                         <TableCell sx={HEAD_SX}>Started</TableCell>
                         <TableCell sx={HEAD_SX}>Duration</TableCell>
-                        <TableCell sx={HEAD_SX}>Pull request</TableCell>
+                        <TableCell sx={HEAD_SX}>Pull requests</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -68,19 +68,26 @@ export function WorkflowRunsTab({ workflowId }: { workflowId: string }) {
                             </TableCell>
                             <TableCell sx={MONO_SX}>{durationLabel(run.started_at, run.finished_at)}</TableCell>
                             <TableCell>
-                                {run.pr_url ? (
-                                    <Link
-                                        href={run.pr_url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        onClick={(e) => e.stopPropagation()}
-                                        sx={{ fontSize: 12.5 }}
-                                    >
-                                        Open PR
-                                    </Link>
-                                ) : (
-                                    <Typography sx={MONO_SX}>—</Typography>
+                                {/* F-018 — a multi-repo run opens one PR per repo it
+                                    changed (ADR 0017/0018). `pr_url` is only the
+                                    first; rendering it alone silently dropped the
+                                    rest. Fall back to `pr_url` so runs recorded
+                                    before `pr_urls` existed still link. */}
+                                {(run.pr_urls?.length ? run.pr_urls : run.pr_url ? [run.pr_url] : []).map(
+                                    (url, i, all) => (
+                                        <Link
+                                            key={url}
+                                            href={url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            sx={{ fontSize: 12.5, display: 'block' }}
+                                        >
+                                            {all.length > 1 ? `PR ${i + 1} of ${all.length}` : 'Open PR'}
+                                        </Link>
+                                    ),
                                 )}
+                                {!run.pr_urls?.length && !run.pr_url && <Typography sx={MONO_SX}>—</Typography>}
                             </TableCell>
                         </TableRow>
                     ))}

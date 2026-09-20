@@ -77,6 +77,7 @@ export function asRunSummary(row: Record<string, unknown>): IWorkflowRunSummary 
         worktree_path: (row['worktree_path'] as string | null) ?? null,
         setup_done: row['setup_done'] as boolean,
         pr_url: (row['pr_url'] as string | null) ?? null,
+        pr_urls: (row['pr_urls'] as string[] | null) ?? [],
         started_at: row['started_at'] as string,
         updated_at: row['updated_at'] as string,
         finished_at: (row['finished_at'] as string | null) ?? null,

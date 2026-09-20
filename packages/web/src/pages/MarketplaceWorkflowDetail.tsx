@@ -28,6 +28,7 @@ import {
     useWorkflowTemplates,
 } from '../hooks/useWorkflows.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
+import { useCliAvailability, findMissingCli, cliUnavailableMessage } from '../hooks/useCliAvailability.js';
 import { formatDate } from '../utils/time.js';
 import { lazyNamed } from '../utils/lazyNamed.js';
 import { useCatalogAgentsById, useKnownAgentsById } from './marketplace/MarketplaceWorkflows.js';
@@ -185,6 +186,22 @@ export function MarketplaceWorkflowDetail() {
     const { isLoading, isError } = publishedId ? published : templates;
     // A published workflow was built from your agents; a template names catalog ones.
     const namesById = publishedId ? knownById : catalogById;
+
+    // F-010 — a template installs its whole agent roster in one click. If a
+    // roster agent's CLI has no binary on this machine the install still
+    // succeeds and the first real run dies at that step, so say so here, while
+    // the Owner can still choose a different template or install the CLI.
+    // `pnpm doctor` already knows; this surface just never asked.
+    const { data: cliRows } = useCliAvailability();
+    const missingCliAgents = useMemo(() => {
+        if (!view) return [];
+        return view.agentIds.flatMap((id) => {
+            const cli = namesById.get(id)?.cli ?? installedById.get(id)?.cli;
+            const missing = findMissingCli(cliRows, cli);
+            return missing ? [{ id, cli, missing }] : [];
+        });
+    }, [view, namesById, installedById, cliRows]);
+
     const back = () => navigate('/agents/marketplace?tab=workflows');
 
     async function confirmUnpublish() {
@@ -298,6 +315,14 @@ export function MarketplaceWorkflowDetail() {
                 </Box>
                 <Box>
                     <Typography sx={SECTION_LABEL_SX}>Agents</Typography>
+                    {missingCliAgents.length > 0 && missingCliAgents[0] && (
+                        <Alert severity="warning" sx={{ mb: 3 }}>
+                            {missingCliAgents.length === 1
+                                ? `${agentLabel(missingCliAgents[0].id, namesById)} runs on ${missingCliAgents[0].cli}. `
+                                : `${missingCliAgents.length} of these agents run on a CLI that isn't installed. `}
+                            {cliUnavailableMessage(missingCliAgents[0].missing, { beforeInstall: true })}
+                        </Alert>
+                    )}
                     <Box component="ul" aria-label="Agents" sx={{ listStyle: 'none', p: 0, m: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {view.agentIds.map((id) => (
                             <Box component="li" key={id} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>

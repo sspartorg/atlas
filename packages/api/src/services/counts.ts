@@ -1,5 +1,6 @@
 import { db } from '../db/kysely-client.js';
 import type { ICostSummary, ITerminalCostSummary } from '@atlas/shared';
+import { notificationsService } from './notifications.js';
 
 export interface SidenavCounts {
     projects: number;
@@ -133,11 +134,14 @@ export const countsService = {
                 .selectFrom('agents')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .executeTakeFirst(),
-            db
-                .selectFrom('notifications')
-                .select(({ fn }) => fn.countAll<string>().as('n'))
-                .where('read_at', 'is', null)
-                .executeTakeFirst(),
+            // F-004 — must be the SAME count the In-App Feed renders, not a
+            // bare `read_at is null`. A completion `needs_you` goes stale once
+            // its item leaves waiting_for_info/in_review, and the feed drops
+            // it; a naive count kept it, so the badge could read 7 over a feed
+            // showing 4 with nothing explaining the gap. `countUnread()`
+            // already applies the join and the staleness filter — the badge
+            // just never called it.
+            notificationsService.countUnread(),
         ]);
         // PG `COUNT(*)` always returns exactly one row; `executeTakeFirst()` on
         // an aggregate query is never undefined. The `?.` null arms are unreachable.
@@ -148,7 +152,7 @@ export const countsService = {
             sub_tasks: Number(subTasks?.n ?? 0),
             queue: Number(queue?.n ?? 0),
             agents: Number(agents?.n ?? 0),
-            notifications: Number(notifications?.n ?? 0),
+            notifications,
         };
         /* v8 ignore stop */
     },

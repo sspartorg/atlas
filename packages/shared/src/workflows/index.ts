@@ -90,7 +90,14 @@ export interface IWorkflowRun {
     branch: string | null;
     worktree_path: string | null;
     setup_done: boolean;
+    /** The FIRST pull request this run opened. Agents read this one. */
     pr_url: string | null;
+    /**
+     * ADR 0017/0018 — every PR the run opened, in repo order, `pr_url` first.
+     * A multi-repo Task opens one per repo it changed; this is the complete
+     * set. Empty when the run opened none.
+     */
+    pr_urls: string[];
     started_at: string;
     updated_at: string;
     finished_at: string | null;

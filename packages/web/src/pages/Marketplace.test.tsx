@@ -13,6 +13,7 @@ function makeSummary(overrides: Partial<IMarketplaceAgentSummary> = {}): IMarket
     return {
         id: 'agent-coder',
         name: 'Coder',
+        cli: 'claude',
         category: 'software-dev',
         kind_slug: 'custom',
         summary: 'A coding agent',

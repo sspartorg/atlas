@@ -728,6 +728,8 @@ export interface WorkflowRunsTable {
     worktree_path: StrN;
     setup_done: ColumnType<boolean, boolean | undefined, boolean>;
     pr_url: StrN;
+    /** Every PR the run opened, in order; `pr_url` is its first entry. */
+    pr_urls: Generated<string[]>;
     started_at: CreatedAt;
     updated_at: UpdatedAt;
     finished_at: TSn;

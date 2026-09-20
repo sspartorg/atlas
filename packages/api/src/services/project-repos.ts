@@ -13,6 +13,25 @@ import { ApiError } from '../utils/errors.js';
 
 type ReposExecutor = Kysely<DB> | Transaction<DB>;
 
+/**
+ * The workspace folder a repo added AFTER project creation clones into.
+ *
+ * F-009 — this used to be an unconditional `<project-slug>-<repo-name>`, while
+ * project create clones to `<project_name>` bare. A repo whose name already
+ * starts with its project's therefore stuttered on disk:
+ * `atlas-sdlc-sandbox-atlas-sdlc-sandbox-web`. The prefix still earns its keep
+ * for a repo called `web` or `api`, which would otherwise collide across
+ * projects in a flat workspace — so it is skipped only when it would repeat.
+ *
+ * Both inputs are slugs, so the result can never escape the workspace root.
+ */
+function repoFolderName(projectName: string, repoName: string): string {
+    const projectSlug = slug(projectName);
+    return repoName === projectSlug || repoName.startsWith(`${projectSlug}-`)
+        ? repoName
+        : `${projectSlug}-${repoName}`;
+}
+
 function slug(s: string): string {
     return (
         s
@@ -200,4 +219,5 @@ export const projectReposService = {
     update,
     remove,
     slug,
+    repoFolderName,
 };

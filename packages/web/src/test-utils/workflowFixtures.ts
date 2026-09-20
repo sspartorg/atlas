@@ -83,6 +83,7 @@ export function makeRunDetail(overrides: Partial<IWorkflowRunDetail> = {}): IWor
         worktree_path: null,
         setup_done: true,
         pr_url: null,
+        pr_urls: [],
         started_at: ISO,
         updated_at: ISO,
         finished_at: null,

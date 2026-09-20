@@ -33,11 +33,11 @@ export function useCatalogAgentsById() {
  * Names and accents for a published workflow's agents: yours first (it was
  * built from them), then the catalog's.
  */
-export function useKnownAgentsById(): Map<string, Pick<IAgent, 'name' | 'accent_color'>> {
+export function useKnownAgentsById(): Map<string, Pick<IAgent, 'name' | 'accent_color' | 'cli'>> {
     const catalogById = useCatalogAgentsById();
     const { data: agents = [] } = useAgents();
     return useMemo(
-        () => new Map<string, Pick<IAgent, 'name' | 'accent_color'>>([...catalogById, ...agents.map((a) => [a.id, a] as const)]),
+        () => new Map<string, Pick<IAgent, 'name' | 'accent_color' | 'cli'>>([...catalogById, ...agents.map((a) => [a.id, a] as const)]),
         [catalogById, agents],
     );
 }
@@ -57,7 +57,7 @@ function WorkflowCard({
     meta: string;
     description: string | null;
     agentIds: string[];
-    agentsById: Map<string, Pick<IAgent, 'name' | 'accent_color'>>;
+    agentsById: Map<string, Pick<IAgent, 'name' | 'accent_color' | 'cli'>>;
     publishedAt?: string;
     onOpen: () => void;
 }) {

@@ -404,8 +404,13 @@ export async function projectsRoutes(app: FastifyInstance) {
         const project = await projectsService.get(id);
         /* v8 ignore next -- assertNameFree already 404s a missing project */
         if (!project) return reply.status(404).send({ error: 'Project not found' });
-        // Both parts are slugs, so the folder can't escape the workspace.
-        const destination = join(settings.workspace_path, `${projectReposService.slug(project.name)}-${body.name}`);
+        // F-009 — see `repoFolderName`: skips the project prefix when the
+        // repo name already carries it. Both parts are slugs, so the folder
+        // can't escape the workspace.
+        const destination = join(
+            settings.workspace_path,
+            projectReposService.repoFolderName(project.name, body.name),
+        );
         const cloneId = await startClone(
             {
                 repo_url: body.repo_url,
