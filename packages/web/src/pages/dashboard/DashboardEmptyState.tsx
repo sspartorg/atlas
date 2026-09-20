@@ -10,6 +10,7 @@ import { HeroActionCard } from '../../components/HeroActionCard.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { lazyNamed } from '../../utils/lazyNamed.js';
 import { useAgents } from '../../hooks/useAgents.js';
+import { useCredentials } from '../../hooks/useCredentials.js';
 
 const NewProjectModal = lazyNamed(
     () => import('../projects/NewProjectModal.js'),
@@ -26,6 +27,14 @@ export function DashboardEmptyState({
     const navigate = useNavigate();
     const [newProjectOpen, setNewProjectOpen] = useState(false);
     const { data: agents } = useAgents();
+    // F-007 — this hint used to render unconditionally, telling an Owner who
+    // already has credentials to go and add one. The agents hint below was
+    // already conditioned; credentials simply were not.
+    const { data: credentials } = useCredentials();
+    // Only hide the hint once we positively know a credential exists.
+    // While the query is still loading, `credentials` is undefined and the
+    // hint shows — the pre-F-007 behaviour — so it never flashes in late.
+    const noCredentials = (credentials?.length ?? 0) === 0;
     const noAgents = agents?.length === 0;
     const alertSx = {
         bgcolor: ATLAS_PALETTE.cloud,
@@ -72,6 +81,7 @@ export function DashboardEmptyState({
                 }
                 supplemental={
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {noCredentials && (
                         <Alert
                             icon={<InfoOutlined sx={{ color: ATLAS_PALETTE.brandBlue }} />}
                             sx={alertSx}
@@ -89,7 +99,7 @@ export function DashboardEmptyState({
                             </Box>{' '}
                             first. Atlas encrypts them with AES-256-GCM and never writes them to
                             disk in plaintext.
-                        </Alert>
+                        </Alert>)}
                         {noAgents && (
                             <Alert
                                 icon={<InfoOutlined sx={{ color: ATLAS_PALETTE.brandBlue }} />}

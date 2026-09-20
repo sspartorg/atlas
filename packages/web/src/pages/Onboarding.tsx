@@ -201,6 +201,11 @@ export function Onboarding() {
 
     function handleWorkspacePathChange(next: string) {
         setWorkspacePath(next);
+        // F-006 — the server's rejection used to survive the fix. `submitError`
+        // was only reset inside handleFinish, so after "Workspace folder must be
+        // an absolute path: relative/path" the message sat there while the Owner
+        // typed a valid path, clearing only on the next submit.
+        if (submitError) setSubmitError(null);
         if (errors.workspacePath) {
             setErrors((prev) => {
                 const copy = { ...prev };

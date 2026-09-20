@@ -564,3 +564,32 @@ describe('POST /api/settings/log-level — non-string level (covers line 109 fal
         expect(body.kind).toBe('validation_error');
     });
 });
+
+// ── F-019: an unrecognised body must not return 200 ────────────────────────
+//
+// UpdateExternalNotificationSchema makes every field optional and Zod strips
+// unknown keys, so `{provider, token, chat_id}` — the un-prefixed names —
+// parsed to {} and the route returned 200 having stored nothing. Found during
+// the 2026-09-20 campaign by sending exactly that body and then finding
+// external_notification_token still NULL. A 200 on a no-op is worst for the
+// agents that drive this API over MCP, where it reads as "the write landed".
+describe('PATCH /api/settings/external-notification — F-019', () => {
+    it('rejects a body whose field names are all unrecognised', async () => {
+        const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/settings/external-notification',
+            payload: { provider: 'telegram', token: 'x', chat_id: 'y' },
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toMatch(/no recognised fields/i);
+    });
+
+    it('still accepts a correctly-named partial patch', async () => {
+        const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/settings/external-notification',
+            payload: { external_notification_chat_id: '-100999' },
+        });
+        expect(res.statusCode).toBe(200);
+    });
+});

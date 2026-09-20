@@ -81,6 +81,23 @@ export async function settingsRoutes(app: FastifyInstance) {
         { preHandler: requireMcpToken },
         async (req, reply) => {
             const body = UpdateExternalNotificationSchema.parse(req.body);
+            // F-019 — every field on this schema is optional and Zod strips
+            // unknown keys, so a body whose names are all wrong parses to `{}`
+            // and used to return 200 having written nothing. That is a silent
+            // no-op for any caller that guesses the shape — including agents
+            // driving this API over MCP, for whom a 200 means the write landed.
+            // `.strict()` on the schema would be the cleaner fix, but it lives
+            // in packages/shared (AGENTS.md hard rule 1), so the route rejects
+            // the empty patch instead.
+            if (Object.values(body).every((v) => v === undefined)) {
+                return reply.status(400).send({
+                    error:
+                        'No recognised fields in the request body. Expected one or more of: ' +
+                        'external_notification_provider, external_notification_token, ' +
+                        'external_notification_chat_id, external_notification_webhook_url.',
+                    kind: 'validation_error',
+                });
+            }
             // Apply every provided field in ONE UPDATE — atomic. The
             // previous per-field sequence would, on a mid-sequence failure,
             // leave settings with `provider='teams'` but the old-provider

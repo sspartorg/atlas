@@ -7,6 +7,7 @@ import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import { HeroEmptyState } from '../../components/HeroEmptyState.js';
 import { HeroActionCard } from '../../components/HeroActionCard.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
+import { useCredentials } from '../../hooks/useCredentials.js';
 
 interface IProjectsEmptyStateProps {
     onNewProject: () => void;
@@ -14,6 +15,14 @@ interface IProjectsEmptyStateProps {
 
 export function ProjectsEmptyState({ onNewProject }: IProjectsEmptyStateProps) {
     const navigate = useNavigate();
+    // F-007 — this hint rendered unconditionally, telling an Owner who already
+    // has a credential to go and add one, and naming a PAT even when the saved
+    // credential is a GitHub App.
+    const { data: credentials } = useCredentials();
+    // Only hide the hint once we positively know a credential exists.
+    // While the query is still loading, `credentials` is undefined and the
+    // hint shows — the pre-F-007 behaviour — so it never flashes in late.
+    const noCredentials = (credentials?.length ?? 0) === 0;
     return (
         <HeroEmptyState
             icon={<ImageNotSupportedRounded sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 28 }} />}
@@ -43,6 +52,7 @@ export function ProjectsEmptyState({ onNewProject }: IProjectsEmptyStateProps) {
                 />
             }
             supplemental={
+                noCredentials ? (
                 <Alert
                     icon={<InfoOutlined sx={{ color: ATLAS_PALETTE.brandBlue }} />}
                     sx={{
@@ -66,6 +76,7 @@ export function ProjectsEmptyState({ onNewProject }: IProjectsEmptyStateProps) {
                     first. Atlas encrypts them with AES-256-GCM and never writes them to disk in
                     plaintext.
                 </Alert>
+                ) : undefined
             }
         />
     );

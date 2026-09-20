@@ -34,7 +34,7 @@ Opened 2026-09-20 on the Owner's ruling. Authoring plan:
 | 12 | [Walk wave E — search and analytics](task-12-walk-wave-e-read-surfaces.md) | web | done |
 | 13 | [Cross-dependency sweep — the twelve chains](task-13-cross-dependency-sweep.md) | api · web | done — X-8 blocked (no Jira site) |
 | 14 | [Fix batch — P0 and P1 findings](task-14-fix-batch-p0-p1.md) | api · web | done |
-| 15 | [Fix batch — P2 and P3 findings](task-15-fix-batch-p2-p3.md) | api · web | todo — depends on 14 |
+| 15 | [Fix batch — P2 and P3 findings](task-15-fix-batch-p2-p3.md) | api · web | done |
 | 16 | [Prove and close the index gaps](task-16-perf-and-indexes.md) | api | todo |
 | 17 | [Name cleanup — CER, DHEQ, JDA all become ATL](task-17-name-cleanup-atl.md) | shared · api · web · docs | todo |
 | 18 | [Coverage lift against the ADR 0009 tiers](task-18-coverage-lift.md) | api · web · mcp | todo |

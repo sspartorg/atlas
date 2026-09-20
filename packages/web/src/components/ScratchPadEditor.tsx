@@ -74,7 +74,17 @@ export function ScratchPadEditor({ open, onClose, tile }: ScratchPadEditorProps)
     // the modal being open).
     const savedRef = useRef<{ title: string; body: string }>({ title: '', body: '' });
 
-    // Reset local state whenever the modal is (re-)opened with a tile.
+    // Reset local state whenever the modal is (re-)opened with a DIFFERENT tile.
+    //
+    // F-015 — this used to depend on `tile`, the whole object. Every autosave
+    // invalidates the scratch-pad query, the refetch hands back a new object
+    // identity, this effect re-ran, and `setSavedAt(null)` wiped the timestamp
+    // the save had set milliseconds earlier — so the footer read "Not saved
+    // yet" forever while the content was in fact saved. The same re-run also
+    // reset `title`/`body` from the refetched row, which could clobber
+    // in-flight typing. Keyed on `tile?.id` the effect fires once per tile, as
+    // intended. The autosave effect below already keys on `tile?.id` for the
+    // same reason.
     useEffect(() => {
         if (open && tile) {
             setTitle(tile.title);
@@ -83,7 +93,7 @@ export function ScratchPadEditor({ open, onClose, tile }: ScratchPadEditorProps)
             setShowDeleteModal(false);
             setSavedAt(null);
         }
-    }, [open, tile]);
+    }, [open, tile?.id]);
 
     // 5-second autosave tick. The effect re-arms after every change, so a
     // burst of typing collapses into a single PATCH 5s after the user
