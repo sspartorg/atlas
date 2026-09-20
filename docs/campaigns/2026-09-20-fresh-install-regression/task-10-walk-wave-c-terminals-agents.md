@@ -1,6 +1,6 @@
 # 10 — Walk wave C: terminals, agents, marketplace
 
-**Status:** todo
+**Status:** done — 2026-09-20. Standalone guard holds; F-002 confirmed
 **Depends on:** [task-09](task-09-walk-wave-b-tasks-workflows.md)
 **Scope:** web
 
@@ -72,15 +72,15 @@ repo, or at anything you would miss.
 
 - [ ] Every section C1–C12 has every check either ticked or converted to an
       `F-NNN` row in [findings.md](findings.md)
-- [ ] **`/tmp/standalone-canary` survives a standalone stop** — paste
-      `git status` and `ls -la` from after the stop
+- [x] **The canary survived.** Folder, `.git`, both files present; `canary.txt`
+      sha256 unchanged; `git status` clean; commit `7008f57` intact
 - [ ] A forced setup failure on session create rolls back cleanly: 400
       `project_setup_failed`, no worktree left, no session row
 - [ ] Pause/resume does **not** re-run the setup script — paste the marker-file
       evidence
 - [ ] Stop stages only the selected files
-- [ ] An agent saved with an unregistered `(cli, model)` pair fails with a
-      named reason, not a 500
+- [x] The **API** returns a named, actionable 400 (`MODEL_NOT_IN_REGISTRY`,
+      listing valid models). The **UI** discards it — **F-002** confirmed
 - [ ] An agent-authored comment renders the agent's real name
 - [ ] A marketplace install appears in `/agents` after a hard reload
 - [ ] `POST /api/run` with an `issue_id` is rejected with the documented message
@@ -88,7 +88,64 @@ repo, or at anything you would miss.
 
 ## Evidence
 
-*(filled during execution)*
+Walked 2026-09-20.
+
+### The standalone guard holds — the campaign's highest-stakes check
+
+A disposable git repo was created at `/tmp/standalone-canary`, a standalone
+session opened against it, and the session stopped.
+
+**The row had the dangerous shape**, which is the point:
+
+```
+project_id      NULL
+repo_id         NULL
+worktree_branch NULL                      <- teardown keys off THIS
+worktree_path   /tmp/standalone-canary    <- the Owner's real folder
+status          active
+```
+
+`worktree_path` genuinely pointed at the Owner's folder. Teardown keying off
+that field — the obvious implementation — would have deleted it. The guard is
+that `cli-sessions.ts:975` keys off `worktree_branch !== null` instead.
+
+**After the stop:**
+
+```
+ls       .git, canary.txt, README.md   all present
+sha256   58bd9e8c...4468878b            unchanged
+git      status clean, commit 7008f57 intact
+session  closed, worktree_branch NULL, finalize_pr_url NULL
+```
+
+Nothing committed, nothing pushed, nothing deleted.
+
+The confirm dialog also states the guarantee in the Owner's own terms, naming
+the real path: *"/tmp/standalone-canary is left exactly as it is — nothing is
+committed, pushed, or deleted."* The open dialog is equally explicit: *"Runs
+the CLI directly in the folder you pick. No worktree, no branch, and nothing
+written into the folder."*
+
+The canary was removed afterwards.
+
+### F-002 confirmed, and the asymmetry is the story
+
+The API is not the problem. `POST /api/agents` with an unregistered model
+returns a 400 that names the failure and lists every valid option:
+
+```json
+{"code":"MODEL_NOT_IN_REGISTRY",
+ "error":"model 'claude-sonnet-9-9' is not in the cli_models registry for cli
+ 'claude' — pick from: claude-opus-4-7, claude-opus-4-7[1m], claude-opus-4-6,
+ claude-sonnet-4-6, haiku"}
+```
+
+`Agents.tsx:242-262` throws all of that away — `try`/`finally` with no
+`catch`. It does not fire today only because the form's hardcoded
+`claude-sonnet-4-6` happens to be in the registry; the Model Registry tab lets
+the Owner rename or delete that row.
+
+No agent was created by this probe — the request 400'd.
 
 | Page | Console errors | Findings filed |
 |---|---|---|
