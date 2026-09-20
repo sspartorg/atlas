@@ -1,6 +1,6 @@
 # 09 — Walk wave B: tasks, sub-tasks, queue, workflows
 
-**Status:** todo
+**Status:** done — 2026-09-20. B1-B8 walked; 2 findings
 **Depends on:** [task-08](task-08-walk-wave-a-projects-repos.md)
 **Scope:** web
 
@@ -66,17 +66,70 @@ Sections **B1–B8** of [`checklists/per-page.md`](checklists/per-page.md).
 
 ## Evidence
 
-*(filled during execution)*
+Walked 2026-09-20 against the task-07 fixture (3 Tasks, 8 sub-tasks, 3 PRs,
+45 completed runs).
 
-Hardcoded-status-list grep: ____
+**Hardcoded-status-list grep: clean.** Exactly three non-test components render
+a status control — `StatusTransitionBar.tsx`, `StatusPickerPopover.tsx`,
+`WorkItemKanban.tsx` — and **all three import `getValidNextStatuses`**. No
+hardcoded status array exists outside test files. Invariant **X5 holds**.
 
 | Page | Console errors | Findings filed |
 |---|---|---|
-| B1 Tasks | | |
-| B2 Task New | | |
-| B3 Task Detail | | |
-| B4 Sub-task Detail | | |
-| B5 Queue | | |
-| B6 Workflows | | |
-| B7 Workflow Builder | | |
-| B8 Workflow Run | | |
+| B1 Tasks | 0 | none |
+| B2 Task New | 0 new | **F-014** (originally filed here) |
+| B3 Task Detail | 0 | **F-017** |
+| B4 Sub-task Detail | 0 | none |
+| B5 Queue | 0 | none |
+| B6 Workflows | 0 | none |
+| B7 Workflow Builder | 0 | none |
+| B8 Workflow Run | 0 | **F-018** |
+
+### B3 — transition legality is exactly right
+
+The wave's spine check passes. ATL-1 sits in `in_review`; the picker offered:
+
+```
+MOVE TO     In Review (current, ticked) · Done · In Progress · Waiting for Info
+OVERRIDE    Draft · Ready
+```
+
+MOVE TO is precisely the machine's answer — the FORWARD set for `in_review`
+(`done`, `in_progress`) plus the universal escape hatch to `waiting_for_info`.
+The two statuses that are illegal from here appear **only** under a separate
+OVERRIDE heading, and picking one routes through `?override=1`
+(`StatusPickerPopover.tsx:24,85`) rather than masquerading as a normal move.
+
+That behaviour is correct; **F-017** is filed against `AGENTS.md:117`, whose
+absolute wording ("not show them at all") would lead an agent to delete the
+override section as a bug.
+
+### B5-B8 — all consistent with the fixture
+
+Queue reads "0 running · 0 queued · 0 waiting on you · 0 need a workflow" with
+the Delivery card Active at 0/1 — matching zero live runs. Workflows lists
+3 workflows · 3 active with correct agent counts (Delivery 4, Build 2, Test 4)
+and triggers (`On item ready` vs `Manual` for the two sub-workflows).
+
+The builder renders the full graph — Start → PO Writer → PO Reviewer →
+Architect → Architect Reviewer → Build sub-task → Test sub-task → End, with the
+Owner node on PO Writer's fail edge and pass/fail edges colour-coded. Save is
+correctly disabled with no pending change.
+
+The Runs tab lists all three runs with real titles, statuses and durations:
+
+| Item | Duration |
+|---|---|
+| ATL-1 (small, 1 repo) | 22m 05s |
+| ATL-4 (medium, 1 repo) | 21m 21s |
+| ATL-5 (large, 2 repos) | 42m 52s |
+
+The multi-repo Task took roughly double, which is the only place the campaign
+has a wall-clock comparison between the single- and multi-repo paths.
+
+### Deferred with reason
+
+The **409 workflow lock** could not be exercised: it needs a live run, and all
+three finished before this walk. It is X-12's business in
+[task-13](task-13-cross-dependency-sweep.md), which starts a run specifically
+to hold the lock.
