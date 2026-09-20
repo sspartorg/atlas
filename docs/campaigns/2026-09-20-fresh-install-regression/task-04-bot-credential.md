@@ -1,6 +1,6 @@
 # 04 — Register the sspart-bot GitHub App credential
 
-**Status:** todo — needs the App installation id
+**Status:** todo
 **Depends on:** [task-03](task-03-first-boot-onboarding.md)
 **Scope:** infra
 
@@ -15,12 +15,11 @@ identity.
 Getting the App fields wrong fails quietly rather than loudly, which is why
 this task checks the commit trailer rather than trusting the save.
 
-## Blocked on
+## Installation id
 
-The **App installation id** is not in `~/Work/workspace/bots-info/`, which
-holds only `app-config.json` (`{"id": 4332243, "slug": "sspart-bot"}`) and
-`sspart-bot.pem`. Ask the Owner, or read it from
-`GET /app/installations` with a JWT signed by the PEM. Do not guess.
+`62910480`, supplied by the Owner on 2026-09-20. It is not in
+`~/Work/workspace/bots-info/`, which holds only `app-config.json`
+(`{"id": 4332243, "slug": "sspart-bot"}`) and `sspart-bot.pem`.
 
 ## What to do
 
@@ -40,7 +39,7 @@ holds only `app-config.json` (`{"id": 4332243, "slug": "sspart-bot"}`) and
    | bot info folder | `~/Work/workspace/bots-info` (Atlas reads the PEM from it) |
    | app slug | `sspart-bot` |
    | installation owner | `sspartorg` |
-   | installation id | *(from the blocker above)* |
+   | installation id | `62910480` |
    | human name | `sspart` |
    | human email | `sspart.org@gmail.com` |
    | human GitHub login | `sspartorg` |
@@ -93,8 +92,7 @@ holds only `app-config.json` (`{"id": 4332243, "slug": "sspart-bot"}`) and
 
 ## Done when
 
-- [ ] The installation id was obtained from the Owner or from
-      `GET /app/installations`, and is recorded below
+- [x] The installation id was obtained from the Owner: `62910480` (2026-09-20)
 - [ ] The credential row exists with `kind = github_app`, `app_id = 4332243`,
       `app_slug = sspart-bot` — paste the row with the encrypted columns elided
 - [ ] `POST /api/credentials/:id/refresh` mints an installation token
@@ -111,4 +109,4 @@ holds only `app-config.json` (`{"id": 4332243, "slug": "sspart-bot"}`) and
 
 *(filled during execution)*
 
-App installation id: ____
+App installation id: `62910480` (supplied by the Owner, 2026-09-20)

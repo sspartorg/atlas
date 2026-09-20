@@ -25,3 +25,5 @@ Add a new ADR whenever a choice is expensive to undo: a database engine, a query
 | 0015 | One Task, One Branch, One PR | 2026-09-18 | Accepted — Tasks and Sub-tasks replace epics/stories/bugs; a Task's run works its sub-tasks on one branch and delivers one PR |
 | 0016 | Jira Bridge | 2026-09-19 | Accepted — the scheduler imports Jira issues by JQL into Tasks (label → workflow) and mirrors progress and Done back as orchestrator comments, with no AI |
 | 0017 | Multi-repo Projects and Tasks | 2026-09-19 | Accepted — a Project holds several repos (its own git fields are the primary); a Task spans one or more, worked side by side in one run, with one PR per changed repo; the Task closes when the last PR merges |
+| 0018 | Repos Without a Primary | 2026-09-20 | Accepted — every repo in a project is an ordinary `project_repos` row with its own clone, credential, branch and setup scripts; the project keeps no git fields |
+| 0019 | Second Baseline Squash | 2026-09-20 | Accepted — migrations 001-045 collapsed into one regenerated baseline; supersedes 0002 |

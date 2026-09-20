@@ -182,18 +182,17 @@ export default defineConfig({
             'src/utils/errors.test.ts',
             'tests/e2e-lifecycle.test.ts',
             'tests/pg-db-truncate.test.ts',
-            'src/db/catalog-sync-migration.test.ts',
-            // ADR 0014 — workflows schema constraints (migration 035).
+            // ADR 0014 — workflows schema constraints, asserted against the
+            // live schema rather than by importing a migration module.
             'src/db/workflows-migration.test.ts',
-            // ADR 0015 — tasks + sub-tasks (migration 037).
-            'src/db/tasks-migration.test.ts',
-            'src/db/graphs-vertical-migration.test.ts',
-            // Migration 041 — workflows published to the Marketplace.
-            'src/db/published-workflows-migration.test.ts',
-            // Migration 044 — Jira sources per repo (ADR 0017).
-            'src/db/jira-sources-migration.test.ts',
-            // Migration 045 — repos without a primary (ADR 0018).
-            'src/db/repos-without-primary-migration.test.ts',
+            // The 2026-09-20 re-squash (ADR 0019) deleted six sibling specs —
+            // catalog-sync (034), tasks (037), graphs-vertical (039),
+            // published-workflows (041), jira-sources (044) and
+            // repos-without-primary (045). Each imported `up`/`down` from the
+            // migration file it named, so they tested transitions that no
+            // longer exist as discrete steps; the baseline is their end state.
+            // `workflows-migration.test.ts` and `hot-path-indexes.test.ts`
+            // survive because they assert the schema, not the migration.
             'src/services/project-repos.test.ts',
             // W2 chunk N — subprocess wrappers + boot files.
             'src/services/git-status.test.ts',
