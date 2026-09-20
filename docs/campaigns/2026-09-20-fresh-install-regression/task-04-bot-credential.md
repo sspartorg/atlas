@@ -113,6 +113,8 @@ this task checks the commit trailer rather than trusting the save.
       zero `ghs_` strings in `ps aux` — the token never reaches argv
 - [x] PEM sha256 matches the task-02 capture exactly; still mode 0600,
       1679 bytes, mtime 11 Aug
+- [x] **Bot identity proven on a real commit** (deferred check, closed in
+      task-07): author `sspart-bot[bot]`, trailer `Co-Authored-By: sspart`
 
 ## Evidence
 
@@ -180,6 +182,17 @@ identical to the task-02 capture.
    which this `gh` session has. **Raised with the Owner rather than assumed
    wrong** — it may be a second installation on a personal account.
 
-**The deferred identity proof** (bot as author, human as `Co-Authored-By`
-trailer) still cannot run here — it needs a repo. It is asserted in
-[task-06](task-06-project-two-repos-setup-secrets.md) step 6.
+**The deferred identity proof PASSED** during task-07's first live run
+(2026-09-20). Commit `df04405` on branch `atlas/wf/ATL-1`:
+
+```
+author:    sspart-bot[bot] <4332243+sspart-bot[bot]@users.noreply.github.com>
+committer: sspart-bot[bot] <4332243+sspart-bot[bot]@users.noreply.github.com>
+Co-Authored-By: sspart <sspart.org@gmail.com>
+```
+
+Exactly the shape `git-credentials.ts:104-175` specifies: the App's bot
+identity authors, the human rides as a trailer. The `[user]` block was written,
+which is the positive proof that `app_slug` and `app_id` both landed — had
+either been missing, the block would have been omitted and the commit would
+have silently inherited the host machine's `~/.gitconfig`.

@@ -18,30 +18,50 @@ and those are the newest and least-exercised paths in the product
 
 ## The graded set
 
-### S — single repo, single file, no dependencies
-> **Add a `GET /health` endpoint to `atlas-demo-api` returning `{ok: true}`,
-> with a test.**
+> **Reworked 2026-09-20.** The original set was written against
+> `atlas-demo-api` / `atlas-demo-web` and a shared `src/contract.ts`, none of
+> which exist — ruling D-2 was amended to reuse the sandbox pair instead
+> ([task-05](task-05-seed-throwaway-repos.md)). The set below is grounded in
+> what those two repos actually contain.
 
-`repo_ids = [atlas-demo-api]`. One worktree at
-`worktrees/<repoId>/<branchSlug>`. Expect few or no sub-tasks — a workflow
-that shreds this into six steps is over-decomposing, which is itself worth
-recording.
+The pair is already a matched design. `atlas-sdlc-sandbox` is a todo CLI
+(`src/todo.js`, `src/cli.js`); `atlas-sdlc-sandbox-web` describes itself as a
+*"Tiny web view of the atlas-sdlc-sandbox todo list, used to test multi-repo
+Atlas Tasks"* and mirrors the CLI's model in `src/todos.js` with the same
+priority ordering.
 
-### M — single repo, several files, real tests
-> **Add request-id middleware to `atlas-demo-api`: generate an id per request,
-> attach it to the response header and to every log line, with tests covering
-> both.**
+That mirroring is where the large task lives: the CLI's `list` supports
+`{ all, overdue, tag }`, but the web's `visibleTodos` supports only
+`{ all, tag }`. The `overdue` filter is a real, natural gap across the two
+repos.
 
-`repo_ids = [atlas-demo-api]`. ~4 files. Exercises the Sub-tasks steps of the
-`delivery` template running the `build` and `test` sub-workflows one at a time
-on the Task's branch.
+### S — one repo, one file
+> **Add a `--version` flag to the todo CLI.** Print the `version` field from
+> package.json and exit 0. `src/cli.js` plus one test.
 
-### L — both repos, shared contract
-> **Extend the `Item` contract with a `status` field in both repos: add a
-> `/items` CRUD route in `atlas-demo-api` and a list view in `atlas-demo-web`
-> that consumes it. The `src/contract.ts` change must be identical in both.**
+`repo_ids = [atlas-sdlc-sandbox]`. One worktree. Expect few or no sub-tasks —
+a workflow that shreds this into six steps is over-decomposing, which is itself
+worth recording.
 
-`repo_ids = [atlas-demo-api, atlas-demo-web]`. This is the one that matters.
+### M — one repo, several files, real tests
+> **Add a `todo stats` command.** Counts of open / done / overdue, broken down
+> by priority, reusing the existing `localToday` overdue rule rather than
+> re-deriving it. `src/todo.js` + `src/cli.js` + tests.
+
+`repo_ids = [atlas-sdlc-sandbox]`. Exercises the Sub-tasks steps of the
+`delivery` template running `build` and `test` one at a time on the Task's
+branch.
+
+### L — both repos, one behaviour
+> **Bring the web view's filtering up to parity with the CLI.** The web's
+> `visibleTodos` gains an `overdue` option matching the CLI's semantics
+> (local-calendar date, not UTC — `todo.js` has a comment explaining why), the
+> render layer shows an overdue badge, and the CLI's overdue predicate is
+> factored so both repos agree rather than drifting.
+
+`repo_ids = [atlas-sdlc-sandbox, atlas-sdlc-sandbox-web]`. **This is the one
+that matters** — it forces the `ws/` workspace, the per-repo setup loop, and
+one Task producing two PRs.
 
 ## What to do
 

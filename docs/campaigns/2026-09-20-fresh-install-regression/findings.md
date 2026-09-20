@@ -4,12 +4,12 @@ Everything the walk finds lands here. Nothing is fixed inline (ruling D-9) —
 fixes happen in [task-14](task-14-fix-batch-p0-p1.md) and
 [task-15](task-15-fix-batch-p2-p3.md), severity-ordered.
 
-**Ten rows as of 2026-09-20.** F-001 to F-005 were pre-filed while authoring
+**Eleven rows as of 2026-09-20.** F-001 to F-005 were pre-filed while authoring
 [`checklists/per-page.md`](checklists/per-page.md), by reading code rather than
 by using the app — recorded so the walk confirms them rather than rediscovering
 them. **F-001 is now confirmed empirically** in
 [task-03](task-03-first-boot-onboarding.md). F-006 was found during that same
-first-boot pass, and F-007 to F-010 during task-06's project setup. F-002 to
+first-boot pass, F-007 to F-010 during task-06's project setup, and F-011 during task-07's first live run. F-002 to
 F-005 remain unconfirmed at runtime; their pages are walked in tasks 10 and 11.
 
 ---
@@ -67,6 +67,7 @@ consequence wins.
 | F-008 | P3 | A5 · `/projects/:id?tab=repos` | The Add repo modal subtitle reads "Tasks in this project can then work on it next to the **primary repo**". ADR 0018 removed the primary repo. | `pages/project/AddRepoDialog.tsx` subtitle. It contradicts the Repos tab copy rendered directly behind it — "A Task works on the repos it picks; each gets its own checkout on the Task's branch" — and contradicts `docs/adr/0018-repos-without-a-primary.md`. | 2 attribution | open |
 | F-009 | P3 | A5 · `/projects/:id?tab=repos` | A repo added after project creation clones into `<project-slug>-<repo-name>`, so a repo whose name already starts with the project name stutters on disk. | `routes/projects.ts:408` builds `join(workspace_path, slug(project.name) + '-' + body.name)`; project-create at `:126` uses `join(workspace_path, body.project_name)`. The two repos of one project therefore follow different naming schemes. Observed 2026-09-20: `~/Work/workspace/atlas-sdlc-sandbox` and `~/Work/workspace/atlas-sdlc-sandbox-atlas-sdlc-sandbox-web`. Functionally harmless — `dirname(git_path)` is identical for both, so worktrees co-locate correctly. | 1 round-trip | open |
 | F-010 | P2 | C9 · `/agents/marketplace` | Installing a workflow template installs agents whose default CLI is absent from the machine, with no warning. The failure surfaces only mid-run. | Creating the `delivery` workflow installed 10 agents, 6 of them `cli = copilot`: Coder, Code Reviewer, Automation Engineer, Automation Reviewer (plus their reviewers). `which copilot` returns not-found, and `pnpm doctor` had already reported `[skip] copilot: not found (optional)` at boot. `Build sub-task` runs `agent-coder` and `agent-code-reviewer`, so the first real Task would have died at the build step. Nothing in the install path consults the prerequisite check. | 3 list membership, 6 error | open |
+| F-011 | P3 | X-2 / X-3 chain | Any file a setup script leaves in the worktree root is committed into the Owner's repo and pushed to the PR. Nothing in the setup-script contract warns about this. | `ensureWorktreeGitignore` (`worktree-orchestrator.ts:730`) writes only `.atlas/`, `.claude/commands/atlas-*` and `.github/prompts/atlas-*`. `commitPending` then runs `git add -A`, so anything else is swept in. Observed 2026-09-20: a `.atlas-setup-ran` marker written by the campaign's own setup script landed in commit `df04405` alongside the agent's work. A script running `npm ci`, a build, or a cache warm in a repo without matching ignores would push those artifacts into the PR. `docs/setup-script-contract.md` documents idempotency and the tmpfile location but never says worktree-root output is committed. | chain | open |
 
 ---
 
