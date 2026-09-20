@@ -36,11 +36,9 @@ vi.mock('./credentials.js', () => ({
     },
 }));
 
-vi.mock('./projects.js', () => ({
-    projectsService: {
+vi.mock('./project-repos.js', () => ({
+    projectReposService: {
         get: vi.fn(),
-        createFromClone: vi.fn(),
-        delete: vi.fn(),
     },
 }));
 
@@ -63,7 +61,7 @@ vi.mock('node:fs/promises', () => ({
 // ---------------------------------------------------------------------------
 import { startReclone } from './reclone-runner.js';
 import { credentialsService } from './credentials.js';
-import { projectsService } from './projects.js';
+import { projectReposService } from './project-repos.js';
 import { broadcastSSE } from '../routes/events.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 
@@ -112,14 +110,15 @@ function makeChild() {
 // Shared fixtures
 // ---------------------------------------------------------------------------
 const INPUT = {
-    projectId: 'proj-1',
+    repoId: 'repo-1',
     destination: '/workspace/my-project',
     branch: 'main',
 };
 
-const FAKE_PROJECT = {
-    id: 'proj-1',
-    name: 'My Project',
+const FAKE_REPO = {
+    id: 'repo-1',
+    project_id: 'proj-1',
+    name: 'my-project',
     git_url: 'https://example.com/owner/repo.git',
     credential_id: 'cred-1',
 };
@@ -131,7 +130,7 @@ const FAKE_TOKEN = 'secret-reclone-token';
 // Helper: set up the happy-path mocks for credentials.
 // ---------------------------------------------------------------------------
 function setupCredMocks() {
-    vi.mocked(projectsService.get).mockResolvedValue(FAKE_PROJECT as never);
+    vi.mocked(projectReposService.get).mockResolvedValue(FAKE_REPO as never);
     vi.mocked(credentialsService.get).mockResolvedValue(FAKE_CRED as never);
     vi.mocked(credentialsService.getToken).mockResolvedValue(FAKE_TOKEN);
 }
@@ -159,14 +158,14 @@ describe('startReclone', () => {
     // -----------------------------------------------------------------------
 
     it('throws when project is not found', async () => {
-        vi.mocked(projectsService.get).mockResolvedValue(null as never);
+        vi.mocked(projectReposService.get).mockResolvedValue(null as never);
 
-        await expect(startReclone(INPUT)).rejects.toThrow('proj-1 not found');
+        await expect(startReclone(INPUT)).rejects.toThrow('repo-1 not found');
     });
 
     it('throws when project has no credential_id', async () => {
-        vi.mocked(projectsService.get).mockResolvedValue({
-            ...FAKE_PROJECT,
+        vi.mocked(projectReposService.get).mockResolvedValue({
+            ...FAKE_REPO,
             credential_id: null,
         } as never);
 
@@ -176,7 +175,7 @@ describe('startReclone', () => {
     });
 
     it('throws when credential record is not found', async () => {
-        vi.mocked(projectsService.get).mockResolvedValue(FAKE_PROJECT as never);
+        vi.mocked(projectReposService.get).mockResolvedValue(FAKE_REPO as never);
         vi.mocked(credentialsService.get).mockResolvedValue(null as never);
 
         await expect(startReclone(INPUT)).rejects.toThrow(
@@ -185,7 +184,7 @@ describe('startReclone', () => {
     });
 
     it('throws when getToken rejects (token unreadable)', async () => {
-        vi.mocked(projectsService.get).mockResolvedValue(FAKE_PROJECT as never);
+        vi.mocked(projectReposService.get).mockResolvedValue(FAKE_REPO as never);
         vi.mocked(credentialsService.get).mockResolvedValue(FAKE_CRED as never);
         vi.mocked(credentialsService.getToken).mockRejectedValue(
             new Error('decryption failed'),

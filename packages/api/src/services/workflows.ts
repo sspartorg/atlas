@@ -77,6 +77,7 @@ export function asRunSummary(row: Record<string, unknown>): IWorkflowRunSummary 
         worktree_path: (row['worktree_path'] as string | null) ?? null,
         setup_done: row['setup_done'] as boolean,
         pr_url: (row['pr_url'] as string | null) ?? null,
+        pr_urls: (row['pr_urls'] as string[] | null) ?? [],
         started_at: row['started_at'] as string,
         updated_at: row['updated_at'] as string,
         finished_at: (row['finished_at'] as string | null) ?? null,
@@ -443,9 +444,18 @@ export const workflowsService = {
 
     /** Queue (or unqueue) an item for a workflow. */
     async setItemWorkflow(itemId: string, workflowId: string | null): Promise<void> {
-        const item = await db.selectFrom('items').select(['id', 'type', 'project_id', 'status']).where('id', '=', itemId).executeTakeFirst();
+        const item = await db
+            .selectFrom('items')
+            .select(['id', 'type', 'project_id', 'status', 'repo_ids'])
+            .where('id', '=', itemId)
+            .executeTakeFirst();
         if (!item) throw new ApiError('not_found', 'Item not found', 404);
         if (workflowId) {
+            // ADR 0018 — a Task's repos can be removed out from under it; a run
+            // with nothing to check out would fail at worktree provisioning.
+            if ((item.repo_ids ?? []).length === 0) {
+                throw new ApiError('conflict', 'This Task has no repos — add one to the project first', 409);
+            }
             // Sub-tasks run inside their Task's workflow run (ADR 0015).
             if (item.type !== 'task') throw new ApiError('validation_error', 'Only Tasks are queued for workflows', 400);
             const wf = await this.get(workflowId);

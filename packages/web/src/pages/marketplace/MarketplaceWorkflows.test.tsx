@@ -16,6 +16,7 @@ function catalogAgent(id: string, name: string): IMarketplaceAgentSummary {
     return {
         id,
         name,
+        cli: 'claude',
         category: 'software-dev',
         kind_slug: 'custom',
         summary: '',

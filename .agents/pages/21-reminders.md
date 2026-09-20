@@ -75,5 +75,9 @@ One-page reminder list with create + cancel. Reminders fire as in-app notificati
 - **Routes**: the create + cancel routes are gated by `requireMcpToken`; the list route is open.
 - **Entities**: `reminder`, `notification` (one is produced per fire).
 
+## Previously undocumented
+
+- `PATCH /api/reminders/:id` via `useUpdateReminder` — what the edit modal calls. *(added 2026-09-20.)*
+
 ## Coming soon on this page
 None.

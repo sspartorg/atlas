@@ -1,7 +1,7 @@
 # 0002. Single Baseline Migration Squash
 
 **Date:** 2026-06-03
-**Status:** Accepted
+**Status:** Superseded by [ADR 0019](0019-second-baseline-squash.md) on 2026-09-20, which squashed the 45 deltas that accumulated on top of this baseline into a new one. The append-only rule below still stands; the regeneration recipe is amended there with two dump artifacts (`\restrict` lines and the `search_path` preamble) that must also be stripped.
 
 ## Context
 

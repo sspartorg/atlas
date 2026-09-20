@@ -73,7 +73,7 @@ vi.mock('../services/credentials.js', () => ({
 
 import { buildApp } from '../server.js';
 import { truncateAll, closeTestDb, testDb } from '../../tests/_pg-db.js';
-import { insertProject } from '../../tests/_items.js';
+import { insertProject, insertProjectRepo } from '../../tests/_items.js';
 
 // W6 chunk 17 — Helper for tests that need a credential row to satisfy
 // the projects.credential_id FK. Inserts a row directly; `credentialsService`
@@ -343,11 +343,11 @@ describe('POST /api/projects/clone', () => {
     });
 });
 
-describe('POST /api/projects/:id/reclone', () => {
+describe('POST /api/projects/:id/repos/:repoId/reclone', () => {
     it('returns 404 for missing project', async () => {
         const res = await app.inject({
             method: 'POST',
-            url: '/api/projects/no-such/reclone',
+            url: '/api/projects/no-such/repos/no-such/reclone',
             payload: {},
         });
         expect(res.statusCode).toBe(404);
@@ -357,7 +357,7 @@ describe('POST /api/projects/:id/reclone', () => {
         await insertProject('p1', 'ATL', { git_path: '/some/path' });
         const res = await app.inject({
             method: 'POST',
-            url: '/api/projects/p1/reclone',
+            url: '/api/projects/p1/repos/p1/reclone',
             payload: {},
         });
         expect(res.statusCode).toBe(202);
@@ -398,23 +398,8 @@ describe('POST /api/projects/:id/generate-ai-scaffold', () => {
 
     it('returns 409 when project is not cloned yet', async () => {
         // Insert project with clone_status = 'pending' (not 'ready')
-        await testDb
-            .insertInto('projects')
-            .values({
-                id: 'p-notcloned',
-                name: 'Not Cloned',
-                issue_key_prefix: 'NCL',
-                git_path: '',
-                git_url: '',
-                default_branch: 'main',
-                status: 'active',
-                clone_status: 'pending',
-            })
-            .execute();
-        await testDb
-            .insertInto('project_issue_counters')
-            .values({ project_id: 'p-notcloned', last_seq: 0 })
-            .execute();
+        await insertProject('p-notcloned', 'NCL', { name: 'Not Cloned', no_repo: true });
+        await insertProjectRepo('p-notcloned', { id: 'p-notcloned', clone_status: 'pending' });
         const res = await app.inject({
             method: 'POST',
             url: '/api/projects/p-notcloned/generate-ai-scaffold',
@@ -423,23 +408,7 @@ describe('POST /api/projects/:id/generate-ai-scaffold', () => {
     });
 
     it('returns 409 when project has no credential_id', async () => {
-        await testDb
-            .insertInto('projects')
-            .values({
-                id: 'p-nocred',
-                name: 'No Cred',
-                issue_key_prefix: 'NCR',
-                git_path: '/path',
-                git_url: '',
-                default_branch: 'main',
-                status: 'active',
-                clone_status: 'ready',
-            })
-            .execute();
-        await testDb
-            .insertInto('project_issue_counters')
-            .values({ project_id: 'p-nocred', last_seq: 0 })
-            .execute();
+        await insertProject('p-nocred', 'NCR', { name: 'No Cred', git_path: '/path' });
         const res = await app.inject({
             method: 'POST',
             url: '/api/projects/p-nocred/generate-ai-scaffold',
@@ -449,10 +418,10 @@ describe('POST /api/projects/:id/generate-ai-scaffold', () => {
     });
 });
 
-describe('GET /api/projects/:id/status', () => {
+describe('GET /api/projects/:id/repos/:repoId/status', () => {
     it('returns 200 with git status fields for an existing project', async () => {
         await insertProject('p1', 'ATL');
-        const res = await app.inject({ method: 'GET', url: '/api/projects/p1/status' });
+        const res = await app.inject({ method: 'GET', url: '/api/projects/p1/repos/p1/status' });
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body);
         expect(body).toMatchObject({
@@ -464,15 +433,15 @@ describe('GET /api/projects/:id/status', () => {
     });
 
     it('returns 404 for a missing project', async () => {
-        const res = await app.inject({ method: 'GET', url: '/api/projects/no-such/status' });
+        const res = await app.inject({ method: 'GET', url: '/api/projects/no-such/repos/no-such/status' });
         expect(res.statusCode).toBe(404);
     });
 });
 
-describe('GET /api/projects/:id/head', () => {
+describe('GET /api/projects/:id/repos/:repoId/head', () => {
     it('returns 200 with null fields when git_path is empty', async () => {
         await insertProject('p1', 'ATL');
-        const res = await app.inject({ method: 'GET', url: '/api/projects/p1/head' });
+        const res = await app.inject({ method: 'GET', url: '/api/projects/p1/repos/p1/head' });
         expect(res.statusCode).toBe(200);
         // git_path is '' in the test project, so the route returns null fields
         const body = JSON.parse(res.body);
@@ -482,7 +451,7 @@ describe('GET /api/projects/:id/head', () => {
     });
 
     it('returns 404 for a missing project', async () => {
-        const res = await app.inject({ method: 'GET', url: '/api/projects/no-such/head' });
+        const res = await app.inject({ method: 'GET', url: '/api/projects/no-such/repos/no-such/head' });
         expect(res.statusCode).toBe(404);
     });
 });
@@ -524,10 +493,10 @@ describe('POST /api/projects/connect', () => {
     });
 });
 
-describe('POST /api/projects/:id/reveal', () => {
+describe('POST /api/projects/:id/repos/:repoId/reveal', () => {
     it('returns 200 on win32/darwin/linux (spawns file browser)', async () => {
         await insertProject('p1', 'ATL', { git_path: '/tmp/test-project' });
-        const res = await app.inject({ method: 'POST', url: '/api/projects/p1/reveal' });
+        const res = await app.inject({ method: 'POST', url: '/api/projects/p1/repos/p1/reveal' });
         // On win32 (test environment) or other platforms — route either succeeds
         // or returns 400/500 depending on platform; we just assert it reaches
         // the project-lookup success path (not 404)
@@ -535,7 +504,7 @@ describe('POST /api/projects/:id/reveal', () => {
     });
 
     it('returns 404 for a missing project', async () => {
-        const res = await app.inject({ method: 'POST', url: '/api/projects/no-such/reveal' });
+        const res = await app.inject({ method: 'POST', url: '/api/projects/no-such/repos/no-such/reveal' });
         expect(res.statusCode).toBe(404);
     });
 
@@ -683,7 +652,7 @@ describe('POST /api/projects/clone — success and error paths', () => {
     });
 });
 
-describe('POST /api/projects/:id/reclone — error path', () => {
+describe('POST /api/projects/:id/repos/:repoId/reclone — error path', () => {
     it('returns 400 when startReclone throws', async () => {
         await insertProject('p1', 'ATL', { git_path: '/some/path' });
         const { startReclone } = await import('../services/reclone-runner.js');
@@ -692,7 +661,7 @@ describe('POST /api/projects/:id/reclone — error path', () => {
         );
         const res = await app.inject({
             method: 'POST',
-            url: '/api/projects/p1/reclone',
+            url: '/api/projects/p1/repos/p1/reclone',
             payload: {},
         });
         expect(res.statusCode).toBe(400);
@@ -728,28 +697,16 @@ describe('POST /api/projects/:id/delete — error + purge success paths', () => 
     });
 });
 
-describe('GET /api/projects/:id/status — credential + error branches', () => {
+describe('GET /api/projects/:id/repos/:repoId/status — credential + error branches', () => {
     it('returns 200 when project has a credential_id (auth attached)', async () => {
         await insertTestCredential();
-        await testDb
-            .insertInto('projects')
-            .values({
-                id: 'p-withcred',
-                name: 'With Cred',
-                issue_key_prefix: 'WCR',
-                git_path: '/some/path',
-                git_url: 'https://github.com/org/repo.git',
-                default_branch: 'main',
-                status: 'active',
-                clone_status: 'ready',
-                credential_id: 'cred-1',
-            })
-            .execute();
-        await testDb
-            .insertInto('project_issue_counters')
-            .values({ project_id: 'p-withcred', last_seq: 0 })
-            .execute();
-        const res = await app.inject({ method: 'GET', url: '/api/projects/p-withcred/status' });
+        await insertProject('p-withcred', 'WCR', {
+            name: 'With Cred',
+            git_path: '/some/path',
+            git_url: 'https://github.com/org/repo.git',
+            credential_id: 'cred-1',
+        });
+        const res = await app.inject({ method: 'GET', url: '/api/projects/p-withcred/repos/p-withcred/status' });
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body);
         expect(body).toMatchObject({ local_head: expect.any(String) });
@@ -761,25 +718,13 @@ describe('GET /api/projects/:id/status — credential + error branches', () => {
         (mockCreds.getToken as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
             new Error('token unavailable'),
         );
-        await testDb
-            .insertInto('projects')
-            .values({
-                id: 'p-badtoken',
-                name: 'Bad Token',
-                issue_key_prefix: 'BTK',
-                git_path: '/some/path',
-                git_url: 'https://github.com/org/repo.git',
-                default_branch: 'main',
-                status: 'active',
-                clone_status: 'ready',
-                credential_id: 'cred-1',
-            })
-            .execute();
-        await testDb
-            .insertInto('project_issue_counters')
-            .values({ project_id: 'p-badtoken', last_seq: 0 })
-            .execute();
-        const res = await app.inject({ method: 'GET', url: '/api/projects/p-badtoken/status' });
+        await insertProject('p-badtoken', 'BTK', {
+            name: 'Bad Token',
+            git_path: '/some/path',
+            git_url: 'https://github.com/org/repo.git',
+            credential_id: 'cred-1',
+        });
+        const res = await app.inject({ method: 'GET', url: '/api/projects/p-badtoken/repos/p-badtoken/status' });
         expect(res.statusCode).toBe(200);
     });
 
@@ -789,19 +734,19 @@ describe('GET /api/projects/:id/status — credential + error branches', () => {
         (getProjectGitStatus as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
             new Error('git exploded'),
         );
-        const res = await app.inject({ method: 'GET', url: '/api/projects/p1/status' });
+        const res = await app.inject({ method: 'GET', url: '/api/projects/p1/repos/p1/status' });
         expect(res.statusCode).toBe(500);
         expect(JSON.parse(res.body).error).toMatch(/git exploded/);
     });
 });
 
-describe('GET /api/projects/:id/head — populated git_path', () => {
+describe('GET /api/projects/:id/repos/:repoId/head — populated git_path', () => {
     it('returns null fields when git is not available (catch branch)', async () => {
         // git_path is set but `/some/repo` does not exist on disk, so the
         // real git call inside the route fails and the catch branch fires,
         // covering the try block entry path (lines 211-225, sans line 223).
         await insertProject('p1', 'ATL', { git_path: '/some/repo' });
-        const res = await app.inject({ method: 'GET', url: '/api/projects/p1/head' });
+        const res = await app.inject({ method: 'GET', url: '/api/projects/p1/repos/p1/head' });
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body);
         expect(body).toEqual({ short_sha: null, subject: null, relative_time: null });
@@ -983,24 +928,12 @@ describe('POST /api/projects/connect — error_kind branches', () => {
 describe('POST /api/projects/:id/generate-ai-scaffold — success + error', () => {
     it('returns 202 with run_id for a ready project that has a credential', async () => {
         await insertTestCredential();
-        await testDb
-            .insertInto('projects')
-            .values({
-                id: 'p-scaffold',
-                name: 'Scaffold Ready',
-                issue_key_prefix: 'SCF',
-                git_path: '/path/to/repo',
-                git_url: 'https://github.com/org/repo.git',
-                default_branch: 'main',
-                status: 'active',
-                clone_status: 'ready',
-                credential_id: 'cred-1',
-            })
-            .execute();
-        await testDb
-            .insertInto('project_issue_counters')
-            .values({ project_id: 'p-scaffold', last_seq: 0 })
-            .execute();
+        await insertProject('p-scaffold', 'SCF', {
+            name: 'Scaffold Ready',
+            git_path: '/path/to/repo',
+            git_url: 'https://github.com/org/repo.git',
+            credential_id: 'cred-1',
+        });
         const res = await app.inject({
             method: 'POST',
             url: '/api/projects/p-scaffold/generate-ai-scaffold',
@@ -1015,24 +948,12 @@ describe('POST /api/projects/:id/generate-ai-scaffold — success + error', () =
         (startWorkflowRun as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
             new Error('agent not found'),
         );
-        await testDb
-            .insertInto('projects')
-            .values({
-                id: 'p-scaffold2',
-                name: 'Scaffold Fail',
-                issue_key_prefix: 'SFF',
-                git_path: '/path/to/repo',
-                git_url: 'https://github.com/org/repo.git',
-                default_branch: 'main',
-                status: 'active',
-                clone_status: 'ready',
-                credential_id: 'cred-1',
-            })
-            .execute();
-        await testDb
-            .insertInto('project_issue_counters')
-            .values({ project_id: 'p-scaffold2', last_seq: 0 })
-            .execute();
+        await insertProject('p-scaffold2', 'SFF', {
+            name: 'Scaffold Fail',
+            git_path: '/path/to/repo',
+            git_url: 'https://github.com/org/repo.git',
+            credential_id: 'cred-1',
+        });
         const res = await app.inject({
             method: 'POST',
             url: '/api/projects/p-scaffold2/generate-ai-scaffold',
@@ -1114,7 +1035,7 @@ describe('GET /api/projects/folder-origin — null-origin branches', () => {
 // ---------------------------------------------------------------------------
 // POST /api/projects/:id/reveal — unsupported platform + spawn-error branches
 // ---------------------------------------------------------------------------
-describe('POST /api/projects/:id/reveal — platform & spawn-error branches (PROJ-REV)', () => {
+describe('POST /api/projects/:id/repos/:repoId/reveal — platform & spawn-error branches (PROJ-REV)', () => {
     it('returns 400 when running on an unsupported platform (PROJ-REV-1)', async () => {
         await insertProject('p1', 'ATL', { git_path: '/tmp/test-project' });
         // Temporarily change process.platform to an unsupported value so the
@@ -1122,7 +1043,7 @@ describe('POST /api/projects/:id/reveal — platform & spawn-error branches (PRO
         const origDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!;
         Object.defineProperty(process, 'platform', { value: 'freebsd', configurable: true });
         try {
-            const res = await app.inject({ method: 'POST', url: '/api/projects/p1/reveal' });
+            const res = await app.inject({ method: 'POST', url: '/api/projects/p1/repos/p1/reveal' });
             expect(res.statusCode).toBe(400);
             expect(JSON.parse(res.body).error).toMatch(/Reveal is not supported/);
         } finally {
@@ -1222,7 +1143,7 @@ describe('POST /api/projects/clone — non-Error fallback (PROJX)', () => {
     });
 });
 
-describe('POST /api/projects/:id/reclone — non-Error fallback (PROJX)', () => {
+describe('POST /api/projects/:id/repos/:repoId/reclone — non-Error fallback (PROJX)', () => {
     it('returns 400 with fallback message when startReclone throws a non-Error (PROJX-2)', async () => {
         await insertProject('p1', 'ATL', { git_path: '/some/path' });
         const { startReclone } = await import('../services/reclone-runner.js');
@@ -1232,7 +1153,7 @@ describe('POST /api/projects/:id/reclone — non-Error fallback (PROJX)', () => 
         });
         const res = await app.inject({
             method: 'POST',
-            url: '/api/projects/p1/reclone',
+            url: '/api/projects/p1/repos/p1/reclone',
             payload: {},
         });
         expect(res.statusCode).toBe(400);
@@ -1258,32 +1179,20 @@ describe('POST /api/projects/:id/delete — non-Error fallback (PROJX)', () => {
     });
 });
 
-describe('GET /api/projects/:id/status — cred-not-found + non-Error fallback (PROJX)', () => {
+describe('GET /api/projects/:id/repos/:repoId/status — cred-not-found + non-Error fallback (PROJX)', () => {
     it('skips authB64 when credential_id is set but credentialsService.get returns null (PROJX-4)', async () => {
         // Insert the credential FK row so the FK is satisfied, then make the
         // mock return null to exercise the `if (cred)` false arm (lines 179-186).
         await insertTestCredential();
         const { credentialsService: mockCreds } = await import('../services/credentials.js');
         (mockCreds.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-        await testDb
-            .insertInto('projects')
-            .values({
-                id: 'p-crednull',
-                name: 'Cred Null',
-                issue_key_prefix: 'PXD',
-                git_path: '/some/path',
-                git_url: 'https://github.com/org/repo.git',
-                default_branch: 'main',
-                status: 'active',
-                clone_status: 'ready',
-                credential_id: 'cred-1',
-            })
-            .execute();
-        await testDb
-            .insertInto('project_issue_counters')
-            .values({ project_id: 'p-crednull', last_seq: 0 })
-            .execute();
-        const res = await app.inject({ method: 'GET', url: '/api/projects/p-crednull/status' });
+        await insertProject('p-crednull', 'PXD', {
+            name: 'Cred Null',
+            git_path: '/some/path',
+            git_url: 'https://github.com/org/repo.git',
+            credential_id: 'cred-1',
+        });
+        const res = await app.inject({ method: 'GET', url: '/api/projects/p-crednull/repos/p-crednull/status' });
         expect(res.statusCode).toBe(200);
     });
 
@@ -1294,7 +1203,7 @@ describe('GET /api/projects/:id/status — cred-not-found + non-Error fallback (
             // eslint-disable-next-line @typescript-eslint/only-throw-error
             throw 'non-error-git-status';
         });
-        const res = await app.inject({ method: 'GET', url: '/api/projects/p1/status' });
+        const res = await app.inject({ method: 'GET', url: '/api/projects/p1/repos/p1/status' });
         expect(res.statusCode).toBe(500);
         expect(JSON.parse(res.body).error).toBe('git status failed');
     });
@@ -1475,14 +1384,14 @@ describe('PATCH /api/projects/:id — Zod strict-mode rejection (PROJ-PATCH-ZOD)
 // The route does not await any event, so no integration path can trigger it.
 // Coverage of the `bin` null path (400) already runs the surrounding code.
 // ---------------------------------------------------------------------------
-describe('POST /api/projects/:id/reveal — spawn-error 500 branch (PROJ-REV-500)', () => {
+describe('POST /api/projects/:id/repos/:repoId/reveal — spawn-error 500 branch (PROJ-REV-500)', () => {
     it('returns a non-404 for a valid project (covers spawn invocation path) (PROJ-REV-500-1)', async () => {
         await insertProject('p1', 'ATL', { git_path: '/tmp/test-project' });
         // On any supported platform, spawn is called and child.unref() invoked;
         // the route returns 200 {ok:true}. On unsupported (already tested
         // above), it returns 400. Either way, we confirm the project-found path
         // runs (not 404) and response is well-formed.
-        const res = await app.inject({ method: 'POST', url: '/api/projects/p1/reveal' });
+        const res = await app.inject({ method: 'POST', url: '/api/projects/p1/repos/p1/reveal' });
         expect(res.statusCode).not.toBe(404);
         expect([200, 400, 500]).toContain(res.statusCode);
     });
@@ -1591,9 +1500,8 @@ describe('POST /api/projects/connect — readHead non-null branch (PROJ-CONN-HEA
             .mockImplementationOnce(async (args) => {
                 capturedArgs = args;
                 return {
-                    id: 'p-head-branch',
-                    name: 'repo',
-                    issue_key_prefix: 'HDB',
+                    project: { id: 'p-head-branch', name: 'repo', issue_key_prefix: 'HDB' },
+                    repo: { id: 'r-head-branch', project_id: 'p-head-branch', name: 'repo' },
                 } as Awaited<ReturnType<typeof projectsService.createFromClone>>;
             });
         const res = await app.inject({
@@ -1613,7 +1521,7 @@ describe('POST /api/projects/connect — readHead non-null branch (PROJ-CONN-HEA
 });
 
 
-describe('project repos (ADR 0017)', () => {
+describe('project repos (ADR 0018)', () => {
     async function connectRepo(name: string, folder = `/ws/${name}`) {
         return app.inject({
             method: 'POST',
@@ -1628,23 +1536,23 @@ describe('project repos (ADR 0017)', () => {
         });
     }
 
-    it('lists the project as its primary repo, then the extras in order', async () => {
+    it('lists a project repos in order, none of them primary', async () => {
         await insertProject('p1', 'ATL', { git_path: '/ws/Atlas Core', git_url: 'https://github.com/org/core' });
+        await testDb.updateTable('project_repos').set({ name: 'atlas-core' }).where('id', '=', 'p1').execute();
         await insertTestCredential();
         expect((await connectRepo('web')).statusCode).toBe(201);
 
         const res = await app.inject({ method: 'GET', url: '/api/projects/p1/repos' });
-        const repos = JSON.parse(res.body) as Array<{ id: string; name: string; primary: boolean }>;
-        expect(repos.map((r) => [r.name, r.primary])).toEqual([
-            ['atlas-core', true],
-            ['web', false],
-        ]);
-        expect(repos[0]?.id).toBe('p1');
+        const repos = JSON.parse(res.body) as Array<{ id: string; name: string; primary?: boolean }>;
+        expect(repos.map((r) => r.name)).toEqual(['atlas-core', 'web']);
+        expect(repos.every((r) => r.primary === undefined)).toBe(true);
     });
 
     it('lists every repo of every project with its project', async () => {
         await insertProject('p1', 'ATL', { git_path: '/ws/core' });
         await insertProject('p2', 'OTH', { git_path: '/ws/other' });
+        await testDb.updateTable('project_repos').set({ name: 'core' }).where('id', '=', 'p1').execute();
+        await testDb.updateTable('project_repos').set({ name: 'other' }).where('id', '=', 'p2').execute();
         await insertTestCredential();
         expect((await connectRepo('web')).statusCode).toBe(201);
 
@@ -1662,7 +1570,7 @@ describe('project repos (ADR 0017)', () => {
         await insertTestCredential();
         expect((await connectRepo('web')).statusCode).toBe(201);
         expect((await connectRepo('web', '/ws/other')).statusCode).toBe(409);
-        expect((await connectRepo('core', '/ws/x')).statusCode).toBe(409); // the primary's name
+        expect((await connectRepo('repo', '/ws/x')).statusCode).toBe(409); // the first repo's name
         const again = await connectRepo('web2', '/ws/web');
         expect(again.statusCode).toBe(400);
         expect(JSON.parse(again.body).error_kind).toBe('already_registered');
@@ -1688,7 +1596,7 @@ describe('project repos (ADR 0017)', () => {
         expect(done.repo?.name).toBe('api');
     });
 
-    it('edits and removes extra repos only, and drops a removed repo from Tasks', async () => {
+    it('edits and removes any repo, and drops a removed repo from Tasks', async () => {
         await insertProject('p1', 'ATL', { git_path: '/ws/core' });
         await insertTestCredential();
         const web = JSON.parse((await connectRepo('web')).body) as { id: string };
@@ -1698,7 +1606,8 @@ describe('project repos (ADR 0017)', () => {
             payload: { setup_sh_body: 'npm ci' },
         });
         expect(JSON.parse(patched.body).setup_sh_body).toBe('npm ci');
-        expect((await app.inject({ method: 'PATCH', url: '/api/projects/p1/repos/p1', payload: {} })).statusCode).toBe(404);
+        // ADR 0018 — the project's own repo is an ordinary row: editable too.
+        expect((await app.inject({ method: 'PATCH', url: '/api/projects/p1/repos/p1', payload: {} })).statusCode).toBe(200);
 
         const task = await app.inject({
             method: 'POST',
@@ -1709,7 +1618,9 @@ describe('project repos (ADR 0017)', () => {
         expect((await app.inject({ method: 'DELETE', url: `/api/projects/p1/repos/${web.id}` })).statusCode).toBe(204);
         const after = JSON.parse((await app.inject({ method: 'GET', url: `/api/tasks/${taskId}` })).body);
         expect(after.repo_ids).toEqual(['p1']);
-        expect((await app.inject({ method: 'DELETE', url: '/api/projects/p1/repos/p1' })).statusCode).toBe(404);
+        // The last repo can go too; the project stays, with no repos.
+        expect((await app.inject({ method: 'DELETE', url: '/api/projects/p1/repos/p1' })).statusCode).toBe(204);
+        expect(JSON.parse((await app.inject({ method: 'GET', url: '/api/projects/p1/repos' })).body)).toEqual([]);
     });
 
     it("keeps a Task's repos inside its project and frozen while a run holds it", async () => {
@@ -1725,10 +1636,24 @@ describe('project repos (ADR 0017)', () => {
         });
         expect(foreign.statusCode).toBe(400);
 
+        // ADR 0018 — with several repos to choose from, not choosing is an error.
+        const unpicked = await app.inject({
+            method: 'POST',
+            url: '/api/tasks',
+            payload: { project_id: 'p1', title: 'No repo' },
+        });
+        expect(unpicked.statusCode).toBe(400);
+
         const task = JSON.parse(
-            (await app.inject({ method: 'POST', url: '/api/tasks', payload: { project_id: 'p1', title: 'T' } })).body
+            (
+                await app.inject({
+                    method: 'POST',
+                    url: '/api/tasks',
+                    payload: { project_id: 'p1', title: 'T', repo_ids: ['p1'] },
+                })
+            ).body
         ) as { id: string; repo_ids: string[] };
-        expect(task.repo_ids).toEqual([]);
+        expect(task.repo_ids).toEqual(['p1']);
         await testDb
             .insertInto('workflows')
             .values({ id: 'wf1', project_id: 'p1', name: 'WF', graph: JSON.stringify({ nodes: [], edges: [] }) } as never)

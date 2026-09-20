@@ -179,7 +179,7 @@ chains.
 |---|---|---|
 | `ATLAS_API_BASE` | `http://127.0.0.1:4001` | Base URL of the `@atlas/api` server |
 | `ATLAS_MCP_TIMEOUT_MS` | `15000` | Per-request HTTP timeout |
-| `ATLAS_MCP_TOKEN` | _(unset)_ | When set, sent as `X-Atlas-Token` on every non-GET request. The API's `requireMcpToken` preHandler rejects mutating calls when this header is missing on protected routes. |
+| `ATLAS_MCP_TOKEN` | _(generated at API boot)_ | Sent as `X-Atlas-Token` on every non-GET request. The API's `requireMcpToken` preHandler rejects mutating calls when this header is missing on protected routes. |
 
 The MCP server expects the API server to already be running. If the API is
 down, individual tool calls return an error carrying the HTTP status and a

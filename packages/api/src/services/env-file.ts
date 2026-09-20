@@ -39,17 +39,30 @@ export const KNOWN_ENV_VARS: ReadonlyArray<Omit<IEnvVar, 'value'>> = [
     },
 ];
 
-function envFilePath(): string {
-    // dist/services/env-file.js → ../../.env, src/services/env-file.ts → ../../.env (tsx)
-    return path.resolve(__dirname, '..', '..', '.env');
+// The env file the server actually loads. This used to resolve to
+// `packages/api/.env`, which `load-env.ts` has never read — it loads the
+// monorepo root file, and the per-package ones were removed precisely because
+// they drifted. So every Environment-tab save landed in a file nothing
+// consumed and was silently lost on restart (campaign finding F-022).
+//
+// `src/services/env-file.ts` and `dist/services/env-file.js` sit at the same
+// depth, so the same four levels work under tsx and after a build. The mode
+// switch mirrors `load-env.ts`; keep the two in step.
+function repoRoot(): string {
+    return path.resolve(__dirname, '..', '..', '..', '..');
 }
 
-// Defense in depth: refuse writes to files outside the API package, even if
-// __dirname is somehow misresolved during a future refactor.
+function envFilePath(): string {
+    const file = process.env['ATLAS_ENV']?.toLowerCase() === 'prod' ? '.env.prod' : '.env';
+    return path.join(repoRoot(), file);
+}
+
+// Defense in depth: refuse writes to anything but the two root env files, even
+// if __dirname is somehow misresolved during a future refactor.
 function assertSafePath(p: string): void {
-    const pkgRoot = path.resolve(__dirname, '..', '..');
-    if (!p.startsWith(pkgRoot + path.sep) && p !== path.join(pkgRoot, '.env')) {
-        throw new Error(`env file path escapes API package root: ${p}`);
+    const root = repoRoot();
+    if (p !== path.join(root, '.env') && p !== path.join(root, '.env.prod')) {
+        throw new Error(`env file path is not a root env file: ${p}`);
     }
 }
 

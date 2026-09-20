@@ -66,14 +66,14 @@ describe('DetailsRailCard', () => {
                 onAssign={vi.fn()}
                 assignee={null}
                 project={null}
-                parents={[{ label: 'Task', text: 'CER-7', href: '/tasks/CER-7' }]}
+                parents={[{ label: 'Task', text: 'ATL-7', href: '/tasks/ATL-7' }]}
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
                 createdAt="2026-05-15T00:00:00.000Z"
                 updatedAt="2026-05-16T00:00:00.000Z"
             />,
         );
-        const taskLink = screen.getByText('CER-7');
+        const taskLink = screen.getByText('ATL-7');
         expect(taskLink).toBeInTheDocument();
         await user.click(taskLink);
     });
@@ -279,9 +279,9 @@ describe('DetailsRailCard', () => {
         });
     });
 
-    describe('Repos row (ADR 0017)', () => {
+    describe('Repos row (ADR 0018)', () => {
         const BASE = 'http://localhost:3000/api';
-        const WEB = makeProjectRepo({ id: 'r-web', name: 'web', primary: false });
+        const WEB = makeProjectRepo({ id: 'r-web', name: 'web' });
 
         function renderRepos(
             repoIds: string[],

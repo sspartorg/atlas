@@ -57,45 +57,51 @@ describe('SQL injection guard — searchItems', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Path traversal — projectsService.create must reject `..` in git_path
+// 2. Path traversal — the git_path guard must reject `..`
+//
+// ADR 0018 — `git_path` left the project row for its repos, so
+// `projectsService.create` no longer takes one. The guard now sits on
+// `createFromClone`, which is the call that stores a path, and the accepted
+// path is asserted on the repo it returns.
 // ---------------------------------------------------------------------------
+function cloneInput(name: string, prefix: string, git_path: string) {
+    return {
+        name,
+        issue_key_prefix: prefix,
+        git_url: 'https://github.com/acme/repo.git',
+        git_path,
+        credential_id: null,
+        default_branch: 'main',
+    };
+}
+
 describe('path traversal guard — projectsService', () => {
     it('rejects git_path with leading traversal (../../etc/passwd)', async () => {
         await expect(
-            projectsService.create({
-                name: 'Test Project',
-                issue_key_prefix: 'TRV',
-                git_path: '../../etc/passwd',
-            }),
+            projectsService.createFromClone(cloneInput('Test Project', 'TRV', '../../etc/passwd')),
         ).rejects.toThrow(/path-traversal/);
     });
 
     it('rejects git_path with traversal in middle (workspaces/../../../secret)', async () => {
         await expect(
-            projectsService.create({
-                name: 'Test Project',
-                issue_key_prefix: 'TV2',
-                git_path: 'workspaces/../../../secret',
-            }),
+            projectsService.createFromClone(
+                cloneInput('Test Project', 'TV2', 'workspaces/../../../secret'),
+            ),
         ).rejects.toThrow(/path-traversal/);
     });
 
     it('accepts safe absolute path (no traversal components)', async () => {
-        const project = await projectsService.create({
-            name: 'Safe Project',
-            issue_key_prefix: 'SFP',
-            git_path: '/home/user/repos/myproject',
-        });
+        const { project, repo } = await projectsService.createFromClone(
+            cloneInput('Safe Project', 'SFP', '/home/user/repos/myproject'),
+        );
         expect(project.id).toBeTruthy();
-        expect(project.git_path).toBe('/home/user/repos/myproject');
+        expect(repo.git_path).toBe('/home/user/repos/myproject');
     });
 
     it('accepts empty git_path', async () => {
-        const project = await projectsService.create({
-            name: 'Empty Path',
-            issue_key_prefix: 'EPT',
-            git_path: '',
-        });
+        const { project } = await projectsService.createFromClone(
+            cloneInput('Empty Path', 'EPT', ''),
+        );
         expect(project.id).toBeTruthy();
     });
 });

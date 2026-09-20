@@ -158,7 +158,7 @@ export function AddRepoDialog({ projectId, onClose }: Props) {
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     <FormHeading>Add repo</FormHeading>
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
-                        Tasks in this project can then work on it next to the primary repo.
+                        Tasks in this project can then pick it alongside the others.
                     </Typography>
                 </Box>
                 <IconButton onClick={onClose} size="small" disabled={busy} aria-label="Close">

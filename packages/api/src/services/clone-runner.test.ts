@@ -167,9 +167,10 @@ describe('startClone', () => {
         vi.mocked(credentialsService.get).mockResolvedValue(FAKE_CRED as never);
         vi.mocked(credentialsService.getToken).mockResolvedValue(FAKE_TOKEN);
         vi.mocked(credentialsService.markUsed).mockResolvedValue(undefined);
-        vi.mocked(projectsService.createFromClone).mockResolvedValue(
-            FAKE_PROJECT as never,
-        );
+        vi.mocked(projectsService.createFromClone).mockResolvedValue({
+            project: FAKE_PROJECT,
+            repo: { id: 'repo-1', project_id: 'proj-1', name: 'my-project' },
+        } as never);
 
         // execFile mock: set-url succeeds, longpaths succeeds.
         mocks.execFile
@@ -220,6 +221,8 @@ describe('startClone', () => {
         );
         expect(completed).toBeDefined();
         expect((completed as { project: unknown }).project).toEqual(FAKE_PROJECT);
+        // ADR 0018 — the event carries the repo the clone created too.
+        expect((completed as { repo: { name: string } }).repo.name).toBe('my-project');
 
         // markUsed and createFromClone should have been called.
         expect(credentialsService.markUsed).toHaveBeenCalledWith(INPUT.credential_id);
@@ -335,9 +338,10 @@ describe('startClone', () => {
         vi.mocked(credentialsService.get).mockResolvedValue(FAKE_CRED as never);
         vi.mocked(credentialsService.getToken).mockResolvedValue(FAKE_TOKEN);
         vi.mocked(credentialsService.markUsed).mockResolvedValue(undefined);
-        vi.mocked(projectsService.createFromClone).mockResolvedValue(
-            FAKE_PROJECT as never,
-        );
+        vi.mocked(projectsService.createFromClone).mockResolvedValue({
+            project: FAKE_PROJECT,
+            repo: { id: 'repo-1', project_id: 'proj-1', name: 'my-project' },
+        } as never);
 
         // remote set-url succeeds, longpaths rejects (should be swallowed).
         mocks.execFile
@@ -395,9 +399,10 @@ describe('startClone', () => {
         vi.mocked(credentialsService.get).mockResolvedValue(FAKE_CRED as never);
         vi.mocked(credentialsService.getToken).mockResolvedValue(FAKE_TOKEN);
         vi.mocked(credentialsService.markUsed).mockResolvedValue(undefined);
-        vi.mocked(projectsService.createFromClone).mockResolvedValue(
-            FAKE_PROJECT as never,
-        );
+        vi.mocked(projectsService.createFromClone).mockResolvedValue({
+            project: FAKE_PROJECT,
+            repo: { id: 'repo-1', project_id: 'proj-1', name: 'my-project' },
+        } as never);
 
         mocks.execFile
             .mockResolvedValueOnce({ stdout: '', stderr: '' })

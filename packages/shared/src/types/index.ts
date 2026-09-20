@@ -291,21 +291,12 @@ export interface IProject {
     id: string;
     name: string;
     // Jira-style 3-letter uppercase prefix used as the namespace for every
-    // issue id in this project (e.g. CER → CER-1, CER-2, ...). Frozen once
+    // issue id in this project (e.g. ATL → ATL-1, ATL-2, ...). Frozen once
     // set; retired into retired_prefixes when the project is deleted.
     issue_key_prefix: string;
-    git_path: string;
-    git_url: string;
-    credential_id: string | null;
-    default_branch: string;
-    clone_status: CloneStatus;
     description: string;
     status: string;
     guardrails_md: string;
-    // 2026-06-10 — Per-project setup scripts. Edited via the Setup tab on
-    // Project Detail; execution wiring is a separate follow-up.
-    setup_sh_body: string;
-    setup_ps1_body: string;
     created_at: string;
     updated_at: string;
     // Most recent timestamp across the project row and any of its children
@@ -315,16 +306,15 @@ export interface IProject {
 }
 
 /**
- * ADR 0017 — a git repo of a Project. The project's own git fields are its
- * PRIMARY repo (`primary: true`, `id` = the project id); extra repos live in
- * `project_repos`.
+ * ADR 0018 — a git repo of a Project. Every repo is an ordinary
+ * `project_repos` row; there is no primary. A repo that predates 0018 carries
+ * its project's id, which is what kept its worktrees and Jira sources valid.
  */
 export interface IProjectRepo {
     id: string;
     project_id: string;
     /** Folder name in a multi-repo workspace; lowercase slug, unique per project. */
     name: string;
-    primary: boolean;
     git_url: string;
     git_path: string;
     credential_id: string | null;
@@ -389,7 +379,7 @@ export interface ITask {
     acceptance_criteria: string;
     /** Architect's spec for the whole Task (ADR 0015). */
     spec_md: string | null;
-    /** The one PR the Task's workflow run opened. */
+    /** The FIRST PR the Task's workflow run opened; see `pr_urls` for all of them. */
     pr_url: string | null;
     /** Free-form labels for filtering. Max 20 per item / 40 chars each (enforced at Zod). */
     labels: string[];
@@ -812,7 +802,7 @@ export interface IItemExternalLink {
 
 /**
  * Jira bridge source (ADR 0017): issues matching `jql` are work for the repo
- * `repo_id` (a primary repo's id is its project's id). An issue matching
+ * `repo_id`. An issue matching
  * several sources becomes one Task in the first match's project, spanning the
  * matched repos of that project; the first of those sources with a
  * `workflow_id` queues it.
@@ -1193,12 +1183,14 @@ export interface SSEEvent {
     stream?: 'stdout' | 'stderr';
     exitCode?: number;
     projectId?: string;
+    /** ADR 0018 — which repo of the project an auto-fetch / reclone event is about. */
+    repoId?: string;
     mode?: 'unregister' | 'purge';
     stashPath?: string | null;
     result?: ScheduleRunStatus;
     detail?: string | null;
     project?: IProject;
-    /** ADR 0017 — set on `clone_completed` when the clone added a repo to a project. */
+    /** Set on `clone_completed`: the repo the clone registered. */
     repo?: IProjectRepo;
     errorDetail?: string;
     /** W4 — typed kind on `run_error` SSE events. Lets the UI render a
@@ -1229,6 +1221,9 @@ export type ScheduleConflictPolicy = 'skip' | 'stash' | 'abort';
 export type ScheduleRunStatus = 'success' | 'skipped' | 'failure' | 'conflict';
 
 export interface IProjectSchedule {
+    // ADR 0018 — auto-fetch is per repo; project_id rides along so the
+    // "pause while agents are active" guard resolves without a join.
+    repo_id: string;
     project_id: string;
     enabled: boolean;
     preset: SchedulePreset;
@@ -1309,6 +1304,8 @@ export interface ICliSession {
      * staging. `project_id === null` is the discriminator for that whole mode.
      */
     project_id: string | null;
+    /** ADR 0018 — the repo of that project the session is checked out on. Null on a standalone session. */
+    repo_id: string | null;
     title: string;
     status: CliSessionStatus;
     /** Which CLI this session is running. The claude dialect (`claude`, `ollama`) supports `--resume`; `copilot` does not. */
@@ -1359,6 +1356,8 @@ export interface ICliSession {
 
 export interface CliSessionCreateInput {
     project_id: string;
+    /** ADR 0018 — which repo to check out. Optional only for a single-repo project. */
+    repo_id?: string;
     /** Defaults to `Session <short-id>` server-side if omitted. */
     title?: string;
     /** Defaults to `atlas/terminal/<short-id>` server-side if omitted. */
@@ -1583,6 +1582,14 @@ export interface IMarketplaceAgent {
 export interface IMarketplaceAgentSummary {
     id: string;
     name: string;
+    /**
+     * F-010 — the CLI this catalog agent runs on. Carried on the SUMMARY, not
+     * just the full record, so an install surface can warn that the binary is
+     * missing BEFORE installing. Without it a workflow template happily
+     * installed ten agents for a CLI that is not on the machine, and the
+     * failure only surfaced mid-run.
+     */
+    cli: AgentCli;
     category: AgentCategory;
     kind_slug: AgentKindSlug;
     summary: string;

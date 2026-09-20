@@ -54,25 +54,36 @@ afterAll(() => {
     rmSync(sandboxRoot, { recursive: true, force: true });
 });
 
+// ADR 0018 — setup scripts live on a repo, so each fixture project gets one.
+// The repo carries the project's id, exactly as migration 045 leaves it.
 async function insertProject(setupBody: string | null): Promise<string> {
     const id = `proj-${randomUUID()}`;
-    const fields: Record<string, unknown> = {
+    await testDb
+        .insertInto('projects')
+        .values({
+            id,
+            name: 'setup runner test',
+            issue_key_prefix: 'STP',
+            description: '',
+            status: 'active',
+            guardrails_md: '',
+        } as never)
+        .execute();
+    const repo: Record<string, unknown> = {
         id,
-        name: 'setup runner test',
-        issue_key_prefix: 'STP',
+        project_id: id,
+        name: 'repo',
         git_path: sandboxRoot,
         git_url: '',
         credential_id: null,
         default_branch: 'main',
         clone_status: 'ready',
-        description: '',
-        status: 'active',
-        guardrails_md: '',
         setup_sh_body: '',
         setup_ps1_body: '',
+        position: 0,
     };
-    if (setupBody !== null) fields[SCRIPT_KEY] = setupBody;
-    await testDb.insertInto('projects').values(fields as never).execute();
+    if (setupBody !== null) repo[SCRIPT_KEY] = setupBody;
+    await testDb.insertInto('project_repos').values(repo as never).execute();
     return id;
 }
 
@@ -86,6 +97,7 @@ describe('runProjectSetup', () => {
         const projectId = await insertProject('');
         const out = await runProjectSetup({
             projectId,
+            repoId: projectId,
             worktreePath: sandboxRoot,
             runId: 'r1',
         });
@@ -96,6 +108,7 @@ describe('runProjectSetup', () => {
     it('returns ok:true when the project does not exist (defensive)', async () => {
         const out = await runProjectSetup({
             projectId: 'does-not-exist',
+            repoId: 'does-not-exist',
             worktreePath: sandboxRoot,
             runId: 'r1',
         });
@@ -113,6 +126,7 @@ describe('runProjectSetup', () => {
 
         const out = await runProjectSetup({
             projectId,
+            repoId: projectId,
             worktreePath: sandboxRoot,
             runId: 'r2',
         });
@@ -143,7 +157,7 @@ describe('runProjectSetup', () => {
             return { stdout: '', stderr: '' };
         });
 
-        await runProjectSetup({ projectId, worktreePath: sandboxRoot, runId: 'r3' });
+        await runProjectSetup({ projectId, repoId: projectId, worktreePath: sandboxRoot, runId: 'r3' });
         expect(writtenContent).toContain('from-project');
         expect(writtenContent).not.toContain('from-env');
     });
@@ -152,6 +166,7 @@ describe('runProjectSetup', () => {
         const projectId = await insertProject('echo "${variable.MISSING}"');
         const out = await runProjectSetup({
             projectId,
+            repoId: projectId,
             worktreePath: sandboxRoot,
             runId: 'r4',
         });
@@ -181,6 +196,7 @@ describe('runProjectSetup', () => {
 
         const out = await runProjectSetup({
             projectId,
+            repoId: projectId,
             worktreePath: sandboxRoot,
             runId: 'r5',
         });
@@ -209,6 +225,7 @@ describe('runProjectSetup', () => {
         );
         const out = await runProjectSetup({
             projectId,
+            repoId: projectId,
             worktreePath: sandboxRoot,
             runId: 'r6',
         });
@@ -228,7 +245,7 @@ describe('runProjectSetup', () => {
             return { stdout: '', stderr: '' };
         });
 
-        await runProjectSetup({ projectId, worktreePath: sandboxRoot, runId: 'cleanup-ok' });
+        await runProjectSetup({ projectId, repoId: projectId, worktreePath: sandboxRoot, runId: 'cleanup-ok' });
         expect(observedPath).not.toBe('');
         expect(existsSync(observedPath)).toBe(false);
     });
@@ -275,6 +292,7 @@ describe('runProjectSetup', () => {
 
         const out = await runProjectSetup({
             projectId,
+            repoId: projectId,
             worktreePath: sandboxRoot,
             runId: 'cleanup-fail',
         });
@@ -303,6 +321,7 @@ describe('runProjectSetup', () => {
 
         const out = await runProjectSetup({
             projectId,
+            repoId: projectId,
             worktreePath: sandboxRoot,
             runId: 'spawn-fail',
         });
@@ -336,6 +355,7 @@ describe('runProjectSetup', () => {
 
         const out = await runProjectSetup({
             projectId,
+            repoId: projectId,
             worktreePath: sandboxRoot,
             runId: 'spawn-fail-non-error',
         });
@@ -367,6 +387,7 @@ describe('runProjectSetup', () => {
 
         const out = await runProjectSetup({
             projectId,
+            repoId: projectId,
             worktreePath: sandboxRoot,
             runId: 'buf-output',
         });
@@ -400,6 +421,7 @@ describe('runProjectSetup', () => {
 
         const out = await runProjectSetup({
             projectId,
+            repoId: projectId,
             worktreePath: sandboxRoot,
             runId: 'short-secret',
         });

@@ -17,6 +17,7 @@ export default defineConfig({
             // level tests can call POST/PATCH/DELETE without supplying a
             // token. The real .env's token must NOT leak in here.
             ATLAS_MCP_TOKEN: '',
+            ATLAS_MCP_TOKEN_OPEN: '1',
             // Pin the timezone. `computeNextFire` in services/reminders.ts
             // deliberately schedules in LOCAL time — a "09:00" reminder fires
             // at 09:00 for the Owner, which is the right behaviour for a
@@ -179,19 +180,23 @@ export default defineConfig({
             'src/services/run-repos.test.ts',
             'src/routes/jira.test.ts',
             'src/marketplace/catalog-loader.test.ts',
+            // F-012 - reviewer agents must ship a required checklist.
+            'src/marketplace/reviewer-checklists.test.ts',
             'src/utils/errors.test.ts',
             'tests/e2e-lifecycle.test.ts',
             'tests/pg-db-truncate.test.ts',
-            'src/db/catalog-sync-migration.test.ts',
-            // ADR 0014 — workflows schema constraints (migration 035).
+            // ADR 0014 — workflows schema constraints, asserted against the
+            // live schema rather than by importing a migration module.
             'src/db/workflows-migration.test.ts',
-            // ADR 0015 — tasks + sub-tasks (migration 037).
-            'src/db/tasks-migration.test.ts',
-            'src/db/graphs-vertical-migration.test.ts',
-            // Migration 041 — workflows published to the Marketplace.
-            'src/db/published-workflows-migration.test.ts',
-            // Migration 044 — Jira sources per repo (ADR 0017).
-            'src/db/jira-sources-migration.test.ts',
+            // The 2026-09-20 re-squash (ADR 0019) deleted six sibling specs —
+            // catalog-sync (034), tasks (037), graphs-vertical (039),
+            // published-workflows (041), jira-sources (044) and
+            // repos-without-primary (045). Each imported `up`/`down` from the
+            // migration file it named, so they tested transitions that no
+            // longer exist as discrete steps; the baseline is their end state.
+            // `workflows-migration.test.ts` and `hot-path-indexes.test.ts`
+            // survive because they assert the schema, not the migration.
+            'src/services/project-repos.test.ts',
             // W2 chunk N — subprocess wrappers + boot files.
             'src/services/git-status.test.ts',
             'src/services/git-verify.test.ts',

@@ -17,19 +17,19 @@ const MONO = '"JetBrains Mono", monospace';
 
 interface Props {
     projectId: string;
-    /** The Task's repos in order; `[]` = the project's primary repo. */
+    /** The Task's repos in order; `[]` only on a pre-ADR-0018 Task. */
     repoIds: string[];
     onChange: (next: string[]) => Promise<unknown>;
 }
 
-/** Task Details rail row (ADR 0017). Editable only when the project has another repo to pick. */
+/** Task Details rail row (ADR 0018). Editable when the project has another repo to pick. */
 export function TaskReposRow({ projectId, repoIds, onChange }: Props) {
     const { data: repos = [] } = useProjectRepos(projectId);
     const toast = useToast();
     const [draft, setDraft] = useState<string[] | null>(null);
     const [saving, setSaving] = useState(false);
 
-    const current = repoIds.length > 0 ? repoIds : repos.filter((r) => r.primary).map((r) => r.id);
+    const current = repoIds.length > 0 ? repoIds : repos.slice(0, 1).map((r) => r.id);
     const nameOf = (id: string) => repos.find((r) => r.id === id)?.name ?? id;
     const editable = repos.length > 1;
 

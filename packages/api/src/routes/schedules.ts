@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { Cron } from 'croner';
 import { ProjectScheduleSchema } from '@atlas/shared';
-import { projectsService } from '../services/projects.js';
+import type { IProjectRepo } from '@atlas/shared';
+import { projectReposService } from '../services/project-repos.js';
 import { schedulesService } from '../services/schedules.js';
 import { materializeCron } from '../services/cron-materializer.js';
 import { registerOne, unregisterOne, nextRun } from '../services/schedule-registry.js';
@@ -10,17 +11,23 @@ import { randomUUID } from 'node:crypto';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
 
 export async function schedulesRoutes(app: FastifyInstance) {
+    // ADR 0018 — auto-fetch is per repo, so every route below names one.
+    async function repoOr404(projectId: string, repoId: string): Promise<IProjectRepo | null> {
+        const repos = await projectReposService.list(projectId).catch(() => null);
+        return repos?.find((r) => r.id === repoId) ?? null;
+    }
+
     app.get('/api/schedules', async (_req, reply) => reply.send(await schedulesService.listEnabled()));
 
-    app.get('/api/projects/:id/schedule', async (req, reply) => {
-        const { id } = req.params as { id: string };
-        if (!(await projectsService.get(id))) return reply.status(404).send({ error: 'Project not found' });
-        return reply.send(await schedulesService.getOrDefault(id));
+    app.get('/api/projects/:id/repos/:repoId/schedule', async (req, reply) => {
+        const { id, repoId } = req.params as { id: string; repoId: string };
+        if (!(await repoOr404(id, repoId))) return reply.status(404).send({ error: 'Repo not found' });
+        return reply.send(await schedulesService.getOrDefault(repoId, id));
     });
 
-    app.put('/api/projects/:id/schedule', { preHandler: requireMcpToken }, async (req, reply) => {
-        const { id } = req.params as { id: string };
-        if (!(await projectsService.get(id))) return reply.status(404).send({ error: 'Project not found' });
+    app.put('/api/projects/:id/repos/:repoId/schedule', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id, repoId } = req.params as { id: string; repoId: string };
+        if (!(await repoOr404(id, repoId))) return reply.status(404).send({ error: 'Repo not found' });
         const parsed = ProjectScheduleSchema.safeParse(req.body);
         if (!parsed.success) {
             return reply.status(400).send({ error: 'Invalid schedule', issues: parsed.error.issues });
@@ -51,6 +58,7 @@ export async function schedulesRoutes(app: FastifyInstance) {
             }
         }
         const saved = await schedulesService.upsert({
+            repo_id: repoId,
             project_id: id,
             enabled: input.enabled,
             preset: input.preset,
@@ -64,37 +72,37 @@ export async function schedulesRoutes(app: FastifyInstance) {
         });
         if (saved.enabled) {
             registerOne(saved);
-            const refreshed = nextRun(id);
+            const refreshed = nextRun(repoId);
             /* v8 ignore next */
             if (refreshed) {
                 await schedulesService.recordRun(
-                    id,
+                    repoId,
                     saved.last_run_status,
                     saved.last_run_detail,
                     refreshed.toISOString(),
                 );
             }
         } else {
-            unregisterOne(id);
+            unregisterOne(repoId);
         }
-        return reply.send(await schedulesService.getOrDefault(id));
+        return reply.send(await schedulesService.getOrDefault(repoId, id));
     });
 
-    app.delete('/api/projects/:id/schedule', { preHandler: requireMcpToken }, async (req, reply) => {
-        const { id } = req.params as { id: string };
-        if (!(await projectsService.get(id))) return reply.status(404).send({ error: 'Project not found' });
-        unregisterOne(id);
-        await schedulesService.delete(id);
+    app.delete('/api/projects/:id/repos/:repoId/schedule', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id, repoId } = req.params as { id: string; repoId: string };
+        if (!(await repoOr404(id, repoId))) return reply.status(404).send({ error: 'Repo not found' });
+        unregisterOne(repoId);
+        await schedulesService.delete(repoId);
         return reply.send({ ok: true });
     });
 
-    app.post('/api/projects/:id/schedule/fire', { preHandler: requireMcpToken }, async (req, reply) => {
+    app.post('/api/projects/:id/repos/:repoId/schedule/fire', { preHandler: requireMcpToken }, async (req, reply) => {
         void req.body;
-        const { id } = req.params as { id: string };
-        if (!(await projectsService.get(id))) return reply.status(404).send({ error: 'Project not found' });
+        const { id, repoId } = req.params as { id: string; repoId: string };
+        if (!(await repoOr404(id, repoId))) return reply.status(404).send({ error: 'Repo not found' });
         const autofetchId = randomUUID();
         setImmediate(() => {
-            void runAutoFetch(id);
+            void runAutoFetch(repoId);
         });
         return reply.status(202).send({ autofetch_id: autofetchId });
     });

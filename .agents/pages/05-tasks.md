@@ -29,7 +29,7 @@ List every Task across all projects (ADR 0015: a Task is the top-level item; its
 
 **Kanban view**
 - `WorkItemKanban`, one column per status; card = kind icon + Task id, title, assignee chip, live dot while `in_progress`
-- Drag to a valid next column → `useTransitionTask`; shift-drop overrides the status machine. A refused move (e.g. 422 closing a Task with open sub-tasks) toasts the server's reason
+- Drag to a valid next column → `useTransitionTask`. **There is no shift-drop override** — `WorkItemKanban.tsx:237-256` refuses an illegal drop outright with a toast naming the legal targets, and the only call is `onTransition(item, status, false)`. Override lives solely in `StatusPickerPopover`. *(corrected 2026-09-20 — campaign task-21.)*
 - Card click → `/tasks/:id`
 
 **Mobile** — `PageFab` "New Task" replaces the header button; the table renders as `MobileTaskList`.
@@ -49,7 +49,7 @@ None.
 
 ## API endpoints touched
 - `GET /api/tasks?project_id=…&include_archived=…`, `GET /api/tasks/stats`
-- `PATCH /api/tasks/:id/status` (Kanban; `?override=1` on shift-drop)
+- `PATCH /api/tasks/:id/status` (Kanban; always `override=false` — the override path is the status picker, not the board)
 - `GET /api/projects`, `GET /api/agents`, `GET /api/settings`
 
 ## Permissions / guards

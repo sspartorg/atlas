@@ -28,7 +28,7 @@
 - **Reset Workspace** button → opens `ResetWorkspaceModal`
 
 ## Tab 2 — Environment (`EnvironmentTab`)
-Info alert explains `.env` mirroring. Variable rows (`EnvVarRow`) show key + "RESTART" badge (if `restart_required`) + description + value field (masked when `secret`, Reveal/Copy toggles otherwise). **Save Changes** → `useUpdateEnv`. **Restart Server** opens a confirm dialog and hits `POST /api/server/restart`.
+Info alert explains `.env` mirroring. Variable rows (`EnvVarRow`) show key + "RESTART" badge (if `restart_required`) + description + value field (masked when `secret`, Reveal/Copy toggles otherwise). **Save Changes** → `useUpdateEnv`. **There is no Restart Server button** — `EnvironmentTab.tsx:149-181` is a static Alert telling the Owner to Ctrl+C and re-run `pnpm dev`. `POST /api/server/restart` exists on the API and `api.ts:342` wraps it, but nothing in the UI calls either. *(corrected 2026-09-20 — campaign task-21.)*
 
 ## Tab 3 — Model Registry (`ModelRegistryTab`)
 Three `CliCard` sections (Claude / Copilot / Ollama), rendered from `AGENT_CLIS`. Each model row: `model_name` + optional note + Remove button. Add row commits via `useCreateCliModel` (Enter key in either input triggers Add). Remove opens a confirmation dialog (`ConfirmRemoveModelDialog`); only the confirm button fires `useRemoveCliModel`. Cancel/X close without mutation.

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    UpdateJiraConfigSchema,
     AgentCategorySchema,
     AgentCliSchema,
     AgentMemoryUpdateSchema,
@@ -176,10 +177,10 @@ describe('A08 — role_id on agent schemas', () => {
 
 describe('IssueKeyPrefixSchema', () => {
     it('accepts 3 uppercase letters', () => {
-        expect(IssueKeyPrefixSchema.parse('CER')).toBe('CER');
+        expect(IssueKeyPrefixSchema.parse('ATL')).toBe('ATL');
     });
     it('rejects lowercase', () => {
-        expect(IssueKeyPrefixSchema.safeParse('cer').success).toBe(false);
+        expect(IssueKeyPrefixSchema.safeParse('atl').success).toBe(false);
     });
     it('rejects wrong length', () => {
         expect(IssueKeyPrefixSchema.safeParse('CE').success).toBe(false);
@@ -235,7 +236,6 @@ describe('CreateProjectSchema / UpdateProjectSchema', () => {
         const out = CreateProjectSchema.parse({ name: 'Atlas', issue_key_prefix: 'ATL' });
         expect(out.name).toBe('Atlas');
         expect(out.issue_key_prefix).toBe('ATL');
-        expect(out.git_path).toBe('');
         expect(out.status).toBe('active');
     });
 
@@ -925,5 +925,51 @@ describe('refine-callback coverage', () => {
 
     it('UpdateScratchPadSchema rejects an empty patch', () => {
         expect(UpdateScratchPadSchema.safeParse({}).success).toBe(false);
+    });
+});
+
+// ── JiraSiteUrlSchema — the only uncovered lines in @atlas/shared ──────────
+//
+// `schemas/index.ts:660-664` is the refine behind `site_url`. It was the one
+// gap keeping the package off its ADR 0009 floor of 100% (measured 99.21%
+// lines / 94.11% functions on 2026-09-20), and it guards something real: the
+// Jira bridge sends Basic-auth credentials to this origin, so plain http is
+// allowed only on loopback.
+describe('UpdateJiraConfigSchema — site_url origin rule', () => {
+    const base = {
+        enabled: true,
+        email: 'a@b.com',
+        api_token: '',
+        poll_interval_minutes: 10,
+        extra_fields: [],
+        sources: [],
+    };
+    const parse = (site_url: string | null) =>
+        UpdateJiraConfigSchema.safeParse({ ...base, site_url });
+
+    it('accepts https', () => {
+        expect(parse('https://example.atlassian.net').success).toBe(true);
+    });
+
+    it('accepts plain http on loopback — a local Jira or a test double', () => {
+        for (const u of ['http://localhost:8080', 'http://127.0.0.1:8080', 'http://[::1]:8080']) {
+            expect(parse(u).success).toBe(true);
+        }
+    });
+
+    it('rejects plain http to any other origin — credentials would cross the wire', () => {
+        expect(parse('http://jira.example.com').success).toBe(false);
+        // A host that merely starts with "localhost" is a different origin.
+        expect(parse('http://localhost.evil.com').success).toBe(false);
+    });
+
+    it('strips trailing slashes so the stored origin is canonical', () => {
+        const r = parse('https://example.atlassian.net///');
+        expect(r.success).toBe(true);
+        if (r.success) expect(r.data.site_url).toBe('https://example.atlassian.net');
+    });
+
+    it('allows null — the bridge is simply not configured', () => {
+        expect(parse(null).success).toBe(true);
     });
 });

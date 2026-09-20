@@ -4,7 +4,7 @@
 
 ## Purpose
 Read-only reference for what an agent can actually call — the same catalogue the
-Agent Detail "Allowed tools" picker offers, so the two can't disagree.
+Agent Detail used to offer — that picker was removed by B14, so this catalogue is now the single reader. *(corrected 2026-09-20 — campaign task-21.)*
 
 ## States
 - Loading: three `<Skeleton>` rows inside a group shell (`:82`).

@@ -216,7 +216,7 @@ describe('ensureWorktree — validation errors', () => {
         await expect(
             ensureWorktree({
                 item: { id: 'ATL-1', worktree_branch: null, worktree_path: null },
-                project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+                repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
             }),
         ).rejects.toMatchObject({
             name: 'WorktreeProvisioningError',
@@ -229,7 +229,7 @@ describe('ensureWorktree — validation errors', () => {
         await expect(
             ensureWorktree({
                 item: { id: 'ATL-1', worktree_branch: 'main', worktree_path: null },
-                project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+                repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
             }),
         ).rejects.toMatchObject({
             name: 'WorktreeProvisioningError',
@@ -242,11 +242,11 @@ describe('ensureWorktree — validation errors', () => {
         await expect(
             ensureWorktree({
                 item: { id: 'ATL-1', worktree_branch: 'atlas/dev/ATL-1', worktree_path: null },
-                project: { id: 'p1', git_path: '', credential_id: null },
+                repo: { id: 'p1', git_path: '', credential_id: null },
             }),
         ).rejects.toMatchObject({
             name: 'WorktreeProvisioningError',
-            code: 'missing_project_git_path',
+            code: 'missing_repo_git_path',
         });
     });
 });
@@ -273,7 +273,7 @@ describe('ensureWorktree — provisioning paths', () => {
 
         const result = await ensureWorktree({
             item: { id: itemId, worktree_branch: 'atlas/dev/ATL-2', worktree_path: null },
-            project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+            repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
         });
 
         expect(result.branch).toBe('atlas/dev/ATL-2');
@@ -318,7 +318,7 @@ describe('ensureWorktree — provisioning paths', () => {
 
         await ensureWorktree({
             item: { id: itemId, worktree_branch: 'atlas/qa/ATL-905', worktree_path: null },
-            project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+            repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
         });
 
         const calls = execFileMock.mock.calls.map((c) => c[1] as string[]);
@@ -383,7 +383,7 @@ describe('ensureWorktree — provisioning paths', () => {
 
         const result = await ensureWorktree({
             item: { id: itemId, worktree_branch: 'atlas/qa/ATL-908', worktree_path: null },
-            project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+            repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
         });
 
         expect(result.freshlyCreated).toBe(false);
@@ -431,7 +431,7 @@ describe('ensureWorktree — provisioning paths', () => {
 
         const result = await ensureWorktree({
             item: { id: itemId, worktree_branch: 'atlas/qa/ATL-906', worktree_path: null },
-            project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+            repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
         });
 
         expect(result.freshlyCreated).toBe(false);
@@ -489,7 +489,7 @@ describe('ensureWorktree — provisioning paths', () => {
         await expect(
             ensureWorktree({
                 item: { id: itemId, worktree_branch: 'atlas/qa/ATL-907', worktree_path: null },
-                project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+                repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
             }),
         ).rejects.toMatchObject({
             name: 'WorktreeProvisioningError',
@@ -519,7 +519,7 @@ describe('ensureWorktree — provisioning paths', () => {
 
         const result = await ensureWorktree({
             item: { id: itemId, worktree_branch: 'atlas/dev/ATL-3', worktree_path: null },
-            project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+            repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
         });
 
         expect(result.freshlyCreated).toBe(true);
@@ -566,7 +566,7 @@ describe('ensureWorktree — provisioning paths', () => {
 
         const result = await ensureWorktree({
             item: { id: itemId, worktree_branch: 'atlas/qa/ATL-902', worktree_path: null },
-            project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+            repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
         });
 
         expect(result.freshlyCreated).toBe(true);
@@ -611,7 +611,7 @@ describe('ensureWorktree — provisioning paths', () => {
 
         const result = await ensureWorktree({
             item: { id: itemId, worktree_branch: 'atlas/dev/ATL-4', worktree_path: null },
-            project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+            repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
         });
 
         expect(result.freshlyCreated).toBe(true);
@@ -662,7 +662,7 @@ describe('ensureWorktree — provisioning paths', () => {
 
         await ensureWorktree({
             item: { id: itemId, worktree_branch: 'atlas/dev/ATL-D1', worktree_path: null },
-            project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+            repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
         });
 
         const calls = execFileMock.mock.calls.map((c) => c[1] as string[]);
@@ -685,7 +685,7 @@ describe('ensureWorktree — provisioning paths', () => {
         expect(unsetHelper).toBeDefined();
     });
 
-    it('respects project.default_branch when cutting a net-new branch', async () => {
+    it('respects the repo default_branch when cutting a net-new branch', async () => {
         const { storyId: itemId } = await setupProjectAndStory({
             storyId: 'ATL-5',
             defaultBranch: 'develop',
@@ -700,7 +700,7 @@ describe('ensureWorktree — provisioning paths', () => {
 
         await ensureWorktree({
             item: { id: itemId, worktree_branch: 'atlas/dev/ATL-5', worktree_path: null },
-            project: {
+            repo: {
                 id: 'p1',
                 git_path: '/repos/atlas',
                 credential_id: null,
@@ -753,7 +753,7 @@ describe('ensureWorktree — provisioning paths', () => {
         await expect(
             ensureWorktree({
                 item: { id: 'ATL-6', worktree_branch: 'atlas/dev/ATL-6', worktree_path: null },
-                project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+                repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
             }),
         ).rejects.toMatchObject({
             name: 'WorktreeProvisioningError',
@@ -784,7 +784,7 @@ describe('ensureWorktree — item.worktree_branch is the single source of truth'
 
         const result = await ensureWorktree({
             item: { id: itemId, worktree_branch: 'atlas/qa/ATL-77', worktree_path: null },
-            project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+            repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
         });
 
         expect(result.branch).toBe('atlas/qa/ATL-77');
@@ -803,7 +803,7 @@ describe('ensureWorktree — item.worktree_branch is the single source of truth'
         await expect(
             ensureWorktree({
                 item: { id: 'ATL-79', worktree_branch: null, worktree_path: null },
-                project: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
+                repo: { id: 'p1', git_path: '/repos/atlas', credential_id: null },
             }),
         ).rejects.toMatchObject({
             name: 'WorktreeProvisioningError',
@@ -1062,7 +1062,7 @@ describe('cleanupWorktreeAfterPush', () => {
             // `/tmp/fake-git-config`, so the fetch goes through the
             // mock harmlessly.
             credentialId: 'cred-test',
-            projectGitPath: '/repos/atlas',
+            repoGitPath: '/repos/atlas',
             worktreePath: '/repos/worktrees/p1/atlas__dev__ATL-300',
             branch: 'atlas/dev/ATL-300',
         });
@@ -1149,7 +1149,7 @@ describe('cleanupWorktreeAfterPush', () => {
                 itemId,
                 projectId: 'p1',
                 credentialId: null,
-                projectGitPath: '/repos/atlas',
+                repoGitPath: '/repos/atlas',
                 worktreePath: '/repos/worktrees/p1/atlas__dev__ATL-301',
                 branch: 'atlas/dev/ATL-301',
             });
@@ -1239,7 +1239,7 @@ describe('cleanupWorktreeAfterPush', () => {
                     itemId,
                     projectId: 'p1',
                     credentialId: null,
-                    projectGitPath: '/repos/atlas',
+                    repoGitPath: '/repos/atlas',
                     worktreePath: '/repos/worktrees/p1/atlas__dev__ATL-310',
                     branch: 'atlas/dev/ATL-310',
                 });
@@ -1318,7 +1318,7 @@ describe('cleanupWorktreeAfterPush', () => {
                     itemId,
                     projectId: 'p1',
                     credentialId: null,
-                    projectGitPath: '/repos/atlas',
+                    repoGitPath: '/repos/atlas',
                     worktreePath: '/repos/worktrees/p1/atlas__dev__ATL-311',
                     branch: 'atlas/dev/ATL-311',
                 });
@@ -1371,7 +1371,7 @@ describe('cleanupWorktreeAfterPush', () => {
             itemId,
             projectId: 'p1',
             credentialId: null,
-            projectGitPath: '/repos/atlas',
+            repoGitPath: '/repos/atlas',
             worktreePath: '/repos/worktrees/p1/atlas__dev__ATL-302',
             branch: 'atlas/dev/ATL-302',
         });
@@ -1419,7 +1419,7 @@ describe('cleanupWorktreeAfterPush', () => {
                 itemId,
                 projectId: 'p1',
                 credentialId: null,
-                projectGitPath: '/repos/atlas',
+                repoGitPath: '/repos/atlas',
                 worktreePath: '/repos/worktrees/p1/atlas__dev__ATL-303',
                 branch: 'atlas/dev/ATL-303',
             });
@@ -1470,7 +1470,7 @@ describe('cleanupWorktreeAfterPush', () => {
             // "skipped when null" test below for the no-credential
             // path. This existing test asserts Step 4 *does* run.
             credentialId: 'cred-test',
-            projectGitPath: '/repos/atlas',
+            repoGitPath: '/repos/atlas',
             worktreePath: '/repos/worktrees/p1/atlas__dev__ATL-305',
             branch: 'atlas/dev/ATL-305',
         });
@@ -1522,7 +1522,7 @@ describe('cleanupWorktreeAfterPush', () => {
             // fire (otherwise it'd be skipped). The mock above throws
             // for the fetch+--prune args.
             credentialId: 'cred-test',
-            projectGitPath: '/repos/atlas',
+            repoGitPath: '/repos/atlas',
             worktreePath: '/repos/worktrees/p1/atlas__dev__ATL-306',
             branch: 'atlas/dev/ATL-306',
         });
@@ -1549,7 +1549,7 @@ describe('cleanupWorktreeAfterPush', () => {
             itemId,
             projectId: 'p1',
             credentialId: null,
-            projectGitPath: '/repos/atlas',
+            repoGitPath: '/repos/atlas',
             worktreePath: '/repos/worktrees/p1/atlas__dev__ATL-304',
             branch: 'atlas/dev/ATL-304',
         });
@@ -1562,7 +1562,7 @@ describe('cleanupWorktreeAfterPush', () => {
             itemId,
             projectId: 'p1',
             credentialId: null,
-            projectGitPath: '/repos/atlas',
+            repoGitPath: '/repos/atlas',
             worktreePath: '/repos/worktrees/p1/atlas__dev__ATL-304',
             branch: 'atlas/dev/ATL-304',
         });
@@ -1593,7 +1593,7 @@ describe('cleanupWorktreeAfterPush', () => {
             itemId,
             projectId: 'p1',
             credentialId: 'cred-abc',
-            projectGitPath: '/repos/atlas',
+            repoGitPath: '/repos/atlas',
             worktreePath: '/repos/worktrees/p1/atlas__dev__ATL-310',
             branch: 'atlas/dev/ATL-310',
         });
@@ -1642,7 +1642,7 @@ describe('cleanupWorktreeAfterPush', () => {
             itemId,
             projectId: 'p1',
             credentialId: null,
-            projectGitPath: '/repos/atlas',
+            repoGitPath: '/repos/atlas',
             worktreePath: '/repos/worktrees/p1/atlas__dev__ATL-311',
             branch: 'atlas/dev/ATL-311',
         });

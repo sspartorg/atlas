@@ -207,6 +207,7 @@ export const marketplaceService = {
             return {
                 id,
                 name: r['name'] as string,
+                cli: r['cli'] as AgentCli,
                 category: r['category'] as AgentCategory,
                 kind_slug: r['kind_slug'] as AgentKindSlug,
                 /* v8 ignore next -- summary is NOT NULL DEFAULT '' at the DB level; `??` branch is unreachable defensive code */

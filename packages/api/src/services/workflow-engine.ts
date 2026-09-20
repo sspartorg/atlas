@@ -339,7 +339,7 @@ async function prepareWorktree(run: RunRow, pushUpstream: boolean): Promise<stri
             const wt = await ensureWorktree({
                 item: null,
                 branch,
-                project: {
+                repo: {
                     id: repo.id,
                     git_path: repo.git_path,
                     credential_id: repo.credential_id,
@@ -746,6 +746,8 @@ async function commitPending(worktreePath: string, credentialId: string | null, 
 interface DeliveryResult {
     pushed: boolean;
     prUrl: string | null;
+    /** Every PR opened this delivery, in repo order. `prUrl` is its first. */
+    prUrls: string[];
     /** Set when a delivery step the workflow asked for did not happen. */
     failure: string | null;
     log: string[];
@@ -766,7 +768,7 @@ async function hasChanges(worktreePath: string, base: string): Promise<boolean> 
 
 async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<DeliveryResult> {
     const log: string[] = [];
-    const result: DeliveryResult = { pushed: false, prUrl: null, failure: null, log };
+    const result: DeliveryResult = { pushed: false, prUrl: null, prUrls: [], failure: null, log };
     const workflow = await loadWorkflow(run.workflow_id);
     if (!workflow || !run.worktree_path || !run.branch || !run.project_id) return result;
     const project = await db.selectFrom('projects').select(['id', 'name']).where('id', '=', run.project_id).executeTakeFirst();
@@ -846,6 +848,9 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
         }
     }
     result.prUrl = opened[0]?.url ?? null;
+    // F-018 — keep every PR, not just the first. `prUrl` stays the first so
+    // agents and `items.pr_url` are unchanged.
+    result.prUrls = opened.map((o) => o.url);
 
     // Each PR names its siblings: they only make sense merged together. An
     // existing PR gets its body edited, so this second pass is safe to repeat.
@@ -873,7 +878,7 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
             const cleanup = await cleanupWorktreeAfterPush({
                 itemId: null,
                 projectId: repo.id,
-                projectGitPath: repo.git_path,
+                repoGitPath: repo.git_path,
                 worktreePath: path,
                 branch,
                 credentialId: repo.credential_id,
@@ -909,7 +914,7 @@ async function finishRun(run: RunRow, endNode: IWorkflowNode): Promise<void> {
     const now = new Date().toISOString();
     await db
         .updateTable('workflow_runs')
-        .set({ status: 'completed', finished_at: now, pr_url: delivery.prUrl })
+        .set({ status: 'completed', finished_at: now, pr_url: delivery.prUrl, pr_urls: JSON.stringify(delivery.prUrls) as never })
         .where('id', '=', run.id)
         .execute();
     broadcastRun(run, 'completed', endNode.id);

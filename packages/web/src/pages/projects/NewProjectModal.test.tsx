@@ -5,9 +5,21 @@ import { http, HttpResponse } from 'msw';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { defaultHandlers } from '../../test-utils/mock-handlers.js';
 import { server } from '../../test-setup.js';
+import { makeProjectRepo } from '../../test-utils/factories.js';
 import { NewProjectModal } from './NewProjectModal.js';
 
 const BASE = 'http://localhost:3000/api';
+
+// ADR 0018 — `clone_completed` names both the project and the repo the clone
+// created; the success view reads its path, branch and HEAD off the repo.
+const repoOf = (projectId: string) =>
+    makeProjectRepo({
+        id: `${projectId}-repo`,
+        project_id: projectId,
+        name: 'myrepo',
+        git_url: 'https://github.com/acme/myrepo.git',
+        git_path: '/workspace/myrepo',
+    });
 
 // Shared credential fixture used by many tests
 const CREDENTIAL = {
@@ -449,8 +461,12 @@ describe('NewProjectModal', () => {
             http.get(`${BASE}/projects/prefix-available`, () =>
                 HttpResponse.json({ available: true }),
             ),
+            // ADR 0018 — connect answers with { project, repo }.
             http.post(`${BASE}/projects/connect`, () =>
-                HttpResponse.json({ id: 'proj-1', name: 'orion' }, { status: 200 }),
+                HttpResponse.json(
+                    { project: { id: 'proj-1', name: 'orion' }, repo: repoOf('proj-1') },
+                    { status: 200 },
+                ),
             ),
         );
 
@@ -632,7 +648,7 @@ describe('NewProjectModal', () => {
             http.post(`${BASE}/projects/clone`, () =>
                 HttpResponse.json({ clone_id: 'clone-xyz', destination: '/workspace/myrepo' }),
             ),
-            http.get(`${BASE}/projects/proj-abc-1234/head`, () =>
+            http.get(`${BASE}/projects/proj-abc-1234/repos/proj-abc-1234-repo/head`, () =>
                 HttpResponse.json({ short_sha: 'abc1234', subject: 'init', relative_time: '1 minute ago' }),
             ),
         );
@@ -1002,7 +1018,7 @@ describe('NewProjectModal', () => {
                 updated_at: '2026-01-01T00:00:00.000Z',
             };
             server.use(
-                http.get(`${BASE}/projects/proj-add-another/head`, () =>
+                http.get(`${BASE}/projects/proj-add-another/repos/proj-add-another-repo/head`, () =>
                     HttpResponse.json({ short_sha: null, subject: null, relative_time: null }),
                 ),
             );
@@ -1010,7 +1026,7 @@ describe('NewProjectModal', () => {
             await startCloningAndAwaitView('clone-addanother');
 
             act(() => {
-                pushSse({ type: 'clone_completed', cloneId: 'clone-addanother', project: PROJECT });
+                pushSse({ type: 'clone_completed', cloneId: 'clone-addanother', project: PROJECT, repo: repoOf(PROJECT.id) });
             });
 
             await waitFor(() => {
@@ -1628,7 +1644,7 @@ describe('NewProjectModal', () => {
             updated_at: '2026-01-01T00:00:00.000Z',
         };
         server.use(
-            http.get(`${BASE}/projects/proj-open/head`, () =>
+            http.get(`${BASE}/projects/proj-open/repos/proj-open-repo/head`, () =>
                 HttpResponse.json({ short_sha: 'abc1', subject: 'init', relative_time: '1m ago' }),
             ),
         );
@@ -1640,12 +1656,16 @@ describe('NewProjectModal', () => {
             (window as Window & { __pushSse?: (e: object) => void }).__pushSse!(e);
 
         act(() => {
-            pushSse({ type: 'clone_completed', cloneId: 'clone-open', project: PROJECT });
+            pushSse({ type: 'clone_completed', cloneId: 'clone-open', project: PROJECT, repo: repoOf(PROJECT.id) });
         });
 
         await waitFor(() => {
             expect(screen.getByText('Project ready')).toBeInTheDocument();
         }, { timeout: 15000 });
+
+        // The summary describes the repo the clone created, not the project.
+        expect(screen.getByText('/workspace/myrepo')).toBeInTheDocument();
+        expect(screen.getByText('main')).toBeInTheDocument();
 
         // Click "Open project" — exercises openProject which calls onClose + navigate
         const openBtn = screen.getByRole('button', { name: /Open project/i });
@@ -1945,7 +1965,7 @@ describe('NewProjectModal', () => {
             http.post(`${BASE}/projects/clone`, () =>
                 HttpResponse.json({ clone_id: 'clone-l434', destination: '/workspace/myrepo' }),
             ),
-            http.get(`${BASE}/projects/proj-l434/head`, () =>
+            http.get(`${BASE}/projects/proj-l434/repos/proj-l434-repo/head`, () =>
                 HttpResponse.json({ short_sha: null, subject: null, relative_time: null }),
             ),
         );
@@ -1964,7 +1984,7 @@ describe('NewProjectModal', () => {
         const pushSse = (e: object) =>
             (window as Window & { __pushSse?: (e: object) => void }).__pushSse!(e);
         act(() => {
-            pushSse({ type: 'clone_completed', cloneId: 'clone-l434', project: PROJECT });
+            pushSse({ type: 'clone_completed', cloneId: 'clone-l434', project: PROJECT, repo: repoOf(PROJECT.id) });
         });
         await waitFor(() => {
             expect(screen.getByText('Project ready')).toBeInTheDocument();
@@ -2131,7 +2151,7 @@ describe('NewProjectModal', () => {
             http.post(`${BASE}/projects/clone`, () =>
                 HttpResponse.json({ clone_id: 'clone-head-notime', destination: '/workspace/myrepo' }),
             ),
-            http.get(`${BASE}/projects/proj-head-notime/head`, () =>
+            http.get(`${BASE}/projects/proj-head-notime/repos/proj-head-notime-repo/head`, () =>
                 HttpResponse.json({ short_sha: 'def5678', subject: 'second commit', relative_time: null }),
             ),
         );
@@ -2150,7 +2170,7 @@ describe('NewProjectModal', () => {
         const pushSse = (e: object) =>
             (window as Window & { __pushSse?: (e: object) => void }).__pushSse!(e);
         act(() => {
-            pushSse({ type: 'clone_completed', cloneId: 'clone-head-notime', project: PROJECT });
+            pushSse({ type: 'clone_completed', cloneId: 'clone-head-notime', project: PROJECT, repo: repoOf(PROJECT.id) });
         });
         await waitFor(() => {
             expect(screen.getByText('Project ready')).toBeInTheDocument();
@@ -2181,7 +2201,7 @@ describe('NewProjectModal', () => {
             http.post(`${BASE}/projects/clone`, () =>
                 HttpResponse.json({ clone_id: 'clone-agents', destination: '/workspace/myrepo' }),
             ),
-            http.get(`${BASE}/projects/proj-agents/head`, () =>
+            http.get(`${BASE}/projects/proj-agents/repos/proj-agents-repo/head`, () =>
                 HttpResponse.json({ short_sha: null, subject: null, relative_time: null }),
             ),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
@@ -2202,6 +2222,7 @@ describe('NewProjectModal', () => {
                 type: 'clone_completed',
                 cloneId: 'clone-agents',
                 project: PROJECT,
+                repo: repoOf(PROJECT.id),
             });
         });
         await screen.findByText('Project ready', {}, { timeout: 15000 });

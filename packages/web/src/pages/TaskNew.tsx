@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -91,9 +92,9 @@ export function TaskNew() {
     const [projectId, setProjectId] = useState(defaultProjectId);
     const [priority, setPriority] = useState<IssuePriority>('low');
     const { data: repos = [] } = useProjectRepos(projectId);
-    // null = untouched: the primary repo, preselected.
+    // ADR 0018 — null = untouched: the project's first repo, preselected.
     const [repoChoice, setRepoChoice] = useState<string[] | null>(null);
-    const repoIds = repoChoice ?? repos.filter((r) => r.primary).map((r) => r.id);
+    const repoIds = repoChoice ?? repos.slice(0, 1).map((r) => r.id);
     const [reporterId, setReporterId] = useState<string>('OWNER');
     // The PO Writer is the agent that breaks an task down, so it is the default
     // when installed and active; otherwise the Owner routes it. Derived rather
@@ -115,6 +116,10 @@ export function TaskNew() {
 
     const ownerName = settings?.owner_name ?? 'Owner';
     const projectMissing = projects.length === 0;
+    // ADR 0018 — a Task always names at least one repo. Only gate once a
+    // project is chosen: before that the form's own "X is required" validation
+    // is what should fire.
+    const reposMissing = Boolean(projectId) && repoIds.length === 0;
 
     const errors = useMemo(() => {
         const e: Partial<Record<FieldKey, string>> = {};
@@ -140,7 +145,7 @@ export function TaskNew() {
                 priority,
                 reporter_agent_id: reporterId === 'OWNER' ? null : reporterId,
                 assignee_agent_id: assigneeId === 'OWNER' ? null : assigneeId,
-                ...(repos.length > 1 ? { repo_ids: repoIds } : {}),
+                repo_ids: repoIds,
             });
             if (mode === 'submit') {
                 try {
@@ -410,7 +415,7 @@ export function TaskNew() {
                     </Box>
                 </Box>
 
-                {repos.length > 1 && (
+                {repos.length > 0 && (
                     <Box sx={{ mb: 4 }}>
                         <Typography
                             sx={{
@@ -430,6 +435,13 @@ export function TaskNew() {
                         </Typography>
                         <RepoSelect repos={repos} value={repoIds} onChange={setRepoChoice} />
                     </Box>
+                )}
+
+                {projectId && repos.length === 0 && (
+                    <Alert severity="info" sx={{ mb: 4 }}>
+                        This project has no repos yet. Add one on the project&apos;s Repos tab
+                        before creating a Task for it.
+                    </Alert>
                 )}
 
                 <Box
@@ -509,7 +521,7 @@ export function TaskNew() {
                         <Button
                             variant="outlined"
                             onClick={() => void submit('draft')}
-                            disabled={createTask.isPending}
+                            disabled={createTask.isPending || reposMissing}
                             sx={{
                                 textTransform: 'none',
                                 fontFamily: '"Inter", system-ui, sans-serif',
@@ -531,7 +543,7 @@ export function TaskNew() {
                         <Button
                             variant="contained"
                             onClick={() => void submit('submit')}
-                            disabled={createTask.isPending}
+                            disabled={createTask.isPending || reposMissing}
                             startIcon={
                                 <Box
                                     component="span"
@@ -571,7 +583,7 @@ export function TaskNew() {
                     <Button
                         variant="outlined"
                         onClick={() => void submit('draft')}
-                        disabled={createTask.isPending}
+                        disabled={createTask.isPending || reposMissing}
                         sx={{
                             textTransform: 'none',
                             fontFamily: '"Inter", system-ui, sans-serif',
@@ -594,7 +606,7 @@ export function TaskNew() {
                     <Button
                         variant="contained"
                         onClick={() => void submit('submit')}
-                        disabled={createTask.isPending}
+                        disabled={createTask.isPending || reposMissing}
                         startIcon={
                             <Box
                                 component="span"

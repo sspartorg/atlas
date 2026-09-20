@@ -23,21 +23,9 @@ function projectFromRow(r: Record<string, unknown>): IProject {
         id: r['id'] as string,
         name: r['name'] as string,
         issue_key_prefix: r['issue_key_prefix'] as string,
-        git_path: r['git_path'] as string,
-        git_url: r['git_url'] as string,
-        credential_id: (r['credential_id'] as string | null) ?? null,
-        default_branch: r['default_branch'] as string,
-        clone_status: r['clone_status'] as IProject['clone_status'],
         description: r['description'] as string,
         status: r['status'] as string,
         guardrails_md: r['guardrails_md'] as string,
-        // Column is `NOT NULL DEFAULT ''` (migration 004) — the `?? ''`
-        // fallback can never fire against a real row; kept only for the
-        // defensive cast from `unknown`.
-        /* v8 ignore next */
-        setup_sh_body: (r['setup_sh_body'] as string | null) ?? '',
-        /* v8 ignore next */
-        setup_ps1_body: (r['setup_ps1_body'] as string | null) ?? '',
         created_at: r['created_at'] as string,
         updated_at: r['updated_at'] as string,
         last_activity_at: r['updated_at'] as string,

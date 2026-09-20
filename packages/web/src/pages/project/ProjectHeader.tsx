@@ -1,13 +1,15 @@
 import { memo } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import type { IProject } from '@atlas/shared';
+import type { IProject, IProjectRepo } from '@atlas/shared';
 import { Breadcrumb } from '../../components/index.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { ProjectActionsMenu } from './ProjectActionsMenu.js';
 
 interface Props {
     project: IProject;
+    /** ADR 0018 — the project's repos; 0..N, all equal. */
+    repos: IProjectRepo[];
     displayId: string;
     guardrailsActive: boolean;
     lastActivity: string;
@@ -22,13 +24,35 @@ interface Props {
 
 const MONO = '"JetBrains Mono", monospace';
 
+const PILL_SX = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    height: 22,
+    px: 1.25,
+    borderRadius: '6px',
+    background: ATLAS_PALETTE.slate08,
+    color: ATLAS_PALETTE.slate,
+    fontFamily: MONO,
+    fontSize: 11.5,
+    fontWeight: 500,
+} as const;
+
 function repoLabel(url: string): string {
     if (!url) return '—';
     return url.replace(/^https?:\/\//, '').replace(/\.git\/?$/, '');
 }
 
+function NoRepoUrl() {
+    return (
+        <Typography sx={{ fontFamily: MONO, fontSize: 12.5, color: ATLAS_PALETTE.slate40 }}>
+            no repo URL set
+        </Typography>
+    );
+}
+
 export const ProjectHeader = memo(function ProjectHeader({
     project,
+    repos,
     displayId,
     guardrailsActive,
     lastActivity,
@@ -80,50 +104,36 @@ export const ProjectHeader = memo(function ProjectHeader({
                     </Box>
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, flexWrap: 'wrap' }}>
-                        {project.git_url ? (
-                            <Box
-                                component="a"
-                                href={project.git_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                sx={{
-                                    fontFamily: MONO,
-                                    fontSize: 12.5,
-                                    color: ATLAS_PALETTE.brandBlue,
-                                    textDecoration: 'none',
-                                    '&:hover': { textDecoration: 'underline' },
-                                }}
-                            >
-                                {repoLabel(project.git_url)}
-                            </Box>
+                        {/* One repo reads like the old single-repo header; several
+                            collapse to a count — the Repos tab has the detail. */}
+                        {repos.length > 1 ? (
+                            <Box sx={PILL_SX}>{repos.length} repos</Box>
+                        ) : !repos[0] ? (
+                            <NoRepoUrl />
                         ) : (
-                            <Typography
-                                sx={{
-                                    fontFamily: MONO,
-                                    fontSize: 12.5,
-                                    color: ATLAS_PALETTE.slate40,
-                                }}
-                            >
-                                no repo URL set
-                            </Typography>
+                            <>
+                                {repos[0].git_url ? (
+                                    <Box
+                                        component="a"
+                                        href={repos[0].git_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        sx={{
+                                            fontFamily: MONO,
+                                            fontSize: 12.5,
+                                            color: ATLAS_PALETTE.brandBlue,
+                                            textDecoration: 'none',
+                                            '&:hover': { textDecoration: 'underline' },
+                                        }}
+                                    >
+                                        {repoLabel(repos[0].git_url)}
+                                    </Box>
+                                ) : (
+                                    <NoRepoUrl />
+                                )}
+                                <Box sx={PILL_SX}>{repos[0].default_branch || 'main'}</Box>
+                            </>
                         )}
-
-                        <Box
-                            sx={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                height: 22,
-                                px: 1.25,
-                                borderRadius: '6px',
-                                background: ATLAS_PALETTE.slate08,
-                                color: ATLAS_PALETTE.slate,
-                                fontFamily: MONO,
-                                fontSize: 11.5,
-                                fontWeight: 500,
-                            }}
-                        >
-                            {project.default_branch || 'main'}
-                        </Box>
 
                         {guardrailsActive && (
                             <Box

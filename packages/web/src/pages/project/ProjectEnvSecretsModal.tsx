@@ -27,6 +27,7 @@ import {
     useSaveProjectEnv,
     useRevealProjectEnv,
 } from '../../hooks/useProjectEnv.js';
+import { useProjectRepos } from '../../hooks/useProjectRepos.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 
@@ -120,6 +121,9 @@ function serializeJsonSecrets(rows: Array<{ key: string; value: string }>): stri
 export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Props) {
     const projectId = project?.id ?? null;
     const { data, isLoading } = useProjectEnv(projectId, open);
+    // ADR 0018 — the secrets are injected into a repo's checkout, so a project
+    // with no repos has nowhere to put them.
+    const { data: repos } = useProjectRepos(projectId ?? '');
     const save = useSaveProjectEnv(projectId ?? '');
     // Batch-9 audit: on-demand reveal for a single stored value.
     const reveal = useRevealProjectEnv(projectId ?? '');
@@ -471,7 +475,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
 
     const plainCount = rows.filter((r) => r.key && KEY_RE.test(r.key)).length;
     const hasErrors = Object.keys(errors).length > 0;
-    const noWorkspace = !project.git_path;
+    const noWorkspace = repos !== undefined && repos.length === 0;
 
     return (
         <Dialog
@@ -560,8 +564,8 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                                 '& .MuiAlert-message': { fontSize: 12, py: 0.5 },
                             }}
                         >
-                            This project has no folder on disk yet. Clone or connect the repo before
-                            managing secrets.
+                            This project has no repos yet, so nothing on disk to inject into. Add a
+                            repo before managing secrets.
                         </Alert>
                     ) : (
                         <Alert

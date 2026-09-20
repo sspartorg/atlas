@@ -1,17 +1,9 @@
 import { describe, expect, it, beforeEach, afterAll } from 'vitest';
 import { allocateIssueKey } from './_keys.js';
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
-
-async function seedProject(id = 'p1', prefix = 'ATL'): Promise<void> {
-    await testDb
-        .insertInto('projects')
-        .values({ id, name: 'Project ' + id, issue_key_prefix: prefix, git_path: '', status: 'active' })
-        .execute();
-    await testDb
-        .insertInto('project_issue_counters')
-        .values({ project_id: id, last_seq: 0 })
-        .execute();
-}
+// ADR 0018 — the project row no longer carries git fields; the shared fixture
+// inserts the project, its counter row and its repo.
+import { insertProject as seedProject } from '../../tests/_items.js';
 
 beforeEach(async () => {
     await truncateAll();
@@ -30,12 +22,16 @@ describe('allocateIssueKey', () => {
     });
 
     it('scopes counters per project — separate prefixes increment independently', async () => {
+        // The two prefixes must DIFFER — that is the whole assertion. The
+        // 2026-09-20 rename (CER -> ATL) briefly collapsed both to 'ATL',
+        // which the suite caught: with one prefix the test proves nothing
+        // about per-project scoping.
         await seedProject('p1', 'ATL');
-        await seedProject('p2', 'CER');
+        await seedProject('p2', 'ZED');
         expect(await allocateIssueKey('p1')).toBe('ATL-1');
-        expect(await allocateIssueKey('p2')).toBe('CER-1');
+        expect(await allocateIssueKey('p2')).toBe('ZED-1');
         expect(await allocateIssueKey('p1')).toBe('ATL-2');
-        expect(await allocateIssueKey('p2')).toBe('CER-2');
+        expect(await allocateIssueKey('p2')).toBe('ZED-2');
     });
 
     it('persists last_seq in project_issue_counters', async () => {

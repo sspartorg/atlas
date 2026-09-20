@@ -381,7 +381,7 @@ function initRepo(dir: string): void {
     g('commit', '-qm', 'chore(atlas): ignore Atlas scratch paths');
 }
 
-describe('workflow engine — multi-repo Tasks (ADR 0017)', () => {
+describe('workflow engine — multi-repo Tasks (ADR 0017/0018)', () => {
     let base = '';
     let ws = '';
     const defaults = {
@@ -392,10 +392,16 @@ describe('workflow engine — multi-repo Tasks (ADR 0017)', () => {
     beforeEach(async () => {
         base = mkdtempSync(join(tmpdir(), 'atlas-multi-'));
         ws = join(base, 'worktrees', 'p1', 'ws', 'atlas__wf__ATL-2');
-        await testDb.updateTable('projects').set({ git_path: join(base, 'core') }).where('id', '=', 'p1').execute();
+        // ADR 0018 — both repos are ordinary rows; the project's own carries
+        // its id, as migration 045 leaves it.
+        await testDb
+            .updateTable('project_repos')
+            .set({ name: 'core', git_path: join(base, 'core'), git_url: 'https://github.com/o/core' })
+            .where('id', '=', 'p1')
+            .execute();
         await testDb
             .insertInto('project_repos')
-            .values({ id: 'repo-web', project_id: 'p1', name: 'web', git_url: 'https://github.com/o/web', git_path: join(base, 'web') })
+            .values({ id: 'repo-web', project_id: 'p1', name: 'web', git_url: 'https://github.com/o/web', git_path: join(base, 'web'), position: 1 })
             .execute();
         await testDb.updateTable('items').set({ repo_ids: JSON.stringify(['p1', 'repo-web']) }).where('id', '=', 'ATL-2').execute();
         git.ensureWorktree.mockImplementation((async (input: { path?: string; branch?: string }) => {
@@ -421,10 +427,10 @@ describe('workflow engine — multi-repo Tasks (ADR 0017)', () => {
     it('works every repo side by side in one workspace and opens one cross-linked PR per repo', async () => {
         const runId = await startWorkflowRun('wf-dev', 'ATL-2');
         expect(git.ensureWorktree).toHaveBeenCalledWith(
-            expect.objectContaining({ path: join(ws, 'core'), project: expect.objectContaining({ id: 'p1' }) })
+            expect.objectContaining({ path: join(ws, 'core'), repo: expect.objectContaining({ id: 'p1' }) })
         );
         expect(git.ensureWorktree).toHaveBeenCalledWith(
-            expect.objectContaining({ path: join(ws, 'web'), project: expect.objectContaining({ id: 'repo-web' }) })
+            expect.objectContaining({ path: join(ws, 'web'), repo: expect.objectContaining({ id: 'repo-web' }) })
         );
         expect((await runOf(runId)).worktree_path).toBe(ws);
 

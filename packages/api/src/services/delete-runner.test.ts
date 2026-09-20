@@ -16,8 +16,15 @@ vi.mock('./projects.js', () => ({
     },
 }));
 
+// ADR 0018 — the folders to purge come from the project's repos.
+vi.mock('./project-repos.js', () => ({
+    projectReposService: {
+        list: vi.fn(),
+    },
+}));
+
 // The new workspace-scope guard on `mode=purge` reads settings; return a
-// workspace_path that CONTAINS the BASE_INPUT.destination so the guard
+// workspace_path that CONTAINS the repo folder so the guard
 // passes and the tests exercise the existing rm/access/delete branches.
 vi.mock('./settings.js', () => ({
     settingsService: {
@@ -35,6 +42,7 @@ vi.mock('../routes/events.js', () => ({
 import { startDelete } from './delete-runner.js';
 import { rm, access } from 'node:fs/promises';
 import { projectsService } from './projects.js';
+import { projectReposService } from './project-repos.js';
 import { broadcastSSE } from '../routes/events.js';
 
 // ---------------------------------------------------------------------------
@@ -42,8 +50,8 @@ import { broadcastSSE } from '../routes/events.js';
 // ---------------------------------------------------------------------------
 const BASE_INPUT = {
     projectId: 'proj-abc',
-    destination: '/workspace/my-project',
 };
+const REPO_PATH = '/workspace/my-project';
 
 /** Collect all broadcastSSE calls and find by type. */
 function sseCalls() {
@@ -56,6 +64,9 @@ function sseCalls() {
 describe('startDelete', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(projectReposService.list).mockResolvedValue([
+            { id: 'repo-1', project_id: 'proj-abc', name: 'repo', git_path: REPO_PATH } as never,
+        ]);
     });
 
     // -----------------------------------------------------------------------
@@ -138,11 +149,11 @@ describe('startDelete', () => {
 
         await new Promise((r) => setTimeout(r, 20));
 
-        // access called with the destination path.
-        expect(access).toHaveBeenCalledWith(BASE_INPUT.destination);
+        // access called with the repo folder.
+        expect(access).toHaveBeenCalledWith(REPO_PATH);
 
         // rm called with recursive + force.
-        expect(rm).toHaveBeenCalledWith(BASE_INPUT.destination, {
+        expect(rm).toHaveBeenCalledWith(REPO_PATH, {
             recursive: true,
             force: true,
         });

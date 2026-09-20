@@ -21,6 +21,7 @@ import { db } from '../db/kysely-client.js';
 import { broadcastSSE } from '../routes/events.js';
 import { buildPrompt } from './prompt-builder.js';
 import { stageCliWorktree } from './worktree-stage.js';
+import { projectReposService } from './project-repos.js';
 import { runRepos, repositoriesMarkdown } from './run-repos.js';
 import { sendExternalForNotification } from './external-notifications.js';
 import { notificationsService } from './notifications.js';
@@ -724,16 +725,22 @@ async function runCommitVerifier(
         .where('id', '=', 1)
         .executeTakeFirst();
     const workspacePath = (settings?.workspace_path as string | null) || process.cwd();
+    // ADR 0018 — with no worktree recorded, fall back to the Task's first
+    // repo's folder; a project has none of its own.
     const itemRow = await db
-        .selectFrom('items as i')
-        .leftJoin('projects as p', 'p.id', 'i.project_id')
-        .select(['p.git_path as project_git_path'])
-        .where('i.id', '=', issueId)
+        .selectFrom('items')
+        .select(['project_id', 'repo_ids'])
+        .where('id', '=', issueId)
         .executeTakeFirst();
-    const cwd =
-        (run.worktree_path as string | null) ||
-        (itemRow?.project_git_path as string | null) ||
-        workspacePath;
+    const firstRepoPath = itemRow?.project_id
+        ? (
+              await projectReposService.forTask({
+                  project_id: itemRow.project_id,
+                  repo_ids: itemRow.repo_ids ?? [],
+              })
+          )[0]?.git_path
+        : null;
+    const cwd = (run.worktree_path as string | null) || firstRepoPath || workspacePath;
     await verifyRunCommits({
         runId,
         agentId,
@@ -1420,25 +1427,35 @@ export async function spawnAgentRun(
 
     // The project supplies guardrails (constitution) and git credentials:
     // explicit for project-level runs, via the item otherwise.
+    // ADR 0018 — agents get one GH_TOKEN: the credential of the first repo the
+    // run works on (a Task's first repo, or the project's first repo for a
+    // project-scope run). Pushes and PRs still use each repo's own credential,
+    // because the engine performs them.
     let effectiveProjectId: string | null = projectId;
     let projectCredentialId: string | null = null;
+    let repoIdsForRun: string[] = [];
     if (projectId) {
         const proj = await db
             .selectFrom('projects')
-            .select(['credential_id'])
+            .select(['id'])
             .where('id', '=', projectId)
             .executeTakeFirst();
         if (!proj) throw new Error(`Project ${projectId} not found`);
-        projectCredentialId = (proj.credential_id as string | null) ?? null;
     } else if (issueId) {
         const itemRow = await db
-            .selectFrom('items as i')
-            .leftJoin('projects as p', 'p.id', 'i.project_id')
-            .select(['p.id as project_id', 'p.credential_id as project_credential_id'])
-            .where('i.id', '=', issueId)
+            .selectFrom('items')
+            .select(['project_id', 'repo_ids'])
+            .where('id', '=', issueId)
             .executeTakeFirst();
-        effectiveProjectId = (itemRow?.project_id as string | null) ?? null;
-        projectCredentialId = (itemRow?.project_credential_id as string | null) ?? null;
+        effectiveProjectId = itemRow?.project_id ?? null;
+        repoIdsForRun = itemRow?.repo_ids ?? [];
+    }
+    if (effectiveProjectId) {
+        const [firstRepo] = await projectReposService.forTask({
+            project_id: effectiveProjectId,
+            repo_ids: repoIdsForRun,
+        });
+        projectCredentialId = firstRepo?.credential_id ?? null;
     }
 
     // Only a workflow run provisions a worktree (once, shared by every step).
@@ -1641,14 +1658,15 @@ export async function spawnAgentRun(
                 // the run is `setup_failed`, the CLI never spawns, and the
                 // engine parks the workflow run with the Owner.
                 if (effectiveProjectId && worktreePath && !workflowRun?.skipSetup) {
-                    // One setup per repo, in order; the first failure stops the run.
+                    // One setup per repo, in order; the first failure stops the
+                    // run. ADR 0018 — a single-repo run has a repo too.
                     let setupResult: Awaited<ReturnType<typeof runProjectSetup>> = { ok: true };
-                    for (const target of multiRepo ?? [null]) {
+                    for (const target of checkouts?.repos ?? []) {
                         setupResult = await runProjectSetup({
                             projectId: effectiveProjectId,
-                            worktreePath: target?.path ?? worktreePath,
+                            repoId: target.repo.id,
+                            worktreePath: target.path,
                             runId,
-                            ...(target ? { repoId: target.repo.id } : {}),
                         });
                         if (!setupResult.ok) break;
                     }

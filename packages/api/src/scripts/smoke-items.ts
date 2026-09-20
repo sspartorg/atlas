@@ -11,7 +11,6 @@ async function ensureProject(id: string, prefix: string): Promise<void> {
             name: `Smoke ${id}`,
             issue_key_prefix: prefix,
             status: 'active',
-            clone_status: 'ready',
         })
         .onConflict((oc) => oc.column('id').doNothing())
         .execute();

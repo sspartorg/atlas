@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import Knex from 'knex';
 import { buildApp } from './server.js';
 import { runSeed } from './db/seed.js';
@@ -12,6 +13,7 @@ import knexConfig from './db/knex-config.js';
 import { bootStep } from './utils/boot-errors.js';
 import { startMcpHost, stopMcpHost, type IMcpHostHandle } from './plugins/mcp-host.js';
 import { apiPort } from './config.js';
+import { envFileService } from './services/env-file.js';
 
 const isDev = process.env['NODE_ENV'] !== 'production';
 
@@ -27,7 +29,7 @@ process.on('unhandledRejection', (reason) => {
     console.error(`[api] unhandled promise rejection (kept alive): ${msg}`);
 });
 
-// CER-2 follow-up — failOrphanedRuns historically only ran as a
+// ATL-2 follow-up — failOrphanedRuns historically only ran as a
 // bootStep, which meant a run that died mid-stream (CLI crash, agent
 // exits without calling performer_done, etc.) would sit in_progress
 // forever as long as the API stayed up. This timer fires the reaper on
@@ -46,7 +48,7 @@ process.on('unhandledRejection', (reason) => {
 //     10-30 min. The 30 min floor is comfortably above those ceilings.
 //
 // Pre-2026-06-01 the cutoff was 60 s on the periodic path too — that
-// killed CER-4 / CER-5 mid-stream when their Architect / QA Writer
+// killed ATL-4 / ATL-5 mid-stream when their Architect / QA Writer
 // runs crossed the 60 s mark.
 const ORPHAN_REAPER_INTERVAL_MS = 60_000;
 const ORPHAN_REAPER_PERIODIC_CUTOFF_MS = 30 * 60_000;
@@ -94,7 +96,7 @@ async function migrateLatest(): Promise<void> {
 //
 // Pre-2026-06-01 this function used a single 60 s cutoff and ran only
 // at boot; making it periodic without the registry filter killed
-// healthy 60-second-plus runs mid-stream (CER-4, CER-5 incident).
+// healthy 60-second-plus runs mid-stream (ATL-4, ATL-5 incident).
 async function failOrphanedRuns(opts: { cutoffMs: number }): Promise<void> {
     try {
         const cutoff = new Date(Date.now() - opts.cutoffMs).toISOString();
@@ -247,22 +249,56 @@ async function main(): Promise<void> {
     const PORT = apiPort();
     const HOST = '127.0.0.1';
 
-    // Live posture safety net: whenever ATLAS_MCP_TOKEN is empty, the
-    // requireMcpToken plugin is in fully-open mode — every local process
-    // (and any origin-spoofing caller from the LAN when ATLAS_LAN_ACCESS
-    // is on) can POST/PATCH/DELETE freely. Surface this at boot regardless
-    // of ATLAS_AI_ENABLED — the write gate's posture is independent of
-    // whether the agent runner is live.
-    if (!(process.env['ATLAS_MCP_TOKEN'] ?? '').trim()) {
+    // Live posture: an empty ATLAS_MCP_TOKEN puts requireMcpToken in
+    // fully-open mode — every local process (and any origin-spoofing caller
+    // from the LAN when ATLAS_LAN_ACCESS is on) can POST/PATCH/DELETE freely.
+    //
+    // This used to only warn. The warning was accurate, loud, dual-logged —
+    // and useless: it fired 14 times in a single session of the 2026-09-20
+    // campaign and the token was still empty at the end (F-021). A default
+    // nobody acts on is the default. So mint one instead, and persist it to
+    // the env file the server actually loads.
+    //
+    // The browser UI is unaffected either way: it passes the gate on
+    // `Sec-Fetch-Site: same-origin`, a forbidden header no non-browser client
+    // can set, and never sends the token at all.
+    //
+    // ATLAS_MCP_TOKEN_OPEN=1 keeps the gate open deliberately. The e2e suite
+    // and the Lighthouse workflow set it because they drive writes over plain
+    // HTTP with no browser headers. Nothing else should.
+    if (process.env['ATLAS_MCP_TOKEN_OPEN'] === '1') {
+        // Authoritative: the flag means "open", so it clears any token the env
+        // file supplies rather than merely skipping generation. Getting this
+        // wrong the first time cost 17 e2e failures — the suite set the flag,
+        // but `.env` already carried a generated token, so the gate came on
+        // anyway and every plain-HTTP write 401'd.
+        process.env['ATLAS_MCP_TOKEN'] = '';
         const msg =
-            '[security] ATLAS_MCP_TOKEN is empty — MCP write gate is OPEN. ' +
-            'Any local process can POST/PATCH/DELETE against this API. Set ' +
-            'ATLAS_MCP_TOKEN to a 64-char random value in .env before going live.';
-        // Dual-log so the warning is visible in the terminal regardless of
-        // ATLAS_LOG_LEVEL or transport buffering, AND in the structured/file
-        // log for the audit trail.
+            '[security] ATLAS_MCP_TOKEN_OPEN=1 — MCP write gate is OPEN by request. ' +
+            'Any local process can POST/PATCH/DELETE against this API.';
         server.log.warn(msg);
         console.warn(msg);
+    } else if (!(process.env['ATLAS_MCP_TOKEN'] ?? '').trim()) {
+        // base64url: no padding, no shell-hostile characters, so it
+        // survives .env round-tripping and process env inheritance.
+        const token = randomBytes(48).toString('base64url');
+        process.env['ATLAS_MCP_TOKEN'] = token;
+        try {
+            envFileService.write([{ key: 'ATLAS_MCP_TOKEN', value: token }]);
+            const msg =
+                '[security] ATLAS_MCP_TOKEN was empty — generated one and saved it ' +
+                'to the root env file. The MCP write gate is CLOSED.';
+            server.log.info(msg);
+            console.log(msg);
+        } catch (err) {
+            // A read-only checkout still gets a closed gate for this
+            // process; it just won't be the same token after a restart.
+            const msg =
+                '[security] ATLAS_MCP_TOKEN was empty — generated one for this ' +
+                `process, but could not persist it: ${err instanceof Error ? err.message : String(err)}`;
+            server.log.warn(msg);
+            console.warn(msg);
+        }
     }
 
     // Graceful shutdown: stop the scheduler poller and close Fastify before

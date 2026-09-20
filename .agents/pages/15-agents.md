@@ -84,3 +84,10 @@ Grid of all agent cards, grouped by category. Per-card actions: open, edit, paus
 
 ## Coming soon on this page
 None.
+
+## Previously undocumented controls
+
+- **Import from zip** (`Agents.tsx:613`) — opens `ImportAgentZipModal`.
+- **`PageFab`** (`:622`) — the mobile add-agent affordance.
+
+*(added 2026-09-20 — campaign task-21.)*

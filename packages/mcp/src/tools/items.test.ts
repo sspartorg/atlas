@@ -221,9 +221,9 @@ describe('update_item', () => {
             issue_type: 'task',
             id: 'ATL-2',
             action: 'patch_fields',
-            patch: { labels: ['CER_Stories'] },
+            patch: { labels: ['ATL_Stories'] },
         });
-        expect(updateItem).toHaveBeenCalledWith('task', 'ATL-2', { labels: ['CER_Stories'] }, null);
+        expect(updateItem).toHaveBeenCalledWith('task', 'ATL-2', { labels: ['ATL_Stories'] }, null);
     });
 
     it("action='patch_fields' forwards agent_id so field edits are credited to the agent", async () => {
@@ -519,7 +519,7 @@ describe('update_item', () => {
             registerItemTools(server, makeFakeApiClient({ pruneItemHistory }));
             const result = await tools.get('update_item')!.handler({
                 issue_type: 'task',
-                id: 'JDA-1',
+                id: 'ATL-1',
                 action: 'remove_history',
                 before_time: '2026-06-01T00:00:00Z',
             });
@@ -527,7 +527,7 @@ describe('update_item', () => {
             // route can attribute the audit event (2026-07-03 audit).
             expect(pruneItemHistory).toHaveBeenCalledWith(
                 'task',
-                'JDA-1',
+                'ATL-1',
                 '2026-06-01T00:00:00Z',
                 'agent-coder',
             );
@@ -645,7 +645,7 @@ describe('update_item', () => {
         await expect(
             tools.get('update_item')!.handler({
                 issue_type: 'task',
-                id: 'JDA-1',
+                id: 'ATL-1',
                 action: 'remove_history',
             }),
         ).rejects.toThrow(/`before_time` is required for action='remove_history'/);

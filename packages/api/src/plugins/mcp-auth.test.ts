@@ -209,3 +209,49 @@ describe('requireMcpToken — token required mode', () => {
         expect(reply.status).toHaveBeenCalledWith(401);
     });
 });
+
+// ---------------------------------------------------------------------------
+// F-021 — the token is read per request, not captured at module load.
+//
+// This is the whole reason the fix works. `main.ts` mints a token when the
+// env var is empty, and by then `server.js` has already pulled this module in
+// transitively. Under the old module-level `const EXPECTED_TOKEN`, that
+// generated token was invisible and the gate stayed open for the life of the
+// process — exactly the hole F-021 described.
+//
+// Mutation proof: restore `const EXPECTED_TOKEN = process.env[...] ?? ''` at
+// module scope and this spec fails with the reply never being sent, because
+// the import below captures '' before the env var is set.
+// ---------------------------------------------------------------------------
+describe('requireMcpToken — token set after module load (F-021)', () => {
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
+    it('honours a token that appears in the environment after import', async () => {
+        vi.resetModules();
+        // Import FIRST, with the env var still empty, the way server.js does.
+        const { requireMcpToken } = await import('./mcp-auth.js');
+
+        // Then mint one, the way main.ts does at boot.
+        vi.stubEnv('ATLAS_MCP_TOKEN', 'minted-at-boot');
+
+        const req = { headers: {} } as any;
+        const reply = { status: vi.fn().mockReturnThis(), send: vi.fn() } as any;
+        await requireMcpToken(req, reply);
+
+        expect(reply.status).toHaveBeenCalledWith(401);
+    });
+
+    it('accepts the minted token on the X-Atlas-Token header', async () => {
+        vi.resetModules();
+        const { requireMcpToken } = await import('./mcp-auth.js');
+        vi.stubEnv('ATLAS_MCP_TOKEN', 'minted-at-boot');
+
+        const req = { headers: { 'x-atlas-token': 'minted-at-boot' } } as any;
+        const reply = { status: vi.fn().mockReturnThis(), send: vi.fn() } as any;
+        await requireMcpToken(req, reply);
+
+        expect(reply.status).not.toHaveBeenCalled();
+    });
+});

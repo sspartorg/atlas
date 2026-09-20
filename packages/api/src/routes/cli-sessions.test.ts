@@ -381,14 +381,9 @@ beforeEach(async () => {
         url: 'https://github.com/sspartorg/atlas/pull/42',
         alreadyExists: false,
     });
-    await insertProject('p1', 'ATL');
-    // Projects inserted by the helper don't have a git_path by default;
-    // the create route gates on this -> set one to a benign value.
-    await testDb
-        .updateTable('projects')
-        .set({ git_path: '/tmp/fake-project' })
-        .where('id', '=', 'p1')
-        .execute();
+    // ADR 0018 — the checkout belongs to the project's repo, and the create
+    // route gates on it having a git_path.
+    await insertProject('p1', 'ATL', { git_path: '/tmp/fake-project' });
 });
 
 afterEach(async () => {
@@ -438,9 +433,9 @@ describe('POST /api/cli/sessions', () => {
         expect(ptyArgs[sidIdx + 1]).toBe(body.claude_session_id);
     });
 
-    it('rejects when project has no git_path', async () => {
+    it('rejects when the repo has no git_path', async () => {
         await testDb
-            .updateTable('projects')
+            .updateTable('project_repos')
             .set({ git_path: '' })
             .where('id', '=', 'p1')
             .execute();
@@ -1209,6 +1204,8 @@ describe('worktree ground-rules staging', () => {
         const body = res.json();
         expect(runProjectSetupMock).toHaveBeenCalledWith({
             projectId: 'p1',
+            // ADR 0018 — setup scripts belong to the repo the session opened on.
+            repoId: 'p1',
             worktreePath: '/tmp/fake-worktree',
             runId: body.id,
         });
@@ -1459,7 +1456,7 @@ describe('GET /api/cli/sessions', () => {
     it('filters by project_id', async () => {
         await insertProject('p2', 'AAA');
         await testDb
-            .updateTable('projects')
+            .updateTable('project_repos')
             .set({ git_path: '/tmp/fake-project-2' })
             .where('id', '=', 'p2')
             .execute();
@@ -1503,7 +1500,7 @@ describe('item linkage (terminal-v2 + item)', () => {
     it('rejects an item_id from a different project with 400', async () => {
         await insertProject('p2', 'AAA');
         await testDb
-            .updateTable('projects')
+            .updateTable('project_repos')
             .set({ git_path: '/tmp/fake-project-2' })
             .where('id', '=', 'p2')
             .execute();
@@ -2129,7 +2126,7 @@ describe('CS5 — STOP error paths', () => {
         await testDb.deleteFrom('cli_sessions').where('id', '=', sessionId).execute();
     });
 
-    it('CS5-5 closes cleanly without push when project has no git_path at stop time', async () => {
+    it('CS5-5 closes cleanly without push when the repo has no git_path at stop time', async () => {
         const created = await app.inject({
             method: 'POST',
             url: '/api/cli/sessions',
@@ -2137,7 +2134,7 @@ describe('CS5 — STOP error paths', () => {
         });
         const sessionId = created.json().id as string;
         await testDb
-            .updateTable('projects')
+            .updateTable('project_repos')
             .set({ git_path: '' })
             .where('id', '=', 'p1')
             .execute();

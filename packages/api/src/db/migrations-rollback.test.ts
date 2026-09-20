@@ -33,10 +33,14 @@ function loadMigrationSources(): Array<{ file: string; src: string }> {
 describe('migrations — rollback safety', () => {
     const migrations = loadMigrationSources();
 
-    it('at least 18 numbered migration .ts files present', () => {
-        // Sanity floor — the baseline (001) + 17 subsequent deltas should
-        // all be present. If this drops the rebase regressed.
-        expect(migrations.length).toBeGreaterThanOrEqual(18);
+    it('at least the baseline migration is present', () => {
+        // Sanity floor. Was 18 (baseline + 17 deltas) until the 2026-09-20
+        // re-squash collapsed 001-045 into a single regenerated baseline
+        // (ADR 0019), which a floor of 18 would have failed outright. The
+        // contiguity check below is what actually guards the append-only
+        // rule; this one only catches an empty or unreadable directory.
+        expect(migrations.length).toBeGreaterThanOrEqual(1);
+        expect(migrations.some((m) => m.file === '001_baseline.ts')).toBe(true);
     });
 
     for (const { file, src } of (migrations.length > 0 ? migrations : [{ file: 'none', src: '' }])) {

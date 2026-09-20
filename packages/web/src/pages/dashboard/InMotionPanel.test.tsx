@@ -6,7 +6,7 @@ import { makeAgent } from '../../test-utils/factories.js';
 import type { QueueItem } from '../../api/types.js';
 
 const makeRow = (overrides: Partial<QueueItem> = {}): QueueItem => ({
-    id: 'CER-1',
+    id: 'ATL-1',
     issue_type: 'sub_task',
     title: 'Going',
     status: 'in_progress',
@@ -56,8 +56,8 @@ describe('InMotionPanel', () => {
     });
 
     it('filter Select: selecting Tasks filters to only task rows (covers filter !== all branch)', async () => {
-        const taskRow = makeRow({ id: 'CER-T1', issue_type: 'task', title: 'Task Work' });
-        const subTaskRow = makeRow({ id: 'CER-S1', issue_type: 'sub_task', title: 'Sub-task Work' });
+        const taskRow = makeRow({ id: 'ATL-T1', issue_type: 'task', title: 'Task Work' });
+        const subTaskRow = makeRow({ id: 'ATL-S1', issue_type: 'sub_task', title: 'Sub-task Work' });
         renderWithProviders(
             <InMotionPanel rows={[taskRow, subTaskRow]} agents={[]} isLoading={false} />,
         );

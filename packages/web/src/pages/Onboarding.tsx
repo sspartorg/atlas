@@ -201,6 +201,11 @@ export function Onboarding() {
 
     function handleWorkspacePathChange(next: string) {
         setWorkspacePath(next);
+        // F-006 — the server's rejection used to survive the fix. `submitError`
+        // was only reset inside handleFinish, so after "Workspace folder must be
+        // an absolute path: relative/path" the message sat there while the Owner
+        // typed a valid path, clearing only on the next submit.
+        if (submitError) setSubmitError(null);
         if (errors.workspacePath) {
             setErrors((prev) => {
                 const copy = { ...prev };
@@ -237,7 +242,21 @@ export function Onboarding() {
                 owner_name: ownerName.trim(),
                 workspace_path: workspacePath.trim(),
             });
-            pendingSettings.current = newSettings;
+            // F-001 — the accent swatch used to write nowhere. `OnboardingSchema`
+            // takes only owner_name and workspace_path, and it lives in
+            // packages/shared, which is protected (AGENTS.md hard rule 1), so the
+            // colour rides on the profile endpoint instead — its schema already
+            // accepts accent_color and it is the same endpoint Settings uses.
+            // Deliberately not fatal: onboarding has already succeeded at this
+            // point, and losing the colour must not strand the Owner outside the
+            // app. It stays changeable in Settings -> Profile.
+            let saved = newSettings;
+            try {
+                saved = await api.settings.updateProfile({ accent_color: accentColor });
+            } catch {
+                // Keep the onboarded settings; the colour falls back to the default.
+            }
+            pendingSettings.current = saved;
             setSubmitState('success');
         } catch (err) {
             setSubmitError(err instanceof Error ? err.message : 'Could not finish onboarding.');

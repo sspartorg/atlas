@@ -5,11 +5,16 @@ import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
 async function insertProject(id: string, prefix: string): Promise<void> {
     await testDb
         .insertInto('projects')
-        .values({ id, name: 'Project ' + id, issue_key_prefix: prefix, git_path: '', status: 'active' })
+        .values({ id, name: 'Project ' + id, issue_key_prefix: prefix, status: 'active' })
         .execute();
     await testDb
         .insertInto('project_issue_counters')
         .values({ project_id: id, last_seq: 0 })
+        .execute();
+    // ADR 0018 — a schedule hangs off a repo, so every test project needs one.
+    await testDb
+        .insertInto('project_repos')
+        .values({ id, project_id: id, name: 'repo', git_path: '', git_url: '', position: 0 })
         .execute();
 }
 
@@ -23,6 +28,7 @@ afterAll(async () => {
 });
 
 const baseInput = (): UpsertScheduleInput => ({
+    repo_id: 'p1',
     project_id: 'p1',
     enabled: true,
     preset: 'daily',
@@ -38,7 +44,7 @@ const baseInput = (): UpsertScheduleInput => ({
 describe('schedulesService', () => {
     describe('getOrDefault', () => {
         it('returns a synthesized default for a project without a row', async () => {
-            const s = await schedulesService.getOrDefault('p1');
+            const s = await schedulesService.getOrDefault('p1', 'p1');
             expect(s.project_id).toBe('p1');
             expect(s.enabled).toBe(false);
             expect(s.preset).toBe('daily');
@@ -48,7 +54,7 @@ describe('schedulesService', () => {
 
         it('returns the stored row when present', async () => {
             await schedulesService.upsert(baseInput());
-            const s = await schedulesService.getOrDefault('p1');
+            const s = await schedulesService.getOrDefault('p1', 'p1');
             expect(s.enabled).toBe(true);
             expect(s.preset).toBe('daily');
         });
@@ -62,7 +68,7 @@ describe('schedulesService', () => {
             expect(s.pause_while_agents_active).toBe(false);
         });
 
-        it('updates on conflict (same project_id)', async () => {
+        it('updates on conflict (same repo_id)', async () => {
             await schedulesService.upsert(baseInput());
             const updated = await schedulesService.upsert({
                 ...baseInput(),
@@ -95,11 +101,11 @@ describe('schedulesService', () => {
     describe('listEnabled', () => {
         it('returns only enabled rows', async () => {
             await insertProject('p2', 'BBB');
-            await schedulesService.upsert({ ...baseInput(), project_id: 'p1', enabled: true });
-            await schedulesService.upsert({ ...baseInput(), project_id: 'p2', enabled: false });
+            await schedulesService.upsert({ ...baseInput(), enabled: true });
+            await schedulesService.upsert({ ...baseInput(), repo_id: 'p2', project_id: 'p2', enabled: false });
             const list = await schedulesService.listEnabled();
             expect(list).toHaveLength(1);
-            expect(list[0]!.project_id).toBe('p1');
+            expect(list[0]!.repo_id).toBe('p1');
         });
     });
 
@@ -107,7 +113,7 @@ describe('schedulesService', () => {
         it('recordRun stamps last_run_status + last_run_detail + next_run_at', async () => {
             await schedulesService.upsert(baseInput());
             await schedulesService.recordRun('p1', 'success', 'all green', '2026-06-01T00:00:00');
-            const s = await schedulesService.getOrDefault('p1');
+            const s = await schedulesService.getOrDefault('p1', 'p1');
             expect(s.last_run_status).toBe('success');
             expect(s.last_run_detail).toBe('all green');
             // PG hands timestamptz back as a Date; normalise to UTC ISO for
@@ -125,7 +131,7 @@ describe('schedulesService', () => {
         it('disable flips enabled=false and clears next_run_at', async () => {
             await schedulesService.upsert({ ...baseInput(), next_run_at: '2026-06-01' });
             await schedulesService.disable('p1');
-            const s = await schedulesService.getOrDefault('p1');
+            const s = await schedulesService.getOrDefault('p1', 'p1');
             expect(s.enabled).toBe(false);
             expect(s.next_run_at).toBeNull();
         });
@@ -133,7 +139,7 @@ describe('schedulesService', () => {
         it('delete removes the row, getOrDefault falls back', async () => {
             await schedulesService.upsert(baseInput());
             await schedulesService.delete('p1');
-            const s = await schedulesService.getOrDefault('p1');
+            const s = await schedulesService.getOrDefault('p1', 'p1');
             expect(s.enabled).toBe(false);
         });
     });
@@ -158,14 +164,14 @@ describe('schedulesService', () => {
             await schedulesService.incrementAuthFailure('p1');
             await schedulesService.incrementAuthFailure('p1');
             await schedulesService.resetAuthFailure('p1');
-            const s = await schedulesService.getOrDefault('p1');
+            const s = await schedulesService.getOrDefault('p1', 'p1');
             expect(s.auth_failure_count).toBe(0);
         });
 
         it('resetAuthFailure on a row with count 0 keeps count at 0', async () => {
             await schedulesService.upsert(baseInput());
             await schedulesService.resetAuthFailure('p1');
-            const s = await schedulesService.getOrDefault('p1');
+            const s = await schedulesService.getOrDefault('p1', 'p1');
             expect(s.auth_failure_count).toBe(0);
         });
 
@@ -184,7 +190,7 @@ describe('schedulesService', () => {
             // but NOT nullish — the ?? only fires on null/undefined, so 0 is covered
             // by the existing upsert tests). The true ?? fallback fires when
             // getOrDefault returns defaultSchedule (no row). Both already covered.
-            const s = await schedulesService.getOrDefault('p1');
+            const s = await schedulesService.getOrDefault('p1', 'p1');
             // defaultSchedule path — auth_failure_count is explicitly 0
             expect(s.auth_failure_count).toBe(0);
         });

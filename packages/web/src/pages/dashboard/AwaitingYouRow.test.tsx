@@ -8,7 +8,7 @@ describe('AwaitingYouRow', () => {
         renderWithProviders(
             <AwaitingYouRow
                 row={{
-                    id: 'CER-7',
+                    id: 'ATL-7',
                     issue_type: 'sub_task',
                     title: 'Add a login form',
                     status: 'waiting_for_info',
@@ -17,7 +17,7 @@ describe('AwaitingYouRow', () => {
             />,
         );
         expect(screen.getByText('Add a login form')).toBeInTheDocument();
-        expect(screen.getByText(/CER-7/)).toBeInTheDocument();
+        expect(screen.getByText(/ATL-7/)).toBeInTheDocument();
     });
 
     it('handles each issue_type → route mapping (click executes navigate)', () => {

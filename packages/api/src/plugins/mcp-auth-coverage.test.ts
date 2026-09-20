@@ -39,7 +39,12 @@ afterAll(async () => {
     process.env['ATLAS_MCP_TOKEN'] = '';
 });
 
-const TRUSTED_ORIGIN = 'http://127.0.0.1:4000';
+// Derived, not hardcoded: `utils/lan-origins.ts:3` builds the trusted set from
+// WEB_PORT (falling back to PORT, then 4000), so a hardcoded :4000 here made
+// this spec fail for anyone running Atlas on another port — which is the
+// documented workaround when :4000 is already taken (campaign finding F-016).
+const WEB_PORT = Number(process.env['WEB_PORT'] ?? process.env['PORT']) || 4000;
+const TRUSTED_ORIGIN = `http://127.0.0.1:${WEB_PORT}`;
 
 describe('global onRequest MCP-token gate (integration)', () => {
     // -----------------------------------------------------------------------

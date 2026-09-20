@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -9,6 +9,21 @@ import { defaultHandlers, handlers } from '../test-utils/mock-handlers.js';
 import { Agents } from './Agents.js';
 
 const BASE = 'http://localhost:3000/api';
+
+// F-002 — capture toast.show() calls. ToastProvider renders nothing on its
+// own, so this is the only way to assert what the Owner would have seen.
+let toastSpy: ((m: string) => void) | null = null;
+vi.mock('../hooks/useToast.js', async (importOriginal) => {
+    const actual = (await importOriginal()) as Record<string, unknown>;
+    return {
+        ...actual,
+        useToast: () => ({
+            toasts: [],
+            dismiss: () => {},
+            show: (t: { message: string }) => toastSpy?.(t.message),
+        }),
+    };
+});
 
 beforeEach(() => {
     server.use(
@@ -1218,4 +1233,55 @@ describe('Agents page', () => {
         }
         expect(document.body).toBeTruthy();
     });
+});
+
+// ── F-002: Add Agent must surface the API's error ──────────────────────────
+//
+// The handler was try/finally with no catch, fired as `void handleAddAgent()`,
+// so a rejected create became an unhandled promise rejection: no toast, no
+// message, the dialog just sat there. The API's error is the useful part - an
+// unregistered model returns MODEL_NOT_IN_REGISTRY naming every valid option -
+// and all of it was discarded client-side. Same shape as the marketplace
+// install defect of 2026-09-12.
+//
+// The toast is asserted by spying on the hook, not by querying the DOM:
+// `ToastProvider` supplies context only and never renders anything, so
+// `renderWithProviders` (which does not mount `<Toast />`) can show no toast
+// text at all. Asserting on rendered text here would pass whatever the code did.
+describe('Agents — Add Agent surfaces API errors (F-002)', () => {
+    it('shows the API error instead of failing silently', async () => {
+        const shown: string[] = [];
+        const hits: string[] = [];
+        toastSpy = (m: string) => shown.push(m);
+
+        server.use(
+            handlers.listAgents([]),
+            http.post(`${BASE}/agents`, () => {
+                hits.push('create');
+                return HttpResponse.json(
+                    {
+                        error: "model 'claude-sonnet-9-9' is not in the cli_models registry for cli 'claude'",
+                        kind: 'validation_error',
+                    },
+                    { status: 400 },
+                );
+            }),
+        );
+
+        renderWithProviders(<Agents />);
+        fireEvent.click(await screen.findByRole('button', { name: /^add agent$/i }));
+
+        const name = await screen.findByLabelText(/agent name/i);
+        await userEvent.type(name, 'Probe');
+        fireEvent.click(screen.getAllByRole('button', { name: /^add agent$/i }).at(-1)!);
+
+        await waitFor(() => {
+            if (hits.length === 0) throw new Error('POST /agents was never called');
+            if (shown.length === 0) {
+                throw new Error('the create failed and nothing was shown to the Owner');
+            }
+        }, { timeout: 5000 });
+
+        expect(shown.join(' ')).toMatch(/registry/i);
+    }, 30000);
 });

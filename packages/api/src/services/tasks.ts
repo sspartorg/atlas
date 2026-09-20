@@ -55,6 +55,24 @@ async function subTaskCounts(taskIds: string[]): Promise<Map<string, number>> {
     return out;
 }
 
+// ADR 0018 — a Task always names at least one repo. With a single-repo
+// project the caller can leave it out and get that repo; with several, not
+// choosing is an error rather than a silent "the primary".
+async function resolveRepoIds(projectId: string, repoIds: string[] | undefined): Promise<string[]> {
+    const validated = await projectReposService.validateIds(projectId, repoIds ?? []);
+    if (validated.length > 0) return validated;
+    const repos = await projectReposService.list(projectId);
+    const [only] = repos;
+    if (repos.length === 1 && only) return [only.id];
+    throw new ApiError(
+        'validation_error',
+        repos.length === 0
+            ? 'This project has no repos — add one before creating a Task'
+            : 'A Task needs at least one repo',
+        400
+    );
+}
+
 export const tasksService = {
     // `includeArchived` defaults to false: hides tasks closed (status=done)
     // more than 7 days ago. Set true to bypass the filter (archived view).
@@ -78,7 +96,7 @@ export const tasksService = {
     },
 
     async create(data: CreateInput, actorAgentId: string | null = null): Promise<ITask> {
-        const repoIds = await projectReposService.validateIds(data.project_id, data.repo_ids ?? []);
+        const repoIds = await resolveRepoIds(data.project_id, data.repo_ids);
         const row = await createItem({
             project_id: data.project_id,
             type: 'task',
@@ -119,7 +137,7 @@ export const tasksService = {
             if (live) {
                 throw new ApiError('conflict', 'Stop the workflow run on this Task before changing its repos', 409);
             }
-            data = { ...data, repo_ids: await projectReposService.validateIds(before.project_id, data.repo_ids) };
+            data = { ...data, repo_ids: await resolveRepoIds(before.project_id, data.repo_ids) };
         }
         await patchItem(id, data);
         // `worktree_branch` isn't logged: it's operational metadata, not

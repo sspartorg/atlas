@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import type { IProjectRepo } from '@atlas/shared';
-import { makeProjectRepo } from '../../test-utils/factories.js';
+import { makeProject, makeProjectRepo } from '../../test-utils/factories.js';
 import { server } from '../../test-setup.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { Toast } from '../../components/Toast.js';
@@ -10,7 +10,9 @@ import { ProjectReposCard } from './ProjectReposCard.js';
 
 const BASE = 'http://localhost:3000/api';
 
-const PRIMARY = makeProjectRepo({
+const PROJECT = makeProject({ id: 'p1', name: 'Acme' });
+
+const API = makeProjectRepo({
     name: 'api',
     git_url: 'https://github.com/acme/api.git',
     git_path: '/ws/api',
@@ -19,7 +21,6 @@ const PRIMARY = makeProjectRepo({
 const WEB = makeProjectRepo({
     id: 'r-web',
     name: 'web',
-    primary: false,
     git_url: 'https://github.com/acme/web.git',
     git_path: '/ws/web',
     default_branch: 'develop',
@@ -33,6 +34,14 @@ const CREDENTIAL = {
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
 };
+
+const ROW_ACTIONS = [
+    'Edit',
+    'Auto-fetch schedule…',
+    'Re-clone from remote',
+    'Open folder',
+    'Remove',
+];
 
 /** Serves the list from a mutable array so a POST / DELETE shows on refetch. */
 function mockRepos(initial: IProjectRepo[]) {
@@ -49,10 +58,22 @@ function mockRepos(initial: IProjectRepo[]) {
 function renderCard() {
     return renderWithProviders(
         <>
-            <ProjectReposCard projectId="p1" />
+            <ProjectReposCard project={PROJECT} displayId="ACM" />
             <Toast />
         </>
     );
+}
+
+/** Opens a row's kebab menu and returns the open <Menu>. */
+async function openRowMenu(repoName: string) {
+    fireEvent.click(await screen.findByRole('button', { name: `Actions for ${repoName}` }));
+    return screen.findByRole('menu');
+}
+
+async function clickRowAction(repoName: string, action: string) {
+    const menu = await openRowMenu(repoName);
+    fireEvent.click(within(menu).getByRole('menuitem', { name: action }));
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
 }
 
 async function fillConnectForm() {
@@ -71,28 +92,43 @@ async function fillConnectForm() {
 }
 
 describe('ProjectReposCard', () => {
-    it('lists the repos; only extra repos can be edited or removed', async () => {
-        mockRepos([PRIMARY, WEB]);
+    it('lists the repos; no repo is primary and every row offers the same actions', async () => {
+        mockRepos([API, WEB]);
         renderCard();
 
-        const primaryRow = await screen.findByTestId('repo-row-api');
-        expect(within(primaryRow).getByText('Primary')).toBeInTheDocument();
-        expect(within(primaryRow).getByText('github.com/acme/api')).toHaveAttribute(
+        const apiRow = await screen.findByTestId('repo-row-api');
+        expect(within(apiRow).getByText('github.com/acme/api')).toHaveAttribute(
             'href',
             'https://github.com/acme/api.git'
         );
-        expect(within(primaryRow).queryByRole('button', { name: /remove/i })).toBeNull();
-        expect(within(primaryRow).queryByRole('button', { name: /edit/i })).toBeNull();
+        // ADR 0018 — the "Primary" chip is gone; the repos are all equal.
+        expect(screen.queryByText('Primary')).toBeNull();
 
         const webRow = screen.getByTestId('repo-row-web');
-        expect(within(webRow).queryByText('Primary')).toBeNull();
         expect(within(webRow).getByText('develop')).toBeInTheDocument();
-        expect(within(webRow).getByRole('button', { name: 'Remove web' })).toBeInTheDocument();
-        expect(within(webRow).getByRole('button', { name: 'Edit web' })).toBeInTheDocument();
+
+        // Both rows — including the first, which used to be the locked-down
+        // primary — carry the same menu.
+        for (const name of ['api', 'web']) {
+            const menu = await openRowMenu(name);
+            for (const action of ROW_ACTIONS) {
+                expect(within(menu).getByRole('menuitem', { name: action })).toBeInTheDocument();
+            }
+            fireEvent.keyDown(menu, { key: 'Escape' });
+            await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+        }
+    });
+
+    it('shows an empty state when the project has no repos', async () => {
+        mockRepos([]);
+        renderCard();
+
+        expect(await screen.findByText('No repos yet')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /add repo/i })).toBeInTheDocument();
     });
 
     it('connects a local clone and shows it in the list', async () => {
-        const rows = mockRepos([PRIMARY]);
+        const rows = mockRepos([API]);
         let body: unknown;
         server.use(
             http.post(`${BASE}/projects/p1/repos`, async ({ request }) => {
@@ -121,7 +157,7 @@ describe('ProjectReposCard', () => {
     });
 
     it('renders a failed connect check like the New project dialog', async () => {
-        mockRepos([PRIMARY]);
+        mockRepos([API]);
         server.use(
             http.post(`${BASE}/projects/p1/repos`, () =>
                 HttpResponse.json(
@@ -157,7 +193,7 @@ describe('ProjectReposCard', () => {
     });
 
     it('clones a repo and closes when the clone registers it', async () => {
-        const rows = mockRepos([PRIMARY]);
+        const rows = mockRepos([API]);
         let body: unknown;
         server.use(
             http.post(`${BASE}/projects/p1/repos`, async ({ request }) => {
@@ -198,8 +234,8 @@ describe('ProjectReposCard', () => {
         expect(await screen.findByTestId('repo-row-web')).toBeInTheDocument();
     });
 
-    it('removes an extra repo after confirming', async () => {
-        const rows = mockRepos([PRIMARY, WEB]);
+    it('removes a repo after confirming', async () => {
+        const rows = mockRepos([API, WEB]);
         let deleted = false;
         server.use(
             http.delete(`${BASE}/projects/p1/repos/r-web`, () => {
@@ -210,7 +246,7 @@ describe('ProjectReposCard', () => {
         );
         renderCard();
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Remove web' }));
+        await clickRowAction('web', 'Remove');
         const confirm = await screen.findByRole('dialog');
         expect(within(confirm).getByText('Remove web?')).toBeInTheDocument();
         fireEvent.click(within(confirm).getByRole('button', { name: 'Remove' }));
@@ -219,8 +255,31 @@ describe('ProjectReposCard', () => {
         await waitFor(() => expect(screen.queryByTestId('repo-row-web')).toBeNull());
     });
 
-    it('saves an extra repo’s default branch and setup scripts', async () => {
-        mockRepos([PRIMARY, WEB]);
+    it('removes the LAST repo too — the folder stays on disk', async () => {
+        const rows = mockRepos([API]);
+        let deleted = false;
+        server.use(
+            http.delete(`${BASE}/projects/p1/repos/${API.id}`, () => {
+                deleted = true;
+                rows.pop();
+                return new HttpResponse(null, { status: 204 });
+            })
+        );
+        renderCard();
+
+        await clickRowAction('api', 'Remove');
+        const confirm = await screen.findByRole('dialog');
+        expect(within(confirm).getByText('Remove api?')).toBeInTheDocument();
+        expect(within(confirm).getByText(/folder stays on disk/i)).toBeInTheDocument();
+        fireEvent.click(within(confirm).getByRole('button', { name: 'Remove' }));
+
+        await waitFor(() => expect(deleted).toBe(true));
+        await waitFor(() => expect(screen.queryByTestId('repo-row-api')).toBeNull());
+        expect(await screen.findByText('No repos yet')).toBeInTheDocument();
+    });
+
+    it('saves a repo’s default branch; setup scripts moved to the Setup tab', async () => {
+        mockRepos([API, WEB]);
         let body: unknown;
         server.use(
             http.patch(`${BASE}/projects/p1/repos/r-web`, async ({ request }) => {
@@ -230,23 +289,86 @@ describe('ProjectReposCard', () => {
         );
         renderCard();
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Edit web' }));
+        await clickRowAction('web', 'Edit');
         const dialog = await screen.findByRole('dialog');
+        // The script editors live on the Setup tab now — exactly one place.
+        expect(within(dialog).queryByLabelText('.sh')).toBeNull();
+        expect(within(dialog).queryByLabelText('.ps1')).toBeNull();
         fireEvent.change(within(dialog).getByLabelText(/default branch/i), {
             target: { value: 'main' },
         });
-        fireEvent.change(within(dialog).getByLabelText('.sh'), {
-            target: { value: 'npm ci' },
-        });
         fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
-        await waitFor(() =>
-            expect(body).toEqual({
-                default_branch: 'main',
-                setup_sh_body: 'npm ci',
-                setup_ps1_body: '',
+        await waitFor(() => expect(body).toEqual({ default_branch: 'main' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
+
+    it('opens the repo folder through the repo-scoped reveal endpoint', async () => {
+        mockRepos([API, WEB]);
+        let revealed: string | null = null;
+        server.use(
+            http.post(`${BASE}/projects/p1/repos/r-web/reveal`, () => {
+                revealed = '/ws/web';
+                return HttpResponse.json({ ok: true, path: '/ws/web' });
             })
         );
-        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        renderCard();
+
+        await clickRowAction('web', 'Open folder');
+        await waitFor(() => expect(revealed).toBe('/ws/web'));
+        expect(await screen.findByText('Opened in File Explorer')).toBeInTheDocument();
+    });
+
+    it('re-clones the repo the row menu names', async () => {
+        mockRepos([API, WEB]);
+        server.use(
+            http.get(`${BASE}/projects/p1/repos/r-web/status`, () =>
+                HttpResponse.json({
+                    local_head: 'abc123',
+                    remote_head: 'def456',
+                    behind: 1,
+                    uncommitted: 0,
+                })
+            )
+        );
+        renderCard();
+
+        await clickRowAction('web', 'Re-clone from remote');
+        expect(await screen.findByText('Re-clone from remote?')).toBeInTheDocument();
+        // The status panel is keyed on the repo, not the project.
+        expect(await screen.findByText('abc123')).toBeInTheDocument();
+    });
+
+    it('opens the auto-fetch schedule for the repo the row menu names', async () => {
+        mockRepos([API, WEB]);
+        server.use(
+            http.get(`${BASE}/projects/p1/repos/r-web/schedule`, () =>
+                HttpResponse.json({
+                    repo_id: 'r-web',
+                    project_id: 'p1',
+                    enabled: false,
+                    preset: 'daily',
+                    cron_expression: '0 6 * * *',
+                    time_of_day: '06:00',
+                    weekday: 1,
+                    skip_if_dirty: true,
+                    pause_while_agents_active: true,
+                    conflict_policy: 'skip',
+                    last_run_at: null,
+                    last_run_status: null,
+                    last_run_detail: null,
+                    next_run_at: null,
+                    auth_failure_count: 0,
+                    created_at: '2026-01-01T00:00:00.000Z',
+                    updated_at: '2026-01-01T00:00:00.000Z',
+                })
+            )
+        );
+        renderCard();
+
+        await clickRowAction('web', 'Auto-fetch schedule…');
+        expect(await screen.findByText('Auto-fetch schedule')).toBeInTheDocument();
+        // The branch it pulls is the repo's, not the project's.
+        expect(await screen.findByText(/origin\/develop/)).toBeInTheDocument();
     });
 });

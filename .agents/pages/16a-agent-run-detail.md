@@ -3,7 +3,7 @@
 **Route:** `/agents/:id/runs/:runId` • **Component:** `packages/web/src/pages/AgentRunDetail.tsx` • **Slug:** `agents`
 
 ## Purpose
-Full read of a single `agent_runs` row: status header, issue link card, **per-event JSON viewer** over the run's stream-json transcript, summary panel pulled from the final `result` event, and three actions — **Re-run with same inputs / Copy log / Download log**. Reached from the Runs tab on `/agents/:id` (each row navigates here) and from `RunNowDialog` after successfully starting a run.
+Full read of a single `agent_runs` row: status header, issue link card, **per-event JSON viewer** over the run's stream-json transcript, summary panel pulled from the final `result` event, and three actions — ****Re-run with same inputs** — gated by `canRerun = !run.workflow_run_id && !run.issue_id` (`AgentRunDetail.tsx:247`), because `POST /api/run` rejects any `issue_id` (`routes/run.ts:42-48`). A run that came from a workflow or an item cannot be re-run from here. *(corrected 2026-09-20 — campaign task-21.)* / Copy log / Download log**. Reached from the Runs tab on `/agents/:id` (each row navigates here) and from `RunNowDialog` after successfully starting a run.
 
 ## States
 - **Loading**: centered spinner.
@@ -89,3 +89,7 @@ Full read of a single `agent_runs` row: status header, issue link card, **per-ev
 
 ## Coming soon on this page
 None.
+
+## Also on this page, previously undocumented
+
+- **Stop run** and **Open workflow run** hero buttons (`AgentRunDetail.tsx:475-481`).

@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "author": "Sspart Enterprise Private Limited",
   "type": "module",
-  "description": "Atlas — AI Agent Orchestration Platform",
+  "description": "Atlas \u2014 AI Agent Orchestration Platform",
   "scripts": {
     "dev": "pnpm db:up && pnpm db:wait && pnpm db:migrate && pnpm --parallel -r dev",
     "dev:local": "pnpm db:migrate && pnpm --parallel --filter @atlas/web --filter @atlas/api dev",

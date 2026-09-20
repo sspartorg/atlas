@@ -40,7 +40,8 @@ None. `FolderPicker` opens the OS dialog directly.
 - `useQueryClient()` — prefetches dashboard/agents/projects/counts/notifications during the 5s success window (lines 184-200)
 
 ## API endpoints touched
-- `POST /api/settings/onboard` — `{ owner_name, accent_color, workspace_path }` (line 245)
+- `POST /api/settings/onboard` — `{ owner_name, workspace_path }` only. `OnboardingSchema` takes no accent (`packages/shared/src/schemas/index.ts`).
+- `PATCH /api/settings/profile` — `{ accent_color }`, sent straight after a successful onboard. The swatch used to write nowhere (campaign F-001); the colour rides on the profile endpoint because `OnboardingSchema` lives in the protected `packages/shared`. Non-fatal by design: onboarding has already succeeded, so a failed colour patch must not strand the Owner.
 - Prefetched during success: `GET /api/counts/dashboard`, `/api/agents`, `/api/projects`, `/api/counts`, `/api/notifications`
 
 ## Permissions / guards
@@ -48,9 +49,9 @@ None. `FolderPicker` opens the OS dialog directly.
 
 ## Edge cases / quirks
 - `pendingSettings` ref (line 179) caches the API response before the navigation delay so the dashboard renders with fresh data the instant the redirect fires.
-- Workspace error text clears as soon as the user changes the path (lines 211-220).
+- Workspace error text clears as soon as the user changes the path (lines 211-220) — **and so does the server's `submitError`** since campaign F-006; before that a rejected submit's message sat on screen while the Owner typed a valid path.
 - The API creates the workspace folder (recursively) on submit, matching the "We'll create this folder if it doesn't exist" copy. A relative path or an uncreatable folder returns `400 validation_error` ("Could not create workspace folder …") shown as the submit error, and onboarding is not marked complete.
-- Color selection persists into `settings.accent_color` and is reused for the Owner chip everywhere.
+- Color selection persists into `settings.accent_color` via the follow-up profile PATCH above, and is reused for the Owner chip everywhere.
 
 ## Connectivity
 - **Pages**: [Dashboard](01-dashboard.md) — post-onboarding redirect target; [Settings → Profile](19-settings.md) — owner_name, accent, workspace_path are all re-editable here once onboarding completes.

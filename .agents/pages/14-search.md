@@ -18,7 +18,7 @@ Cross-entity search across Tasks and Sub-tasks (and agents for prompt search). T
 - Active filter pills: Type, Project, Updated, Status — click to edit, X to remove
 - **Add Filter** dashed pill — menu with options Type / Project / Updated / Status
 - Multi-select for Type (task / sub-task / prompt); single-select for the others
-- **Save This Search** button + ⌘S shortcut (lines 140-149) — currently just toasts "Search saved"
+- ~~**Save This Search** button + ⌘S shortcut~~ — **does not exist.** No such control in `Search.tsx` or `search/*.tsx`, and no "Search saved" toast anywhere. Removed 2026-09-20.
 
 **Query mode (`SearchQueryInput`)**
 - Monospace input with syntax-coloring overlay (tokens: field / op / value / connector / unknown)

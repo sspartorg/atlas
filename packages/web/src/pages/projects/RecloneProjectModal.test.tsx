@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../test-setup.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
-import { makeProject } from '../../test-utils/factories.js';
+import { makeProject, makeProjectRepo } from '../../test-utils/factories.js';
 import { defaultHandlers } from '../../test-utils/mock-handlers.js';
 import { RecloneProjectModal } from './RecloneProjectModal.js';
 
@@ -12,6 +12,13 @@ type PushSse = (e: object) => void;
 
 const BASE = 'http://localhost:3000/api';
 const project = makeProject({ id: 'p1', name: 'Acme' });
+// ADR 0018 — a re-clone names the repo it acts on.
+const repo = makeProjectRepo({
+    id: 'r1',
+    name: 'api',
+    git_url: 'https://github.com/acme/api.git',
+    git_path: '/ws/api',
+});
 
 const statusOk = {
     local_head: 'abc123',
@@ -23,14 +30,27 @@ const statusOk = {
 beforeEach(() => {
     server.use(
         ...defaultHandlers,
-        http.get(`${BASE}/projects/p1/status`, () => HttpResponse.json(statusOk)),
+        http.get(`${BASE}/projects/p1/repos/r1/status`, () => HttpResponse.json(statusOk)),
     );
 });
 
 describe('RecloneProjectModal — closed', () => {
     it('renders nothing when project is null', () => {
         const { container } = renderWithProviders(
-            <RecloneProjectModal open project={null} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={null} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+        );
+        expect(container).toBeEmptyDOMElement();
+    });
+
+    it('renders nothing when repo is null', () => {
+        const { container } = renderWithProviders(
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={null}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />,
         );
         expect(container).toBeEmptyDOMElement();
     });
@@ -39,7 +59,7 @@ describe('RecloneProjectModal — closed', () => {
 describe('RecloneProjectModal — confirm view', () => {
     it('renders the dialog heading and project details', async () => {
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         expect(screen.getByText('Re-clone from remote?')).toBeInTheDocument();
         expect(screen.getByText('Acme')).toBeInTheDocument();
@@ -47,7 +67,7 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('shows git status once loaded', async () => {
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() =>
             expect(screen.getByText('abc123')).toBeInTheDocument(),
@@ -59,7 +79,7 @@ describe('RecloneProjectModal — confirm view', () => {
     it('Cancel button calls onClose', async () => {
         const onClose = vi.fn();
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={onClose} />,
         );
         await userEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
         expect(onClose).toHaveBeenCalled();
@@ -67,12 +87,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('Stash & re-clone button starts reclone job', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-1' }),
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         // Wait for status to load before clicking submit
         await waitFor(() => screen.getByText('clean'));
@@ -84,12 +104,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('shows error alert when reclone API call fails', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ error: 'failed' }, { status: 500 }),
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -100,12 +120,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('shows error when status endpoint fails', async () => {
         server.use(
-            http.get(`${BASE}/projects/p1/status`, () =>
+            http.get(`${BASE}/projects/p1/repos/r1/status`, () =>
                 HttpResponse.json({ error: 'bad' }, { status: 500 }),
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() =>
             expect(screen.getByText(/Could not read git status/i)).toBeInTheDocument(),
@@ -114,12 +134,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('shows uncommitted warning when there are dirty files', async () => {
         server.use(
-            http.get(`${BASE}/projects/p1/status`, () =>
+            http.get(`${BASE}/projects/p1/repos/r1/status`, () =>
                 HttpResponse.json({ ...statusOk, uncommitted: 3 }),
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() =>
             expect(screen.getByText(/3 uncommitted files/i)).toBeInTheDocument(),
@@ -128,13 +148,13 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('close button does nothing while reclone is running (handleClose guard)', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-guard' }),
             ),
         );
         const onClose = vi.fn();
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={onClose} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -147,12 +167,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('transitions to success view and shows Open project button on reclone_completed SSE', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-ok' }),
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -175,12 +195,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('transitions to error view on reclone_error SSE and Try again resets to confirm', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-fail' }),
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -208,12 +228,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('shows deriveStepIndex progress when reclone_output lines match step keywords', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-steps' }),
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -254,7 +274,7 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('shows "Original credential was deleted" error alert and Manage credentials button', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json(
                     { error: 'Original credential was deleted — re-attach one first' },
                     { status: 422 },
@@ -262,7 +282,7 @@ describe('RecloneProjectModal — confirm view', () => {
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -276,17 +296,18 @@ describe('RecloneProjectModal — confirm view', () => {
 
     // ─── Additional branch coverage ────────────────────────────────────────────
 
-    it('ProjectChip renders only git_path when git_url is absent', async () => {
-        const noUrlProject = makeProject({
-            id: 'p1',
-            name: 'Acme',
+    it('ProjectChip renders only the repo’s git_path when its git_url is absent', async () => {
+        const noUrlRepo = makeProjectRepo({
+            id: 'r1',
+            name: 'api',
             git_url: null as unknown as string,
             git_path: '/tmp/only-path',
         });
         renderWithProviders(
             <RecloneProjectModal
                 open
-                project={noUrlProject}
+                project={project}
+                repo={noUrlRepo}
                 displayId="ACM"
                 onClose={vi.fn()}
             />,
@@ -303,12 +324,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('deriveStepIndex matches /Re-indexing/i keyword via SSE output line', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-reidx' }),
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -332,12 +353,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('success view shows commits/files stats parsed from Fast-forward output', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-stats' }),
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -377,12 +398,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('success view shows stashPath when SSE includes a non-null stashPath', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-stash' }),
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -407,12 +428,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('success view shows "Already up to date" when no commits regex matched', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-noop' }),
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -451,12 +472,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('error view falls back to job.lines when errorDetail is absent', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-no-detail' }),
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -495,13 +516,13 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('Open project button calls onClose and navigates to /projects/:id', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-open' }),
             ),
         );
         const onClose = vi.fn();
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={onClose} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -527,7 +548,7 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('Manage credentials button calls onClose (and navigates to /settings/credentials)', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json(
                     { error: 'Original credential was deleted — re-attach one first' },
                     { status: 422 },
@@ -536,7 +557,7 @@ describe('RecloneProjectModal — confirm view', () => {
         );
         const onClose = vi.fn();
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={onClose} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -547,12 +568,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('running view shows "Waiting for output…" fallback when no output lines have arrived', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-wait' }),
             ),
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -566,13 +587,13 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('useEffect resets view to confirm and clears state when modal is closed (open=false)', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/reclone`, () =>
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-reset' }),
             ),
         );
         const onClose = vi.fn();
         const { rerender } = renderWithProviders(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={onClose} />,
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -582,12 +603,12 @@ describe('RecloneProjectModal — confirm view', () => {
 
         // Close the modal by setting open=false — the useEffect resets state back to confirm
         rerender(
-            <RecloneProjectModal open={false} project={project} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal open={false} project={project} repo={repo} displayId="ACM" onClose={onClose} />,
         );
 
         // Re-open — should be back at the confirm view with the project heading
         rerender(
-            <RecloneProjectModal open project={project} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={onClose} />,
         );
         await waitFor(() =>
             expect(screen.getByText('Re-clone from remote?')).toBeInTheDocument(),

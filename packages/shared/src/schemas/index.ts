@@ -185,7 +185,6 @@ export const CreateProjectSchema = z
     .object({
         name: z.string().min(1).max(200),
         issue_key_prefix: IssueKeyPrefixSchema,
-        git_path: z.string().default(''),
         description: z.string().default(''),
         status: z.string().default('active'),
     })
@@ -194,15 +193,9 @@ export const CreateProjectSchema = z
 export const UpdateProjectSchema = z
     .object({
         name: z.string().min(1).max(200).optional(),
-        git_path: z.string().min(1).optional(),
         description: z.string().optional(),
         status: z.string().min(1).optional(),
         guardrails_md: z.string().optional(),
-        // 2026-06-10 — Per-project setup script bodies. Owner edits via
-        // the Setup tab on Project Detail; orchestrator will execute at
-        // worktree provisioning time in a follow-up. Empty string clears.
-        setup_sh_body: z.string().optional(),
-        setup_ps1_body: z.string().optional(),
     })
     .strict();
 
@@ -332,7 +325,7 @@ export const ReplyToItemSchema = z
     });
 
 // POST /api/issues/:type/:id/history/prune body. Agents that manage a
-// long-lived tracking item (e.g. cer-weekly-automation on JDA-1) invoke
+// long-lived tracking item (e.g. atl-weekly-automation on ATL-1) invoke
 // this via the MCP `update_item` action `remove_history` to drop stale
 // comments + issue_events older than a cutoff timestamp. `before_time`
 // is an ISO 8601 datetime — everything strictly before it is deleted,
@@ -547,6 +540,14 @@ export const DeleteProjectSchema = z.object({
 });
 
 export const RecloneProjectSchema = z.object({}).strict().optional().default({});
+
+// ADR 0018 — the AI-readiness scaffold reads a checkout, so it names a repo.
+// Omitted means the project's first repo.
+export const GenerateAiScaffoldSchema = z
+    .object({ repo_id: z.string().min(1).max(200).optional() })
+    .strict()
+    .optional()
+    .default({});
 
 export const ConnectExistingProjectSchema = z.object({
     folder_path: z.string().min(1),
@@ -881,6 +882,9 @@ export type UpdateScratchPadInput = z.infer<typeof UpdateScratchPadSchema>;
 export const CliSessionCreateSchema = z
     .object({
         project_id: z.string().min(1),
+        // ADR 0018 — which repo of the project to check out. Optional only
+        // when the project has exactly one repo.
+        repo_id: z.string().min(1).max(200).optional(),
         title: z.string().min(1).max(200).optional(),
         branch_name: z.string().min(1).max(200).optional(),
         initial_prompt: z.string().max(8_000).optional(),

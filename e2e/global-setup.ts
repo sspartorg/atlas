@@ -152,6 +152,9 @@ function startApi(): ChildProcess {
                 WEB_PORT: String(WEB_PORT),
                 DATABASE_URL: `postgres://atlas:atlas@localhost:5500/${E2E_DB}`,
                 ATLAS_AI_ENABLED: 'false',
+                // The suite drives writes over plain HTTP with no browser
+                // headers, so it opts out of the generated MCP write token.
+                ATLAS_MCP_TOKEN_OPEN: '1',
                 ATLAS_LOG_LEVEL: 'error',
                 // Disable per-request log noise.
                 ATLAS_REQUEST_LOG: 'false',

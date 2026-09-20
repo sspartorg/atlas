@@ -5,7 +5,7 @@ import { StartSessionDialog } from './StartSessionDialog.js';
 import { Toast } from './Toast.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { server } from '../test-setup.js';
-import { makeProject } from '../test-utils/factories.js';
+import { makeProject, makeProjectRepo } from '../test-utils/factories.js';
 import { DEFAULT_MODEL_BY_CLI } from '@atlas/shared';
 
 const DEFAULT_CLI_MODEL = DEFAULT_MODEL_BY_CLI.claude;
@@ -68,6 +68,8 @@ function renderDialog(overrides: DialogProps = {}) {
 beforeEach(() => {
     server.use(
         http.get(`${BASE}/projects`, () => HttpResponse.json(PROJECTS)),
+        // ADR 0018 — the dialog reads the project's repos to know which to open on.
+        http.get(`${BASE}/projects/:id/repos`, () => HttpResponse.json([makeProjectRepo()])),
         http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
         http.get(`${BASE}/issues/tree`, () =>
             HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] }),
@@ -256,6 +258,54 @@ describe('StartSessionDialog — submission', () => {
             expect(onCreated).toHaveBeenCalledTimes(1);
         });
         expect(capturedBody).toMatchObject({ project_id: 'p1' });
+    });
+
+    // ADR 0018 — a session opens on one repo of the project.
+    it('sends the only repo without asking, and offers a picker when there are several', async () => {
+        let capturedBody: { repo_id?: string } = {};
+        server.use(
+            http.post(`${BASE}/cli/sessions`, async ({ request }) => {
+                capturedBody = (await request.json()) as { repo_id?: string };
+                return HttpResponse.json(makeCreatedSession());
+            }),
+        );
+        renderDialog();
+        fireEvent.mouseDown(screen.getByLabelText(/project/i));
+        await screen.findByText('Alpha');
+        fireEvent.click(screen.getByText('Alpha'));
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /start session/i })).not.toBeDisabled();
+        });
+        // One repo: nothing to pick, and the session still names it.
+        await waitFor(() =>
+            expect(screen.queryByRole('combobox', { name: /^repo$/i })).toBeNull()
+        );
+        await waitFor(() => {
+            fireEvent.click(screen.getByRole('button', { name: /start session/i }));
+            expect(capturedBody.repo_id).toBe('p1');
+        });
+    });
+
+    it('lets the Owner pick the repo when the project has several', async () => {
+        let capturedBody: { repo_id?: string } = {};
+        server.use(
+            http.get(`${BASE}/projects/p1/repos`, () =>
+                HttpResponse.json([makeProjectRepo(), makeProjectRepo({ id: 'r-web', name: 'web' })]),
+            ),
+            http.post(`${BASE}/cli/sessions`, async ({ request }) => {
+                capturedBody = (await request.json()) as { repo_id?: string };
+                return HttpResponse.json(makeCreatedSession());
+            }),
+        );
+        renderDialog();
+        fireEvent.mouseDown(screen.getByLabelText(/project/i));
+        await screen.findByText('Alpha');
+        fireEvent.click(screen.getByText('Alpha'));
+        const repoSelect = await screen.findByRole('combobox', { name: /^repo$/i });
+        fireEvent.mouseDown(repoSelect);
+        fireEvent.click(await screen.findByRole('option', { name: 'web' }));
+        fireEvent.click(screen.getByRole('button', { name: /start session/i }));
+        await waitFor(() => expect(capturedBody.repo_id).toBe('r-web'));
     });
 
     it('calls onCreated with the created session on success', async () => {

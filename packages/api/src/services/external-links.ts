@@ -101,24 +101,31 @@ function isStalePr(row: ExternalLinkRow): boolean {
 // stamped even on a failed lookup so a broken link isn't retried per read.
 // ADR 0017 — a Task's PRs can live in several repos of its project, each
 // with its own credential. Keyed by `owner/repo`, lowercased.
-async function repoCredentials(projectId: string): Promise<Map<string, string>> {
-    const [project, extras] = await Promise.all([
-        db.selectFrom('projects').select(['git_url', 'credential_id']).where('id', '=', projectId).executeTakeFirst(),
-        db.selectFrom('project_repos').select(['git_url', 'credential_id']).where('project_id', '=', projectId).execute(),
-    ]);
+// ADR 0018 — `fallback` is the first repo's credential, used for a PR whose
+// remote is not one of the project's repos (the same rule the agents' GH_TOKEN
+// follows).
+async function repoCredentials(
+    projectId: string
+): Promise<{ byRepo: Map<string, string>; fallback: string | null }> {
+    const repos = await db
+        .selectFrom('project_repos')
+        .select(['git_url', 'credential_id'])
+        .where('project_id', '=', projectId)
+        .orderBy('position', 'asc')
+        .orderBy('created_at', 'asc')
+        .execute();
     const byRepo = new Map<string, string>();
-    for (const r of [...extras, ...(project ? [project] : [])]) {
+    for (const r of repos) {
         const m = /github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(r.git_url ?? '');
         if (m && r.credential_id) byRepo.set(`${m[1]}/${m[2]}`.toLowerCase(), r.credential_id);
     }
-    return byRepo;
+    return { byRepo, fallback: repos[0]?.credential_id ?? null };
 }
 
 async function syncPrStates(itemId: string, onlyStale: boolean): Promise<void> {
     const item = await db
         .selectFrom('items')
-        .innerJoin('projects', 'projects.id', 'items.project_id')
-        .select(['items.type', 'items.project_id', 'projects.credential_id'])
+        .select(['items.type', 'items.project_id'])
         .where('items.id', '=', itemId)
         .executeTakeFirst();
     if (!item) return;
@@ -130,11 +137,11 @@ async function syncPrStates(itemId: string, onlyStale: boolean): Promise<void> {
         .execute();
     const due = onlyStale ? rows.filter(isStalePr) : rows;
     if (due.length === 0) return;
-    const byRepo = await repoCredentials(item.project_id);
+    const { byRepo, fallback } = await repoCredentials(item.project_id);
     const tokens = new Map<string, string | null>();
     const tokenFor = async (url: string): Promise<string | null> => {
         const pr = parseGithubPrUrl(url);
-        const credentialId = (pr && byRepo.get(`${pr.owner}/${pr.repo}`.toLowerCase())) ?? item.credential_id;
+        const credentialId = (pr && byRepo.get(`${pr.owner}/${pr.repo}`.toLowerCase())) ?? fallback;
         if (!credentialId) return null;
         if (!tokens.has(credentialId)) {
             tokens.set(credentialId, await credentialsService.getToken(credentialId).catch(() => null));

@@ -22,13 +22,13 @@ List every PTY-backed Claude Code, GitHub Copilot, or Ollama CLI session scoped 
 
 **Filter row (`TerminalFilters`)**
 - **Status pills** (single-select with All): All · Active · Paused · Closed · Errored. Each pill carries the status's accent color and a material-symbols icon. Count chip shows the unfiltered session count per status.
-- **CLI dropdown chip**: Any · Claude Code · GitHub Copilot · Ollama. Options render from `AGENT_CLIS` via `utils/cliPresentation.ts`.
+- **CLI dropdown chip**: Any · Claude Code · GitHub Copilot · Ollama. Options render from `AGENT_CLIS`; the icon comes from `utils/cliIcons.ts` (`Terminal.tsx:14`), a module deliberately split out of `cliPresentation.ts`.
 - **Project dropdown chip**: Any · then every project from `useProjects()`.
 - **Search field**: substring match against `title`, `worktree_branch`, `id`, and `item_id`. `/` keyboard shortcut focuses it (inherited from `SearchPillTextField`).
 - Filter state persists to `localStorage` under `atlas.terminal-filters.v1` so a reload preserves the chip configuration.
 
 **Card grid (`SessionCard`)** — `gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(3, 1fr)' }`, fixed `height: 200`, hover-lift transform.
-- Row 1: CLI icon from `utils/cliPresentation.ts` (TerminalRounded for Claude, SmartToyRounded for Copilot, MemoryRounded for Ollama) + truncated title.
+- Row 1: CLI icon from `utils/cliIcons.ts` (TerminalRounded for Claude, SmartToyRounded for Copilot, MemoryRounded for Ollama) + truncated title. *(corrected 2026-09-20 — campaign task-21.)*
 - Row 2: status chip (colored), CLI chip (outlined), optional item-id chip (monospace, outlined).
 - Row 3 (bottom-anchored): project name (mono), branch · model line, "last active …" timestamp.
 - Click anywhere on the `CardActionArea` → `navigate('/terminal/:id')`.
@@ -67,7 +67,7 @@ List every PTY-backed Claude Code, GitHub Copilot, or Ollama CLI session scoped 
 ## Edge cases / quirks
 - Filter state lives in `localStorage` with a versioned key (`v1`). Bumping the shape later requires bumping the key and clearing stale state on first load.
 - `relativeAgo` returns `''` for non-finite or future timestamps to avoid noisy "NaN ago" strings.
-- The Copilot (`SmartToyRounded`) and Ollama (`MemoryRounded`) icons are stand-ins — MUI ships no mark for either. All three live in `utils/cliPresentation.ts`.
+- The Copilot (`SmartToyRounded`) and Ollama (`MemoryRounded`) icons are stand-ins — MUI ships no mark for either. All three live in `utils/cliIcons.ts`.
 
 ## Connectivity
 - **Pages**: `/terminal/:id` (`TerminalSession.tsx`) — single-session deep link target; no dedicated page doc yet, see the route row in [routes-map](../routes-map.md). Its live pane is the shared `TerminalXterm` documented in [Terminal Layout](24-terminal-layout.md). [Terminal — Standalone](26-terminal-standalone.md) is the sibling surface for folder-scoped sessions.

@@ -10,9 +10,13 @@ vi.mock('./notifications.js', () => ({
     notificationsService: { create: vi.fn(() => ({ id: 1 })) },
 }));
 
-const projectStub = {
-    id: 'p1',
-    name: 'Demo',
+const projectStub = { id: 'p1', name: 'Demo' } as const;
+
+// ADR 0018 — the git fields and the credential live on the repo.
+const repoStub = {
+    id: 'r1',
+    project_id: 'p1',
+    name: 'demo',
     git_path: '/tmp/repo',
     git_url: 'https://example.invalid/demo.git',
     default_branch: 'main',
@@ -20,11 +24,13 @@ const projectStub = {
 } as const;
 
 vi.mock('./projects.js', () => ({ projectsService: { get: vi.fn(() => projectStub) } }));
+vi.mock('./project-repos.js', () => ({ projectReposService: { get: vi.fn(() => repoStub) } }));
 vi.mock('./credentials.js', () => ({
     credentialsService: { get: vi.fn(() => ({ username: 'bot' })), getToken: vi.fn(() => 'tok') },
 }));
 
 let scheduleRow = {
+    repo_id: 'r1',
     project_id: 'p1',
     enabled: true,
     preset: 'custom' as const,
@@ -79,7 +85,7 @@ describe('auto-fetch-runner', () => {
         ['FETCH_FAILED', 'failure'],
     ])('maps %s → %s', async (code, expected) => {
         scriptedResult = { code, detail: 'x' };
-        await runAutoFetch('p1');
+        await runAutoFetch('r1');
         expect(recorded.at(-1)?.status).toBe(expected);
     });
 
@@ -90,9 +96,9 @@ describe('auto-fetch-runner', () => {
             .mockReturnValueOnce(2)
             .mockReturnValueOnce(3);
         scriptedResult = { code: 'AUTH_FAILED', detail: 'fatal: Authentication failed' };
-        await runAutoFetch('p1');
-        await runAutoFetch('p1');
-        await runAutoFetch('p1');
-        expect(vi.mocked(schedulesService.disable)).toHaveBeenCalledWith('p1');
+        await runAutoFetch('r1');
+        await runAutoFetch('r1');
+        await runAutoFetch('r1');
+        expect(vi.mocked(schedulesService.disable)).toHaveBeenCalledWith('r1');
     });
 });

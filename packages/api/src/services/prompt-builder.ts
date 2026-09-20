@@ -1,4 +1,5 @@
 import { db } from '../db/kysely-client.js';
+import { projectReposService } from './project-repos.js';
 import { commentsService } from './comments.js';
 import { itemLinks } from './item-links.js';
 import { DEFAULT_THREAD_TAIL_COMMENTS, takeRecentComments } from './context-budget.js';
@@ -646,7 +647,7 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
     if (!issueType && !issueId && projectId) {
         const project = await db
             .selectFrom('projects')
-            .select(['id', 'name', 'description', 'guardrails_md', 'git_path'])
+            .select(['id', 'name', 'description', 'guardrails_md'])
             .where('id', '=', projectId)
             .executeTakeFirst();
         if (!project) throw new Error(`Project ${projectId} not found`);
@@ -675,13 +676,13 @@ export async function buildPrompt(input: BuildPromptInput): Promise<string> {
         // return ''; the falsy arm is unreachable defensively.
         /* v8 ignore next */
         if (outcomeContract) sections.push(outcomeContract);
-        // reason: `projects.git_path` / `description` / `guardrails_md` are
-        // DB-level `NOT NULL DEFAULT ''` columns (see
-        // migrations/001_baseline.sql), so the `??` fallbacks below can
-        // never fire through a real query; they're defensive against the
-        // column ever becoming nullable.
-        /* v8 ignore next */
-        const gitPath = project.git_path ?? '(unknown)';
+        // ADR 0018 — a project has no folder of its own; show its first repo's.
+        const [firstRepo] = await projectReposService.list(projectId);
+        const gitPath = firstRepo?.git_path || '(unknown)';
+        // reason: `description` / `guardrails_md` are DB-level `NOT NULL
+        // DEFAULT ''` columns (see migrations/001_baseline.sql), so the `??`
+        // fallback below can never fire through a real query; it's defensive
+        // against the column ever becoming nullable.
         /* v8 ignore next */
         const projectDescription = (project.description ?? '').trim() || '_(no description set)_';
         const ctxLines: string[] = [

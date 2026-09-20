@@ -5,6 +5,11 @@ import { api } from '../api/api.js';
 // `clone_completed` invalidation of ['projects'] cover it too.
 const reposKey = (projectId: string) => ['projects', projectId, 'repos'];
 
+/** Every repo of every project in one round trip — the projects list and the Jira source picker. */
+export function useAllRepos() {
+    return useQuery({ queryKey: ['repos'], queryFn: () => api.repos.listAll() });
+}
+
 export function useProjectRepos(projectId: string) {
     return useQuery({
         queryKey: reposKey(projectId),

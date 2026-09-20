@@ -1,1 +1,22 @@
-[]
+[
+    {
+        "label": "spec.md exists at specs/<n>-<slug>/spec.md and was read from disk",
+        "sort_order": 0,
+        "required": true
+    },
+    {
+        "label": "All six required spec sections present, and spec_md mirrors the file",
+        "sort_order": 1,
+        "required": true
+    },
+    {
+        "label": "File-level change list covers every dev sub-task",
+        "sort_order": 2,
+        "required": true
+    },
+    {
+        "label": "Ran check-architect-spec-md.sh <itemId> and it exited 0",
+        "sort_order": 3,
+        "required": true
+    }
+]

@@ -527,7 +527,7 @@ describe('createApiClient — items (getItemFull / search / projects / links)', 
             );
         const result = await createApiClient(config).pruneItemHistory(
             'task',
-            'JDA-1',
+            'ATL-1',
             '2026-06-01T00:00:00Z',
             'agent-coder',
         );
@@ -537,7 +537,7 @@ describe('createApiClient — items (getItemFull / search / projects / links)', 
             owner_comments_preserved: 1,
         });
         const [url, init] = fetchSpy.mock.calls[0]!;
-        expect(url).toBe('http://api.test/api/issues/task/JDA-1/history/prune');
+        expect(url).toBe('http://api.test/api/issues/task/ATL-1/history/prune');
         const req = init as RequestInit;
         expect(req.method).toBe('POST');
         expect(JSON.parse(req.body as string)).toEqual({ before_time: '2026-06-01T00:00:00Z' });

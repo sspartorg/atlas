@@ -7,6 +7,7 @@ import type { IMarketplaceAgentSummary } from '@atlas/shared';
 const agent: IMarketplaceAgentSummary = {
     id: 'agent-coder',
     name: 'Coder',
+    cli: 'claude',
     category: 'software-dev',
     kind_slug: 'custom',
     summary: 'A coding agent',

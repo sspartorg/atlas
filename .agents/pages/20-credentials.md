@@ -15,7 +15,7 @@ Manage encrypted git credentials. Today only Personal Access Tokens (PAT) are fu
 
 **Header**
 - Title "Git credentials" + summary line "{N} credentials · {M} hosts · {P} expiring soon"
-- **Check expiries** button — disabled with tooltip "Coming soon"
+- ~~**Check expiries** button~~ — **does not exist.** `Credentials.tsx:182-194` has only **Add credential**. *(corrected 2026-09-20 — campaign task-21.)*
 - **Add credential** → opens `CredentialModal` in add mode
 
 **Security alert** — AES-256-GCM at rest copy + badge "local · aes-256-gcm". Read-only.
@@ -26,7 +26,7 @@ Manage encrypted git credentials. Today only Personal Access Tokens (PAT) are fu
 
 **`CredentialRowMenu`** items
 - **Edit** → opens `CredentialModal` in edit mode
-- **Verify now** → toast "Verify "{label}" — coming soon"; see coming-soon
+- ~~**Verify now**~~ — **does not exist.** `CredentialRowMenu.tsx:14-23` has exactly two items: Edit and Delete. *(corrected 2026-09-20 — campaign task-21.)*
 - **Copy fingerprint** → clipboard write of `token_fingerprint` + toast
 - **Delete credential…** → confirmation → `DELETE /api/credentials/:id`
 

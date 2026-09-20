@@ -3,18 +3,23 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
+import FormControl from '@mui/material/FormControl';
+import InputLabel from '@mui/material/InputLabel';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import SaveRounded from '@mui/icons-material/SaveRounded';
 import TerminalRounded from '@mui/icons-material/TerminalRounded';
-import { useProject, useUpdateProject } from '../../hooks/useProjects.js';
+import { useProjectRepos, useUpdateProjectRepo } from '../../hooks/useProjectRepos.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 
-// 2026-06-10 — Per-project setup scripts editor.
+// 2026-06-10 — Setup scripts editor.
 //
-// Two free-text editors (`.sh` and `.ps1`) saved on the `projects` row.
-// Executed by the agent runner (project-setup-runner) before spawning the CLI.
+// ADR 0018 — the two free-text editors (`.sh` and `.ps1`) belong to a repo,
+// not the project: pick the repo, edit its scripts. Executed by the agent
+// runner (project-setup-runner) in that repo's checkout before the CLI starts.
 
 const MONO = '"JetBrains Mono", monospace';
 
@@ -23,33 +28,38 @@ interface Props {
 }
 
 export function SetupTab({ projectId }: Props) {
-    const { data: project, isLoading } = useProject(projectId);
-    const update = useUpdateProject();
+    const { data: repos, isLoading } = useProjectRepos(projectId);
+    const update = useUpdateProjectRepo(projectId);
     const toast = useToast();
 
-    const [sh, setSh] = useState(project?.setup_sh_body ?? '');
-    const [ps1, setPs1] = useState(project?.setup_ps1_body ?? '');
+    const [selectedId, setSelectedId] = useState('');
+    // Falls back to the first repo until the Owner picks one (and again if the
+    // picked one is removed under us).
+    const repo = repos?.find((r) => r.id === selectedId) ?? repos?.[0];
 
-    // Sync local state when the project finishes loading or refetches.
+    const [sh, setSh] = useState('');
+    const [ps1, setPs1] = useState('');
+
+    // Sync local state when the repo finishes loading, refetches, or changes.
     useEffect(() => {
-        if (project) {
-            setSh(project.setup_sh_body ?? '');
-            setPs1(project.setup_ps1_body ?? '');
+        if (repo) {
+            setSh(repo.setup_sh_body ?? '');
+            setPs1(repo.setup_ps1_body ?? '');
         }
-    }, [project]);
+    }, [repo]);
 
     const dirty = useMemo(
         () =>
-            project !== undefined &&
-            (sh !== (project.setup_sh_body ?? '') || ps1 !== (project.setup_ps1_body ?? '')),
-        [project, sh, ps1],
+            repo !== undefined &&
+            (sh !== (repo.setup_sh_body ?? '') || ps1 !== (repo.setup_ps1_body ?? '')),
+        [repo, sh, ps1],
     );
 
     async function handleSave(): Promise<void> {
-        if (!project) return;
+        if (!repo) return;
         await update.mutateAsync(
             {
-                id: projectId,
+                repoId: repo.id,
                 data: { setup_sh_body: sh, setup_ps1_body: ps1 },
             },
             {
@@ -58,11 +68,20 @@ export function SetupTab({ projectId }: Props) {
         );
     }
 
-    if (isLoading || !project) {
+    if (isLoading || !repos) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                 <CircularProgress size={20} />
             </Box>
+        );
+    }
+
+    if (!repo) {
+        return (
+            <Alert severity="info">
+                This project has no repos yet. Setup scripts belong to a repo — add one on the
+                Repos tab.
+            </Alert>
         );
     }
 
@@ -100,7 +119,7 @@ export function SetupTab({ projectId }: Props) {
                             lineHeight: 1.5,
                         }}
                     >
-                        Runs in each agent run's fresh worktree before the agent CLI starts —
+                        Runs in this repo&apos;s fresh worktree before the agent CLI starts —
                         symlinks, env-file generation, system checks, anything project-specific.
                         The API host runs the PowerShell body on Windows and the shell body
                         elsewhere; leave blank if not needed. A failing script ends the run as
@@ -132,6 +151,24 @@ export function SetupTab({ projectId }: Props) {
                     {update.isPending ? 'Saving…' : 'Save'}
                 </Button>
             </Box>
+
+            <FormControl size="small" sx={{ mb: 3, minWidth: 220 }}>
+                <InputLabel id="setup-repo-label">Repo</InputLabel>
+                <Select
+                    labelId="setup-repo-label"
+                    id="setup-repo"
+                    label="Repo"
+                    value={repo.id}
+                    onChange={(e) => setSelectedId(e.target.value)}
+                    sx={{ fontFamily: MONO, fontSize: 13 }}
+                >
+                    {repos.map((r) => (
+                        <MenuItem key={r.id} value={r.id} sx={{ fontFamily: MONO, fontSize: 13 }}>
+                            {r.name}
+                        </MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
 
             {update.isError && (
                 <Alert severity="error" sx={{ mb: 3 }}>

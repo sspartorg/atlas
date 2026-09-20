@@ -849,8 +849,8 @@ describe('TaskNew — unsaved draft guard', () => {
     });
 });
 
-describe('TaskNew — repo picker (ADR 0017)', () => {
-    const WEB = makeProjectRepo({ id: 'r-web', name: 'web', primary: false });
+describe('TaskNew — repo picker (ADR 0018)', () => {
+    const WEB = makeProjectRepo({ id: 'r-web', name: 'web' });
 
     async function pickProject() {
         const project = await screen.findByRole('combobox', { name: 'Project' });
@@ -860,22 +860,31 @@ describe('TaskNew — repo picker (ADR 0017)', () => {
         fireEvent.click(await screen.findByRole('option', { name: 'Atlas' }));
     }
 
-    it('stays hidden for a single-repo project', async () => {
-        let fetched = false;
+    // ADR 0018 — a Task always names its repos, so the picker is always shown;
+    // with one repo it is preselected and there is nothing else to choose.
+    it('shows the picker with the only repo preselected', async () => {
+        let body: { repo_ids?: string[] } = {};
         server.use(
-            http.get(`${BASE}/projects/p1/repos`, () => {
-                fetched = true;
-                return HttpResponse.json([makeProjectRepo()]);
+            http.get(`${BASE}/projects/p1/repos`, () => HttpResponse.json([makeProjectRepo()])),
+            http.post(`${BASE}/tasks`, async ({ request }) => {
+                body = (await request.json()) as { repo_ids?: string[] };
+                return HttpResponse.json(makeTask({ id: 'ATL-8' }));
             }),
             ...baseHandlers(),
         );
         renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new'] });
+        fireEvent.change(await screen.findByLabelText('Title'), { target: { value: 'One repo' } });
+        fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'desc' } });
         await pickProject();
-        await waitFor(() => expect(fetched).toBe(true));
-        expect(screen.queryByRole('combobox', { name: 'Repos' })).toBeNull();
+
+        const repos = await screen.findByRole('combobox', { name: 'Repos' });
+        expect(within(repos).getByText('atlas')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /Save as draft/i }));
+        await waitFor(() => expect(body.repo_ids).toEqual(['p1']));
     });
 
-    it('preselects the primary and sends the picked repos in pick order', async () => {
+    it('preselects the first repo and sends the picked repos in pick order', async () => {
         let body: { repo_ids?: string[] } = {};
         server.use(
             http.get(`${BASE}/projects/p1/repos`, () =>

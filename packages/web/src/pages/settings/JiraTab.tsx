@@ -12,13 +12,13 @@ import type { IJiraConfig, IJiraSource } from '@atlas/shared';
 import type { JiraConfigUpdate } from '../../api/api.js';
 import { FormRow } from '../../components/FormSection.js';
 import {
-    useAllRepos,
     useJiraConfig,
     useSyncJira,
     useTestJira,
     useUpdateJiraConfig,
 } from '../../hooks/useJira.js';
 import { useProjects } from '../../hooks/useProjects.js';
+import { useAllRepos } from '../../hooks/useProjectRepos.js';
 import { useToast } from '../../hooks/useToast.js';
 import { useWorkflows } from '../../hooks/useWorkflows.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
@@ -343,7 +343,7 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
                         multiline
                         minRows={2}
                         value={newJql}
-                        placeholder='project = DHEQ AND status = "Selected for Development"'
+                        placeholder='project = ATL AND status = "Selected for Development"'
                         onChange={(e) => setNewJql(e.target.value)}
                         slotProps={{ htmlInput: { 'aria-label': 'Source JQL' } }}
                         sx={{

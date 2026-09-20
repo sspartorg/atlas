@@ -24,7 +24,7 @@ Two structural reasons they survived, worth knowing before adding a test:
 - **e2e specs stop at open/close.** `e2e/pages/credentials.spec.ts` (37 lines)
   never saves a credential and never reads one back.
 
-Triage against [`coming-soon.md`](coming-soon.md) first — 11 controls toast or
+Triage against [`coming-soon.md`](coming-soon.md) first — 6 controls toast or
 sit disabled **on purpose**. A stub is not a bug.
 
 ---
@@ -77,7 +77,7 @@ Wave letters match the sweep order (entity graph first, readers after).
 
 | Route | Route-specific checks |
 |---|---|
-| `/onboarding` | Owner name + accent + workspace folder survive `POST /settings/onboard` and a reload. Route guard: post-onboarding hit redirects to `/`; pre-onboarding hit on any other route redirects here. |
+| `/onboarding` | Owner name + accent + workspace folder survive `POST /settings/onboard` and a reload. Route guard: post-onboarding hit redirects to `/`; pre-onboarding hit on any other route redirects here. | *(2026-09-20: the accent only survives since campaign F-001 was fixed — before that the swatch wrote nowhere. It rides on a follow-up `PATCH /settings/profile`, not the onboard payload.)*
 | `/` (Dashboard) | KPI numbers equal the same figures on Projects / Tasks / Queue. "In motion" rows resolve agent names (`InMotionRow` reads `agent_name` denormalized by `counts.ts` — check it is populated, not falling back to "Unassigned"). AI-cost figures come from real `agent_runs` sums. |
 | `/projects` | Create → appears without reload (SSE `counts_changed`) and after one. Delete → gone from Projects, Dashboard, sidenav badge, and the NewProjectModal credential picker. Clone/reclone stream SSE and land in a terminal state, not a spinner. Auto-fetch schedule round-trips its cron. |
 | `/projects/:id` (5 tabs + Setup) | **Manage Secrets**: write → reload → per-row Reveal returns the stored value (X1); Copy copies the real value; Reveal-all fans out one call per row; Save with an untouched row preserves it instead of blanking it. Guard-rails tab writes reach `/projects/:id/guardrails`. Setup scripts round-trip both bodies. Tab state survives `?tab=` deep links. |

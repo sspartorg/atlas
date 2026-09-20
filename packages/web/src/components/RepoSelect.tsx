@@ -51,7 +51,6 @@ export function RepoSelect({ repos, value, onChange }: Props) {
                         <Checkbox size="small" checked={value.includes(r.id)} />
                         <ListItemText
                             primary={r.name}
-                            secondary={r.primary ? 'primary' : null}
                             slotProps={{ primary: { sx: { fontFamily: MONO, fontSize: 13 } } }}
                         />
                     </MenuItem>

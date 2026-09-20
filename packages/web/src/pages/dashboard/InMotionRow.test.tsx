@@ -10,7 +10,7 @@ describe('InMotionRow', () => {
             <InMotionRow
                 agent={makeAgent({ name: 'Coder' })}
                 row={{
-                    id: 'CER-1',
+                    id: 'ATL-1',
                     issue_type: 'sub_task',
                     title: 'Build login',
                     status: 'in_progress',
@@ -29,7 +29,7 @@ describe('InMotionRow', () => {
             <InMotionRow
                 agent={undefined}
                 row={{
-                    id: 'CER-2',
+                    id: 'ATL-2',
                     issue_type: 'sub_task',
                     title: 'Fallback name',
                     status: 'in_progress',
@@ -49,7 +49,7 @@ describe('InMotionRow', () => {
             <InMotionRow
                 agent={undefined}
                 row={{
-                    id: 'CER-3',
+                    id: 'ATL-3',
                     issue_type: 'task',
                     title: 'No assignee',
                     status: 'in_progress',

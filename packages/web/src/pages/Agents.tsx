@@ -256,6 +256,16 @@ export function Agents() {
                 accent_color: DEFAULT_ACCENT,
             });
             toast.show({ message: 'Agent added' });
+        } catch (err) {
+            // F-002 — this handler had no catch, so a rejected create left the
+            // dialog open with no toast and no message while the API's own
+            // error was discarded. That error is worth showing: an
+            // unregistered model comes back as MODEL_NOT_IN_REGISTRY naming
+            // every valid option. Fired as `void handleAddAgent()`, an
+            // uncaught rejection surfaced nowhere at all.
+            toast.show({
+                message: err instanceof Error ? err.message : 'Could not add the agent.',
+            });
         } finally {
             setSaving(false);
         }

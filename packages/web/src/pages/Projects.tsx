@@ -13,14 +13,14 @@ import InputLabel from '@mui/material/InputLabel';
 import AddRounded from '@mui/icons-material/AddRounded';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { useProjects, useProjectsPaged } from '../hooks/useProjects.js';
+import { useAllRepos } from '../hooks/useProjectRepos.js';
 import { useTasks } from '../hooks/useTasks.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useToast } from '../hooks/useToast.js';
-import { api } from '../api/api.js';
 import { ViewToggle, type ProjectsView } from './projects/ViewToggle.js';
 import { ProjectFilterChips, type FilterKey } from './projects/ProjectFilterChips.js';
-import { ProjectCard } from './projects/ProjectCard.js';
+import { ProjectCard, shortRemote } from './projects/ProjectCard.js';
 import { ProjectsTable, type ProjectRow } from './projects/ProjectsTable.js';
 import { useEnabledSchedules } from '../hooks/useProjectSchedule.js';
 import { ProjectsEmptyState } from './projects/ProjectsEmptyState.js';
@@ -32,15 +32,7 @@ const DeleteProjectModal = lazyNamed(
     () => import('./projects/DeleteProjectModal.js'),
     'DeleteProjectModal',
 );
-const RecloneProjectModal = lazyNamed(
-    () => import('./projects/RecloneProjectModal.js'),
-    'RecloneProjectModal',
-);
-const AutoFetchScheduleModal = lazyNamed(
-    () => import('./projects/AutoFetchScheduleModal.js'),
-    'AutoFetchScheduleModal',
-);
-import type { IProject, AgentCategory } from '@atlas/shared';
+import type { IProject, IProjectRepo, AgentCategory } from '@atlas/shared';
 import { relativeTime } from '../utils/time.js';
 import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
@@ -63,6 +55,10 @@ export function Projects() {
     // know whether ANY project exists across pages, not just the visible one.
     const { data: allProjectsForEmpty = [] } = useProjects();
 
+    // ADR 0018 — a project has 0..N equal repos. One round trip for the whole
+    // page, grouped client-side: a per-card useProjectRepos would be an N+1.
+    const { data: allRepos = [] } = useAllRepos();
+
     const { data: allTasks = [] } = useTasks();
     const { data: agents = [] } = useAgents();
     const { data: settings } = useSettings();
@@ -71,18 +67,36 @@ export function Projects() {
     const [filter, setFilter] = useState<FilterKey>('all');
     const [newProjectOpen, setNewProjectOpen] = useState(false);
     const [activeProject, setActiveProject] = useState<IProject | null>(null);
-    const [activeAction, setActiveAction] = useState<'delete' | 'reclone' | 'schedule' | null>(
-        null
-    );
     const toast = useToast();
     const { map: scheduleMap } = useEnabledSchedules();
+
+    const reposByProject = useMemo(() => {
+        const map = new Map<string, IProjectRepo[]>();
+        for (const repo of allRepos) {
+            const list = map.get(repo.project_id);
+            if (list) list.push(repo);
+            else map.set(repo.project_id, [repo]);
+        }
+        return map;
+    }, [allRepos]);
+
+    // `scheduleMap` is keyed by repo; the list shows one badge per project, so
+    // a project counts as scheduled as soon as any of its repos is.
+    const scheduleByProject = useMemo(() => {
+        const map = new Map<string, { preset: string; next_run_at: string | null }>();
+        for (const repo of allRepos) {
+            const schedule = scheduleMap.get(repo.id);
+            if (schedule && !map.has(repo.project_id)) map.set(repo.project_id, schedule);
+        }
+        return map;
+    }, [allRepos, scheduleMap]);
 
     const sortedProjects = useMemo(
         () => [...projects].sort((a, b) => a.created_at.localeCompare(b.created_at)),
         [projects]
     );
     // Project display id is the issue key prefix picked at create time
-    // (e.g. "CER"), so it lines up with the issue ids (CER-1, CER-2, …).
+    // (e.g. "ATL"), so it lines up with the issue ids (ATL-1, ATL-2, …).
     const displayIdById = useMemo(() => {
         const map = new Map<string, string>();
         for (const p of sortedProjects) map.set(p.id, p.issue_key_prefix);
@@ -171,19 +185,30 @@ export function Projects() {
     // twice per render before. Re-derives only when its inputs change.
     const tableRows: ProjectRow[] = useMemo(
         () =>
-            filteredProjects.map((p) => ({
-                id: p.id,
-                displayId: displayIdById.get(p.id) ?? '',
-                name: p.name,
-                gitPath: p.git_url
-                    ? p.git_url.replace(/^https?:\/\//, '').replace(/\.git\/?$/, '')
-                    : '',
-                tasks: taskCountByProject.get(p.id) ?? 0,
-                subTasks: subTaskCountByProject.get(p.id) ?? 0,
-                lastActivity: relativeTime(p.updated_at),
-                updatedAt: p.updated_at,
-            })),
-        [filteredProjects, displayIdById, taskCountByProject, subTaskCountByProject],
+            filteredProjects.map((p) => {
+                const repos = reposByProject.get(p.id) ?? [];
+                const first = repos[0];
+                const extra = repos.length - 1;
+                return {
+                    id: p.id,
+                    displayId: displayIdById.get(p.id) ?? '',
+                    name: p.name,
+                    gitPath: first?.git_url
+                        ? `${shortRemote(first.git_url)}${extra > 0 ? ` +${extra}` : ''}`
+                        : '',
+                    tasks: taskCountByProject.get(p.id) ?? 0,
+                    subTasks: subTaskCountByProject.get(p.id) ?? 0,
+                    lastActivity: relativeTime(p.updated_at),
+                    updatedAt: p.updated_at,
+                };
+            }),
+        [
+            filteredProjects,
+            displayIdById,
+            reposByProject,
+            taskCountByProject,
+            subTaskCountByProject,
+        ],
     );
 
     // Loading: don't fall through to the empty state while data is undefined.
@@ -197,20 +222,8 @@ export function Projects() {
 
     const ownerName = settings?.owner_name ?? 'Owner';
 
-    async function handleOpen(p: IProject) {
-        try {
-            const res = await api.projects.reveal(p.id);
-            toast.show({ message: 'Opened in File Explorer', detail: res.path });
-        } catch (err) {
-            toast.show({
-                message: 'Could not open File Explorer',
-                detail: err instanceof Error ? err.message : 'Unknown error',
-            });
-        }
-    }
-
     async function handleCopyUrl(p: IProject) {
-        const url = p.git_url || '';
+        const url = reposByProject.get(p.id)?.[0]?.git_url ?? '';
         try {
             await navigator.clipboard.writeText(url);
             toast.show({
@@ -226,22 +239,11 @@ export function Projects() {
         }
     }
 
-    function handleReclone(p: IProject) {
-        setActiveProject(p);
-        setActiveAction('reclone');
-    }
-
-    function handleScheduleFetch(p: IProject) {
-        setActiveProject(p);
-        setActiveAction('schedule');
-    }
-
     function handleDelete(p: IProject) {
         setActiveProject(p);
-        setActiveAction('delete');
     }
 
-    function handleRowAction(id: string, kind: 'open' | 'copy' | 'reclone' | 'delete'): void {
+    function handleRowAction(id: string, kind: 'copy' | 'delete'): void {
         const p = projectById.get(id);
         // Defensive guard: `id` always comes from a rendered ProjectsTable row,
         // and every row's id is drawn from `tableRows` (filteredProjects ⊆
@@ -253,9 +255,7 @@ export function Projects() {
         // simulated background-data race.
         /* v8 ignore next */
         if (!p) return;
-        if (kind === 'open') void handleOpen(p);
-        else if (kind === 'copy') void handleCopyUrl(p);
-        else if (kind === 'reclone') handleReclone(p);
+        if (kind === 'copy') void handleCopyUrl(p);
         else handleDelete(p);
     }
 
@@ -369,13 +369,11 @@ export function Projects() {
                                             <ProjectCard
                                                 project={p}
                                                 displayId={displayIdById.get(p.id) ?? ''}
+                                                repos={reposByProject.get(p.id) ?? []}
                                                 taskCount={taskCountByProject.get(p.id) ?? 0}
                                                 subTaskCount={subTaskCountByProject.get(p.id) ?? 0}
-                                                scheduleInfo={scheduleMap.get(p.id)}
-                                                onOpen={() => void handleOpen(p)}
+                                                scheduleInfo={scheduleByProject.get(p.id)}
                                                 onCopyUrl={() => void handleCopyUrl(p)}
-                                                onReclone={() => handleReclone(p)}
-                                                onScheduleFetch={() => handleScheduleFetch(p)}
                                                 onDelete={() => handleDelete(p)}
                                             />
                                         </Box>
@@ -386,15 +384,9 @@ export function Projects() {
                             <ProjectsTable
                                 rows={tableRows}
                                 ownerName={ownerName}
-                                scheduleMap={scheduleMap}
+                                scheduleMap={scheduleByProject}
                                 onRowClick={(id) => navigate(`/projects/${id}`)}
-                                onOpen={(id) => handleRowAction(id, 'open')}
                                 onCopyUrl={(id) => handleRowAction(id, 'copy')}
-                                onReclone={(id) => handleRowAction(id, 'reclone')}
-                                onScheduleFetch={(id) => {
-                                    const p = projects.find((x) => x.id === id);
-                                    if (p) handleScheduleFetch(p);
-                                }}
                                 onDelete={(id) => handleRowAction(id, 'delete')}
                             />
                         )}
@@ -464,57 +456,13 @@ export function Projects() {
                 </Suspense>
             )}
             <PageFab onClick={() => setNewProjectOpen(true)} label="New Project" />
-            {activeAction === 'delete' && (
+            {activeProject && (
                 <Suspense fallback={null}>
                     <DeleteProjectModal
                         open
                         project={activeProject}
-                        // Defensive guard: this block only renders when activeAction ===
-                        // 'delete', which handleDelete() always sets in the same call that
-                        // sets activeProject to a real IProject; the two are reset together
-                        // to null in onClose. activeProject is therefore always truthy
-                        // whenever this ternary evaluates.
-                        displayId={
-                            /* v8 ignore next */
-                            activeProject ? (displayIdById.get(activeProject.id) ?? '') : ''
-                        }
-                        onClose={() => {
-                            setActiveAction(null);
-                            setActiveProject(null);
-                        }}
-                    />
-                </Suspense>
-            )}
-            {activeAction === 'reclone' && (
-                <Suspense fallback={null}>
-                    <RecloneProjectModal
-                        open
-                        project={activeProject}
-                        // Defensive guard: this block only renders when activeAction ===
-                        // 'reclone', which handleReclone() always sets in the same call
-                        // that sets activeProject to a real IProject; the two are reset
-                        // together to null in onClose. activeProject is therefore always
-                        // truthy whenever this ternary evaluates.
-                        displayId={
-                            /* v8 ignore next */
-                            activeProject ? (displayIdById.get(activeProject.id) ?? '') : ''
-                        }
-                        onClose={() => {
-                            setActiveAction(null);
-                            setActiveProject(null);
-                        }}
-                    />
-                </Suspense>
-            )}
-            {activeAction === 'schedule' && (
-                <Suspense fallback={null}>
-                    <AutoFetchScheduleModal
-                        open
-                        project={activeProject}
-                        onClose={() => {
-                            setActiveAction(null);
-                            setActiveProject(null);
-                        }}
+                        displayId={displayIdById.get(activeProject.id) ?? ''}
+                        onClose={() => setActiveProject(null)}
                     />
                 </Suspense>
             )}

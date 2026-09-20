@@ -9,17 +9,8 @@ process.env['ATLAS_DATA_DIR'] = tmpKeyDir;
 import { sql } from 'kysely';
 import { projectEnvFileService } from './project-env-file.js';
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
-
-async function insertProject(id: string, prefix: string): Promise<void> {
-    await testDb
-        .insertInto('projects')
-        .values({ id, name: 'Project ' + id, issue_key_prefix: prefix, git_path: '', status: 'active' })
-        .execute();
-    await testDb
-        .insertInto('project_issue_counters')
-        .values({ project_id: id, last_seq: 0 })
-        .execute();
-}
+// ADR 0018 — git fields moved to project_repos; use the shared fixture.
+import { insertProject } from '../../tests/_items.js';
 
 beforeEach(async () => {
     await truncateAll();

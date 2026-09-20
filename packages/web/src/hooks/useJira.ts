@@ -15,11 +15,6 @@ export function useUpdateJiraConfig() {
     });
 }
 
-/** Every repo of every project, for the Jira source picker. */
-export function useAllRepos() {
-    return useQuery({ queryKey: ['repos'], queryFn: () => api.repos.listAll() });
-}
-
 export function useTestJira() {
     return useMutation({ mutationFn: () => api.jira.test() });
 }

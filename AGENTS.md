@@ -114,8 +114,9 @@ For full MUI/data-fetching/status-display patterns, see `packages/web/AGENTS.md`
 - Design: `docs/adr/0014-workflows-replace-agent-handoffs.md`, `docs/adr/0015-one-task-one-pr.md` (Tasks, Sub-tasks steps, one PR per Task), `docs/adr/0017-multi-repo-projects.md` (multi-repo projects and Tasks)
 
 ### Status transitions
-- The UI must HIDE invalid transitions (not grey them out, not show them at all)
+- The UI must HIDE invalid transitions from the normal picker — not grey them out, not list them as if they were legal moves
 - Valid transitions come from `getValidNextStatuses()` in `@atlas/shared`
+- The one sanctioned exception is the **OVERRIDE** group in `StatusPickerPopover`: statuses outside the legal set are rendered under their own heading and route through `PATCH /api/tasks/:id/status?override=1`, never through the normal path. This is the Owner's escape hatch and is deliberate — do not "fix" it by deleting the group
 - Never hardcode a list of statuses in a component — always derive from the status machine
 
 ### No invented data

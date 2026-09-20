@@ -202,16 +202,17 @@ describe('api.projects', () => {
         await api.projects.prefixAvailable('ATL');
         captureMethod('post', '/projects/p1/delete', { delete_id: 'd' });
         await api.projects.deleteJob('p1', { mode: 'unregister' });
-        captureMethod('post', '/projects/p1/reclone', { reclone_id: 'r1' });
-        await api.projects.reclone('p1');
-        captureGet('/projects/p1/status', { local_head: 'h', remote_head: 'r', behind: 0, uncommitted: 0 });
-        await api.projects.status('p1');
-        captureMethod('post', '/projects/p1/reveal', { ok: true, path: '/' });
-        await api.projects.reveal('p1');
+        // ADR 0018 — every git call names the repo it acts on.
+        captureMethod('post', '/projects/p1/repos/r1/reclone', { reclone_id: 'r1' });
+        await api.projects.reclone('p1', 'r1');
+        captureGet('/projects/p1/repos/r1/status', { local_head: 'h', remote_head: 'r', behind: 0, uncommitted: 0 });
+        await api.projects.status('p1', 'r1');
+        captureMethod('post', '/projects/p1/repos/r1/reveal', { ok: true, path: '/' });
+        await api.projects.reveal('p1', 'r1');
         captureGet('/projects/folder-origin', { origin: null });
         await api.projects.folderOrigin('/x');
-        captureGet('/projects/p1/head', { short_sha: null, subject: null, relative_time: null });
-        await api.projects.head('p1');
+        captureGet('/projects/p1/repos/r1/head', { short_sha: null, subject: null, relative_time: null });
+        await api.projects.head('p1', 'r1');
         captureGet('/projects/p1/env', { vars: [] });
         await api.projects.getEnv('p1');
         captureMethod('put', '/projects/p1/env', { vars: [] });
@@ -234,10 +235,10 @@ describe('api.schedules', () => {
     it('list/get/save/delete/fire', async () => {
         captureGet('/schedules', []);
         await api.schedules.listEnabled();
-        captureGet('/projects/p1/schedule', {});
-        await api.schedules.get('p1');
-        captureMethod('put', '/projects/p1/schedule', {});
-        await api.schedules.save('p1', {
+        captureGet('/projects/p1/repos/r1/schedule', {});
+        await api.schedules.get('p1', 'r1');
+        captureMethod('put', '/projects/p1/repos/r1/schedule', {});
+        await api.schedules.save('p1', 'r1', {
             enabled: true,
             preset: 'daily',
             time_of_day: '09:00',
@@ -247,10 +248,10 @@ describe('api.schedules', () => {
             pause_while_agents_active: false,
             conflict_policy: 'skip',
         });
-        captureMethod('delete', '/projects/p1/schedule', {});
-        await api.schedules.delete('p1');
-        captureMethod('post', '/projects/p1/schedule/fire', { autofetch_id: 'a' });
-        await api.schedules.fire('p1');
+        captureMethod('delete', '/projects/p1/repos/r1/schedule', {});
+        await api.schedules.delete('p1', 'r1');
+        captureMethod('post', '/projects/p1/repos/r1/schedule/fire', { autofetch_id: 'a' });
+        await api.schedules.fire('p1', 'r1');
     });
 });
 

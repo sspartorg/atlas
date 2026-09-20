@@ -166,7 +166,7 @@ function FeedItem({
     onOpen: () => void;
 }) {
     const unread = !row.read_at;
-    const agentName = agent?.name ?? 'Atlas';
+    const agentName = (row.agent_id ? (agent?.name ?? 'Unknown agent') : 'Atlas');
     const typeText = row.issue_type ? (TYPE_LABEL[row.issue_type] ?? row.issue_type) : null;
     const shortId = row.issue_id ? row.issue_id.slice(0, 12) : null;
     const time = relativeShort(row.created_at);

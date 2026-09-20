@@ -30,11 +30,8 @@ function renderTable(overrides: Partial<React.ComponentProps<typeof ProjectsTabl
         rows: [sampleRow, secondRow],
         ownerName: 'Bob',
         onRowClick: vi.fn(),
-        onOpen: vi.fn(),
         onCopyUrl: vi.fn(),
-        onReclone: vi.fn(),
         onDelete: vi.fn(),
-        onScheduleFetch: vi.fn(),
     };
     return renderWithProviders(<ProjectsTable {...defaults} {...overrides} />);
 }
@@ -90,19 +87,15 @@ describe('ProjectsTable', () => {
         expect(screen.getAllByText('—').length).toBeGreaterThan(0);
     });
 
-    it('opens the row action menu and clicks the actions (onOpen/onCopyUrl/onReclone/etc)', () => {
-        const onOpen = vi.fn();
+    it('renders the first repo URL with its +N suffix when the project has several repos', () => {
+        renderTable({ rows: [{ ...sampleRow, gitPath: 'github.com/x/y +2' }] });
+        expect(screen.getByText('github.com/x/y +2')).toBeInTheDocument();
+    });
+
+    it('opens the row action menu and clicks the actions (onCopyUrl/onDelete)', () => {
         const onCopyUrl = vi.fn();
-        const onReclone = vi.fn();
         const onDelete = vi.fn();
-        const onScheduleFetch = vi.fn();
-        const { container } = renderTable({
-            onOpen,
-            onCopyUrl,
-            onReclone,
-            onDelete,
-            onScheduleFetch,
-        });
+        const { container } = renderTable({ onCopyUrl, onDelete });
         // Each row has a Project-actions trigger button.
         const actionButtons = container.querySelectorAll('button[aria-label="Project actions"]');
         expect(actionButtons.length).toBeGreaterThan(0);
@@ -111,13 +104,8 @@ describe('ProjectsTable', () => {
         const menuItems = document.querySelectorAll('[role="menuitem"]');
         menuItems.forEach((item) => fireEvent.click(item));
         // One of the action handlers should have been invoked.
-        const invoked =
-            onOpen.mock.calls.length +
-            onCopyUrl.mock.calls.length +
-            onReclone.mock.calls.length +
-            onDelete.mock.calls.length +
-            onScheduleFetch.mock.calls.length;
-        expect(invoked).toBeGreaterThan(0);
+        expect(onCopyUrl).toHaveBeenCalledWith('p1');
+        expect(onDelete).toHaveBeenCalledWith('p1');
     });
 
     it('clicks on the actions cell does NOT bubble row click (stopPropagation)', () => {
@@ -171,11 +159,8 @@ describe('ProjectsTable', () => {
                 rows={[rowA, rowB]}
                 ownerName="Bob"
                 onRowClick={vi.fn()}
-                onOpen={vi.fn()}
                 onCopyUrl={vi.fn()}
-                onReclone={vi.fn()}
                 onDelete={vi.fn()}
-                onScheduleFetch={vi.fn()}
             />,
         );
         // Sort by Tasks — both rows have tasks=3, compare returns 0 for the equality case

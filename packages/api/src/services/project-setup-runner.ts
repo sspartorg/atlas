@@ -64,34 +64,28 @@ export async function runProjectSetup(opts: {
     projectId: string;
     worktreePath: string;
     runId: string;
-    /** ADR 0017 — an extra repo runs its own script; the primary's is the project's. */
-    repoId?: string;
+    /** ADR 0018 — setup scripts belong to a repo; every caller names one. */
+    repoId: string;
 }): Promise<SetupResult> {
     const project = await db
         .selectFrom('projects')
         .select(['id'])
-        // setup_sh_body / setup_ps1_body are bracket-accessed below because
-        // the Kysely DB type for `ProjectsTable` doesn't yet carry these
-        // columns (migration 004 added them; type-extension is a separate
-        // cleanup). Reading via `selectAll` and casting keeps the runner
-        // working without poking the type today.
-        .selectAll()
         .where('id', '=', opts.projectId)
         .executeTakeFirst();
     if (!project) {
         return { ok: false, kind: 'spawn_failed', output: 'project not found' };
     }
-    const repo =
-        opts.repoId && opts.repoId !== opts.projectId
-            ? await db.selectFrom('project_repos').selectAll().where('id', '=', opts.repoId).executeTakeFirst()
-            : undefined;
-    if (opts.repoId && opts.repoId !== opts.projectId && !repo) {
+    const repo = await db
+        .selectFrom('project_repos')
+        .selectAll()
+        .where('id', '=', opts.repoId)
+        .executeTakeFirst();
+    if (!repo) {
         return { ok: false, kind: 'spawn_failed', output: 'repo not found' };
     }
-    const source = (repo ?? project) as Record<string, unknown>;
 
     const isWindows = process.platform === 'win32';
-    const blob = (isWindows ? source['setup_ps1_body'] : source['setup_sh_body']) as string | null | undefined;
+    const blob = isWindows ? repo.setup_ps1_body : repo.setup_sh_body;
 
     if (!blob || blob.trim() === '') {
         return { ok: true };

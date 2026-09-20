@@ -1,1 +1,22 @@
-[]
+[
+    {
+        "label": "Every sub-task follows As-a / I-want / so-that",
+        "sort_order": 0,
+        "required": true
+    },
+    {
+        "label": "Every dev sub-task has a sibling '<dev title> [QA]' twin",
+        "sort_order": 1,
+        "required": true
+    },
+    {
+        "label": "Ran check-po-writer-output.sh <itemId> and it exited 0",
+        "sort_order": 2,
+        "required": true
+    },
+    {
+        "label": "No unanswered '## Brainstorm \u2014 open questions' block remains",
+        "sort_order": 3,
+        "required": true
+    }
+]

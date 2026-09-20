@@ -10,6 +10,7 @@ import Tab from '@mui/material/Tab';
 import Skeleton from '@mui/material/Skeleton';
 import Button from '@mui/material/Button';
 import { useProject } from '../hooks/useProjects.js';
+import { useProjectRepos } from '../hooks/useProjectRepos.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useProjectCounts } from '../hooks/useProjectCounts.js';
@@ -37,9 +38,14 @@ import { GenerateAiScaffoldDialog } from './projects/GenerateAiScaffoldDialog.js
 import { useSetPageTitle } from '../components/shell/index.js';
 
 import { relativeTime } from '../utils/time.js';
+import type { IProjectRepo } from '@atlas/shared';
 
 type TabKey = 'overview' | 'tasks' | 'guardrails' | 'repos' | 'setup' | 'history';
 const TAB_KEYS = ['overview', 'tasks', 'guardrails', 'repos', 'setup', 'history'] as const;
+
+// Module-scoped so the `repos` prop keeps a stable identity while the query
+// is still pending — `ProjectHeader` is memo'd.
+const NO_REPOS: IProjectRepo[] = [];
 
 export function ProjectDetail() {
     const { id = '' } = useParams<{ id: string }>();
@@ -64,6 +70,7 @@ export function ProjectDetail() {
     // Single-record fetch — the list endpoint scaled O(n) with project count
     // and shipped the whole catalog just to render one row's metadata.
     const { data: project = null, isLoading: projectsLoading } = useProject(id);
+    const { data: repos = NO_REPOS } = useProjectRepos(id);
     const { data: agents = [] } = useAgents();
     const { data: settings } = useSettings();
     // Lifted from per-tab containers so tab swaps are pure-render. The fetches
@@ -162,6 +169,7 @@ export function ProjectDetail() {
             </Box>
             <ProjectHeader
                 project={project}
+                repos={repos}
                 displayId={displayId}
                 guardrailsActive={guardrailsActive}
                 lastActivity={relativeTime(project.updated_at)}
@@ -170,7 +178,8 @@ export function ProjectDetail() {
                 onManageSecrets={handleManageSecrets}
                 onDelete={handleDelete}
                 onGenerateAiScaffold={handleGenerateAiScaffold}
-                aiScaffoldEnabled={project.clone_status === 'ready'}
+                // ADR 0018 — the scaffold reads a checkout: it needs at least one.
+                aiScaffoldEnabled={repos.some((r) => r.clone_status === 'ready')}
             />
 
             <Tabs
@@ -309,7 +318,9 @@ export function ProjectDetail() {
                         />
                     )}
                     {currentTab === 'guardrails' && <GuardrailsTab project={project} />}
-                    {currentTab === 'repos' && <ProjectReposCard projectId={id} />}
+                    {currentTab === 'repos' && (
+                        <ProjectReposCard project={project} displayId={displayId} />
+                    )}
                     {currentTab === 'setup' && <SetupTab projectId={id} />}
                     {currentTab === 'history' && <HistoryTab projectId={id} />}
                 </Box>

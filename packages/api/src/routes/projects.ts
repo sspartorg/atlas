@@ -1,11 +1,12 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { workflowsService } from '../services/workflows.js';
 import { startWorkflowRun } from '../services/workflow-engine.js';
 import { projectsService, PrefixCollisionError } from '../services/projects.js';
 import { projectReposService } from '../services/project-repos.js';
-import { IssueKeyPrefixSchema } from '@atlas/shared';
+import { GenerateAiScaffoldSchema, IssueKeyPrefixSchema } from '@atlas/shared';
+import type { IProjectRepo } from '@atlas/shared';
 import { settingsService } from '../services/settings.js';
 import { startClone, injectToken } from '../services/clone-runner.js';
 import { startDelete } from '../services/delete-runner.js';
@@ -139,10 +140,30 @@ export async function projectsRoutes(app: FastifyInstance) {
         }
     });
 
-    app.post('/api/projects/:id/reveal', { preHandler: requireMcpToken }, async (req, reply) => {
-        const { id } = req.params as { id: string };
-        const project = await projectsService.get(id);
-        if (!project) return reply.status(404).send({ error: 'Project not found' });
+    // ADR 0018 — every git action is on a repo of the project, not on the
+    // project itself.
+    async function repoOr404(
+        projectId: string,
+        repoId: string,
+        reply: FastifyReply
+    ): Promise<IProjectRepo | null> {
+        const repos = await projectReposService.list(projectId).catch(() => null);
+        if (!repos) {
+            await reply.status(404).send({ error: 'Project not found', kind: 'not_found' });
+            return null;
+        }
+        const repo = repos.find((r) => r.id === repoId);
+        if (!repo) {
+            await reply.status(404).send({ error: 'Repo not found', kind: 'not_found' });
+            return null;
+        }
+        return repo;
+    }
+
+    app.post('/api/projects/:id/repos/:repoId/reveal', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id, repoId } = req.params as { id: string; repoId: string };
+        const repo = await repoOr404(id, repoId, reply);
+        if (!repo) return reply;
         /* v8 ignore next 13 */
         const bin =
             process.platform === 'win32'
@@ -158,13 +179,13 @@ export async function projectsRoutes(app: FastifyInstance) {
                 .send({ error: `Reveal is not supported on ${process.platform}` });
         }
         try {
-            const child = spawn(bin, [project.git_path], {
+            const child = spawn(bin, [repo.git_path], {
                 detached: true,
                 stdio: 'ignore',
                 windowsHide: false,
             });
             child.unref();
-            return reply.send({ ok: true, path: project.git_path });
+            return reply.send({ ok: true, path: repo.git_path });
         } catch (err) {
             /* v8 ignore next 3 */
             return reply
@@ -175,17 +196,17 @@ export async function projectsRoutes(app: FastifyInstance) {
         }
     });
 
-    app.post('/api/projects/:id/reclone', { preHandler: requireMcpToken }, async (req, reply) => {
+    app.post('/api/projects/:id/repos/:repoId/reclone', { preHandler: requireMcpToken }, async (req, reply) => {
         /* v8 ignore next */
         RecloneProjectSchema.parse(req.body ?? {});
-        const { id } = req.params as { id: string };
-        const project = await projectsService.get(id);
-        if (!project) return reply.status(404).send({ error: 'Project not found' });
+        const { id, repoId } = req.params as { id: string; repoId: string };
+        const repo = await repoOr404(id, repoId, reply);
+        if (!repo) return reply;
         try {
             const recloneId = await startReclone({
-                projectId: id,
-                destination: project.git_path,
-                branch: project.default_branch,
+                repoId: repo.id,
+                destination: repo.git_path,
+                branch: repo.default_branch,
             });
             return reply.status(202).send({ reclone_id: recloneId });
         } catch (err) {
@@ -194,17 +215,17 @@ export async function projectsRoutes(app: FastifyInstance) {
         }
     });
 
-    app.get('/api/projects/:id/status', async (req, reply) => {
-        const { id } = req.params as { id: string };
-        const project = await projectsService.get(id);
-        if (!project) return reply.status(404).send({ error: 'Project not found' });
+    app.get('/api/projects/:id/repos/:repoId/status', async (req, reply) => {
+        const { id, repoId } = req.params as { id: string; repoId: string };
+        const repo = await repoOr404(id, repoId, reply);
+        if (!repo) return reply;
 
         let authB64: string | null = null;
-        if (project.credential_id) {
-            const cred = await credentialsService.get(project.credential_id);
+        if (repo.credential_id) {
+            const cred = await credentialsService.get(repo.credential_id);
             if (cred) {
                 try {
-                    const token = await credentialsService.getToken(project.credential_id);
+                    const token = await credentialsService.getToken(repo.credential_id);
                     authB64 = Buffer.from(`${cred.username}:${token}`, 'utf8').toString('base64');
                 } catch {
                     authB64 = null;
@@ -213,7 +234,7 @@ export async function projectsRoutes(app: FastifyInstance) {
         }
 
         try {
-            const s = await getProjectGitStatus(project.git_path, project.default_branch, authB64);
+            const s = await getProjectGitStatus(repo.git_path, repo.default_branch, authB64);
             return reply.send({
                 local_head: s.localHead,
                 remote_head: s.remoteHead,
@@ -226,11 +247,11 @@ export async function projectsRoutes(app: FastifyInstance) {
         }
     });
 
-    app.get('/api/projects/:id/head', async (req, reply) => {
-        const { id } = req.params as { id: string };
-        const project = await projectsService.get(id);
-        if (!project) return reply.status(404).send({ error: 'Project not found' });
-        if (!project.git_path)
+    app.get('/api/projects/:id/repos/:repoId/head', async (req, reply) => {
+        const { id, repoId } = req.params as { id: string; repoId: string };
+        const repo = await repoOr404(id, repoId, reply);
+        if (!repo) return reply;
+        if (!repo.git_path)
             return reply.send({ short_sha: null, subject: null, relative_time: null });
         try {
             const { execFile } = await import('node:child_process');
@@ -241,7 +262,7 @@ export async function projectsRoutes(app: FastifyInstance) {
             const exec = promisify(execFile);
             const { stdout } = await exec(
                 'git',
-                ['-C', project.git_path, 'log', '-1', `--pretty=format:${GIT_HEAD_FORMAT}`],
+                ['-C', repo.git_path, 'log', '-1', `--pretty=format:${GIT_HEAD_FORMAT}`],
                 { timeout: 10_000 },
             );
             return reply.send(parseGitHeadOutput(stdout));
@@ -272,9 +293,7 @@ export async function projectsRoutes(app: FastifyInstance) {
         checks.has_git = hasGitDir(body.folder_path);
         if (!checks.has_git) return { error: { ok: false, checks, error_kind: 'not_git' } };
 
-        const existing =
-            (await projectsService.list()).find((p) => p.git_path === body.folder_path) ??
-            (await projectReposService.ownerOfPath(body.folder_path));
+        const existing = await projectReposService.ownerOfPath(body.folder_path);
         if (existing) {
             return {
                 error: {
@@ -385,8 +404,13 @@ export async function projectsRoutes(app: FastifyInstance) {
         const project = await projectsService.get(id);
         /* v8 ignore next -- assertNameFree already 404s a missing project */
         if (!project) return reply.status(404).send({ error: 'Project not found' });
-        // Both parts are slugs, so the folder can't escape the workspace.
-        const destination = join(settings.workspace_path, `${projectReposService.slug(project.name)}-${body.name}`);
+        // F-009 — see `repoFolderName`: skips the project prefix when the
+        // repo name already carries it. Both parts are slugs, so the folder
+        // can't escape the workspace.
+        const destination = join(
+            settings.workspace_path,
+            projectReposService.repoFolderName(project.name, body.name),
+        );
         const cloneId = await startClone(
             {
                 repo_url: body.repo_url,
@@ -430,11 +454,7 @@ export async function projectsRoutes(app: FastifyInstance) {
             return reply.status(400).send({ error: 'Project name confirmation does not match' });
         }
         try {
-            const deleteId = startDelete({
-                projectId: id,
-                destination: project.git_path,
-                mode: body.mode,
-            });
+            const deleteId = startDelete({ projectId: id, mode: body.mode });
             return reply.status(202).send({ delete_id: deleteId });
         } catch (err) {
             /* v8 ignore next */
@@ -468,15 +488,26 @@ export async function projectsRoutes(app: FastifyInstance) {
             const { id } = req.params as { id: string };
             const project = await projectsService.get(id);
             if (!project) return reply.status(404).send({ error: 'Project not found' });
-            if (project.clone_status !== 'ready') {
+            // ADR 0018 — the scaffold reads a checkout, so it runs on a repo.
+            // The body may name one; otherwise the project's first repo.
+            const body = GenerateAiScaffoldSchema.parse(req.body ?? {});
+            const repos = await projectReposService.list(id);
+            const repo = body.repo_id ? repos.find((r) => r.id === body.repo_id) : repos[0];
+            if (!repo) {
                 return reply.status(409).send({
-                    error: 'Project is not cloned yet',
-                    detail: `clone_status='${project.clone_status}'. Wait for the clone to finish before generating AI scaffold.`,
+                    error: 'Project has no repo',
+                    detail: 'Add a repo to this project before generating AI scaffold.',
                 });
             }
-            if (!project.credential_id) {
+            if (repo.clone_status !== 'ready') {
                 return reply.status(409).send({
-                    error: 'Project has no credential attached',
+                    error: 'Repo is not cloned yet',
+                    detail: `clone_status='${repo.clone_status}'. Wait for the clone to finish before generating AI scaffold.`,
+                });
+            }
+            if (!repo.credential_id) {
+                return reply.status(409).send({
+                    error: 'Repo has no credential attached',
                     detail: 'Attach a credential before generating AI scaffold — git push needs it.',
                 });
             }

@@ -14,6 +14,8 @@ test.describe('/projects/:id?tab=setup', () => {
         await openLink.click();
         // Click the Setup tab
         await page.getByRole('tab', { name: /Setup/i }).click();
+        // ADR 0018 — the scripts belong to a repo, so the tab picks one first.
+        await expect(page.getByRole('combobox', { name: /Repo/i })).toBeVisible();
         // Two multiline TextFields — labelled Bash / POSIX shell and Windows PowerShell
         await expect(page.getByText(/Bash \/ POSIX shell/i)).toBeVisible();
         await expect(page.getByText(/Windows PowerShell/i)).toBeVisible();

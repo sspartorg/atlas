@@ -14,7 +14,15 @@ import type { IssueStatus, IssuePriority } from '@atlas/shared';
 export async function insertProject(
     id: string = 'p1',
     prefix: string = 'ATL',
-    overrides: Partial<{ name: string; git_path: string; git_url: string; default_branch: string }> = {},
+    overrides: Partial<{
+        name: string;
+        git_path: string;
+        git_url: string;
+        default_branch: string;
+        credential_id: string;
+        /** ADR 0018 — a project can exist with no repos at all. */
+        no_repo: boolean;
+    }> = {},
 ): Promise<string> {
     await testDb
         .insertInto('projects')
@@ -22,16 +30,62 @@ export async function insertProject(
             id,
             name: overrides.name ?? `Project ${id}`,
             issue_key_prefix: prefix,
-            git_path: overrides.git_path ?? '',
-            git_url: overrides.git_url ?? '',
-            default_branch: overrides.default_branch ?? 'main',
             status: 'active',
-            clone_status: 'ready',
         })
         .execute();
     await testDb
         .insertInto('project_issue_counters')
         .values({ project_id: id, last_seq: 0 })
+        .execute();
+    // ADR 0018 — the git fields live on a repo. Migration 045 gives the repo
+    // the project's own id, and so does this fixture.
+    if (!overrides.no_repo) {
+        await insertProjectRepo(id, {
+            id,
+            name: 'repo',
+            ...(overrides.git_path !== undefined ? { git_path: overrides.git_path } : {}),
+            ...(overrides.git_url !== undefined ? { git_url: overrides.git_url } : {}),
+            ...(overrides.default_branch !== undefined ? { default_branch: overrides.default_branch } : {}),
+            ...(overrides.credential_id !== undefined ? { credential_id: overrides.credential_id } : {}),
+        });
+    }
+    return id;
+}
+
+export async function insertProjectRepo(
+    projectId: string,
+    overrides: Partial<{
+        id: string;
+        name: string;
+        git_path: string;
+        git_url: string;
+        default_branch: string;
+        credential_id: string;
+        clone_status: 'pending' | 'cloning' | 'ready' | 'error';
+        position: number;
+    }> = {},
+): Promise<string> {
+    const id = overrides.id ?? `${projectId}-repo-${Math.random().toString(36).slice(2, 8)}`;
+    const existing = await testDb
+        .selectFrom('project_repos')
+        .select('position')
+        .where('project_id', '=', projectId)
+        .execute();
+    await testDb
+        .insertInto('project_repos')
+        .values({
+            id,
+            project_id: projectId,
+            name: overrides.name ?? `repo-${existing.length + 1}`,
+            git_path: overrides.git_path ?? '',
+            git_url: overrides.git_url ?? '',
+            default_branch: overrides.default_branch ?? 'main',
+            clone_status: overrides.clone_status ?? 'ready',
+            position:
+                overrides.position ??
+                existing.reduce((max, r) => Math.max(max, r.position), -1) + 1,
+            ...(overrides.credential_id !== undefined ? { credential_id: overrides.credential_id } : {}),
+        })
         .execute();
     return id;
 }
@@ -105,6 +159,8 @@ export interface InsertItemInput {
     pr_url?: string | null;
     points?: number | null;
     acceptance_criteria?: string | null;
+    /** ADR 0018 — the repos this Task works on. */
+    repo_ids?: string[];
 }
 
 let autoSeq = 1;
@@ -119,6 +175,13 @@ export async function insertItem(input: InsertItemInput): Promise<string> {
             parent_id: input.parent_id ?? null,
             parent_type: input.parent_type ?? null,
             title: input.title ?? 'Item',
+            // ADR 0018 — a Task always names at least one repo; the fixture's
+            // repo carries the project's id, exactly as migration 045 leaves it.
+            ...(input.repo_ids
+                ? { repo_ids: JSON.stringify(input.repo_ids) }
+                : input.type === 'task'
+                  ? { repo_ids: JSON.stringify([input.project_id]) }
+                  : {}),
             description: input.description ?? '',
             status: input.status ?? 'draft',
             priority: input.priority ?? 'normal',
