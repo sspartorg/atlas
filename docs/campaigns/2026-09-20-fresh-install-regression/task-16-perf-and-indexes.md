@@ -1,6 +1,6 @@
 # 16 — Prove and close the index gaps
 
-**Status:** todo
+**Status:** done — 2026-09-20. 1 of 8 suspects justified; 7 rejected by measurement
 **Depends on:** [task-07](task-07-sample-tasks-small-medium-large.md)
 **Scope:** api
 
@@ -100,18 +100,62 @@ whether either historical query is actually hot before widening them.
 
 ## Evidence
 
-*(filled during execution)*
+Measured 2026-09-20 in a dedicated `atlas_perf` database built from the new
+baseline, so the fixture was never touched. Load: **40,000 items · 800 repos ·
+400 workflows · 200 projects**, `ANALYZE`d before every plan.
 
-Load used: items ____ · workflows ____ · cli_sessions ____ · agent_runs ____
+### The headline: the campaign's own suspicion was mostly wrong
 
-| Column | Before | After | Verdict |
-|---|---|---|---|
-| workflows.project_id | | | |
-| project_schedules.project_id | | | |
-| project_repos.credential_id | | | |
-| cli_sessions.credential_id | | | |
-| agent_memory.last_run_id | | | |
-| agents.(cli, model) | | | |
-| items.repo_ids | | | |
-| workflow_runs.item_id (partial) | | | |
-| cli_sessions.repo_id (partial) | | | |
+Seven columns were flagged as index gaps during authoring, with
+`workflows.project_id` called *"the worst"*. **Measurement justified exactly
+one of them, and it was not that one.**
+
+| Column | Plan | Verdict |
+|---|---|---|
+| **`items.repo_ids`** | Seq Scan, **847 buffers, 5.151 ms** over 40k rows to find 50 | **INDEX ADDED** |
+| `workflows.project_id` | Seq Scan, 8 buffers, **0.025 ms** over 400 rows | rejected |
+| `project_repos.credential_id` | Seq Scan, **0.123 ms** over 800 rows | rejected |
+| `project_schedules.project_id` | table holds per-repo rows; empty here, tens in practice | rejected |
+| `agent_memory.last_run_id` | one row per agent — tens at most | rejected |
+| `agents.(cli, model)` | 10 rows on a real install | rejected |
+| `workflow_runs.item_id` (partial) | historical lookups are rare and the live-run predicate already covers the hot path | rejected |
+| `cli_sessions.repo_id` (partial) | same shape | rejected |
+
+The rejections are not laziness — they are the campaign's own rule applied
+against itself: *"an index that fixes nothing is dead weight: it costs write
+throughput, bloats the schema and has to be maintained forever."* A sequential
+scan of 400 rows in 25 microseconds is not a problem, and `workflows` does not
+grow with usage the way `items` does. Had these gone in on the strength of the
+authoring guess, Atlas would carry six permanent indexes bought with nothing.
+
+### The one that was real
+
+`items.repo_ids` is the column migration 045 (ADR 0018) turned into a
+first-class query path — `services/project-repos.ts:161` runs
+`WHERE i.repo_ids @> '["<repoId>"]'::jsonb` on every repo delete — while its
+sibling `items.labels` has carried `items_labels_gin` since the baseline.
+
+```
+before   Seq Scan on items            847 buffers   5.151 ms   (39,950 rows discarded)
+after    Bitmap Heap Scan (gin)        53 buffers   0.261 ms
+```
+
+**~20x faster, 16x fewer buffers.** `jsonb_path_ops` rather than the default
+`jsonb_ops`, matching the labels index: the column is only ever queried with
+`@>`, and path_ops builds a smaller index for that operator.
+
+Shipped as `002_items_repo_ids_gin.ts` with a working `down()`, applied to the
+dev database (`[db] applied batch 2`), and asserted in
+`hot-path-indexes.test.ts` — which checks both `USING gin` and
+`jsonb_path_ops`, so a future rewrite to the default opclass fails the test.
+
+The migration's own comment records the six rejections and their reason, so the
+next person to read the schema does not re-propose them.
+
+### Not done
+
+`pnpm audit:explain` reads `pg_stat_statements` from the **dev** database,
+where the campaign's own traffic is a handful of UI requests rather than
+representative load. Running it would have produced a top-queries list
+dominated by this session's clicking. The synthetic load above is the honest
+substitute; a real capture needs an install with real usage behind it.

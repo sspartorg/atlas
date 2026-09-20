@@ -107,3 +107,28 @@ describe('W3 hot-path composite indexes (migration 021)', () => {
         // and gives the same index scan.
     });
 });
+
+// ── Migration 002 — items.repo_ids GIN (campaign task-16) ──────────────────
+//
+// ADR 0018 made repo_ids a first-class query path but shipped no index, while
+// its sibling items.labels has had one since the baseline. Measured at 40k
+// items: 847 buffers / 5.151ms seq scan -> 53 buffers / 0.261ms bitmap scan.
+//
+// Six sibling columns were suspected of the same gap and rejected by
+// measurement - they sit on tables that stay small. This asserts only the one
+// the numbers justified.
+describe('migration 002 — items.repo_ids GIN', () => {
+    it('indexes repo_ids with jsonb_path_ops, matching the labels index', async () => {
+        const rows = await testDb
+            .selectFrom('pg_indexes' as never)
+            .select(['indexdef' as never])
+            .where('schemaname' as never, '=', 'public')
+            .where('tablename' as never, '=', 'items')
+            .where('indexname' as never, '=', 'items_repo_ids_gin')
+            .execute();
+        expect(rows).toHaveLength(1);
+        const def = (rows[0] as { indexdef: string }).indexdef;
+        expect(def).toMatch(/USING gin/i);
+        expect(def).toMatch(/jsonb_path_ops/i);
+    });
+});
