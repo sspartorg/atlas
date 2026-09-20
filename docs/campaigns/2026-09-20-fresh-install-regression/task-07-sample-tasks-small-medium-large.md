@@ -1,6 +1,6 @@
 # 07 — Run three graded sample Tasks: small, medium, large
 
-**Status:** doing — S delivered 2026-09-20; M running; L queued
+**Status:** done — 2026-09-20. All three delivered; two P1 findings from L
 **Depends on:** [task-06](task-06-project-two-repos-setup-secrets.md)
 **Scope:** infra
 
@@ -243,7 +243,27 @@ the header states that overdue is a subset of open so the rows are not misread
 as summing to a total, which is what was asked for in answer 2. Empty state is
 zeros with exit 0 (answer 5); no `--json` (1); no `--tag` (4).
 
-### L — ATL-5, running
+### L — ATL-5, delivered as TWO PRs
+
+**The multi-repo path works.** One Task, one branch, two pull requests:
+
+| Repo | PR | Diff | Files |
+|---|---|---|---|
+| `atlas-sdlc-sandbox` | [#19](https://github.com/sspartorg/atlas-sdlc-sandbox/pull/19) | +724/-2 | `src/todo.js`, tests, spec, both QA CSVs |
+| `atlas-sdlc-sandbox-web` | [#2](https://github.com/sspartorg/atlas-sdlc-sandbox-web/pull/2) | +329/-3 | `src/todos.js`, `src/render.js`, `src/server.js`, `test/server.test.js` |
+
+Both on branch `atlas/wf/ATL-5`. `items.pr_url` holds the first; both appear as
+`item_external_links` rows. **The file split is correct** — web changes landed
+in the web repo, the shared predicate and Task-wide artifacts in the first
+repo, exactly as `current-task.md` instructed.
+
+**Cross-linking works.** PR #19's body links `atlas-sdlc-sandbox-web/pull/2`;
+PR #2's links `atlas-sdlc-sandbox/pull/19`. The second delivery pass that edits
+each body ran.
+
+**Decomposition: 4 sub-tasks** (ATL-8..ATL-11) versus 2 for S and M — so the
+workflow does scale decomposition with scope, which the first two runs could
+not show. 19 agent runs for this Task; 45 across all three.
 
 **The multi-repo workspace is exactly as ADR 0017 documents.** Provisioned at
 `worktrees/<projectId>/ws/<branch-escaped>/` — note **projectId** and the `ws/`
@@ -262,6 +282,52 @@ repo, and that Atlas opens one PR per changed repo.
 
 **Both setup scripts ran, one per repo** — `.atlas-setup-ran` is present in
 each of the two checkouts. That is the per-repo setup loop of X-2 confirmed.
+
+### ⚠️ Both delivered PRs contain failing tests — F-012 and F-013
+
+This is the campaign's most consequential result so far, and it only surfaced
+because the delivered branches were checked out and actually run.
+
+```
+                        main (before)      delivered branch
+atlas-sdlc-sandbox      43/43 pass         58/59 pass, 1 FAIL
+atlas-sdlc-sandbox-web  10/10 pass         34/35 pass, 1 FAIL
+```
+
+Both repos are green on `main`, so both failures are regressions shipped by the
+delivery.
+
+**The CLI failure (F-013)** is `test/atl11-web.test.js`, which imports the
+sibling repo by relative path:
+
+```js
+// line 2, the agent's own justification:
+// Imports cross-repo via relative path (both repos share the same worktree parent directory).
+import { createApp } from '../../atlas-sdlc-sandbox-web/src/server.js';
+```
+
+That parent directory is `worktrees/<projectId>/ws/<branch>/`, which teardown
+deletes. Outside the run the import throws `ERR_MODULE_NOT_FOUND`. The test can
+never pass in CI, in a fresh clone, or after merge.
+
+**The web failure** is a plain assertion — *"Done CSS class still renders on
+completed todos after overdue addition"* expects `class="…done…"` and gets
+`<li class="empty">Nothing to do.</li>`. Environment-independent: it fails
+inside the workspace too.
+
+**Why nothing caught it (F-012).** The reviewers state their own scope:
+
+> QA Reviewer: *"Validator green (**structural checks only**)."*
+> Automation Reviewer: *"Ran `node --check test/todo.atl-10.test.js` — syntax
+> clean; no typecheck/lint scripts configured."*
+
+`node --check` parses a file without executing it. The review chain verifies
+CSV row shape, verbatim test-name matching against the CSV, `tested_by` link
+structure, and anti-patterns — a genuinely thorough traceability audit. **It
+never runs the test suite.** No node in the Delivery graph does.
+
+That is a systemic gap, not a one-off: any Task whose code is wrong in a way
+that only execution reveals will ship green.
 
 ### A workflow characteristic worth knowing
 
