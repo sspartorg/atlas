@@ -1,6 +1,6 @@
 # 18 — Coverage lift against the ADR 0009 tiers
 
-**Status:** todo
+**Status:** done — 2026-09-20. shared restored to 100%; api/web gates need an Owner ruling
 **Depends on:** [task-15](task-15-fix-batch-p2-p3.md)
 **Scope:** api · web · mcp
 
@@ -87,11 +87,57 @@ lifted.
 
 ## Evidence
 
-*(filled during execution)*
+Measured 2026-09-20. **The measurement overturned this task's own premise**,
+which is why the task insisted on measuring first.
 
-| Package | Before | After | Floor set to |
-|---|---|---|---|
-| shared | | | |
-| mcp | | | |
-| api | | | |
-| web | | | |
+| Package | ADR 0009 documents | `vitest.config.ts` enforces | Measured | Gate |
+|---|---|---|---|---|
+| `@atlas/shared` | 100 across the board | 100 / 100 / 100 / 100 | **100 / 100 / 100 / 100** | passes |
+| `@atlas/mcp` | 85 / 85 / 60 / 90 | 95 / 95 / 95 / 95 | **100 / 100 / 100 / 100** | passes |
+| `@atlas/api` | 95 / 95 / 95 / 86 | 98 / 98 / 98 / 96 | 94.81 / 93.76 / 94.54 / 86.67 | **fails** |
+| `@atlas/web` | 70 / 70 / 65 / 59 | 97 / 96 / 94 / 94 | 95.43 / 94.20 / 91.65 / 90.60 | **fails** |
+
+(lines / statements / functions / branches)
+
+### Ruling D-5's premise was wrong
+
+D-5 said *"web rises 70 → 80 lines"*. **Web is at 95.43%.** ADR 0009's floor
+table was stale by roughly twenty-five points — the package improved
+enormously and the document never moved. `mcp` is at 100%, not the 60%
+functions the ADR records.
+
+There was no 70→80 lift to do. Writing tests toward an 80% target would have
+been busywork against a number the codebase passed long ago.
+
+### What was actually wrong
+
+**`@atlas/shared` was failing its own 100% gate** at 99.21% lines / 94.11%
+functions. One gap: `schemas/index.ts:660-664`, the `site_url` origin rule
+behind `UpdateJiraConfigSchema`, which had no test at all.
+
+It guards something real — the Jira bridge sends Basic-auth credentials to
+that origin, so plain `http` is permitted only on loopback. Five cases now
+cover it: https accepted, `localhost` / `127.0.0.1` / `[::1]` accepted over
+plain http, any other http origin rejected (including `localhost.evil.com`,
+which merely *starts with* localhost), trailing slashes stripped, and `null`
+accepted for an unconfigured bridge.
+
+**shared is back to 100% — 255/255 lines, 34/34 functions.**
+
+### Two gates are red, and that is the Owner's call
+
+`api` and `web` carry thresholds ratcheted above their measured values, so
+`pnpm -w run gate` fails on both. That contradicts ADR 0009's own central
+idea — the *"honest floor … the measured number CI actually enforces today"*.
+A threshold nobody meets is not a floor; it is an aspiration that turns a red
+build into background noise nobody reads.
+
+The two options are to lower `api` and `web` to measured-minus-a-buffer
+(restoring the honest-floor intent) or to leave them high and do the work.
+Both are defensible. **Lowering a CI gate is not something to do unasked**, and
+choosing between them is a decision about where test effort goes — so it is
+recorded and left open rather than resolved here.
+
+ADR 0009 now carries a dated amendment with the measured table, and its README
+row says the floors are stale. That much is documentation accuracy and needed
+no ruling.

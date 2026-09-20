@@ -37,7 +37,7 @@ Opened 2026-09-20 on the Owner's ruling. Authoring plan:
 | 15 | [Fix batch — P2 and P3 findings](task-15-fix-batch-p2-p3.md) | api · web | done |
 | 16 | [Prove and close the index gaps](task-16-perf-and-indexes.md) | api | done |
 | 17 | [Name cleanup — CER, DHEQ, JDA all become ATL](task-17-name-cleanup-atl.md) | shared · api · web · docs | done |
-| 18 | [Coverage lift against the ADR 0009 tiers](task-18-coverage-lift.md) | api · web · mcp | todo |
+| 18 | [Coverage lift against the ADR 0009 tiers](task-18-coverage-lift.md) | api · web · mcp | done — api/web gates need an Owner ruling |
 | 19 | [Security audit — evidence-based, targeted](task-19-security-audit.md) | api · infra | todo |
 | 20 | [Refresh the user guide and its screenshots](task-20-docs-guide-refresh.md) | docs | todo |
 | 21 | [Sync `.agents/` and write the ADRs](task-21-agents-sync-and-adrs.md) | docs | todo |

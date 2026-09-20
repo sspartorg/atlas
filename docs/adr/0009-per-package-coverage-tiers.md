@@ -1,7 +1,7 @@
 # 0009. Per-Package Coverage Tiers
 
 **Date:** 2026-05-24
-**Status:** Accepted
+**Status:** Accepted. **Amended 2026-09-20** — the floor table below is stale by a wide margin; see *Amendment* at the end for measured values.
 
 ## Context
 
@@ -35,3 +35,47 @@ The "honest floor" is the measured number CI actually enforces today; the "targe
 - The `web` floor is below the long-term target. Backfill work (hooks + view-model tests for Theme 08/09/11 additions) is documented in `.agents/testing.md` as the path back to 80%.
 - Active-development surfaces and Playwright-covered modals are excluded from coverage measurement entirely (`Agents.tsx`, `AgentDetail.tsx`, `Queue.tsx`, the heavy modals). That exclusion is the only way the `web` floor remains both honest and achievable.
 - New packages added to the monorepo must declare their own threshold tier in their `vitest.config.ts`. There is no default.
+
+---
+
+## Amendment — 2026-09-20 (fresh-install regression campaign)
+
+The tier **structure** stands. The **numbers** in the table above do not: they
+were never updated as the packages improved, and they now understate reality so
+badly that reading this ADR gives a false picture of the codebase.
+
+Measured on 2026-09-20 against the re-squashed baseline:
+
+| Package | This ADR says | `vitest.config.ts` enforces | Actually measured | Gate |
+|---|---|---|---|---|
+| `@atlas/shared` | 100 across the board | 100 / 100 / 100 / 100 | **100 / 100 / 100 / 100** | passes |
+| `@atlas/mcp` | lines 85, stmts 85, funcs 60, branches 90 | 95 / 95 / 95 / 95 | **100 / 100 / 100 / 100** | passes |
+| `@atlas/api` | lines 95, stmts 95, funcs 95, branches 86 | 98 / 98 / 98 / 96 | 94.81 / 93.76 / 94.54 / 86.67 | **fails** |
+| `@atlas/web` | lines 70, stmts 70, branches 65, funcs 59 | 97 / 96 / 94 / 94 | 95.43 / 94.20 / 91.65 / 90.60 | **fails** |
+
+(lines / statements / functions / branches)
+
+Two things follow.
+
+**The documented floors are obsolete in the generous direction.** `web` is at
+95.43% lines, not the 70% recorded above — the package improved by roughly
+twenty-five points and the ADR never moved. `mcp` reached 100%, not 60%
+functions. Anyone planning work from this document's numbers would badly
+mis-estimate where the gaps are.
+
+**Two configured gates are currently red.** `api` and `web` have thresholds
+ratcheted above their measured values, so `pnpm -w run gate` fails on both.
+That contradicts this ADR's central idea — the "honest floor", *"the measured
+number CI actually enforces today"*. A threshold nobody meets is not a floor;
+it is an aspiration that turns a red build into background noise.
+
+`shared` was also below its own 100% gate when measured (99.21% lines, 94.11%
+functions). The single gap was `schemas/index.ts:660-664`, the `site_url`
+origin rule that permits plain http only on loopback. It is now covered, and
+the package is back at 100%.
+
+**Unresolved, and deliberately left to the Owner:** whether to lower `api` and
+`web` to measured-minus-a-buffer (restoring this ADR's honest-floor intent) or
+to leave them high and do the work to reach them. Both are defensible; picking
+one is a product decision about where test effort goes, not a mechanical fix,
+and lowering a gate is not something an agent should do unasked.
