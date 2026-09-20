@@ -117,8 +117,8 @@ specs all survived unnoticed because every check was opt-in and manual.
 |---|---|---|
 | `.github/workflows/build.yml` | push (main) · PR | `pnpm -r build` → `pnpm -F @atlas/web bundle:check` |
 | `.github/workflows/gate.yml` → `fast` | push (main) · PR | `pnpm -r typecheck` → `pnpm -r lint` → shared / web / mcp tests. No service container, no browser download — the cheap job. |
-| `.github/workflows/gate.yml` → `api` | **nightly · manual** | `pnpm -F @atlas/api test:coverage` (coverage-gated since 2026-09-21) against a docker-compose Postgres. |
-| `.github/workflows/gate.yml` → `e2e` | **nightly · manual** | `pnpm db:up` + Chromium + `pnpm e2e` across all three viewport projects (~9 min). |
+| `.github/workflows/gate.yml` → `api` | **push (main) · PR · nightly · manual** | `pnpm -F @atlas/api test:coverage` (coverage-gated, and per-PR, since 2026-09-21) against a docker-compose Postgres. |
+| `.github/workflows/gate.yml` → `e2e` | **push (main) · PR · nightly · manual** | `pnpm db:up` + Chromium + `pnpm e2e` across all three viewport projects (~9 min). Per-PR since 2026-09-21. |
 | `.github/workflows/lighthouse.yml` | nightly · manual | Lighthouse audit of `/`, `/projects`, `/queue`, `/tasks`, `/analytics` × desktop / mobile / iPad on a seeded prod preview. Floors: perf ≥ 0.90 (mobile ≥ 0.55), a11y ≥ 0.95, best practices ≥ 0.95, SEO ≥ 0.90. Reports upload per job (`.lighthouseci`). |
 
 Two deliberate choices in `gate.yml`, both documented in its header comment:
@@ -133,10 +133,24 @@ Two deliberate choices in `gate.yml`, both documented in its header comment:
   exact name; a `services:` Postgres answers on the port but has no such
   container, and setup would fail before the first spec ran.
 
-To promote e2e to a per-PR gate, add `pull_request:` to `on:` and drop the `if:`
-from the `api` / `e2e` jobs. That is a spend decision, not a technical one.
+~~To promote e2e to a per-PR gate…~~ — **done 2026-09-21.** The Owner took the
+spend decision the other way and both jobs now run on every PR. `concurrency:
+cancel-in-progress` is what keeps it affordable: three pushes to a PR cost one
+e2e run, not three.
 
-`pnpm lint:knip` passes at HEAD as of 2026-09-20 — the unused files, exports and binaries it used to report are either deleted, made module-local, or configured as the false positives they were. `web` / `shared` / `mcp` coverage remains **local-only**; `api` coverage now runs nightly. The practical consequence: coverage and test regressions are invisible until someone runs them by hand, which is exactly how the api package drifted below its own floor (see the table above). Run `pnpm -w run gate` before pushing anything non-trivial — it is the only thing standing in for CI.
+**They are not *required* status checks.** `main`'s protection has none
+configured, so a red run informs but does not block a merge. Make them required
+only once they have shown they are not flaky — e2e is timing-sensitive (see the
+`--workspace-concurrency=1` note below), and a required flaky check on a
+single-maintainer repo blocks every merge.
+
+`pnpm lint:knip` passes at HEAD as of 2026-09-20 — the unused files, exports and binaries it used to report are either deleted, made module-local, or configured as the false positives they were. `web` / `shared` / `mcp` coverage remains **local-only**; `api` coverage runs on every PR.
+
+**`pnpm gate` serialises coverage** (`--workspace-concurrency=1`, 2026-09-21).
+Run concurrently, web's 4152 jsdom tests starve api's Postgres-backed suite until
+a 60s hook timeout fires: api took 1273s and failed, versus 293s and 286s across
+two serialised runs. CI is unaffected — `api` and `web` are separate jobs on
+separate runners — but do not "optimise" the local gate by re-parallelising it. The practical consequence: coverage and test regressions are invisible until someone runs them by hand, which is exactly how the api package drifted below its own floor (see the table above). Run `pnpm -w run gate` before pushing anything non-trivial — it is the only thing standing in for CI.
 
 The one gate that IS enforced remotely is the **web bundle budget** (`bundle:check` in `build.yml`), which fails the Build workflow on every push and PR.
 

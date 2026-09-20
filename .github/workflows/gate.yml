@@ -13,13 +13,22 @@ name: Gate
 #   * `fast` (typecheck · lint · shared/web/mcp tests) runs on every push and
 #     PR. No service containers, no browser download — the cheap job that
 #     catches the largest share of regressions.
-#   * `api` (needs Postgres) and `e2e` (needs Postgres + Chromium) run ONLY
-#     on demand (`workflow_dispatch`) or nightly. They are the expensive
-#     minutes, and nothing in this repo's cadence needs them per-commit.
+#   * `api` (needs Postgres) and `e2e` (needs Postgres + Chromium) ran ONLY
+#     nightly / on demand until 2026-09-21.
 #
-# To make e2e a per-PR gate, add `pull_request:` to the `on:` block and drop
-# the `if:` from the api / e2e jobs. That is a spend decision, not a
-# technical one.
+# 2026-09-21 — the Owner took the spend decision the other way: api and e2e
+# now run per-PR. The trigger is why. `pnpm gate` was red for so long that
+# nobody read it, and under that cover a hook timeout in cli-sessions.test.ts
+# sat undetected because the only thing that ran the api suite was a human
+# remembering to. Nightly catches it a day late, on main, after the merge.
+#
+# `concurrency: cancel-in-progress` below is what keeps this affordable:
+# pushing three times to a PR costs one e2e run, not three.
+#
+# NOTE these are not *required* status checks — `main`'s protection has none
+# configured, so a red run informs but does not block. Make them required
+# only once they have shown they are not flaky; e2e is timing-sensitive and a
+# required flaky check on a single-maintainer repo blocks every merge.
 
 on:
   push:
@@ -56,8 +65,7 @@ jobs:
 
   api:
     name: api tests (postgres)
-    # Expensive (Postgres). Nightly + on demand only — see COST above.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Per-PR since 2026-09-21 (Owner spend decision). Was nightly + on demand.
     runs-on: ubuntu-latest
     env:
       TEST_DATABASE_URL: postgres://atlas:atlas@localhost:5500/atlas_test
@@ -88,8 +96,7 @@ jobs:
   e2e:
     name: e2e (chromium + mobile + ipad)
     # Most expensive job: Postgres + a Chromium download + 3 viewport
-    # projects (~9 min). Nightly + on demand only — see COST above.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # projects (~9 min). Per-PR since 2026-09-21 (Owner spend decision).
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
