@@ -1,6 +1,6 @@
 # 07 — Run three graded sample Tasks: small, medium, large
 
-**Status:** todo
+**Status:** doing — S delivered 2026-09-20; M running; L queued
 **Depends on:** [task-06](task-06-project-two-repos-setup-secrets.md)
 **Scope:** infra
 
@@ -147,8 +147,61 @@ one Task producing two PRs.
 
 ## Evidence
 
-*(filled during execution)*
+Executed 2026-09-20.
 
-S decomposition: ____ sub-tasks — judgement: ____
-M decomposition: ____ sub-tasks — judgement: ____
-L decomposition: ____ sub-tasks — judgement: ____
+### S — ATL-1, delivered
+
+**PR:** https://github.com/sspartorg/atlas-sdlc-sandbox/pull/17 · branch
+`atlas/wf/ATL-1` · author `app/sspart-bot` · title `[ATL-1] Add a --version
+flag to the todo CLI` · body opens with `Requested-By: @sspartorg` and names
+the workflow run.
+
+**13 agent runs, all completed:** po-writer ×2 (side of a park/resume),
+po-reviewer, architect, architect-reviewer, coder, code-reviewer, qa-writer ×2,
+qa-reviewer ×2, automation, automation-reviewer.
+
+**Decomposition: 2 sub-tasks** — ATL-2 (dev) and ATL-3 (`[QA]` suffix, which is
+how the Test sub-workflow's `label: "qa"` node selects it). Proportionate for a
+one-file change: not shredded into ceremony, not collapsed into one. Each
+carried Given/When/Then acceptance criteria written by the PO Writer.
+
+⚠️ **The task was mis-specified by the campaign, not by Atlas.** `--version`
+and `-v` **already existed** in `origin/main:src/cli.js:5,9-12`, added by a
+previous Atlas run (the existing tests are labelled "SDB-28"). The sandbox repo
+was not read closely enough before the task was written.
+
+**The agents handled it well, which is a better signal than a correct task
+would have given.** The Coder did not fabricate a change to look busy. It
+reviewed the file, confirmed ACs 1, 2 and 4 were already satisfied, identified
+that AC3 (`todo add --version` must not print the version) had no coverage, and
+added exactly that one test:
+
+> *"Identified that Scenario 3 (AC3) had no test — the three existing "Version
+> flag tests (SDB-28)" covered `--version`, `-v`, and the usage string, but not
+> subcommand non-interference."*
+
+The one criticism: neither the PO Writer nor the Coder escalated *"this feature
+already exists"* back to the Owner. Adding the missing AC3 test is a defensible
+reading, but a 13-run delivery chain executed for what amounted to one test
+case. Worth knowing as a cost characteristic, not filed as a defect.
+
+### Chains confirmed by this run
+
+| Chain | Evidence |
+|---|---|
+| **X-1** repo → worktree | Task creation provisioned nothing (`worktree_path` null, rail read *not provisioned*). The run then created branch `atlas/wf/ATL-1` — the `atlas/wf/<item-id>` fallback — and one plain worktree, correctly **not** a `ws/` workspace for a single repo. `current-task.md` carried no Repositories block, the expected single-repo baseline |
+| **X-2** setup script | Ran inside the worktree (`.atlas-setup-ran` written), full `.atlas` staging present (constitution, current-task, outcome, self-memory, scripts, templates), no `atlas-setup-*` tmpfile inside the worktree |
+| **X-3** run end → push → PR | One branch, one PR, `items.pr_url` set, `worktree_path` nulled, `worktree_branch` **preserved** as `atlas/wf/ATL-1` (step 7c), worktree removed from disk |
+| **X-12** dispatch | `item_ready` fired 80s after queueing, with no manual trigger |
+| **X3** attribution | Every agent comment carries a real `agent_id` (`agent-po-writer`, `agent-coder`, …), never the literal "Agent" |
+| **ADR 0014 escalation** | PO Writer asked three clarifying questions, parked the run (`waiting_for_owner` / item `waiting_for_info`), and resumed to completion on the Owner's reply |
+| **ADR 0015 sub-tasks** | Three `workflow_runs`: one parent and two children both carrying `parent_workflow_run_id = 39085d8b`, run one at a time on the Task's branch |
+| **Bot identity** | Commit `df04405` — author `sspart-bot[bot] <4332243+sspart-bot[bot]@users.noreply.github.com>`, trailer `Co-Authored-By: sspart`. Closes the check deferred from tasks 04 and 06 |
+| **F-010 patch was load-bearing** | `agent-coder` and `agent-code-reviewer` both ran. Had they stayed on the absent `copilot` CLI, the run would have died at the Build step |
+
+**F-011 proven end to end:** the PR's file list includes `.atlas-setup-ran` —
+the campaign's own setup-script marker, swept into the Owner's repo by
+`commitPending`'s `git add -A` and shipped in the pull request.
+
+### M — ATL-4, running
+### L — ATL-5, queued behind M

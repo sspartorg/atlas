@@ -26,7 +26,7 @@ Opened 2026-09-20 on the Owner's ruling. Authoring plan:
 | 4 | [Register the sspart-bot GitHub App credential](task-04-bot-credential.md) | infra | done |
 | 5 | [Verify the two sandbox repos](task-05-seed-throwaway-repos.md) | infra | done |
 | 6 | [Create the project, add both repos, setup scripts and secrets](task-06-project-two-repos-setup-secrets.md) | infra | done |
-| 7 | [Run three graded sample Tasks: small, medium, large](task-07-sample-tasks-small-medium-large.md) | infra | todo |
+| 7 | [Run three graded sample Tasks: small, medium, large](task-07-sample-tasks-small-medium-large.md) | infra | doing — S delivered, M running |
 | 8 | [Walk wave A — onboarding, dashboard, scratch pad, projects, repos](task-08-walk-wave-a-projects-repos.md) | web | todo |
 | 9 | [Walk wave B — tasks, sub-tasks, queue, workflows](task-09-walk-wave-b-tasks-workflows.md) | web | todo |
 | 10 | [Walk wave C — terminals, agents, marketplace](task-10-walk-wave-c-terminals-agents.md) | web | todo |
