@@ -27,7 +27,7 @@ Opened 2026-09-20 on the Owner's ruling. Authoring plan:
 | 5 | [Verify the two sandbox repos](task-05-seed-throwaway-repos.md) | infra | done |
 | 6 | [Create the project, add both repos, setup scripts and secrets](task-06-project-two-repos-setup-secrets.md) | infra | done |
 | 7 | [Run three graded sample Tasks: small, medium, large](task-07-sample-tasks-small-medium-large.md) | infra | done |
-| 8 | [Walk wave A — onboarding, dashboard, scratch pad, projects, repos](task-08-walk-wave-a-projects-repos.md) | web | todo |
+| 8 | [Walk wave A — onboarding, dashboard, scratch pad, projects, repos](task-08-walk-wave-a-projects-repos.md) | web | doing — A1-A3 done, A4-A6 outstanding |
 | 9 | [Walk wave B — tasks, sub-tasks, queue, workflows](task-09-walk-wave-b-tasks-workflows.md) | web | todo |
 | 10 | [Walk wave C — terminals, agents, marketplace](task-10-walk-wave-c-terminals-agents.md) | web | todo |
 | 11 | [Walk wave D — settings, credentials, guard-rails, notifications, reminders](task-11-walk-wave-d-settings-admin.md) | web | todo |

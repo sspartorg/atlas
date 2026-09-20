@@ -1,6 +1,6 @@
 # 08 — Walk wave A: onboarding, dashboard, scratch pad, projects, repos
 
-**Status:** todo
+**Status:** doing — A1-A3 walked 2026-09-20; A4-A6 outstanding
 **Depends on:** [task-07](task-07-sample-tasks-small-medium-large.md)
 **Scope:** web
 
@@ -68,13 +68,58 @@ For every page:
 
 ## Evidence
 
-*(filled during execution)*
+Walked 2026-09-20 against the fixture built by tasks 6-7 (1 project, 2 repos,
+3 Tasks, 8 sub-tasks, 45 agent runs, 3 PRs).
 
 | Page | Console errors | Findings filed |
 |---|---|---|
-| A1 Onboarding guard | | |
-| A2 Dashboard | | |
-| A3 Scratch pad | | |
-| A4 Projects | | |
-| A5 Project Detail | | |
-| A6 Project Guard-rails | | |
+| A1 Onboarding guard | 0 | F-001 (confirmed), F-006 — both in task-03 |
+| A2 Dashboard | 0 | none — all rendered KPIs reconcile |
+| A3 Scratch pad | 0 | **F-015** |
+| A4 Projects | — | F-007 (from task-06) |
+| A5 Project Detail | — | F-008, F-009 (from task-06) |
+| A6 Project Guard-rails | not yet walked | — |
+
+### A2 — Dashboard: every rendered KPI reconciles
+
+| KPI | Dashboard | Ground truth | |
+|---|---|---|---|
+| Projects | 1 | `projects` = 1 | ok |
+| Awaiting You | 11 | `items.status='in_review'` = 11 | ok |
+| In Motion | 0 | `items.status='in_progress'` = 0 | ok |
+| Agent tiles (4 categories) | 0 live | `agent_runs.status='in_progress'` = 0 | ok |
+| AI Cost (September) | $17.03 · 45 runs | 45 `agent_runs` | ok |
+
+**The checklist's own trap note prevented a false positive.** The payload
+carries `tasksInProgress: 3` while zero items are `in_progress` — but that
+field is never rendered (`01-dashboard.md:58`), so it is not a finding. Written
+into the section before the walk, it did its job.
+
+**Class 2 (attribution) passes** — the Today's Pass payload resolves every run
+to a real agent name and accent colour (`Automation Reviewer`, `QA Writer`,
+`Coder`, …). No literal "Agent" anywhere.
+
+Cost note for the campaign record: the three sample Tasks of task-07 cost
+**$17.03** across 45 runs — 553 input tokens, 306,672 output, 15.9M cache read,
+1.28M cache creation.
+
+### A3 — Scratch pad: F-015
+
+Empty state renders correctly. A tile created, typed into, and confirmed
+persisted in `scratch_pad.body_md` — the round-trip itself works. The defect is
+the indicator: it says "Not saved yet" forever because each autosave's query
+invalidation gives the effect a new `tile` identity, which resets the timestamp
+the save just set.
+
+### Positive confirmation, not a finding
+
+**The draft guard works.** Navigating away from `/tasks/new` with text in the
+Title raised the browser's "Leave site?" dialog and blocked the navigation
+(`useDraftGuard`, `TaskNew.tsx:115`). Clearing the field released it.
+
+### Still outstanding for this task
+
+A6 (Project Guard-rails) is not yet walked. A4 and A5 have their actions
+exercised by task-06 (clone, add repo, Setup tab, prefix guard) but their
+remaining checks — re-clone, auto-fetch schedule, row menus, Delete Project in
+`unregister` mode, the view toggle and pagination — have not been.
