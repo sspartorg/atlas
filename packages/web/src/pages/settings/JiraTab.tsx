@@ -283,7 +283,7 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
 
             <SettingsSection
                 title="Sources"
-                subtitle="One JQL per repo. An issue matching several sources becomes one Task spanning those repos, in the project of the first source it matches; its repos in other projects are named in the notification. The first matching source with a workflow queues it; without one it waits as a draft and notifies you to pick one."
+                subtitle="One JQL per repo. An issue matching several sources becomes one Task spanning those repos, in the project of the first source it matches; its repos in other projects are named in the notification. The first of that project's matching sources with a workflow queues it; without one it waits as a draft and notifies you to pick one."
             >
                 {cfg.sources.map((s, i) => (
                     <FormRow key={`${i}:${s.repo_id}:${s.jql}`} label={repoLabel(s.repo_id)}>
