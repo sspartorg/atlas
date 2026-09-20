@@ -1,1 +1,22 @@
-[]
+[
+    {
+        "label": "tested_by link from the QA sub-task to its dev sub-task still exists",
+        "sort_order": 0,
+        "required": true
+    },
+    {
+        "label": "CSV header is exactly Summary,Description,Issue Type,Priority,Labels,Components",
+        "sort_order": 1,
+        "required": true
+    },
+    {
+        "label": "Every data row passes the per-row shape check",
+        "sort_order": 2,
+        "required": true
+    },
+    {
+        "label": "Per-AC coverage floor met for every ac-<id>",
+        "sort_order": 3,
+        "required": true
+    }
+]

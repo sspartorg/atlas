@@ -179,6 +179,8 @@ export default defineConfig({
             'src/services/run-repos.test.ts',
             'src/routes/jira.test.ts',
             'src/marketplace/catalog-loader.test.ts',
+            // F-012 - reviewer agents must ship a required checklist.
+            'src/marketplace/reviewer-checklists.test.ts',
             'src/utils/errors.test.ts',
             'tests/e2e-lifecycle.test.ts',
             'tests/pg-db-truncate.test.ts',

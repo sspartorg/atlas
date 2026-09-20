@@ -1,1 +1,27 @@
-[]
+[
+    {
+        "label": "On the Task branch atlas/wf/<taskId>",
+        "sort_order": 0,
+        "required": true
+    },
+    {
+        "label": "Every automation-yes CSV row has a verbatim-named test in the diff",
+        "sort_order": 1,
+        "required": true
+    },
+    {
+        "label": "Automated tests execute green, not merely parse",
+        "sort_order": 2,
+        "required": true
+    },
+    {
+        "label": "'not automated:' comment posted for every automation-no row",
+        "sort_order": 3,
+        "required": true
+    },
+    {
+        "label": "No anti-patterns (sleep, XPath, dangling promises) in new tests",
+        "sort_order": 4,
+        "required": true
+    }
+]
