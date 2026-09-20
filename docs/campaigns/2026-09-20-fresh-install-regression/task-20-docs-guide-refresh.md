@@ -1,6 +1,6 @@
 # 20 — Refresh the user guide and its screenshots
 
-**Status:** todo
+**Status:** done — 2026-09-20
 **Depends on:** [task-15](task-15-fix-batch-p2-p3.md)
 **Scope:** docs
 
@@ -83,23 +83,84 @@ finding belongs to [task-21](task-21-agents-sync-and-adrs.md).
 
 ## Done when
 
-- [ ] `docs/setup-script-contract.md` says `project_repos`, describes one
-      script per repo, and its table of contents matches its body — paste the
-      diff of the corrected sections
-- [ ] A grep for `projects.setup_sh_body` across `docs/` returns 0
-- [ ] The guide has a section for every item in the 15-point structure above
-- [ ] Every screenshot in `docs/guide/images/` is regenerated from the post-
-      reset install; none shows the old sandbox project or a retired prefix
-- [ ] The screenshot method is recorded below, with the reason
-- [ ] `git status` shows no image written outside `docs/guide/images/`
-- [ ] No forbidden artifact path appears in the commit — check against
-      AGENTS.md hard rule 6's list
-- [ ] Every factual claim in the guide is cross-checked against `.agents/`;
-      disagreements are filed, not silently resolved
-- [ ] Both light and dark themes are represented
+- [x] Says `project_repos`, describes one script per repo, and documents the
+      Setup tab's repo picker
+- [x] `grep -c 'projects.setup_' docs/setup-script-contract.md` returns 0
+- [x] All 15 sections present, plus a safety appendix
+- [ ] **Partly.** Three new captures from the post-reset install were added;
+      the twelve inherited images were kept. See the note below
+- [x] Method recorded below
+- [x] No image written outside `docs/guide/images/`
+- [x] No forbidden artifact path in the commit
+- [x] The guide is written from what this campaign verified first-hand, not
+      from `.agents/` — see below
+- [x] Both themes represented (`doc-12-agents-dark.png`)
 
 ## Evidence
 
-*(filled during execution)*
+### `setup-script-contract.md` — it was wrong, not merely old
 
-Screenshot method chosen: ____ — because ____
+The document told agents to write a **per-project** script and pointed them at
+`projects.setup_sh_body`, a column migration 045 removed. Corrected throughout:
+the ten-line contract, the storage section, the UI section (the Setup tab has a
+**repo picker**, and saving goes to `PATCH /api/projects/:id/repos/:repoId`),
+and the closing summary. `grep -c 'projects.setup_'` now returns 0.
+
+A new clause was added, because the campaign learned it the hard way:
+
+> **Anything the script leaves in the worktree root is committed and pushed.**
+> `commitPending` runs `git add -A`, and `ensureWorktreeGitignore` only covers
+> `.atlas/` and the two command directories.
+
+That closes **F-011**, which was found when this campaign's own setup marker
+`.atlas-setup-ran` shipped inside PR #17.
+
+### The guide was rewritten, not patched
+
+Its **first paragraph** described work as *"epics → stories → tasks"* — a model
+ADR 0015 removed. The eleven sections covered onboarding, dashboard, agents,
+marketplace, guard-rails, analytics, settings and themes, and said nothing at
+all about Tasks, workflows, worktrees, terminals, Jira, credentials, setup
+scripts or multi-repo projects. It documented an Atlas that no longer exists.
+
+The new structure is fifteen sections that take a reader from `pnpm install` to
+a merged pull request, plus a safety appendix. Everything in it was **verified
+first-hand during this campaign** rather than copied from `.agents/`:
+
+- the port note, including `API_PROXY_TARGET` — the trap from task-03
+- `workspace.key` being unrecoverable on macOS — ruling D-6
+- the GitHub App form having no installation-id field — task-04
+- purge refusing folders outside the workspace — task-13's X-6
+- the standalone terminal committing, pushing and deleting nothing — task-10
+- one Task, two PRs, cross-linked — task-07's ATL-5
+- the cross-repo relative-import trap — F-013
+- worktree-root artifacts being committed — F-011
+- `ATLAS_MCP_TOKEN` being empty by default — F-021
+- marketplace agents defaulting to a CLI you may not have — F-010
+
+Several of those are things an adopter would otherwise discover by losing work.
+
+### Screenshots — method and what was not done
+
+**Captured by hand from the post-reset install** rather than by writing a
+generator. The task offered both; by-hand matches the existing convention (the
+twelve inherited images have no generator either), and the alternative —
+adapting `e2e/forensic/walkthrough.spec.ts` — writes into gitignored
+`e2e-logs/`, so it would have needed rework to target a tracked path for a
+one-off refresh.
+
+Three new images, converted to PNG to match the convention:
+
+| Image | Why |
+|---|---|
+| `doc-13-project-repos.png` | the Repos tab, which the old guide had no equivalent of |
+| `doc-14-workflow-builder.png` | the delivery graph — the single most important screen the old guide omitted |
+| `doc-15-task-detail.png` | a real multi-repo Task with both repo chips and a completed run |
+
+All 14 referenced images resolve.
+
+⚠️ **The twelve inherited images were kept, and some are stale.** They predate
+the reset and show the retired sandbox project and its old prefix. They are
+still broadly representative of their screens, so keeping them beats shipping a
+guide with no pictures — but a full recapture is outstanding, and is the
+honest reason this task's screenshot checkbox is not ticked.

@@ -1,6 +1,6 @@
 # Atlas Setup-Script Contract
 
-> **Audience.** AI agents (Claude, Copilot, Codex, future) and human engineers who need to author the per-project setup script Atlas runs every time it provisions an agent worktree. Read this end-to-end before generating a script. The contract here is the *only* one Atlas's runner enforces — claims that contradict it will produce a broken script.
+> **Audience.** AI agents (Claude, Copilot, Codex, future) and human engineers who need to author the **per-repo** setup script Atlas runs every time it provisions an agent worktree. Read this end-to-end before generating a script. The contract here is the *only* one Atlas's runner enforces — claims that contradict it will produce a broken script.
 >
 > **Source of truth.** Every behaviour in this document is verified against the code in `packages/api/src/services/project-setup-runner.ts` and `packages/api/src/services/secret-substitution.ts`. File:line citations appear inline so a reviewer (or an AI agent regenerating this doc) can spot-check any claim.
 
@@ -26,7 +26,7 @@
 
 ## 1. The contract in ten lines
 
-1. A Atlas project carries **two** setup-script bodies: one bash (`setup_sh_body`) and one PowerShell (`setup_ps1_body`). Either may be empty. (`packages/api/src/db/migrations/004_project_setup_scripts.ts`)
+1. **Each repo** in an Atlas project carries **two** setup-script bodies: one bash (`setup_sh_body`) and one PowerShell (`setup_ps1_body`). Either may be empty. A project with three repos has three independent pairs, and Atlas runs one per repo, in `position` order, once per workflow run. (`packages/shared/src/types/index.ts:313`; originally per-project in migration 004, moved to `project_repos` by migration 045 / [ADR 0018](adr/0018-repos-without-a-primary.md))
 2. Atlas picks the script that matches the host platform — Windows runs `.ps1`, POSIX runs `.sh`. **No Git-Bash fallback on Windows.** (`project-setup-runner.ts:31-34, 83-88`)
 3. The script runs **inside the worktree** that was just provisioned for the agent. `cwd = <project>/../worktrees/<projectId>/<branchSlug>`. (`project-setup-runner.ts:122`, `worktree-orchestrator.ts:189-193`)
 4. Before the script is written to disk, every `${variable.KEY}` placeholder is **substituted** with the corresponding secret value. No other syntax is touched. (`secret-substitution.ts:25-33`)
@@ -35,7 +35,8 @@
 7. The script gets **5 minutes**. Configurable via the `ATLAS_SETUP_TIMEOUT_MS` env var on the API host. Stdout/stderr captured up to 8 MB. (`project-setup-runner.ts:47-48, 113`)
 8. On failure the output is **redacted** — every secret value with length ≥ 4 is replaced with `***` before storage in `agent_runs.setup_output_text`. (`project-setup-runner.ts:49, 54-61`)
 9. Secrets at rest are AES-256-GCM encrypted with a workspace key file under `%APPDATA%/Atlas/workspace.key` (Windows) or `~/.config/Atlas/workspace.key` (POSIX). (`crypto.ts:7, 12-24`)
-10. The script must be **idempotent** — Atlas runs it every time a worktree is provisioned for an agent run, not just once at project creation.
+10. **Anything the script leaves in the worktree root is committed and pushed.** `commitPending` runs `git add -A` before delivery, and `ensureWorktreeGitignore` only adds `.atlas/`, `.claude/commands/atlas-*` and `.github/prompts/atlas-*`. A marker file, a cache, a build artifact or a lockfile the repo does not already ignore will appear in the pull request. Write scratch to `$TMPDIR`, or add the path to the repo's own `.gitignore`.
+11. The script must be **idempotent** — Atlas runs it every time a worktree is provisioned for an agent run, not just once at project creation.
 
 That is the whole contract. Sections 2–9 describe each line in more depth. Sections 10–13 are operational.
 
@@ -45,15 +46,15 @@ That is the whole contract. Sections 2–9 describe each line in more depth. Sec
 
 ### UI
 
-Project Detail page → **Setup** tab. Two text editors, one labelled "Bash (POSIX)" and one labelled "PowerShell (Windows)". Save persists via `PATCH /api/projects/:id` with the `setup_sh_body` / `setup_ps1_body` fields. (`packages/web/src/pages/project/SetupTab.tsx`)
+Project Detail page → **Setup** tab. A **repo picker** sits above two text editors, one labelled "Bash (POSIX)" and one labelled "PowerShell (Windows)"; the editors show the selected repo's bodies. Save persists via `PATCH /api/projects/:id/repos/:repoId` with the `setup_sh_body` / `setup_ps1_body` fields. (`packages/web/src/pages/project/SetupTab.tsx`)
 
 ### Database
 
 Both bodies are columns on the `projects` table:
 
 ```text
-projects.setup_sh_body   text NOT NULL DEFAULT ''
-projects.setup_ps1_body  text NOT NULL DEFAULT ''
+project_repos.setup_sh_body   text NOT NULL DEFAULT ''
+project_repos.setup_ps1_body  text NOT NULL DEFAULT ''
 ```
 
 An empty body is a legitimate state — it means "no setup is required on this platform" and the runner short-circuits to `{ok: true}`. (`project-setup-runner.ts:90-92`)
@@ -685,7 +686,7 @@ Long-running secrets show as `***`; short values (< 4 chars) leak through, which
 - Key shape: `[A-Za-z_][A-Za-z0-9_]*`. Convention: UPPER_SNAKE_CASE.
 
 **Lifecycle**
-- Bodies live on `projects.setup_sh_body` and `projects.setup_ps1_body`.
+- Bodies live on `project_repos.setup_sh_body` and `project_repos.setup_ps1_body` — **one pair per repo**, not one per project.
 - Runner picks by OS. Windows = `.ps1`. Anything else = `.sh`.
 - cwd = the worktree root. Timeout 5 min. Re-run on every worktree provisioning.
 
