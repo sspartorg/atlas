@@ -1,6 +1,6 @@
 # 08 — Walk wave A: onboarding, dashboard, scratch pad, projects, repos
 
-**Status:** doing — A1-A3 walked 2026-09-20; A4-A6 outstanding
+**Status:** done — 2026-09-20. A1-A6 walked; 3 findings
 **Depends on:** [task-07](task-07-sample-tasks-small-medium-large.md)
 **Scope:** web
 
@@ -76,9 +76,9 @@ Walked 2026-09-20 against the fixture built by tasks 6-7 (1 project, 2 repos,
 | A1 Onboarding guard | 0 | F-001 (confirmed), F-006 — both in task-03 |
 | A2 Dashboard | 0 | none — all rendered KPIs reconcile |
 | A3 Scratch pad | 0 | **F-015** |
-| A4 Projects | — | F-007 (from task-06) |
-| A5 Project Detail | — | F-008, F-009 (from task-06) |
-| A6 Project Guard-rails | not yet walked | — |
+| A4 Projects | 0 | F-007 (from task-06) |
+| A5 Project Detail | 0 | F-008, F-009 (from task-06) |
+| A6 Project Guard-rails | 0 | **F-014** (reproduced here) |
 
 ### A2 — Dashboard: every rendered KPI reconciles
 
@@ -117,9 +117,43 @@ the save just set.
 Title raised the browser's "Leave site?" dialog and blocked the navigation
 (`useDraftGuard`, `TaskNew.tsx:115`). Clearing the field released it.
 
-### Still outstanding for this task
+### A5 — the secrets round-trip passes in full
 
-A6 (Project Guard-rails) is not yet walked. A4 and A5 have their actions
-exercised by task-06 (clone, add repo, Setup tab, prefix guard) but their
-remaining checks — re-clone, auto-fetch schedule, row menus, Delete Project in
-`unregister` mode, the view toggle and pagination — have not been.
+This is the check that matters most on this page: it is the exact shape of the
+2026-09-12 defect, where an eye icon toggled an input's `type` over a field the
+API always nulled. All six parts pass now:
+
+| Step | Result |
+|---|---|
+| Write `CK_TOKEN=s3cr3t-alpha` through the UI | saved, "1 unsaved change" tracked, Save enabled only when dirty |
+| Hard-reload the page and re-open the modal | row present, value masked |
+| Click Reveal | returns `s3cr3t-alpha` — the real stored plaintext |
+| `GET /api/projects/:id/env` | metadata only: `key`, `updated_at`, `has_value`. No plaintext anywhere in the payload |
+| Reveal route | `GET /api/projects/:id/env/:key/value`, gated by `requireMcpToken` |
+| Audit | 3 `{tag:'secret_reveal'}` log lines for 3 reveal clicks |
+
+⚠️ The checklist had the reveal route as `…/env/:key`; the real route is
+`…/env/:key/value` (`routes/projects.ts:537-540`). Corrected in
+`checklists/per-page.md` so the next walker is not misled.
+
+### A6 — round-trip passes, and F-014 reproduced here
+
+A guard-rail was created through the dialog, persisted a hard reload, and the
+header moved to "Rules 1 · 1 active". `/projects/:id/guard-rails` redirects into
+`?tab=guardrails` as documented.
+
+The valuable part was accidental: typing the rule body reproduced **F-014**,
+which task-08 had filed as unreproduced and TaskNew-specific. It is neither —
+see the finding for the controlled comparison between the dialog's single-line
+Title (clean) and its `multiline` Rule (three dropped characters plus the
+exception).
+
+### Not walked, deferred with reason
+
+A4 and A5 had their **write** paths exercised by task-06 — clone, add repo,
+prefix guard, Setup tab per repo. Their remaining read-side controls are not
+yet walked: re-clone, auto-fetch schedule, the repo row menu's Open folder and
+Remove, Delete Project in `unregister` mode, the grid/table view toggle, filter
+chips and pagination. `purge` stays deferred to
+[task-13](task-13-cross-dependency-sweep.md), which builds a disposable project
+for it rather than destroying the fixture the later waves need.
