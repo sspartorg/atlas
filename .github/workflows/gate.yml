@@ -78,12 +78,12 @@ jobs:
       - run: pnpm db:wait
         env:
           DATABASE_URL: postgres://atlas:atlas@localhost:5500/atlas
-      # `test`, not `test:coverage`, on purpose. The api coverage thresholds
-      # (98/98/98/96) sit above the measured numbers — `.agents/testing.md`
-      # records the gap — so gating on them would make this job red on day
-      # one, and a permanently-red gate is a gate everyone learns to ignore.
-      # Get the suite running first; raise the coverage gate as its own change.
-      - run: pnpm -F @atlas/api test
+      # `test:coverage` since 2026-09-21. This used to run bare `test`
+      # because the api thresholds (98/98/98/96) sat above the measured
+      # numbers, so gating on them would have made the job red on day one.
+      # ADR 0009's ratchet fixed that: the floors are now measured-minus-0.5pp
+      # and pass, so this job can enforce them. Same minutes, one more gate.
+      - run: pnpm -F @atlas/api test:coverage
 
   e2e:
     name: e2e (chromium + mobile + ipad)
