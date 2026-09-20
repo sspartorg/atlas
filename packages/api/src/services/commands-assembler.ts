@@ -103,7 +103,7 @@ const SLUG_SAFE_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
  * (`assembleCommands`) skips that agent so one malicious id can't
  * plant files in `~/.claude/hooks/` or `.git/hooks/`.
  */
-export class AgentSlugUnsafeError extends Error {
+class AgentSlugUnsafeError extends Error {
     constructor(id: string) {
         super(`Agent id ${JSON.stringify(id)} does not produce a filesystem-safe slug`);
         this.name = 'AgentSlugUnsafeError';

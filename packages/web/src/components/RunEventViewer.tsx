@@ -28,9 +28,9 @@ const PREVIEW_MAX = 140;
 // but the regex is harmless on them.
 const ATLAS_API_ERROR_RE = /\[atlas-api-\d{3}\]/;
 
-export type RunEventSource = 'agent-stream-json' | 'claude-pty' | 'copilot';
+type RunEventSource = 'agent-stream-json' | 'claude-pty' | 'copilot';
 
-export type RunEvent =
+type RunEvent =
     | {
           kind: 'json';
           raw: string;

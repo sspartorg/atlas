@@ -11,16 +11,30 @@
             ]
         },
         "packages/mcp": {
-            "entry": ["scripts/*.mjs"]
+            "entry": [
+                "scripts/*.mjs"
+            ]
+        },
+        "packages/web": {
+            "ignore": [
+                "public/sw.js",
+                "scripts/seed-visual-baselines.mjs"
+            ]
         }
     },
     "ignore": [
-        "**/coverage/**"
+        "**/coverage/**",
+        "e2e/fixtures/**"
     ],
     "ignoreDependencies": [
         "@secretlint/secretlint-rule-preset-recommend"
     ],
     "rules": {
         "duplicates": "off"
-    }
+    },
+    "ignoreBinaries": [
+        "where.exe",
+        "reg",
+        "icacls"
+    ]
 }

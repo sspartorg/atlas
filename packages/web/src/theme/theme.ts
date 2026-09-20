@@ -357,4 +357,4 @@ export function createAtlasTheme(mode: ThemeMode): Theme {
     });
 }
 
-export const atlasTheme = createAtlasTheme('light');
+

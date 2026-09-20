@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/api.js';
 
-export type PushState =
+type PushState =
     | 'unsupported'
     | 'denied'
     | 'default'
