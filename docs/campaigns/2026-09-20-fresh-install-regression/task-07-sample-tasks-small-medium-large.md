@@ -203,5 +203,70 @@ case. Worth knowing as a cost characteristic, not filed as a defect.
 the campaign's own setup-script marker, swept into the Owner's repo by
 `commitPending`'s `git add -A` and shipped in the pull request.
 
-### M — ATL-4, running
-### L — ATL-5, queued behind M
+### M — ATL-4, delivered
+
+**PR:** https://github.com/sspartorg/atlas-sdlc-sandbox/pull/18 · branch
+`atlas/wf/ATL-4` · author `app/sspart-bot`. 13 agent runs, same shape as S.
+
+**Decomposition: 2 sub-tasks** — ATL-6 (dev), ATL-7 (`[QA]`). Consistent with S,
+so the workflow's decomposition is stable across sizes rather than scaling with
+them.
+
+**This is the run that shows Atlas working properly**, because unlike S there
+was real work to do:
+
+```
++482 -3
+  src/todo.js                          +22/-0    the stats computation
+  src/cli.js                           +12/-2    subcommand wiring
+  test/todo.test.js                   +244/-1    20 new tests
+  specs/6-add-a-todo-stats-command/…   +91/-0    Architect's spec
+  tests/qa/ATL-7.csv                  +113/-0    QA matrix
+  .atlas-setup-ran                      +0/-0    F-011 again
+```
+
+Verified by checking out the branch and running it:
+
+```
+# tests 63   # pass 63   # fail 0        (was 43 before the change)
+
+$ node src/cli.js stats
+Todo stats (overdue is a subset of open, not an additional category):
+         high  normal  low
+open       0       0    0
+done       0       0    0
+overdue    0       0    0
+```
+
+**It honoured all five Owner answers precisely**, including the subtle one —
+the header states that overdue is a subset of open so the rows are not misread
+as summing to a total, which is what was asked for in answer 2. Empty state is
+zeros with exit 0 (answer 5); no `--json` (1); no `--tag` (4).
+
+### L — ATL-5, running
+
+**The multi-repo workspace is exactly as ADR 0017 documents.** Provisioned at
+`worktrees/<projectId>/ws/<branch-escaped>/` — note **projectId** and the `ws/`
+segment, where the single-repo runs used `worktrees/<repoId>/<branch>`:
+
+```
+worktrees/c4cf4b2b-.../ws/atlas__wf__ATL-5/
+  atlas-sdlc-sandbox
+  atlas-sdlc-sandbox-web
+```
+
+`current-task.md` carries the `repositoriesMarkdown()` block absent from the
+single-repo runs, naming both remotes and base branches and telling the agent
+that the workspace root is not a git repo, that Task-wide files go in the first
+repo, and that Atlas opens one PR per changed repo.
+
+**Both setup scripts ran, one per repo** — `.atlas-setup-ran` is present in
+each of the two checkouts. That is the per-repo setup loop of X-2 confirmed.
+
+### A workflow characteristic worth knowing
+
+The PO Writer brainstormed and **parked for Owner answers on every one of the
+three Tasks**. It is designed behaviour and the questions were good ones — five
+genuinely scope-changing questions on ATL-4 — but it means no Task reaches a
+Coder without one human round-trip. Anyone expecting unattended operation
+should know this before they queue a backlog.
