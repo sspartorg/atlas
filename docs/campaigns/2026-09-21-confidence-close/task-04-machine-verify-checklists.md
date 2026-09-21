@@ -47,6 +47,12 @@ whether a PR ships.
 
 ## The shape
 
+> ⚠️ **Superseded during execution.** The sketch below assumed per-step flags.
+> They do not exist — `push_code` / `raises_pr` are columns on `workflows`, not
+> fields on a node — so the gate went into `deliver()`, once per repo, before
+> that repo's push. See **Evidence**. Kept as written so the correction is
+> legible rather than tidied away.
+
 ```
 workflow-engine.ts, after a step completes with outcome.kind === 'done':
 
@@ -101,11 +107,19 @@ cleans up. Do not write a second spawn helper.
 ## Done when
 
 - [x] `runVerificationGate` added, reusing the setup-runner exec pattern
-- [x] Gated only on steps with `push_code` or `raises_pr` (E-8)
-- [x] `decideRunRouting` still pure; gate verdict passed in, not computed inside
-- [x] Ungated steps provably unchanged — a test asserts identical routing
-- [x] "Could not run" parks with the Owner; a test proves it is not a fail
-- [x] Empty-checklist semantics on a gated step decided, commented, tested
+      (`execFile`, timeout, bounded `maxBuffer`, shared `redactSecretValues`)
+- [x] ~~Gated only on steps with `push_code` or `raises_pr`~~ — **amended.**
+      No per-step flags exist. Gated in `deliver()`, once per repo, in
+      workflows whose `push_code` / `raises_pr` make a wrong "green" matter
+- [x] ~~`decideRunRouting` … gate verdict passed in~~ — **amended.** The router
+      was not touched at all; the gate lives where the push it guards happens
+- [x] Ungated behaviour provably unchanged — 43 pre-existing integration tests
+      pass **unmodified**
+- [x] "Could not run" parks with the Owner; 6 unit tests + 1 integration test
+      prove it is not a fail
+- [x] ~~Empty-checklist semantics~~ — **not applicable.** The gate does not
+      consult the checklist, so the empty-checklist path is untouched. Items
+      remain self-reported; the gate is independent of them
 - [x] **Mutation proof**: making the gate trust `item.passed` again fails a test
 - [x] Gate output passes through secret redaction before storage
 - [x] `pnpm -F @atlas/api test` green
