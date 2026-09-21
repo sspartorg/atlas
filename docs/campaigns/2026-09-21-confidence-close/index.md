@@ -1,7 +1,9 @@
 # confidence-close — the board
 
-> **CLOSED — 2026-09-21. All 10 rows done.** 16 findings, **all 16 fixed**. `pnpm -w run gate` exit 0, `pnpm e2e` 224 passed / 0 failed, `pnpm audit` clean — all re-run after the final fixes.
-> **Six real defects were found, one of them P1.**
+> **CLOSED — 2026-09-21. All 10 rows done.** 25 findings, 24 fixed, **1 open
+> by necessity (G-023, an architecture decision).** `pnpm -w run gate` exit 0, `pnpm e2e` 224 passed / 0 failed, `pnpm audit` clean — all re-run after the final fixes.
+> **Twelve real defects were found, five of them P1 — including four security
+> findings, two of which this campaign's own work introduced.**
 > Read *Closing* at the foot of this file first.
 
 The Owner asked of the 2026-09-20 campaign: *"is it all completed, are you 100%
@@ -152,6 +154,28 @@ instead of decided unilaterally. The ruling was: fix them. G-013 became a rule
 migration and no new toggle. G-015 needed three buttons given real labels as a
 direct consequence, because hiding a glyph turns an icon-only button from
 badly-named into **unnamed**.
+
+### The security review changed the answer
+
+Run late, over this branch's own surfaces, and it found **four P1s** — each
+verified independently against a running API rather than taken on report:
+
+- **G-023** — one header (`Sec-Fetch-Site: same-origin`) reaches every gated
+  route. `DELETE /api/credentials/<id>`: **401** bare, **404** with it. The
+  code asserted the opposite — *"a forbidden header no non-browser client can
+  set"* — which is false; that phrase means browser **JavaScript** may not set
+  it, and curl sets it freely.
+- **G-020** — `.env` written **0644** holding the DB password and the MCP
+  token, by the very code that mints that token.
+- **G-021** — the verification gate handed the parent's whole environment to
+  the script it runs, whose failure output is persisted and rendered.
+- **G-022** — that gate executed a script **the repository could supply**.
+
+**G-021 and G-022 were introduced by ADR 0020, this campaign's own work.** The
+gate built to stop bad code shipping was itself the new attack surface. Three
+are fixed with regression tests; G-023 is half-fixed by necessity, because no
+header-based check can close it and the honest repair is an Owner-level
+architecture decision.
 
 ### What is now proven
 

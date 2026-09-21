@@ -98,52 +98,65 @@ Exactly the four gate tests; the other 43 unchanged.
 
 ## The answer
 
-**Every known issue is closed and every gate is green. That I will certify.
-"100% confident there are no bugs" I will not, and the reason is this board
-itself: six real defects were sitting in this codebase this morning, the day
-after a campaign closed 22/22 and declared it done. One was a P1 that
-corrupted credentials. The sixth was found in the last hour, from an aside
-somebody nearly dismissed.**
+**Not yet — and the reason arrived in the last hour of the campaign.**
 
-A codebase that yields six defects to one day of looking will yield more to the
-next day of looking. That is not a reason to withhold the merge — it is the
-reason the gates, the ratcheted floors and the sixteen regression tests added
-here matter more than any assurance I could give.
+A focused security review of this branch's own surfaces found **four P1s**,
+every one verified independently against a running API rather than taken on the
+reviewer's word:
 
-What can be said instead, with numbers behind it: Atlas's gate is green, 7,487
-tests pass, 224 e2e specs pass, the dependency audit is clean, six of eight
-non-branch coverage metrics are at or above 95%, the Jira bridge has now
-actually been run against a live site, and the one path that could ship a red
-test suite into a merged PR is closed by machinery rather than by an agent's
-promise. That is a materially stronger position than the one this board opened
-on, and every claim in it is pasted above rather than asserted.
+| id | issue | proof |
+|---|---|---|
+| **G-023** | One header reaches **every gated route** | `DELETE /api/credentials/<id>` → **401** bare, **404** with `Sec-Fetch-Site: same-origin`. The handler was reached; only a missing row stopped it. |
+| **G-020** | `.env` written **world-readable** holding the DB password and the MCP token | `ls -l .env` → `-rw-r--r--`. `main.ts` persists the token it mints through that path. |
+| **G-021** | The gate leaked `process.env` into the **persisted run log** | A failing script echoing `DATABASE_URL` returned it verbatim into stored, rendered output. |
+| **G-022** | The gate executed a script **the repository could supply** | `access()` cannot tell a planted file from a staged one, and `bash <path>` ignores the execute bit. |
 
-What stops it being "yes" is named below, not buried.
+**G-021 and G-022 were introduced by this campaign's own ADR 0020 work.** The
+verification gate added to stop bad code shipping was itself handing the
+parent's secrets to a script the repo could choose. That belongs at the front of
+this verdict, not buried in a table.
+
+Three are fixed, with regression tests; one of those plants a hostile script and
+asserts it does not run. **G-023 is deliberately only half-fixed** — see below.
+
+### What can be certified
+
+Every gate green, and every known issue closed except the one named below.
+That is a real claim with numbers behind it, and it is not the same claim as
+"there are no bugs" — twenty-five findings surfaced in a day, in a codebase
+that had been declared done the evening before.
 
 ## What is still not true
 
+- **G-023 — the write gate is not a security boundary, and cannot be made one
+  by any header check.** Nothing in an HTTP request distinguishes a browser
+  from a local process; tightening the Origin arm only means forging two
+  headers instead of one, and baking the token into the web bundle is worse —
+  with `ATLAS_LAN_ACCESS=true` the bundle, and the token, go to the LAN. What
+  *was* fixed is the false claim: `mcp-auth.ts`, `main.ts` and
+  `.agents/architecture.md` now state the real property, because a comment
+  telling the next developer the gate is sound is the most dangerous part of
+  it. Closing it properly needs a same-origin bootstrap setting an HttpOnly
+  `SameSite=Strict` cookie. **Owner decision.** Practical ceiling worth
+  knowing: a hostile process running as the Owner can read `ATLAS_MCP_TOKEN`
+  from `.env` anyway, so the token was never stronger against that threat.
 - **Git history carries the old third-party names.** Ruling E-5 — working tree
   and docs only, no rewrite. The repo is public and those commits remain
-  readable. That was the Owner's call, and it is a real residue, not a closed
-  item.
-- **Branch coverage is not 95%** — `api` 87.84, `web` 92.51 — and reaching it
-  would mean writing tests that assert nothing. The ceiling and its arithmetic
-  are in tasks 05 and 06.
-- **The install, onboarding and sample-Task steps were not re-run** (E-1). They
-  rest on the 2026-09-20 record. That record is good — two resets, identical
-  seed counts, 45 agent runs, four PRs — but it is inherited, not re-proved.
+  readable.
+- **Branch coverage is not 95%** — `api` 87.8, `web` 92.5 — because the
+  remaining branches are defensive guards and lazy-route closures. Tasks 05
+  and 06 carry the arithmetic; ADR 0009 records it as a ceiling.
+- **The install, onboarding and sample-Task steps were not re-run** (E-1).
+  They rest on the inherited 2026-09-20 record.
 - **A clean `pnpm audit` is not "0 vulnerabilities."** It means no advisory
   currently in the registry matches a version currently in this lockfile. It is
-  not a reachability analysis, it says nothing about Atlas's own code, and it is
-  true today only. The brief asked for "0 vulnerabilities so companies can adopt
-  this"; what can honestly be handed to such a company is a clean dependency
-  audit, 18 pinned security floors, a closed-by-default MCP write gate, and
-  these limits stated rather than glossed.
-- **Two chains from the predecessor's sweep are still partial**, and the Jira
-  status-sync hop was deliberately not exercised against a real board.
-- **The Jira API token used for X-8 was shared in conversation** and must be
-  revoked and reissued. It never reached the repo — `git grep` returns nothing —
-  but it is in a transcript.
+  not a reachability analysis and — as G-020 through G-025 demonstrate — it
+  says nothing whatever about Atlas's own code. The dependency posture is
+  genuinely clean; that is a different sentence.
+- **Four e2e specs still abstain** where the seed genuinely creates no fixture
+  (no agent run, no closed CLI session). Their messages now say so instead of
+  blaming a lookup.
+- **The Jira API token must be rotated.** It never reached the repo.
 
 ## The two that were escalated, then fixed
 
