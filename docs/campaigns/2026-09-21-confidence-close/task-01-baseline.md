@@ -98,9 +98,16 @@ No known vulnerabilities found
 Confirms F-020 still holds on 2026-09-21, before any change on this board.
 Task-09 re-runs it at the end, and records what the claim does and does not mean.
 
-### `pnpm e2e`
+### `pnpm e2e` — 224 passed, 315 skipped, 0 failed, exit 0
 
-_Run started 2026-09-21; result appended below on completion._
+Identical to the figure the predecessor recorded at its close ("224 passed /
+315 skipped"), so nothing regressed in the four PRs that landed since. Runtime
+6.1m across the chromium, mobile-chrome and ipad-chrome projects.
+
+The 315 skips are gates, not failures: the `PERF` / `FORENSIC` / `FUNCTIONAL` /
+`STATE_TRANSITIONS` suites plus the Linux-only visual baselines, which
+`snapshots.spec.ts` skips by design on macOS. Counting them as failures is the
+mistake this line exists to prevent.
 
 ### The six spot-checks
 
