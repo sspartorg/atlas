@@ -1,7 +1,6 @@
 # confidence-close — the board
 
-> **CLOSED — 2026-09-21. All 10 rows done.** 15 findings, 13 fixed, 2 open by
-> design. `pnpm -w run gate` green, `pnpm e2e` 224/0, `pnpm audit` clean.
+> **CLOSED — 2026-09-21. All 10 rows done.** 15 findings, **all 15 fixed**. `pnpm -w run gate` green, `pnpm e2e` 224/0, `pnpm audit` clean.
 > **Five real defects were found, one of them P1.**
 > Read *Closing* at the foot of this file first.
 
@@ -188,10 +187,9 @@ demonstrated rather than asserted.
   arithmetic is in tasks 05 and 06; ADR 0009 records it as a ceiling.
 - **Install, onboarding and the sample Tasks were not re-run** (E-1). They rest
   on the inherited 2026-09-20 record.
-- **G-013** — the Jira bridge writes to every matched issue the moment it is
-  enabled. There is no import-only mode and nothing warns. Owner ruling.
-- **G-015** — 152 icon spans without `aria-hidden`, so buttons announce as
-  "addNew workflow". A sanctioned convention, so an Owner ruling.
+- ~~**G-013**~~ and ~~**G-015**~~ — escalated for an Owner ruling, then ruled on
+  and fixed. The Jira bridge now writes only when Atlas acts, and all 152 icon
+  spans are hidden with three buttons given real labels as a consequence.
 - **Two cross-dependency chains are still partial**, and the Jira status-sync
   hop was deliberately not run against a real board.
 - **The Jira API token must be rotated** — it was shared in conversation. It

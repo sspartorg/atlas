@@ -44,14 +44,19 @@ describe('deliveryLabel', () => {
     it('names each remaining push/PR combination', () => {
         expect(deliveryLabel(delivery({ push_code: true, raises_pr: true }))).toBe('Push + PR');
         expect(deliveryLabel(delivery({ push_code: true }))).toBe('Push branch');
-        expect(deliveryLabel(delivery({ raises_pr: true }))).toBe('Pull request');
+        // G-016 — raises_pr alone delivers NOTHING: deliver() requires
+        // push_code too. This asserted 'Pull request', a promise the engine
+        // does not keep.
+        expect(deliveryLabel(delivery({ raises_pr: true }))).toBe('No delivery');
         expect(deliveryLabel(delivery())).toBe('No delivery');
     });
 
     // push_to_default is optional on the input type; without push_code it is
     // irrelevant and must not shadow the PR-only answer.
     it('ignores push_to_default when nothing is pushed', () => {
-        expect(deliveryLabel(delivery({ raises_pr: true, push_to_default: true }))).toBe('Pull request');
+        expect(deliveryLabel(delivery({ raises_pr: true, push_to_default: true }))).toBe(
+            'No delivery',
+        );
     });
 });
 

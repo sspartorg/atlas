@@ -93,7 +93,7 @@ Exactly the four gate tests; the other 43 unchanged.
 
 ### Findings
 
-**15 rows. 13 fixed, 2 open — both needing an Owner ruling rather than a fix.**
+**15 rows. All 15 fixed.** G-013 and G-015 were filed for an Owner ruling and then ruled on: *fix them*. Both are closed, mutation-proved, and described below.
 
 ## The answer
 
@@ -133,13 +133,37 @@ What stops it being "yes" is named below, not buried.
   these limits stated rather than glossed.
 - **Two chains from the predecessor's sweep are still partial**, and the Jira
   status-sync hop was deliberately not exercised against a real board.
-- **Two findings are open by design** — G-013 (the Jira bridge writes to matched
-  issues the moment it is enabled; there is no import-only mode) and G-015 (152
-  icon spans without `aria-hidden`, so buttons announce as "addNew workflow").
-  Both are Owner rulings about intended behaviour, not bugs to fix unilaterally.
 - **The Jira API token used for X-8 was shared in conversation** and must be
   revoked and reissued. It never reached the repo — `git grep` returns nothing —
   but it is in a transcript.
+
+## The two that were escalated, then fixed
+
+G-013 and G-015 were filed rather than fixed because both changed behaviour a
+document called intentional. The Owner ruled: fix them.
+
+**G-013 — the Jira bridge was a write action.** Enabling it and matching an
+issue posted a comment within one tick, before anything was approved. Fixed
+with a rule rather than a toggle: **Atlas writes to Jira when it acts, not when
+it merely looks.** A `draft` Task is not a milestone. No migration, no new
+config field, no import-only mode to explain — and the suppressed comment
+carried no information anyway, since it said Atlas was *not* doing anything.
+Atlas still comments at each real milestone, so the settings copy now says so
+outright.
+
+**G-015 — 152 icon spans leaked their glyph into accessible names.** Fixed
+across 73 files. The half nobody should skip: hiding a glyph turns an icon-only
+button from badly-named into **unnamed**, so three buttons needed a real
+`aria-label` as a direct consequence. `RefreshButton` was the trap — it looked
+safe because a `<Tooltip>` wraps it, but the Tooltip wraps a `<span>` and MUI
+names only its immediate child, so it was left nameless. A failing
+`ProjectDetail` test caught it, not the fix's own reasoning.
+
+Both now have a source-level invariant test. That test was itself **silently
+vacuous** on its first version — its tag parser stopped at the `>` inside
+`onClick={(e) => …}`, and a glob that matched nothing would have passed every
+assertion under it. It now asserts its own scan finds >100 files, and refuses
+to accept a wrapping Tooltip as a name.
 
 ## What the evidence contradicted
 
