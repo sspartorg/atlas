@@ -456,3 +456,35 @@ describe('credentialsService — github_app kind', () => {
         expect(pat.app_id).toBeNull();
     });
 });
+
+// G-025 — the slug is written verbatim into the file that becomes
+// GIT_CONFIG_GLOBAL, so a newline injects git config directives and
+// `[core] sshCommand` is command execution as the API user.
+describe('readBotInfoFolder — app_slug injection guard (G-025)', () => {
+    it('rejects a slug carrying a newline and a git config directive', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'atlas-bot-slug-'));
+        writeFileSync(
+            join(dir, 'app-config.json'),
+            JSON.stringify({ id: 123456, slug: 'ok\n[core]\n\tsshCommand = touch /tmp/pwned' }),
+            'utf8',
+        );
+        writeFileSync(
+            join(dir, 'k.pem'),
+            '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----\n',
+            'utf8',
+        );
+        await expect(
+            credentialsService.create({
+                label: 'App',
+                host: 'github',
+                kind: 'github_app',
+                bot_info_path: dir,
+                app_installation_owner: 'acme-org',
+                scope: '',
+                human_name: null,
+                human_email: null,
+                human_gh_login: null,
+            } as never),
+        ).rejects.toThrow(/"slug" must be a GitHub App slug/);
+    });
+});
