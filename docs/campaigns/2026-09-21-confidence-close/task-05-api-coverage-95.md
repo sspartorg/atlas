@@ -94,4 +94,43 @@ other six would have been permanent write cost bought with nothing.
 
 ## Evidence
 
-_Written after execution._
+_In progress._
+
+### G-009 first, because it was free
+
+`history-prune.test.ts` was committed but missing from
+`packages/api/vitest.config.ts`'s explicit `include:` allowlist, so its 7 tests
+had never run and `services/history-prune.ts` sat at **0% branches / 11.11%
+statements** — the worst file in the package. Adding one line to the allowlist
+was the whole fix, and **one of the seven tests then failed**: it asserted ISO
+strings against the `Date` objects node-postgres actually returns. A test that
+never runs is not a test; it is a file that looks like one.
+
+### The allowlist is the hazard, and it has outlived its purpose
+
+Having fixed the symptom, the cause is worth removing. Measured after the fix:
+
+```
+listed: 155 | on disk (src+tests): 155
+on disk NOT listed: none
+listed NOT on disk: none
+```
+
+The 155-entry allowlist is now **exactly equivalent** to
+`src/**/*.test.ts` + `tests/**/*.test.ts`. Its own header explains why it
+exists — *"Migrated tests use the PG fixture in `tests/_pg-db.ts`"* — it was a
+migration ledger, added to file by file as tests moved to the Postgres fixture.
+That migration is complete. What remains is ~110 lines of configuration whose
+only measurable effects have been one silently-skipped test file and one stale
+entry pointing at a file that no longer exists.
+
+Every other package (`web`, `mcp`, `shared`) already uses a glob, which is why
+this bug class exists in `api` alone. Replacing the list with the same glob
+deletes the configuration, runs exactly the same 155 files today, and makes the
+failure permanently impossible rather than merely fixed once.
+
+### Sequencing note
+
+The allowlist change is deliberately held until the in-flight coverage
+measurement completes, so the baseline is measured against the configuration
+that produced it rather than one edited underneath it.
