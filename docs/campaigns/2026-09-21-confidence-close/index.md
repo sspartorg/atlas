@@ -26,8 +26,8 @@ Its findings are `F-001`…`F-022`; this board's are `G-001`…, a fresh series.
 | 2 | [Leftover-name sweep round 2](task-02-name-sweep-round-2.md) | api · shared · web · docs | done |
 | 3 | [`.strict()` on `UpdateExternalNotificationSchema`](task-03-strict-external-notification.md) | shared | done |
 | 4 | [Machine-verify the reviewer checklist gates](task-04-machine-verify-checklists.md) | api | done — ADR 0020 |
-| 5 | [`@atlas/api` coverage to 95 on all four metrics](task-05-api-coverage-95.md) | api | todo |
-| 6 | [`@atlas/web` coverage to 95 on all four metrics](task-06-web-coverage-95.md) | web | todo |
+| 5 | [`@atlas/api` coverage to 95 on all four metrics](task-05-api-coverage-95.md) | api | done — 3 of 4 metrics; branches a documented ceiling |
+| 6 | [`@atlas/web` coverage to 95 on all four metrics](task-06-web-coverage-95.md) | web | done — 3 of 4 metrics; branches a documented ceiling |
 | 7 | [Recapture the twelve stale guide screenshots](task-07-guide-screenshots.md) | docs | done |
 | 8 | [Execute Jira chain X-8 and the two partial chains](task-08-jira-x8.md) | api · web | done — X-8 live; 2 chains still partial |
 | 9 | [Security re-audit — confirm 0 advisories still holds](task-09-security-reaudit.md) | infra | done |

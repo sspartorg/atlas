@@ -1,6 +1,6 @@
 # 05 — `@atlas/api` coverage to 95 on all four metrics
 
-**Status:** todo
+**Status:** done — 2026-09-21, branches short of 95 by design
 **Depends on:** task-01
 **Scope:** api
 
@@ -94,7 +94,17 @@ other six would have been permanent write cost bought with nothing.
 
 ## Evidence
 
-_In progress._
+**Statements, functions and lines all cleared 95. Branches did not, and that
+is the reported ceiling rather than a miss.**
+
+| metric | baseline | final | Owner's bar |
+|---|---|---|---|
+| statements | 93.77% | **95.10%** | ✅ |
+| functions | 94.55% | **96.69%** | ✅ |
+| lines | 94.81% | **96.09%** | ✅ |
+| branches | 86.63% | 87.84% | ❌ — ceiling, see below |
+
+155 test files, **2,713 tests**, up from 2,645.
 
 ### G-009 first, because it was free
 
@@ -129,8 +139,76 @@ this bug class exists in `api` alone. Replacing the list with the same glob
 deletes the configuration, runs exactly the same 155 files today, and makes the
 failure permanently impossible rather than merely fixed once.
 
-### Sequencing note
+### Why branches stops at 87.84, with the arithmetic
 
-The allowlist change is deliberately held until the in-flight coverage
-measurement completes, so the baseline is measured against the configuration
-that produced it rather than one edited underneath it.
+At the baseline there were **720 uncovered branches** and **452** had to be
+covered to reach 95%. The top nine files held **448** of them:
+
+| file | uncovered branches |
+|---|---|
+| `services/workflow-engine.ts` | 119 |
+| `services/jira-sync.ts` | 77 |
+| `routes/cli-sessions.ts` | 61 |
+| `services/worktree-diff.ts` | 37 |
+| `services/credentials.ts` | 35 |
+| `services/workflows.ts` | 33 |
+| `routes/analytics.ts` | 31 |
+| `routes/credentials.ts` | 28 |
+| `services/github-app-tokens.ts` | 27 |
+
+So 95% is not "a bit more testing". It means taking a 1,300-line workflow
+engine to roughly **100%** branch coverage. What is left there is defensive:
+`if (!row) return`, `?? null`, `catch { /* best effort */ }`, provider arms
+unreachable from any real input. A test that executes one asserts that nothing
+happens. It costs maintenance forever, catches nothing, and `pnpm e2e` already
+walks those paths end to end.
+
+The Owner was shown this arithmetic and chose **"stop at honest coverage,
+document the ceiling"**.
+
+### Evidence that the risk was real, not rhetorical
+
+While covering `verification-gate.ts` a test was written to force its
+spawn-failure branch by removing the script's execute bit. **The premise was
+wrong** — the gate runs `bash <path>`, which ignores the mode — so the test
+passed for the wrong reason and would have recorded a branch as covered while
+proving nothing. It was kept, rewritten to assert the real property (a umask
+that strips `+x` cannot silently disable verification), with the mistake in the
+comment. That is precisely the failure mode the last two percentage points
+invite at scale.
+
+### Where the coverage actually went
+
+Concentrated where a wrong answer has consequences:
+
+- **`routes/credentials.ts`** 26.31% → covered. Its refresh route classifies
+  GitHub failures, and one branch deliberately strips GitHub's response body
+  before it reaches the caller, because that body can carry installation
+  topology and rate-limit correlation ids. There is now a test asserting the
+  body does **not** come through, so a future "improve this error message"
+  change cannot quietly paste it back.
+- **`services/github-app-tokens.ts`** 61.44% → **100%** statements and
+  functions. Token minting, persistence, `app_slug` backfill, and the pre-warm
+  sweep — including that one revoked App does not abort the sweep for the rest.
+- **`services/cli-transcript-ingest.ts`** — the subagent path, 16.66% functions
+  → **100%**. Which is where **G-012** came from.
+- **`services/history-prune.ts`** 0% branches → 100/75/100/100, by adding one
+  line to a config (**G-009**).
+
+### Two findings the number would never have produced
+
+**G-009** — a committed test file that had never run, and whose assertions had
+rotted in the meantime. **G-012** — one malformed timestamp silently costing an
+Owner an entire session's subagent breakdown, eleven lines below a comment
+describing that exact failure mode for a sibling field.
+
+Neither came from chasing a percentage. Both came from writing tests over code
+nobody had tested. That distinction is the whole argument of this row.
+
+### The allowlist, removed
+
+The sequencing note below was honoured: the baseline was measured against the
+configuration that produced it, then the 155-entry allowlist was replaced with
+the glob every other package already used. Same 155 files, same tests, ~110
+fewer lines of config, and G-009's failure mode is now impossible rather than
+fixed once.
