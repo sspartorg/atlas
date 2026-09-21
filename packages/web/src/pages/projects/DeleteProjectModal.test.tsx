@@ -8,6 +8,7 @@ import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { makeProject, makeProjectRepo } from '../../test-utils/factories.js';
 import { defaultHandlers } from '../../test-utils/mock-handlers.js';
 import { DeleteProjectModal } from './DeleteProjectModal.js';
+import { projectsPagedKey } from '../../hooks/useProjects.js';
 
 // Stub EventSource so we can fire SSE events in tests. sse-hub (Batch-6
 // SSE-hub refactor) sets handlers via `.onmessage = fn` property
@@ -304,13 +305,12 @@ describe('DeleteProjectModal — success view via SSE', () => {
         expect(screen.getByRole('button', { name: /Back to projects/i })).toBeInTheDocument();
     });
 
-    // Regression: after a delete succeeds, the Projects list page must
-    // show the fresh state. The page reads from useProjectsPaged (key
-    // ['projects-paged']), NOT the unpaged ['projects'] used by sidenav.
-    // Previously the modal invalidated only the unpaged key, so hitting
-    // Back to Projects after a delete showed the deleted row until a
-    // hard refresh.
-    it('invalidates BOTH [projects] and [projects-paged] on delete success', async () => {
+    // Regression: after a delete succeeds, the Projects list page must show
+    // the fresh state. The page reads from useProjectsPaged, not the unpaged
+    // ['projects'] used by sidenav. This asserts against that hook's real key
+    // — if it is ever moved out from under ['projects'] again, the single
+    // invalidation stops reaching it and this fails.
+    it('invalidates the paged Projects list on delete success', async () => {
         const qc = new QueryClient({
             defaultOptions: {
                 queries: { retry: false, staleTime: 0, gcTime: 0, refetchOnMount: 'always' },
@@ -318,6 +318,8 @@ describe('DeleteProjectModal — success view via SSE', () => {
             },
         });
         const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
+        // The exact key the Projects page renders from.
+        const pagedKey = projectsPagedKey(1, 20);
         server.use(
             http.post(`${BASE}/projects/p1/delete`, () =>
                 HttpResponse.json({ delete_id: 'del-cache' })
@@ -335,9 +337,14 @@ describe('DeleteProjectModal — success view via SSE', () => {
         const invalidatedKeys = invalidateSpy.mock.calls.map(
             (call) => (call[0] as { queryKey?: unknown[] })?.queryKey?.[0]
         );
-        expect(invalidatedKeys).toContain('projects');
-        expect(invalidatedKeys).toContain('projects-paged');
         expect(invalidatedKeys).toContain('sidenav-counts');
+        // One of the invalidations must be a prefix of the paged list's real
+        // key — that is what makes TanStack match it.
+        const reachesPagedList = invalidateSpy.mock.calls.some((call) => {
+            const key = (call[0] as { queryKey?: unknown[] })?.queryKey ?? [];
+            return key.length > 0 && key.every((seg, i) => seg === pagedKey[i]);
+        });
+        expect(reachesPagedList).toBe(true);
     });
 
     it('success view — unregister mode shows "workspace folder kept on disk" text', async () => {

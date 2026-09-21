@@ -184,14 +184,10 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
     useEffect(() => {
         if (job.status === 'ready') {
             setView('success');
-            // Both ['projects'] AND ['projects-paged'] must be invalidated
-            // — the Projects page reads from useProjectsPaged (paged key),
-            // while sidenav / onboarding pull from useProjects (unpaged).
-            // Invalidating only one leaves the other stale, so hitting Back
-            // to Projects after a delete showed the deleted row until the
-            // user hard-refreshed. Matches useDeleteProject in useProjects.ts.
+            // Covers both the unpaged list (sidenav / onboarding) and the
+            // paged list the Projects page renders — useProjectsPaged nests
+            // its key under ['projects'] so one invalidation reaches both.
             void qc.invalidateQueries({ queryKey: ['projects'] });
-            void qc.invalidateQueries({ queryKey: ['projects-paged'] });
             void qc.invalidateQueries({ queryKey: ['sidenav-counts'] });
         } else if (job.status === 'error') {
             setView('error');

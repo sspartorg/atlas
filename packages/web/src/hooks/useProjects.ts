@@ -21,9 +21,19 @@ export function useProjects() {
 // Page-scoped variant for the visible /projects table. Keeps payloads bounded
 // even after the workspace grows past a few hundred projects, and lets the
 // table render the next page near-instantly via keepPreviousData.
+//
+// The key nests under ['projects'] on purpose: this is the list the page
+// actually renders, and a sibling root key ('projects-paged') meant every
+// invalidateQueries(['projects']) elsewhere in the app silently missed it,
+// leaving a freshly cloned project invisible until a reload.
+// Exported so a regression test can assert an invalidation actually reaches
+// this list rather than asserting on a key literal that could drift apart.
+export const projectsPagedKey = (page: number, limit: number) =>
+    ['projects', 'paged', page, limit] as const;
+
 export function useProjectsPaged(params: { page: number; limit: number }) {
     return useQuery({
-        queryKey: ['projects-paged', params.page, params.limit],
+        queryKey: projectsPagedKey(params.page, params.limit),
         queryFn: () => api.projects.listPaged(params),
         placeholderData: keepPreviousData,
         staleTime: 30_000,
@@ -44,7 +54,6 @@ export function useCreateProject() {
         mutationFn: (data: Partial<IProject>) => api.projects.create(data),
         onSuccess: () => {
             void qc.invalidateQueries({ queryKey: ['projects'] });
-            void qc.invalidateQueries({ queryKey: ['projects-paged'] });
             void qc.invalidateQueries({ queryKey: ['sidenav-counts'] });
         },
     });
@@ -57,7 +66,6 @@ export function useUpdateProject() {
             api.projects.update(id, data),
         onSuccess: (updated) => {
             void qc.invalidateQueries({ queryKey: ['projects'] });
-            void qc.invalidateQueries({ queryKey: ['projects-paged'] });
             void qc.setQueryData(['projects', updated.id], updated);
         },
     });
@@ -69,7 +77,6 @@ export function useDeleteProject() {
         mutationFn: (id: string) => api.projects.delete(id),
         onSuccess: () => {
             void qc.invalidateQueries({ queryKey: ['projects'] });
-            void qc.invalidateQueries({ queryKey: ['projects-paged'] });
             void qc.invalidateQueries({ queryKey: ['sidenav-counts'] });
         },
     });
