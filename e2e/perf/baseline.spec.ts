@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { gotoWithPerf } from '../helpers/perf.js';
+import { firstAgentId, firstMarketplaceAgentId, firstProjectId } from '../helpers/entities.js';
 
 // W7 chunk 1 — expanded from 13 routes to all 34 route patterns registered
 // in packages/web/src/App.tsx (reconciled 2026-06-25).
@@ -129,14 +130,10 @@ test.describe('perf baseline', () => {
     // Projects — detail page + project-level guardrails
     // -----------------------------------------------------------------------
     test('walk first project detail (tabs)', async ({ page }) => {
-        await gotoWithPerf(page, '/projects');
-        const firstProjectLink = page.locator('a[href^="/projects/"]').first();
-        if ((await firstProjectLink.count()) === 0) {
-            test.skip(true, 'no seeded project on /projects — skipping detail walk');
-            return;
-        }
-        const href = await firstProjectLink.getAttribute('href');
-        if (!href) return;
+        // G-018 — id from the API, not an `<a href>`. The cards navigate via
+        // onClick, so the old locator matched nothing even with a seeded DB and
+        // this walk silently never ran.
+        const href = `/projects/${await firstProjectId(page)}`;
         const tabs = ['overview', 'tasks', 'history', 'guardrails'] as const;
         for (const tab of tabs) {
             const record = await gotoWithPerf(page, `${href}?tab=${tab}`);
@@ -145,15 +142,7 @@ test.describe('perf baseline', () => {
     });
 
     test('walk project guardrails page', async ({ page }) => {
-        await gotoWithPerf(page, '/projects');
-        const firstProjectLink = page.locator('a[href^="/projects/"]').first();
-        if ((await firstProjectLink.count()) === 0) {
-            test.skip(true, 'no seeded project — skipping /projects/:id/guardrails');
-            return;
-        }
-        const href = await firstProjectLink.getAttribute('href');
-        if (!href) return;
-        const projectId = href.replace('/projects/', '').split('/')[0];
+        const projectId = await firstProjectId(page);
         const record = await gotoWithPerf(page, `/projects/${projectId}/guardrails`);
         assertApiBudget(record, `/projects/${projectId}/guardrails`);
     });
@@ -173,17 +162,7 @@ test.describe('perf baseline', () => {
     // Agents — detail page + agent run detail + marketplace agent detail
     // -----------------------------------------------------------------------
     test('walk first agent detail (tabs)', async ({ page }) => {
-        await gotoWithPerf(page, '/agents');
-        const firstAgentLink = page.locator('a[href^="/agents/"]')
-            .filter({ hasNot: page.locator('[href="/agents/mcp-tools"]') })
-            .filter({ hasNot: page.locator('[href="/agents/marketplace"]') })
-            .first();
-        if ((await firstAgentLink.count()) === 0) {
-            test.skip(true, 'no seeded agent on /agents — skipping detail walk');
-            return;
-        }
-        const href = await firstAgentLink.getAttribute('href');
-        if (!href) return;
+        const href = `/agents/${await firstAgentId(page)}`;
         const tabs = ['overview', 'prompt', 'testrun', 'runs', 'memory'] as const;
         for (const tab of tabs) {
             const record = await gotoWithPerf(page, `${href}?tab=${tab}`);
@@ -192,36 +171,20 @@ test.describe('perf baseline', () => {
     });
 
     test('walk first marketplace agent detail', async ({ page }) => {
-        await gotoWithPerf(page, '/agents/marketplace');
-        const firstMarketplaceLink = page.locator('a[href^="/agents/marketplace/"]').first();
-        if ((await firstMarketplaceLink.count()) === 0) {
-            test.skip(true, 'no marketplace agents visible — skipping marketplace detail walk');
-            return;
-        }
-        const href = await firstMarketplaceLink.getAttribute('href');
-        if (!href) return;
+        const href = `/agents/marketplace/${await firstMarketplaceAgentId(page)}`;
         const record = await gotoWithPerf(page, href);
         assertApiBudget(record, href);
     });
 
     test('walk first agent run detail', async ({ page }) => {
-        await gotoWithPerf(page, '/agents');
-        // Navigate to first agent detail, then look for a run link
-        const firstAgentLink = page.locator('a[href^="/agents/"]')
-            .filter({ hasNot: page.locator('[href="/agents/mcp-tools"]') })
-            .filter({ hasNot: page.locator('[href="/agents/marketplace"]') })
-            .first();
-        if ((await firstAgentLink.count()) === 0) {
-            test.skip(true, 'no seeded agent — skipping run detail walk');
-            return;
-        }
-        const agentHref = await firstAgentLink.getAttribute('href');
-        if (!agentHref) return;
+        const agentHref = `/agents/${await firstAgentId(page)}`;
         // Navigate to runs tab
         await gotoWithPerf(page, `${agentHref}?tab=runs`);
         const runLink = page.locator(`a[href^="${agentHref}/runs/"]`).first();
         if ((await runLink.count()) === 0) {
-            test.skip(true, 'no agent runs visible — skipping run detail walk');
+            // Honest: the e2e seed starts no agent run — that would spawn a
+            // CLI. Genuinely absent, not a failed lookup.
+            test.skip(true, 'e2e seed starts no agent run — genuinely absent');
             return;
         }
         const runHref = await runLink.getAttribute('href');
