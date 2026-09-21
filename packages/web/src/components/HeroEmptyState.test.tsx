@@ -12,7 +12,7 @@ describe('HeroEmptyState', () => {
                 description="Connect your first repo"
                 primaryAction={<button>Connect</button>}
                 supplemental={<span>more help</span>}
-            />,
+            />
         );
         expect(screen.getByText('No projects')).toBeInTheDocument();
         expect(screen.getByText('Connect your first repo')).toBeInTheDocument();

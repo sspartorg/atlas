@@ -25,7 +25,13 @@ import {
     type UpdateWorkflowInput,
 } from '@atlas/shared';
 import { AtlasApiError } from '../../api/api.js';
-import { useWorkflow, useWorkflows, useStartWorkflowRun, useUpdateWorkflow, useDeleteWorkflow } from '../../hooks/useWorkflows.js';
+import {
+    useWorkflow,
+    useWorkflows,
+    useStartWorkflowRun,
+    useUpdateWorkflow,
+    useDeleteWorkflow,
+} from '../../hooks/useWorkflows.js';
 import { useAgents } from '../../hooks/useAgents.js';
 import { useProjects } from '../../hooks/useProjects.js';
 import { useTabParam } from '../../hooks/useTabParam.js';
@@ -127,7 +133,7 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
     const draft = useMemo(() => ({ ...settings, graph }), [settings, graph]);
     const dirty = useMemo(
         () => JSON.stringify(toUpdate(draft)) !== JSON.stringify(toUpdate(baseline)),
-        [draft, baseline],
+        [draft, baseline]
     );
     useDraftGuard(dirty);
 
@@ -145,11 +151,14 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
 
     useEffect(() => setServerErrors((prev) => (prev.length ? [] : prev)), [graph]);
 
-    const clientErrors = useMemo(() => validateWorkflowGraph(graph, settings.input_kind), [graph, settings.input_kind]);
+    const clientErrors = useMemo(
+        () => validateWorkflowGraph(graph, settings.input_kind),
+        [graph, settings.input_kind]
+    );
     const errors = clientErrors.length ? clientErrors : serverErrors;
     const errorNodeIds = useMemo(
         () => new Set(errors.flatMap((e) => (e.node_id ? [e.node_id] : []))),
-        [errors],
+        [errors]
     );
 
     const context = useMemo(
@@ -160,15 +169,21 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
             runStates: null,
             delivery: settings,
         }),
-        [agents, workflows, errorNodeIds, settings],
+        [agents, workflows, errorNodeIds, settings]
     );
 
-    const onNodesChange = useCallback((c: NodeChange<WfNode>[]) => setNodes((ns) => applyNodeChanges(c, ns)), []);
-    const onEdgesChange = useCallback((c: EdgeChange<WfEdge>[]) => setEdges((es) => applyEdgeChanges(c, es)), []);
+    const onNodesChange = useCallback(
+        (c: NodeChange<WfNode>[]) => setNodes((ns) => applyNodeChanges(c, ns)),
+        []
+    );
+    const onEdgesChange = useCallback(
+        (c: EdgeChange<WfEdge>[]) => setEdges((es) => applyEdgeChanges(c, es)),
+        []
+    );
     const onConnect = useCallback((c: Connection) => setEdges((es) => connectEdges(es, c)), []);
     const onSelectionChange = useCallback<OnSelectionChangeFunc<WfNode, WfEdge>>(
         ({ nodes: sel }) => setSelectedId(sel[0]?.id ?? null),
-        [],
+        []
     );
 
     const addNode = useCallback(
@@ -185,7 +200,13 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
                 // node down past any node already sitting there so they
                 // never stack invisibly on top of each other.
                 const position = { x: p.x, y: p.y - 32 };
-                while (ns.some((n) => Math.abs(n.position.x - position.x) < 40 && Math.abs(n.position.y - position.y) < 40)) {
+                while (
+                    ns.some(
+                        (n) =>
+                            Math.abs(n.position.x - position.x) < 40 &&
+                            Math.abs(n.position.y - position.y) < 40
+                    )
+                ) {
                     position.y += 80;
                 }
                 const node: WfNode = {
@@ -199,7 +220,7 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
             });
             setSelectedId(id);
         },
-        [screenToFlowPosition],
+        [screenToFlowPosition]
     );
 
     const onDrop = useCallback(
@@ -209,16 +230,21 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
             e.preventDefault();
             addNode(JSON.parse(raw) as IPaletteItem, { x: e.clientX, y: e.clientY });
         },
-        [addNode],
+        [addNode]
     );
 
     const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
     const onNodeData = useCallback(
         (patch: IWfNodeData) =>
-            setNodes((ns) => ns.map((n) => (n.id === selectedId ? { ...n, data: { ...n.data, ...patch } } : n))),
-        [selectedId],
+            setNodes((ns) =>
+                ns.map((n) => (n.id === selectedId ? { ...n, data: { ...n.data, ...patch } } : n))
+            ),
+        [selectedId]
     );
-    const onSettings = useCallback((patch: Partial<IWorkflow>) => setSettings((s) => ({ ...s, ...patch })), []);
+    const onSettings = useCallback(
+        (patch: Partial<IWorkflow>) => setSettings((s) => ({ ...s, ...patch })),
+        []
+    );
 
     async function save() {
         try {
@@ -228,7 +254,10 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
             toast.show({ message: 'Workflow saved' });
         } catch (err) {
             setServerErrors(graphErrorsOf(err));
-            toast.show({ message: 'Could not save workflow', detail: err instanceof Error ? err.message : String(err) });
+            toast.show({
+                message: 'Could not save workflow',
+                detail: err instanceof Error ? err.message : String(err),
+            });
         }
     }
 
@@ -241,7 +270,10 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
             const { run_id } = await start.mutateAsync({ workflowId: baseline.id });
             navigate(`/workflows/${baseline.id}/runs/${run_id}`);
         } catch (err) {
-            toast.show({ message: 'Could not start run', detail: err instanceof Error ? err.message : String(err) });
+            toast.show({
+                message: 'Could not start run',
+                detail: err instanceof Error ? err.message : String(err),
+            });
         }
     }
 
@@ -252,7 +284,10 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
             navigate('/workflows');
         } catch (err) {
             setDeleteOpen(false);
-            toast.show({ message: 'Could not delete workflow', detail: err instanceof Error ? err.message : String(err) });
+            toast.show({
+                message: 'Could not delete workflow',
+                detail: err instanceof Error ? err.message : String(err),
+            });
         }
     }
 
@@ -286,7 +321,10 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
                     onChange={(_, v: TabKey) => setTab(v)}
                     sx={{
                         minHeight: 42,
-                        '& .MuiTabs-indicator': { backgroundColor: ATLAS_PALETTE.brandBlue, height: 2 },
+                        '& .MuiTabs-indicator': {
+                            backgroundColor: ATLAS_PALETTE.brandBlue,
+                            height: 2,
+                        },
                         '& .MuiTab-root': {
                             minHeight: 42,
                             textTransform: 'none',
@@ -309,7 +347,8 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
                     <GraphErrors errors={errors} />
                     {phone && (
                         <Alert severity="info" sx={{ mb: 3 }}>
-                            The canvas is read-only on a phone. Open this workflow on a tablet or desktop to edit it.
+                            The canvas is read-only on a phone. Open this workflow on a tablet or
+                            desktop to edit it.
                         </Alert>
                     )}
                     <Box
@@ -325,11 +364,24 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
                         }}
                     >
                         {!phone && (
-                            <Box sx={{ display: 'flex', minHeight: 0, maxHeight: { xs: 280, md: 'calc(100vh - 300px)' } }}>
-                                <NodePalette agents={agents} showSubtasks={settings.input_kind === 'item'} onAdd={(item) => addNode(item)} />
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    minHeight: 0,
+                                    maxHeight: { xs: 280, md: 'calc(100vh - 300px)' },
+                                }}
+                            >
+                                <NodePalette
+                                    agents={agents}
+                                    showSubtasks={settings.input_kind === 'item'}
+                                    onAdd={(item) => addNode(item)}
+                                />
                             </Box>
                         )}
-                        <Box ref={canvasRef} sx={{ height: { xs: 420, md: 'calc(100vh - 300px)' }, minHeight: 420 }}>
+                        <Box
+                            ref={canvasRef}
+                            sx={{ height: { xs: 420, md: 'calc(100vh - 300px)' }, minHeight: 420 }}
+                        >
                             <WorkflowCanvas
                                 nodes={nodes}
                                 edges={edges}
@@ -343,7 +395,14 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
                             />
                         </Box>
                         {!phone && (
-                            <Box sx={{ gridColumn: { md: '1 / -1', lg: 'auto' }, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                            <Box
+                                sx={{
+                                    gridColumn: { md: '1 / -1', lg: 'auto' },
+                                    minHeight: 0,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                }}
+                            >
                                 <WorkflowInspector
                                     workflow={settings}
                                     node={selectedNode}
@@ -390,7 +449,9 @@ export function WorkflowBuilder() {
         return (
             <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
                 <Typography sx={{ fontSize: 16, color: ATLAS_PALETTE.slate60 }}>
-                    {error instanceof AtlasApiError && error.status !== 404 ? error.message : 'Workflow not found.'}
+                    {error instanceof AtlasApiError && error.status !== 404
+                        ? error.message
+                        : 'Workflow not found.'}
                 </Typography>
             </Box>
         );

@@ -28,7 +28,7 @@ describe('MobileWorkItemList', () => {
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('Hello')).toBeInTheDocument();
     });
@@ -41,7 +41,7 @@ describe('MobileWorkItemList', () => {
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('No items yet.')).toBeInTheDocument();
     });
@@ -55,7 +55,7 @@ describe('MobileWorkItemList', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 emptyMessage="Nothing here yet"
-            />,
+            />
         );
         expect(screen.getByText('Nothing here yet')).toBeInTheDocument();
     });
@@ -69,7 +69,7 @@ describe('MobileWorkItemList', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 title="Sub-tasks"
-            />,
+            />
         );
         expect(screen.getByText('Sub-tasks')).toBeInTheDocument();
     });
@@ -84,7 +84,7 @@ describe('MobileWorkItemList', () => {
                 onRowClick={vi.fn()}
                 title="Sub-tasks"
                 headerRight={<button>Add</button>}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
     });
@@ -98,11 +98,13 @@ describe('MobileWorkItemList', () => {
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
                 onRowClick={onRowClick}
-            />,
+            />
         );
         const row = screen.getByRole('button');
         fireEvent.click(row);
-        expect(onRowClick).toHaveBeenCalledWith(expect.objectContaining({ title: 'Clickable row' }));
+        expect(onRowClick).toHaveBeenCalledWith(
+            expect.objectContaining({ title: 'Clickable row' })
+        );
     });
 
     it('shows LiveDot for in_progress row (isLive branch)', () => {
@@ -113,7 +115,7 @@ describe('MobileWorkItemList', () => {
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('Live task')).toBeInTheDocument();
     });
@@ -127,7 +129,7 @@ describe('MobileWorkItemList', () => {
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('Hello')).toBeInTheDocument();
     });
@@ -142,7 +144,7 @@ describe('MobileWorkItemList', () => {
                     ownerName="Bob"
                     ownerAccent="#0A0A0A"
                     onRowClick={vi.fn()}
-                />,
+                />
             );
             expect(screen.getByText(`${kind} item`)).toBeInTheDocument();
             unmount();

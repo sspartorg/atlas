@@ -16,7 +16,7 @@ const defaultProps = {
 describe('ProjectCard', () => {
     it('renders the project name and counters', () => {
         renderWithProviders(
-            <ProjectCard project={makeProject({ id: 'p1', name: 'Acme' })} {...defaultProps} />,
+            <ProjectCard project={makeProject({ id: 'p1', name: 'Acme' })} {...defaultProps} />
         );
         expect(screen.getByText('Acme')).toBeInTheDocument();
     });
@@ -27,7 +27,7 @@ describe('ProjectCard', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 {...defaultProps}
                 repos={[makeProjectRepo({ git_url: 'https://github.com/acme/repo.git' })]}
-            />,
+            />
         );
         expect(screen.getByText('github.com/acme/repo')).toBeInTheDocument();
     });
@@ -38,7 +38,7 @@ describe('ProjectCard', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 {...defaultProps}
                 repos={[makeProjectRepo({ git_url: 'http://github.com/acme/repo.git' })]}
-            />,
+            />
         );
         expect(screen.getByText('github.com/acme/repo')).toBeInTheDocument();
     });
@@ -49,7 +49,7 @@ describe('ProjectCard', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 {...defaultProps}
                 repos={[makeProjectRepo({ git_url: '' })]}
-            />,
+            />
         );
         expect(screen.getByText('—')).toBeInTheDocument();
     });
@@ -57,7 +57,7 @@ describe('ProjectCard', () => {
     it('counts the repos: "1 repo", "2 repos", "No repos"', () => {
         const project = makeProject({ id: 'p1', name: 'Acme' });
         const { unmount } = renderWithProviders(
-            <ProjectCard project={project} {...defaultProps} repos={[makeProjectRepo()]} />,
+            <ProjectCard project={project} {...defaultProps} repos={[makeProjectRepo()]} />
         );
         expect(screen.getByText('1 repo')).toBeInTheDocument();
         unmount();
@@ -70,7 +70,7 @@ describe('ProjectCard', () => {
                     makeProjectRepo({ id: 'r1', name: 'atlas' }),
                     makeProjectRepo({ id: 'r2', name: 'docs' }),
                 ]}
-            />,
+            />
         );
         expect(screen.getByText('2 repos')).toBeInTheDocument();
         two.unmount();
@@ -90,7 +90,7 @@ describe('ProjectCard', () => {
                     makeProjectRepo({ id: 'r1', git_url: 'https://github.com/acme/first.git' }),
                     makeProjectRepo({ id: 'r2', git_url: 'https://github.com/acme/second.git' }),
                 ]}
-            />,
+            />
         );
         expect(screen.getByText('github.com/acme/first')).toBeInTheDocument();
         expect(screen.queryByText('github.com/acme/second')).not.toBeInTheDocument();
@@ -102,7 +102,7 @@ describe('ProjectCard', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 {...defaultProps}
                 scheduleInfo={{ preset: 'daily', next_run_at: '2026-06-28T09:00:00.000Z' }}
-            />,
+            />
         );
         expect(screen.getByLabelText('Auto-fetch enabled')).toBeInTheDocument();
     });
@@ -113,7 +113,7 @@ describe('ProjectCard', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 {...defaultProps}
                 scheduleInfo={{ preset: 'weekly', next_run_at: null }}
-            />,
+            />
         );
         expect(screen.getByLabelText('Auto-fetch enabled')).toBeInTheDocument();
     });
@@ -124,7 +124,7 @@ describe('ProjectCard', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 {...defaultProps}
                 scheduleInfo={undefined}
-            />,
+            />
         );
         expect(screen.queryByLabelText('Auto-fetch enabled')).not.toBeInTheDocument();
     });
@@ -136,7 +136,7 @@ describe('ProjectCard', () => {
                 {...defaultProps}
                 taskCount={null as unknown as number}
                 subTaskCount={null as unknown as number}
-            />,
+            />
         );
         // Counter renders '—' for null values
         const dashes = screen.getAllByText('—');
@@ -150,7 +150,7 @@ describe('ProjectCard', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 {...defaultProps}
                 repos={[makeProjectRepo({ git_path: null as unknown as string })]}
-            />,
+            />
         );
         // The card still renders without crashing when git_path is null
         expect(screen.getByText('Acme')).toBeInTheDocument();

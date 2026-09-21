@@ -30,9 +30,7 @@ const SEED_MODELS = [
 
 describe('ModelRegistryTab', () => {
     it('mounts without crashing', () => {
-        server.use(
-            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json([])),
-        );
+        server.use(http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json([])));
         const { container } = renderWithProviders(<ModelRegistryTab />);
         expect(container.firstChild).toBeInTheDocument();
     });
@@ -40,10 +38,8 @@ describe('ModelRegistryTab', () => {
     it('shows a confirmation dialog before deleting a model', async () => {
         const deleteHandler = vi.fn(() => HttpResponse.json({}, { status: 204 }));
         server.use(
-            http.get('http://localhost:3000/api/cli-models', () =>
-                HttpResponse.json(SEED_MODELS),
-            ),
-            http.delete('http://localhost:3000/api/cli-models/:id', deleteHandler),
+            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json(SEED_MODELS)),
+            http.delete('http://localhost:3000/api/cli-models/:id', deleteHandler)
         );
         renderWithProviders(<ModelRegistryTab />);
 
@@ -57,7 +53,7 @@ describe('ModelRegistryTab', () => {
         expect(dialog).toBeInTheDocument();
         // The dialog body includes the model name (wrapped in <strong>).
         const matchesInDialog = await screen.findAllByText((_, node) =>
-            (node?.textContent ?? '').includes('claude-opus-4-7'),
+            (node?.textContent ?? '').includes('claude-opus-4-7')
         );
         expect(matchesInDialog.length).toBeGreaterThan(0);
     });
@@ -65,15 +61,13 @@ describe('ModelRegistryTab', () => {
     it('Cancel closes the dialog without calling DELETE', async () => {
         const deleteHandler = vi.fn(() => HttpResponse.json({}, { status: 204 }));
         server.use(
-            http.get('http://localhost:3000/api/cli-models', () =>
-                HttpResponse.json(SEED_MODELS),
-            ),
-            http.delete('http://localhost:3000/api/cli-models/:id', deleteHandler),
+            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json(SEED_MODELS)),
+            http.delete('http://localhost:3000/api/cli-models/:id', deleteHandler)
         );
         renderWithProviders(<ModelRegistryTab />);
 
         await userEvent.click(
-            await screen.findByRole('button', { name: /Remove claude-opus-4-7/i }),
+            await screen.findByRole('button', { name: /Remove claude-opus-4-7/i })
         );
         await screen.findByRole('dialog');
         await userEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
@@ -85,15 +79,13 @@ describe('ModelRegistryTab', () => {
     it('confirm fires DELETE and closes the dialog', async () => {
         const deleteHandler = vi.fn(() => HttpResponse.json({}, { status: 204 }));
         server.use(
-            http.get('http://localhost:3000/api/cli-models', () =>
-                HttpResponse.json(SEED_MODELS),
-            ),
-            http.delete('http://localhost:3000/api/cli-models/:id', deleteHandler),
+            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json(SEED_MODELS)),
+            http.delete('http://localhost:3000/api/cli-models/:id', deleteHandler)
         );
         renderWithProviders(<ModelRegistryTab />);
 
         await userEvent.click(
-            await screen.findByRole('button', { name: /Remove claude-opus-4-7/i }),
+            await screen.findByRole('button', { name: /Remove claude-opus-4-7/i })
         );
         await screen.findByRole('dialog');
         await userEvent.click(screen.getByRole('button', { name: /Delete model/i }));
@@ -104,9 +96,7 @@ describe('ModelRegistryTab', () => {
 
     it('openAdd (fn#2) — clicking Add model opens the modal with no editing model', async () => {
         server.use(
-            http.get('http://localhost:3000/api/cli-models', () =>
-                HttpResponse.json(SEED_MODELS),
-            ),
+            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json(SEED_MODELS))
         );
         renderWithProviders(<ModelRegistryTab />);
         // Wait for the component to load then click "Add model"
@@ -120,9 +110,7 @@ describe('ModelRegistryTab', () => {
 
     it('openEdit (fn#3) — clicking a model row opens the edit modal', async () => {
         server.use(
-            http.get('http://localhost:3000/api/cli-models', () =>
-                HttpResponse.json(SEED_MODELS),
-            ),
+            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json(SEED_MODELS))
         );
         renderWithProviders(<ModelRegistryTab />);
         // Wait for models to render then click the model row (role=button)
@@ -132,7 +120,7 @@ describe('ModelRegistryTab', () => {
             (el) =>
                 el.getAttribute('role') === 'button' &&
                 !el.getAttribute('aria-label') &&
-                (el.textContent ?? '').includes('claude-opus-4-7'),
+                (el.textContent ?? '').includes('claude-opus-4-7')
         );
         if (modelRow) {
             fireEvent.click(modelRow);
@@ -142,9 +130,7 @@ describe('ModelRegistryTab', () => {
 
     it('onClose (fn#9) — ModelEditModal closes when its close handler fires', async () => {
         server.use(
-            http.get('http://localhost:3000/api/cli-models', () =>
-                HttpResponse.json(SEED_MODELS),
-            ),
+            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json(SEED_MODELS))
         );
         renderWithProviders(<ModelRegistryTab />);
         const addBtns = await screen.findAllByRole('button', { name: /Add model/i });
@@ -153,22 +139,23 @@ describe('ModelRegistryTab', () => {
         }
         await screen.findByRole('dialog');
         // Close the modal by pressing Escape key (MUI Dialog default close)
-        fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape', code: 'Escape' });
+        fireEvent.keyDown(document.activeElement ?? document.body, {
+            key: 'Escape',
+            code: 'Escape',
+        });
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     });
 
     it('onError (fn#6) — delete error clears pendingDelete state', async () => {
         const deleteHandler = vi.fn(() => HttpResponse.json({ error: 'failed' }, { status: 500 }));
         server.use(
-            http.get('http://localhost:3000/api/cli-models', () =>
-                HttpResponse.json(SEED_MODELS),
-            ),
-            http.delete('http://localhost:3000/api/cli-models/:id', deleteHandler),
+            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json(SEED_MODELS)),
+            http.delete('http://localhost:3000/api/cli-models/:id', deleteHandler)
         );
         renderWithProviders(<ModelRegistryTab />);
 
         await userEvent.click(
-            await screen.findByRole('button', { name: /Remove claude-opus-4-7/i }),
+            await screen.findByRole('button', { name: /Remove claude-opus-4-7/i })
         );
         await screen.findByRole('dialog');
         await userEvent.click(screen.getByRole('button', { name: /Delete model/i }));
@@ -179,9 +166,7 @@ describe('ModelRegistryTab', () => {
 
     it('shows a loading spinner while models are being fetched', () => {
         // Never-resolving handler simulates loading state
-        server.use(
-            http.get('http://localhost:3000/api/cli-models', () => new Promise(() => {})),
-        );
+        server.use(http.get('http://localhost:3000/api/cli-models', () => new Promise(() => {})));
         renderWithProviders(<ModelRegistryTab />);
         expect(document.querySelector('.MuiCircularProgress-root')).toBeInTheDocument();
     });
@@ -189,9 +174,7 @@ describe('ModelRegistryTab', () => {
     it('renders a section heading for every CLI in the registry', async () => {
         // Cards render from AGENT_CLIS, so this asserts the whole set rather
         // than a hardcoded two — a fourth CLI should show up here for free.
-        server.use(
-            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json([])),
-        );
+        server.use(http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json([])));
         renderWithProviders(<ModelRegistryTab />);
         await waitFor(() => {
             expect(screen.getByText('Claude CLI')).toBeInTheDocument();
@@ -203,9 +186,7 @@ describe('ModelRegistryTab', () => {
 
     it('renders model note when model has a note field', async () => {
         server.use(
-            http.get('http://localhost:3000/api/cli-models', () =>
-                HttpResponse.json(SEED_MODELS),
-            ),
+            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json(SEED_MODELS))
         );
         renderWithProviders(<ModelRegistryTab />);
         // claude-opus-4-7 has note '1M context'
@@ -214,9 +195,7 @@ describe('ModelRegistryTab', () => {
 
     it('shows model count label (N models) next to each CLI section', async () => {
         server.use(
-            http.get('http://localhost:3000/api/cli-models', () =>
-                HttpResponse.json(SEED_MODELS),
-            ),
+            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json(SEED_MODELS))
         );
         renderWithProviders(<ModelRegistryTab />);
         await waitFor(() => {
@@ -227,9 +206,7 @@ describe('ModelRegistryTab', () => {
     });
 
     it('renders "0 models" when the list is empty', async () => {
-        server.use(
-            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json([])),
-        );
+        server.use(http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json([])));
         renderWithProviders(<ModelRegistryTab />);
         await waitFor(() => {
             const zeroCounts = screen.getAllByText('0 models');
@@ -239,13 +216,11 @@ describe('ModelRegistryTab', () => {
 
     it('Close icon button in confirm dialog dismisses it without deleting', async () => {
         server.use(
-            http.get('http://localhost:3000/api/cli-models', () =>
-                HttpResponse.json(SEED_MODELS),
-            ),
+            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json(SEED_MODELS))
         );
         renderWithProviders(<ModelRegistryTab />);
         await userEvent.click(
-            await screen.findByRole('button', { name: /Remove claude-opus-4-7/i }),
+            await screen.findByRole('button', { name: /Remove claude-opus-4-7/i })
         );
         const dialog = await screen.findByRole('dialog');
         expect(dialog).toBeInTheDocument();
@@ -256,9 +231,7 @@ describe('ModelRegistryTab', () => {
     });
 
     it('renders the info alert about Add Agent dialog scope', async () => {
-        server.use(
-            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json([])),
-        );
+        server.use(http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json([])));
         renderWithProviders(<ModelRegistryTab />);
         await waitFor(() => {
             expect(screen.getByText(/Add Agent/)).toBeInTheDocument();
@@ -267,31 +240,34 @@ describe('ModelRegistryTab', () => {
 
     it('shows busy state in delete button while DELETE is in-flight (line 321 busy branch)', async () => {
         let resolveDelete!: () => void;
-        const deletePromise = new Promise<void>((res) => { resolveDelete = res; });
+        const deletePromise = new Promise<void>((res) => {
+            resolveDelete = res;
+        });
         server.use(
-            http.get('http://localhost:3000/api/cli-models', () =>
-                HttpResponse.json(SEED_MODELS),
-            ),
+            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json(SEED_MODELS)),
             http.delete('http://localhost:3000/api/cli-models/:id', async () => {
                 await deletePromise;
                 return HttpResponse.json({}, { status: 204 });
-            }),
+            })
         );
         renderWithProviders(<ModelRegistryTab />);
         await userEvent.click(
-            await screen.findByRole('button', { name: /Remove claude-opus-4-7/i }),
+            await screen.findByRole('button', { name: /Remove claude-opus-4-7/i })
         );
         await screen.findByRole('dialog');
         // Capture the delete button before clicking
         const deleteBtn = screen.getByRole('button', { name: /Delete model/i });
         fireEvent.click(deleteBtn);
         // While DELETE is pending, the dialog confirm button should be disabled or show Removing
-        await waitFor(() => {
-            // Either the button is disabled OR the text changes to "Removing…"
-            const isDisabled = deleteBtn.hasAttribute('disabled');
-            const showsRemoving = document.body.textContent?.includes('Removing');
-            expect(isDisabled || showsRemoving).toBe(true);
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                // Either the button is disabled OR the text changes to "Removing…"
+                const isDisabled = deleteBtn.hasAttribute('disabled');
+                const showsRemoving = document.body.textContent?.includes('Removing');
+                expect(isDisabled || showsRemoving).toBe(true);
+            },
+            { timeout: 3000 }
+        );
         resolveDelete();
     });
 });

@@ -238,6 +238,7 @@ export function TaskNew() {
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 18, color: ATLAS_PALETTE.cerulean, mt: 0.25 }}
                     >
                         tips_and_updates
@@ -548,6 +549,7 @@ export function TaskNew() {
                                 <Box
                                     component="span"
                                     className="material-symbols-rounded"
+                                    aria-hidden="true"
                                     sx={{ fontSize: 16 }}
                                 >
                                     send
@@ -611,6 +613,7 @@ export function TaskNew() {
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 16 }}
                             >
                                 send

@@ -49,16 +49,12 @@ describe('RunsTabContent', () => {
     });
 
     it('renders "No runs yet" when runs is empty', async () => {
-        renderWithProviders(
-            <RunsTabContent agent={makeAgent()} runs={[]} />
-        );
+        renderWithProviders(<RunsTabContent agent={makeAgent()} runs={[]} />);
         expect(await screen.findByText(/No runs yet/i)).toBeInTheDocument();
     });
 
     it('renders run list when runs are provided', async () => {
-        renderWithProviders(
-            <RunsTabContent agent={makeAgent()} runs={[makeRun()]} />
-        );
+        renderWithProviders(<RunsTabContent agent={makeAgent()} runs={[makeRun()]} />);
         expect(await screen.findByText(/Recent runs \(1\)/i)).toBeInTheDocument();
     });
 
@@ -147,18 +143,14 @@ describe('RunsTabContent', () => {
     });
 
     it('delete button opens confirm dialog', async () => {
-        renderWithProviders(
-            <RunsTabContent agent={makeAgent()} runs={[makeRun()]} />
-        );
+        renderWithProviders(<RunsTabContent agent={makeAgent()} runs={[makeRun()]} />);
         const deleteBtn = await screen.findByRole('button', { name: /Delete run/i });
         fireEvent.click(deleteBtn);
         expect(await screen.findByText(/Delete run\?/i)).toBeInTheDocument();
     });
 
     it('Cancel in confirm dialog closes it', async () => {
-        renderWithProviders(
-            <RunsTabContent agent={makeAgent()} runs={[makeRun()]} />
-        );
+        renderWithProviders(<RunsTabContent agent={makeAgent()} runs={[makeRun()]} />);
         const deleteBtn = await screen.findByRole('button', { name: /Delete run/i });
         fireEvent.click(deleteBtn);
         await screen.findByText(/Delete run\?/i);
@@ -175,11 +167,9 @@ describe('RunsTabContent', () => {
             http.delete(`${BASE}/run/run-001`, () => {
                 deleteCalled = true;
                 return new HttpResponse(null, { status: 204 });
-            }),
+            })
         );
-        renderWithProviders(
-            <RunsTabContent agent={makeAgent()} runs={[makeRun()]} />
-        );
+        renderWithProviders(<RunsTabContent agent={makeAgent()} runs={[makeRun()]} />);
         const deleteBtn = await screen.findByRole('button', { name: /Delete run/i });
         fireEvent.click(deleteBtn);
         await screen.findByText(/Delete run\?/i);
@@ -190,9 +180,7 @@ describe('RunsTabContent', () => {
 
     it('delete failure shows error toast', async () => {
         server.use(
-            http.delete(`${BASE}/run/run-001`, () =>
-                new HttpResponse(null, { status: 500 }),
-            ),
+            http.delete(`${BASE}/run/run-001`, () => new HttpResponse(null, { status: 500 }))
         );
         renderWithProviders(
             <>
@@ -206,18 +194,15 @@ describe('RunsTabContent', () => {
         const confirmBtn = screen.getByRole('button', { name: /^Delete run$/i });
         fireEvent.click(confirmBtn);
         // Toast should appear with error
-        await waitFor(() =>
-            expect(screen.getByText(/Delete failed/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Delete failed/i)).toBeInTheDocument());
     });
 
     it('clicking a run row navigates to run detail', async () => {
-        renderWithProviders(
-            <RunsTabContent agent={makeAgent()} runs={[makeRun()]} />,
-            { initialEntries: ['/agents/agent-coder'] }
-        );
+        renderWithProviders(<RunsTabContent agent={makeAgent()} runs={[makeRun()]} />, {
+            initialEntries: ['/agents/agent-coder'],
+        });
         const rows = await screen.findAllByRole('button');
-        const runRow = rows.find(r => !r.getAttribute('aria-label'));
+        const runRow = rows.find((r) => !r.getAttribute('aria-label'));
         expect(runRow).toBeDefined();
         fireEvent.click(runRow!);
         // Navigation handled by MemoryRouter — no error thrown
@@ -268,20 +253,17 @@ describe('RunsTabContent', () => {
                 dispatchEvent: vi.fn(),
             })),
         });
-        renderWithProviders(
-            <RunsTabContent agent={makeAgent()} runs={[makeRun()]} />
-        );
+        renderWithProviders(<RunsTabContent agent={makeAgent()} runs={[makeRun()]} />);
         expect(await screen.findByText('Completed')).toBeInTheDocument();
         Object.defineProperty(window, 'matchMedia', { writable: true, value: origMatchMedia });
     });
 
     it('keyboard Enter on run row triggers navigation', async () => {
-        renderWithProviders(
-            <RunsTabContent agent={makeAgent()} runs={[makeRun()]} />,
-            { initialEntries: ['/agents/agent-coder'] }
-        );
+        renderWithProviders(<RunsTabContent agent={makeAgent()} runs={[makeRun()]} />, {
+            initialEntries: ['/agents/agent-coder'],
+        });
         const rows = await screen.findAllByRole('button');
-        const runRow = rows.find(r => !r.getAttribute('aria-label'));
+        const runRow = rows.find((r) => !r.getAttribute('aria-label'));
         expect(runRow).toBeDefined();
         fireEvent.keyDown(runRow!, { key: 'Enter' });
         // No crash — navigation attempted
@@ -298,9 +280,7 @@ describe('RunsTabContent', () => {
             status: 'error',
             created_at: '2026-05-16T00:00:00.000Z',
         });
-        renderWithProviders(
-            <RunsTabContent agent={makeAgent()} runs={[run1, run2]} />
-        );
+        renderWithProviders(<RunsTabContent agent={makeAgent()} runs={[run1, run2]} />);
         // Both statuses should appear
         expect(await screen.findByText('Error')).toBeInTheDocument();
         expect(screen.getByText('Completed')).toBeInTheDocument();
@@ -318,13 +298,12 @@ describe('RunsTabContent', () => {
     });
 
     it('space key onKeyDown on run row triggers navigation (no crash)', async () => {
-        renderWithProviders(
-            <RunsTabContent agent={makeAgent()} runs={[makeRun()]} />,
-            { initialEntries: ['/agents/agent-coder'] }
-        );
+        renderWithProviders(<RunsTabContent agent={makeAgent()} runs={[makeRun()]} />, {
+            initialEntries: ['/agents/agent-coder'],
+        });
         const rows = await screen.findAllByRole('button');
         // The run row is the button with no aria-label (delete button has aria-label)
-        const runRow = rows.find(r => !r.getAttribute('aria-label'));
+        const runRow = rows.find((r) => !r.getAttribute('aria-label'));
         expect(runRow).toBeDefined();
         // Space key fires the same open() as Enter — should not throw
         fireEvent.keyDown(runRow!, { key: ' ' });
@@ -333,9 +312,7 @@ describe('RunsTabContent', () => {
     });
 
     it('confirm dialog shows "Delete run" button text in initial (non-pending) state', async () => {
-        renderWithProviders(
-            <RunsTabContent agent={makeAgent()} runs={[makeRun()]} />
-        );
+        renderWithProviders(<RunsTabContent agent={makeAgent()} runs={[makeRun()]} />);
         const deleteBtn = await screen.findByRole('button', { name: /Delete run/i });
         fireEvent.click(deleteBtn);
         await screen.findByText(/Delete run\?/i);
@@ -364,12 +341,11 @@ describe('RunsTabContent', () => {
 
     it('onKeyDown with non-Enter/Space key does NOT navigate — covers else branch', async () => {
         // Only Enter and Space trigger navigation; other keys are no-ops
-        renderWithProviders(
-            <RunsTabContent agent={makeAgent()} runs={[makeRun()]} />,
-            { initialEntries: ['/agents/agent-coder'] }
-        );
+        renderWithProviders(<RunsTabContent agent={makeAgent()} runs={[makeRun()]} />, {
+            initialEntries: ['/agents/agent-coder'],
+        });
         const rows = await screen.findAllByRole('button');
-        const runRow = rows.find(r => !r.getAttribute('aria-label'));
+        const runRow = rows.find((r) => !r.getAttribute('aria-label'));
         expect(runRow).toBeDefined();
         // Tab key should not trigger navigation (no crash, no exception)
         fireEvent.keyDown(runRow!, { key: 'Tab' });
@@ -379,15 +355,15 @@ describe('RunsTabContent', () => {
 
     it('Dialog onClose returns undefined when deleteRun.isPending — inflight delete keeps dialog open', async () => {
         let resolveDelete!: () => void;
-        const deleteProm = new Promise<void>((res) => { resolveDelete = res; });
+        const deleteProm = new Promise<void>((res) => {
+            resolveDelete = res;
+        });
         server.use(
             http.delete(`${BASE}/run/run-001`, () =>
-                deleteProm.then(() => new HttpResponse(null, { status: 204 })),
-            ),
+                deleteProm.then(() => new HttpResponse(null, { status: 204 }))
+            )
         );
-        renderWithProviders(
-            <RunsTabContent agent={makeAgent()} runs={[makeRun()]} />
-        );
+        renderWithProviders(<RunsTabContent agent={makeAgent()} runs={[makeRun()]} />);
         const deleteBtn = await screen.findByRole('button', { name: /Delete run/i });
         fireEvent.click(deleteBtn);
         await screen.findByText(/Delete run\?/i);
@@ -398,9 +374,7 @@ describe('RunsTabContent', () => {
 
         // While pending, onClose callback is undefined so the dialog stays open.
         // The dialog should still be in the document.
-        await waitFor(() =>
-            expect(screen.getByText(/Deleting…/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Deleting…/i)).toBeInTheDocument());
         // Dialog remains open while delete is in-flight
         expect(screen.getByText(/Delete run\?/i)).toBeInTheDocument();
 

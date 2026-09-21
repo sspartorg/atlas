@@ -27,7 +27,7 @@ describe('RefreshButton', () => {
                 isFetching={false}
                 tooltipLabel="Custom refresh"
                 size="medium"
-            />,
+            />
         );
         expect(screen.getByRole('button')).toBeInTheDocument();
     });

@@ -1,10 +1,6 @@
 import Box from '@mui/material/Box';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
-import type {
-    AgentStatsByCategory,
-    CostSummary,
-    TerminalCostSummary,
-} from '../../api/types.js';
+import type { AgentStatsByCategory, CostSummary, TerminalCostSummary } from '../../api/types.js';
 import { KpiTile } from '../../components/index.js';
 import { formatCostUsd, formatTokenCount } from '../../utils/formatCost.js';
 import { useLabelColor } from '../../hooks/useLabelColor.js';
@@ -97,33 +93,31 @@ export function KpiStrip({
                     costSummary30d || terminalCostSummary30d
                         ? formatCostUsd(
                               (costSummary30d?.total_cost_usd ?? 0) +
-                                  (terminalCostSummary30d?.total_cost_usd ?? 0),
+                                  (terminalCostSummary30d?.total_cost_usd ?? 0)
                           )
                         : '—'
                 }
                 caption={
-                    costSummary30d || terminalCostSummary30d ? (
-                        (() => {
-                            const runs = costSummary30d?.run_count ?? 0;
-                            const sessions = terminalCostSummary30d?.session_count ?? 0;
-                            const totalTokens =
-                                (costSummary30d?.input_tokens ?? 0) +
-                                (costSummary30d?.output_tokens ?? 0) +
-                                (costSummary30d?.cache_read_tokens ?? 0) +
-                                (terminalCostSummary30d?.input_tokens ?? 0) +
-                                (terminalCostSummary30d?.output_tokens ?? 0) +
-                                (terminalCostSummary30d?.cache_read_tokens ?? 0);
-                            return (
-                                <>
-                                    <Bold>{runs}</Bold> completed run{runs === 1 ? '' : 's'} ·{' '}
-                                    <Bold>{sessions}</Bold> session{sessions === 1 ? '' : 's'} ·{' '}
-                                    <Bold>{formatTokenCount(totalTokens)}</Bold> tokens
-                                </>
-                            );
-                        })()
-                    ) : (
-                        'No activity yet'
-                    )
+                    costSummary30d || terminalCostSummary30d
+                        ? (() => {
+                              const runs = costSummary30d?.run_count ?? 0;
+                              const sessions = terminalCostSummary30d?.session_count ?? 0;
+                              const totalTokens =
+                                  (costSummary30d?.input_tokens ?? 0) +
+                                  (costSummary30d?.output_tokens ?? 0) +
+                                  (costSummary30d?.cache_read_tokens ?? 0) +
+                                  (terminalCostSummary30d?.input_tokens ?? 0) +
+                                  (terminalCostSummary30d?.output_tokens ?? 0) +
+                                  (terminalCostSummary30d?.cache_read_tokens ?? 0);
+                              return (
+                                  <>
+                                      <Bold>{runs}</Bold> completed run{runs === 1 ? '' : 's'} ·{' '}
+                                      <Bold>{sessions}</Bold> session{sessions === 1 ? '' : 's'} ·{' '}
+                                      <Bold>{formatTokenCount(totalTokens)}</Bold> tokens
+                                  </>
+                              );
+                          })()
+                        : 'No activity yet'
                 }
             />
         </Box>

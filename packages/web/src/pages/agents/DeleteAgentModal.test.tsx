@@ -8,12 +8,7 @@ import { DeleteAgentModal } from './DeleteAgentModal.js';
 describe('DeleteAgentModal', () => {
     it('renders nothing when agent is null', () => {
         const { container } = renderWithProviders(
-            <DeleteAgentModal
-                open={true}
-                agent={null}
-                onConfirm={vi.fn()}
-                onClose={vi.fn()}
-            />,
+            <DeleteAgentModal open={true} agent={null} onConfirm={vi.fn()} onClose={vi.fn()} />
         );
         // No dialog rendered — container has only the react root div
         expect(container.querySelector('[role="dialog"]')).toBeNull();
@@ -22,12 +17,7 @@ describe('DeleteAgentModal', () => {
     it('renders dialog with agent name when open and agent provided', () => {
         const agent = makeAgent({ name: 'Coder' });
         renderWithProviders(
-            <DeleteAgentModal
-                open={true}
-                agent={agent}
-                onConfirm={vi.fn()}
-                onClose={vi.fn()}
-            />,
+            <DeleteAgentModal open={true} agent={agent} onConfirm={vi.fn()} onClose={vi.fn()} />
         );
         expect(screen.getByText(/delete coder\?/i)).toBeTruthy();
     });
@@ -35,12 +25,7 @@ describe('DeleteAgentModal', () => {
     it('renders Cancel and Delete agent buttons', () => {
         const agent = makeAgent();
         renderWithProviders(
-            <DeleteAgentModal
-                open={true}
-                agent={agent}
-                onConfirm={vi.fn()}
-                onClose={vi.fn()}
-            />,
+            <DeleteAgentModal open={true} agent={agent} onConfirm={vi.fn()} onClose={vi.fn()} />
         );
         expect(screen.getByRole('button', { name: /cancel/i })).toBeTruthy();
         expect(screen.getByRole('button', { name: /delete agent/i })).toBeTruthy();
@@ -50,12 +35,7 @@ describe('DeleteAgentModal', () => {
         const onClose = vi.fn();
         const agent = makeAgent();
         renderWithProviders(
-            <DeleteAgentModal
-                open={true}
-                agent={agent}
-                onConfirm={vi.fn()}
-                onClose={onClose}
-            />,
+            <DeleteAgentModal open={true} agent={agent} onConfirm={vi.fn()} onClose={onClose} />
         );
         await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
         expect(onClose).toHaveBeenCalledTimes(1);
@@ -65,12 +45,7 @@ describe('DeleteAgentModal', () => {
         const onConfirm = vi.fn();
         const agent = makeAgent();
         renderWithProviders(
-            <DeleteAgentModal
-                open={true}
-                agent={agent}
-                onConfirm={onConfirm}
-                onClose={vi.fn()}
-            />,
+            <DeleteAgentModal open={true} agent={agent} onConfirm={onConfirm} onClose={vi.fn()} />
         );
         await userEvent.click(screen.getByRole('button', { name: /delete agent/i }));
         expect(onConfirm).toHaveBeenCalledTimes(1);
@@ -85,7 +60,7 @@ describe('DeleteAgentModal', () => {
                 busy={true}
                 onConfirm={vi.fn()}
                 onClose={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('Deleting…')).toBeTruthy();
         const cancelBtn = screen.getByRole('button', { name: /cancel/i });
@@ -97,12 +72,7 @@ describe('DeleteAgentModal', () => {
     it('shows warning about queued runs being dropped', () => {
         const agent = makeAgent({ name: 'Coder' });
         renderWithProviders(
-            <DeleteAgentModal
-                open={true}
-                agent={agent}
-                onConfirm={vi.fn()}
-                onClose={vi.fn()}
-            />,
+            <DeleteAgentModal open={true} agent={agent} onConfirm={vi.fn()} onClose={vi.fn()} />
         );
         expect(screen.getByText(/queued runs/i)).toBeTruthy();
     });

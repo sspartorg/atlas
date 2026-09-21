@@ -43,7 +43,7 @@ function renderSession(id: string) {
         <Routes>
             <Route path="/terminal/:id" element={<TerminalSession />} />
         </Routes>,
-        { initialEntries: [`/terminal/${id}`] },
+        { initialEntries: [`/terminal/${id}`] }
     );
 }
 
@@ -63,9 +63,7 @@ describe('TerminalSession — missing id param', () => {
 
 describe('TerminalSession — loading', () => {
     it('shows loading spinner while session loads', async () => {
-        server.use(
-            http.get(`${BASE}/cli/sessions/sess-1`, () => new Promise(() => {})),
-        );
+        server.use(http.get(`${BASE}/cli/sessions/sess-1`, () => new Promise(() => {})));
         renderSession('sess-1');
         expect(document.querySelector('[role="progressbar"]')).toBeInTheDocument();
     });
@@ -75,8 +73,8 @@ describe('TerminalSession — error state', () => {
     it('shows error alert when session not found', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions/sess-bad`, () =>
-                HttpResponse.json({ error: 'Not found' }, { status: 404 }),
-            ),
+                HttpResponse.json({ error: 'Not found' }, { status: 404 })
+            )
         );
         renderSession('sess-bad');
         await screen.findByText(/session not found/i);
@@ -86,15 +84,13 @@ describe('TerminalSession — error state', () => {
 describe('TerminalSession — active session', () => {
     beforeEach(() => {
         server.use(
-            http.get(`${BASE}/cli/sessions/sess-1`, () =>
-                HttpResponse.json(makeSession()),
-            ),
+            http.get(`${BASE}/cli/sessions/sess-1`, () => HttpResponse.json(makeSession())),
             http.post(`${BASE}/cli/sessions/sess-1/pause`, () =>
-                HttpResponse.json(makeSession({ status: 'paused' })),
+                HttpResponse.json(makeSession({ status: 'paused' }))
             ),
             http.post(`${BASE}/cli/sessions/sess-1/resume`, () =>
-                HttpResponse.json(makeSession({ status: 'active' })),
-            ),
+                HttpResponse.json(makeSession({ status: 'active' }))
+            )
         );
     });
 
@@ -133,8 +129,8 @@ describe('TerminalSession — active session', () => {
     it('renders session id as dash when no claude_session_id', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions/sess-1`, () =>
-                HttpResponse.json(makeSession({ claude_session_id: null })),
-            ),
+                HttpResponse.json(makeSession({ claude_session_id: null }))
+            )
         );
         renderSession('sess-1');
         await screen.findByText('Live Session');
@@ -145,8 +141,8 @@ describe('TerminalSession — active session', () => {
     it('renders item chip when session has item_id', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions/sess-1`, () =>
-                HttpResponse.json(makeSession({ item_id: 'ATL-5' })),
-            ),
+                HttpResponse.json(makeSession({ item_id: 'ATL-5' }))
+            )
         );
         renderSession('sess-1');
         await screen.findByTestId('session-item-chip');
@@ -163,15 +159,18 @@ describe('TerminalSession — terminal status redirect (closed)', () => {
     it('renders null for closed session (redirect in progress)', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions/sess-closed`, () =>
-                HttpResponse.json(makeSession({ id: 'sess-closed', status: 'closed' })),
-            ),
+                HttpResponse.json(makeSession({ id: 'sess-closed', status: 'closed' }))
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/terminal/:id" element={<TerminalSession />} />
-                <Route path="/terminal/:id/history" element={<div data-testid="history-page">History</div>} />
+                <Route
+                    path="/terminal/:id/history"
+                    element={<div data-testid="history-page">History</div>}
+                />
             </Routes>,
-            { initialEntries: ['/terminal/sess-closed'] },
+            { initialEntries: ['/terminal/sess-closed'] }
         );
         // Effect triggers redirect; history page should appear
         await screen.findByTestId('history-page');
@@ -182,11 +181,11 @@ describe('TerminalSession — paused session', () => {
     it('renders for paused session', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions/sess-1`, () =>
-                HttpResponse.json(makeSession({ status: 'paused' })),
+                HttpResponse.json(makeSession({ status: 'paused' }))
             ),
             http.post(`${BASE}/cli/sessions/sess-1/resume`, () =>
-                HttpResponse.json(makeSession({ status: 'active' })),
-            ),
+                HttpResponse.json(makeSession({ status: 'active' }))
+            )
         );
         renderSession('sess-1');
         await screen.findByText('Live Session');

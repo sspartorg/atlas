@@ -41,7 +41,7 @@ export function OverviewTabContent({ agent, view }: Props) {
     function handleSaveConfig() {
         updateAgent.mutate(
             { id: agent.id, data: { cli, model, effort } },
-            { onSuccess: () => toast.show({ message: 'Configuration saved' }) },
+            { onSuccess: () => toast.show({ message: 'Configuration saved' }) }
         );
     }
 
@@ -66,7 +66,7 @@ export function OverviewTabContent({ agent, view }: Props) {
                     toast.show({ message: 'Description saved' });
                     setEditingDescription(false);
                 },
-            },
+            }
         );
     }
 
@@ -106,9 +106,7 @@ export function OverviewTabContent({ agent, view }: Props) {
                                 variant="contained"
                                 size="small"
                                 onClick={() => handleSaveDescription(description)}
-                                disabled={
-                                    updateAgent.isPending || description === view.description
-                                }
+                                disabled={updateAgent.isPending || description === view.description}
                             >
                                 {updateAgent.isPending ? 'Saving…' : 'Save'}
                             </Button>
@@ -128,12 +126,14 @@ export function OverviewTabContent({ agent, view }: Props) {
                         </Typography>
                         <IconButton
                             size="small"
+                            aria-label="Edit description"
                             onClick={() => setEditingDescription(true)}
                             sx={{ color: ATLAS_PALETTE.slate60 }}
                         >
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 18 }}
                             >
                                 edit
@@ -265,13 +265,12 @@ function RoleSection({ agent }: { agent: IAgent }) {
     const [memoryCadence, setMemoryCadence] = useState<number>(agent.memory_cadence ?? 1);
 
     const dirty =
-        designation !== (agent.designation ?? '') ||
-        memoryCadence !== (agent.memory_cadence ?? 1);
+        designation !== (agent.designation ?? '') || memoryCadence !== (agent.memory_cadence ?? 1);
 
     function handleSave() {
         updateAgent.mutate(
             { id: agent.id, data: { designation, memory_cadence: memoryCadence } },
-            { onSuccess: () => toast.show({ message: 'Role saved' }) },
+            { onSuccess: () => toast.show({ message: 'Role saved' }) }
         );
     }
 
@@ -328,8 +327,8 @@ function CommitDisciplineTile({ agentId }: { agentId: string }) {
         return (
             <FormSection label="Commit discipline">
                 <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate60 }}>
-                    No agent runs have been verified yet. The verifier audits commits
-                    every issue-attached run completes.
+                    No agent runs have been verified yet. The verifier audits commits every
+                    issue-attached run completes.
                 </Typography>
             </FormSection>
         );
@@ -345,12 +344,15 @@ function CommitDisciplineTile({ agentId }: { agentId: string }) {
             <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: 1 }}>
                 {data.map((row) => {
                     const sha = row.problems[0]?.commit_sha ?? '';
-                    const detail = row.problems.length === 0
-                        ? `run ${row.run_id.slice(0, 8)} · ${row.commit_count} commit(s)`
-                        : row.problems
-                              .slice(0, 4)
-                              .map((p) => (p.commit_sha ? `${p.commit_sha}: ${p.reason}` : p.reason))
-                              .join('\n');
+                    const detail =
+                        row.problems.length === 0
+                            ? `run ${row.run_id.slice(0, 8)} · ${row.commit_count} commit(s)`
+                            : row.problems
+                                  .slice(0, 4)
+                                  .map((p) =>
+                                      p.commit_sha ? `${p.commit_sha}: ${p.reason}` : p.reason
+                                  )
+                                  .join('\n');
                     return (
                         <Tooltip
                             key={row.id}
@@ -378,8 +380,8 @@ function CommitDisciplineTile({ agentId }: { agentId: string }) {
                 })}
             </Box>
             <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
-                Newest first. Green = compliant, amber = partial (missing Refs or unconventional subject),
-                red = silent (files changed, no commit), grey = clean (no work to verify).
+                Newest first. Green = compliant, amber = partial (missing Refs or unconventional
+                subject), red = silent (files changed, no commit), grey = clean (no work to verify).
             </Typography>
         </FormSection>
     );

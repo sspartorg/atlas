@@ -9,7 +9,7 @@ describe('InfoPanel + InfoRow', () => {
             <InfoPanel label="Details">
                 <InfoRow label="Status">Open</InfoRow>
                 <InfoRow label="Owner">Bob</InfoRow>
-            </InfoPanel>,
+            </InfoPanel>
         );
         expect(screen.getByText('Details')).toBeInTheDocument();
         expect(screen.getByText('Status')).toBeInTheDocument();
@@ -21,7 +21,7 @@ describe('InfoPanel + InfoRow', () => {
         renderWithProviders(
             <InfoPanel label="X" headerRight={<button>add</button>}>
                 <div>child</div>
-            </InfoPanel>,
+            </InfoPanel>
         );
         expect(screen.getByRole('button', { name: 'add' })).toBeInTheDocument();
     });

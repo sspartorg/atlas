@@ -25,21 +25,22 @@ const MODEL_WITH_NOTE = {
 
 describe('ModelSelect', () => {
     it('renders without crashing', () => {
-        server.use(
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
-        );
+        server.use(http.get(`${BASE}/cli-models`, () => HttpResponse.json([])));
         const { container } = renderWithProviders(
-            <ModelSelect cli="claude" value="" onChange={vi.fn()} />,
+            <ModelSelect cli="claude" value="" onChange={vi.fn()} />
         );
         expect(container.firstChild).toBeInTheDocument();
     });
 
     it('size="dialog" branch — FormControl renders without sizeSmall on FormControl itself', async () => {
-        server.use(
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_CLAUDE])),
-        );
+        server.use(http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_CLAUDE])));
         const { container } = renderWithProviders(
-            <ModelSelect cli="claude" value={MODEL_CLAUDE.model_name} onChange={vi.fn()} size="dialog" />,
+            <ModelSelect
+                cli="claude"
+                value={MODEL_CLAUDE.model_name}
+                onChange={vi.fn()}
+                size="dialog"
+            />
         );
         // size="dialog" → FormControl gets size="medium" — the FormControl root should NOT have sizeSmall
         await waitFor(() => {
@@ -50,16 +51,14 @@ describe('ModelSelect', () => {
     });
 
     it('showLabel=true — InputLabel element is rendered with id model-select-claude', async () => {
-        server.use(
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_CLAUDE])),
-        );
+        server.use(http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_CLAUDE])));
         const { container } = renderWithProviders(
             <ModelSelect
                 cli="claude"
                 value={MODEL_CLAUDE.model_name}
                 onChange={vi.fn()}
                 showLabel
-            />,
+            />
         );
         await waitFor(() => {
             const label = container.querySelector('#model-select-claude');
@@ -69,39 +68,33 @@ describe('ModelSelect', () => {
     });
 
     it('renderValue — empty string + hasOptions → "Pick a model…" placeholder', async () => {
-        server.use(
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_CLAUDE])),
-        );
-        renderWithProviders(
-            <ModelSelect cli="claude" value="" onChange={vi.fn()} />,
-        );
+        server.use(http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_CLAUDE])));
+        renderWithProviders(<ModelSelect cli="claude" value="" onChange={vi.fn()} />);
         await waitFor(() => {
             expect(screen.getByText('Pick a model…')).toBeInTheDocument();
         });
     });
 
     it('renderValue — empty string + no options → "No models registered for this CLI" placeholder', async () => {
-        server.use(
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
-        );
-        renderWithProviders(
-            <ModelSelect cli="claude" value="" onChange={vi.fn()} />,
-        );
+        server.use(http.get(`${BASE}/cli-models`, () => HttpResponse.json([])));
+        renderWithProviders(<ModelSelect cli="claude" value="" onChange={vi.fn()} />);
         await waitFor(() => {
-            expect(screen.getAllByText('No models registered for this CLI').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('No models registered for this CLI').length).toBeGreaterThan(
+                0
+            );
         });
     });
 
     it('!hasOptions — disabled "No models registered" MenuItem shown when select is opened', async () => {
-        server.use(
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
-        );
+        server.use(http.get(`${BASE}/cli-models`, () => HttpResponse.json([])));
         const { container } = renderWithProviders(
-            <ModelSelect cli="claude" value="" onChange={vi.fn()} />,
+            <ModelSelect cli="claude" value="" onChange={vi.fn()} />
         );
         await waitFor(() => {
             // placeholder already visible
-            expect(screen.getAllByText('No models registered for this CLI').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('No models registered for this CLI').length).toBeGreaterThan(
+                0
+            );
         });
         // Open the select to show the disabled MenuItem
         const combobox = container.querySelector('[role="combobox"]')!;
@@ -114,11 +107,9 @@ describe('ModelSelect', () => {
     });
 
     it('m.note truthy — note Typography is rendered inside open menu', async () => {
-        server.use(
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_WITH_NOTE])),
-        );
+        server.use(http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_WITH_NOTE])));
         const { container } = renderWithProviders(
-            <ModelSelect cli="claude" value={MODEL_WITH_NOTE.model_name} onChange={vi.fn()} />,
+            <ModelSelect cli="claude" value={MODEL_WITH_NOTE.model_name} onChange={vi.fn()} />
         );
         // Wait for data to load
         await waitFor(() => {
@@ -134,11 +125,9 @@ describe('ModelSelect', () => {
     });
 
     it('!valueIsKnown && value && hasOptions — stale-value option shown in open menu', async () => {
-        server.use(
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_CLAUDE])),
-        );
+        server.use(http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_CLAUDE])));
         const { container } = renderWithProviders(
-            <ModelSelect cli="claude" value="stale-model-gone" onChange={vi.fn()} />,
+            <ModelSelect cli="claude" value="stale-model-gone" onChange={vi.fn()} />
         );
         await waitFor(() => {
             expect(container.querySelector('[role="combobox"]')).toBeTruthy();
@@ -153,11 +142,11 @@ describe('ModelSelect', () => {
 
     it('onChange fires with selected model_name when user picks an option', async () => {
         server.use(
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_CLAUDE, MODEL_WITH_NOTE])),
+            http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_CLAUDE, MODEL_WITH_NOTE]))
         );
         const onChange = vi.fn();
         const { container } = renderWithProviders(
-            <ModelSelect cli="claude" value="" onChange={onChange} />,
+            <ModelSelect cli="claude" value="" onChange={onChange} />
         );
         await waitFor(() => {
             expect(screen.getByText('Pick a model…')).toBeInTheDocument();
@@ -175,11 +164,9 @@ describe('ModelSelect', () => {
     });
 
     it('fullWidth=false — FormControl renders without fullWidth class', async () => {
-        server.use(
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_CLAUDE])),
-        );
+        server.use(http.get(`${BASE}/cli-models`, () => HttpResponse.json([MODEL_CLAUDE])));
         const { container } = renderWithProviders(
-            <ModelSelect cli="claude" value="" onChange={vi.fn()} fullWidth={false} />,
+            <ModelSelect cli="claude" value="" onChange={vi.fn()} fullWidth={false} />
         );
         await waitFor(() => {
             const fc = container.querySelector('.MuiFormControl-root');

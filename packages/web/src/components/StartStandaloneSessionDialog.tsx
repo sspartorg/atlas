@@ -56,10 +56,7 @@ export function StartStandaloneSessionDialog({
     // 404s on a dangling id and the error toast below says so. Reconciling the
     // select against a live list would be more code for the same outcome.
 
-    const modelsForCli = useMemo(
-        () => cliModels.filter((m) => m.cli === cli),
-        [cliModels, cli],
-    );
+    const modelsForCli = useMemo(() => cliModels.filter((m) => m.cli === cli), [cliModels, cli]);
     const defaultModelForCli = DEFAULT_MODEL_BY_CLI[cli];
 
     function handleCliChange(_: unknown, next: AgentCli | null) {
@@ -230,9 +227,7 @@ export function StartStandaloneSessionDialog({
                         disabled={isPending}
                         helperText="Authenticates git and gh inside this session. Set a name and email on the credential to also own the commits."
                     >
-                        <MenuItem value={NO_CREDENTIAL}>
-                            This machine&apos;s git config
-                        </MenuItem>
+                        <MenuItem value={NO_CREDENTIAL}>This machine&apos;s git config</MenuItem>
                         {credentials.map((c) => (
                             <MenuItem key={c.id} value={c.id}>
                                 {c.label}
@@ -310,7 +305,9 @@ export function StartStandaloneSessionDialog({
                     variant="contained"
                     onClick={handleStart}
                     disabled={!folderPath.trim() || isPending}
-                    startIcon={isPending ? <CircularProgress size={16} color="inherit" /> : <AddRounded />}
+                    startIcon={
+                        isPending ? <CircularProgress size={16} color="inherit" /> : <AddRounded />
+                    }
                     sx={{
                         textTransform: 'none',
                         background: ATLAS_PALETTE.green,

@@ -31,7 +31,7 @@ describe('DashboardPopulated', () => {
                     queue: [],
                     kpis: baseKpis,
                 }}
-            />,
+            />
         );
         expect(container.firstChild).toBeInTheDocument();
     });
@@ -41,11 +41,11 @@ describe('DashboardPopulated', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: '', onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({ id: 1, owner_name: '', onboarding_complete: 1 })
+            )
         );
         renderWithProviders(
-            <DashboardPopulated data={{ awaiting: [], queue: [], kpis: baseKpis }} />,
+            <DashboardPopulated data={{ awaiting: [], queue: [], kpis: baseKpis }} />
         );
         // GreetingBlock uppercases: "..., THERE"
         await screen.findByText(/,\s*THERE/i);
@@ -57,11 +57,11 @@ describe('DashboardPopulated', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: '   ', onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({ id: 1, owner_name: '   ', onboarding_complete: 1 })
+            )
         );
         renderWithProviders(
-            <DashboardPopulated data={{ awaiting: [], queue: [], kpis: baseKpis }} />,
+            <DashboardPopulated data={{ awaiting: [], queue: [], kpis: baseKpis }} />
         );
         await screen.findByText(/,\s*THERE/i);
         expect(screen.getByText(/,\s*THERE/i)).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe('DashboardPopulated', () => {
                     queue: [],
                     kpis: baseKpis,
                 }}
-            />,
+            />
         );
         await screen.findByText('Review login flow');
         expect(screen.getByText('Review login flow')).toBeInTheDocument();
@@ -112,7 +112,7 @@ describe('DashboardPopulated', () => {
                     ],
                     kpis: baseKpis,
                 }}
-            />,
+            />
         );
         await screen.findByText('Launch campaign task');
         expect(screen.getByText('Launch campaign task')).toBeInTheDocument();
@@ -138,7 +138,7 @@ describe('DashboardPopulated', () => {
                         },
                     },
                 }}
-            />,
+            />
         );
         // KpiStrip renders formatCostUsd(12.5) — should not show '—' or 'No runs yet'
         // It also renders run_count "42 runs". Exact match on "42" because a
@@ -153,10 +153,10 @@ describe('DashboardPopulated', () => {
         // settings query never resolves → settings=undefined → owner_name?? '' → ''
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/settings`, () => new Promise(() => {})), // never resolves
+            http.get(`${BASE}/settings`, () => new Promise(() => {})) // never resolves
         );
         renderWithProviders(
-            <DashboardPopulated data={{ awaiting: [], queue: [], kpis: baseKpis }} />,
+            <DashboardPopulated data={{ awaiting: [], queue: [], kpis: baseKpis }} />
         );
         // With settings undefined, ownerFullName='' → ownerFirstName='there'
         await screen.findByText(/,\s*THERE/i).catch(() => {
@@ -172,14 +172,14 @@ describe('DashboardPopulated', () => {
             ...defaultHandlers,
             http.get(`${BASE}/settings`, () =>
                 // null owner_name exercises the ?? '' fallback at L20
-                HttpResponse.json({ id: 1, owner_name: null, onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({ id: 1, owner_name: null, onboarding_complete: 1 })
+            )
         );
         renderWithProviders(
             <DashboardPopulated
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 data={{ awaiting: null as any, queue: null as any, kpis: undefined as any }}
-            />,
+            />
         );
         // Should render without crashing; awaiting ?? [] and queue ?? [] default to []
         // kpis?.projectCount ?? 0 defaults to 0

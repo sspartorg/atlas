@@ -8,10 +8,7 @@ import SendRounded from '@mui/icons-material/SendRounded';
 import RefreshRounded from '@mui/icons-material/RefreshRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import type { INotification, NotificationDeliveryStatus, ISettings } from '@atlas/shared';
-import {
-    useResendNotification,
-    useCancelNotification,
-} from '../../hooks/useNotifications.js';
+import { useResendNotification, useCancelNotification } from '../../hooks/useNotifications.js';
 import { useToast } from '../../hooks/useToast.js';
 import { useIsMobile } from '../../hooks/useIsMobile.js';
 import { api } from '../../api/api.js';
@@ -52,7 +49,10 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
     }, [externalRows]);
 
     const visible = useMemo(
-        () => (filter === 'all' ? externalRows : externalRows.filter((r) => r.external_status === filter)),
+        () =>
+            filter === 'all'
+                ? externalRows
+                : externalRows.filter((r) => r.external_status === filter),
         [externalRows, filter]
     );
 
@@ -115,10 +115,7 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
                         <Box component="span" sx={{ color: ATLAS_PALETTE.slate30 }}>
                             ·
                         </Box>
-                        <Box
-                            component="span"
-                            sx={{ fontFamily: MONO, color: ATLAS_PALETTE.slate }}
-                        >
+                        <Box component="span" sx={{ fontFamily: MONO, color: ATLAS_PALETTE.slate }}>
                             {settings.external_notification_endpoint_label}
                         </Box>
                         <Box component="span" sx={{ color: ATLAS_PALETTE.slate30 }}>
@@ -212,8 +209,7 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
                                     letterSpacing: '0.08em',
                                     textTransform: 'uppercase',
                                     color: ATLAS_PALETTE.slate60,
-                                    textAlign:
-                                        h === 'Status' || h === 'Action' ? 'center' : 'left',
+                                    textAlign: h === 'Status' || h === 'Action' ? 'center' : 'left',
                                 }}
                             >
                                 {h}
@@ -221,7 +217,11 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
                         ))}
                     </Box>
                     {visible.map((row, i) => (
-                        <NotificationLogRow key={row.id} row={row} isLast={i === visible.length - 1} />
+                        <NotificationLogRow
+                            key={row.id}
+                            row={row}
+                            isLast={i === visible.length - 1}
+                        />
                     ))}
                     {visible.length === 0 && (
                         <Box
@@ -268,7 +268,10 @@ function NotificationLogCard({ row }: { row: INotification }) {
     return (
         <Box
             sx={{
-                bgcolor: row.external_status === 'pending' ? 'rgba(223,172,45,.06)' : ATLAS_PALETTE.white,
+                bgcolor:
+                    row.external_status === 'pending'
+                        ? 'rgba(223,172,45,.06)'
+                        : ATLAS_PALETTE.white,
                 border: `1px solid ${ATLAS_PALETTE.slate10}`,
                 borderRadius: '12px',
                 p: 4,
@@ -627,7 +630,9 @@ function EmptyState({ settings }: { settings: ISettings | undefined }) {
             title="External Channel Is Configured but Quiet"
             description="No messages have been sent yet. Agents will ping you here when something needs attention."
             primaryAction={
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                <Box
+                    sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}
+                >
                     <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
                         {endpointLabel && (
                             <Typography

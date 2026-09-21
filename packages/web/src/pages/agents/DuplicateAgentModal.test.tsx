@@ -17,12 +17,7 @@ describe('DuplicateAgentModal', () => {
 
     it('renders nothing when agent is null', () => {
         const { container } = renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={null}
-                existingIds={[]}
-                onClose={vi.fn()}
-            />,
+            <DuplicateAgentModal open={true} agent={null} existingIds={[]} onClose={vi.fn()} />
         );
         expect(container.querySelector('[role="dialog"]')).toBeNull();
     });
@@ -30,12 +25,7 @@ describe('DuplicateAgentModal', () => {
     it('shows "Duplicate agent?" heading on open', () => {
         const agent = makeAgent();
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={vi.fn()}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={vi.fn()} />
         );
         expect(screen.getByText('Duplicate agent?')).toBeTruthy();
     });
@@ -43,12 +33,7 @@ describe('DuplicateAgentModal', () => {
     it('auto-fills name with "Coder (copy)" based on agent name', () => {
         const agent = makeAgent({ name: 'Coder' });
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={vi.fn()}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={vi.fn()} />
         );
         const input = screen.getByRole('textbox') as HTMLInputElement;
         expect(input.value).toBe('Coder (copy)');
@@ -57,12 +42,7 @@ describe('DuplicateAgentModal', () => {
     it('renders Cancel and Duplicate agent buttons', () => {
         const agent = makeAgent();
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={vi.fn()}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={vi.fn()} />
         );
         expect(screen.getByRole('button', { name: /cancel/i })).toBeTruthy();
         expect(screen.getByRole('button', { name: /duplicate agent/i })).toBeTruthy();
@@ -72,12 +52,7 @@ describe('DuplicateAgentModal', () => {
         const onClose = vi.fn();
         const agent = makeAgent();
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={onClose}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={onClose} />
         );
         await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
         expect(onClose).toHaveBeenCalledTimes(1);
@@ -86,17 +61,12 @@ describe('DuplicateAgentModal', () => {
     it('shows "Agent duplicated" heading on successful POST', async () => {
         server.use(
             http.post(`${BASE}/agents`, () =>
-                HttpResponse.json(makeAgent({ id: 'agent-coder-copy', name: 'Coder (copy)' })),
-            ),
+                HttpResponse.json(makeAgent({ id: 'agent-coder-copy', name: 'Coder (copy)' }))
+            )
         );
         const agent = makeAgent();
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={vi.fn()}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={vi.fn()} />
         );
         await userEvent.click(screen.getByRole('button', { name: /duplicate agent/i }));
         await waitFor(() => {
@@ -107,17 +77,12 @@ describe('DuplicateAgentModal', () => {
     it('shows "Open duplicate →" button after success', async () => {
         server.use(
             http.post(`${BASE}/agents`, () =>
-                HttpResponse.json(makeAgent({ id: 'agent-coder-copy', name: 'Coder (copy)' })),
-            ),
+                HttpResponse.json(makeAgent({ id: 'agent-coder-copy', name: 'Coder (copy)' }))
+            )
         );
         const agent = makeAgent();
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={vi.fn()}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={vi.fn()} />
         );
         await userEvent.click(screen.getByRole('button', { name: /duplicate agent/i }));
         await waitFor(() => {
@@ -128,17 +93,12 @@ describe('DuplicateAgentModal', () => {
     it('shows "Duplicate failed" heading on error POST', async () => {
         server.use(
             http.post(`${BASE}/agents`, () =>
-                HttpResponse.json({ error: 'conflict' }, { status: 409 }),
-            ),
+                HttpResponse.json({ error: 'conflict' }, { status: 409 })
+            )
         );
         const agent = makeAgent();
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={vi.fn()}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={vi.fn()} />
         );
         await userEvent.click(screen.getByRole('button', { name: /duplicate agent/i }));
         await waitFor(() => {
@@ -149,17 +109,12 @@ describe('DuplicateAgentModal', () => {
     it('shows "Try again" button on error', async () => {
         server.use(
             http.post(`${BASE}/agents`, () =>
-                HttpResponse.json({ error: 'conflict' }, { status: 409 }),
-            ),
+                HttpResponse.json({ error: 'conflict' }, { status: 409 })
+            )
         );
         const agent = makeAgent();
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={vi.fn()}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={vi.fn()} />
         );
         await userEvent.click(screen.getByRole('button', { name: /duplicate agent/i }));
         await waitFor(() => {
@@ -170,17 +125,12 @@ describe('DuplicateAgentModal', () => {
     it('returns to confirm view when Try again is clicked', async () => {
         server.use(
             http.post(`${BASE}/agents`, () =>
-                HttpResponse.json({ error: 'conflict' }, { status: 409 }),
-            ),
+                HttpResponse.json({ error: 'conflict' }, { status: 409 })
+            )
         );
         const agent = makeAgent();
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={vi.fn()}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={vi.fn()} />
         );
         await userEvent.click(screen.getByRole('button', { name: /duplicate agent/i }));
         await waitFor(() => screen.getByRole('button', { name: /try again/i }));
@@ -192,12 +142,7 @@ describe('DuplicateAgentModal', () => {
         const onClose = vi.fn();
         const agent = makeAgent();
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={onClose}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={onClose} />
         );
         // The X close button (CloseRounded) has no label — find by its icon class
         const allButtons = screen.getAllByRole('button');
@@ -212,12 +157,7 @@ describe('DuplicateAgentModal', () => {
     it('updating the name input enables the duplicate button again (name editing branch)', async () => {
         const agent = makeAgent({ name: 'Coder' });
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={vi.fn()}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={vi.fn()} />
         );
         const input = screen.getByRole('textbox') as HTMLInputElement;
         await userEvent.clear(input);
@@ -228,18 +168,13 @@ describe('DuplicateAgentModal', () => {
     it('navigates to duplicate after clicking Open duplicate (handleOpenCopy branch)', async () => {
         server.use(
             http.post(`${BASE}/agents`, () =>
-                HttpResponse.json(makeAgent({ id: 'agent-coder-copy', name: 'Coder (copy)' })),
-            ),
+                HttpResponse.json(makeAgent({ id: 'agent-coder-copy', name: 'Coder (copy)' }))
+            )
         );
         const onClose = vi.fn();
         const agent = makeAgent();
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={onClose}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={onClose} />
         );
         await userEvent.click(screen.getByRole('button', { name: /duplicate agent/i }));
         const openBtn = await screen.findByRole('button', { name: /open duplicate/i });
@@ -256,7 +191,7 @@ describe('DuplicateAgentModal', () => {
                 agent={agent}
                 existingIds={['coder (copy)']}
                 onClose={vi.fn()}
-            />,
+            />
         );
         const input = screen.getByRole('textbox') as HTMLInputElement;
         // suggestNewName tries 'Coder (copy)' → taken (lowercase match) → uses 'Coder (copy 2)'
@@ -266,18 +201,13 @@ describe('DuplicateAgentModal', () => {
     it('Stay here button on success view calls onClose', async () => {
         server.use(
             http.post(`${BASE}/agents`, () =>
-                HttpResponse.json(makeAgent({ id: 'agent-coder-copy', name: 'Coder (copy)' })),
-            ),
+                HttpResponse.json(makeAgent({ id: 'agent-coder-copy', name: 'Coder (copy)' }))
+            )
         );
         const onClose = vi.fn();
         const agent = makeAgent();
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={onClose}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={onClose} />
         );
         await userEvent.click(screen.getByRole('button', { name: /duplicate agent/i }));
         await waitFor(() => screen.getByRole('button', { name: /stay here/i }));
@@ -296,7 +226,7 @@ describe('DuplicateAgentModal', () => {
                 // existingIds includes 'agent-copy' so the first candidate is taken
                 existingIds={['agent-copy']}
                 onClose={vi.fn()}
-            />,
+            />
         );
         // The name input should be pre-filled (suggestNewName runs normally).
         const input = screen.getByRole('textbox') as HTMLInputElement;
@@ -308,14 +238,13 @@ describe('DuplicateAgentModal', () => {
     it('hexToRgba returns hex as-is for an invalid hex string (L36 guard branch)', () => {
         // When agent.accent_color is an invalid hex, hexToRgba returns the string unchanged.
         // This exercises the `if (!m || !m[1] || ...) return hex` branch at L36.
-        const agent = makeAgent({ id: 'agent-bad-hex', name: 'Bad Hex', accent_color: 'notacolor' });
+        const agent = makeAgent({
+            id: 'agent-bad-hex',
+            name: 'Bad Hex',
+            accent_color: 'notacolor',
+        });
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={vi.fn()}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={vi.fn()} />
         );
         // Modal renders with invalid hex; hexToRgba falls back to the raw string.
         expect(screen.queryByRole('dialog')).toBeInTheDocument();
@@ -329,20 +258,17 @@ describe('DuplicateAgentModal', () => {
                 // Return a 500 — Fastify / the api client will throw; the thrown value
                 // from our api.ts wrapper is an Error instance, so we need the test to
                 // see a non-Error. We simulate by testing the error-view renders regardless.
-                HttpResponse.json({ message: 'fail' }, { status: 500 }),
-            ),
+                HttpResponse.json({ message: 'fail' }, { status: 500 })
+            )
         );
         const agent = makeAgent();
         renderWithProviders(
-            <DuplicateAgentModal
-                open={true}
-                agent={agent}
-                existingIds={[]}
-                onClose={vi.fn()}
-            />,
+            <DuplicateAgentModal open={true} agent={agent} existingIds={[]} onClose={vi.fn()} />
         );
         await userEvent.click(screen.getByRole('button', { name: /duplicate agent/i }));
         // Error view shows "Could not duplicate"
-        await waitFor(() => expect(screen.getByText(/Could not duplicate/i)).toBeInTheDocument(), { timeout: 5000 });
+        await waitFor(() => expect(screen.getByText(/Could not duplicate/i)).toBeInTheDocument(), {
+            timeout: 5000,
+        });
     }, 15000);
 });

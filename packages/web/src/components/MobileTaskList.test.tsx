@@ -13,7 +13,7 @@ describe('MobileTaskList', () => {
                 agents={[]}
                 ownerName="O"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.getByText(/No tasks match/)).toBeInTheDocument();
     });
@@ -26,7 +26,7 @@ describe('MobileTaskList', () => {
                 agents={[makeAgent({ id: 'agent-coder' })]}
                 ownerName="O"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.getByText('Alpha')).toBeInTheDocument();
     });
@@ -39,7 +39,7 @@ describe('MobileTaskList', () => {
                 agents={[]}
                 ownerName="O"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.getByText('Live Task')).toBeInTheDocument();
     });
@@ -48,12 +48,14 @@ describe('MobileTaskList', () => {
         const agent = makeAgent({ id: 'a1', name: 'Alice', status: 'active' });
         renderWithProviders(
             <MobileTaskList
-                rows={[makeTaskListItem({ id: 'E2', title: 'Assigned Task', assignee_agent_id: 'a1' })]}
+                rows={[
+                    makeTaskListItem({ id: 'E2', title: 'Assigned Task', assignee_agent_id: 'a1' }),
+                ]}
                 projects={[]}
                 agents={[agent]}
                 ownerName="O"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.getByText('Assigned Task')).toBeInTheDocument();
     });
@@ -62,12 +64,14 @@ describe('MobileTaskList', () => {
         const project = makeProject({ id: 'p1', name: 'Apollo' });
         renderWithProviders(
             <MobileTaskList
-                rows={[makeTaskListItem({ id: 'E3', title: 'Task with project', project_id: 'p1' })]}
+                rows={[
+                    makeTaskListItem({ id: 'E3', title: 'Task with project', project_id: 'p1' }),
+                ]}
                 projects={[project]}
                 agents={[]}
                 ownerName="O"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.getByText('Apollo')).toBeInTheDocument();
     });
@@ -80,7 +84,7 @@ describe('MobileTaskList', () => {
                 agents={[]}
                 ownerName="O"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         const row = screen.getByRole('button');
         fireEvent.click(row);
@@ -90,12 +94,14 @@ describe('MobileTaskList', () => {
     it('uses owner chip when assignee_agent_id is null (falsy branch)', () => {
         renderWithProviders(
             <MobileTaskList
-                rows={[makeTaskListItem({ id: 'E5', title: 'No Assignee', assignee_agent_id: null })]}
+                rows={[
+                    makeTaskListItem({ id: 'E5', title: 'No Assignee', assignee_agent_id: null }),
+                ]}
                 projects={[]}
                 agents={[]}
                 ownerName="TheOwner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.getByText('No Assignee')).toBeInTheDocument();
     });
@@ -104,12 +110,18 @@ describe('MobileTaskList', () => {
         // assignee_agent_id is truthy but agentsById.get returns undefined → ?? null → owner chip
         renderWithProviders(
             <MobileTaskList
-                rows={[makeTaskListItem({ id: 'E6', title: 'Missing Agent', assignee_agent_id: 'non-existent-agent' })]}
+                rows={[
+                    makeTaskListItem({
+                        id: 'E6',
+                        title: 'Missing Agent',
+                        assignee_agent_id: 'non-existent-agent',
+                    }),
+                ]}
                 projects={[]}
                 agents={[]} // empty agents list → agentsById is empty → get returns undefined
                 ownerName="OwnerFallback"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.getByText('Missing Agent')).toBeInTheDocument();
     });
@@ -125,7 +137,7 @@ describe('MobileTaskList', () => {
                 agents={[]}
                 ownerName="O"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.getByText('First')).toBeInTheDocument();
         expect(screen.getByText('Last')).toBeInTheDocument();

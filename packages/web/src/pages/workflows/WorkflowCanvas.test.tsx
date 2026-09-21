@@ -29,7 +29,7 @@ function context(overrides: Partial<ICanvasContext> = {}): ICanvasContext {
 function mount(props: Partial<Parameters<typeof WorkflowCanvas>[0]> = {}) {
     const flow = toFlow(workflow.graph);
     renderWithProviders(
-        <WorkflowCanvas nodes={flow.nodes} edges={flow.edges} context={context()} {...props} />,
+        <WorkflowCanvas nodes={flow.nodes} edges={flow.edges} context={context()} {...props} />
     );
     return screen.getByTestId('workflow-canvas');
 }

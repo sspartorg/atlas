@@ -41,7 +41,7 @@ describe('Terminal — loading state', () => {
     it('does not crash in loading state', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () => new Promise(() => {})),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         // spinner is shown
@@ -53,7 +53,7 @@ describe('Terminal — empty state', () => {
     beforeEach(() => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
     });
 
@@ -74,9 +74,7 @@ describe('Terminal — empty state', () => {
     });
 
     it('opens StartSessionDialog when empty state button is clicked', async () => {
-        server.use(
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
-        );
+        server.use(http.get(`${BASE}/cli-models`, () => HttpResponse.json([])));
         renderWithProviders(<Terminal />);
         await screen.findByText(/no sessions yet/i);
         const startBtn = screen.getAllByRole('button', { name: /start session/i })[0]!;
@@ -91,14 +89,19 @@ describe('Terminal — with sessions', () => {
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
                     makeSession({ id: 'sess-1', title: 'Alpha Session', status: 'active' }),
-                    makeSession({ id: 'sess-2', title: 'Beta Session', status: 'paused', cli: 'copilot' }),
+                    makeSession({
+                        id: 'sess-2',
+                        title: 'Beta Session',
+                        status: 'paused',
+                        cli: 'copilot',
+                    }),
                     makeSession({ id: 'sess-3', title: 'Gamma Session', status: 'closed' }),
                     makeSession({ id: 'sess-4', title: 'Delta Session', status: 'errored' }),
-                ]),
+                ])
             ),
             http.get(`${BASE}/projects`, () =>
-                HttpResponse.json([makeProject({ id: 'p1', name: 'Alpha Project' })]),
-            ),
+                HttpResponse.json([makeProject({ id: 'p1', name: 'Alpha Project' })])
+            )
         );
     });
 
@@ -119,8 +122,8 @@ describe('Terminal — with sessions', () => {
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
                     makeSession({ id: 'sess-item', title: 'Linked Session', item_id: 'ATL-42' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Linked Session');
@@ -134,9 +137,7 @@ describe('Terminal — with sessions', () => {
         fireEvent.click(screen.getByText('Active'));
         // Should show only active sessions
         expect(screen.getByText('Alpha Session')).toBeInTheDocument();
-        await waitFor(() =>
-            expect(screen.queryByText('Beta Session')).not.toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.queryByText('Beta Session')).not.toBeInTheDocument());
     });
 
     it('shows no-match message when filters exclude all sessions', async () => {
@@ -154,9 +155,9 @@ describe('Terminal — with sessions', () => {
         renderWithProviders(<Terminal />);
         await screen.findByText('Alpha Session');
         // The DashboardCustomize icon button navigates to /terminal/layout
-        screen.getAllByRole('button').find(
-            (b) => b.getAttribute('title') === null && !b.textContent?.trim(),
-        );
+        screen
+            .getAllByRole('button')
+            .find((b) => b.getAttribute('title') === null && !b.textContent?.trim());
         // Just check the Start Session button is present (navigation tested in App)
         expect(screen.getAllByRole('button', { name: /start session/i }).length).toBeGreaterThan(0);
     });
@@ -183,9 +184,9 @@ describe('Terminal — session card display', () => {
     it('renders "no branch" text for sessions without worktree_branch', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
-                HttpResponse.json([makeSession({ worktree_branch: null })]),
+                HttpResponse.json([makeSession({ worktree_branch: null })])
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText(/no branch/i);
@@ -196,9 +197,9 @@ describe('Terminal — session card display', () => {
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
                     makeSession({ last_active_at: new Date(Date.now() - 30_000).toISOString() }),
-                ]),
+                ])
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText(/last active/i);
@@ -207,7 +208,7 @@ describe('Terminal — session card display', () => {
     it('shows "Start Session" button in header toolbar', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Terminal');
@@ -219,11 +220,11 @@ describe('Terminal — filters persistence from localStorage', () => {
     it('loads saved filters from localStorage', async () => {
         window.localStorage.setItem(
             'atlas.terminal-filters.v1',
-            JSON.stringify({ status: 'paused', cli: 'all', projectId: 'all', search: '' }),
+            JSON.stringify({ status: 'paused', cli: 'all', projectId: 'all', search: '' })
         );
         server.use(
             http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Terminal');
@@ -235,7 +236,7 @@ describe('Terminal — filters persistence from localStorage', () => {
         window.localStorage.setItem('atlas.terminal-filters.v1', 'not-valid-json{{{');
         server.use(
             http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Terminal');
@@ -247,13 +248,23 @@ describe('Terminal — filter callbacks', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 'sess-1', title: 'Claude Session', status: 'active', cli: 'claude' }),
-                    makeSession({ id: 'sess-2', title: 'Copilot Session', status: 'active', cli: 'copilot' }),
-                ]),
+                    makeSession({
+                        id: 'sess-1',
+                        title: 'Claude Session',
+                        status: 'active',
+                        cli: 'claude',
+                    }),
+                    makeSession({
+                        id: 'sess-2',
+                        title: 'Copilot Session',
+                        status: 'active',
+                        cli: 'copilot',
+                    }),
+                ])
             ),
             http.get(`${BASE}/projects`, () =>
-                HttpResponse.json([makeProject({ id: 'p1', name: 'Alpha Project' })]),
-            ),
+                HttpResponse.json([makeProject({ id: 'p1', name: 'Alpha Project' })])
+            )
         );
     });
 
@@ -278,7 +289,7 @@ describe('Terminal — filter callbacks', () => {
         if (selects.length > 0) {
             fireEvent.mouseDown(selects[0]!);
             const opts = screen.queryAllByRole('option');
-            const projOpt = opts.find(o => o.textContent?.includes('Alpha Project'));
+            const projOpt = opts.find((o) => o.textContent?.includes('Alpha Project'));
             if (projOpt) fireEvent.click(projOpt);
         }
         expect(document.body).toBeTruthy();
@@ -288,12 +299,15 @@ describe('Terminal — filter callbacks', () => {
         renderWithProviders(<Terminal />);
         await screen.findByText('Claude Session');
         // Find the tooltip button for layout navigation
-        const layoutBtn = screen.queryAllByRole('button').find(b =>
-            b.querySelector('[data-testid="DashboardCustomizeRounded"]') !== null ||
-            b.getAttribute('aria-label')?.includes('layout') ||
-            b.title?.includes('layout') ||
-            (b.querySelector('svg') !== null && !b.textContent?.trim())
-        );
+        const layoutBtn = screen
+            .queryAllByRole('button')
+            .find(
+                (b) =>
+                    b.querySelector('[data-testid="DashboardCustomizeRounded"]') !== null ||
+                    b.getAttribute('aria-label')?.includes('layout') ||
+                    b.title?.includes('layout') ||
+                    (b.querySelector('svg') !== null && !b.textContent?.trim())
+            );
         if (layoutBtn) fireEvent.click(layoutBtn);
         expect(document.body).toBeTruthy();
     });
@@ -304,9 +318,9 @@ describe('Terminal — filter callbacks', () => {
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
                     makeSession({ id: 'sess-old', title: 'Old Session', last_active_at: oldDate }),
-                ]),
+                ])
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Old Session');
@@ -320,11 +334,21 @@ describe('Terminal — onCliChange filter wires through', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 's1', title: 'Claude Only', cli: 'claude', status: 'active' }),
-                    makeSession({ id: 's2', title: 'Copilot Only', cli: 'copilot', status: 'active' }),
-                ]),
+                    makeSession({
+                        id: 's1',
+                        title: 'Claude Only',
+                        cli: 'claude',
+                        status: 'active',
+                    }),
+                    makeSession({
+                        id: 's2',
+                        title: 'Copilot Only',
+                        cli: 'copilot',
+                        status: 'active',
+                    }),
+                ])
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Claude Only');
@@ -354,16 +378,28 @@ describe('Terminal — onProjectChange filter wires through', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 's1', title: 'Project A Session', project_id: 'p1', cli: 'claude', status: 'active' }),
-                    makeSession({ id: 's2', title: 'Project B Session', project_id: 'p2', cli: 'claude', status: 'active' }),
-                ]),
+                    makeSession({
+                        id: 's1',
+                        title: 'Project A Session',
+                        project_id: 'p1',
+                        cli: 'claude',
+                        status: 'active',
+                    }),
+                    makeSession({
+                        id: 's2',
+                        title: 'Project B Session',
+                        project_id: 'p2',
+                        cli: 'claude',
+                        status: 'active',
+                    }),
+                ])
             ),
             http.get(`${BASE}/projects`, () =>
                 HttpResponse.json([
                     makeProject({ id: 'p1', name: 'Alpha Project' }),
                     makeProject({ id: 'p2', name: 'Beta Project' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Project A Session');
@@ -372,11 +408,11 @@ describe('Terminal — onProjectChange filter wires through', () => {
         if (selects.length > 0) {
             fireEvent.mouseDown(selects[0]!);
             const opts = screen.queryAllByRole('option');
-            const alphaOpt = opts.find(o => o.textContent?.includes('Alpha Project'));
+            const alphaOpt = opts.find((o) => o.textContent?.includes('Alpha Project'));
             if (alphaOpt) {
                 fireEvent.click(alphaOpt);
                 await waitFor(() =>
-                    expect(screen.queryByText('Project B Session')).not.toBeInTheDocument(),
+                    expect(screen.queryByText('Project B Session')).not.toBeInTheDocument()
                 );
                 expect(screen.getByText('Project A Session')).toBeInTheDocument();
             }
@@ -390,11 +426,21 @@ describe('Terminal — onSearchChange filter wires through', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 's1', title: 'Unique Alpha Session', cli: 'claude', status: 'active' }),
-                    makeSession({ id: 's2', title: 'Unique Beta Session', cli: 'claude', status: 'active' }),
-                ]),
+                    makeSession({
+                        id: 's1',
+                        title: 'Unique Alpha Session',
+                        cli: 'claude',
+                        status: 'active',
+                    }),
+                    makeSession({
+                        id: 's2',
+                        title: 'Unique Beta Session',
+                        cli: 'claude',
+                        status: 'active',
+                    }),
+                ])
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Unique Alpha Session');
@@ -402,7 +448,7 @@ describe('Terminal — onSearchChange filter wires through', () => {
         if (searchInputs.length > 0) {
             fireEvent.change(searchInputs[0]!, { target: { value: 'Unique Alpha' } });
             await waitFor(() =>
-                expect(screen.queryByText('Unique Beta Session')).not.toBeInTheDocument(),
+                expect(screen.queryByText('Unique Beta Session')).not.toBeInTheDocument()
             );
             expect(screen.getByText('Unique Alpha Session')).toBeInTheDocument();
         }
@@ -416,10 +462,14 @@ describe('Terminal — relativeAgo hours branch', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 'sess-h', title: 'Hour Session', last_active_at: twoHoursAgo }),
-                ]),
+                    makeSession({
+                        id: 'sess-h',
+                        title: 'Hour Session',
+                        last_active_at: twoHoursAgo,
+                    }),
+                ])
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Hour Session');
@@ -431,10 +481,14 @@ describe('Terminal — relativeAgo hours branch', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 'sess-s', title: 'Sec Session', last_active_at: thirtySecondsAgo }),
-                ]),
+                    makeSession({
+                        id: 'sess-s',
+                        title: 'Sec Session',
+                        last_active_at: thirtySecondsAgo,
+                    }),
+                ])
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Sec Session');
@@ -446,10 +500,14 @@ describe('Terminal — relativeAgo hours branch', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 'sess-m', title: 'Min Session', last_active_at: fiveMinutesAgo }),
-                ]),
+                    makeSession({
+                        id: 'sess-m',
+                        title: 'Min Session',
+                        last_active_at: fiveMinutesAgo,
+                    }),
+                ])
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Min Session');
@@ -462,10 +520,14 @@ describe('Terminal — relativeAgo invalid / negative', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 'sess-inv', title: 'Invalid Time Session', last_active_at: 'not-a-date' }),
-                ]),
+                    makeSession({
+                        id: 'sess-inv',
+                        title: 'Invalid Time Session',
+                        last_active_at: 'not-a-date',
+                    }),
+                ])
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Invalid Time Session');
@@ -479,10 +541,14 @@ describe('Terminal — relativeAgo invalid / negative', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 'sess-fut', title: 'Future Session', last_active_at: futureDate }),
-                ]),
+                    makeSession({
+                        id: 'sess-fut',
+                        title: 'Future Session',
+                        last_active_at: futureDate,
+                    }),
+                ])
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Future Session');
@@ -497,10 +563,10 @@ describe('Terminal — header Start Session button opens dialog', () => {
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
                     makeSession({ id: 's1', title: 'Existing Session', status: 'active' }),
-                ]),
+                ])
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([])),
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
+            http.get(`${BASE}/cli-models`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Existing Session');
@@ -516,10 +582,15 @@ describe('Terminal — copilot CLI session card', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 'cop-1', title: 'Copilot Session', cli: 'copilot', status: 'active' }),
-                ]),
+                    makeSession({
+                        id: 'cop-1',
+                        title: 'Copilot Session',
+                        cli: 'copilot',
+                        status: 'active',
+                    }),
+                ])
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Copilot Session');
@@ -538,10 +609,10 @@ describe('Terminal — onCreated callback', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
             http.get(`${BASE}/projects`, () =>
-                HttpResponse.json([makeProject({ id: 'p1', name: 'Alpha Project' })]),
+                HttpResponse.json([makeProject({ id: 'p1', name: 'Alpha Project' })])
             ),
             http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
-            http.post(`${BASE}/cli/sessions`, () => HttpResponse.json(newSession, { status: 201 })),
+            http.post(`${BASE}/cli/sessions`, () => HttpResponse.json(newSession, { status: 201 }))
         );
         renderWithProviders(<Terminal />);
         // Wait for the page to load then open the dialog
@@ -557,12 +628,12 @@ describe('Terminal — onCreated callback', () => {
         }
         // Submit the form (the Start button inside the dialog)
         const dialogStartBtns = screen.queryAllByRole('button', { name: /start/i });
-        const submitBtn = dialogStartBtns.find(b => b.closest('[role="dialog"]') !== null);
+        const submitBtn = dialogStartBtns.find((b) => b.closest('[role="dialog"]') !== null);
         if (submitBtn && !submitBtn.hasAttribute('disabled')) {
             fireEvent.click(submitBtn);
             // After creation, dialog should close (the text disappears)
             await waitFor(() =>
-                expect(screen.queryByText(/start a terminal session/i)).not.toBeInTheDocument(),
+                expect(screen.queryByText(/start a terminal session/i)).not.toBeInTheDocument()
             );
         } else {
             // Dialog opened successfully — exercise onCreated callback path indirectly
@@ -573,14 +644,18 @@ describe('Terminal — onCreated callback', () => {
 
 describe('Terminal — onCreated fires toast and closes dialog (full path)', () => {
     it('creates a session via dialog and fires onCreated callback closing the dialog', async () => {
-        const newSession = makeSession({ id: 'toast-sess', title: 'Toast Session', status: 'active' });
+        const newSession = makeSession({
+            id: 'toast-sess',
+            title: 'Toast Session',
+            status: 'active',
+        });
         server.use(
             http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
             http.get(`${BASE}/projects`, () =>
-                HttpResponse.json([makeProject({ id: 'p1', name: 'Alpha Project' })]),
+                HttpResponse.json([makeProject({ id: 'p1', name: 'Alpha Project' })])
             ),
             http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
-            http.post(`${BASE}/cli/sessions`, () => HttpResponse.json(newSession, { status: 201 })),
+            http.post(`${BASE}/cli/sessions`, () => HttpResponse.json(newSession, { status: 201 }))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText(/no sessions yet/i);
@@ -594,7 +669,7 @@ describe('Terminal — onCreated fires toast and closes dialog (full path)', () 
         await screen.findByText('Alpha Project');
         fireEvent.click(screen.getByText('Alpha Project'));
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /start session/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /start session/i })).not.toBeDisabled()
         );
         // Submit — this fires onCreated which closes the dialog + shows toast + navigates
         fireEvent.click(screen.getByRole('button', { name: /start session/i }));
@@ -602,7 +677,7 @@ describe('Terminal — onCreated fires toast and closes dialog (full path)', () 
         // close transition can exceed the default 1s waitFor; bump to 10s to absorb that)
         await waitFor(
             () => expect(screen.queryByText(/start a terminal session/i)).not.toBeInTheDocument(),
-            { timeout: 10000 },
+            { timeout: 10000 }
         );
     });
 });
@@ -611,11 +686,13 @@ describe('Terminal — projectNameById resolution', () => {
     it('resolves project name from project list and renders it on the session card', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
-                HttpResponse.json([makeSession({ id: 's-proj', title: 'Named Project Session', project_id: 'p1' })]),
+                HttpResponse.json([
+                    makeSession({ id: 's-proj', title: 'Named Project Session', project_id: 'p1' }),
+                ])
             ),
             http.get(`${BASE}/projects`, () =>
-                HttpResponse.json([makeProject({ id: 'p1', name: 'Resolved Project Name' })]),
-            ),
+                HttpResponse.json([makeProject({ id: 'p1', name: 'Resolved Project Name' })])
+            )
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Named Project Session');
@@ -632,7 +709,7 @@ describe('Terminal — localStorage setItem catch branch', () => {
         });
         server.use(
             http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Terminal');
@@ -655,21 +732,31 @@ describe('Terminal — projectId filter excludes non-matching sessions', () => {
         // `s.project_id !== filters.projectId` (true for the p2 session).
         window.localStorage.setItem(
             'atlas.terminal-filters.v1',
-            JSON.stringify({ status: 'all', cli: 'all', projectId: 'p1', search: '' }),
+            JSON.stringify({ status: 'all', cli: 'all', projectId: 'p1', search: '' })
         );
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 's-match', title: 'Matching Session', project_id: 'p1', status: 'active' }),
-                    makeSession({ id: 's-no', title: 'No Match Session', project_id: 'p2', status: 'active' }),
-                ]),
+                    makeSession({
+                        id: 's-match',
+                        title: 'Matching Session',
+                        project_id: 'p1',
+                        status: 'active',
+                    }),
+                    makeSession({
+                        id: 's-no',
+                        title: 'No Match Session',
+                        project_id: 'p2',
+                        status: 'active',
+                    }),
+                ])
             ),
             http.get(`${BASE}/projects`, () =>
                 HttpResponse.json([
                     makeProject({ id: 'p1', name: 'Alpha' }),
                     makeProject({ id: 'p2', name: 'Beta' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Matching Session');
@@ -685,11 +772,21 @@ describe('Terminal — search haystack includes null item_id as empty string', (
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 's-noid', title: 'Needle Session', item_id: null, status: 'active' }),
-                    makeSession({ id: 's-other', title: 'Other Session', item_id: null, status: 'active' }),
-                ]),
+                    makeSession({
+                        id: 's-noid',
+                        title: 'Needle Session',
+                        item_id: null,
+                        status: 'active',
+                    }),
+                    makeSession({
+                        id: 's-other',
+                        title: 'Other Session',
+                        item_id: null,
+                        status: 'active',
+                    }),
+                ])
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Needle Session');
@@ -697,7 +794,7 @@ describe('Terminal — search haystack includes null item_id as empty string', (
         if (searchInputs.length > 0) {
             fireEvent.change(searchInputs[0]!, { target: { value: 'Needle' } });
             await waitFor(() =>
-                expect(screen.queryByText('Other Session')).not.toBeInTheDocument(),
+                expect(screen.queryByText('Other Session')).not.toBeInTheDocument()
             );
             expect(screen.getByText('Needle Session')).toBeInTheDocument();
         }
@@ -710,17 +807,22 @@ describe('Terminal — DropdownChip onCliChange callback (L207)', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 's1', title: 'My Session', cli: 'copilot', status: 'active' }),
-                ]),
+                    makeSession({
+                        id: 's1',
+                        title: 'My Session',
+                        cli: 'copilot',
+                        status: 'active',
+                    }),
+                ])
             ),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('My Session');
         // The DropdownChip for CLI renders as role="button" containing "CLI:"
-        const cliChip = screen.queryAllByRole('button').find(
-            (b) => b.textContent?.includes('CLI:'),
-        );
+        const cliChip = screen
+            .queryAllByRole('button')
+            .find((b) => b.textContent?.includes('CLI:'));
         if (cliChip) {
             fireEvent.click(cliChip);
             // Menu opens — click "Claude Code" option
@@ -740,19 +842,24 @@ describe('Terminal — DropdownChip onProjectChange callback (L208)', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 's1', title: 'Project Session', project_id: 'p1', status: 'active' }),
-                ]),
+                    makeSession({
+                        id: 's1',
+                        title: 'Project Session',
+                        project_id: 'p1',
+                        status: 'active',
+                    }),
+                ])
             ),
             http.get(`${BASE}/projects`, () =>
-                HttpResponse.json([makeProject({ id: 'p1', name: 'Alpha Project' })]),
-            ),
+                HttpResponse.json([makeProject({ id: 'p1', name: 'Alpha Project' })])
+            )
         );
         renderWithProviders(<Terminal />);
         await screen.findByText('Project Session');
         // The DropdownChip for Project renders as role="button" containing "Project:"
-        const projectChip = screen.queryAllByRole('button').find(
-            (b) => b.textContent?.includes('Project:'),
-        );
+        const projectChip = screen
+            .queryAllByRole('button')
+            .find((b) => b.textContent?.includes('Project:'));
         if (projectChip) {
             fireEvent.click(projectChip);
             // Menu opens — click "Alpha Project" option (may appear multiple times in DOM)
@@ -772,7 +879,7 @@ describe('Terminal — EmptyState onStart callback (L220)', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
             http.get(`${BASE}/projects`, () => HttpResponse.json([])),
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
+            http.get(`${BASE}/cli-models`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText(/no sessions yet/i);
@@ -790,7 +897,7 @@ describe('Terminal — StartSessionDialog onClose callback (L257)', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
             http.get(`${BASE}/projects`, () => HttpResponse.json([])),
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
+            http.get(`${BASE}/cli-models`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Terminal />);
         await screen.findByText(/no sessions yet/i);
@@ -807,11 +914,10 @@ describe('Terminal — StartSessionDialog onClose callback (L257)', () => {
             fireEvent.click(cancelBtn);
         }
         // Dialog should close — onClose@L257 fired
-        await waitFor(() =>
-            expect(screen.queryByText(/start a terminal session/i)).not.toBeInTheDocument(),
-            { timeout: 5000 },
+        await waitFor(
+            () => expect(screen.queryByText(/start a terminal session/i)).not.toBeInTheDocument(),
+            { timeout: 5000 }
         );
         expect(document.body).toBeTruthy();
     });
 });
-

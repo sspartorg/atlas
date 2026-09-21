@@ -23,7 +23,7 @@ describe('GuardrailCategoryCard', () => {
                 rules={[]}
                 onAdd={vi.fn()}
                 onEdit={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText(/No rules in this category yet/i)).toBeInTheDocument();
         expect(screen.getByText(/0 rules/i)).toBeInTheDocument();
@@ -36,7 +36,7 @@ describe('GuardrailCategoryCard', () => {
                 rules={[baseRule]}
                 onAdd={vi.fn()}
                 onEdit={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText(/1 rule$/i)).toBeInTheDocument();
     });
@@ -48,7 +48,7 @@ describe('GuardrailCategoryCard', () => {
                 rules={[baseRule, { ...baseRule, id: 'r2', rule_text: 'Second rule' }]}
                 onAdd={vi.fn()}
                 onEdit={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('Never delete .env')).toBeInTheDocument();
         expect(screen.getByText('Second rule')).toBeInTheDocument();
@@ -63,7 +63,7 @@ describe('GuardrailCategoryCard', () => {
                 rules={[]}
                 onAdd={onAdd}
                 onEdit={vi.fn()}
-            />,
+            />
         );
         const addBtn = screen.getByRole('button', { name: /Add rule/i });
         fireEvent.click(addBtn);
@@ -78,7 +78,7 @@ describe('GuardrailCategoryCard', () => {
                 rules={[baseRule]}
                 onAdd={vi.fn()}
                 onEdit={onEdit}
-            />,
+            />
         );
         const ruleRow = screen.getByRole('button', { name: /Never delete/i });
         fireEvent.click(ruleRow);
@@ -92,7 +92,7 @@ describe('GuardrailCategoryCard', () => {
                 rules={[]}
                 onAdd={vi.fn()}
                 onEdit={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText(/0 rules/i)).toBeInTheDocument();
     });

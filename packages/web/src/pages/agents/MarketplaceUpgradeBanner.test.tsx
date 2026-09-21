@@ -17,9 +17,7 @@ beforeEach(() => {
 describe('MarketplaceUpgradeBanner', () => {
     it('renders nothing when marketplace_source_id is null', () => {
         const agent = makeAgent({ marketplace_source_id: null, marketplace_pulled_version: null });
-        const { container } = renderWithProviders(
-            <MarketplaceUpgradeBanner agent={agent} />,
-        );
+        const { container } = renderWithProviders(<MarketplaceUpgradeBanner agent={agent} />);
         // component returns null — only the react root div remains
         expect(container.firstChild).toBeNull();
     });
@@ -32,15 +30,13 @@ describe('MarketplaceUpgradeBanner', () => {
                 // Respond after a delay the test won't wait for
                 await new Promise(() => {}); // hangs
                 return HttpResponse.json({});
-            }),
+            })
         );
         const agent = makeAgent({
             marketplace_source_id: 'cat-1',
             marketplace_pulled_version: 1,
         });
-        const { container } = renderWithProviders(
-            <MarketplaceUpgradeBanner agent={agent} />,
-        );
+        const { container } = renderWithProviders(<MarketplaceUpgradeBanner agent={agent} />);
         // Before data arrives, component should render null
         expect(container.firstChild).toBeNull();
     });
@@ -52,16 +48,14 @@ describe('MarketplaceUpgradeBanner', () => {
                     agent: { id: 'cat-1', name: 'Coder', version: 1 },
                     is_linked: true,
                     installed_agent_id: 'agent-coder',
-                }),
-            ),
+                })
+            )
         );
         const agent = makeAgent({
             marketplace_source_id: 'cat-1',
             marketplace_pulled_version: 1,
         });
-        const { container } = renderWithProviders(
-            <MarketplaceUpgradeBanner agent={agent} />,
-        );
+        const { container } = renderWithProviders(<MarketplaceUpgradeBanner agent={agent} />);
         // Even after load, version is not greater so component returns null
         await new Promise((r) => setTimeout(r, 50));
         expect(container.firstChild).toBeNull();
@@ -74,17 +68,15 @@ describe('MarketplaceUpgradeBanner', () => {
                     agent: { id: 'cat-1', name: 'Coder', version: 2 },
                     is_linked: true,
                     installed_agent_id: 'agent-coder',
-                }),
-            ),
+                })
+            )
         );
         const agent = makeAgent({
             marketplace_source_id: 'cat-1',
             marketplace_pulled_version: 1,
         });
         renderWithProviders(<MarketplaceUpgradeBanner agent={agent} />);
-        await waitFor(() =>
-            expect(screen.getByText('Marketplace upgrade available')).toBeTruthy(),
-        );
+        await waitFor(() => expect(screen.getByText('Marketplace upgrade available')).toBeTruthy());
     });
 
     it('shows version transition in banner text', async () => {
@@ -94,8 +86,8 @@ describe('MarketplaceUpgradeBanner', () => {
                     agent: { id: 'cat-1', name: 'Coder', version: 2 },
                     is_linked: true,
                     installed_agent_id: 'agent-coder',
-                }),
-            ),
+                })
+            )
         );
         const agent = makeAgent({
             marketplace_source_id: 'cat-1',
@@ -112,8 +104,8 @@ describe('MarketplaceUpgradeBanner', () => {
                     agent: { id: 'cat-1', name: 'Coder', version: 2 },
                     is_linked: true,
                     installed_agent_id: 'agent-coder',
-                }),
-            ),
+                })
+            )
         );
         const agent = makeAgent({
             marketplace_source_id: 'cat-1',
@@ -121,7 +113,7 @@ describe('MarketplaceUpgradeBanner', () => {
         });
         renderWithProviders(<MarketplaceUpgradeBanner agent={agent} />);
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /review upgrade/i })).toBeTruthy(),
+            expect(screen.getByRole('button', { name: /review upgrade/i })).toBeTruthy()
         );
         expect(screen.getByRole('button', { name: /detach/i })).toBeTruthy();
     });
@@ -145,17 +137,24 @@ describe('MarketplaceUpgradeBanner', () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/cat-1`, () => HttpResponse.json(catalogData)),
             http.get(`${BASE}/marketplace/agents/cat-1/diff/agent-coder`, () =>
-                HttpResponse.json(diffResponse),
-            ),
+                HttpResponse.json(diffResponse)
+            )
         );
-        const agent = makeAgent({ id: 'agent-coder', marketplace_source_id: 'cat-1', marketplace_pulled_version: 1 });
+        const agent = makeAgent({
+            id: 'agent-coder',
+            marketplace_source_id: 'cat-1',
+            marketplace_pulled_version: 1,
+        });
         renderWithProviders(<MarketplaceUpgradeBanner agent={agent} />);
         const reviewBtn = await screen.findByRole('button', { name: /review upgrade/i });
         fireEvent.click(reviewBtn);
         // AcceptUpgradeModal should open (has a dialog)
-        await waitFor(() => {
-            expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+            },
+            { timeout: 5000 }
+        );
     });
 
     it('clicking Detach opens confirm modal (exercises setConfirmDetach(true))', async () => {
@@ -165,15 +164,22 @@ describe('MarketplaceUpgradeBanner', () => {
             installed_agent_id: 'agent-coder',
         };
         server.use(
-            http.get(`${BASE}/marketplace/agents/cat-1`, () => HttpResponse.json(catalogData)),
+            http.get(`${BASE}/marketplace/agents/cat-1`, () => HttpResponse.json(catalogData))
         );
-        const agent = makeAgent({ id: 'agent-coder', marketplace_source_id: 'cat-1', marketplace_pulled_version: 1 });
+        const agent = makeAgent({
+            id: 'agent-coder',
+            marketplace_source_id: 'cat-1',
+            marketplace_pulled_version: 1,
+        });
         renderWithProviders(<MarketplaceUpgradeBanner agent={agent} />);
         const detachBtn = await screen.findByRole('button', { name: /detach/i });
         fireEvent.click(detachBtn);
         // ConfirmActionModal should open
         await waitFor(() => {
-            expect(screen.queryByText(/Detach agent-coder/i) ?? document.querySelector('[role="dialog"]')).toBeTruthy();
+            expect(
+                screen.queryByText(/Detach agent-coder/i) ??
+                    document.querySelector('[role="dialog"]')
+            ).toBeTruthy();
         });
         // Close it
         const cancelBtn = screen.queryByRole('button', { name: /cancel/i });
@@ -192,9 +198,13 @@ describe('MarketplaceUpgradeBanner', () => {
             http.post(`${BASE}/agents/agent-coder/detach`, () => {
                 detached = true;
                 return HttpResponse.json({ id: 'agent-coder', marketplace_source_id: null });
-            }),
+            })
         );
-        const agent = makeAgent({ id: 'agent-coder', marketplace_source_id: 'cat-1', marketplace_pulled_version: 1 });
+        const agent = makeAgent({
+            id: 'agent-coder',
+            marketplace_source_id: 'cat-1',
+            marketplace_pulled_version: 1,
+        });
         renderWithProviders(<MarketplaceUpgradeBanner agent={agent} />);
         const detachBtn = await screen.findByRole('button', { name: /detach/i });
         fireEvent.click(detachBtn);
@@ -226,13 +236,17 @@ describe('MarketplaceUpgradeBanner', () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/cat-1`, () => HttpResponse.json(catalogData)),
             http.get(`${BASE}/marketplace/agents/cat-1/diff/agent-coder`, () =>
-                HttpResponse.json(diffResponse),
+                HttpResponse.json(diffResponse)
             ),
             http.post(`${BASE}/agents/agent-coder/accept-upgrade`, () =>
-                HttpResponse.json({ id: 'agent-coder', marketplace_pulled_version: 2 }),
-            ),
+                HttpResponse.json({ id: 'agent-coder', marketplace_pulled_version: 2 })
+            )
         );
-        const agent = makeAgent({ id: 'agent-coder', marketplace_source_id: 'cat-1', marketplace_pulled_version: 1 });
+        const agent = makeAgent({
+            id: 'agent-coder',
+            marketplace_source_id: 'cat-1',
+            marketplace_pulled_version: 1,
+        });
         renderWithProviders(
             <>
                 <MarketplaceUpgradeBanner agent={agent} />
@@ -242,23 +256,31 @@ describe('MarketplaceUpgradeBanner', () => {
         // Open AcceptUpgradeModal
         const reviewBtn = await screen.findByRole('button', { name: /review upgrade/i });
         fireEvent.click(reviewBtn);
-        await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeTruthy(), { timeout: 5000 });
+        await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeTruthy(), {
+            timeout: 5000,
+        });
         // Click "Accept selected" button (it should be enabled since prompt_md changed)
-        await waitFor(() => {
-            const acceptBtn = screen.queryByRole('button', { name: /Accept selected/i });
-            expect(acceptBtn).toBeTruthy();
-            expect(acceptBtn).not.toBeDisabled();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                const acceptBtn = screen.queryByRole('button', { name: /Accept selected/i });
+                expect(acceptBtn).toBeTruthy();
+                expect(acceptBtn).not.toBeDisabled();
+            },
+            { timeout: 5000 }
+        );
         fireEvent.click(screen.getByRole('button', { name: /Accept selected/i }));
         // Confirm the accept action in the nested ConfirmActionModal
-        await waitFor(() => {
-            const confirmBtn = screen.queryByRole('button', { name: /Apply selected/i });
-            if (confirmBtn) fireEvent.click(confirmBtn);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                const confirmBtn = screen.queryByRole('button', { name: /Apply selected/i });
+                if (confirmBtn) fireEvent.click(confirmBtn);
+            },
+            { timeout: 5000 }
+        );
         // After acceptance, the toast "Upgraded Coder" should appear
-        await waitFor(() =>
-            expect(screen.queryByText(/Upgraded Coder/i)).toBeTruthy(),
-        { timeout: 5000 });
+        await waitFor(() => expect(screen.queryByText(/Upgraded Coder/i)).toBeTruthy(), {
+            timeout: 5000,
+        });
     });
 
     it('onDismissed callback fires after dismissing upgrade — exercises setReviewing(false) + dismiss toast', async () => {
@@ -279,13 +301,17 @@ describe('MarketplaceUpgradeBanner', () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/cat-1`, () => HttpResponse.json(catalogData)),
             http.get(`${BASE}/marketplace/agents/cat-1/diff/agent-coder`, () =>
-                HttpResponse.json(diffResponse),
+                HttpResponse.json(diffResponse)
             ),
             http.post(`${BASE}/agents/agent-coder/dismiss-upgrade`, () =>
-                HttpResponse.json({ id: 'agent-coder', marketplace_pulled_version: 2 }),
-            ),
+                HttpResponse.json({ id: 'agent-coder', marketplace_pulled_version: 2 })
+            )
         );
-        const agent = makeAgent({ id: 'agent-coder', marketplace_source_id: 'cat-1', marketplace_pulled_version: 1 });
+        const agent = makeAgent({
+            id: 'agent-coder',
+            marketplace_source_id: 'cat-1',
+            marketplace_pulled_version: 1,
+        });
         renderWithProviders(
             <>
                 <MarketplaceUpgradeBanner agent={agent} />
@@ -295,22 +321,30 @@ describe('MarketplaceUpgradeBanner', () => {
         // Open AcceptUpgradeModal
         const reviewBtn = await screen.findByRole('button', { name: /review upgrade/i });
         fireEvent.click(reviewBtn);
-        await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeTruthy(), { timeout: 5000 });
+        await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeTruthy(), {
+            timeout: 5000,
+        });
         // Click "Dismiss upgrade" button
-        await waitFor(() => {
-            const dismissBtn = screen.queryByRole('button', { name: /Dismiss upgrade/i });
-            expect(dismissBtn).toBeTruthy();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                const dismissBtn = screen.queryByRole('button', { name: /Dismiss upgrade/i });
+                expect(dismissBtn).toBeTruthy();
+            },
+            { timeout: 5000 }
+        );
         fireEvent.click(screen.getByRole('button', { name: /Dismiss upgrade/i }));
         // Confirm the dismiss action
-        await waitFor(() => {
-            const confirmBtn = screen.queryByRole('button', { name: /^Dismiss$/i });
-            if (confirmBtn) fireEvent.click(confirmBtn);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                const confirmBtn = screen.queryByRole('button', { name: /^Dismiss$/i });
+                if (confirmBtn) fireEvent.click(confirmBtn);
+            },
+            { timeout: 5000 }
+        );
         // After dismissal, "Upgrade dismissed" toast appears
-        await waitFor(() =>
-            expect(screen.queryByText(/Upgrade dismissed/i)).toBeTruthy(),
-        { timeout: 5000 });
+        await waitFor(() => expect(screen.queryByText(/Upgrade dismissed/i)).toBeTruthy(), {
+            timeout: 5000,
+        });
     });
 
     it('handleDetach shows toast after successful detach', async () => {
@@ -322,10 +356,15 @@ describe('MarketplaceUpgradeBanner', () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/cat-1`, () => HttpResponse.json(catalogData)),
             http.post(`${BASE}/agents/agent-coder/detach`, () =>
-                HttpResponse.json({ id: 'agent-coder', marketplace_source_id: null }),
-            ),
+                HttpResponse.json({ id: 'agent-coder', marketplace_source_id: null })
+            )
         );
-        const agent = makeAgent({ id: 'agent-coder', name: 'Coder', marketplace_source_id: 'cat-1', marketplace_pulled_version: 1 });
+        const agent = makeAgent({
+            id: 'agent-coder',
+            name: 'Coder',
+            marketplace_source_id: 'cat-1',
+            marketplace_pulled_version: 1,
+        });
         renderWithProviders(
             <>
                 <MarketplaceUpgradeBanner agent={agent} />
@@ -338,10 +377,10 @@ describe('MarketplaceUpgradeBanner', () => {
         const confirmBtns = screen.queryAllByRole('button', { name: /^Detach$/i });
         if (confirmBtns.length > 0) {
             fireEvent.click(confirmBtns[confirmBtns.length - 1]!);
-            await waitFor(() =>
-                expect(screen.queryByText(/detached from marketplace/i)).toBeTruthy(),
-            { timeout: 5000 });
+            await waitFor(
+                () => expect(screen.queryByText(/detached from marketplace/i)).toBeTruthy(),
+                { timeout: 5000 }
+            );
         }
     });
-
 });

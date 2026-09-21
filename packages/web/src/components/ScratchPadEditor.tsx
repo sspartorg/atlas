@@ -149,138 +149,138 @@ export function ScratchPadEditor({ open, onClose, tile }: ScratchPadEditorProps)
 
     return (
         <>
-        <Dialog
-            open={open}
-            onClose={flushAndClose}
-            maxWidth="md"
-            fullWidth
-            PaperProps={{
-                sx: {
-                    minHeight: '70vh',
-                    maxHeight: '90vh',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    borderRadius: '12px',
-                },
-            }}
-        >
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    px: 3,
-                    pt: 2.5,
-                    pb: 1.5,
-                }}
-            >
-                <TextField
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Title (auto from first 3 words if blank)"
-                    variant="standard"
-                    fullWidth
-                    InputProps={{
-                        disableUnderline: true,
-                        sx: {
-                            fontSize: '1.25rem',
-                            fontWeight: 600,
-                            color: ATLAS_PALETTE.slate,
-                            '& input::placeholder': {
-                                color: ATLAS_PALETTE.slate40,
-                                opacity: 1,
-                                fontWeight: 500,
-                            },
-                        },
-                    }}
-                />
-                <Tooltip title="Delete tile" arrow>
-                    <span>
-                        <IconButton
-                            size="small"
-                            aria-label="Delete tile"
-                            onClick={() => setShowDeleteModal(true)}
-                            disabled={!tile}
-                            sx={{
-                                color: ATLAS_PALETTE.slate60,
-                                '&:hover': { color: ATLAS_PALETTE.error },
-                            }}
-                        >
-                            <DeleteOutlineRounded sx={{ fontSize: 20 }} />
-                        </IconButton>
-                    </span>
-                </Tooltip>
-                <Tooltip title="Close" arrow>
-                    <IconButton
-                        size="small"
-                        aria-label="Close"
-                        onClick={flushAndClose}
-                        sx={{ color: ATLAS_PALETTE.slate60 }}
-                    >
-                        <CloseRounded sx={{ fontSize: 20 }} />
-                    </IconButton>
-                </Tooltip>
-            </Box>
-
-            <Box
-                sx={{
-                    flex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    px: 3,
-                    pb: 2,
-                    minHeight: 0,
+            <Dialog
+                open={open}
+                onClose={flushAndClose}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        minHeight: '70vh',
+                        maxHeight: '90vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        borderRadius: '12px',
+                    },
                 }}
             >
                 <Box
-                    component="textarea"
-                    value={body}
-                    onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setBody(e.target.value)}
-                    spellCheck
-                    placeholder="Take a note..."
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        px: 3,
+                        pt: 2.5,
+                        pb: 1.5,
+                    }}
+                >
+                    <TextField
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Title (auto from first 3 words if blank)"
+                        variant="standard"
+                        fullWidth
+                        InputProps={{
+                            disableUnderline: true,
+                            sx: {
+                                fontSize: '1.25rem',
+                                fontWeight: 600,
+                                color: ATLAS_PALETTE.slate,
+                                '& input::placeholder': {
+                                    color: ATLAS_PALETTE.slate40,
+                                    opacity: 1,
+                                    fontWeight: 500,
+                                },
+                            },
+                        }}
+                    />
+                    <Tooltip title="Delete tile" arrow>
+                        <span>
+                            <IconButton
+                                size="small"
+                                aria-label="Delete tile"
+                                onClick={() => setShowDeleteModal(true)}
+                                disabled={!tile}
+                                sx={{
+                                    color: ATLAS_PALETTE.slate60,
+                                    '&:hover': { color: ATLAS_PALETTE.error },
+                                }}
+                            >
+                                <DeleteOutlineRounded sx={{ fontSize: 20 }} />
+                            </IconButton>
+                        </span>
+                    </Tooltip>
+                    <Tooltip title="Close" arrow>
+                        <IconButton
+                            size="small"
+                            aria-label="Close"
+                            onClick={flushAndClose}
+                            sx={{ color: ATLAS_PALETTE.slate60 }}
+                        >
+                            <CloseRounded sx={{ fontSize: 20 }} />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
+
+                <Box
                     sx={{
                         flex: 1,
-                        width: '100%',
-                        minHeight: '60vh',
-                        maxHeight: '80vh',
-                        border: 'none',
-                        outline: 'none',
-                        resize: 'none',
-                        py: 2,
-                        px: 0,
-                        fontFamily: 'inherit',
-                        fontSize: 15,
-                        lineHeight: 1.6,
-                        color: ATLAS_PALETTE.slate,
-                        background: 'transparent',
-                        '&::placeholder': { color: ATLAS_PALETTE.slate40 },
+                        display: 'flex',
+                        flexDirection: 'column',
+                        px: 3,
+                        pb: 2,
+                        minHeight: 0,
                     }}
-                />
-            </Box>
+                >
+                    <Box
+                        component="textarea"
+                        value={body}
+                        onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setBody(e.target.value)}
+                        spellCheck
+                        placeholder="Take a note..."
+                        sx={{
+                            flex: 1,
+                            width: '100%',
+                            minHeight: '60vh',
+                            maxHeight: '80vh',
+                            border: 'none',
+                            outline: 'none',
+                            resize: 'none',
+                            py: 2,
+                            px: 0,
+                            fontFamily: 'inherit',
+                            fontSize: 15,
+                            lineHeight: 1.6,
+                            color: ATLAS_PALETTE.slate,
+                            background: 'transparent',
+                            '&::placeholder': { color: ATLAS_PALETTE.slate40 },
+                        }}
+                    />
+                </Box>
 
-            <Box
-                sx={{
-                    px: 3,
-                    py: 1.5,
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    borderTop: `1px solid ${ATLAS_PALETTE.slate06}`,
-                }}
-            >
-                <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
-                    {savedLabel}
-                </Typography>
-            </Box>
-        </Dialog>
-        {tile && (
-            <ConfirmDeleteModal
-                open={showDeleteModal}
-                entityKind="scratch_pad"
-                entityTitle={inferTitle(title, body)}
-                onConfirm={handleConfirmDelete}
-                onClose={() => setShowDeleteModal(false)}
-            />
-        )}
+                <Box
+                    sx={{
+                        px: 3,
+                        py: 1.5,
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        borderTop: `1px solid ${ATLAS_PALETTE.slate06}`,
+                    }}
+                >
+                    <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
+                        {savedLabel}
+                    </Typography>
+                </Box>
+            </Dialog>
+            {tile && (
+                <ConfirmDeleteModal
+                    open={showDeleteModal}
+                    entityKind="scratch_pad"
+                    entityTitle={inferTitle(title, body)}
+                    onConfirm={handleConfirmDelete}
+                    onClose={() => setShowDeleteModal(false)}
+                />
+            )}
         </>
     );
 }

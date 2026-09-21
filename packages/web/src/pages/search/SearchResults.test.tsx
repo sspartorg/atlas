@@ -37,7 +37,7 @@ describe('SearchResults', () => {
                 highlightText=""
                 sort="updated_desc"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         expect(container.firstChild).toBeInTheDocument();
     });
@@ -63,7 +63,7 @@ describe('SearchResults', () => {
                 highlightText=""
                 sort="updated_desc"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         expect(container.textContent).toContain('Hi there');
     });
@@ -77,7 +77,7 @@ describe('SearchResults', () => {
                 highlightText="foo"
                 sort="updated_desc"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('foo');
     });
@@ -92,7 +92,7 @@ describe('SearchResults', () => {
                 highlightText=""
                 sort="updated_desc"
                 onSortChange={onSortChange}
-            />,
+            />
         );
         // MUI Select uses a custom combobox — open it via mouseDown then click a menu item
         const sortSelect = screen.queryByRole('combobox');
@@ -118,7 +118,7 @@ describe('SearchResults', () => {
                 highlightText=""
                 sort="updated_desc"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('Task One');
     });
@@ -132,7 +132,7 @@ describe('SearchResults', () => {
                 highlightText=""
                 sort="updated_desc"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         const title = screen.queryByText('My Agent');
         if (title) {
@@ -157,7 +157,7 @@ describe('SearchResults', () => {
                     onSortChange={vi.fn()}
                 />
                 <LocationDisplay />
-            </>,
+            </>
         );
         fireEvent.click(screen.getByText('Open me'));
         expect(screen.getByTestId('location').textContent).toBe(path);
@@ -169,13 +169,19 @@ describe('SearchResults', () => {
         const agentsById = new Map([['agent-coder', agent]]);
         renderWithProviders(
             <SearchResults
-                hits={[makeHit({ id: 'S2', title: 'Sub-task With Agent', assignee_agent_id: 'agent-coder' })]}
+                hits={[
+                    makeHit({
+                        id: 'S2',
+                        title: 'Sub-task With Agent',
+                        assignee_agent_id: 'agent-coder',
+                    }),
+                ]}
                 agentsById={agentsById}
                 projectNameById={new Map()}
                 highlightText=""
                 sort="updated_desc"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         // The agent chip renders the agent name
         expect(document.body.textContent).toContain('Coder');
@@ -191,7 +197,7 @@ describe('SearchResults', () => {
                 highlightText=""
                 sort="updated_desc"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('My Project');
     });
@@ -199,13 +205,18 @@ describe('SearchResults', () => {
     it('renders hit with description highlighting — covers highlightSubstring on description (line 316-320)', () => {
         renderWithProviders(
             <SearchResults
-                hits={[makeHit({ title: 'Hello World', description: 'A description with match keyword' })]}
+                hits={[
+                    makeHit({
+                        title: 'Hello World',
+                        description: 'A description with match keyword',
+                    }),
+                ]}
                 agentsById={new Map()}
                 projectNameById={new Map()}
                 highlightText="match"
                 sort="updated_desc"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('match');
     });
@@ -222,7 +233,7 @@ describe('SearchResults', () => {
                 highlightText=""
                 sort="updated_asc"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('Older');
         expect(document.body.textContent).toContain('Newer');
@@ -240,7 +251,7 @@ describe('SearchResults', () => {
                 highlightText=""
                 sort="type"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('Task First');
         expect(document.body.textContent).toContain('Sub-task Second');
@@ -256,7 +267,7 @@ describe('SearchResults', () => {
                 highlightText=""
                 sort="updated_desc"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('Unassigned view');
     });
@@ -265,7 +276,9 @@ describe('SearchResults', () => {
         // makeAgent without a glyph field so getAgentView returns view with no glyph
         const agentNoGlyph = makeAgent({ id: 'a-no-glyph', name: 'NoGlyph' });
         // Remove glyph from the agent to exercise the ?? 'developer_board' branch
-        const { glyph: _removed, ...agentWithoutGlyph } = agentNoGlyph as typeof agentNoGlyph & { glyph?: unknown };
+        const { glyph: _removed, ...agentWithoutGlyph } = agentNoGlyph as typeof agentNoGlyph & {
+            glyph?: unknown;
+        };
         renderWithProviders(
             <SearchResults
                 hits={[makeHit({ assignee_agent_id: 'a-no-glyph', title: 'Agent No Glyph' })]}
@@ -274,7 +287,7 @@ describe('SearchResults', () => {
                 highlightText=""
                 sort="updated_desc"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('NoGlyph');
     });
@@ -290,7 +303,7 @@ describe('SearchResults', () => {
                 highlightText=""
                 sort="updated_desc"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('No Status Hit');
         // StatusChip should not be rendered when status is ''
@@ -304,7 +317,7 @@ describe('SearchResults', () => {
         const agentUnknownCat = makeAgent({
             id: 'a-unknown-cat',
             name: 'UnknownCat',
-            glyph: '',  // empty → falls through to seed/category lookup
+            glyph: '', // empty → falls through to seed/category lookup
             category: 'unknown-category' as ReturnType<typeof makeAgent>['category'],
         });
         renderWithProviders(
@@ -315,7 +328,7 @@ describe('SearchResults', () => {
                 highlightText=""
                 sort="updated_desc"
                 onSortChange={vi.fn()}
-            />,
+            />
         );
         // The agent chip renders with 'developer_board' fallback glyph
         expect(document.body.textContent).toContain('UnknownCat');

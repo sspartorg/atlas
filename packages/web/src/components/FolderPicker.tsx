@@ -240,9 +240,7 @@ export function FolderPicker(props: Props) {
                     },
                     // Merged here on purpose: a second `slotProps` prop would
                     // replace this object wholesale rather than merge.
-                    ...(ariaLabel !== undefined
-                        ? { htmlInput: { 'aria-label': ariaLabel } }
-                        : {}),
+                    ...(ariaLabel !== undefined ? { htmlInput: { 'aria-label': ariaLabel } } : {}),
                 }}
             />
             <Button

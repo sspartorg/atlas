@@ -40,9 +40,7 @@ export function McpTools() {
                 >
                     MCP Tools
                 </Typography>
-                <Typography
-                    sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1.5 }}
-                >
+                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>
                     Read-only directory of every tool the Atlas MCP server exposes to agents.
                 </Typography>
                 {!isLoading && !isError && totalTools > 0 && (
@@ -80,9 +78,21 @@ export function McpTools() {
                     {[0, 1, 2].map((i) => (
                         <Box key={i}>
                             <Skeleton variant="text" width={140} height={24} sx={{ mb: 2 }} />
-                            <Skeleton variant="rectangular" height={56} sx={{ borderRadius: '8px', mb: 1 }} />
-                            <Skeleton variant="rectangular" height={56} sx={{ borderRadius: '8px', mb: 1 }} />
-                            <Skeleton variant="rectangular" height={56} sx={{ borderRadius: '8px' }} />
+                            <Skeleton
+                                variant="rectangular"
+                                height={56}
+                                sx={{ borderRadius: '8px', mb: 1 }}
+                            />
+                            <Skeleton
+                                variant="rectangular"
+                                height={56}
+                                sx={{ borderRadius: '8px', mb: 1 }}
+                            />
+                            <Skeleton
+                                variant="rectangular"
+                                height={56}
+                                sx={{ borderRadius: '8px' }}
+                            />
                         </Box>
                     ))}
                 </Box>

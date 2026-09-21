@@ -17,46 +17,36 @@ describe('ImportAgentZipModal', () => {
     });
 
     it('renders the dialog when open=true', () => {
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />);
         expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
 
     it('shows "Import agent from zip" title', () => {
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />);
         expect(screen.getByText('Import agent from zip')).toBeInTheDocument();
     });
 
     it('does not render dialog when open=false', () => {
         renderWithProviders(
-            <ImportAgentZipModal open={false} onClose={vi.fn()} onImported={vi.fn()} />,
+            <ImportAgentZipModal open={false} onClose={vi.fn()} onImported={vi.fn()} />
         );
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
     it('Cancel button calls onClose', async () => {
         const onClose = vi.fn();
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={onClose} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={onClose} onImported={vi.fn()} />);
         await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
         expect(onClose).toHaveBeenCalled();
     });
 
     it('Import button is disabled when no file selected', () => {
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />);
         expect(screen.getByRole('button', { name: /^import$/i })).toBeDisabled();
     });
 
     it('selecting a file enables Import button', () => {
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />);
         const input = document.querySelector('input[type="file"]') as HTMLInputElement;
         const mockFile = new File(['content'], 'agent.zip', { type: 'application/zip' });
         fireEvent.change(input, { target: { files: [mockFile] } });
@@ -65,13 +55,9 @@ describe('ImportAgentZipModal', () => {
 
     it('successful import calls onImported', async () => {
         const agent = makeAgent({ id: 'imported-agent', name: 'Imported Agent' });
-        server.use(
-            http.post(`${BASE}/agents/import`, () => HttpResponse.json(agent)),
-        );
+        server.use(http.post(`${BASE}/agents/import`, () => HttpResponse.json(agent)));
         const onImported = vi.fn();
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={vi.fn()} onImported={onImported} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={vi.fn()} onImported={onImported} />);
         const input = document.querySelector('input[type="file"]') as HTMLInputElement;
         const mockFile = new File(['content'], 'agent.zip', { type: 'application/zip' });
         fireEvent.change(input, { target: { files: [mockFile] } });
@@ -94,13 +80,11 @@ describe('ImportAgentZipModal', () => {
                             suggested_id: 'existing-agent-2',
                         },
                     },
-                    { status: 409 },
-                ),
-            ),
+                    { status: 409 }
+                )
+            )
         );
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />);
         const input = document.querySelector('input[type="file"]') as HTMLInputElement;
         const mockFile = new File(['content'], 'agent.zip', { type: 'application/zip' });
         fireEvent.change(input, { target: { files: [mockFile] } });
@@ -115,12 +99,10 @@ describe('ImportAgentZipModal', () => {
     it('server error shows error message', async () => {
         server.use(
             http.post(`${BASE}/agents/import`, () =>
-                HttpResponse.json({ error: 'Import failed: bad zip' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Import failed: bad zip' }, { status: 500 })
+            )
         );
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />);
         const input = document.querySelector('input[type="file"]') as HTMLInputElement;
         const mockFile = new File(['content'], 'agent.zip', { type: 'application/zip' });
         fireEvent.change(input, { target: { files: [mockFile] } });
@@ -133,9 +115,7 @@ describe('ImportAgentZipModal', () => {
     });
 
     it('typing in Override slug field sets agentId state (opts.agent_id branch)', () => {
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />);
         // The "Override slug" text field should be visible when slugTaken is null
         const slugField = screen.getByLabelText(/override slug/i) as HTMLInputElement;
         expect(slugField).toBeInTheDocument();
@@ -146,22 +126,23 @@ describe('ImportAgentZipModal', () => {
     it('shows error text when server returns 500 (catch block err instanceof Error branch)', async () => {
         server.use(
             http.post(`${BASE}/agents/import`, () =>
-                HttpResponse.json({ error: 'Import failed: something broke' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Import failed: something broke' }, { status: 500 })
+            )
         );
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />);
         const input = document.querySelector('input[type="file"]') as HTMLInputElement;
         const mockFile = new File(['content'], 'agent.zip', { type: 'application/zip' });
         fireEvent.change(input, { target: { files: [mockFile] } });
 
         await userEvent.click(screen.getByRole('button', { name: /^import$/i }));
 
-        await waitFor(() => {
-            const txt = document.body.textContent ?? '';
-            expect(/import failed|error|failed|something broke/i.test(txt)).toBe(true);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                const txt = document.body.textContent ?? '';
+                expect(/import failed|error|failed|something broke/i.test(txt)).toBe(true);
+            },
+            { timeout: 5000 }
+        );
     });
 
     it('non-Error throw from importZip shows the generic "Import failed" fallback message', async () => {
@@ -169,9 +150,7 @@ describe('ImportAgentZipModal', () => {
         const importSpy = vi
             .spyOn(apiModule.api.agents, 'importZip')
             .mockRejectedValueOnce('a plain string rejection, not an Error');
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />);
         const input = document.querySelector('input[type="file"]') as HTMLInputElement;
         const mockFile = new File(['content'], 'agent.zip', { type: 'application/zip' });
         fireEvent.change(input, { target: { files: [mockFile] } });
@@ -187,14 +166,14 @@ describe('ImportAgentZipModal', () => {
     it('Cancel is a no-op while uploading (handleClose early-return)', async () => {
         // Delay the importZip resolution so `uploading` stays true while we click Cancel.
         let resolveImport!: (v: unknown) => void;
-        const pending = new Promise((res) => { resolveImport = res; });
+        const pending = new Promise((res) => {
+            resolveImport = res;
+        });
         const importSpy = vi
             .spyOn(apiModule.api.agents, 'importZip')
             .mockReturnValueOnce(pending as ReturnType<typeof apiModule.api.agents.importZip>);
         const onClose = vi.fn();
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={onClose} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={onClose} onImported={vi.fn()} />);
         const input = document.querySelector('input[type="file"]') as HTMLInputElement;
         const mockFile = new File(['content'], 'agent.zip', { type: 'application/zip' });
         fireEvent.change(input, { target: { files: [mockFile] } });
@@ -203,7 +182,7 @@ describe('ImportAgentZipModal', () => {
 
         // While the import is in-flight, the Import button shows "Importing…" and Cancel is disabled
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Importing…/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /Importing…/i })).toBeInTheDocument()
         );
         const cancelBtn = screen.getByRole('button', { name: /cancel/i });
         expect(cancelBtn).toBeDisabled();
@@ -213,7 +192,7 @@ describe('ImportAgentZipModal', () => {
 
         resolveImport(makeAgent({ id: 'imported-agent-2' }));
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /^Import$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /^Import$/i })).toBeInTheDocument()
         );
         importSpy.mockRestore();
     });
@@ -224,14 +203,14 @@ describe('ImportAgentZipModal', () => {
         // (also handleClose), which is the only way to exercise the `uploading`
         // true branch of the early-return.
         let resolveImport!: (v: unknown) => void;
-        const pending = new Promise((res) => { resolveImport = res; });
+        const pending = new Promise((res) => {
+            resolveImport = res;
+        });
         const importSpy = vi
             .spyOn(apiModule.api.agents, 'importZip')
             .mockReturnValueOnce(pending as ReturnType<typeof apiModule.api.agents.importZip>);
         const onClose = vi.fn();
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={onClose} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={onClose} onImported={vi.fn()} />);
         const input = document.querySelector('input[type="file"]') as HTMLInputElement;
         const mockFile = new File(['content'], 'agent.zip', { type: 'application/zip' });
         fireEvent.change(input, { target: { files: [mockFile] } });
@@ -239,7 +218,7 @@ describe('ImportAgentZipModal', () => {
         await userEvent.click(screen.getByRole('button', { name: /^import$/i }));
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Importing…/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /Importing…/i })).toBeInTheDocument()
         );
 
         fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', code: 'Escape' });
@@ -247,24 +226,20 @@ describe('ImportAgentZipModal', () => {
 
         resolveImport(makeAgent({ id: 'imported-agent-3' }));
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /^Import$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /^Import$/i })).toBeInTheDocument()
         );
         importSpy.mockRestore();
     });
 
     it('Escape key closes and resets the dialog when not uploading (handleClose non-early-return path)', async () => {
         const onClose = vi.fn();
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={onClose} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={onClose} onImported={vi.fn()} />);
         fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', code: 'Escape' });
         expect(onClose).toHaveBeenCalled();
     });
 
     it('selecting an empty file list clears the selection (files?.[0] ?? null fallback)', () => {
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />);
         const input = document.querySelector('input[type="file"]') as HTMLInputElement;
         const mockFile = new File(['content'], 'agent.zip', { type: 'application/zip' });
         fireEvent.change(input, { target: { files: [mockFile] } });
@@ -281,9 +256,7 @@ describe('ImportAgentZipModal', () => {
         const importSpy = vi
             .spyOn(apiModule.api.agents, 'importZip')
             .mockResolvedValueOnce(makeAgent({ id: 'imported-agent-4' }));
-        renderWithProviders(
-            <ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />,
-        );
+        renderWithProviders(<ImportAgentZipModal open onClose={vi.fn()} onImported={vi.fn()} />);
         const input = document.querySelector('input[type="file"]') as HTMLInputElement;
         const mockFile = new File(['content'], 'agent.zip', { type: 'application/zip' });
         fireEvent.change(input, { target: { files: [mockFile] } });

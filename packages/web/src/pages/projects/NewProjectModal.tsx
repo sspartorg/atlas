@@ -450,14 +450,11 @@ export function NewProjectModal({ open, onClose }: Props) {
     }
 
     const canConnect =
-        existingFolder.trim().length > 0 &&
-        repoIsValid &&
-        credentialId &&
-        !verifying &&
-        prefixIsOk;
+        existingFolder.trim().length > 0 && repoIsValid && credentialId && !verifying && prefixIsOk;
 
     function renderPrefixField() {
-        let helperText = 'Issue ids in this project become {PREFIX}-1, {PREFIX}-2, … and the prefix can’t be changed later.';
+        let helperText =
+            'Issue ids in this project become {PREFIX}-1, {PREFIX}-2, … and the prefix can’t be changed later.';
         let isError = false;
         if (issueKeyPrefix.length > 0 && issueKeyPrefix.length < 3) {
             helperText = 'Exactly 3 uppercase letters.';
@@ -470,7 +467,12 @@ export function NewProjectModal({ open, onClose }: Props) {
             isError = true;
             helperText = `Already used by "${prefixStatus.conflict ?? 'another project'}"`;
         } else if (prefixStatus.kind === 'ok') {
-            helperText = 'Available. New issues will be ' + issueKeyPrefix + '-1, ' + issueKeyPrefix + '-2, …';
+            helperText =
+                'Available. New issues will be ' +
+                issueKeyPrefix +
+                '-1, ' +
+                issueKeyPrefix +
+                '-2, …';
         }
         return (
             <TextField
@@ -481,7 +483,10 @@ export function NewProjectModal({ open, onClose }: Props) {
                 value={issueKeyPrefix}
                 onChange={(e) =>
                     setIssueKeyPrefix(
-                        e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)
+                        e.target.value
+                            .toUpperCase()
+                            .replace(/[^A-Z]/g, '')
+                            .slice(0, 3)
                     )
                 }
                 placeholder="ATL"
@@ -494,9 +499,7 @@ export function NewProjectModal({ open, onClose }: Props) {
                 error={isError}
                 helperText={helperText}
                 FormHelperTextProps={
-                    prefixStatus.kind === 'ok'
-                        ? { sx: { color: ATLAS_PALETTE.green } }
-                        : undefined
+                    prefixStatus.kind === 'ok' ? { sx: { color: ATLAS_PALETTE.green } } : undefined
                 }
             />
         );
@@ -652,9 +655,7 @@ export function NewProjectModal({ open, onClose }: Props) {
                                     >
                                         Clone fresh
                                     </Typography>
-                                    <Typography
-                                        sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}
-                                    >
+                                    <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
                                         new local folder
                                     </Typography>
                                 </Box>
@@ -696,9 +697,7 @@ export function NewProjectModal({ open, onClose }: Props) {
                                     >
                                         Use existing folder
                                     </Typography>
-                                    <Typography
-                                        sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}
-                                    >
+                                    <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
                                         already on disk
                                     </Typography>
                                 </Box>
@@ -803,7 +802,9 @@ export function NewProjectModal({ open, onClose }: Props) {
                                         }}
                                     >
                                         {computedDest ||
-                                            (settings ? 'Set a workspace path in Settings first' : '…')}
+                                            (settings
+                                                ? 'Set a workspace path in Settings first'
+                                                : '…')}
                                     </Typography>
                                 </Box>
 
@@ -1213,35 +1214,35 @@ export function NewProjectModal({ open, onClose }: Props) {
                         >
                             {(
                                 [
-                                ['Project ID', job.project.id.slice(0, 8)],
-                                ['Default branch', job.repo?.default_branch ?? '—'],
-                                [
-                                    'Latest commit',
-                                    headInfo && headInfo.short_sha
-                                        ? `${headInfo.short_sha} · ${headInfo.subject ?? '—'}${headInfo.relative_time ? ` (${headInfo.relative_time})` : ''}`
-                                        : '—',
-                                ],
-                                [
-                                    'Agents',
-                                    // Agents are global — every installed agent can work this project.
-                                    agents === undefined ? (
-                                        '—'
-                                    ) : agents.length > 0 ? (
-                                        `${agents.length} installed · shared by all projects`
-                                    ) : (
-                                        <Button
-                                            size="small"
-                                            onClick={() => {
-                                                onClose();
-                                                navigate('/agents/marketplace');
-                                            }}
-                                            sx={{ textTransform: 'none', p: 0, minWidth: 0 }}
-                                        >
-                                            None installed · Browse Marketplace →
-                                        </Button>
-                                    ),
-                                ],
-                            ] as Array<[string, ReactNode]>
+                                    ['Project ID', job.project.id.slice(0, 8)],
+                                    ['Default branch', job.repo?.default_branch ?? '—'],
+                                    [
+                                        'Latest commit',
+                                        headInfo && headInfo.short_sha
+                                            ? `${headInfo.short_sha} · ${headInfo.subject ?? '—'}${headInfo.relative_time ? ` (${headInfo.relative_time})` : ''}`
+                                            : '—',
+                                    ],
+                                    [
+                                        'Agents',
+                                        // Agents are global — every installed agent can work this project.
+                                        agents === undefined ? (
+                                            '—'
+                                        ) : agents.length > 0 ? (
+                                            `${agents.length} installed · shared by all projects`
+                                        ) : (
+                                            <Button
+                                                size="small"
+                                                onClick={() => {
+                                                    onClose();
+                                                    navigate('/agents/marketplace');
+                                                }}
+                                                sx={{ textTransform: 'none', p: 0, minWidth: 0 }}
+                                            >
+                                                None installed · Browse Marketplace →
+                                            </Button>
+                                        ),
+                                    ],
+                                ] as Array<[string, ReactNode]>
                             ).map(([k, v], i) => (
                                 <Box
                                     key={k}
@@ -1252,12 +1253,13 @@ export function NewProjectModal({ open, onClose }: Props) {
                                         py: 2,
                                         borderBottom:
                                             i < 3 ? `1px solid ${ATLAS_PALETTE.slate06}` : 'none',
-                                        bgcolor: i % 2 === 0 ? ATLAS_PALETTE.white : ATLAS_PALETTE.slate08,
+                                        bgcolor:
+                                            i % 2 === 0
+                                                ? ATLAS_PALETTE.white
+                                                : ATLAS_PALETTE.slate08,
                                     }}
                                 >
-                                    <Typography
-                                        sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}
-                                    >
+                                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
                                         {k}
                                     </Typography>
                                     <Typography

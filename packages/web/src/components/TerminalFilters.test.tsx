@@ -13,7 +13,10 @@ function renderFilters(overrides: Partial<Parameters<typeof TerminalFilters>[0]>
         projectId: 'all' as const,
         search: '',
         counts: defaultCounts,
-        projects: [makeProject({ id: 'p1', name: 'Alpha' }), makeProject({ id: 'p2', name: 'Beta' })],
+        projects: [
+            makeProject({ id: 'p1', name: 'Alpha' }),
+            makeProject({ id: 'p2', name: 'Beta' }),
+        ],
         onStatusChange: vi.fn(),
         onCliChange: vi.fn(),
         onProjectChange: vi.fn(),

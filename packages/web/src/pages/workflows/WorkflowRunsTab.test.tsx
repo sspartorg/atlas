@@ -29,8 +29,8 @@ function mount(runs: IWorkflowRunSummary[] | null, opts: { status?: number } = {
         http.get(`${BASE}/workflows/${WF}/runs`, () =>
             opts.status
                 ? new HttpResponse(null, { status: opts.status })
-                : HttpResponse.json(runs ?? []),
-        ),
+                : HttpResponse.json(runs ?? [])
+        )
     );
     navigate.mockClear();
     return renderWithProviders(<WorkflowRunsTab workflowId={WF} />);
@@ -83,12 +83,17 @@ describe('WorkflowRunsTab', () => {
         // Each link points at its own repo, not twice at the first.
         expect(screen.getByText('PR 2 of 2')).toHaveAttribute(
             'href',
-            'https://github.com/o/web/pull/2',
+            'https://github.com/o/web/pull/2'
         );
     });
 
     it('says "Open PR" rather than "PR 1 of 1" for a single-repo run', async () => {
-        mount([makeRun({ pr_url: 'https://github.com/o/core/pull/19', pr_urls: ['https://github.com/o/core/pull/19'] })]);
+        mount([
+            makeRun({
+                pr_url: 'https://github.com/o/core/pull/19',
+                pr_urls: ['https://github.com/o/core/pull/19'],
+            }),
+        ]);
         expect(await screen.findByText('Open PR')).toBeInTheDocument();
     });
 
@@ -116,7 +121,14 @@ describe('WorkflowRunsTab', () => {
     it('does not navigate when the PR link itself is clicked', async () => {
         // The link opens GitHub in a new tab; without stopPropagation the row
         // handler also fires and the Owner loses their place.
-        mount([makeRun({ item_id: 'ATL-4', item_title: 'Link row', pr_url: 'https://github.com/o/core/pull/7', pr_urls: [] })]);
+        mount([
+            makeRun({
+                item_id: 'ATL-4',
+                item_title: 'Link row',
+                pr_url: 'https://github.com/o/core/pull/7',
+                pr_urls: [],
+            }),
+        ]);
         await userEvent.click(await screen.findByText('Open PR'));
         await waitFor(() => expect(navigate).not.toHaveBeenCalled());
     });

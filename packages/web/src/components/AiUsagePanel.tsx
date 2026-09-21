@@ -68,13 +68,8 @@ export function AiUsagePanel({
                 AI Usage
             </Typography>
             {rows.map(({ label, value, sub }) => (
-                <Box
-                    key={label}
-                    sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.75 }}
-                >
-                    <Typography
-                        sx={{ fontSize: 11, color: ATLAS_PALETTE.slate40, minWidth: 90 }}
-                    >
+                <Box key={label} sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.75 }}>
+                    <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate40, minWidth: 90 }}>
                         {label}
                     </Typography>
                     <Typography

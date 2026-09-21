@@ -16,9 +16,7 @@ function reposAre(...repos: ReturnType<typeof makeProjectRepo>[]) {
 describe('GenerateAiScaffoldDialog', () => {
     it('renders the body naming the repo it will analyse', async () => {
         server.use(reposAre(makeProjectRepo({ id: 'r1', name: 'atlas', git_path: '/tmp/x' })));
-        renderWithProviders(
-            <GenerateAiScaffoldDialog project={project} open onClose={() => {}} />,
-        );
+        renderWithProviders(<GenerateAiScaffoldDialog project={project} open onClose={() => {}} />);
         expect(screen.getByText('Generate AI scaffold')).toBeInTheDocument();
         expect(await screen.findByText('/tmp/x')).toBeInTheDocument();
         expect(screen.getByText('atlas')).toBeInTheDocument();
@@ -26,9 +24,7 @@ describe('GenerateAiScaffoldDialog', () => {
 
     it('fires onClose when Cancel is clicked', () => {
         const onClose = vi.fn();
-        renderWithProviders(
-            <GenerateAiScaffoldDialog project={project} open onClose={onClose} />,
-        );
+        renderWithProviders(<GenerateAiScaffoldDialog project={project} open onClose={onClose} />);
         fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
         expect(onClose).toHaveBeenCalled();
     });
@@ -40,14 +36,12 @@ describe('GenerateAiScaffoldDialog', () => {
             http.post(`${BASE}/projects/p1/generate-ai-scaffold`, async ({ request }) => {
                 body = await request.json();
                 return HttpResponse.json({ run_id: 'r99', workflow_id: 'wf-1' });
-            }),
+            })
         );
         const onClose = vi.fn();
-        renderWithProviders(
-            <GenerateAiScaffoldDialog project={project} open onClose={onClose} />,
-        );
+        renderWithProviders(<GenerateAiScaffoldDialog project={project} open onClose={onClose} />);
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /generate/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /generate/i })).not.toBeDisabled()
         );
         fireEvent.click(screen.getByRole('button', { name: /generate/i }));
         await waitFor(() => expect(onClose).toHaveBeenCalled());
@@ -59,16 +53,14 @@ describe('GenerateAiScaffoldDialog', () => {
         server.use(
             reposAre(
                 makeProjectRepo({ id: 'r1', name: 'atlas', git_path: '/tmp/atlas' }),
-                makeProjectRepo({ id: 'r2', name: 'docs', git_path: '/tmp/docs' }),
+                makeProjectRepo({ id: 'r2', name: 'docs', git_path: '/tmp/docs' })
             ),
             http.post(`${BASE}/projects/p1/generate-ai-scaffold`, async ({ request }) => {
                 body = await request.json();
                 return HttpResponse.json({ run_id: 'r99', workflow_id: 'wf-1' });
-            }),
+            })
         );
-        renderWithProviders(
-            <GenerateAiScaffoldDialog project={project} open onClose={vi.fn()} />,
-        );
+        renderWithProviders(<GenerateAiScaffoldDialog project={project} open onClose={vi.fn()} />);
         // Defaults to the first ready repo.
         expect(await screen.findByText('/tmp/atlas')).toBeInTheDocument();
         fireEvent.mouseDown(screen.getByRole('combobox'));
@@ -80,12 +72,8 @@ describe('GenerateAiScaffoldDialog', () => {
 
     it('offers no picker and no Generate when the project has no ready repo', async () => {
         server.use(reposAre(makeProjectRepo({ id: 'r1', clone_status: 'cloning' })));
-        renderWithProviders(
-            <GenerateAiScaffoldDialog project={project} open onClose={vi.fn()} />,
-        );
-        expect(
-            await screen.findByText(/no repo ready to analyze/i),
-        ).toBeInTheDocument();
+        renderWithProviders(<GenerateAiScaffoldDialog project={project} open onClose={vi.fn()} />);
+        expect(await screen.findByText(/no repo ready to analyze/i)).toBeInTheDocument();
         expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: /generate/i })).toBeDisabled();
     });
@@ -95,15 +83,13 @@ describe('GenerateAiScaffoldDialog', () => {
             reposAre(makeProjectRepo({ id: 'r1' })),
             http.post(
                 `${BASE}/projects/p1/generate-ai-scaffold`,
-                () => new HttpResponse('boom', { status: 500 }),
-            ),
+                () => new HttpResponse('boom', { status: 500 })
+            )
         );
         const onClose = vi.fn();
-        renderWithProviders(
-            <GenerateAiScaffoldDialog project={project} open onClose={onClose} />,
-        );
+        renderWithProviders(<GenerateAiScaffoldDialog project={project} open onClose={onClose} />);
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /generate/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /generate/i })).not.toBeDisabled()
         );
         fireEvent.click(screen.getByRole('button', { name: /generate/i }));
         await waitFor(() => {
@@ -115,7 +101,7 @@ describe('GenerateAiScaffoldDialog', () => {
 
     it('does not render when open=false', () => {
         renderWithProviders(
-            <GenerateAiScaffoldDialog project={project} open={false} onClose={() => {}} />,
+            <GenerateAiScaffoldDialog project={project} open={false} onClose={() => {}} />
         );
         expect(screen.queryByText('Generate AI scaffold')).not.toBeInTheDocument();
     });

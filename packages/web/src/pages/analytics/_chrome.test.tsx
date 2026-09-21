@@ -18,15 +18,13 @@ describe('analytics chrome', () => {
         renderWithProviders(
             <Card>
                 <span>child</span>
-            </Card>,
+            </Card>
         );
         expect(screen.getByText('child')).toBeInTheDocument();
     });
 
     it('ChartTitle renders eyebrow + title + optional sub', () => {
-        renderWithProviders(
-            <ChartTitle eyebrow="EY" title="My chart" sub="Subtext" />,
-        );
+        renderWithProviders(<ChartTitle eyebrow="EY" title="My chart" sub="Subtext" />);
         expect(screen.getByText('EY')).toBeInTheDocument();
         expect(screen.getByText('My chart')).toBeInTheDocument();
         expect(screen.getByText('Subtext')).toBeInTheDocument();
@@ -40,7 +38,7 @@ describe('analytics chrome', () => {
 
     it('MetricMarquee renders label + value + optional sub', () => {
         renderWithProviders(
-            <MetricMarquee label="Cost" value="$1.23" sub="this month" accent="#fff" />,
+            <MetricMarquee label="Cost" value="$1.23" sub="this month" accent="#fff" />
         );
         expect(screen.getByText('Cost')).toBeInTheDocument();
         expect(screen.getByText('$1.23')).toBeInTheDocument();
@@ -48,21 +46,15 @@ describe('analytics chrome', () => {
     });
 
     it('MetricMarquee omits sub when undefined', () => {
-        renderWithProviders(
-            <MetricMarquee label="Cost" value="$1.23" accent="#fff" />,
-        );
+        renderWithProviders(<MetricMarquee label="Cost" value="$1.23" accent="#fff" />);
         expect(screen.queryByText('this month')).not.toBeInTheDocument();
     });
 
     it('Hero renders title, sub, breadcrumb, and children', () => {
         renderWithProviders(
-            <Hero
-                breadcrumb={<span>crumb</span>}
-                title={<span>hero</span>}
-                sub="some sub"
-            >
+            <Hero breadcrumb={<span>crumb</span>} title={<span>hero</span>} sub="some sub">
                 <div>marquee child</div>
-            </Hero>,
+            </Hero>
         );
         expect(screen.getByText('crumb')).toBeInTheDocument();
         expect(screen.getByText('hero')).toBeInTheDocument();
@@ -72,19 +64,17 @@ describe('analytics chrome', () => {
 
     it('ChartEmpty renders the label and sub text', () => {
         renderWithProviders(
-            <ChartEmpty label="No data" sub="Once a run completes it lands here." />,
+            <ChartEmpty label="No data" sub="Once a run completes it lands here." />
         );
         expect(screen.getByText(/No data/i)).toBeInTheDocument();
-        expect(
-            screen.getByText(/Once a run completes it lands here./i),
-        ).toBeInTheDocument();
+        expect(screen.getByText(/Once a run completes it lands here./i)).toBeInTheDocument();
     });
 
     it('Hero omits sub when undefined', () => {
         renderWithProviders(
             <Hero breadcrumb={<span>c</span>} title={<span>t</span>}>
                 <div>k</div>
-            </Hero>,
+            </Hero>
         );
         expect(screen.getByText('t')).toBeInTheDocument();
     });

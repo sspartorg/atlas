@@ -6,7 +6,7 @@ import { KpiStrip } from './KpiStrip.js';
 describe('KpiStrip', () => {
     it('renders with empty stats', () => {
         const { container } = renderWithProviders(
-            <KpiStrip awaitingCount={0} projectCount={0} stats={undefined} />,
+            <KpiStrip awaitingCount={0} projectCount={0} stats={undefined} />
         );
         expect(container.firstChild).toBeInTheDocument();
     });
@@ -22,7 +22,7 @@ describe('KpiStrip', () => {
                     content: { running: 1 },
                     design: { running: 0 },
                 }}
-            />,
+            />
         );
         expect(container.textContent).toContain('Software dev');
         expect(container.textContent).toContain('Content + Design');
@@ -34,7 +34,7 @@ describe('KpiStrip', () => {
 
     it('singular "project" when projectCount=1 (covers === 1 branch)', () => {
         const { container } = renderWithProviders(
-            <KpiStrip awaitingCount={2} projectCount={1} stats={undefined} />,
+            <KpiStrip awaitingCount={2} projectCount={1} stats={undefined} />
         );
         // The caption reads "across 1 project"
         expect(container.textContent).toContain('project');
@@ -55,15 +55,13 @@ describe('KpiStrip', () => {
                     cache_read_tokens: 200,
                     cache_creation_tokens: 0,
                 }}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('7 completed runs');
     });
 
     it('shows "No activity yet" when both costSummary30d and terminalCostSummary30d are undefined', () => {
-        renderWithProviders(
-            <KpiStrip awaitingCount={0} projectCount={0} stats={undefined} />,
-        );
+        renderWithProviders(<KpiStrip awaitingCount={0} projectCount={0} stats={undefined} />);
         expect(screen.getByText('No activity yet')).toBeInTheDocument();
     });
 
@@ -74,11 +72,13 @@ describe('KpiStrip', () => {
             <KpiStrip
                 awaitingCount={1}
                 projectCount={2}
-                stats={{
-                    // Only software-dev provided; marketing/content/design are absent
-                    'software-dev': { running: 1 },
-                } as Parameters<typeof KpiStrip>[0]['stats']}
-            />,
+                stats={
+                    {
+                        // Only software-dev provided; marketing/content/design are absent
+                        'software-dev': { running: 1 },
+                    } as Parameters<typeof KpiStrip>[0]['stats']
+                }
+            />
         );
         expect(document.body.textContent).toContain('Software dev');
         // Content + Design tile renders 0 from the ?? fallback
@@ -100,7 +100,7 @@ describe('KpiStrip', () => {
                     cache_read_tokens: null as unknown as number,
                     cache_creation_tokens: 0,
                 }}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('runs');
     });
@@ -120,7 +120,7 @@ describe('KpiStrip', () => {
                     cache_read_tokens: 0,
                     cache_creation_tokens: 0,
                 }}
-            />,
+            />
         );
         // "1 run" (singular) should appear — "runs" should NOT
         expect(document.body.textContent).toMatch(/\b1\b.*\brun\b/);
@@ -141,7 +141,7 @@ describe('KpiStrip', () => {
                     cache_read_tokens: 0,
                     cache_creation_tokens: 0,
                 }}
-            />,
+            />
         );
         // "1 session" (singular) should appear
         expect(document.body.textContent).toMatch(/\b1\b.*\bsession\b/);
@@ -163,7 +163,7 @@ describe('KpiStrip', () => {
                     cache_read_tokens: 0,
                     cache_creation_tokens: 0,
                 }}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('sessions');
     });

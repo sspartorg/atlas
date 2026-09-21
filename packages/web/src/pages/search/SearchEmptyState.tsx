@@ -31,6 +31,7 @@ export function SearchEmptyState({
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 28, color: ATLAS_PALETTE.slate60 }}
                 >
                     travel_explore
@@ -70,6 +71,7 @@ export function SearchEmptyState({
                                 <Box
                                     component="span"
                                     className="material-symbols-rounded"
+                                    aria-hidden="true"
                                     sx={{ fontSize: 16 }}
                                 >
                                     filter_alt_off
@@ -89,6 +91,7 @@ export function SearchEmptyState({
                                 <Box
                                     component="span"
                                     className="material-symbols-rounded"
+                                    aria-hidden="true"
                                     sx={{ fontSize: 16 }}
                                 >
                                     swap_horiz
@@ -107,6 +110,7 @@ export function SearchEmptyState({
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 16 }}
                             >
                                 add

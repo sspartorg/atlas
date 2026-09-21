@@ -5,16 +5,18 @@ import { AgentChip } from './AgentChip.js';
 
 describe('AgentChip', () => {
     it('renders the agent name and initial', () => {
-        renderWithProviders(
-            <AgentChip agent={{ name: 'Coder', accent_color: '#0A0A0A' }} />,
-        );
+        renderWithProviders(<AgentChip agent={{ name: 'Coder', accent_color: '#0A0A0A' }} />);
         expect(screen.getByText('Coder')).toBeInTheDocument();
         expect(screen.getByText('C')).toBeInTheDocument();
     });
 
     it('hides the name when showName is false', () => {
         renderWithProviders(
-            <AgentChip agent={{ name: 'Coder', accent_color: '#0A0A0A' }} showName={false} size="xs" />,
+            <AgentChip
+                agent={{ name: 'Coder', accent_color: '#0A0A0A' }}
+                showName={false}
+                size="xs"
+            />
         );
         expect(screen.queryByText('Coder')).not.toBeInTheDocument();
     });
@@ -23,14 +25,14 @@ describe('AgentChip', () => {
         renderWithProviders(
             <AgentChip
                 agent={{ name: 'PO Writer', accent_color: '#0A0A0A', designation: 'Product Owner' }}
-            />,
+            />
         );
         expect(screen.getByText('PO Writer · Product Owner')).toBeInTheDocument();
     });
 
     it('renders just the name when designation is empty or missing', () => {
         renderWithProviders(
-            <AgentChip agent={{ name: 'Coder', accent_color: '#0A0A0A', designation: '' }} />,
+            <AgentChip agent={{ name: 'Coder', accent_color: '#0A0A0A', designation: '' }} />
         );
         expect(screen.getByText('Coder')).toBeInTheDocument();
         expect(screen.queryByText(/·/)).not.toBeInTheDocument();
@@ -41,7 +43,7 @@ describe('AgentChip', () => {
             <AgentChip
                 agent={{ name: 'PO Writer', accent_color: '#0A0A0A', designation: 'Product Owner' }}
                 layout="stacked"
-            />,
+            />
         );
         // Both texts present as their own elements (no inline dot separator).
         expect(screen.getByText('PO Writer')).toBeInTheDocument();
@@ -55,7 +57,7 @@ describe('AgentChip', () => {
             <AgentChip
                 agent={{ name: 'Owner', accent_color: '#0A0A0A', designation: '' }}
                 layout="stacked"
-            />,
+            />
         );
         expect(screen.getByText('Owner')).toBeInTheDocument();
     });

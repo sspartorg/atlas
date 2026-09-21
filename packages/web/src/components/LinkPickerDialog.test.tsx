@@ -15,7 +15,7 @@ type Mode = 'relates_to' | 'depends_on' | 'tested_by';
 
 function renderPicker(
     mode: Mode,
-    opts: { onClose?: () => void; links?: IIssueLinkRow[]; restrictToTaskId?: string } = {},
+    opts: { onClose?: () => void; links?: IIssueLinkRow[]; restrictToTaskId?: string } = {}
 ) {
     const onClose = opts.onClose ?? vi.fn();
     renderWithProviders(
@@ -27,7 +27,7 @@ function renderPicker(
             links={opts.links ?? []}
             restrictToTaskId={opts.restrictToTaskId}
             onClose={onClose}
-        />,
+        />
     );
     return onClose;
 }
@@ -42,8 +42,8 @@ describe('LinkPickerDialog', () => {
         await screen.findByText('Add test link');
         expect(
             screen.getByText(
-                'This item will be the test holder. Pick the item it tests (same task only).',
-            ),
+                'This item will be the test holder. Pick the item it tests (same task only).'
+            )
         ).toBeInTheDocument();
     });
 
@@ -72,19 +72,23 @@ describe('LinkPickerDialog', () => {
             http.post(`${BASE}/issues/sub_task/ST-0/links`, async ({ request }) => {
                 body = await request.json();
                 return HttpResponse.json({ id: 1 });
-            }),
+            })
         );
         const onClose = renderPicker('relates_to');
         await search('Target');
         fireEvent.click(await screen.findByText('Target Task'));
         await waitFor(() => expect(onClose).toHaveBeenCalled());
-        expect(body).toMatchObject({ to_type: 'task', to_id: 'ATL-50', relation_type: 'relates_to' });
+        expect(body).toMatchObject({
+            to_type: 'task',
+            to_id: 'ATL-50',
+            relation_type: 'relates_to',
+        });
     });
 
     it('links a sub-task in depends_on mode and closes', async () => {
         server.use(
             handlers.listSubTasks([makeSubTask({ id: 'ST-51', title: 'Blocking Sub-task' })]),
-            http.post(`${BASE}/issues/sub_task/ST-0/links`, () => HttpResponse.json({ id: 2 })),
+            http.post(`${BASE}/issues/sub_task/ST-0/links`, () => HttpResponse.json({ id: 2 }))
         );
         const onClose = renderPicker('depends_on');
         await search('Blocking');
@@ -96,8 +100,8 @@ describe('LinkPickerDialog', () => {
         server.use(
             handlers.listTasks([makeTaskListItem({ id: 'ATL-52', title: 'Error Task' })]),
             http.post(`${BASE}/issues/sub_task/ST-0/links`, () =>
-                HttpResponse.json({ error: 'Duplicate link' }, { status: 422 }),
-            ),
+                HttpResponse.json({ error: 'Duplicate link' }, { status: 422 })
+            )
         );
         const onClose = renderPicker('relates_to');
         await search('Error');
@@ -112,7 +116,7 @@ describe('LinkPickerDialog', () => {
             handlers.listSubTasks([
                 makeSubTask({ id: 'ST-1', task_id: 'T1', title: 'Twin in task' }),
                 makeSubTask({ id: 'ST-2', task_id: 'T2', title: 'Twin elsewhere' }),
-            ]),
+            ])
         );
         renderPicker('tested_by', { restrictToTaskId: 'T1' });
         await search('Twin');
@@ -140,7 +144,7 @@ describe('LinkPickerDialog', () => {
             handlers.listSubTasks([
                 makeSubTask({ id: 'ST-0', title: 'Already Self' }),
                 makeSubTask({ id: 'ST-9', title: 'Already Free' }),
-            ]),
+            ])
         );
         renderPicker('relates_to', { links: preLinked });
         await search('Already');

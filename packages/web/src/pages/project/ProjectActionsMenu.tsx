@@ -105,6 +105,11 @@ export function ProjectActionsMenu({
             <Tooltip title="Project actions">
                 <IconButton
                     size="small"
+                    // Redundant with the Tooltip, which does name this button
+                    // because it wraps it directly — but stated explicitly so
+                    // the name does not depend on a wrapper staying put
+                    // (G-015; RefreshButton lost its name exactly that way).
+                    aria-label="Project actions"
                     onClick={(e: MouseEvent<HTMLButtonElement>) => setAnchor(e.currentTarget)}
                     sx={{
                         color: ATLAS_PALETTE.slate60,
@@ -114,6 +119,7 @@ export function ProjectActionsMenu({
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 22 }}
                     >
                         more_horiz
@@ -152,14 +158,13 @@ export function ProjectActionsMenu({
                             <ListItemIcon
                                 sx={{
                                     minWidth: 28,
-                                    color: it.danger
-                                        ? ATLAS_PALETTE.error
-                                        : ATLAS_PALETTE.slate60,
+                                    color: it.danger ? ATLAS_PALETTE.error : ATLAS_PALETTE.slate60,
                                 }}
                             >
                                 <Box
                                     component="span"
                                     className="material-symbols-rounded"
+                                    aria-hidden="true"
                                     sx={{ fontSize: 18 }}
                                 >
                                     {it.icon}

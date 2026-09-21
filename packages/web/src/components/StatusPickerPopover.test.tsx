@@ -20,7 +20,7 @@ describe('StatusPickerPopover', () => {
                 issueType="task"
                 current="ready"
                 onPick={vi.fn()}
-            />,
+            />
         );
     });
 
@@ -34,7 +34,7 @@ describe('StatusPickerPopover', () => {
                 issueType="task"
                 current="ready"
                 onPick={vi.fn()}
-            />,
+            />
         );
         await waitFor(() => {
             expect(screen.getByText('Move to')).toBeInTheDocument();
@@ -53,7 +53,7 @@ describe('StatusPickerPopover', () => {
                 issueType="task"
                 current="ready"
                 onPick={vi.fn()}
-            />,
+            />
         );
         // getValidNextStatuses('task', 'ready') = ['in_progress', 'waiting_for_info']
         await waitFor(() => {
@@ -74,7 +74,7 @@ describe('StatusPickerPopover', () => {
                 issueType="task"
                 current="ready"
                 onPick={onPick}
-            />,
+            />
         );
         await waitFor(() => {
             expect(screen.getByText('In Progress')).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe('StatusPickerPopover', () => {
                 issueType="task"
                 current="ready"
                 onPick={vi.fn()}
-            />,
+            />
         );
         await waitFor(() => {
             expect(screen.getByText('Override')).toBeInTheDocument();
@@ -118,7 +118,7 @@ describe('StatusPickerPopover', () => {
                 issueType="task"
                 current="ready"
                 onPick={onPick}
-            />,
+            />
         );
         await waitFor(() => {
             expect(screen.getByText('Done')).toBeInTheDocument();
@@ -138,7 +138,7 @@ describe('StatusPickerPopover', () => {
                 issueType="task"
                 current="in_progress"
                 onPick={vi.fn()}
-            />,
+            />
         );
         // getValidNextStatuses('task', 'in_progress') = ['in_review', 'ready', 'waiting_for_info']
         await waitFor(() => {
@@ -159,7 +159,7 @@ describe('StatusPickerPopover', () => {
                 issueType="task"
                 current="draft"
                 onPick={onPick}
-            />,
+            />
         );
         await waitFor(() => {
             expect(screen.getByText('Draft')).toBeInTheDocument();

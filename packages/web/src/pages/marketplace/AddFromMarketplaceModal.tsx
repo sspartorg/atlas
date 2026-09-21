@@ -21,9 +21,7 @@ interface Props {
     /** Set by the parent after a 409 SLUG_TAKEN — pre-fills the rename input
      *  with the server's suggested alternate slug. When null, the modal is in
      *  "default slug" state (no rename needed yet). */
-    slugTaken?:
-        | { conflictingId: string; suggestedId: string }
-        | null;
+    slugTaken?: { conflictingId: string; suggestedId: string } | null;
 }
 
 export function AddFromMarketplaceModal({
@@ -54,8 +52,8 @@ export function AddFromMarketplaceModal({
             <DialogContent>
                 <Typography sx={{ fontSize: 13.5, color: ATLAS_PALETTE.slate70, mb: 3 }}>
                     A fresh copy of the catalog entry will be created in your local agents. You can
-                    edit prompts, settings, and checklists after install — your changes never go back
-                    to the marketplace.
+                    edit prompts, settings, and checklists after install — your changes never go
+                    back to the marketplace.
                 </Typography>
                 <InstallHints agentId={agent.id} />
                 {isRename ? (
@@ -68,7 +66,14 @@ export function AddFromMarketplaceModal({
                             mb: 3,
                         }}
                     >
-                        <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.warnFg, fontWeight: 500, mb: 2 }}>
+                        <Typography
+                            sx={{
+                                fontSize: 13,
+                                color: ATLAS_PALETTE.warnFg,
+                                fontWeight: 500,
+                                mb: 2,
+                            }}
+                        >
                             <code>{slugTaken!.conflictingId}</code> is already in use locally
                             (likely a previously-installed or detached copy). Pick a different slug
                             for this fresh copy — the existing local agent stays untouched.
@@ -103,7 +108,9 @@ export function AddFromMarketplaceModal({
                             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
                                 local slug
                             </Typography>
-                            <Typography sx={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace' }}>
+                            <Typography
+                                sx={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace' }}
+                            >
                                 {agent.id}
                             </Typography>
                         </Box>
@@ -111,7 +118,9 @@ export function AddFromMarketplaceModal({
                             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
                                 catalog version
                             </Typography>
-                            <Typography sx={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace' }}>
+                            <Typography
+                                sx={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace' }}
+                            >
                                 v{agent.version}
                             </Typography>
                         </Box>
@@ -119,7 +128,9 @@ export function AddFromMarketplaceModal({
                             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
                                 kind
                             </Typography>
-                            <Typography sx={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace' }}>
+                            <Typography
+                                sx={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace' }}
+                            >
                                 {agent.kind_slug}
                             </Typography>
                         </Box>

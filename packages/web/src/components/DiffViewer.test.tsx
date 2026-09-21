@@ -27,7 +27,7 @@ describe('DiffViewer', () => {
 
     it('respects custom maxHeight without throwing', () => {
         expect(() =>
-            renderWithProviders(<DiffViewer from="a" to="b" maxHeight={500} />),
+            renderWithProviders(<DiffViewer from="a" to="b" maxHeight={500} />)
         ).not.toThrow();
     });
 });

@@ -13,7 +13,7 @@ describe('AiUsagePanel', () => {
                 output_tokens={null}
                 cache_creation_tokens={null}
                 cache_read_tokens={null}
-            />,
+            />
         );
         expect(container.firstChild).toBeNull();
     });
@@ -26,7 +26,7 @@ describe('AiUsagePanel', () => {
                 output_tokens={2_000}
                 cache_creation_tokens={5_000}
                 cache_read_tokens={10_000}
-            />,
+            />
         );
         expect(screen.getByText('AI Usage')).toBeInTheDocument();
         expect(screen.getByText('Cost')).toBeInTheDocument();
@@ -52,7 +52,7 @@ describe('AiUsagePanel', () => {
                 output_tokens={0}
                 cache_creation_tokens={0}
                 cache_read_tokens={0}
-            />,
+            />
         );
         expect(container.firstChild).not.toBeNull();
         expect(screen.getByText('AI Usage')).toBeInTheDocument();

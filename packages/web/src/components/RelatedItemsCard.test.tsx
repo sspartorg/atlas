@@ -35,7 +35,7 @@ describe('RelatedItemsCard', () => {
                 relatedLinks={[]}
                 agents={[]}
                 onOpenPicker={vi.fn()}
-            />,
+            />
         );
         expect(container).toBeInTheDocument();
     });
@@ -52,7 +52,7 @@ describe('RelatedItemsCard', () => {
                 relatedLinks={links}
                 agents={[makeAgent()]}
                 onOpenPicker={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('Blocker')).toBeInTheDocument();
     });
@@ -75,7 +75,7 @@ describe('RelatedItemsCard', () => {
                 agents={[]}
                 onOpenPicker={vi.fn()}
                 allowAddTestLink
-            />,
+            />
         );
         expect(screen.getByText('QA covers')).toBeInTheDocument();
     });
@@ -89,16 +89,14 @@ describe('RelatedItemsCard', () => {
                 agents={[]}
                 onOpenPicker={vi.fn()}
                 allowAddTestLink
-            />,
+            />
         );
         expect(screen.getByText(/No test links yet/i)).toBeInTheDocument();
     });
 
     it('fires onOpenPicker("depends_on") from the "Add dependency" button', () => {
         const onOpenPicker = vi.fn();
-        const links = [
-            makeLink({ id: 20, relation_type: 'depends_on', title: 'Block' }),
-        ];
+        const links = [makeLink({ id: 20, relation_type: 'depends_on', title: 'Block' })];
         renderWithProviders(
             <RelatedItemsCard
                 issueType="sub_task"
@@ -106,7 +104,7 @@ describe('RelatedItemsCard', () => {
                 relatedLinks={links}
                 agents={[]}
                 onOpenPicker={onOpenPicker}
-            />,
+            />
         );
         const btn = screen.getByRole('button', { name: /Add dependency/i });
         fireEvent.click(btn);
@@ -123,7 +121,7 @@ describe('RelatedItemsCard', () => {
                 relatedLinks={links}
                 agents={[]}
                 onOpenPicker={onOpenPicker}
-            />,
+            />
         );
         const btn = screen.getByRole('button', { name: /Link an item/i });
         fireEvent.click(btn);
@@ -140,7 +138,7 @@ describe('RelatedItemsCard', () => {
                 agents={[]}
                 onOpenPicker={onOpenPicker}
                 allowAddTestLink
-            />,
+            />
         );
         const btn = screen.getByRole('button', { name: /Add test link/i });
         fireEvent.click(btn);
@@ -167,7 +165,7 @@ describe('RelatedItemsCard', () => {
                 agents={[]}
                 onOpenPicker={vi.fn()}
                 allowAddTestLink
-            />,
+            />
         );
         expect(screen.getByText('Dep')).toBeInTheDocument();
         expect(screen.getByText('Tested')).toBeInTheDocument();
@@ -179,7 +177,14 @@ describe('RelatedItemsCard', () => {
         ['sub_task', 'ST-1', 'sub-task page'],
     ] as const)('clicking a %s link row opens its detail page', (type, id, page) => {
         const links = [
-            makeLink({ id: 40, type, item_id: id, relation_type: 'depends_on', short_id: id, title: 'Dep row' }),
+            makeLink({
+                id: 40,
+                type,
+                item_id: id,
+                relation_type: 'depends_on',
+                short_id: id,
+                title: 'Dep row',
+            }),
         ];
         renderWithProviders(
             <Routes>
@@ -197,7 +202,7 @@ describe('RelatedItemsCard', () => {
                 />
                 <Route path="/tasks/:id" element={<div>task page</div>} />
                 <Route path="/sub-tasks/:id" element={<div>sub-task page</div>} />
-            </Routes>,
+            </Routes>
         );
         fireEvent.click(screen.getByText('Dep row'));
         expect(screen.getByText(page)).toBeInTheDocument();
@@ -207,11 +212,16 @@ describe('RelatedItemsCard', () => {
         server.use(
             ...defaultHandlers,
             http.delete('http://localhost:3000/api/issues/links/50', () =>
-                HttpResponse.json({ ok: true }),
-            ),
+                HttpResponse.json({ ok: true })
+            )
         );
         const links = [
-            makeLink({ id: 50, relation_type: 'depends_on', short_id: 'ATL-99', title: 'Dep Link' }),
+            makeLink({
+                id: 50,
+                relation_type: 'depends_on',
+                short_id: 'ATL-99',
+                title: 'Dep Link',
+            }),
         ];
         renderWithProviders(
             <RelatedItemsCard
@@ -220,7 +230,7 @@ describe('RelatedItemsCard', () => {
                 relatedLinks={links}
                 agents={[]}
                 onOpenPicker={vi.fn()}
-            />,
+            />
         );
         const unlinkBtn = screen.getByRole('button', { name: /Unlink/i });
         fireEvent.click(unlinkBtn);
@@ -232,11 +242,17 @@ describe('RelatedItemsCard', () => {
         server.use(
             ...defaultHandlers,
             http.delete('http://localhost:3000/api/issues/links/60', () =>
-                HttpResponse.json({ ok: true }),
-            ),
+                HttpResponse.json({ ok: true })
+            )
         );
         const links = [
-            makeLink({ id: 60, relation_type: 'tested_by', direction: 'outgoing', short_id: 'ATL-60', title: 'Test Link' }),
+            makeLink({
+                id: 60,
+                relation_type: 'tested_by',
+                direction: 'outgoing',
+                short_id: 'ATL-60',
+                title: 'Test Link',
+            }),
         ];
         renderWithProviders(
             <RelatedItemsCard
@@ -246,7 +262,7 @@ describe('RelatedItemsCard', () => {
                 agents={[]}
                 onOpenPicker={vi.fn()}
                 allowAddTestLink
-            />,
+            />
         );
         const unlinkBtn = screen.getByRole('button', { name: /Unlink/i });
         fireEvent.click(unlinkBtn);
@@ -255,7 +271,13 @@ describe('RelatedItemsCard', () => {
 
     it('exercises testedByTitle = "Tests" when direction is mixed (outgoing only)', () => {
         const links = [
-            makeLink({ id: 70, relation_type: 'tested_by', direction: 'outgoing', short_id: 'ATL-70', title: 'Tests Item' }),
+            makeLink({
+                id: 70,
+                relation_type: 'tested_by',
+                direction: 'outgoing',
+                short_id: 'ATL-70',
+                title: 'Tests Item',
+            }),
         ];
         renderWithProviders(
             <RelatedItemsCard
@@ -265,7 +287,7 @@ describe('RelatedItemsCard', () => {
                 agents={[]}
                 onOpenPicker={vi.fn()}
                 allowAddTestLink
-            />,
+            />
         );
         // Title should be "Tests" when all tested_by links are outgoing
         expect(screen.getByText('Tests')).toBeInTheDocument();
@@ -296,7 +318,7 @@ describe('RelatedItemsCard', () => {
                     externalLinks={[]}
                     agents={[]}
                     onOpenPicker={vi.fn()}
-                />,
+                />
             );
             expect(screen.getByText('Pull Requests')).toBeInTheDocument();
             expect(screen.getByText('No pull requests linked yet.')).toBeInTheDocument();
@@ -320,7 +342,7 @@ describe('RelatedItemsCard', () => {
                     ]}
                     agents={[]}
                     onOpenPicker={vi.fn()}
-                />,
+                />
             );
             expect(screen.getByText('Open')).toBeInTheDocument();
             expect(screen.getByText('Merged')).toBeInTheDocument();
@@ -331,8 +353,18 @@ describe('RelatedItemsCard', () => {
         it('renders each PR row with #number, title, and an external-tab anchor', () => {
             server.use(...defaultHandlers);
             const links = [
-                makeExtLink({ id: 200, external_ref: '99', title: 'feat: cool thing', url: 'https://github.com/foo/bar/pull/99' }),
-                makeExtLink({ id: 201, external_ref: '7', title: null, url: 'https://github.com/foo/bar/pull/7' }),
+                makeExtLink({
+                    id: 200,
+                    external_ref: '99',
+                    title: 'feat: cool thing',
+                    url: 'https://github.com/foo/bar/pull/99',
+                }),
+                makeExtLink({
+                    id: 201,
+                    external_ref: '7',
+                    title: null,
+                    url: 'https://github.com/foo/bar/pull/7',
+                }),
             ];
             renderWithProviders(
                 <RelatedItemsCard
@@ -342,7 +374,7 @@ describe('RelatedItemsCard', () => {
                     externalLinks={links}
                     agents={[]}
                     onOpenPicker={vi.fn()}
-                />,
+                />
             );
             expect(screen.getByText('#99')).toBeInTheDocument();
             expect(screen.getByText('feat: cool thing')).toBeInTheDocument();
@@ -367,7 +399,7 @@ describe('RelatedItemsCard', () => {
                     externalLinks={[]}
                     agents={[]}
                     onOpenPicker={vi.fn()}
-                />,
+                />
             );
             fireEvent.click(screen.getByRole('button', { name: /Add PR link/i }));
             // Dialog renders with the URL input.
@@ -381,7 +413,7 @@ describe('RelatedItemsCard', () => {
                 http.delete('http://localhost:3000/api/issues/external-links/200', () => {
                     calls.push(200);
                     return new HttpResponse(null, { status: 204 });
-                }),
+                })
             );
             renderWithProviders(
                 <RelatedItemsCard
@@ -391,7 +423,7 @@ describe('RelatedItemsCard', () => {
                     externalLinks={[makeExtLink({ id: 200 })]}
                     agents={[]}
                     onOpenPicker={vi.fn()}
-                />,
+                />
             );
             fireEvent.click(screen.getByLabelText('Remove PR link'));
             // Allow the mutation to flush.
@@ -402,9 +434,10 @@ describe('RelatedItemsCard', () => {
         it('renders "PR" fallback label and url-as-detail when external_ref is falsy', async () => {
             server.use(
                 ...defaultHandlers,
-                http.delete('http://localhost:3000/api/issues/external-links/300', () =>
-                    new HttpResponse(null, { status: 204 }),
-                ),
+                http.delete(
+                    'http://localhost:3000/api/issues/external-links/300',
+                    () => new HttpResponse(null, { status: 204 })
+                )
             );
             renderWithProviders(
                 <>
@@ -412,12 +445,18 @@ describe('RelatedItemsCard', () => {
                         issueType="sub_task"
                         issueId="S1"
                         relatedLinks={[]}
-                        externalLinks={[makeExtLink({ id: 300, external_ref: null, url: 'https://github.com/foo/bar/pull/300' })]}
+                        externalLinks={[
+                            makeExtLink({
+                                id: 300,
+                                external_ref: null,
+                                url: 'https://github.com/foo/bar/pull/300',
+                            }),
+                        ]}
                         agents={[]}
                         onOpenPicker={vi.fn()}
                     />
                     <Toast />
-                </>,
+                </>
             );
             // external_ref is falsy → label falls back to the literal "PR".
             expect(screen.getByText('PR')).toBeInTheDocument();
@@ -433,17 +472,18 @@ describe('RelatedItemsCard', () => {
             ...defaultHandlers,
             http.get('http://localhost:3000/api/issues/sub_task/S1/links', () =>
                 HttpResponse.json([
-                    makeLink({ id: 80, relation_type: 'depends_on', short_id: 'ATL-80', title: 'Fetched Dep' }),
-                ]),
+                    makeLink({
+                        id: 80,
+                        relation_type: 'depends_on',
+                        short_id: 'ATL-80',
+                        title: 'Fetched Dep',
+                    }),
+                ])
             ),
-            http.get('http://localhost:3000/api/agents', () => HttpResponse.json([makeAgent()])),
+            http.get('http://localhost:3000/api/agents', () => HttpResponse.json([makeAgent()]))
         );
         renderWithProviders(
-            <RelatedItemsCard
-                issueType="sub_task"
-                issueId="S1"
-                onOpenPicker={vi.fn()}
-            />,
+            <RelatedItemsCard issueType="sub_task" issueId="S1" onOpenPicker={vi.fn()} />
         );
         // No relatedLinks/agents props supplied → the component falls through
         // to `propLinks ?? fetchedLinks` / `propAgents ?? fetchedAgents`,
@@ -455,11 +495,16 @@ describe('RelatedItemsCard', () => {
         server.use(
             ...defaultHandlers,
             http.delete('http://localhost:3000/api/issues/links/51', () =>
-                HttpResponse.json({ ok: true }),
-            ),
+                HttpResponse.json({ ok: true })
+            )
         );
         const links = [
-            makeLink({ id: 51, relation_type: 'depends_on', short_id: 'ATL-51', title: 'Dep Toast' }),
+            makeLink({
+                id: 51,
+                relation_type: 'depends_on',
+                short_id: 'ATL-51',
+                title: 'Dep Toast',
+            }),
         ];
         renderWithProviders(
             <>
@@ -471,7 +516,7 @@ describe('RelatedItemsCard', () => {
                     onOpenPicker={vi.fn()}
                 />
                 <Toast />
-            </>,
+            </>
         );
         fireEvent.click(screen.getByRole('button', { name: /Unlink/i }));
         await screen.findByText(/Removed dependency on ATL-51/);
@@ -481,11 +526,17 @@ describe('RelatedItemsCard', () => {
         server.use(
             ...defaultHandlers,
             http.delete('http://localhost:3000/api/issues/links/61', () =>
-                HttpResponse.json({ ok: true }),
-            ),
+                HttpResponse.json({ ok: true })
+            )
         );
         const links = [
-            makeLink({ id: 61, relation_type: 'tested_by', direction: 'outgoing', short_id: 'ATL-61', title: 'Tested Toast' }),
+            makeLink({
+                id: 61,
+                relation_type: 'tested_by',
+                direction: 'outgoing',
+                short_id: 'ATL-61',
+                title: 'Tested Toast',
+            }),
         ];
         renderWithProviders(
             <>
@@ -498,7 +549,7 @@ describe('RelatedItemsCard', () => {
                     allowAddTestLink
                 />
                 <Toast />
-            </>,
+            </>
         );
         fireEvent.click(screen.getByRole('button', { name: /Unlink/i }));
         await screen.findByText(/Removed test link to ATL-61/);
@@ -508,11 +559,16 @@ describe('RelatedItemsCard', () => {
         server.use(
             ...defaultHandlers,
             http.delete('http://localhost:3000/api/issues/links/71', () =>
-                HttpResponse.json({ ok: true }),
-            ),
+                HttpResponse.json({ ok: true })
+            )
         );
         const links = [
-            makeLink({ id: 71, relation_type: 'relates_to', short_id: 'ATL-71', title: 'Relates Toast' }),
+            makeLink({
+                id: 71,
+                relation_type: 'relates_to',
+                short_id: 'ATL-71',
+                title: 'Relates Toast',
+            }),
         ];
         renderWithProviders(
             <>
@@ -524,7 +580,7 @@ describe('RelatedItemsCard', () => {
                     onOpenPicker={vi.fn()}
                 />
                 <Toast />
-            </>,
+            </>
         );
         fireEvent.click(screen.getByRole('button', { name: /Unlink/i }));
         await screen.findByText(/Unlinked ATL-71/);
@@ -534,11 +590,16 @@ describe('RelatedItemsCard', () => {
         server.use(
             ...defaultHandlers,
             http.delete('http://localhost:3000/api/issues/links/81', () =>
-                HttpResponse.json({ error: 'boom' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'boom' }, { status: 500 })
+            )
         );
         const links = [
-            makeLink({ id: 81, relation_type: 'relates_to', short_id: 'ATL-81', title: 'Fail Toast' }),
+            makeLink({
+                id: 81,
+                relation_type: 'relates_to',
+                short_id: 'ATL-81',
+                title: 'Fail Toast',
+            }),
         ];
         renderWithProviders(
             <>
@@ -550,7 +611,7 @@ describe('RelatedItemsCard', () => {
                     onOpenPicker={vi.fn()}
                 />
                 <Toast />
-            </>,
+            </>
         );
         fireEvent.click(screen.getByRole('button', { name: /Unlink/i }));
         await screen.findByText(/Unlink failed/);
@@ -558,7 +619,13 @@ describe('RelatedItemsCard', () => {
 
     it('renders tested-by rows WITHOUT the add-test-link header button when allowAddTestLink is false (Task detail scenario)', () => {
         const links = [
-            makeLink({ id: 95, relation_type: 'tested_by', direction: 'incoming', short_id: 'ATL-95', title: 'No Add Button' }),
+            makeLink({
+                id: 95,
+                relation_type: 'tested_by',
+                direction: 'incoming',
+                short_id: 'ATL-95',
+                title: 'No Add Button',
+            }),
         ];
         renderWithProviders(
             <RelatedItemsCard
@@ -567,7 +634,7 @@ describe('RelatedItemsCard', () => {
                 relatedLinks={links}
                 agents={[]}
                 onOpenPicker={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('No Add Button')).toBeInTheDocument();
         // headerRight is `undefined` when allowAddTestLink is falsy — the

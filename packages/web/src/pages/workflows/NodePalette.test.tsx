@@ -14,7 +14,11 @@ const AGENTS = [
 function mount(opts: { agents?: IAgent[]; showSubtasks?: boolean } = {}) {
     const onAdd = vi.fn();
     renderWithProviders(
-        <NodePalette agents={opts.agents ?? AGENTS} showSubtasks={opts.showSubtasks ?? true} onAdd={onAdd} />,
+        <NodePalette
+            agents={opts.agents ?? AGENTS}
+            showSubtasks={opts.showSubtasks ?? true}
+            onAdd={onAdd}
+        />
     );
     return onAdd;
 }
@@ -89,7 +93,7 @@ describe('NodePalette', () => {
         fireEvent.dragStart(screen.getByRole('button', { name: 'Add Coder' }), { dataTransfer });
         expect(dataTransfer.setData).toHaveBeenCalledWith(
             PALETTE_MIME,
-            JSON.stringify({ type: 'agent', agent_id: 'agent-coder' }),
+            JSON.stringify({ type: 'agent', agent_id: 'agent-coder' })
         );
         expect(dataTransfer.effectAllowed).toBe('move');
     });

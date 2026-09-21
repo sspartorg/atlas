@@ -83,9 +83,7 @@ describe('NotificationLogTabContent', () => {
         // Click the "Failed" pill (the role=button one, not the status chip).
         const failedPills = screen.getAllByText('Failed');
         // The pill is wrapped in a role=button container.
-        const pill = failedPills.find((el) =>
-            el.closest('[role="button"]') !== null,
-        );
+        const pill = failedPills.find((el) => el.closest('[role="button"]') !== null);
         if (pill) {
             fireEvent.click(pill);
         }
@@ -93,9 +91,7 @@ describe('NotificationLogTabContent', () => {
     });
 
     it('shows the endpoint identity when external_notification_endpoint_label is set', () => {
-        const rows = [
-            makeNotification({ id: 1, external_status: 'sent', message: 'msg' }),
-        ];
+        const rows = [makeNotification({ id: 1, external_status: 'sent', message: 'msg' })];
         renderWithProviders(<NotificationLogTabContent settings={settings} allRows={rows} />);
         expect(screen.getByText('atlas_bot')).toBeInTheDocument();
     });
@@ -106,7 +102,7 @@ describe('NotificationLogTabContent', () => {
             http.post(`${BASE}/notifications/1/resend`, () => {
                 resent = true;
                 return HttpResponse.json({ ok: true });
-            }),
+            })
         );
         const rows = [
             makeNotification({
@@ -129,7 +125,7 @@ describe('NotificationLogTabContent', () => {
             http.post(`${BASE}/notifications/2/resend`, () => {
                 resent = true;
                 return HttpResponse.json({ ok: true });
-            }),
+            })
         );
         const rows = [
             makeNotification({
@@ -153,7 +149,7 @@ describe('NotificationLogTabContent', () => {
             http.post(`${BASE}/notifications/3/cancel`, () => {
                 cancelled = true;
                 return HttpResponse.json({ ok: true });
-            }),
+            })
         );
         const rows = [
             makeNotification({
@@ -176,7 +172,7 @@ describe('NotificationLogTabContent', () => {
             http.post(`${BASE}/settings/external-notification/test`, () => {
                 tested = true;
                 return HttpResponse.json({ ok: true });
-            }),
+            })
         );
         renderWithProviders(<NotificationLogTabContent settings={settings} allRows={[]} />);
         const btn = screen.getByRole('button', { name: /Send a Test Message/i });
@@ -187,20 +183,23 @@ describe('NotificationLogTabContent', () => {
     it('handleSendTest success branch (r.ok=true) shows "Test message sent" toast', async () => {
         server.use(
             http.post(`${BASE}/settings/external-notification/test`, () =>
-                HttpResponse.json({ ok: true }),
-            ),
+                HttpResponse.json({ ok: true })
+            )
         );
         renderWithProviders(
             <>
                 <NotificationLogTabContent settings={settings} allRows={[]} />
                 <Toast />
-            </>,
+            </>
         );
         const btn = screen.getByRole('button', { name: /Send a Test Message/i });
         fireEvent.click(btn);
-        await waitFor(() => {
-            expect(screen.queryByText(/Test message sent/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/Test message sent/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     it('renders a row with failure_reason text', () => {
@@ -251,8 +250,8 @@ describe('NotificationLogTabContent', () => {
     it('fires onError (fn#9) when resend fails on a NotificationLogRow', async () => {
         server.use(
             http.post(`${BASE}/notifications/11/resend`, () =>
-                HttpResponse.json({ error: 'Network failure' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Network failure' }, { status: 500 })
+            )
         );
         const rows = [
             makeNotification({
@@ -266,15 +265,14 @@ describe('NotificationLogTabContent', () => {
             <>
                 <NotificationLogTabContent settings={settings} allRows={rows} />
                 <Toast />
-            </>,
+            </>
         );
         const btn = screen.getAllByRole('button', { name: /Resend/i })[0];
         if (btn) {
             fireEvent.click(btn);
-            await waitFor(
-                () => expect(screen.queryByText(/Resend failed/i)).toBeInTheDocument(),
-                { timeout: 10000 },
-            );
+            await waitFor(() => expect(screen.queryByText(/Resend failed/i)).toBeInTheDocument(), {
+                timeout: 10000,
+            });
         }
     }, 30000);
 
@@ -319,40 +317,46 @@ describe('NotificationLogTabContent', () => {
         // lines 614-618: else { toast.show(r.error ? { message: 'Test failed', detail: r.error } : ...) }
         server.use(
             http.post(`${BASE}/settings/external-notification/test`, () =>
-                HttpResponse.json({ ok: false, error: 'Telegram rate limit' }),
-            ),
+                HttpResponse.json({ ok: false, error: 'Telegram rate limit' })
+            )
         );
         renderWithProviders(
             <>
                 <NotificationLogTabContent settings={settings} allRows={[]} />
                 <Toast />
-            </>,
+            </>
         );
         const btn = screen.getByRole('button', { name: /Send a Test Message/i });
         fireEvent.click(btn);
-        await waitFor(() => {
-            expect(screen.queryByText(/Test failed/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/Test failed/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     it('handleSendTest not-ok no-error branch (lines 614-618): shows plain "Test failed" when no r.error', async () => {
         // lines 614-618: r.error is falsy → toast.show({ message: 'Test failed' })
         server.use(
             http.post(`${BASE}/settings/external-notification/test`, () =>
-                HttpResponse.json({ ok: false }),
-            ),
+                HttpResponse.json({ ok: false })
+            )
         );
         renderWithProviders(
             <>
                 <NotificationLogTabContent settings={settings} allRows={[]} />
                 <Toast />
-            </>,
+            </>
         );
         const btn = screen.getByRole('button', { name: /Send a Test Message/i });
         fireEvent.click(btn);
-        await waitFor(() => {
-            expect(screen.queryByText(/Test failed/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/Test failed/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     it('desktop view: "No deliveries match this filter" shown when a filter yields zero rows', () => {
@@ -412,7 +416,11 @@ describe('NotificationLogTabContent', () => {
 
     it('fires the Pending FilterPill onClick (fn#4)', () => {
         const rows = [
-            makeNotification({ id: 14, external_status: 'pending', message: 'Pending filter test' }),
+            makeNotification({
+                id: 14,
+                external_status: 'pending',
+                message: 'Pending filter test',
+            }),
         ];
         renderWithProviders(<NotificationLogTabContent settings={settings} allRows={rows} />);
         const pendingPills = screen.getAllByText('Pending');
@@ -438,11 +446,7 @@ describe('NotificationLogTabContent', () => {
                 dispatchEvent: vi.fn(),
             })),
         });
-        server.use(
-            http.post(`${BASE}/notifications/20/resend`, () =>
-                HttpResponse.json({}),
-            ),
-        );
+        server.use(http.post(`${BASE}/notifications/20/resend`, () => HttpResponse.json({})));
         const rows = [
             makeNotification({ id: 20, external_status: 'sent', message: 'Mobile resend test' }),
         ];
@@ -473,11 +477,7 @@ describe('NotificationLogTabContent', () => {
                 dispatchEvent: vi.fn(),
             })),
         });
-        server.use(
-            http.post(`${BASE}/notifications/21/cancel`, () =>
-                HttpResponse.json({}),
-            ),
-        );
+        server.use(http.post(`${BASE}/notifications/21/cancel`, () => HttpResponse.json({})));
         const rows = [
             makeNotification({ id: 21, external_status: 'pending', message: 'Mobile cancel test' }),
         ];
@@ -496,8 +496,8 @@ describe('NotificationLogTabContent', () => {
         const restoreViewport = mockMobileViewport();
         server.use(
             http.post(`${BASE}/notifications/50/resend`, () =>
-                HttpResponse.json({ error: 'Card resend broke' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Card resend broke' }, { status: 500 })
+            )
         );
         const rows = [
             makeNotification({ id: 50, external_status: 'sent', message: 'Card error row' }),
@@ -506,15 +506,14 @@ describe('NotificationLogTabContent', () => {
             <>
                 <NotificationLogTabContent settings={settings} allRows={rows} />
                 <Toast />
-            </>,
+            </>
         );
         const btn = screen.getAllByRole('button', { name: /Resend/i })[0];
         expect(btn).toBeDefined();
         fireEvent.click(btn!);
-        await waitFor(
-            () => expect(screen.queryByText(/Resend failed/i)).toBeInTheDocument(),
-            { timeout: 10000 },
-        );
+        await waitFor(() => expect(screen.queryByText(/Resend failed/i)).toBeInTheDocument(), {
+            timeout: 10000,
+        });
         restoreViewport();
     }, 15000);
 
@@ -530,14 +529,12 @@ describe('NotificationLogTabContent', () => {
             <>
                 <NotificationLogTabContent settings={settings} allRows={rows} />
                 <Toast />
-            </>,
+            </>
         );
         const btn = screen.getAllByRole('button', { name: /Resend/i })[0];
         expect(btn).toBeDefined();
         fireEvent.click(btn!);
-        await waitFor(() =>
-            expect(screen.queryByText(/Resend failed/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.queryByText(/Resend failed/i)).toBeInTheDocument());
         resendSpy.mockRestore();
         restoreViewport();
     });
@@ -553,14 +550,12 @@ describe('NotificationLogTabContent', () => {
             <>
                 <NotificationLogTabContent settings={settings} allRows={rows} />
                 <Toast />
-            </>,
+            </>
         );
         const btn = screen.getAllByRole('button', { name: /Resend/i })[0];
         expect(btn).toBeDefined();
         fireEvent.click(btn!);
-        await waitFor(() =>
-            expect(screen.queryByText(/Resend failed/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.queryByText(/Resend failed/i)).toBeInTheDocument());
         resendSpy.mockRestore();
     });
 

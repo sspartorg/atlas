@@ -35,11 +35,11 @@ describe('DiffToolbar', () => {
         renderToolbar();
         expect(screen.getByRole('button', { name: /split/i })).toHaveAttribute(
             'aria-pressed',
-            'true',
+            'true'
         );
         expect(screen.getByRole('button', { name: /unified/i })).toHaveAttribute(
             'aria-pressed',
-            'false',
+            'false'
         );
     });
 

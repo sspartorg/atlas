@@ -29,10 +29,10 @@ export function ImportAgentZipModal({ open, onClose, onImported }: Props) {
     /** When the manifest's id (or the override) is already taken locally,
      *  the server returns 409 with a suggested alternate; the input flips
      *  into "rename" mode and the user picks a new slug. */
-    const [slugTaken, setSlugTaken] = useState<
-        | { conflictingId: string; suggestedId: string }
-        | null
-    >(null);
+    const [slugTaken, setSlugTaken] = useState<{
+        conflictingId: string;
+        suggestedId: string;
+    } | null>(null);
 
     const reset = () => {
         setFile(null);
@@ -65,8 +65,9 @@ export function ImportAgentZipModal({ open, onClose, onImported }: Props) {
             onImported(agent);
             reset();
         } catch (err) {
-            const details = (err as { details?: { conflicting_id?: string; suggested_id?: string } })
-                ?.details;
+            const details = (
+                err as { details?: { conflicting_id?: string; suggested_id?: string } }
+            )?.details;
             if (details?.conflicting_id && details?.suggested_id) {
                 setSlugTaken({
                     conflictingId: details.conflicting_id,
@@ -87,8 +88,8 @@ export function ImportAgentZipModal({ open, onClose, onImported }: Props) {
             <DialogContent>
                 <Typography sx={{ fontSize: 13.5, color: ATLAS_PALETTE.slate70, mb: 3 }}>
                     Upload an agent bundle (manifest.json + prompt.md + memory.md +
-                    checklists.json). The imported agent is fully owned
-                    locally — no link to the marketplace, no upgrade tracking.
+                    checklists.json). The imported agent is fully owned locally — no link to the
+                    marketplace, no upgrade tracking.
                 </Typography>
                 <Box
                     onClick={() => fileRef.current?.click()}
@@ -124,7 +125,14 @@ export function ImportAgentZipModal({ open, onClose, onImported }: Props) {
                             mb: 2,
                         }}
                     >
-                        <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.warnFg, fontWeight: 500, mb: 2 }}>
+                        <Typography
+                            sx={{
+                                fontSize: 13,
+                                color: ATLAS_PALETTE.warnFg,
+                                fontWeight: 500,
+                                mb: 2,
+                            }}
+                        >
                             <code>{slugTaken.conflictingId}</code> is already in use locally. Pick a
                             different slug — your existing agent stays untouched.
                         </Typography>

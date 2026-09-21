@@ -136,7 +136,7 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
                         onClose();
                     },
                     onError: (e: Error) => setError(e.message),
-                },
+                }
             );
         } else {
             createReminder.mutate(parsed.data, {
@@ -178,17 +178,35 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
                     />
 
                     <Box>
-                        <FormLabel sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>Schedule</FormLabel>
+                        <FormLabel sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
+                            Schedule
+                        </FormLabel>
                         <RadioGroup
                             row
                             value={kind}
                             onChange={(_, v) => setKind(v as ReminderScheduleKind)}
                             sx={{ mt: 1 }}
                         >
-                            <FormControlLabel value="once" control={<Radio size="small" />} label="Once" />
-                            <FormControlLabel value="daily" control={<Radio size="small" />} label="Daily" />
-                            <FormControlLabel value="weekly" control={<Radio size="small" />} label="Weekly" />
-                            <FormControlLabel value="cron" control={<Radio size="small" />} label="Cron" />
+                            <FormControlLabel
+                                value="once"
+                                control={<Radio size="small" />}
+                                label="Once"
+                            />
+                            <FormControlLabel
+                                value="daily"
+                                control={<Radio size="small" />}
+                                label="Daily"
+                            />
+                            <FormControlLabel
+                                value="weekly"
+                                control={<Radio size="small" />}
+                                label="Weekly"
+                            />
+                            <FormControlLabel
+                                value="cron"
+                                control={<Radio size="small" />}
+                                label="Cron"
+                            />
                         </RadioGroup>
 
                         {kind === 'once' && (
@@ -232,11 +250,15 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
                                                 <Checkbox
                                                     size="small"
                                                     checked={weekdays.includes(w.value)}
-                                                    onChange={(e) => toggleWeekday(w.value, e.target.checked)}
+                                                    onChange={(e) =>
+                                                        toggleWeekday(w.value, e.target.checked)
+                                                    }
                                                 />
                                             }
                                             label={
-                                                <Typography sx={{ fontSize: 13 }}>{w.label}</Typography>
+                                                <Typography sx={{ fontSize: 13 }}>
+                                                    {w.label}
+                                                </Typography>
                                             }
                                         />
                                     ))}
@@ -257,26 +279,46 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
                     </Box>
 
                     <Box>
-                        <FormLabel sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>Channel</FormLabel>
+                        <FormLabel sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
+                            Channel
+                        </FormLabel>
                         <RadioGroup
                             row
                             value={channel}
                             onChange={(_, v) => setChannel(v as ReminderChannel)}
                             sx={{ mt: 1 }}
                         >
-                            <FormControlLabel value="notification" control={<Radio size="small" />} label="In-app" />
-                            <FormControlLabel value="external" control={<Radio size="small" />} label="External Notification" />
-                            <FormControlLabel value="both" control={<Radio size="small" />} label="Both" />
+                            <FormControlLabel
+                                value="notification"
+                                control={<Radio size="small" />}
+                                label="In-app"
+                            />
+                            <FormControlLabel
+                                value="external"
+                                control={<Radio size="small" />}
+                                label="External Notification"
+                            />
+                            <FormControlLabel
+                                value="both"
+                                control={<Radio size="small" />}
+                                label="Both"
+                            />
                         </RadioGroup>
                     </Box>
 
                     {error && (
-                        <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.error }}>{error}</Typography>
+                        <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.error }}>
+                            {error}
+                        </Typography>
                     )}
                 </Box>
             </DialogContent>
             <DialogActions>
-                <Button onClick={handleClose} disabled={mutation.isPending} sx={{ textTransform: 'none' }}>
+                <Button
+                    onClick={handleClose}
+                    disabled={mutation.isPending}
+                    sx={{ textTransform: 'none' }}
+                >
                     Cancel
                 </Button>
                 <Button
@@ -308,7 +350,7 @@ interface ScheduleFields {
 
 function buildSchedule(
     kind: ReminderScheduleKind,
-    f: ScheduleFields,
+    f: ScheduleFields
 ): SetReminderInput['schedule'] | null {
     switch (kind) {
         case 'once': {
@@ -353,7 +395,7 @@ function hydrateScheduleFromRow(r: IReminder, s: ScheduleSetters): void {
             if (!Number.isNaN(d.getTime())) {
                 const pad = (n: number) => String(n).padStart(2, '0');
                 s.setOnce(
-                    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
+                    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
                 );
             }
             return;
@@ -368,7 +410,7 @@ function hydrateScheduleFromRow(r: IReminder, s: ScheduleSetters): void {
                 (csv ?? '')
                     .split(',')
                     .map((n) => Number(n.trim()))
-                    .filter((n) => Number.isFinite(n) && n >= 1 && n <= 7),
+                    .filter((n) => Number.isFinite(n) && n >= 1 && n <= 7)
             );
             return;
         }

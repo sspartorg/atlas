@@ -10,7 +10,7 @@ describe('InlineRuleText', () => {
 
     it('renders backtick chunks as inline code', () => {
         const { container } = renderWithProviders(
-            <InlineRuleText text="use `foo()` over `bar()`" />,
+            <InlineRuleText text="use `foo()` over `bar()`" />
         );
         expect(container.querySelectorAll('code').length).toBe(2);
     });

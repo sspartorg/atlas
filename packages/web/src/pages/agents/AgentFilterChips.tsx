@@ -130,6 +130,7 @@ export function AgentFilterChips({
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 16, opacity: active === chip.key ? 1 : 0.7 }}
                             >
                                 {chip.icon}

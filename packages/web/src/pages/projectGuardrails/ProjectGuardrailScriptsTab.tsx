@@ -196,12 +196,22 @@ export function ProjectGuardrailScriptsTab({ projectId }: { projectId: string })
                         Add a shell script scoped to this project. Org-wide scripts from Atlas
                         Guardrails apply automatically.
                     </Typography>
-                    <Button variant="outlined" onClick={openAdd} startIcon={<AddRounded fontSize="small" />}>
+                    <Button
+                        variant="outlined"
+                        onClick={openAdd}
+                        startIcon={<AddRounded fontSize="small" />}
+                    >
                         Add first script
                     </Button>
                 </Box>
             ) : (
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+                <Box
+                    sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                        gap: 2,
+                    }}
+                >
                     {scripts.map((s) => (
                         <ScriptCard key={s.id} script={s} onClick={() => openEdit(s)} />
                     ))}

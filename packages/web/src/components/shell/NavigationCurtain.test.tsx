@@ -36,16 +36,19 @@ describe('NavigationCurtain', () => {
 
     it('becomes visible after a pathname change (isFirstMount=false branch + visible=true branch)', async () => {
         vi.useFakeTimers();
-        const { getByRole } = renderWithProviders(
-            <NavigationCurtainWithTrigger />,
-            { initialEntries: ['/projects'] },
-        );
+        const { getByRole } = renderWithProviders(<NavigationCurtainWithTrigger />, {
+            initialEntries: ['/projects'],
+        });
         // Trigger a navigation — this should flip isFirstMount to false and call setVisible(true)
-        act(() => { getByRole('button', { name: 'Go' }).click(); });
+        act(() => {
+            getByRole('button', { name: 'Go' }).click();
+        });
         // The curtain element should now be in the DOM (visible=true branch renders the Box)
         expect(document.body.innerHTML).toBeTruthy();
         // Advance past CURTAIN_MS to trigger setVisible(false) and clearTimeout cleanup
-        act(() => { vi.advanceTimersByTime(400); });
+        act(() => {
+            vi.advanceTimersByTime(400);
+        });
         vi.useRealTimers();
     });
 });

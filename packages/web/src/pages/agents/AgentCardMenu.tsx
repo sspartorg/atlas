@@ -54,7 +54,12 @@ export function AgentCardMenu({ actions }: { actions: AgentCardMenuActions }) {
                     '&:hover': { background: ATLAS_PALETTE.slate08, color: ATLAS_PALETTE.slate },
                 }}
             >
-                <Box component="span" className="material-symbols-rounded" sx={{ fontSize: 20 }}>
+                <Box
+                    component="span"
+                    className="material-symbols-rounded"
+                    aria-hidden="true"
+                    sx={{ fontSize: 20 }}
+                >
                     more_vert
                 </Box>
             </Box>
@@ -83,14 +88,13 @@ export function AgentCardMenu({ actions }: { actions: AgentCardMenuActions }) {
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 18, color: ATLAS_PALETTE.slate60 }}
                             >
                                 open_in_new
                             </Box>
                         </ListItemIcon>
-                        <ListItemText primaryTypographyProps={{ fontSize: 13 }}>
-                            Open
-                        </ListItemText>
+                        <ListItemText primaryTypographyProps={{ fontSize: 13 }}>Open</ListItemText>
                     </MenuItem>
                 ) : null}
                 {actions.onEdit ? (
@@ -99,14 +103,13 @@ export function AgentCardMenu({ actions }: { actions: AgentCardMenuActions }) {
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 18, color: ATLAS_PALETTE.slate60 }}
                             >
                                 edit
                             </Box>
                         </ListItemIcon>
-                        <ListItemText primaryTypographyProps={{ fontSize: 13 }}>
-                            Edit
-                        </ListItemText>
+                        <ListItemText primaryTypographyProps={{ fontSize: 13 }}>Edit</ListItemText>
                     </MenuItem>
                 ) : null}
                 <MenuItem onClick={run(actions.onDuplicate)}>
@@ -114,6 +117,7 @@ export function AgentCardMenu({ actions }: { actions: AgentCardMenuActions }) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 18, color: ATLAS_PALETTE.slate60 }}
                         >
                             content_copy
@@ -127,6 +131,7 @@ export function AgentCardMenu({ actions }: { actions: AgentCardMenuActions }) {
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 18, color: ATLAS_PALETTE.slate60 }}
                             >
                                 download
@@ -143,6 +148,7 @@ export function AgentCardMenu({ actions }: { actions: AgentCardMenuActions }) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 18, color: ATLAS_PALETTE.slate60 }}
                         >
                             {actions.paused ? 'play_arrow' : 'pause'}
@@ -158,6 +164,7 @@ export function AgentCardMenu({ actions }: { actions: AgentCardMenuActions }) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 18, color: ATLAS_PALETTE.error }}
                         >
                             delete

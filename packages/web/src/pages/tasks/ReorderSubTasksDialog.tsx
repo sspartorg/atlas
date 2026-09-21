@@ -20,7 +20,12 @@ interface Props {
 
 function Arrow({ name }: { name: string }) {
     return (
-        <Box component="span" className="material-symbols-rounded" sx={{ fontSize: 18 }}>
+        <Box
+            component="span"
+            className="material-symbols-rounded"
+            aria-hidden="true"
+            sx={{ fontSize: 18 }}
+        >
             {name}
         </Box>
     );
@@ -45,7 +50,11 @@ export function ReorderSubTasksDialog({ taskId, subTasks, onClose }: Props) {
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mb: 2 }}>
                     The Task&apos;s workflow runs its open sub-tasks top to bottom, one at a time.
                 </Typography>
-                <Box component="ol" aria-label="Sub-task order" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+                <Box
+                    component="ol"
+                    aria-label="Sub-task order"
+                    sx={{ listStyle: 'none', m: 0, p: 0 }}
+                >
                     {order.map((s, i) => (
                         <Box
                             component="li"
@@ -58,13 +67,33 @@ export function ReorderSubTasksDialog({ taskId, subTasks, onClose }: Props) {
                                 borderTop: i === 0 ? 0 : `1px solid ${ATLAS_PALETTE.slate06}`,
                             }}
                         >
-                            <Typography sx={{ fontSize: 11.5, fontFamily: TYPOGRAPHY.fontFamilyMono, color: ATLAS_PALETTE.slate60, minWidth: 64 }}>
+                            <Typography
+                                sx={{
+                                    fontSize: 11.5,
+                                    fontFamily: TYPOGRAPHY.fontFamilyMono,
+                                    color: ATLAS_PALETTE.slate60,
+                                    minWidth: 64,
+                                }}
+                            >
                                 {s.id}
                             </Typography>
-                            <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate, flex: 1, minWidth: 0 }} noWrap>
+                            <Typography
+                                sx={{
+                                    fontSize: 13,
+                                    color: ATLAS_PALETTE.slate,
+                                    flex: 1,
+                                    minWidth: 0,
+                                }}
+                                noWrap
+                            >
                                 {s.title}
                             </Typography>
-                            <IconButton size="small" aria-label={`Move ${s.id} up`} disabled={i === 0} onClick={() => move(i, -1)}>
+                            <IconButton
+                                size="small"
+                                aria-label={`Move ${s.id} up`}
+                                disabled={i === 0}
+                                onClick={() => move(i, -1)}
+                            >
                                 <Arrow name="arrow_upward" />
                             </IconButton>
                             <IconButton
@@ -92,7 +121,10 @@ export function ReorderSubTasksDialog({ taskId, subTasks, onClose }: Props) {
                     variant="contained"
                     disabled={reorder.isPending}
                     onClick={() =>
-                        reorder.mutate({ taskId, ids: order.map((s) => s.id) }, { onSuccess: onClose })
+                        reorder.mutate(
+                            { taskId, ids: order.map((s) => s.id) },
+                            { onSuccess: onClose }
+                        )
                     }
                     sx={{
                         bgcolor: ATLAS_PALETTE.green,

@@ -2,20 +2,25 @@ import { describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
-import { FilterPill, SearchPillTextField, DropdownChip, SortableHeader } from './filterPrimitives.js';
+import {
+    FilterPill,
+    SearchPillTextField,
+    DropdownChip,
+    SortableHeader,
+} from './filterPrimitives.js';
 
 describe('FilterPill', () => {
     it('fires onClick when clicked', async () => {
         const onClick = vi.fn();
-        renderWithProviders(
-            <FilterPill label="All" count={5} selected onClick={onClick} />,
-        );
+        renderWithProviders(<FilterPill label="All" count={5} selected onClick={onClick} />);
         await userEvent.click(screen.getByRole('button', { name: /All/ }));
         expect(onClick).toHaveBeenCalled();
     });
 
     it('renders without selected state', () => {
-        renderWithProviders(<FilterPill label="Mine" count={2} selected={false} onClick={vi.fn()} />);
+        renderWithProviders(
+            <FilterPill label="Mine" count={2} selected={false} onClick={vi.fn()} />
+        );
         expect(screen.getByRole('button', { name: /Mine/ })).toBeInTheDocument();
     });
 
@@ -58,7 +63,7 @@ describe('FilterPill', () => {
                 selected
                 onClick={vi.fn()}
                 accentColor={{ bg: '#ff0000', fg: '#ffffff' }}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: /Custom/ })).toBeInTheDocument();
     });
@@ -73,7 +78,12 @@ describe('DropdownChip', () => {
 
     it('renders current label and opens menu on click', async () => {
         renderWithProviders(
-            <DropdownChip label="Status" value={null} options={options as never} onChange={vi.fn()} />,
+            <DropdownChip
+                label="Status"
+                value={null}
+                options={options as never}
+                onChange={vi.fn()}
+            />
         );
         expect(screen.getByText('Status:')).toBeInTheDocument();
         const chip = screen.getByRole('button');
@@ -84,7 +94,12 @@ describe('DropdownChip', () => {
     it('fires onChange and closes menu when option selected', async () => {
         const onChange = vi.fn();
         renderWithProviders(
-            <DropdownChip label="Status" value={null} options={options as never} onChange={onChange} />,
+            <DropdownChip
+                label="Status"
+                value={null}
+                options={options as never}
+                onChange={onChange}
+            />
         );
         await userEvent.click(screen.getByRole('button'));
         await waitFor(() => screen.getByText('Draft'));
@@ -94,7 +109,12 @@ describe('DropdownChip', () => {
 
     it('shows a checkmark on the currently selected option', async () => {
         renderWithProviders(
-            <DropdownChip label="Status" value="draft" options={options as never} onChange={vi.fn()} />,
+            <DropdownChip
+                label="Status"
+                value="draft"
+                options={options as never}
+                onChange={vi.fn()}
+            />
         );
         // The chip shows the current label inline without opening
         expect(screen.getByText('Draft')).toBeInTheDocument();
@@ -102,7 +122,12 @@ describe('DropdownChip', () => {
 
     it('opens menu on Enter keydown', async () => {
         renderWithProviders(
-            <DropdownChip label="Status" value={null} options={options as never} onChange={vi.fn()} />,
+            <DropdownChip
+                label="Status"
+                value={null}
+                options={options as never}
+                onChange={vi.fn()}
+            />
         );
         const chip = screen.getByRole('button');
         fireEvent.keyDown(chip, { key: 'Enter' });
@@ -111,7 +136,12 @@ describe('DropdownChip', () => {
 
     it('shows "any" fallback when no option matches current value', () => {
         renderWithProviders(
-            <DropdownChip label="Status" value={'unmatched' as never} options={options as never} onChange={vi.fn()} />,
+            <DropdownChip
+                label="Status"
+                value={'unmatched' as never}
+                options={options as never}
+                onChange={vi.fn()}
+            />
         );
         // Falls back to options[0].label = 'any'
         expect(screen.getByText('any')).toBeInTheDocument();
@@ -119,7 +149,12 @@ describe('DropdownChip', () => {
 
     it('closes menu via onClose (backdrop click path)', async () => {
         renderWithProviders(
-            <DropdownChip label="Status" value={null} options={options as never} onChange={vi.fn()} />,
+            <DropdownChip
+                label="Status"
+                value={null}
+                options={options as never}
+                onChange={vi.fn()}
+            />
         );
         const chip = screen.getByRole('button');
         await userEvent.click(chip);
@@ -133,9 +168,7 @@ describe('DropdownChip', () => {
 describe('SearchPillTextField', () => {
     it('renders and fires onChange', async () => {
         const onChange = vi.fn();
-        renderWithProviders(
-            <SearchPillTextField value="" onChange={onChange} label="Search" />,
-        );
+        renderWithProviders(<SearchPillTextField value="" onChange={onChange} label="Search" />);
         const tb = screen.getByRole('textbox');
         await userEvent.type(tb, 'abc');
         expect(onChange).toHaveBeenCalled();
@@ -147,13 +180,17 @@ describe('SearchPillTextField', () => {
     });
 
     it('pressing "/" key focuses the search input (window keydown shortcut)', () => {
-        renderWithProviders(<SearchPillTextField value="" onChange={vi.fn()} label="Search items" />);
+        renderWithProviders(
+            <SearchPillTextField value="" onChange={vi.fn()} label="Search items" />
+        );
         fireEvent.keyDown(window, { key: '/', ctrlKey: false, metaKey: false, altKey: false });
         expect(document.body).toBeTruthy();
     });
 
     it('pressing "/" when target is INPUT does not steal focus (guard branch)', () => {
-        renderWithProviders(<SearchPillTextField value="" onChange={vi.fn()} label="Search items" />);
+        renderWithProviders(
+            <SearchPillTextField value="" onChange={vi.fn()} label="Search items" />
+        );
         const input = screen.getByLabelText('Search items') as HTMLInputElement;
         fireEvent.keyDown(input, { key: '/', ctrlKey: false, metaKey: false, altKey: false });
         expect(document.body).toBeTruthy();
@@ -166,7 +203,7 @@ describe('SearchPillTextField — keyboard branches', () => {
             <>
                 <textarea data-testid="ta" />
                 <SearchPillTextField value="" onChange={vi.fn()} label="Search" />
-            </>,
+            </>
         );
         const ta = document.querySelector('textarea') as HTMLTextAreaElement;
         // Dispatch keydown from the textarea so target.tagName === 'TEXTAREA'
@@ -198,7 +235,13 @@ describe('SortableHeader', () => {
     it('renders label and fires onChange when clicked (active asc dir)', () => {
         const onChange = vi.fn();
         renderWithProviders(
-            <SortableHeader label="Title" sortKey="title" current="title" dir="asc" onChange={onChange} />,
+            <SortableHeader
+                label="Title"
+                sortKey="title"
+                current="title"
+                dir="asc"
+                onChange={onChange}
+            />
         );
         expect(screen.getByText('Title')).toBeInTheDocument();
         fireEvent.click(screen.getByText('Title').parentElement!);
@@ -207,21 +250,40 @@ describe('SortableHeader', () => {
 
     it('renders with desc dir (active desc = arrow_drop_down icon)', () => {
         renderWithProviders(
-            <SortableHeader label="Updated" sortKey="updated" current="updated" dir="desc" onChange={vi.fn()} />,
+            <SortableHeader
+                label="Updated"
+                sortKey="updated"
+                current="updated"
+                dir="desc"
+                onChange={vi.fn()}
+            />
         );
         expect(screen.getByText('Updated')).toBeInTheDocument();
     });
 
     it('renders as right-aligned when align="right"', () => {
         renderWithProviders(
-            <SortableHeader label="Updated" sortKey="updated" current={null} dir="asc" onChange={vi.fn()} align="right" />,
+            <SortableHeader
+                label="Updated"
+                sortKey="updated"
+                current={null}
+                dir="asc"
+                onChange={vi.fn()}
+                align="right"
+            />
         );
         expect(screen.getByText('Updated')).toBeInTheDocument();
     });
 
     it('renders without sort arrow when sortKey is null', () => {
         renderWithProviders(
-            <SortableHeader label="Reporter" sortKey={null} current={null} dir="asc" onChange={vi.fn()} />,
+            <SortableHeader
+                label="Reporter"
+                sortKey={null}
+                current={null}
+                dir="asc"
+                onChange={vi.fn()}
+            />
         );
         expect(screen.getByText('Reporter')).toBeInTheDocument();
     });

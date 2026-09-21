@@ -12,23 +12,25 @@ import { AgentRunDetail } from './AgentRunDetail.js';
 const BASE = 'http://localhost:3000/api';
 const RUN_ID = '08507bc0-1234-5678-9abc-def012345678';
 
-function makeRun(over: Partial<{
-    id: string;
-    agent_id: string;
-    issue_type: string;
-    issue_id: string;
-    status: string;
-    output_text: string | null;
-    started_at: string | null;
-    completed_at: string | null;
-    created_at: string;
-    prompt_snapshot: string | null;
-    total_cost_usd: number | null;
-    input_tokens: number | null;
-    output_tokens: number | null;
-    cache_read_tokens: number | null;
-    cache_creation_tokens: number | null;
-}> = {}) {
+function makeRun(
+    over: Partial<{
+        id: string;
+        agent_id: string;
+        issue_type: string;
+        issue_id: string;
+        status: string;
+        output_text: string | null;
+        started_at: string | null;
+        completed_at: string | null;
+        created_at: string;
+        prompt_snapshot: string | null;
+        total_cost_usd: number | null;
+        input_tokens: number | null;
+        output_tokens: number | null;
+        cache_read_tokens: number | null;
+        cache_creation_tokens: number | null;
+    }> = {}
+) {
     return {
         id: RUN_ID,
         agent_id: 'agent-coder',
@@ -60,7 +62,7 @@ function renderPage() {
         <Routes>
             <Route path="/agents/:id/runs/:runId" element={<AgentRunDetail />} />
         </Routes>,
-        { initialEntries: [`/agents/agent-coder/runs/${RUN_ID}`] },
+        { initialEntries: [`/agents/agent-coder/runs/${RUN_ID}`] }
     );
 }
 
@@ -73,11 +75,11 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json({ ...makeRun(), workflow_run_id: 'wr-1', node_id: 'coder' }),
+                HttpResponse.json({ ...makeRun(), workflow_run_id: 'wr-1', node_id: 'coder' })
             ),
             http.get(`${BASE}/workflow-runs/wr-1`, () =>
-                HttpResponse.json({ id: 'wr-1', workflow_id: 'wf-dev', steps: [] }),
-            ),
+                HttpResponse.json({ id: 'wr-1', workflow_id: 'wf-dev', steps: [] })
+            )
         );
         renderPage();
         const links = await screen.findAllByRole('link', { name: /Open workflow run/i });
@@ -89,7 +91,7 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
-            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun(PROJECT_RUN))),
+            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun(PROJECT_RUN)))
         );
         const { findAllByText, findByText, findByRole } = renderPage();
         // Short run id appears in both breadcrumbs and hero.
@@ -97,7 +99,7 @@ describe('AgentRunDetail page', () => {
         expect(matches.length).toBeGreaterThanOrEqual(1);
         expect(await findByText('Completed')).toBeInTheDocument();
         expect(
-            await findByRole('button', { name: /Re-run with same inputs/i }),
+            await findByRole('button', { name: /Re-run with same inputs/i })
         ).toBeInTheDocument();
     });
 
@@ -112,9 +114,9 @@ describe('AgentRunDetail page', () => {
                         output_text: null,
                         started_at: null,
                         completed_at: null,
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         expect(await screen.findByText('Queued')).toBeInTheDocument();
@@ -132,9 +134,9 @@ describe('AgentRunDetail page', () => {
                         output_text: null,
                         started_at: '2026-05-27T10:00:00.000Z',
                         completed_at: null,
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         expect(await screen.findByText(/live · agent_output/i)).toBeInTheDocument();
@@ -143,7 +145,7 @@ describe('AgentRunDetail page', () => {
                 type: 'agent_output',
                 runId: RUN_ID,
                 output: 'hello-from-stream',
-            }),
+            })
         );
         expect(await screen.findAllByText('hello-from-stream')).not.toHaveLength(0);
     });
@@ -153,14 +155,14 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/missing`, () =>
-                HttpResponse.json({ error: 'not found' }, { status: 404 }),
-            ),
+                HttpResponse.json({ error: 'not found' }, { status: 404 })
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/agents/:id/runs/:runId" element={<AgentRunDetail />} />
             </Routes>,
-            { initialEntries: ['/agents/agent-coder/runs/missing'] },
+            { initialEntries: ['/agents/agent-coder/runs/missing'] }
         );
         expect(await screen.findByText(/Run not found/i)).toBeInTheDocument();
     });
@@ -178,7 +180,7 @@ describe('AgentRunDetail page', () => {
             }),
             // Navigation lands on the new run id — return the same payload so
             // the page settles without an unhandled-request warning.
-            http.get(`${BASE}/run/${NEW_ID}`, () => HttpResponse.json(makeRun({ id: NEW_ID }))),
+            http.get(`${BASE}/run/${NEW_ID}`, () => HttpResponse.json(makeRun({ id: NEW_ID })))
         );
         renderPage();
         const rerun = await screen.findByRole('button', { name: /Re-run with same inputs/i });
@@ -192,7 +194,7 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
-            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun())),
+            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun()))
         );
         renderPage();
         const copy = await screen.findByRole('button', { name: /Copy log/i });
@@ -207,7 +209,7 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
-            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun())),
+            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun()))
         );
         renderPage();
         const dl = await screen.findByRole('button', { name: /Download log/i });
@@ -221,8 +223,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: STREAM_JSON_OUTPUT })),
-            ),
+                HttpResponse.json(makeRun({ output_text: STREAM_JSON_OUTPUT }))
+            )
         );
         renderPage();
         // Land on Timeline tab. Both Tabs are rendered for completed runs.
@@ -242,11 +244,11 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () =>
-                HttpResponse.json(makeAgent({ cli: 'copilot' })),
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: STREAM_JSON_OUTPUT })),
-            ),
+                HttpResponse.json(makeRun({ output_text: STREAM_JSON_OUTPUT }))
+            )
         );
         renderPage();
         const rawTab = await screen.findByRole('tab', { name: 'Raw text' });
@@ -260,8 +262,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: STREAM_JSON_OUTPUT })),
-            ),
+                HttpResponse.json(makeRun({ output_text: STREAM_JSON_OUTPUT }))
+            )
         );
         renderPage();
         // Wait for the event index to render — its rows are <button> elements
@@ -269,16 +271,16 @@ describe('AgentRunDetail page', () => {
         await screen.findByRole('tab', { name: 'Timeline' });
         // Pick the button containing 'stderr' in its label (text row).
         const rows = await screen.findAllByRole('button');
-        const stderrRow = rows.find((b) =>
-            /stderr/i.test(b.textContent ?? '') && /warning: deprecated/i.test(b.textContent ?? ''),
+        const stderrRow = rows.find(
+            (b) =>
+                /stderr/i.test(b.textContent ?? '') &&
+                /warning: deprecated/i.test(b.textContent ?? '')
         );
         expect(stderrRow).toBeDefined();
         fireEvent.click(stderrRow!);
         // Right pane shows the stderr text — appears multiple times once
         // selected (index + detail), so getAllByText.
-        expect(
-            screen.getAllByText(/warning: deprecated flag/i).length,
-        ).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText(/warning: deprecated flag/i).length).toBeGreaterThanOrEqual(1);
     });
 
     it('opens the stop-confirm modal, cancels it, then confirms a stop', async () => {
@@ -292,8 +294,8 @@ describe('AgentRunDetail page', () => {
                         status: 'in_progress',
                         output_text: null,
                         completed_at: null,
-                    }),
-                ),
+                    })
+                )
             ),
             http.post(`${BASE}/run/${RUN_ID}/stop`, async () => {
                 stopped = true;
@@ -303,17 +305,18 @@ describe('AgentRunDetail page', () => {
                     killedSubprocess: true,
                     pidKilled: 1234,
                 });
-            }),
+            })
         );
         renderPage();
         const stop = await screen.findByRole('button', { name: /Stop run/i }, { timeout: 10_000 });
         fireEvent.click(stop);
-        expect(await screen.findByText('Stop this run?', undefined, { timeout: 10_000 })).toBeInTheDocument();
+        expect(
+            await screen.findByText('Stop this run?', undefined, { timeout: 10_000 })
+        ).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));
-        await waitFor(
-            () => expect(screen.queryByText('Stop this run?')).not.toBeInTheDocument(),
-            { timeout: 10_000 },
-        );
+        await waitFor(() => expect(screen.queryByText('Stop this run?')).not.toBeInTheDocument(), {
+            timeout: 10_000,
+        });
         fireEvent.click(screen.getByRole('button', { name: /Stop run/i }));
         await screen.findByText('Stop this run?', undefined, { timeout: 10_000 });
         const confirmBtn = screen
@@ -336,9 +339,9 @@ describe('AgentRunDetail page', () => {
                         output_tokens: 3000,
                         cache_read_tokens: 4000,
                         cache_creation_tokens: 500,
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         expect(await screen.findByText('AI Usage')).toBeInTheDocument();
@@ -352,10 +355,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(
-                    makeRun({ status: 'error', output_text: ERROR_OUTPUT }),
-                ),
-            ),
+                HttpResponse.json(makeRun({ status: 'error', output_text: ERROR_OUTPUT }))
+            )
         );
         renderPage();
         // Status pill flips to "Error" once the error run lands.
@@ -373,9 +374,9 @@ describe('AgentRunDetail page', () => {
                         output_text: null,
                         started_at: '2026-05-27T10:00:00.000Z',
                         completed_at: null,
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         await screen.findByText(/live · agent_output/i);
@@ -388,7 +389,7 @@ describe('AgentRunDetail page', () => {
                 type: 'agent_output',
                 runId: RUN_ID,
                 output: '{"type":"system","subtype":"init","model":"claude-opus-4-7"}',
-            }),
+            })
         );
         expect(await screen.findAllByText('system/init')).not.toHaveLength(0);
         act(() =>
@@ -396,7 +397,7 @@ describe('AgentRunDetail page', () => {
                 type: 'agent_output',
                 runId: RUN_ID,
                 output: '{"type":"assistant","message":{"content":[{"type":"text","text":"Reading the file"}]}}',
-            }),
+            })
         );
         expect(await screen.findByText('assistant')).toBeInTheDocument();
         expect(screen.queryByText(/"type":"assistant"/)).not.toBeInTheDocument();
@@ -412,8 +413,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ issue_type: issueType, issue_id: issueId })),
-            ),
+                HttpResponse.json(makeRun({ issue_type: issueType, issue_id: issueId }))
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -425,8 +426,15 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ status: 'queued', started_at: null, completed_at: null, output_text: null })),
-            ),
+                HttpResponse.json(
+                    makeRun({
+                        status: 'queued',
+                        started_at: null,
+                        completed_at: null,
+                        output_text: null,
+                    })
+                )
+            )
         );
         renderPage();
         // With started_at = null, durationLabel returns '—'
@@ -441,10 +449,12 @@ describe('AgentRunDetail page', () => {
         ].join('\n');
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent({ cli: 'copilot' }))),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: COPILOT_OUTPUT })),
+            http.get(`${BASE}/agents/agent-coder`, () =>
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
+            http.get(`${BASE}/run/${RUN_ID}`, () =>
+                HttpResponse.json(makeRun({ output_text: COPILOT_OUTPUT }))
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -455,8 +465,13 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ issue_type: null as unknown as string, issue_id: null as unknown as string })),
-            ),
+                HttpResponse.json(
+                    makeRun({
+                        issue_type: null as unknown as string,
+                        issue_id: null as unknown as string,
+                    })
+                )
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -467,8 +482,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ status: 'completed', output_text: null })),
-            ),
+                HttpResponse.json(makeRun({ status: 'completed', output_text: null }))
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -486,8 +501,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ status: 'completed', output_text: null })),
-            ),
+                HttpResponse.json(makeRun({ status: 'completed', output_text: null }))
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -509,9 +524,9 @@ describe('AgentRunDetail page', () => {
                         output_text: null,
                         started_at: '2026-05-27T10:00:00.000Z',
                         completed_at: null,
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         // Wait for live log to confirm component is mounted with in_progress run
@@ -530,8 +545,8 @@ describe('AgentRunDetail page', () => {
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun(PROJECT_RUN))),
             http.post(`${BASE}/run`, () =>
-                HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Server error' }, { status: 500 })
+            )
         );
         renderPage();
         const rerunBtn = await screen.findByRole('button', { name: /Re-run with same inputs/i });
@@ -539,11 +554,9 @@ describe('AgentRunDetail page', () => {
         // Wait for error toast to appear — indicates onError fired
         await waitFor(
             () => {
-                expect(
-                    screen.queryByText(/Re-run failed/i) ?? document.body,
-                ).toBeTruthy();
+                expect(screen.queryByText(/Re-run failed/i) ?? document.body).toBeTruthy();
             },
-            { timeout: 10000 },
+            { timeout: 10000 }
         );
         expect(document.body).toBeTruthy();
     }, 30000);
@@ -559,15 +572,19 @@ describe('AgentRunDetail page', () => {
                         output_text: null,
                         started_at: '2026-05-27T10:00:00.000Z',
                         completed_at: null,
-                    }),
-                ),
+                    })
+                )
             ),
             http.post(`${BASE}/run/${RUN_ID}/stop`, () =>
-                HttpResponse.json({ error: 'Internal error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Internal error' }, { status: 500 })
+            )
         );
         renderPage();
-        const stopBtn = await screen.findByRole('button', { name: /Stop run/i }, { timeout: 10000 });
+        const stopBtn = await screen.findByRole(
+            'button',
+            { name: /Stop run/i },
+            { timeout: 10000 }
+        );
         fireEvent.click(stopBtn);
         // Confirm dialog opens — click the Stop confirm button
         await screen.findByText('Stop this run?', undefined, { timeout: 10000 });
@@ -581,36 +598,37 @@ describe('AgentRunDetail page', () => {
             () => {
                 expect(document.body).toBeTruthy();
             },
-            { timeout: 10000 },
+            { timeout: 10000 }
         );
     }, 60000);
 
     it('renders mobile sticky footer with Re-run button — fn#24 zIndex / fn#25 onClick', async () => {
         // Simulate mobile viewport so isMobile=true renders the mobile sticky bottom bar
         const origMatchMedia = window.matchMedia;
-        window.matchMedia = (query: string) => ({
-            matches: /max-width/.test(query),
-            media: query,
-            onchange: null,
-            addListener: () => {},
-            removeListener: () => {},
-            addEventListener: () => {},
-            removeEventListener: () => {},
-            dispatchEvent: () => false,
-        } as unknown as MediaQueryList);
+        window.matchMedia = (query: string) =>
+            ({
+                matches: /max-width/.test(query),
+                media: query,
+                onchange: null,
+                addListener: () => {},
+                removeListener: () => {},
+                addEventListener: () => {},
+                removeEventListener: () => {},
+                dispatchEvent: () => false,
+            }) as unknown as MediaQueryList;
         let rerunCalled = false;
         const NEW_ID = 'bbbbbbbb-2222-3333-4444-555555555555';
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ status: 'completed' })),
+                HttpResponse.json(makeRun({ status: 'completed' }))
             ),
             http.post(`${BASE}/run`, () => {
                 rerunCalled = true;
                 return HttpResponse.json({ runId: NEW_ID });
             }),
-            http.get(`${BASE}/run/${NEW_ID}`, () => HttpResponse.json(makeRun({ id: NEW_ID }))),
+            http.get(`${BASE}/run/${NEW_ID}`, () => HttpResponse.json(makeRun({ id: NEW_ID })))
         );
         renderPage();
         await screen.findByText('Completed');
@@ -637,15 +655,15 @@ describe('AgentRunDetail page', () => {
                         status: 'setup_failed',
                         output_text: null,
                         setup_output_text: 'Script exited with code 1\nERROR: missing SECRET_KEY',
-                    } as Parameters<typeof makeRun>[0]),
-                ),
-            ),
+                    } as Parameters<typeof makeRun>[0])
+                )
+            )
         );
         renderPage();
         expect(await screen.findByText('Setup failed')).toBeInTheDocument();
         // Alert message about setup script
         expect(
-            await screen.findByText(/per-project setup script did not complete/i),
+            await screen.findByText(/per-project setup script did not complete/i)
         ).toBeInTheDocument();
         // The captured output is rendered in the pre block
         expect(screen.getByText(/Script exited with code 1/)).toBeInTheDocument();
@@ -662,9 +680,9 @@ describe('AgentRunDetail page', () => {
                         status: 'setup_failed',
                         output_text: null,
                         setup_output_text: null,
-                    } as Parameters<typeof makeRun>[0]),
-                ),
-            ),
+                    } as Parameters<typeof makeRun>[0])
+                )
+            )
         );
         renderPage();
         expect(await screen.findByText('Setup failed')).toBeInTheDocument();
@@ -688,8 +706,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         await screen.findByRole('tab', { name: 'Timeline' });
@@ -716,15 +734,13 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         await screen.findByRole('tab', { name: 'Timeline' });
         // The preview contains 'thinking · ...' text
-        expect(
-            await screen.findByText(/thinking · Let me reason/i),
-        ).toBeInTheDocument();
+        expect(await screen.findByText(/thinking · Let me reason/i)).toBeInTheDocument();
     });
 
     it('extractPreview — Copilot session.mcp_server* event type', async () => {
@@ -735,22 +751,20 @@ describe('AgentRunDetail page', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent({ cli: 'copilot' }))),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
+            http.get(`${BASE}/agents/agent-coder`, () =>
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
+            http.get(`${BASE}/run/${RUN_ID}`, () =>
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         // Switch to timeline tab to see the event index
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
         fireEvent.click(timelineTab);
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
-        );
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
         // The preview renders 'atlas-mcp · connected'
-        expect(
-            await screen.findByText(/atlas-mcp · connected/i),
-        ).toBeInTheDocument();
+        expect(await screen.findByText(/atlas-mcp · connected/i)).toBeInTheDocument();
     });
 
     it('extractPreview — Copilot session.mcp_servers_loaded event type', async () => {
@@ -761,17 +775,17 @@ describe('AgentRunDetail page', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent({ cli: 'copilot' }))),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
+            http.get(`${BASE}/agents/agent-coder`, () =>
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
+            http.get(`${BASE}/run/${RUN_ID}`, () =>
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
         fireEvent.click(timelineTab);
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
-        );
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
         // The preview renders '3 server(s)'
         expect(await screen.findByText(/3 server\(s\)/i)).toBeInTheDocument();
     });
@@ -784,17 +798,17 @@ describe('AgentRunDetail page', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent({ cli: 'copilot' }))),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
+            http.get(`${BASE}/agents/agent-coder`, () =>
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
+            http.get(`${BASE}/run/${RUN_ID}`, () =>
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
         fireEvent.click(timelineTab);
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
-        );
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
         // The preview renders 'model=gpt-4o'
         expect(await screen.findByText(/model=gpt-4o/i)).toBeInTheDocument();
     });
@@ -809,9 +823,9 @@ describe('AgentRunDetail page', () => {
                     makeRun({
                         started_at: '2026-05-16T14:22:00.000Z',
                         completed_at: '2026-05-16T14:25:07.000Z',
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -832,8 +846,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ status: 'error', output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ status: 'error', output_text: output }))
+            )
         );
         renderPage();
         expect(await screen.findByText('Error')).toBeInTheDocument();
@@ -854,9 +868,9 @@ describe('AgentRunDetail page', () => {
                     makeRun({
                         total_cost_usd: 0.05,
                         output_text: '[SIMULATED] run output here',
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -869,8 +883,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: null })),
-            ),
+                HttpResponse.json(makeRun({ output_text: null }))
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -880,29 +894,30 @@ describe('AgentRunDetail page', () => {
         // With null output_text, the false branch "— no output captured —" renders
         await waitFor(
             () => expect(screen.getByText('— no output captured —')).toBeInTheDocument(),
-            { timeout: 5000 },
+            { timeout: 5000 }
         );
     });
 
     it('mobile sticky footer shows Stop button when run is in_progress (lines 1347-1364)', async () => {
         const origMatchMedia = window.matchMedia;
-        window.matchMedia = (query: string) => ({
-            matches: /max-width/.test(query),
-            media: query,
-            onchange: null,
-            addListener: () => {},
-            removeListener: () => {},
-            addEventListener: () => {},
-            removeEventListener: () => {},
-            dispatchEvent: () => false,
-        } as unknown as MediaQueryList);
+        window.matchMedia = (query: string) =>
+            ({
+                matches: /max-width/.test(query),
+                media: query,
+                onchange: null,
+                addListener: () => {},
+                removeListener: () => {},
+                addEventListener: () => {},
+                removeEventListener: () => {},
+                dispatchEvent: () => false,
+            }) as unknown as MediaQueryList;
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ status: 'in_progress', completed_at: null })),
+                HttpResponse.json(makeRun({ status: 'in_progress', completed_at: null }))
             ),
-            http.delete(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json({})),
+            http.delete(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json({}))
         );
         renderPage();
         await screen.findByText('In progress');
@@ -921,17 +936,17 @@ describe('AgentRunDetail page', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent({ cli: 'copilot' }))),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
+            http.get(`${BASE}/agents/agent-coder`, () =>
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
+            http.get(`${BASE}/run/${RUN_ID}`, () =>
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
         fireEvent.click(timelineTab);
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
-        );
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
         // Preview shows "Here is the fix. · 250 tok"
         expect(await screen.findByText(/Here is the fix\. · 250 tok/i)).toBeInTheDocument();
     });
@@ -945,17 +960,17 @@ describe('AgentRunDetail page', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent({ cli: 'copilot' }))),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
+            http.get(`${BASE}/agents/agent-coder`, () =>
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
+            http.get(`${BASE}/run/${RUN_ID}`, () =>
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
         fireEvent.click(timelineTab);
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
-        );
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
         expect(await screen.findByText(/Δ partial response chunk/i)).toBeInTheDocument();
     });
 
@@ -968,23 +983,26 @@ describe('AgentRunDetail page', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent({ cli: 'copilot' }))),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
+            http.get(`${BASE}/agents/agent-coder`, () =>
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
+            http.get(`${BASE}/run/${RUN_ID}`, () =>
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         // Switch to Timeline tab (Copilot defaults to Raw text)
         await screen.findByRole('tab', { name: 'Raw text' });
         const timelineTab = screen.getByRole('tab', { name: 'Timeline' });
         fireEvent.click(timelineTab);
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
+        await waitFor(
+            () => {
+                const els = screen.queryAllByText(/User provided context here\./i);
+                expect(els.length).toBeGreaterThanOrEqual(1);
+            },
+            { timeout: 5000 }
         );
-        await waitFor(() => {
-            const els = screen.queryAllByText(/User provided context here\./i);
-            expect(els.length).toBeGreaterThanOrEqual(1);
-        }, { timeout: 5000 });
     });
 
     // ── extractPreview: Copilot result event with premiumRequests + sessionDurationMs ─
@@ -996,17 +1014,17 @@ describe('AgentRunDetail page', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent({ cli: 'copilot' }))),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
+            http.get(`${BASE}/agents/agent-coder`, () =>
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
+            http.get(`${BASE}/run/${RUN_ID}`, () =>
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
         fireEvent.click(timelineTab);
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
-        );
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
         // Preview shows "5 premium req · 12s"
         expect(await screen.findByText(/5 premium req · 12s/i)).toBeInTheDocument();
     });
@@ -1020,17 +1038,17 @@ describe('AgentRunDetail page', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent({ cli: 'copilot' }))),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
+            http.get(`${BASE}/agents/agent-coder`, () =>
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
+            http.get(`${BASE}/run/${RUN_ID}`, () =>
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
         fireEvent.click(timelineTab);
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
-        );
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
         // Preview shows "3 premium req" (no duration suffix)
         expect(await screen.findByText(/3 premium req/i)).toBeInTheDocument();
     });
@@ -1047,8 +1065,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         await screen.findByRole('tab', { name: 'Timeline' });
@@ -1067,21 +1085,22 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         // Claude defaults to Timeline tab
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
-        );
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
         // The preview for result events shows the result string in the event index
         // The text also appears in the Summary panel below
-        await waitFor(() => {
-            const els = screen.queryAllByText(/Task completed successfully\./i);
-            expect(els.length).toBeGreaterThanOrEqual(1);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                const els = screen.queryAllByText(/Task completed successfully\./i);
+                expect(els.length).toBeGreaterThanOrEqual(1);
+            },
+            { timeout: 5000 }
+        );
     });
 
     // ── shortenPreview: long string gets truncated with ellipsis ─────────────
@@ -1099,29 +1118,33 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         await screen.findByRole('tab', { name: 'Timeline' });
         // The preview text should be truncated to 140 chars + ellipsis
-        await waitFor(() => {
-            const truncatedText = screen.queryByText(/A{139}…/);
-            expect(truncatedText ?? document.body).toBeTruthy();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                const truncatedText = screen.queryByText(/A{139}…/);
+                expect(truncatedText ?? document.body).toBeTruthy();
+            },
+            { timeout: 5000 }
+        );
     });
 
     // ── parseErrorKindMarker: marker with JSON details (m[2] present) ────────
 
     it('parseErrorKindMarker — error marker with JSON details parses kind correctly', async () => {
         // The marker includes JSON details like `{"binary":"claude"}`
-        const ERROR_OUTPUT = '[error-kind:cli_not_found:{"binary":"claude"}] some error output here';
+        const ERROR_OUTPUT =
+            '[error-kind:cli_not_found:{"binary":"claude"}] some error output here';
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ status: 'error', output_text: ERROR_OUTPUT })),
-            ),
+                HttpResponse.json(makeRun({ status: 'error', output_text: ERROR_OUTPUT }))
+            )
         );
         renderPage();
         // Status pill shows "Error" — the ApiErrorAlert renders
@@ -1141,8 +1164,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ status: 'error', output_text: ERROR_OUTPUT })),
-            ),
+                HttpResponse.json(makeRun({ status: 'error', output_text: ERROR_OUTPUT }))
+            )
         );
         renderPage();
         expect(await screen.findByText('Error')).toBeInTheDocument();
@@ -1151,27 +1174,26 @@ describe('AgentRunDetail page', () => {
     // ── eventColor: session.* header renders with slate40 color ──────────────
 
     it('eventColor — session.* events use slate40 color and render in timeline', async () => {
-        const output = [
-            '{"type":"session","subtype":"start"}',
-        ].join('\n');
+        const output = ['{"type":"session","subtype":"start"}'].join('\n');
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         // Claude defaults to Timeline tab — wait for it to be active
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
-        );
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
         // The event header "session/start" should appear in the index
-        await waitFor(() => {
-            const els = screen.queryAllByText('session/start');
-            expect(els.length).toBeGreaterThanOrEqual(1);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                const els = screen.queryAllByText('session/start');
+                expect(els.length).toBeGreaterThanOrEqual(1);
+            },
+            { timeout: 5000 }
+        );
     });
 
     // ── eventColor: hook_response in header triggers error color ─────────────
@@ -1185,18 +1207,19 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
+        await waitFor(
+            () => {
+                const els = screen.queryAllByText('hook_response/denied');
+                expect(els.length).toBeGreaterThanOrEqual(1);
+            },
+            { timeout: 5000 }
         );
-        await waitFor(() => {
-            const els = screen.queryAllByText('hook_response/denied');
-            expect(els.length).toBeGreaterThanOrEqual(1);
-        }, { timeout: 5000 });
     });
 
     // ── hasApiError: atlas-api error marker in JSON line ────────────────────
@@ -1218,8 +1241,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         await screen.findByRole('tab', { name: 'Timeline' });
@@ -1236,20 +1259,21 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         // Claude defaults to Timeline tab
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
-        );
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
         // The malformed line falls through as a 'text' event — renders as 'text' header
-        await waitFor(() => {
-            const els = screen.queryAllByText('text');
-            expect(els.length).toBeGreaterThanOrEqual(1);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                const els = screen.queryAllByText('text');
+                expect(els.length).toBeGreaterThanOrEqual(1);
+            },
+            { timeout: 5000 }
+        );
     });
 
     // ── durationLabel: started_at with null completed_at (still running) ─────
@@ -1259,12 +1283,14 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({
-                    status: 'in_progress',
-                    started_at: '2026-05-27T10:00:00.000Z',
-                    completed_at: null,
-                })),
-            ),
+                HttpResponse.json(
+                    makeRun({
+                        status: 'in_progress',
+                        started_at: '2026-05-27T10:00:00.000Z',
+                        completed_at: null,
+                    })
+                )
+            )
         );
         renderPage();
         await screen.findByText('In progress');
@@ -1280,9 +1306,7 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: '' })),
-            ),
+            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun({ output_text: '' })))
         );
         renderPage();
         await screen.findByText('Completed');
@@ -1298,13 +1322,15 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({
-                    status: 'queued',
-                    output_text: null,
-                    started_at: null,
-                    completed_at: null,
-                })),
-            ),
+                HttpResponse.json(
+                    makeRun({
+                        status: 'queued',
+                        output_text: null,
+                        started_at: null,
+                        completed_at: null,
+                    })
+                )
+            )
         );
         renderPage();
         await screen.findByText('Queued');
@@ -1334,15 +1360,13 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         await screen.findByRole('tab', { name: 'Timeline' });
         // Preview should show 'tool_use · read_file'
-        await waitFor(() =>
-            expect(screen.getByText(/tool_use · read_file/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/tool_use · read_file/i)).toBeInTheDocument());
     });
 
     // ── extractPreview: message.content block with unknown type — falls through ─
@@ -1354,24 +1378,25 @@ describe('AgentRunDetail page', () => {
             type: 'result',
             result: 'UnknownTask completed.',
             message: {
-                content: [
-                    { type: 'unknown_type', data: 'something' },
-                ],
+                content: [{ type: 'unknown_type', data: 'something' }],
             },
         });
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         await screen.findByRole('tab', { name: 'Timeline' });
         // The result field preview text appears somewhere in the rendered output
-        await waitFor(() => {
-            expect(document.body.textContent).toContain('UnknownTask completed');
-        }, { timeout: 10000 });
+        await waitFor(
+            () => {
+                expect(document.body.textContent).toContain('UnknownTask completed');
+            },
+            { timeout: 10000 }
+        );
     });
 
     // ── extractPreview: copilot result event with premiumRequests + sessionDurationMs ─
@@ -1384,20 +1409,23 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () =>
-                HttpResponse.json(makeAgent({ cli: 'copilot' })),
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         // Copilot defaults to Raw text tab — switch to Timeline first
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
         fireEvent.click(timelineTab);
         // Preview = "3 premium req · 45s" appears in the timeline index
-        await waitFor(() => {
-            expect(document.body.textContent).toContain('3 premium req');
-        }, { timeout: 10000 });
+        await waitFor(
+            () => {
+                expect(document.body.textContent).toContain('3 premium req');
+            },
+            { timeout: 10000 }
+        );
     });
 
     // ── extractPreview: copilot result event with only premiumRequests (no dur) ─
@@ -1410,36 +1438,37 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () =>
-                HttpResponse.json(makeAgent({ cli: 'copilot' })),
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         // Copilot defaults to Raw text tab — switch to Timeline first
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
         fireEvent.click(timelineTab);
         // Preview = "1 premium req" (no duration suffix) appears in timeline index
-        await waitFor(() => {
-            expect(document.body.textContent).toContain('1 premium req');
-        }, { timeout: 10000 });
+        await waitFor(
+            () => {
+                expect(document.body.textContent).toContain('1 premium req');
+            },
+            { timeout: 10000 }
+        );
     });
 
     // ── extractFinalResult: copilot assistant.message with empty content string ─
 
     it('extractFinalResult — copilot assistant.message with empty content is skipped (falls through to empty)', async () => {
-        const output = [
-            '{"type":"assistant.message","data":{"content":""}}',
-        ].join('\n');
+        const output = ['{"type":"assistant.message","data":{"content":""}}'].join('\n');
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () =>
-                HttpResponse.json(makeAgent({ cli: 'copilot' })),
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -1462,17 +1491,20 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         await screen.findByRole('tab', { name: 'Timeline' });
         // 2 events parsed (system/init + text), blank lines skipped
         // The system event header "system/init" appears in the event index
-        await waitFor(() => {
-            const allText = document.body.textContent ?? '';
-            expect(allText).toContain('system/init');
-        }, { timeout: 10000 });
+        await waitFor(
+            () => {
+                const allText = document.body.textContent ?? '';
+                expect(allText).toContain('system/init');
+            },
+            { timeout: 10000 }
+        );
     });
 
     // ── summary panel with run status === 'error' shows 'Error tail' label ──
@@ -1483,14 +1515,12 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ status: 'error', output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ status: 'error', output_text: output }))
+            )
         );
         renderPage();
         await screen.findByText('Error');
-        await waitFor(() =>
-            expect(screen.getByText('Error tail')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Error tail')).toBeInTheDocument());
     });
 
     // ── parseRunEvents: JSON event with non-string type → '' then type||'event' ─
@@ -1503,19 +1533,20 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
-        );
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
         // The event header falls back to 'event'
-        await waitFor(() => {
-            const els = screen.queryAllByText('event');
-            expect(els.length).toBeGreaterThanOrEqual(1);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                const els = screen.queryAllByText('event');
+                expect(els.length).toBeGreaterThanOrEqual(1);
+            },
+            { timeout: 5000 }
+        );
     });
 
     // ── extractPreview: tool_result with non-string, non-array content → '' ──
@@ -1537,16 +1568,19 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         await screen.findByRole('tab', { name: 'Timeline' });
         // tool_result header still appears
-        await waitFor(() => {
-            const els = screen.queryAllByText(/tool_result/);
-            expect(els.length).toBeGreaterThanOrEqual(1);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                const els = screen.queryAllByText(/tool_result/);
+                expect(els.length).toBeGreaterThanOrEqual(1);
+            },
+            { timeout: 5000 }
+        );
     });
 
     // ── extractPreview: session.mcp_server* when status is not a string → '' ─
@@ -1559,21 +1593,24 @@ describe('AgentRunDetail page', () => {
         });
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent({ cli: 'copilot' }))),
-            http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
+            http.get(`${BASE}/agents/agent-coder`, () =>
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
+            http.get(`${BASE}/run/${RUN_ID}`, () =>
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
         fireEvent.click(timelineTab);
-        await waitFor(() =>
-            expect(timelineTab).toHaveAttribute('aria-selected', 'true'),
-        );
+        await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
         // Preview renders 'my-server · ' (empty status suffix)
-        await waitFor(() => {
-            expect(document.body.textContent).toContain('my-server ·');
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(document.body.textContent).toContain('my-server ·');
+            },
+            { timeout: 5000 }
+        );
     });
 
     // ── parseErrorKindMarker: error run with null output_text → no alert ──────
@@ -1586,8 +1623,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ status: 'error', output_text: ERROR_OUTPUT })),
-            ),
+                HttpResponse.json(makeRun({ status: 'error', output_text: ERROR_OUTPUT }))
+            )
         );
         renderPage();
         expect(await screen.findByText('Error')).toBeInTheDocument();
@@ -1607,9 +1644,9 @@ describe('AgentRunDetail page', () => {
                     makeRun({
                         output_text: '[SIMULATED] This run was simulated.',
                         total_cost_usd: null,
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -1624,7 +1661,7 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () =>
-                HttpResponse.json(makeAgent({ accent_color: null as unknown as string })),
+                HttpResponse.json(makeAgent({ accent_color: null as unknown as string }))
             ),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
                 HttpResponse.json(
@@ -1633,9 +1670,9 @@ describe('AgentRunDetail page', () => {
                         output_text: null,
                         started_at: null,
                         completed_at: null,
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         expect(await screen.findByText('Queued')).toBeInTheDocument();
@@ -1658,9 +1695,9 @@ describe('AgentRunDetail page', () => {
                         output_tokens: null,
                         cache_read_tokens: null,
                         cache_creation_tokens: null,
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         expect(await screen.findByText('AI Usage')).toBeInTheDocument();
@@ -1683,8 +1720,8 @@ describe('AgentRunDetail page', () => {
                         output_text: null,
                         started_at: '2026-05-27T10:00:00.000Z',
                         completed_at: null,
-                    }),
-                ),
+                    })
+                )
             ),
             http.post(`${BASE}/run/${RUN_ID}/stop`, () =>
                 HttpResponse.json({
@@ -1692,11 +1729,15 @@ describe('AgentRunDetail page', () => {
                     status: 'cancelled',
                     killedSubprocess: false,
                     pidKilled: null,
-                }),
-            ),
+                })
+            )
         );
         renderPage();
-        const stopBtn = await screen.findByRole('button', { name: /Stop run/i }, { timeout: 10000 });
+        const stopBtn = await screen.findByRole(
+            'button',
+            { name: /Stop run/i },
+            { timeout: 10000 }
+        );
         fireEvent.click(stopBtn);
         await screen.findByText('Stop this run?', undefined, { timeout: 10000 });
         const confirmBtn = screen
@@ -1706,7 +1747,7 @@ describe('AgentRunDetail page', () => {
         fireEvent.click(confirmBtn!);
         await waitFor(
             () => expect(screen.queryByText('Run stopped') ?? document.body).toBeTruthy(),
-            { timeout: 10000 },
+            { timeout: 10000 }
         );
     }, 30000);
 
@@ -1724,9 +1765,9 @@ describe('AgentRunDetail page', () => {
                         output_text: 'some existing output',
                         started_at: '2026-05-27T10:00:00.000Z',
                         completed_at: null,
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         // Wait for the live log to confirm component is mounted
@@ -1737,7 +1778,7 @@ describe('AgentRunDetail page', () => {
                 type: 'agent_output',
                 runId: RUN_ID,
                 output: '',
-            }),
+            })
         );
         // No crash, component still renders
         await waitFor(() => expect(document.body).toBeTruthy(), { timeout: 5000 });
@@ -1757,8 +1798,8 @@ describe('AgentRunDetail page', () => {
                         output_text: null,
                         started_at: '2026-05-27T10:00:00.000Z',
                         completed_at: null,
-                    }),
-                ),
+                    })
+                )
             ),
             http.post(`${BASE}/run/${RUN_ID}/stop`, () =>
                 HttpResponse.json({
@@ -1766,11 +1807,15 @@ describe('AgentRunDetail page', () => {
                     status: 'cancelled',
                     killedSubprocess: false,
                     pidKilled: null,
-                }),
-            ),
+                })
+            )
         );
         renderPage();
-        const stopBtn = await screen.findByRole('button', { name: /Stop run/i }, { timeout: 10000 });
+        const stopBtn = await screen.findByRole(
+            'button',
+            { name: /Stop run/i },
+            { timeout: 10000 }
+        );
         fireEvent.click(stopBtn);
         await screen.findByText('Stop this run?', undefined, { timeout: 10000 });
         const confirmBtn = screen
@@ -1778,10 +1823,7 @@ describe('AgentRunDetail page', () => {
             .find((b) => b.textContent?.trim() === 'Stop');
         expect(confirmBtn).toBeDefined();
         fireEvent.click(confirmBtn!);
-        await waitFor(
-            () => expect(document.body).toBeTruthy(),
-            { timeout: 10000 },
-        );
+        await waitFor(() => expect(document.body).toBeTruthy(), { timeout: 10000 });
     }, 30000);
 
     // ── parseErrorKindMarker — called with error status but no marker → null ──
@@ -1794,8 +1836,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ status: 'error', output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ status: 'error', output_text: output }))
+            )
         );
         renderPage();
         expect(await screen.findByText('Error')).toBeInTheDocument();
@@ -1820,9 +1862,9 @@ describe('AgentRunDetail page', () => {
                         output_tokens: 1000,
                         cache_read_tokens: 500,
                         cache_creation_tokens: 100,
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -1839,7 +1881,7 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
-            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun())),
+            http.get(`${BASE}/run/${RUN_ID}`, () => HttpResponse.json(makeRun()))
         );
         renderPage();
         const copy = await screen.findByRole('button', { name: /Copy log/i });
@@ -1858,11 +1900,11 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () =>
-                HttpResponse.json(makeAgent({ cli: 'copilot' })),
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: 'plain text output' })),
-            ),
+                HttpResponse.json(makeRun({ output_text: 'plain text output' }))
+            )
         );
         renderPage();
         const rawTab = await screen.findByRole('tab', { name: 'Raw text' });
@@ -1878,13 +1920,14 @@ describe('AgentRunDetail page', () => {
 
     it('extractFinalResult — CRLF-delimited output parses result event (line 201 guard path)', async () => {
         // split(/\r?\n/) on CRLF text; lines[i] ?? '' guard (line 201) for undefined slots
-        const output = '{"type":"result","result":"CRLF summary."}\r\n{"type":"system","subtype":"init"}';
+        const output =
+            '{"type":"result","result":"CRLF summary."}\r\n{"type":"system","subtype":"init"}';
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -1906,11 +1949,11 @@ describe('AgentRunDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () =>
-                HttpResponse.json(makeAgent({ cli: 'copilot' })),
+                HttpResponse.json(makeAgent({ cli: 'copilot' }))
             ),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: output })),
-            ),
+                HttpResponse.json(makeRun({ output_text: output }))
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -1927,8 +1970,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ status: 'error', output_text: null })),
-            ),
+                HttpResponse.json(makeRun({ status: 'error', output_text: null }))
+            )
         );
         renderPage();
         expect(await screen.findByText('Error')).toBeInTheDocument();
@@ -1949,9 +1992,9 @@ describe('AgentRunDetail page', () => {
                         status: 'cancelled',
                         output_text: '[error-kind:cli_not_found] not-an-error-run',
                         completed_at: '2026-05-16T14:36:00.000Z',
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         expect(await screen.findByText('Cancelled')).toBeInTheDocument();
@@ -1976,9 +2019,9 @@ describe('AgentRunDetail page', () => {
                         output_text: 'existing output',
                         started_at: '2026-05-27T10:00:00.000Z',
                         completed_at: null,
-                    }),
-                ),
-            ),
+                    })
+                )
+            )
         );
         renderPage();
         await screen.findByText(/live · agent_output/i);
@@ -1987,7 +2030,7 @@ describe('AgentRunDetail page', () => {
                 type: 'agent_output',
                 runId: RUN_ID,
                 output: 'gap-chunk',
-            }),
+            })
         );
         await waitFor(() => expect(document.body).toBeTruthy(), { timeout: 5000 });
     }, 20000);
@@ -2006,9 +2049,7 @@ describe('AgentRunDetail page', () => {
                 postCount++;
                 return HttpResponse.json({ runId: NEW_RUN });
             }),
-            http.get(`${BASE}/run/${NEW_RUN}`, () =>
-                HttpResponse.json(makeRun({ id: NEW_RUN })),
-            ),
+            http.get(`${BASE}/run/${NEW_RUN}`, () => HttpResponse.json(makeRun({ id: NEW_RUN })))
         );
         renderPage();
         const btn = await screen.findByRole('button', { name: /Re-run with same inputs/i });
@@ -2025,17 +2066,20 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: null })),
-            ),
+                HttpResponse.json(makeRun({ output_text: null }))
+            )
         );
         renderPage();
         await screen.findByText('Completed');
         const timelineTab = await screen.findByRole('tab', { name: 'Timeline' });
         await waitFor(() => expect(timelineTab).toHaveAttribute('aria-selected', 'true'));
-        await waitFor(() => {
-            const all = screen.getAllByText('— no output captured —');
-            expect(all.length).toBeGreaterThanOrEqual(1);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                const all = screen.getAllByText('— no output captured —');
+                expect(all.length).toBeGreaterThanOrEqual(1);
+            },
+            { timeout: 5000 }
+        );
     });
 
     // ── SimulatedBadge false branch — assert the badge is actually absent ────
@@ -2047,8 +2091,8 @@ describe('AgentRunDetail page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
             http.get(`${BASE}/run/${RUN_ID}`, () =>
-                HttpResponse.json(makeRun({ output_text: 'Normal, non-simulated output.' })),
-            ),
+                HttpResponse.json(makeRun({ output_text: 'Normal, non-simulated output.' }))
+            )
         );
         renderPage();
         await screen.findByText('Completed');
@@ -2074,9 +2118,9 @@ describe('AgentRunDetail page', () => {
                         output_text: 'existing output',
                         started_at: '2026-05-27T10:00:00.000Z',
                         completed_at: null,
-                    }),
+                    })
                 );
-            }),
+            })
         );
         renderPage();
         await screen.findByText(/live · agent_output/i);
@@ -2085,7 +2129,7 @@ describe('AgentRunDetail page', () => {
                 type: 'agent_output',
                 runId: RUN_ID,
                 output: 'chunk-one',
-            }),
+            })
         );
         await waitFor(() => expect(getCount).toBe(1), { timeout: 5000 });
         // Second event for the same runId — ref already matches, so no new fetch.
@@ -2094,7 +2138,7 @@ describe('AgentRunDetail page', () => {
                 type: 'agent_output',
                 runId: RUN_ID,
                 output: 'chunk-two',
-            }),
+            })
         );
         await new Promise((r) => setTimeout(r, 50));
         expect(getCount).toBe(1);
@@ -2108,7 +2152,9 @@ describe('AgentRunDetail page', () => {
         // undefined when the .then() callback runs. We delay the /run response
         // with `since` so we can clear the query cache in between.
         let resolveSince!: () => void;
-        const sincePromise = new Promise<void>((res) => { resolveSince = res; });
+        const sincePromise = new Promise<void>((res) => {
+            resolveSince = res;
+        });
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
@@ -2124,9 +2170,9 @@ describe('AgentRunDetail page', () => {
                         output_text: 'existing output',
                         started_at: '2026-05-27T10:00:00.000Z',
                         completed_at: null,
-                    }),
+                    })
                 );
-            }),
+            })
         );
         const queryClient = new QueryClient({
             defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -2135,7 +2181,7 @@ describe('AgentRunDetail page', () => {
             <Routes>
                 <Route path="/agents/:id/runs/:runId" element={<AgentRunDetail />} />
             </Routes>,
-            { initialEntries: [`/agents/agent-coder/runs/${RUN_ID}`], queryClient },
+            { initialEntries: [`/agents/agent-coder/runs/${RUN_ID}`], queryClient }
         );
         await screen.findByText(/live · agent_output/i);
         act(() =>
@@ -2143,7 +2189,7 @@ describe('AgentRunDetail page', () => {
                 type: 'agent_output',
                 runId: RUN_ID,
                 output: 'chunk',
-            }),
+            })
         );
         // Give the gap-fill request a tick to be in-flight, then remove the
         // cached run row so `prev` is undefined when the .then() resolves.
@@ -2158,7 +2204,7 @@ describe('AgentRunDetail page', () => {
 
     // ── gap-fill setQueryData: prev.output_text is null → ?? '' fallback (line 209) ─
 
-    it('gap-fill setQueryData — prev.output_text is null takes the ?? \'\' fallback before appending the tail', async () => {
+    it("gap-fill setQueryData — prev.output_text is null takes the ?? '' fallback before appending the tail", async () => {
         // `(prev.output_text ?? '') + tail` — every other gap-fill test starts
         // with a non-empty output_text; here the initial run row has
         // output_text=null so the `?? ''` fallback must fire before the tail
@@ -2177,9 +2223,9 @@ describe('AgentRunDetail page', () => {
                         output_text: null,
                         started_at: '2026-05-27T10:00:00.000Z',
                         completed_at: null,
-                    }),
+                    })
                 );
-            }),
+            })
         );
         renderPage();
         await screen.findByText(/live · agent_output/i);
@@ -2188,7 +2234,7 @@ describe('AgentRunDetail page', () => {
                 type: 'agent_output',
                 runId: RUN_ID,
                 output: 'chunk',
-            }),
+            })
         );
         // The gap-filled tail gets spliced into the cached run's output_text,
         // which then flows into the raw-text view once the run completes;
@@ -2202,7 +2248,9 @@ describe('AgentRunDetail page', () => {
         // Same ternary pattern as the gap-fill effect, but inside stopRun's
         // onSuccess. Delay the stop POST so we can clear the cache first.
         let resolveStop!: () => void;
-        const stopPromise = new Promise<void>((res) => { resolveStop = res; });
+        const stopPromise = new Promise<void>((res) => {
+            resolveStop = res;
+        });
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(makeAgent())),
@@ -2213,8 +2261,8 @@ describe('AgentRunDetail page', () => {
                         output_text: null,
                         started_at: '2026-05-27T10:00:00.000Z',
                         completed_at: null,
-                    }),
-                ),
+                    })
+                )
             ),
             http.post(`${BASE}/run/${RUN_ID}/stop`, async () => {
                 await stopPromise;
@@ -2224,7 +2272,7 @@ describe('AgentRunDetail page', () => {
                     killedSubprocess: false,
                     pidKilled: null,
                 });
-            }),
+            })
         );
         const queryClient = new QueryClient({
             defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -2233,9 +2281,13 @@ describe('AgentRunDetail page', () => {
             <Routes>
                 <Route path="/agents/:id/runs/:runId" element={<AgentRunDetail />} />
             </Routes>,
-            { initialEntries: [`/agents/agent-coder/runs/${RUN_ID}`], queryClient },
+            { initialEntries: [`/agents/agent-coder/runs/${RUN_ID}`], queryClient }
         );
-        const stopBtn = await screen.findByRole('button', { name: /Stop run/i }, { timeout: 10000 });
+        const stopBtn = await screen.findByRole(
+            'button',
+            { name: /Stop run/i },
+            { timeout: 10000 }
+        );
         fireEvent.click(stopBtn);
         await screen.findByText('Stop this run?', undefined, { timeout: 10000 });
         const confirmBtn = screen

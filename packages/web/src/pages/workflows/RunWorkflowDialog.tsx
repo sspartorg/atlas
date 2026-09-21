@@ -20,7 +20,13 @@ interface ReadyItem {
     queued: boolean;
 }
 
-export function RunWorkflowDialog({ workflow, onClose }: { workflow: IWorkflow; onClose: () => void }) {
+export function RunWorkflowDialog({
+    workflow,
+    onClose,
+}: {
+    workflow: IWorkflow;
+    onClose: () => void;
+}) {
     const navigate = useNavigate();
     const { data: tree, isLoading } = useIssues({ projectId: workflow.project_id ?? undefined });
     const start = useStartWorkflowRun();
@@ -44,8 +50,12 @@ export function RunWorkflowDialog({ workflow, onClose }: { workflow: IWorkflow; 
 
     return (
         <Dialog open onClose={start.isPending ? undefined : onClose} maxWidth="sm" fullWidth>
-            <DialogTitle sx={{ fontSize: 18, fontWeight: 600, pb: 2 }}>Run {workflow.name}</DialogTitle>
-            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: '8px !important' }}>
+            <DialogTitle sx={{ fontSize: 18, fontWeight: 600, pb: 2 }}>
+                Run {workflow.name}
+            </DialogTitle>
+            <DialogContent
+                sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: '8px !important' }}
+            >
                 <TextField
                     select
                     label="Ready task"

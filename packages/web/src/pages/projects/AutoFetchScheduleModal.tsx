@@ -37,7 +37,11 @@ const POLICIES: Array<{ value: ScheduleConflictPolicy; label: string; sub: strin
     { value: 'abort', label: 'Abort & alert', sub: 'raise an error on the project' },
 ];
 
-const GUARDS: Array<{ key: 'skip_if_dirty' | 'pause_while_agents_active'; label: string; sub: string }> = [
+const GUARDS: Array<{
+    key: 'skip_if_dirty' | 'pause_while_agents_active';
+    label: string;
+    sub: string;
+}> = [
     {
         key: 'skip_if_dirty',
         label: 'Skip if working tree is dirty',
@@ -100,9 +104,7 @@ function LabeledField({ label, hint, tag, value, onChange, readOnly, mono }: Lab
                 <Typography sx={{ fontSize: 12, fontWeight: 700, color: ATLAS_PALETTE.slate }}>
                     {label}
                 </Typography>
-                <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
-                    {hint}
-                </Typography>
+                <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>{hint}</Typography>
             </Box>
             <TextField
                 fullWidth
@@ -154,9 +156,7 @@ function GuardRow({ label, sub, checked, onChange, disabled }: GuardRowProps) {
             }}
         >
             <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography
-                    sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate }}
-                >
+                <Typography sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate }}>
                     {label}
                 </Typography>
                 <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, mt: 0.25 }}>
@@ -265,18 +265,13 @@ export function AutoFetchScheduleModal({ open, project, repo, onClose }: Props) 
                         >
                             {enabled ? 'Auto-fetch enabled' : 'Auto-fetch schedule'}
                         </Typography>
-                        <Typography
-                            sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 0.5 }}
-                        >
+                        <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
                             {project.name} ·{' '}
                             <Box component="span" sx={{ fontFamily: MONO, fontWeight: 600 }}>
                                 {repo.name}
                             </Box>{' '}
                             pulls{' '}
-                            <Box
-                                component="span"
-                                sx={{ fontFamily: MONO, fontWeight: 600 }}
-                            >
+                            <Box component="span" sx={{ fontFamily: MONO, fontWeight: 600 }}>
                                 origin/{repo.default_branch}
                             </Box>{' '}
                             in the background

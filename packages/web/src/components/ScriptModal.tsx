@@ -84,7 +84,7 @@ export function ScriptModal({
     async function handleSubmit() {
         if (!editing && !SLUG_RE.test(id)) {
             setError(
-                'Slug must be lowercase kebab-case (a-z, 0-9, hyphens); must start and end with a letter or digit.',
+                'Slug must be lowercase kebab-case (a-z, 0-9, hyphens); must start and end with a letter or digit.'
             );
             return;
         }
@@ -132,7 +132,9 @@ export function ScriptModal({
 
     return (
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-            <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <DialogTitle
+                sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+            >
                 {/* `component="span"`: MuiDialogTitle already renders the
                     heading element (h2), so a nested h6 is invalid HTML and
                     React warns "In HTML, <h6> cannot be a child of <h2>" on
@@ -166,12 +168,18 @@ export function ScriptModal({
                                 : 'Lowercase kebab-case (a-z, 0-9, hyphens). Agent prompts reference this exact id (e.g. `check-<slug>.sh <itemId>`).'
                         }
                         InputProps={{
-                            sx: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13 },
+                            sx: {
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                fontSize: 13,
+                            },
                         }}
                     />
                     {!isEdit && slugSuggestions ? (
                         <Box>
-                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+                            <Typography
+                                variant="caption"
+                                sx={{ color: 'text.secondary', display: 'block', mb: 1 }}
+                            >
                                 A project script with the same slug overrides the workspace script.
                                 {slugSuggestions.length > 0 ? ' Override one:' : ''}
                             </Typography>
@@ -187,7 +195,10 @@ export function ScriptModal({
                                             setId(s.id);
                                             if (!name.trim()) setName(s.name);
                                         }}
-                                        sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                                        sx={{
+                                            fontFamily:
+                                                'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                        }}
                                     />
                                 ))}
                             </Box>
@@ -225,7 +236,10 @@ export function ScriptModal({
                             '#!/usr/bin/env bash\nset -eu\n# exit 0 on pass, exit 1 on violation\n'
                         }
                         InputProps={{
-                            sx: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13 },
+                            sx: {
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                fontSize: 13,
+                            },
                         }}
                         disabled={submitting}
                     />
@@ -242,7 +256,10 @@ export function ScriptModal({
                             "$ErrorActionPreference = 'Stop'\n# exit 0 on pass, exit 1 on violation\n"
                         }
                         InputProps={{
-                            sx: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13 },
+                            sx: {
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                fontSize: 13,
+                            },
                         }}
                         disabled={submitting}
                     />

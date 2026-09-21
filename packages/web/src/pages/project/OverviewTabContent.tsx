@@ -36,7 +36,6 @@ const RUN_STATUS_LABEL: Record<RunStatus, string> = {
     setup_failed: 'Setup failed',
 };
 
-
 function RecentRunRow({
     run,
     agent,
@@ -189,10 +188,7 @@ interface Kpi {
 export function OverviewTabContent({ counts, projectId, onJumpToHistory }: Props) {
     const { data: runs, isPending: runsPending } = useProjectAgentRuns(projectId);
     const { data: agents = [] } = useAgents();
-    const agentsById = useMemo(
-        () => new Map(agents.map((a) => [a.id, a] as const)),
-        [agents],
-    );
+    const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a] as const)), [agents]);
     const recentRuns = useMemo(() => (runs ?? []).slice(0, RECENT_LIMIT), [runs]);
     const openTasks = counts.open_tasks;
     const tasksReady = counts.tasks_ready;
@@ -352,6 +348,7 @@ export function OverviewTabContent({ counts, projectId, onJumpToHistory }: Props
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{
                                 fontSize: 32,
                                 color: ATLAS_PALETTE.slate40,

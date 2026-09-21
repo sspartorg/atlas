@@ -329,9 +329,7 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                 {view === 'confirm' && (
                     <>
                         <Alert
-                            icon={
-                                <WarningAmberRounded sx={{ color: ATLAS_PALETTE.warning }} />
-                            }
+                            icon={<WarningAmberRounded sx={{ color: ATLAS_PALETTE.warning }} />}
                             sx={{
                                 mt: 4,
                                 bgcolor: 'rgba(199,83,47,.08)',
@@ -341,12 +339,12 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                             }}
                         >
                             <strong>
-                                Both options permanently wipe every task, sub-task, agent
-                                run, comment, and notification for this project.
+                                Both options permanently wipe every task, sub-task, agent run,
+                                comment, and notification for this project.
                             </strong>{' '}
                             They differ only in whether the workspace folder on disk is kept.
-                            Re-adding the repo later starts a fresh empty project — the history
-                            does not come back.
+                            Re-adding the repo later starts a fresh empty project — the history does
+                            not come back.
                         </Alert>
 
                         <Typography
@@ -403,8 +401,8 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                                     Unregister the project from Atlas and detach agents. The
                                     workspace folder on disk is kept untouched, so you can still
                                     open it in your editor — but the project's DB content (all
-                                    issues, runs, comments, notifications) is wiped and cannot
-                                    be recovered.
+                                    issues, runs, comments, notifications) is wiped and cannot be
+                                    recovered.
                                 </Typography>
                                 <ConfirmChips
                                     items={[

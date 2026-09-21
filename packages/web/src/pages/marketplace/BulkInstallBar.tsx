@@ -19,13 +19,7 @@ interface Props {
  * until at least one agent is selected, then floats at the bottom of the
  * marketplace with the count + Select all / Clear / Add selected actions.
  */
-export function BulkInstallBar({
-    count,
-    busy,
-    onClear,
-    onSelectAll,
-    onAdd,
-}: Props) {
+export function BulkInstallBar({ count, busy, onClear, onSelectAll, onAdd }: Props) {
     if (count === 0) return null;
 
     const ghostButton = {

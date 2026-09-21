@@ -77,7 +77,7 @@ function renderAt(path: string) {
         <Routes>
             <Route path="/analytics/project/:projectId" element={<AnalyticsProject />} />
         </Routes>,
-        { initialEntries: [path] },
+        { initialEntries: [path] }
     );
 }
 
@@ -86,8 +86,8 @@ describe('AnalyticsProject page', () => {
         server.use(
             http.get(`${BASE}/analytics/project/p1`, () => HttpResponse.json(minimalProject)),
             http.get(`${BASE}/analytics/project/p1/tasks`, () =>
-                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 25 }),
-            ),
+                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 25 })
+            )
         );
         const { container } = renderAt('/analytics/project/p1');
         await waitFor(() => {
@@ -102,17 +102,15 @@ describe('AnalyticsProject page', () => {
 
     it('renders the populated hero + top tasks ladder', async () => {
         server.use(
-            http.get(`${BASE}/analytics/project/p1`, () =>
-                HttpResponse.json(populatedProject),
-            ),
+            http.get(`${BASE}/analytics/project/p1`, () => HttpResponse.json(populatedProject)),
             http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
                     rows: populatedProject.topTasks,
                     total: 25,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/project/p1');
         await waitFor(() => {
@@ -125,17 +123,15 @@ describe('AnalyticsProject page', () => {
 
     it('flips into showAll mode when the "View all" button is clicked', async () => {
         server.use(
-            http.get(`${BASE}/analytics/project/p1`, () =>
-                HttpResponse.json(populatedProject),
-            ),
+            http.get(`${BASE}/analytics/project/p1`, () => HttpResponse.json(populatedProject)),
             http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
                     rows: populatedProject.topTasks,
                     total: 25,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/project/p1');
         const btn = await screen.findByRole('button', { name: /View all 25 tasks/i });
@@ -149,8 +145,8 @@ describe('AnalyticsProject page', () => {
     it('shows an error message when summary fails', async () => {
         server.use(
             http.get(`${BASE}/analytics/project/p1`, () =>
-                HttpResponse.json({ error: 'boom' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'boom' }, { status: 500 })
+            )
         );
         renderAt('/analytics/project/p1');
         await waitFor(() => {
@@ -186,8 +182,8 @@ describe('AnalyticsProject page', () => {
                     },
                     terminalByCli: [],
                     topTerminalSessions: [],
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/project/p1');
         await waitFor(() => {
@@ -218,8 +214,8 @@ describe('AnalyticsProject page', () => {
                         },
                     ],
                     task_count: 1,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/project/p1');
         await waitFor(() => {
@@ -243,11 +239,11 @@ describe('AnalyticsProject page', () => {
                     ...populatedProject,
                     task_count: 26,
                     topTasks: populatedProject.topTasks,
-                }),
+                })
             ),
             http.get(`${BASE}/analytics/project/p1/tasks`, () =>
-                HttpResponse.json({ rows: rows.slice(0, 25), total: 26, page: 1, limit: 25 }),
-            ),
+                HttpResponse.json({ rows: rows.slice(0, 25), total: 26, page: 1, limit: 25 })
+            )
         );
         renderAt('/analytics/project/p1');
         await waitFor(() => expect(screen.getByText('Task A')).toBeInTheDocument());
@@ -274,9 +270,7 @@ describe('AnalyticsProject page', () => {
 
     it('renders avg-cost-per-run as "—" when run_count is 0 (branch coverage)', async () => {
         server.use(
-            http.get(`${BASE}/analytics/project/p1`, () =>
-                HttpResponse.json(minimalProject),
-            ),
+            http.get(`${BASE}/analytics/project/p1`, () => HttpResponse.json(minimalProject))
         );
         renderAt('/analytics/project/p1');
         // The page loads; avg cost / run MetricMarquee renders '—' when run_count=0
@@ -303,8 +297,8 @@ describe('AnalyticsProject page', () => {
                             last_run_at: null,
                         },
                     ],
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/project/p1');
         await waitFor(() => {
@@ -320,7 +314,7 @@ describe('AnalyticsProject page', () => {
                     ...populatedProject,
                     task_count: 3,
                     topTasks: populatedProject.topTasks,
-                }),
+                })
             ),
             http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
@@ -336,8 +330,8 @@ describe('AnalyticsProject page', () => {
                     total: 3,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/project/p1');
         const btn = await screen.findByRole('button', { name: /View all 3 tasks/i });
@@ -355,7 +349,7 @@ describe('AnalyticsProject page', () => {
                     ...populatedProject,
                     task_count: 3,
                     topTasks: populatedProject.topTasks,
-                }),
+                })
             ),
             http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
@@ -371,8 +365,8 @@ describe('AnalyticsProject page', () => {
                     total: 3,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/project/p1');
         const btn = await screen.findByRole('button', { name: /View all 3 tasks/i });
@@ -390,7 +384,7 @@ describe('AnalyticsProject page', () => {
                     ...populatedProject,
                     task_count: 3,
                     topTasks: populatedProject.topTasks,
-                }),
+                })
             ),
             http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
@@ -406,8 +400,8 @@ describe('AnalyticsProject page', () => {
                     total: 3,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/project/p1');
         const btn = await screen.findByRole('button', { name: /View all 3 tasks/i });
@@ -425,7 +419,7 @@ describe('AnalyticsProject page', () => {
                     ...populatedProject,
                     task_count: 3,
                     topTasks: populatedProject.topTasks,
-                }),
+                })
             ),
             http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
@@ -441,8 +435,8 @@ describe('AnalyticsProject page', () => {
                     total: 3,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/project/p1');
         const btn = await screen.findByRole('button', { name: /View all 3 tasks/i });
@@ -460,7 +454,7 @@ describe('AnalyticsProject page', () => {
                     ...populatedProject,
                     task_count: 3,
                     topTasks: populatedProject.topTasks,
-                }),
+                })
             ),
             http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
@@ -476,8 +470,8 @@ describe('AnalyticsProject page', () => {
                     total: 3,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/project/p1');
         const btn = await screen.findByRole('button', { name: /View all 3 tasks/i });
@@ -495,7 +489,7 @@ describe('AnalyticsProject page', () => {
                     ...populatedProject,
                     task_count: 3,
                     topTasks: populatedProject.topTasks,
-                }),
+                })
             ),
             http.get(`${BASE}/analytics/project/p1/tasks`, () =>
                 HttpResponse.json({
@@ -511,8 +505,8 @@ describe('AnalyticsProject page', () => {
                     total: 3,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/project/p1');
         const btn = await screen.findByRole('button', { name: /View all 3 tasks/i });
@@ -538,11 +532,11 @@ describe('AnalyticsProject page', () => {
                     ...populatedProject,
                     task_count: 30,
                     topTasks: populatedProject.topTasks,
-                }),
+                })
             ),
             http.get(`${BASE}/analytics/project/p1/tasks`, () =>
-                HttpResponse.json({ rows: rows.slice(0, 25), total: 30, page: 1, limit: 25 }),
-            ),
+                HttpResponse.json({ rows: rows.slice(0, 25), total: 30, page: 1, limit: 25 })
+            )
         );
         renderAt('/analytics/project/p1');
         const btn = await screen.findByRole('button', { name: /View all 30 tasks/i });
@@ -571,11 +565,11 @@ describe('AnalyticsProject page', () => {
                     ...populatedProject,
                     task_count: 30,
                     topTasks: populatedProject.topTasks,
-                }),
+                })
             ),
             http.get(`${BASE}/analytics/project/p1/tasks`, () =>
-                HttpResponse.json({ rows: rows.slice(0, 25), total: 30, page: 1, limit: 25 }),
-            ),
+                HttpResponse.json({ rows: rows.slice(0, 25), total: 30, page: 1, limit: 25 })
+            )
         );
         renderAt('/analytics/project/p1');
         const btn = await screen.findByRole('button', { name: /View all 30 tasks/i });
@@ -601,11 +595,7 @@ describe('AnalyticsProject page', () => {
         // Mocking the analytics endpoint to return null exercises the
         // `if (summary.isError || !summary.data)` branch where isError=false
         // but data is null/undefined.
-        server.use(
-            http.get(`${BASE}/analytics/project/p1`, () =>
-                HttpResponse.json(null),
-            ),
-        );
+        server.use(http.get(`${BASE}/analytics/project/p1`, () => HttpResponse.json(null)));
         renderAt('/analytics/project/p1');
         await waitFor(() => {
             expect(screen.getByText(/Failed to load project analytics/i)).toBeInTheDocument();
@@ -625,8 +615,8 @@ describe('AnalyticsProject page', () => {
                         // Unknown type — exercises the fallback ?? branches
                         { type: 'unknown_custom', total_cost_usd: 1, item_count: 1 },
                     ],
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/project/p1');
         await waitFor(() => {
@@ -653,14 +643,12 @@ describe('AnalyticsProject page', () => {
                     },
                     terminalByCli: [],
                     topTerminalSessions: [],
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/project/p1');
         await waitFor(() => {
-            expect(
-                screen.getByText(/no terminal sessions for this project/i),
-            ).toBeInTheDocument();
+            expect(screen.getByText(/no terminal sessions for this project/i)).toBeInTheDocument();
         });
     });
 
@@ -707,11 +695,7 @@ describe('AnalyticsProject page', () => {
                 },
             ],
         };
-        server.use(
-            http.get(`${BASE}/analytics/project/p1`, () =>
-                HttpResponse.json(withTerminal),
-            ),
-        );
+        server.use(http.get(`${BASE}/analytics/project/p1`, () => HttpResponse.json(withTerminal)));
         renderAt('/analytics/project/p1');
         // Hero "Total spend" should be combined: $5 agent + $2.5 terminal = $7.50
         await waitFor(() => {

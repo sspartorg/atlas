@@ -32,74 +32,56 @@ describe('TestRunTabContent', () => {
     });
 
     it('renders without crashing', async () => {
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         expect(await screen.findByText(/Live CLI test run/i)).toBeInTheDocument();
     });
 
     it('shows Run test and Stop buttons', async () => {
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         expect(await screen.findByRole('button', { name: /Run test/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Stop/i })).toBeInTheDocument();
     });
 
     it('Stop button is disabled initially', async () => {
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const stopBtn = await screen.findByRole('button', { name: /Stop/i });
         expect(stopBtn).toBeDisabled();
     });
 
     it('Run test button is enabled initially', async () => {
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         expect(runBtn).not.toBeDisabled();
     });
 
     it('shows idle status initially', async () => {
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         await screen.findByText(/Live CLI test run/i);
         expect(screen.getByText('Idle')).toBeInTheDocument();
     });
 
     it('shows "no test yet" in output header initially', async () => {
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         await screen.findByText(/Live CLI test run/i);
         expect(screen.getByText('no test yet')).toBeInTheDocument();
     });
 
     it('shows placeholder text in output when no lines', async () => {
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         await screen.findByText(/Live CLI test run/i);
         expect(screen.getByText(/Press "Run test" to invoke the live CLI/i)).toBeInTheDocument();
     });
 
     it('shows cli and model in description line', async () => {
         const agent = makeAgent({ cli: 'claude', model: 'claude-opus-4-7' });
-        renderWithProviders(
-            <TestRunTabContent agent={agent} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={agent} view={view} />);
         await screen.findByText(/Live CLI test run/i);
         expect(screen.getByText(/cli · claude · model · claude-opus-4-7/i)).toBeInTheDocument();
     });
 
     it('shows "(unset)" when model is empty', async () => {
         const agent = makeAgent({ model: '' });
-        renderWithProviders(
-            <TestRunTabContent agent={agent} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={agent} view={view} />);
         await screen.findByText(/Live CLI test run/i);
         expect(screen.getByText(/\(unset\)/i)).toBeInTheDocument();
     });
@@ -115,11 +97,9 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 });
-            }),
+            })
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => expect(called).toBe(true));
@@ -134,11 +114,9 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => {
@@ -156,16 +134,12 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
-        await waitFor(() =>
-            expect(screen.getByText('Live')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Live')).toBeInTheDocument());
         expect(screen.getByText(/streaming/i)).toBeInTheDocument();
     });
 
@@ -178,11 +152,9 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => {
@@ -208,11 +180,9 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => screen.getByText(/queued/i));
@@ -223,9 +193,7 @@ describe('TestRunTabContent', () => {
             exitCode: 1,
             output: '[test] done · exit=1',
         });
-        await waitFor(() =>
-            expect(screen.getByText('Failed')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Failed')).toBeInTheDocument());
     });
 
     it('SSE dry_run_started event appends output line', async () => {
@@ -237,11 +205,9 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => screen.getByText(/queued/i));
@@ -251,9 +217,7 @@ describe('TestRunTabContent', () => {
             dryRunId: 'dry-004',
             output: '[started] CLI process spawned',
         });
-        await waitFor(() =>
-            expect(screen.getByText(/CLI process spawned/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/CLI process spawned/i)).toBeInTheDocument());
     });
 
     it('SSE dry_run_output event appends plain output', async () => {
@@ -265,11 +229,9 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => screen.getByText(/queued/i));
@@ -280,9 +242,7 @@ describe('TestRunTabContent', () => {
             stream: 'stdout',
             output: 'OK',
         });
-        await waitFor(() =>
-            expect(screen.getByText('OK')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('OK')).toBeInTheDocument());
     });
 
     it('SSE dry_run_output on stderr appends err line', async () => {
@@ -294,11 +254,9 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => screen.getByText(/queued/i));
@@ -309,9 +267,7 @@ describe('TestRunTabContent', () => {
             stream: 'stderr',
             output: 'stderr error text',
         });
-        await waitFor(() =>
-            expect(screen.getByText('stderr error text')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('stderr error text')).toBeInTheDocument());
     });
 
     it('SSE event for different dryRunId is ignored', async () => {
@@ -323,11 +279,9 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => screen.getByText(/queued/i));
@@ -339,7 +293,7 @@ describe('TestRunTabContent', () => {
             output: 'should not appear',
         });
         // Should still show Live (not Done)
-        await new Promise(r => setTimeout(r, 50));
+        await new Promise((r) => setTimeout(r, 50));
         expect(screen.getByText('Live')).toBeInTheDocument();
     });
 
@@ -352,11 +306,9 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => screen.getByText(/queued/i));
@@ -364,33 +316,28 @@ describe('TestRunTabContent', () => {
         const stopBtn = screen.getByRole('button', { name: /Stop/i });
         fireEvent.click(stopBtn);
 
-        await waitFor(() =>
-            expect(screen.getByText(/stopped by user/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/stopped by user/i)).toBeInTheDocument());
         // Status goes back to Idle
-        await waitFor(() =>
-            expect(screen.getByText('Idle')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Idle')).toBeInTheDocument());
     });
 
     it('dry-run API error shows err line and resets state', async () => {
         server.use(
-            http.post(`${BASE}/agents/agent-coder/dry-run`, () =>
-                new HttpResponse(null, { status: 500 }),
-            ),
+            http.post(
+                `${BASE}/agents/agent-coder/dry-run`,
+                () => new HttpResponse(null, { status: 500 })
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
 
         await waitFor(() =>
-            expect(screen.getByText(/failed to start test run/i)).toBeInTheDocument(),
+            expect(screen.getByText(/failed to start test run/i)).toBeInTheDocument()
         );
         // Run test button re-enabled
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Run test/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /Run test/i })).not.toBeDisabled()
         );
     });
 
@@ -403,7 +350,7 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
         renderWithProviders(
             <>
@@ -417,15 +364,16 @@ describe('TestRunTabContent', () => {
         const copyLog = screen.getByText(/Copy log/i);
         fireEvent.click(copyLog);
         await waitFor(() => {
-            expect((navigator.clipboard as unknown as { writeText: ReturnType<typeof vi.fn> }).writeText).toHaveBeenCalled();
+            expect(
+                (navigator.clipboard as unknown as { writeText: ReturnType<typeof vi.fn> })
+                    .writeText
+            ).toHaveBeenCalled();
         });
     });
 
     it('copilot agent shows copilot command preview', async () => {
         const copilotAgent = makeAgent({ cli: 'copilot', model: 'gpt-5' });
-        renderWithProviders(
-            <TestRunTabContent agent={copilotAgent} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={copilotAgent} view={view} />);
         await screen.findByText(/Live CLI test run/i);
         // The component shows cli info
         expect(screen.getByText(/cli · copilot/i)).toBeInTheDocument();
@@ -440,17 +388,17 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => screen.getByText(/queued/i));
 
         // Trigger onerror on the active EventSource instance
-        const MockEs = window.EventSource as unknown as { _instances: Array<{ onerror: ((ev: Event) => void) | null }> };
+        const MockEs = window.EventSource as unknown as {
+            _instances: Array<{ onerror: ((ev: Event) => void) | null }>;
+        };
         const instances = MockEs._instances;
         if (instances.length > 0) {
             const inst = instances[instances.length - 1]!;
@@ -460,7 +408,7 @@ describe('TestRunTabContent', () => {
         }
 
         await waitFor(() =>
-            expect(screen.getByText(/\[sse\] connection error/i)).toBeInTheDocument(),
+            expect(screen.getByText(/\[sse\] connection error/i)).toBeInTheDocument()
         );
     });
 
@@ -473,11 +421,9 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => screen.getByText(/queued/i));
@@ -496,13 +442,9 @@ describe('TestRunTabContent', () => {
         const stopBtn = screen.getByRole('button', { name: /Stop/i });
         fireEvent.click(stopBtn);
 
-        await waitFor(() =>
-            expect(screen.getByText(/stopped by user/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/stopped by user/i)).toBeInTheDocument());
         // lines.length > 0, exitCode === null → middle 'Idle' branch
-        await waitFor(() =>
-            expect(screen.getByText('Idle')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Idle')).toBeInTheDocument());
     });
 
     it('copilot model hyphen→dot normalization in commandPreview', async () => {
@@ -516,18 +458,14 @@ describe('TestRunTabContent', () => {
                     cli: 'copilot',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={copilotAgent} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={copilotAgent} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         // After clicking run, the commandPreview line is appended — it shows
         // the normalized model (hyphen→dot applied for copilot cli)
-        await waitFor(() =>
-            expect(screen.getByText(/claude-sonnet-4\.7/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/claude-sonnet-4\.7/i)).toBeInTheDocument());
     });
 
     it('SSE dry_run_started with falsy output does not append a line', async () => {
@@ -539,11 +477,9 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => screen.getByText(/queued/i));
@@ -571,11 +507,9 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => screen.getByText(/queued/i));
@@ -600,11 +534,9 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={makeAgent()} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
         await waitFor(() => screen.getByText(/queued/i));
@@ -615,7 +547,7 @@ describe('TestRunTabContent', () => {
             dryRunId: 'dry-done-fallbacks',
         });
         await waitFor(() =>
-            expect(screen.getByText(/\[test\] done · exit=-1/i)).toBeInTheDocument(),
+            expect(screen.getByText(/\[test\] done · exit=-1/i)).toBeInTheDocument()
         );
         // exitCode -1 !== 0 → "Failed" status, and footer shows "exit -1"
         expect(screen.getByText('Failed')).toBeInTheDocument();
@@ -634,16 +566,12 @@ describe('TestRunTabContent', () => {
                     cli: 'claude',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={agent} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={agent} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
-        await waitFor(() =>
-            expect(screen.getByText(/--model sonnet/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/--model sonnet/i)).toBeInTheDocument());
     });
 
     it('empty model on a copilot agent falls back to "gpt-5" in the command preview', async () => {
@@ -658,15 +586,11 @@ describe('TestRunTabContent', () => {
                     cli: 'copilot',
                     promptLen: 10,
                 })
-            ),
+            )
         );
-        renderWithProviders(
-            <TestRunTabContent agent={agent} view={view} />
-        );
+        renderWithProviders(<TestRunTabContent agent={agent} view={view} />);
         const runBtn = await screen.findByRole('button', { name: /Run test/i });
         fireEvent.click(runBtn);
-        await waitFor(() =>
-            expect(screen.getByText(/--model gpt-5/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/--model gpt-5/i)).toBeInTheDocument());
     });
 });

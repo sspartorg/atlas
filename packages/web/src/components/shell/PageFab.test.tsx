@@ -30,9 +30,7 @@ describe('PageFab', () => {
 
     it('honors the custom icon prop', () => {
         isMobileValue = true;
-        renderWithProviders(
-            <PageFab label="Refresh" icon="refresh" onClick={vi.fn()} />,
-        );
+        renderWithProviders(<PageFab label="Refresh" icon="refresh" onClick={vi.fn()} />);
         expect(screen.getByText('refresh')).toBeInTheDocument();
     });
 });

@@ -28,7 +28,7 @@ describe('WorkItemTable', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
-            />,
+            />
         );
         expect(screen.getByText('Hello')).toBeInTheDocument();
     });
@@ -43,7 +43,7 @@ describe('WorkItemTable', () => {
                 onRowClick={vi.fn()}
                 emptyMessage="Nothing yet"
                 formatRelative={() => 'just now'}
-            />,
+            />
         );
         expect(screen.getByText('Nothing yet')).toBeInTheDocument();
     });
@@ -58,7 +58,7 @@ describe('WorkItemTable', () => {
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
                 hideWhenEmpty
-            />,
+            />
         );
         expect(container.firstChild).toBeNull();
     });
@@ -73,7 +73,7 @@ describe('WorkItemTable', () => {
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
                 title="Sub-tasks"
-            />,
+            />
         );
         expect(screen.getByText('Sub-tasks')).toBeInTheDocument();
     });
@@ -87,7 +87,7 @@ describe('WorkItemTable', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
-            />,
+            />
         );
         expect(screen.getByText('dev')).toBeInTheDocument();
         expect(screen.getByText('qa')).toBeInTheDocument();
@@ -104,7 +104,7 @@ describe('WorkItemTable', () => {
                 formatRelative={() => 'just now'}
                 title="Sub-tasks"
                 headerRight={<button>Add</button>}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
     });
@@ -120,7 +120,7 @@ describe('WorkItemTable', () => {
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
                 rowAction={rowAction}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: 'Action' })).toBeInTheDocument();
         expect(rowAction).toHaveBeenCalled();
@@ -136,7 +136,7 @@ describe('WorkItemTable', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={onRowClick}
                 formatRelative={() => 'just now'}
-            />,
+            />
         );
         const row = screen.getByRole('button');
         fireEvent.click(row);
@@ -153,7 +153,7 @@ describe('WorkItemTable', () => {
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
                 showLiveDot
-            />,
+            />
         );
         expect(screen.getByText('Hello')).toBeInTheDocument();
     });
@@ -161,13 +161,16 @@ describe('WorkItemTable', () => {
     it('renders an isChild row with indented layout', () => {
         renderWithProviders(
             <WorkItemTable
-                rows={[makeRow({ title: 'Parent' }), makeRow({ id: 'S2', shortId: 'S2', title: 'Child task', isChild: true })]}
+                rows={[
+                    makeRow({ title: 'Parent' }),
+                    makeRow({ id: 'S2', shortId: 'S2', title: 'Child task', isChild: true }),
+                ]}
                 agentsById={new Map()}
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
-            />,
+            />
         );
         expect(screen.getByText('Child task')).toBeInTheDocument();
     });
@@ -182,7 +185,7 @@ describe('WorkItemTable', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
-            />,
+            />
         );
         expect(screen.getAllByText('Alice').length).toBeGreaterThan(0);
     });
@@ -203,7 +206,7 @@ describe('WorkItemTable', () => {
                     onChange: sortOnChange,
                     sortable: new Set(['id', 'title', 'status', 'updated']),
                 }}
-            />,
+            />
         );
         // Click an ID header to exercise sort.onChange
         const idHeaders = screen.getAllByText('ID');
@@ -221,7 +224,7 @@ describe('WorkItemTable', () => {
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
                 title="Links"
-            />,
+            />
         );
         expect(screen.getByText(/No links yet/i)).toBeInTheDocument();
     });
@@ -235,7 +238,7 @@ describe('WorkItemTable', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
-            />,
+            />
         );
         expect(screen.getByText('No items.')).toBeInTheDocument();
     });
@@ -261,7 +264,7 @@ describe('WorkItemTable', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
-            />,
+            />
         );
         // MobileWorkItemList renders rows in a card format — title still present
         expect(document.body.textContent).toContain('Mobile Task');
@@ -270,7 +273,7 @@ describe('WorkItemTable', () => {
 
     it('renders virtualized body when rows.length >= VIRTUALIZE_THRESHOLD (60)', () => {
         const rows = Array.from({ length: 65 }, (_, i) =>
-            makeRow({ id: `S${i}`, shortId: `S${i}`, title: `Row ${i}` }),
+            makeRow({ id: `S${i}`, shortId: `S${i}`, title: `Row ${i}` })
         );
         renderWithProviders(
             <WorkItemTable
@@ -280,7 +283,7 @@ describe('WorkItemTable', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
-            />,
+            />
         );
         // Virtualised body renders a subset (overscan window) of the 65 rows.
         expect(screen.getAllByText(/Row \d+/).length).toBeGreaterThan(0);
@@ -289,7 +292,7 @@ describe('WorkItemTable', () => {
     it('clicking a row inside the virtualized body calls onRowClick', () => {
         const onRowClick = vi.fn();
         const rows = Array.from({ length: 61 }, (_, i) =>
-            makeRow({ id: `S${i}`, shortId: `S${i}`, title: `VRow ${i}` }),
+            makeRow({ id: `S${i}`, shortId: `S${i}`, title: `VRow ${i}` })
         );
         renderWithProviders(
             <WorkItemTable
@@ -299,7 +302,7 @@ describe('WorkItemTable', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={onRowClick}
                 formatRelative={() => 'just now'}
-            />,
+            />
         );
         const firstRowText = screen.getAllByText(/VRow \d+/)[0]!;
         fireEvent.click(firstRowText);
@@ -315,7 +318,7 @@ describe('WorkItemTable', () => {
                 title: `VRow ${i}`,
                 reporter_agent_id: 'agent-v1',
                 assignee_agent_id: 'agent-v1',
-            }),
+            })
         );
         renderWithProviders(
             <WorkItemTable
@@ -325,7 +328,7 @@ describe('WorkItemTable', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
-            />,
+            />
         );
         expect(screen.getAllByText('Virtual Agent').length).toBeGreaterThan(0);
     });
@@ -338,7 +341,7 @@ describe('WorkItemTable', () => {
                 title: `VRow ${i}`,
                 reporter_agent_id: 'missing-agent',
                 assignee_agent_id: 'missing-agent',
-            }),
+            })
         );
         renderWithProviders(
             <WorkItemTable
@@ -348,7 +351,7 @@ describe('WorkItemTable', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
-            />,
+            />
         );
         expect(screen.getAllByText('FallbackOwner').length).toBeGreaterThan(0);
     });
@@ -374,7 +377,7 @@ describe('WorkItemTable', () => {
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
                 title="Mobile Section"
-            />,
+            />
         );
         expect(document.body.textContent).toContain('Mobile Section');
         window.matchMedia = origMatchMedia;
@@ -392,7 +395,7 @@ describe('WorkItemTable', () => {
                 onRowClick={onRowClick}
                 formatRelative={() => 'just now'}
                 rowAction={rowAction}
-            />,
+            />
         );
         const actionButton = screen.getByRole('button', { name: 'Action' });
         fireEvent.click(actionButton.parentElement!);
@@ -416,7 +419,7 @@ describe('WorkItemTable', () => {
                     // fall through to the plain <Typography> branch.
                     sortable: new Set(['id']),
                 }}
-            />,
+            />
         );
         // Plain (non-sortable) headers still render their label text.
         expect(screen.getByText('Item')).toBeInTheDocument();
@@ -434,7 +437,7 @@ describe('WorkItemTable', () => {
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
                 hideWhenEmpty
-            />,
+            />
         );
         expect(screen.getByText('Still visible')).toBeInTheDocument();
     });
@@ -451,7 +454,7 @@ describe('WorkItemTable', () => {
                 formatRelative={() => 'just now'}
                 showLiveDot
                 rowAction={rowAction}
-            />,
+            />
         );
         expect(screen.getByText('Combo row')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Do' })).toBeInTheDocument();
@@ -470,7 +473,7 @@ describe('WorkItemTable', () => {
                 ownerAccent="#0A0A0A"
                 onRowClick={vi.fn()}
                 formatRelative={() => 'just now'}
-            />,
+            />
         );
         expect(screen.getByText('Hello')).toBeInTheDocument();
     });

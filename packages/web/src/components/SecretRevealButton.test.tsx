@@ -18,9 +18,7 @@ describe('SecretRevealButton', () => {
     });
 
     it('renders nothing when hasValue is false', () => {
-        const { container } = render(
-            <SecretRevealButton hasValue={false} onReveal={() => {}} />,
-        );
+        const { container } = render(<SecretRevealButton hasValue={false} onReveal={() => {}} />);
         expect(container.firstChild).toBeNull();
     });
 
@@ -52,7 +50,7 @@ describe('SecretRevealButton', () => {
                 onReveal={() => {}}
                 revealedValue="ghp_XXXXXXX"
                 autoMaskSeconds={30}
-            />,
+            />
         );
         expect(screen.getByText('ghp_XXXXXXX')).toBeInTheDocument();
         expect(screen.getByText(/auto-masks in 30s/i)).toBeInTheDocument();
@@ -69,14 +67,20 @@ describe('SecretRevealButton', () => {
                 revealedValue="sekret"
                 onExpire={onExpire}
                 autoMaskSeconds={3}
-            />,
+            />
         );
         expect(screen.getByText(/auto-masks in 3s/i)).toBeInTheDocument();
-        act(() => { vi.advanceTimersByTime(1000); });
+        act(() => {
+            vi.advanceTimersByTime(1000);
+        });
         expect(screen.getByText(/auto-masks in 2s/i)).toBeInTheDocument();
-        act(() => { vi.advanceTimersByTime(1000); });
+        act(() => {
+            vi.advanceTimersByTime(1000);
+        });
         expect(screen.getByText(/auto-masks in 1s/i)).toBeInTheDocument();
-        act(() => { vi.advanceTimersByTime(1000); });
+        act(() => {
+            vi.advanceTimersByTime(1000);
+        });
         expect(screen.getByText(/auto-masks in 0s/i)).toBeInTheDocument();
         expect(onExpire).toHaveBeenCalledTimes(1);
     });
@@ -90,12 +94,16 @@ describe('SecretRevealButton', () => {
                 revealedValue="sekret"
                 onExpire={onExpire}
                 autoMaskSeconds={1}
-            />,
+            />
         );
-        act(() => { vi.advanceTimersByTime(1000); });
+        act(() => {
+            vi.advanceTimersByTime(1000);
+        });
         expect(onExpire).toHaveBeenCalledTimes(1);
         // Extra ticks after the interval self-clears must not re-fire.
-        act(() => { vi.advanceTimersByTime(5000); });
+        act(() => {
+            vi.advanceTimersByTime(5000);
+        });
         expect(onExpire).toHaveBeenCalledTimes(1);
     });
 
@@ -114,11 +122,13 @@ describe('SecretRevealButton', () => {
                 revealedValue="secret"
                 onExpire={parentA}
                 autoMaskSeconds={3}
-            />,
+            />
         );
         // Simulate a parent re-render that swaps to a fresh closure at
         // every tick; the countdown must still land in ~3s.
-        act(() => { vi.advanceTimersByTime(1000); });
+        act(() => {
+            vi.advanceTimersByTime(1000);
+        });
         rerender(
             <SecretRevealButton
                 hasValue
@@ -126,9 +136,11 @@ describe('SecretRevealButton', () => {
                 revealedValue="secret"
                 onExpire={parentB}
                 autoMaskSeconds={3}
-            />,
+            />
         );
-        act(() => { vi.advanceTimersByTime(1000); });
+        act(() => {
+            vi.advanceTimersByTime(1000);
+        });
         rerender(
             <SecretRevealButton
                 hasValue
@@ -136,9 +148,11 @@ describe('SecretRevealButton', () => {
                 revealedValue="secret"
                 onExpire={parentB}
                 autoMaskSeconds={3}
-            />,
+            />
         );
-        act(() => { vi.advanceTimersByTime(1000); });
+        act(() => {
+            vi.advanceTimersByTime(1000);
+        });
         // Countdown reached zero → the LATEST onExpire (parentB) fires,
         // not the original (parentA).
         expect(parentA).not.toHaveBeenCalled();
@@ -153,7 +167,7 @@ describe('SecretRevealButton', () => {
                 onReveal={() => {}}
                 revealedValue="sekret"
                 onExpire={onExpire}
-            />,
+            />
         );
         fireEvent.click(screen.getByRole('button', { name: /re-mask secret/i }));
         expect(onExpire).toHaveBeenCalledTimes(1);
@@ -169,11 +183,7 @@ describe('SecretRevealButton', () => {
             value: { writeText },
         });
         render(
-            <SecretRevealButton
-                hasValue
-                onReveal={() => {}}
-                revealedValue="secret-plaintext"
-            />,
+            <SecretRevealButton hasValue onReveal={() => {}} revealedValue="secret-plaintext" />
         );
         fireEvent.click(screen.getByRole('button', { name: /copy revealed secret/i }));
         await waitFor(() => expect(writeText).toHaveBeenCalledWith('secret-plaintext'));
@@ -186,13 +196,7 @@ describe('SecretRevealButton', () => {
             configurable: true,
             value: { writeText },
         });
-        render(
-            <SecretRevealButton
-                hasValue
-                onReveal={() => {}}
-                revealedValue="secret"
-            />,
-        );
+        render(<SecretRevealButton hasValue onReveal={() => {}} revealedValue="secret" />);
         // Must not throw — the click resolves cleanly even when the
         // clipboard promise rejects.
         fireEvent.click(screen.getByRole('button', { name: /copy revealed secret/i }));
@@ -206,35 +210,21 @@ describe('SecretRevealButton', () => {
         // shape, unwinding revealedValue, then confirming the mask state
         // has no copy button at all.
         const { rerender } = render(
-            <SecretRevealButton
-                hasValue
-                onReveal={() => {}}
-                revealedValue="secret"
-            />,
+            <SecretRevealButton hasValue onReveal={() => {}} revealedValue="secret" />
         );
         expect(screen.getByRole('button', { name: /copy revealed secret/i })).toBeInTheDocument();
-        rerender(
-            <SecretRevealButton
-                hasValue
-                onReveal={() => {}}
-                revealedValue={null}
-            />,
-        );
-        expect(screen.queryByRole('button', { name: /copy revealed secret/i })).not.toBeInTheDocument();
+        rerender(<SecretRevealButton hasValue onReveal={() => {}} revealedValue={null} />);
+        expect(
+            screen.queryByRole('button', { name: /copy revealed secret/i })
+        ).not.toBeInTheDocument();
     });
 
     it('re-masks when revealedValue transitions from string to null', () => {
         const { rerender } = render(
-            <SecretRevealButton
-                hasValue
-                onReveal={() => {}}
-                revealedValue="plain"
-            />,
+            <SecretRevealButton hasValue onReveal={() => {}} revealedValue="plain" />
         );
         expect(screen.getByText('plain')).toBeInTheDocument();
-        rerender(
-            <SecretRevealButton hasValue onReveal={() => {}} revealedValue={null} />,
-        );
+        rerender(<SecretRevealButton hasValue onReveal={() => {}} revealedValue={null} />);
         expect(screen.queryByText('plain')).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: /reveal secret/i })).toBeInTheDocument();
     });
@@ -246,9 +236,11 @@ describe('SecretRevealButton', () => {
                 onReveal={() => {}}
                 revealedValue="v1"
                 autoMaskSeconds={5}
-            />,
+            />
         );
-        act(() => { vi.advanceTimersByTime(3000); });
+        act(() => {
+            vi.advanceTimersByTime(3000);
+        });
         expect(screen.getByText(/auto-masks in 2s/i)).toBeInTheDocument();
         // Parent re-masks then re-reveals — countdown restarts from 5s.
         rerender(
@@ -257,7 +249,7 @@ describe('SecretRevealButton', () => {
                 onReveal={() => {}}
                 revealedValue={null}
                 autoMaskSeconds={5}
-            />,
+            />
         );
         rerender(
             <SecretRevealButton
@@ -265,7 +257,7 @@ describe('SecretRevealButton', () => {
                 onReveal={() => {}}
                 revealedValue="v2"
                 autoMaskSeconds={5}
-            />,
+            />
         );
         expect(screen.getByText(/auto-masks in 5s/i)).toBeInTheDocument();
     });

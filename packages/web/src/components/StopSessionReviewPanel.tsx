@@ -105,7 +105,10 @@ export function StopSessionReviewPanel({
                 <Tabs
                     value={scope}
                     onChange={(_e, v: CliSessionDiffScopeName) => onScopeChange(v)}
-                    sx={{ minHeight: 40, '& .MuiTab-root': { minHeight: 40, textTransform: 'none' } }}
+                    sx={{
+                        minHeight: 40,
+                        '& .MuiTab-root': { minHeight: 40, textTransform: 'none' },
+                    }}
                 >
                     <Tab
                         value="uncommitted"

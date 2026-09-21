@@ -19,7 +19,7 @@ function baseHandlers() {
                 workspace_path: '',
                 server_root: '',
                 accent_color: null,
-            }),
+            })
         ),
         ...defaultHandlers,
         http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
@@ -53,10 +53,13 @@ describe('Settings page', () => {
         server.use(...baseHandlers());
         renderWithProviders(<Settings />, { initialEntries: ['/settings'] });
         // Wait for settings to load (isLoading → tabs appear)
-        await waitFor(() => {
-            // At least one tab should appear once settings resolves
-            expect(screen.queryAllByRole('tab').length).toBeGreaterThan(0);
-        }, { timeout: 8000 });
+        await waitFor(
+            () => {
+                // At least one tab should appear once settings resolves
+                expect(screen.queryAllByRole('tab').length).toBeGreaterThan(0);
+            },
+            { timeout: 8000 }
+        );
         expect(document.body).toBeTruthy();
     });
 
@@ -64,9 +67,12 @@ describe('Settings page', () => {
         server.use(...baseHandlers());
         renderWithProviders(<Settings />, { initialEntries: ['/settings'] });
         // Wait for tabs to appear
-        await waitFor(() => {
-            expect(screen.queryAllByRole('tab').length).toBeGreaterThan(0);
-        }, { timeout: 8000 });
+        await waitFor(
+            () => {
+                expect(screen.queryAllByRole('tab').length).toBeGreaterThan(0);
+            },
+            { timeout: 8000 }
+        );
         const tabs = screen.queryAllByRole('tab');
         // Click the second tab (index 1 = Environment) to exercise setTab(non-profile)
         if (tabs[1]) fireEvent.click(tabs[1]);
@@ -78,9 +84,12 @@ describe('Settings page', () => {
         // Start on models tab so the tab bar renders; profile tab is already selected by default
         // when URL has no ?tab — this test just verifies initial rendering with models tab selected
         renderWithProviders(<Settings />, { initialEntries: ['/settings?tab=models'] });
-        await waitFor(() => {
-            expect(screen.queryAllByRole('tab').length).toBeGreaterThan(0);
-        }, { timeout: 8000 });
+        await waitFor(
+            () => {
+                expect(screen.queryAllByRole('tab').length).toBeGreaterThan(0);
+            },
+            { timeout: 8000 }
+        );
         // Exercises the params.set('tab', next) path by clicking a non-profile tab
         const tabs = screen.queryAllByRole('tab');
         // Click the last tab (help, index 5) — exercises setTab with a non-default value
@@ -115,7 +124,7 @@ describe('Settings page', () => {
         // Return a promise that never resolves to keep isLoading=true
         server.use(
             ...baseHandlers(),
-            http.get(`${BASE}/settings`, () => new Promise(() => {})),
+            http.get(`${BASE}/settings`, () => new Promise(() => {}))
         );
         const { container } = renderWithProviders(<Settings />, {
             initialEntries: ['/settings'],
@@ -144,14 +153,17 @@ describe('Settings page', () => {
                     workspace_path: '',
                     server_root: '',
                     accent_color: null,
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<Settings />, { initialEntries: ['/settings'] });
         // When owner_name is null → ownerName = 'Owner' (the fallback)
-        await waitFor(() => {
-            expect(screen.queryAllByRole('tab').length).toBeGreaterThan(0);
-        }, { timeout: 8000 });
+        await waitFor(
+            () => {
+                expect(screen.queryAllByRole('tab').length).toBeGreaterThan(0);
+            },
+            { timeout: 8000 }
+        );
         // The subtitle "Owner · local app · ..." should render with the fallback
         const ownerText = document.body.textContent ?? '';
         expect(ownerText).toMatch(/Owner/);
@@ -161,9 +173,12 @@ describe('Settings page', () => {
         server.use(...baseHandlers());
         // Start on environment tab
         renderWithProviders(<Settings />, { initialEntries: ['/settings?tab=environment'] });
-        await waitFor(() => {
-            expect(screen.queryAllByRole('tab').length).toBeGreaterThan(0);
-        }, { timeout: 8000 });
+        await waitFor(
+            () => {
+                expect(screen.queryAllByRole('tab').length).toBeGreaterThan(0);
+            },
+            { timeout: 8000 }
+        );
         const tabs = screen.queryAllByRole('tab');
         // Click the Profile tab (index 0) while already on environment → exercises params.delete branch
         if (tabs[0]) fireEvent.click(tabs[0]);

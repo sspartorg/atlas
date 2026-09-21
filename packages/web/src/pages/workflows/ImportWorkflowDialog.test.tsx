@@ -13,13 +13,17 @@ import { ImportWorkflowDialog } from './ImportWorkflowDialog.js';
 const BASE = 'http://localhost:3000/api';
 
 function mount(onClose = vi.fn()) {
-    server.use(http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])));
+    server.use(
+        http.get(`${BASE}/projects`, () =>
+            HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])
+        )
+    );
     renderWithProviders(
         <Routes>
             <Route path="/workflows" element={<ImportWorkflowDialog open onClose={onClose} />} />
             <Route path="/workflows/:id" element={<p>Builder page</p>} />
         </Routes>,
-        { initialEntries: ['/workflows'] },
+        { initialEntries: ['/workflows'] }
     );
     return onClose;
 }
@@ -44,7 +48,7 @@ describe('ImportWorkflowDialog', () => {
             http.post(`${BASE}/workflows/import`, () => {
                 hit = true;
                 return HttpResponse.json(result, { status: 201 });
-            }),
+            })
         );
         const onClose = mount();
         const importButton = screen.getByRole('button', { name: 'Import' });
@@ -63,12 +67,17 @@ describe('ImportWorkflowDialog', () => {
     it('shows why an import was rejected', async () => {
         server.use(
             http.post(`${BASE}/workflows/import`, () =>
-                HttpResponse.json({ error: 'Workflow bundle: missing workflow.json', kind: 'validation_error' }, { status: 400 }),
-            ),
+                HttpResponse.json(
+                    { error: 'Workflow bundle: missing workflow.json', kind: 'validation_error' },
+                    { status: 400 }
+                )
+            )
         );
         mount();
         await fill();
         await userEvent.click(screen.getByRole('button', { name: 'Import' }));
-        expect(await screen.findByText('Workflow bundle: missing workflow.json')).toBeInTheDocument();
+        expect(
+            await screen.findByText('Workflow bundle: missing workflow.json')
+        ).toBeInTheDocument();
     });
 });

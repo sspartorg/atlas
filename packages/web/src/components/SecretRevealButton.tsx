@@ -146,8 +146,16 @@ export function SecretRevealButton({
                     {revealedValue}
                 </Box>
                 <Tooltip title="Copy to clipboard">
-                    <IconButton size="small" onClick={copyToClipboard} aria-label="Copy revealed secret">
-                        <span className="material-symbols-rounded" style={{ fontSize: 18 }}>
+                    <IconButton
+                        size="small"
+                        onClick={copyToClipboard}
+                        aria-label="Copy revealed secret"
+                    >
+                        <span
+                            className="material-symbols-rounded"
+                            aria-hidden="true"
+                            style={{ fontSize: 18 }}
+                        >
                             content_copy
                         </span>
                     </IconButton>
@@ -158,7 +166,11 @@ export function SecretRevealButton({
                         onClick={() => onExpireRef.current?.()}
                         aria-label="Re-mask secret"
                     >
-                        <span className="material-symbols-rounded" style={{ fontSize: 18 }}>
+                        <span
+                            className="material-symbols-rounded"
+                            aria-hidden="true"
+                            style={{ fontSize: 18 }}
+                        >
                             visibility_off
                         </span>
                     </IconButton>

@@ -134,10 +134,10 @@ export function Marketplace() {
         tab === 'workflows'
             ? `${templateCount} starter workflow${templateCount === 1 ? '' : 's'}${publishedCount > 0 ? ` · ${publishedCount} published` : ''}`
             : totalCount === 0
-            ? 'No catalog agents'
-            : upgradeCount > 0
-              ? `${totalCount} available · ${upgradeCount} upgrade${upgradeCount === 1 ? '' : 's'} ready`
-              : `${totalCount} available`;
+              ? 'No catalog agents'
+              : upgradeCount > 0
+                ? `${totalCount} available · ${upgradeCount} upgrade${upgradeCount === 1 ? '' : 's'} ready`
+                : `${totalCount} available`;
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
@@ -165,7 +165,10 @@ export function Marketplace() {
                     onChange={(_, v: (typeof TABS)[number]) => setTab(v)}
                     sx={{
                         minHeight: 42,
-                        '& .MuiTabs-indicator': { backgroundColor: ATLAS_PALETTE.brandBlue, height: 2 },
+                        '& .MuiTabs-indicator': {
+                            backgroundColor: ATLAS_PALETTE.brandBlue,
+                            height: 2,
+                        },
                         '& .MuiTab-root': {
                             minHeight: 42,
                             textTransform: 'none',

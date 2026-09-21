@@ -151,9 +151,7 @@ describe('JiraTab', () => {
         // Nothing is sent while typing.
         expect(puts).toEqual([]);
         await userEvent.tab();
-        await waitFor(() =>
-            expect(puts).toEqual([{ site_url: 'https://new.atlassian.net' }])
-        );
+        await waitFor(() => expect(puts).toEqual([{ site_url: 'https://new.atlassian.net' }]));
         expect(await screen.findByText('Jira settings saved')).toBeInTheDocument();
     });
 
@@ -289,15 +287,11 @@ describe('JiraTab', () => {
     it('splits extra fields on commas and drops the blanks', async () => {
         const puts: unknown[] = [];
         mount((b) => puts.push(b));
-        const field = await screen.findByPlaceholderText(
-            'Acceptance Criteria, customfield_10016'
-        );
+        const field = await screen.findByPlaceholderText('Acceptance Criteria, customfield_10016');
         await userEvent.type(field, ' Acceptance Criteria , , customfield_10016 ');
         await userEvent.tab();
         await waitFor(() =>
-            expect(puts).toEqual([
-                { extra_fields: ['Acceptance Criteria', 'customfield_10016'] },
-            ])
+            expect(puts).toEqual([{ extra_fields: ['Acceptance Criteria', 'customfield_10016'] }])
         );
     });
 

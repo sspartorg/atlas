@@ -18,12 +18,7 @@ describe('GlyphPickerModal', () => {
     it('renders "Replace glyph" title when open', () => {
         const agent = makeAgent();
         renderWithProviders(
-            <GlyphPickerModal
-                open={true}
-                agent={agent}
-                currentGlyph="terminal"
-                onClose={vi.fn()}
-            />,
+            <GlyphPickerModal open={true} agent={agent} currentGlyph="terminal" onClose={vi.fn()} />
         );
         expect(screen.getByText('Replace glyph')).toBeTruthy();
     });
@@ -31,30 +26,18 @@ describe('GlyphPickerModal', () => {
     it('renders 16 glyph buttons', () => {
         const agent = makeAgent();
         renderWithProviders(
-            <GlyphPickerModal
-                open={true}
-                agent={agent}
-                currentGlyph="terminal"
-                onClose={vi.fn()}
-            />,
+            <GlyphPickerModal open={true} agent={agent} currentGlyph="terminal" onClose={vi.fn()} />
         );
         const buttons = screen.getAllByRole('button');
         // 16 glyph buttons + Cancel + Save = at least 18; filter to those with aria-pressed
-        const glyphButtons = buttons.filter(
-            (b) => b.getAttribute('aria-pressed') !== null,
-        );
+        const glyphButtons = buttons.filter((b) => b.getAttribute('aria-pressed') !== null);
         expect(glyphButtons).toHaveLength(16);
     });
 
     it('renders Cancel and Save buttons', () => {
         const agent = makeAgent();
         renderWithProviders(
-            <GlyphPickerModal
-                open={true}
-                agent={agent}
-                currentGlyph="terminal"
-                onClose={vi.fn()}
-            />,
+            <GlyphPickerModal open={true} agent={agent} currentGlyph="terminal" onClose={vi.fn()} />
         );
         expect(screen.getByRole('button', { name: /cancel/i })).toBeTruthy();
         expect(screen.getByRole('button', { name: /save/i })).toBeTruthy();
@@ -63,12 +46,7 @@ describe('GlyphPickerModal', () => {
     it('marks the currentGlyph as selected (aria-pressed=true)', () => {
         const agent = makeAgent();
         renderWithProviders(
-            <GlyphPickerModal
-                open={true}
-                agent={agent}
-                currentGlyph="terminal"
-                onClose={vi.fn()}
-            />,
+            <GlyphPickerModal open={true} agent={agent} currentGlyph="terminal" onClose={vi.fn()} />
         );
         const coderBtn = screen.getByRole('button', { name: 'Coder' });
         expect(coderBtn.getAttribute('aria-pressed')).toBe('true');
@@ -77,12 +55,7 @@ describe('GlyphPickerModal', () => {
     it('clicking a glyph selects it (aria-pressed becomes true)', async () => {
         const agent = makeAgent();
         renderWithProviders(
-            <GlyphPickerModal
-                open={true}
-                agent={agent}
-                currentGlyph="terminal"
-                onClose={vi.fn()}
-            />,
+            <GlyphPickerModal open={true} agent={agent} currentGlyph="terminal" onClose={vi.fn()} />
         );
         const designBtn = screen.getByRole('button', { name: 'Design' });
         expect(designBtn.getAttribute('aria-pressed')).toBe('false');
@@ -95,12 +68,7 @@ describe('GlyphPickerModal', () => {
         const agent = makeAgent();
         // If a PATCH is made unexpectedly, MSW will throw an unhandled-request error.
         renderWithProviders(
-            <GlyphPickerModal
-                open={true}
-                agent={agent}
-                currentGlyph="terminal"
-                onClose={onClose}
-            />,
+            <GlyphPickerModal open={true} agent={agent} currentGlyph="terminal" onClose={onClose} />
         );
         await userEvent.click(screen.getByRole('button', { name: /save/i }));
         expect(onClose).toHaveBeenCalledTimes(1);
@@ -112,17 +80,12 @@ describe('GlyphPickerModal', () => {
             http.patch(`${BASE}/agents/agent-coder`, () => {
                 patched = true;
                 return HttpResponse.json(makeAgent());
-            }),
+            })
         );
         const onClose = vi.fn();
         const agent = makeAgent();
         renderWithProviders(
-            <GlyphPickerModal
-                open={true}
-                agent={agent}
-                currentGlyph="terminal"
-                onClose={onClose}
-            />,
+            <GlyphPickerModal open={true} agent={agent} currentGlyph="terminal" onClose={onClose} />
         );
         // Click a different glyph
         await userEvent.click(screen.getByRole('button', { name: 'Design' }));
@@ -135,12 +98,7 @@ describe('GlyphPickerModal', () => {
         const onClose = vi.fn();
         const agent = makeAgent();
         renderWithProviders(
-            <GlyphPickerModal
-                open={true}
-                agent={agent}
-                currentGlyph="terminal"
-                onClose={onClose}
-            />,
+            <GlyphPickerModal open={true} agent={agent} currentGlyph="terminal" onClose={onClose} />
         );
         await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
         expect(onClose).toHaveBeenCalledTimes(1);
@@ -154,7 +112,7 @@ describe('GlyphPickerModal', () => {
                 agent={agent}
                 currentGlyph="terminal"
                 onClose={vi.fn()}
-            />,
+            />
         );
         expect(screen.queryByText('Replace glyph')).toBeNull();
     });

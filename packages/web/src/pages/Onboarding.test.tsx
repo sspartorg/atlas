@@ -25,17 +25,21 @@ const BASE = 'http://localhost:3000/api';
 // Shared fs stubs so FolderPicker mounts without unhandled-request errors.
 const fsFsHandlers = [
     http.get(`${BASE}/fs/home`, () => HttpResponse.json({ path: '/home/user' })),
-    http.get(`${BASE}/fs/list`, () => HttpResponse.json({ items: [], path: '/home', entries: [], parent: null })),
-    http.get(`${BASE}/fs/stat`, () => HttpResponse.json({ path: '/home/user', exists: true, is_directory: true })),
+    http.get(`${BASE}/fs/list`, () =>
+        HttpResponse.json({ items: [], path: '/home', entries: [], parent: null })
+    ),
+    http.get(`${BASE}/fs/stat`, () =>
+        HttpResponse.json({ path: '/home/user', exists: true, is_directory: true })
+    ),
 ];
 
 beforeEach(() => {
     server.use(
         http.get(`${BASE}/settings`, () =>
-            HttpResponse.json({ id: 1, owner_name: '', onboarding_complete: 0 }),
+            HttpResponse.json({ id: 1, owner_name: '', onboarding_complete: 0 })
         ),
         ...fsFsHandlers,
-        ...defaultHandlers,
+        ...defaultHandlers
     );
 });
 
@@ -62,7 +66,13 @@ describe('Onboarding — loading state', () => {
     it('renders WizardSkeleton while settings is still loading', () => {
         // Override settings to never resolve so isPending stays true.
         server.use(
-            http.get(`${BASE}/settings`, () => new Promise(() => { /* never resolves */ })),
+            http.get(
+                `${BASE}/settings`,
+                () =>
+                    new Promise(() => {
+                        /* never resolves */
+                    })
+            )
         );
         renderOnboarding();
         // WizardSkeleton uses StepIndicator with loading prop — no form content visible.
@@ -92,7 +102,9 @@ describe('Onboarding — Step 1', () => {
         await userEvent.click(screen.getByRole('button', { name: /^Next$/i }));
         // Step 2 heading must not appear
         await waitFor(() => {
-            expect(screen.queryByText('Where should Atlas keep your projects?')).not.toBeInTheDocument();
+            expect(
+                screen.queryByText('Where should Atlas keep your projects?')
+            ).not.toBeInTheDocument();
         });
     });
 });
@@ -126,7 +138,7 @@ describe('Onboarding — Step 2', () => {
         await screen.findByText('Welcome to Atlas.');
         await advanceToStep2();
         expect(screen.getByText(/We'll create this folder if it doesn't exist/)).toHaveTextContent(
-            'Settings → Profile',
+            'Settings → Profile'
         );
         expect(screen.queryByText(/Settings → Environment/)).not.toBeInTheDocument();
     });
@@ -172,11 +184,11 @@ describe('Onboarding — submit success', () => {
                     owner_name: 'Test User',
                     onboarding_complete: 1,
                     workspace_path: '/home/user/projects',
-                }),
+                })
             ),
             // Also stub counts/dashboard/agents/projects/notifications for the prefetch calls
             http.get(`${BASE}/counts/dashboard`, () => HttpResponse.json({})),
-            http.get(`${BASE}/counts/sidenav`, () => HttpResponse.json({})),
+            http.get(`${BASE}/counts/sidenav`, () => HttpResponse.json({}))
         );
 
         renderOnboarding();
@@ -199,8 +211,8 @@ describe('Onboarding — submit error', () => {
     it('shows an error message when the onboard POST returns 500', async () => {
         server.use(
             http.post(`${BASE}/settings/onboard`, () =>
-                HttpResponse.json({ error: 'Internal Server Error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+            )
         );
 
         renderOnboarding();
@@ -218,9 +230,10 @@ describe('Onboarding — submit error', () => {
             expect(screen.getByRole('button', { name: /^Finish Setup$/i })).not.toBeDisabled();
         });
         // The error text is either the message from the API or the fallback
-        const errorText = screen.queryByText(/Could not finish onboarding\./i)
-            ?? screen.queryByText(/Internal Server Error/i)
-            ?? screen.queryByText(/HTTP 500/i);
+        const errorText =
+            screen.queryByText(/Could not finish onboarding\./i) ??
+            screen.queryByText(/Internal Server Error/i) ??
+            screen.queryByText(/HTTP 500/i);
         expect(errorText).toBeInTheDocument();
     });
 });
@@ -296,7 +309,9 @@ describe('Onboarding — workspace error cleared on change', () => {
 
         // The workspace error should disappear after typing
         await waitFor(() => {
-            expect(screen.queryByText('Pick a workspace folder to continue.')).not.toBeInTheDocument();
+            expect(
+                screen.queryByText('Pick a workspace folder to continue.')
+            ).not.toBeInTheDocument();
         });
     });
 });
@@ -316,7 +331,9 @@ describe('Onboarding — workspace path error clears on retype', () => {
         await userEvent.type(workspaceInput, '/home/user/projects');
 
         await waitFor(() => {
-            expect(screen.queryByText('Pick a workspace folder to continue.')).not.toBeInTheDocument();
+            expect(
+                screen.queryByText('Pick a workspace folder to continue.')
+            ).not.toBeInTheDocument();
         });
     });
 });
@@ -402,13 +419,13 @@ describe('Onboarding — accent colour persists (F-001)', () => {
         server.use(
             ...fsFsHandlers,
             http.post(`${BASE}/settings/onboard`, async ({ request }) => {
-                seen.push({ url: 'onboard', ...(await request.json() as object) });
+                seen.push({ url: 'onboard', ...((await request.json()) as object) });
                 return HttpResponse.json({ id: 1, owner_name: 'Ada', onboarding_complete: 1 });
             }),
             http.patch(`${BASE}/settings/profile`, async ({ request }) => {
-                seen.push({ url: 'profile', ...(await request.json() as object) });
+                seen.push({ url: 'profile', ...((await request.json()) as object) });
                 return HttpResponse.json({ id: 1, owner_name: 'Ada', onboarding_complete: 1 });
-            }),
+            })
         );
 
         renderOnboarding();
@@ -426,7 +443,10 @@ describe('Onboarding — accent colour persists (F-001)', () => {
 
         await waitFor(() => {
             const profile = seen.find((s) => s['url'] === 'profile');
-            if (!profile) throw new Error('no PATCH /settings/profile was sent — the accent colour is still discarded');
+            if (!profile)
+                throw new Error(
+                    'no PATCH /settings/profile was sent — the accent colour is still discarded'
+                );
             expect(typeof profile['accent_color']).toBe('string');
         });
     });

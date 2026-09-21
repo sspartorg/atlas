@@ -64,7 +64,11 @@ describe('MoreSheet', () => {
     it('shows notification badge when counts.notifications > 0 (item.countKey && count > 0 branch)', () => {
         // Spy on useSidenavCounts to return a non-zero notification count
         const spy = vi.spyOn(sidenavModule, 'useSidenavCounts').mockReturnValue({
-            projects: 0, tasks: 0, queue: 0, agents: 0, notifications: 5,
+            projects: 0,
+            tasks: 0,
+            queue: 0,
+            agents: 0,
+            notifications: 5,
         });
         server.use(...defaultHandlers);
         renderWithProviders(<MoreSheet open onClose={vi.fn()} />);

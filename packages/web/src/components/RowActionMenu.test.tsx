@@ -8,10 +8,7 @@ describe('RowActionMenu', () => {
     it('opens the menu and fires the chosen item', async () => {
         const onClick = vi.fn();
         renderWithProviders(
-            <RowActionMenu
-                ariaLabel="Row actions"
-                items={[{ label: 'Edit', onClick }]}
-            />,
+            <RowActionMenu ariaLabel="Row actions" items={[{ label: 'Edit', onClick }]} />
         );
         await userEvent.click(screen.getByRole('button', { name: 'Row actions' }));
         await userEvent.click(await screen.findByText('Edit'));
@@ -23,7 +20,7 @@ describe('RowActionMenu', () => {
             <RowActionMenu
                 ariaLabel="A"
                 items={[false, null, undefined, { label: 'Real', onClick: () => undefined }]}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: 'A' }));
         expect(await screen.findByText('Real')).toBeInTheDocument();
@@ -37,7 +34,7 @@ describe('RowActionMenu', () => {
                     { label: 'Top', onClick: () => undefined },
                     { label: 'Sep', onClick: () => undefined, dividerAbove: true },
                 ]}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: 'A' }));
         await screen.findByText('Sep');
@@ -50,7 +47,7 @@ describe('RowActionMenu', () => {
             <RowActionMenu
                 ariaLabel="A"
                 items={[{ label: 'Delete', onClick: onDelete, danger: true }]}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: 'A' }));
         const deleteItem = await screen.findByText('Delete');
@@ -63,10 +60,7 @@ describe('RowActionMenu', () => {
         const onClick = vi.fn();
         const icon = <span data-testid="test-icon">X</span>;
         renderWithProviders(
-            <RowActionMenu
-                ariaLabel="A"
-                items={[{ label: 'WithIcon', onClick, icon }]}
-            />,
+            <RowActionMenu ariaLabel="A" items={[{ label: 'WithIcon', onClick, icon }]} />
         );
         await userEvent.click(screen.getByRole('button', { name: 'A' }));
         await screen.findByText('WithIcon');
@@ -80,7 +74,7 @@ describe('RowActionMenu', () => {
             <RowActionMenu
                 ariaLabel="A"
                 items={[{ label: 'DangerWithIcon', onClick, icon, danger: true }]}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: 'A' }));
         await screen.findByText('DangerWithIcon');

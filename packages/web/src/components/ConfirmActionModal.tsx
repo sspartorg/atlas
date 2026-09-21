@@ -50,7 +50,9 @@ export function ConfirmActionModal({
         <Dialog open={open} onClose={onCancel} maxWidth="xs" fullWidth>
             <DialogTitle sx={{ fontWeight: 600 }}>{title}</DialogTitle>
             <DialogContent>
-                <Typography sx={{ fontSize: 13.5, color: ATLAS_PALETTE.slate70, whiteSpace: 'pre-line' }}>
+                <Typography
+                    sx={{ fontSize: 13.5, color: ATLAS_PALETTE.slate70, whiteSpace: 'pre-line' }}
+                >
                     {body}
                 </Typography>
             </DialogContent>

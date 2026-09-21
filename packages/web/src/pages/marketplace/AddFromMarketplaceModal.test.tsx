@@ -30,14 +30,12 @@ describe('AddFromMarketplaceModal', () => {
                 agent={agent}
                 installing={false}
                 onConfirm={() => {}}
-            />,
+            />
         );
         expect(screen.getByText('Add Coder to your agents')).toBeInTheDocument();
         expect(screen.getByText('v3')).toBeInTheDocument();
         expect(screen.getByText('custom')).toBeInTheDocument();
-        expect(
-            screen.getByRole('button', { name: /add to my agents/i }),
-        ).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /add to my agents/i })).toBeInTheDocument();
     });
 
     it('shows the rename input when slugTaken is set', () => {
@@ -49,12 +47,10 @@ describe('AddFromMarketplaceModal', () => {
                 installing={false}
                 onConfirm={() => {}}
                 slugTaken={{ conflictingId: 'agent-coder', suggestedId: 'agent-coder-2' }}
-            />,
+            />
         );
         expect(screen.getByLabelText('New slug')).toBeInTheDocument();
-        expect(
-            screen.getByRole('button', { name: /install at new slug/i }),
-        ).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /install at new slug/i })).toBeInTheDocument();
     });
 
     it('fires onConfirm with the trimmed slug on Add', () => {
@@ -66,7 +62,7 @@ describe('AddFromMarketplaceModal', () => {
                 agent={agent}
                 installing={false}
                 onConfirm={onConfirm}
-            />,
+            />
         );
         fireEvent.click(screen.getByRole('button', { name: /add to my agents/i }));
         expect(onConfirm).toHaveBeenCalledWith('agent-coder');
@@ -81,7 +77,7 @@ describe('AddFromMarketplaceModal', () => {
                 agent={agent}
                 installing={false}
                 onConfirm={() => {}}
-            />,
+            />
         );
         fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
         expect(onClose).toHaveBeenCalled();
@@ -95,7 +91,7 @@ describe('AddFromMarketplaceModal', () => {
                 agent={agent}
                 installing
                 onConfirm={() => {}}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: /adding/i })).toBeDisabled();
         expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
@@ -110,12 +106,10 @@ describe('AddFromMarketplaceModal', () => {
                 installing={false}
                 onConfirm={() => {}}
                 slugTaken={{ conflictingId: 'agent-coder', suggestedId: 'agent-coder-2' }}
-            />,
+            />
         );
         const input = screen.getByLabelText('New slug') as HTMLInputElement;
         fireEvent.change(input, { target: { value: '   ' } });
-        expect(
-            screen.getByRole('button', { name: /install at new slug/i }),
-        ).toBeDisabled();
+        expect(screen.getByRole('button', { name: /install at new slug/i })).toBeDisabled();
     });
 });

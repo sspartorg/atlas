@@ -88,10 +88,7 @@ export function StartSessionDialog({
         return buildItemOptions(issuesData);
     }, [projectId, issuesData]);
 
-    const modelsForCli = useMemo(
-        () => cliModels.filter((m) => m.cli === cli),
-        [cliModels, cli],
-    );
+    const modelsForCli = useMemo(() => cliModels.filter((m) => m.cli === cli), [cliModels, cli]);
     const defaultModelForCli = DEFAULT_MODEL_BY_CLI[cli];
 
     function handleCliChange(_: unknown, next: AgentCli | null) {
@@ -201,7 +198,8 @@ export function StartSessionDialog({
                         Start a Terminal session
                     </Typography>
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
-                        Spawns Claude Code or GitHub Copilot CLI in a fresh worktree for the chosen project.
+                        Spawns Claude Code or GitHub Copilot CLI in a fresh worktree for the chosen
+                        project.
                     </Typography>
                 </Box>
                 <IconButton
@@ -328,7 +326,9 @@ export function StartSessionDialog({
                                 {...params}
                                 size="small"
                                 label="Item (optional)"
-                                placeholder={projectId ? 'Search by id or title…' : 'Pick a project first'}
+                                placeholder={
+                                    projectId ? 'Search by id or title…' : 'Pick a project first'
+                                }
                                 helperText="Anchors the session to a Atlas item — Atlas writes the item context into `.atlas/current-task.md` (with your initial prompt appended). Sub-tasks created from the CLI nest under this item."
                             />
                         )}
@@ -402,7 +402,9 @@ export function StartSessionDialog({
                     variant="contained"
                     onClick={handleStart}
                     disabled={!projectId || isPending}
-                    startIcon={isPending ? <CircularProgress size={16} color="inherit" /> : <AddRounded />}
+                    startIcon={
+                        isPending ? <CircularProgress size={16} color="inherit" /> : <AddRounded />
+                    }
                     sx={{
                         textTransform: 'none',
                         background: ATLAS_PALETTE.green,

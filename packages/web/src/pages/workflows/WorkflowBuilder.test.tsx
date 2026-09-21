@@ -32,17 +32,19 @@ function mount(wf: IWorkflow, opts: MountOpts = {}) {
     server.use(
         http.get(`${BASE}/workflows/${wf.id}`, () =>
             opts.detailError
-                ? HttpResponse.json(opts.detailError.body ?? null, { status: opts.detailError.status })
-                : HttpResponse.json(wf),
+                ? HttpResponse.json(opts.detailError.body ?? null, {
+                      status: opts.detailError.status,
+                  })
+                : HttpResponse.json(wf)
         ),
         http.get(`${BASE}/workflows`, () => HttpResponse.json([wf])),
         http.get(`${BASE}/agents`, () =>
             HttpResponse.json([
                 makeAgent({ id: 'agent-coder', name: 'Coder' }),
                 makeAgent({ id: 'agent-reviewer', name: 'Reviewer', accent_color: '#B33A30' }),
-            ]),
+            ])
         ),
-        http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
+        http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()]))
     );
     navigate.mockClear();
     return renderWithProviders(
@@ -52,13 +54,18 @@ function mount(wf: IWorkflow, opts: MountOpts = {}) {
         {
             initialEntries: [`/workflows/${wf.id}`],
             ...(opts.queryClient ? { queryClient: opts.queryClient } : {}),
-        },
+        }
     );
 }
 
 /** A DataTransfer stand-in: jsdom ships no constructor for one. */
 function dataTransfer(payload = '') {
-    return { dropEffect: 'none', effectAllowed: 'none', getData: () => payload, setData: () => undefined } as unknown as DataTransfer;
+    return {
+        dropEffect: 'none',
+        effectAllowed: 'none',
+        getData: () => payload,
+        setData: () => undefined,
+    } as unknown as DataTransfer;
 }
 
 /** Make every `max-width` media query match, i.e. render as a phone. */
@@ -80,7 +87,9 @@ function stubPhone(): () => void {
 }
 
 function sharedClient(): QueryClient {
-    return new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
+    return new QueryClient({
+        defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
+    });
 }
 
 describe('WorkflowBuilder', () => {
@@ -106,7 +115,7 @@ describe('WorkflowBuilder', () => {
         const errors = await screen.findByTestId('graph-errors');
         expect(within(errors).getByText('Needs exactly one pass connection')).toBeInTheDocument();
         await waitFor(() =>
-            expect(screen.getByTestId('wf-node-review')).toHaveAttribute('data-invalid', 'true'),
+            expect(screen.getByTestId('wf-node-review')).toHaveAttribute('data-invalid', 'true')
         );
         expect(screen.getByTestId('wf-node-coder')).toHaveAttribute('data-invalid', 'false');
         expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
@@ -120,8 +129,12 @@ describe('WorkflowBuilder', () => {
         server.use(
             http.patch(`${BASE}/workflows/${wf.id}`, async ({ request }) => {
                 body = (await request.json()) as UpdateWorkflowInput;
-                return HttpResponse.json({ ...wf, ...body, updated_at: '2026-09-14T11:00:00.000Z' });
-            }),
+                return HttpResponse.json({
+                    ...wf,
+                    ...body,
+                    updated_at: '2026-09-14T11:00:00.000Z',
+                });
+            })
         );
 
         const name = await screen.findByLabelText('Name');
@@ -135,7 +148,12 @@ describe('WorkflowBuilder', () => {
         const sent = body as unknown as UpdateWorkflowInput;
         expect(sent.name).toBe('Dev flow');
         expect(sent.graph?.nodes.map((n) => n.id)).toEqual(['start', 'coder', 'review', 'end']);
-        expect(sent.graph?.edges).toContainEqual({ id: 'e4', source: 'review', target: 'coder', kind: 'fail' });
+        expect(sent.graph?.edges).toContainEqual({
+            id: 'e4',
+            source: 'review',
+            target: 'coder',
+            kind: 'fail',
+        });
         await waitFor(() => expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument());
     });
 
@@ -146,7 +164,9 @@ describe('WorkflowBuilder', () => {
         await user.click(await screen.findByRole('button', { name: 'Add Owner' }));
         await user.click(screen.getByRole('button', { name: 'Add Owner' }));
         await waitFor(() => {
-            const owners = [...document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="owner"]')];
+            const owners = [
+                ...document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="owner"]'),
+            ];
             expect(owners).toHaveLength(2);
             expect(owners[0]?.style.transform).not.toBe(owners[1]?.style.transform);
         });
@@ -162,11 +182,18 @@ describe('WorkflowBuilder', () => {
                     {
                         error: 'Agent agent-reviewer does not exist',
                         kind: 'validation_error',
-                        details: { graph_errors: [{ node_id: 'review', message: 'Agent agent-reviewer does not exist' }] },
+                        details: {
+                            graph_errors: [
+                                {
+                                    node_id: 'review',
+                                    message: 'Agent agent-reviewer does not exist',
+                                },
+                            ],
+                        },
                     },
-                    { status: 400 },
-                ),
-            ),
+                    { status: 400 }
+                )
+            )
         );
         const name = await screen.findByLabelText('Name');
         await user.type(name, '!');
@@ -179,7 +206,12 @@ describe('WorkflowBuilder', () => {
     it('offers a Sub-tasks step on Task workflows and points it at a sub-workflow', async () => {
         const user = userEvent.setup();
         const wf = makeWorkflow();
-        const build = makeWorkflow({ id: 'wf-build', name: 'Build sub-task', input_kind: 'sub_task', trigger: 'manual' });
+        const build = makeWorkflow({
+            id: 'wf-build',
+            name: 'Build sub-task',
+            input_kind: 'sub_task',
+            trigger: 'manual',
+        });
         mount(wf);
         server.use(http.get(`${BASE}/workflows`, () => HttpResponse.json([wf, build])));
         await screen.findByTestId('workflow-canvas');
@@ -199,7 +231,9 @@ describe('WorkflowBuilder', () => {
         expect(await screen.findByRole('button', { name: 'Add Owner' })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Add Sub-tasks' })).not.toBeInTheDocument();
         expect(screen.queryByLabelText('Trigger')).not.toBeInTheDocument();
-        expect(within(screen.getByTestId('workflow-canvas')).getByText('Back to the Task')).toBeInTheDocument();
+        expect(
+            within(screen.getByTestId('workflow-canvas')).getByText('Back to the Task')
+        ).toBeInTheDocument();
     });
 
     // ─── Load failures ──────────────────────────────────────────────────────
@@ -213,7 +247,9 @@ describe('WorkflowBuilder', () => {
     // A server fault is not a missing workflow — telling the Owner "not found"
     // would send them looking for a workflow that is still there.
     it('shows the server’s reason when the load fails for anything but a 404', async () => {
-        mount(makeWorkflow(), { detailError: { status: 500, body: { error: 'Database is locked' } } });
+        mount(makeWorkflow(), {
+            detailError: { status: 500, body: { error: 'Database is locked' } },
+        });
         expect(await screen.findByText('Database is locked')).toBeInTheDocument();
     });
 
@@ -225,7 +261,9 @@ describe('WorkflowBuilder', () => {
         wf.graph.edges = wf.graph.edges.filter((e) => e.target !== 'end');
         mount(wf);
         const errors = await screen.findByTestId('graph-errors');
-        expect(within(errors).getByText('A workflow needs at least one End node')).toBeInTheDocument();
+        expect(
+            within(errors).getByText('A workflow needs at least one End node')
+        ).toBeInTheDocument();
         // No node is outlined for it, but Save is still blocked.
         expect(screen.getByTestId('wf-node-coder')).toHaveAttribute('data-invalid', 'false');
         expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
@@ -253,8 +291,11 @@ describe('WorkflowBuilder', () => {
         mount(wf);
         server.use(
             http.patch(`${BASE}/workflows/${wf.id}`, () =>
-                HttpResponse.json({ error: 'Name already taken', kind: 'validation_error' }, { status: 400 }),
-            ),
+                HttpResponse.json(
+                    { error: 'Name already taken', kind: 'validation_error' },
+                    { status: 400 }
+                )
+            )
         );
         await user.type(await screen.findByLabelText('Name'), '!');
         await user.click(screen.getByRole('button', { name: /save/i }));
@@ -274,11 +315,18 @@ describe('WorkflowBuilder', () => {
                     {
                         error: 'Agent agent-reviewer does not exist',
                         kind: 'validation_error',
-                        details: { graph_errors: [{ node_id: 'review', message: 'Agent agent-reviewer does not exist' }] },
+                        details: {
+                            graph_errors: [
+                                {
+                                    node_id: 'review',
+                                    message: 'Agent agent-reviewer does not exist',
+                                },
+                            ],
+                        },
                     },
-                    { status: 400 },
-                ),
-            ),
+                    { status: 400 }
+                )
+            )
         );
         await user.type(await screen.findByLabelText('Name'), '!');
         await user.click(screen.getByRole('button', { name: /save/i }));
@@ -286,11 +334,17 @@ describe('WorkflowBuilder', () => {
 
         await user.click(screen.getByRole('button', { name: 'Add Owner' }));
         await waitFor(() =>
-            expect(screen.queryByText('Agent agent-reviewer does not exist')).not.toBeInTheDocument(),
+            expect(
+                screen.queryByText('Agent agent-reviewer does not exist')
+            ).not.toBeInTheDocument()
         );
         // The freshly-added Owner has no pass connection, so the box now
         // carries the client's own complaint instead.
-        expect(within(screen.getByTestId('graph-errors')).getByText('Needs exactly one pass connection')).toBeInTheDocument();
+        expect(
+            within(screen.getByTestId('graph-errors')).getByText(
+                'Needs exactly one pass connection'
+            )
+        ).toBeInTheDocument();
     });
 
     it('selects the node that was clicked and offers it to the inspector', async () => {
@@ -304,7 +358,9 @@ describe('WorkflowBuilder', () => {
         // d3-drag, which needs a real window on the event and throws in jsdom.
         fireEvent.click(screen.getByTestId('rf__node-coder'));
         await waitFor(() => expect(screen.getByTestId('rf__node-coder')).toHaveClass('selected'));
-        expect(screen.queryByRole('heading', { name: 'Workflow settings' })).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole('heading', { name: 'Workflow settings' })
+        ).not.toBeInTheDocument();
     });
 
     // ─── Run now ────────────────────────────────────────────────────────────
@@ -315,8 +371,8 @@ describe('WorkflowBuilder', () => {
         mount(wf);
         server.use(
             http.get(`${BASE}/issues/tree`, () =>
-                HttpResponse.json({ projects: [], agents: [], tree: [], tasks: [] }),
-            ),
+                HttpResponse.json({ projects: [], agents: [], tree: [], tasks: [] })
+            )
         );
         await screen.findByTestId('workflow-canvas');
         await user.click(screen.getByRole('button', { name: /run now/i }));
@@ -337,14 +393,16 @@ describe('WorkflowBuilder', () => {
             http.post(`${BASE}/workflows/${wf.id}/runs`, async () => {
                 await delay(100);
                 return HttpResponse.json({ run_id: 'wfr-9' });
-            }),
+            })
         );
         await screen.findByTestId('workflow-canvas');
         await user.click(screen.getByRole('button', { name: /run now/i }));
         // Locked while the POST is in flight, so a second click cannot start
         // a duplicate run.
         expect(screen.getByRole('button', { name: /run now/i })).toBeDisabled();
-        await waitFor(() => expect(navigate).toHaveBeenCalledWith(`/workflows/${wf.id}/runs/wfr-9`));
+        await waitFor(() =>
+            expect(navigate).toHaveBeenCalledWith(`/workflows/${wf.id}/runs/wfr-9`)
+        );
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
@@ -357,7 +415,7 @@ describe('WorkflowBuilder', () => {
             http.post(`${BASE}/workflows/${wf.id}/runs`, () => {
                 asked = true;
                 return HttpResponse.json({ error: 'No repo cloned' }, { status: 409 });
-            }),
+            })
         );
         await screen.findByTestId('workflow-canvas');
         await user.click(screen.getByRole('button', { name: /run now/i }));
@@ -385,7 +443,7 @@ describe('WorkflowBuilder', () => {
             http.delete(`${BASE}/workflows/${wf.id}`, () => {
                 deleted = true;
                 return new HttpResponse(null, { status: 204 });
-            }),
+            })
         );
         await screen.findByTestId('workflow-canvas');
         await user.click(screen.getByRole('button', { name: 'Delete workflow' }));
@@ -404,11 +462,15 @@ describe('WorkflowBuilder', () => {
         const wf = makeWorkflow();
         mount(wf);
         server.use(
-            http.delete(`${BASE}/workflows/${wf.id}`, () => HttpResponse.json({ error: 'Run in flight' }, { status: 409 })),
+            http.delete(`${BASE}/workflows/${wf.id}`, () =>
+                HttpResponse.json({ error: 'Run in flight' }, { status: 409 })
+            )
         );
         await screen.findByTestId('workflow-canvas');
         await user.click(screen.getByRole('button', { name: 'Delete workflow' }));
-        await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
+        await user.click(
+            within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' })
+        );
 
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
         expect(navigate).not.toHaveBeenCalled();
@@ -420,7 +482,9 @@ describe('WorkflowBuilder', () => {
         mount(makeWorkflow());
         await screen.findByTestId('workflow-canvas');
         await user.click(screen.getByRole('button', { name: 'Delete workflow' }));
-        await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+        await user.click(
+            within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' })
+        );
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
         // No DELETE handler is registered — msw would fail the test on one.
         expect(navigate).not.toHaveBeenCalled();
@@ -447,8 +511,14 @@ describe('WorkflowBuilder', () => {
     it('adds the dropped palette node where it landed', async () => {
         mount(makeWorkflow());
         const canvas = await screen.findByTestId('workflow-canvas');
-        fireEvent.drop(canvas, { dataTransfer: dataTransfer(JSON.stringify({ type: 'owner' })), clientX: 120, clientY: 90 });
-        await waitFor(() => expect(document.querySelectorAll('.react-flow__node[data-id^="owner"]')).toHaveLength(1));
+        fireEvent.drop(canvas, {
+            dataTransfer: dataTransfer(JSON.stringify({ type: 'owner' })),
+            clientX: 120,
+            clientY: 90,
+        });
+        await waitFor(() =>
+            expect(document.querySelectorAll('.react-flow__node[data-id^="owner"]')).toHaveLength(1)
+        );
     });
 
     // Dragging anything else (a file, selected text) over the canvas must not

@@ -121,19 +121,17 @@ const STOP_OK = {
  * MSW runs with `onUnhandledRequest: 'error'`, and the modal now fires the
  * diff summary alongside preflight, so both must always be stubbed.
  */
-function stubEndpoints(
-    opts: { preflight?: unknown; diff?: unknown; patch?: unknown } = {},
-) {
+function stubEndpoints(opts: { preflight?: unknown; diff?: unknown; patch?: unknown } = {}) {
     server.use(
         http.post(`${BASE}/cli/sessions/sess-1/preflight-stop`, () =>
-            HttpResponse.json(opts.preflight ?? PREFLIGHT_EMPTY),
+            HttpResponse.json(opts.preflight ?? PREFLIGHT_EMPTY)
         ),
         http.get(`${BASE}/cli/sessions/sess-1/diff`, () =>
-            HttpResponse.json(opts.diff ?? DIFF_EMPTY),
+            HttpResponse.json(opts.diff ?? DIFF_EMPTY)
         ),
         http.get(`${BASE}/cli/sessions/sess-1/diff/file`, () =>
-            HttpResponse.json(opts.patch ?? PATCH_FOO),
-        ),
+            HttpResponse.json(opts.patch ?? PATCH_FOO)
+        )
     );
 }
 
@@ -142,7 +140,7 @@ function stubStop(capture?: (body: Record<string, unknown>) => void) {
         http.post(`${BASE}/cli/sessions/sess-1/stop`, async ({ request }) => {
             if (capture) capture((await request.json()) as Record<string, unknown>);
             return HttpResponse.json(STOP_OK);
-        }),
+        })
     );
 }
 
@@ -165,13 +163,12 @@ function renderModal(overrides: ModalProps = {}) {
         <>
             <StopSessionModal {...props} />
             <Toast />
-        </>,
+        </>
     );
     return props;
 }
 
-const confirmButton = () =>
-    screen.getByRole('button', { name: /^stop (session|& open pr)$/i });
+const confirmButton = () => screen.getByRole('button', { name: /^stop (session|& open pr)$/i });
 
 // Prefs persist to localStorage, so they leak between tests without this.
 beforeEach(() => {
@@ -185,7 +182,7 @@ describe('StopSessionModal — loading state', () => {
     it('shows a spinner while preflight is pending', async () => {
         server.use(
             http.post(`${BASE}/cli/sessions/sess-1/preflight-stop`, () => new Promise(() => {})),
-            http.get(`${BASE}/cli/sessions/sess-1/diff`, () => HttpResponse.json(DIFF_EMPTY)),
+            http.get(`${BASE}/cli/sessions/sess-1/diff`, () => HttpResponse.json(DIFF_EMPTY))
         );
         renderModal();
         await screen.findByText(/inspecting worktree/i);
@@ -236,8 +233,8 @@ describe('StopSessionModal — stop result', () => {
     it('passes the full result through to onClosed', async () => {
         server.use(
             http.post(`${BASE}/cli/sessions/sess-1/stop`, () =>
-                HttpResponse.json({ ...STOP_OK, finalize_pr_url: 'https://gh/x/y/pull/7' }),
-            ),
+                HttpResponse.json({ ...STOP_OK, finalize_pr_url: 'https://gh/x/y/pull/7' })
+            )
         );
         const props = renderModal();
         await screen.findByText(/no changes to review/i);
@@ -247,7 +244,7 @@ describe('StopSessionModal — stop result', () => {
                 pushed: true,
                 committed: false,
                 prUrl: 'https://gh/x/y/pull/7',
-            }),
+            })
         );
     });
 
@@ -257,17 +254,15 @@ describe('StopSessionModal — stop result', () => {
         await screen.findByText(/no changes to review/i);
         fireEvent.click(confirmButton());
         await waitFor(() =>
-            expect(props.onClosed).toHaveBeenCalledWith(
-                expect.objectContaining({ prUrl: null }),
-            ),
+            expect(props.onClosed).toHaveBeenCalledWith(expect.objectContaining({ prUrl: null }))
         );
     });
 
     it('shows an error toast when stop fails', async () => {
         server.use(
             http.post(`${BASE}/cli/sessions/sess-1/stop`, () =>
-                HttpResponse.json({ error: 'Git error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Git error' }, { status: 500 })
+            )
         );
         renderModal();
         await screen.findByText(/no changes to review/i);
@@ -285,15 +280,13 @@ describe('StopSessionModal — stop result', () => {
 });
 
 describe('StopSessionModal — reviewing changes', () => {
-    beforeEach(() =>
-        stubEndpoints({ preflight: PREFLIGHT_WITH_FILES, diff: DIFF_WITH_FILES }),
-    );
+    beforeEach(() => stubEndpoints({ preflight: PREFLIGHT_WITH_FILES, diff: DIFF_WITH_FILES }));
 
     it('renders both scope tabs with counts', async () => {
         renderModal();
         expect(await screen.findByRole('tab', { name: /uncommitted \(2\)/i })).toBeInTheDocument();
         expect(
-            await screen.findByRole('tab', { name: /committed on branch \(1\)/i }),
+            await screen.findByRole('tab', { name: /committed on branch \(1\)/i })
         ).toBeInTheDocument();
     });
 
@@ -375,7 +368,7 @@ describe('StopSessionModal — reviewing changes', () => {
         fireEvent.click(await screen.findByRole('tab', { name: /committed on branch/i }));
         await screen.findByText('committed.ts');
         expect(
-            screen.queryByRole('checkbox', { name: /stage src\/committed\.ts/i }),
+            screen.queryByRole('checkbox', { name: /stage src\/committed\.ts/i })
         ).not.toBeInTheDocument();
     });
 });
@@ -387,17 +380,13 @@ describe('StopSessionModal — open_pull_request', () => {
 
     it('defaults to checked, preserving the pre-toggle behaviour', async () => {
         renderModal();
-        expect(
-            await screen.findByRole('checkbox', { name: /open a pull request/i }),
-        ).toBeChecked();
+        expect(await screen.findByRole('checkbox', { name: /open a pull request/i })).toBeChecked();
     });
 
     it('relabels the confirm button when unchecked', async () => {
         renderModal();
         fireEvent.click(await screen.findByRole('checkbox', { name: /open a pull request/i }));
-        expect(
-            await screen.findByRole('button', { name: /^stop session$/i }),
-        ).toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: /^stop session$/i })).toBeInTheDocument();
     });
 
     it('sends open_pull_request:false when unchecked', async () => {
@@ -428,18 +417,18 @@ describe('StopSessionModal — open_pull_request', () => {
         renderModal();
         fireEvent.click(await screen.findByRole('checkbox', { name: /open a pull request/i }));
         await waitFor(() =>
-            expect(window.localStorage.getItem(DIFF_PREFS_KEY)).toContain('"openPr":false'),
+            expect(window.localStorage.getItem(DIFF_PREFS_KEY)).toContain('"openPr":false')
         );
     });
 
     it('restores the saved choice on a fresh mount', async () => {
         window.localStorage.setItem(
             DIFF_PREFS_KEY,
-            JSON.stringify({ openPr: false, viewMode: 'split', wrap: true }),
+            JSON.stringify({ openPr: false, viewMode: 'split', wrap: true })
         );
         renderModal();
         expect(
-            await screen.findByRole('checkbox', { name: /open a pull request/i }),
+            await screen.findByRole('checkbox', { name: /open a pull request/i })
         ).not.toBeChecked();
         expect(screen.getByRole('button', { name: /^stop session$/i })).toBeInTheDocument();
     });
@@ -470,9 +459,9 @@ describe('StopSessionModal — degraded states', () => {
     it('shows an error toast when preflight fails', async () => {
         server.use(
             http.post(`${BASE}/cli/sessions/sess-1/preflight-stop`, () =>
-                HttpResponse.json({ error: 'nope' }, { status: 500 }),
+                HttpResponse.json({ error: 'nope' }, { status: 500 })
             ),
-            http.get(`${BASE}/cli/sessions/sess-1/diff`, () => HttpResponse.json(DIFF_EMPTY)),
+            http.get(`${BASE}/cli/sessions/sess-1/diff`, () => HttpResponse.json(DIFF_EMPTY))
         );
         renderModal();
         expect(await screen.findByText(/could not inspect worktree/i)).toBeInTheDocument();
@@ -483,11 +472,11 @@ describe('StopSessionModal — degraded states', () => {
     it('still allows stopping when the diff request fails', async () => {
         server.use(
             http.post(`${BASE}/cli/sessions/sess-1/preflight-stop`, () =>
-                HttpResponse.json(PREFLIGHT_WITH_FILES),
+                HttpResponse.json(PREFLIGHT_WITH_FILES)
             ),
             http.get(`${BASE}/cli/sessions/sess-1/diff`, () =>
-                HttpResponse.json({ error: 'worktree gone' }, { status: 409 }),
-            ),
+                HttpResponse.json({ error: 'worktree gone' }, { status: 409 })
+            )
         );
         renderModal();
         expect(await screen.findByText(/could not load the diff/i)).toBeInTheDocument();

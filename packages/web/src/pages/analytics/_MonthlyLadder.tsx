@@ -26,9 +26,7 @@ interface MomRow {
 }
 
 export function MonthlyLadder({ momData }: { momData: MomRow[] }) {
-    const hasData = momData.some(
-        (m) => m.cost > 0 || m.terminalCost > 0 || m.runs > 0,
-    );
+    const hasData = momData.some((m) => m.cost > 0 || m.terminalCost > 0 || m.runs > 0);
     if (!hasData) {
         return (
             <Card>
@@ -63,18 +61,39 @@ export function MonthlyLadder({ momData }: { momData: MomRow[] }) {
                             <stop offset="100%" stopColor={CHART_COLORS.cost} stopOpacity={0.78} />
                         </linearGradient>
                         <linearGradient id="momTermBar" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={CHART_COLORS.terminal} stopOpacity={0.55} />
-                            <stop offset="100%" stopColor={CHART_COLORS.terminal} stopOpacity={0.32} />
+                            <stop
+                                offset="0%"
+                                stopColor={CHART_COLORS.terminal}
+                                stopOpacity={0.55}
+                            />
+                            <stop
+                                offset="100%"
+                                stopColor={CHART_COLORS.terminal}
+                                stopOpacity={0.32}
+                            />
                         </linearGradient>
                         <linearGradient id="momTermBarCurrent" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor={CHART_COLORS.terminal} stopOpacity={1} />
-                            <stop offset="100%" stopColor={CHART_COLORS.terminal} stopOpacity={0.78} />
+                            <stop
+                                offset="100%"
+                                stopColor={CHART_COLORS.terminal}
+                                stopOpacity={0.78}
+                            />
                         </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="2 5" stroke={CHART_COLORS.grid} vertical={false} />
+                    <CartesianGrid
+                        strokeDasharray="2 5"
+                        stroke={CHART_COLORS.grid}
+                        vertical={false}
+                    />
                     <XAxis
                         dataKey="month"
-                        tick={{ fontSize: 11, fill: ATLAS_PALETTE.slate60, fontFamily: MONO, fontWeight: 600 }}
+                        tick={{
+                            fontSize: 11,
+                            fill: ATLAS_PALETTE.slate60,
+                            fontFamily: MONO,
+                            fontWeight: 600,
+                        }}
                         axisLine={{ stroke: CHART_COLORS.rail }}
                         tickLine={false}
                     />
@@ -110,7 +129,11 @@ export function MonthlyLadder({ momData }: { momData: MomRow[] }) {
                         }}
                         labelStyle={{ fontFamily: TYPOGRAPHY.fontFamily, fontWeight: 600 }}
                     />
-                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 6 }} iconType="circle" iconSize={8} />
+                    <Legend
+                        wrapperStyle={{ fontSize: 11, paddingTop: 6 }}
+                        iconType="circle"
+                        iconSize={8}
+                    />
                     <Bar
                         yAxisId="cost"
                         dataKey="cost"
@@ -122,7 +145,11 @@ export function MonthlyLadder({ momData }: { momData: MomRow[] }) {
                         {momData.map((m, idx) => (
                             <Cell
                                 key={`a:${m.key}`}
-                                fill={idx === momData.length - 1 ? 'url(#momCostBarCurrent)' : 'url(#momCostBar)'}
+                                fill={
+                                    idx === momData.length - 1
+                                        ? 'url(#momCostBarCurrent)'
+                                        : 'url(#momCostBar)'
+                                }
                             />
                         ))}
                     </Bar>
@@ -138,7 +165,11 @@ export function MonthlyLadder({ momData }: { momData: MomRow[] }) {
                         {momData.map((m, idx) => (
                             <Cell
                                 key={`t:${m.key}`}
-                                fill={idx === momData.length - 1 ? 'url(#momTermBarCurrent)' : 'url(#momTermBar)'}
+                                fill={
+                                    idx === momData.length - 1
+                                        ? 'url(#momTermBarCurrent)'
+                                        : 'url(#momTermBar)'
+                                }
                             />
                         ))}
                     </Bar>
@@ -149,8 +180,18 @@ export function MonthlyLadder({ momData }: { momData: MomRow[] }) {
                         name="Runs"
                         stroke={CHART_COLORS.runs}
                         strokeWidth={2.5}
-                        dot={{ r: 3.5, fill: ATLAS_PALETTE.surfaceRaised, stroke: CHART_COLORS.runs, strokeWidth: 2 }}
-                        activeDot={{ r: 6, fill: CHART_COLORS.runs, stroke: ATLAS_PALETTE.surfaceRaised, strokeWidth: 2 }}
+                        dot={{
+                            r: 3.5,
+                            fill: ATLAS_PALETTE.surfaceRaised,
+                            stroke: CHART_COLORS.runs,
+                            strokeWidth: 2,
+                        }}
+                        activeDot={{
+                            r: 6,
+                            fill: CHART_COLORS.runs,
+                            stroke: ATLAS_PALETTE.surfaceRaised,
+                            strokeWidth: 2,
+                        }}
                     />
                 </ComposedChart>
             </ResponsiveContainer>

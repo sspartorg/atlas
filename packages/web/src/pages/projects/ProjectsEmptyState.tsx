@@ -25,7 +25,9 @@ export function ProjectsEmptyState({ onNewProject }: IProjectsEmptyStateProps) {
     const noCredentials = (credentials?.length ?? 0) === 0;
     return (
         <HeroEmptyState
-            icon={<ImageNotSupportedRounded sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 28 }} />}
+            icon={
+                <ImageNotSupportedRounded sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 28 }} />
+            }
             title="No projects yet."
             description={
                 <>
@@ -53,29 +55,33 @@ export function ProjectsEmptyState({ onNewProject }: IProjectsEmptyStateProps) {
             }
             supplemental={
                 noCredentials ? (
-                <Alert
-                    icon={<InfoOutlined sx={{ color: ATLAS_PALETTE.brandBlue }} />}
-                    sx={{
-                        bgcolor: ATLAS_PALETTE.cloud,
-                        color: ATLAS_PALETTE.slate,
-                        textAlign: 'left',
-                        '& .MuiAlert-message': { fontSize: 13, lineHeight: 1.6 },
-                    }}
-                >
-                    <Box component="span" sx={{ fontWeight: 600 }}>
-                        No credentials yet?
-                    </Box>{' '}
-                    Add a Personal Access Token in{' '}
-                    <Box
-                        component="a"
-                        onClick={() => navigate('/settings/credentials')}
-                        sx={{ color: ATLAS_PALETTE.brandBlue, cursor: 'pointer', fontWeight: 500 }}
+                    <Alert
+                        icon={<InfoOutlined sx={{ color: ATLAS_PALETTE.brandBlue }} />}
+                        sx={{
+                            bgcolor: ATLAS_PALETTE.cloud,
+                            color: ATLAS_PALETTE.slate,
+                            textAlign: 'left',
+                            '& .MuiAlert-message': { fontSize: 13, lineHeight: 1.6 },
+                        }}
                     >
-                        Settings → Credentials
-                    </Box>{' '}
-                    first. Atlas encrypts them with AES-256-GCM and never writes them to disk in
-                    plaintext.
-                </Alert>
+                        <Box component="span" sx={{ fontWeight: 600 }}>
+                            No credentials yet?
+                        </Box>{' '}
+                        Add a Personal Access Token in{' '}
+                        <Box
+                            component="a"
+                            onClick={() => navigate('/settings/credentials')}
+                            sx={{
+                                color: ATLAS_PALETTE.brandBlue,
+                                cursor: 'pointer',
+                                fontWeight: 500,
+                            }}
+                        >
+                            Settings → Credentials
+                        </Box>{' '}
+                        first. Atlas encrypts them with AES-256-GCM and never writes them to disk in
+                        plaintext.
+                    </Alert>
                 ) : undefined
             }
         />

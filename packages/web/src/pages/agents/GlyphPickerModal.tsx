@@ -117,17 +117,14 @@ export function GlyphPickerModal({ open, agent, currentGlyph, onClose }: Props) 
                                     height: 92,
                                     px: 1,
                                     border: `2px solid ${
-                                        isSelected
-                                            ? agent.accent_color
-                                            : ATLAS_PALETTE.slate10
+                                        isSelected ? agent.accent_color : ATLAS_PALETTE.slate10
                                     }`,
                                     background: isSelected
                                         ? hexToRgba(agent.accent_color, 0.06)
                                         : ATLAS_PALETTE.white,
                                     borderRadius: '10px',
                                     cursor: 'pointer',
-                                    transition:
-                                        'border-color 120ms ease, background 120ms ease',
+                                    transition: 'border-color 120ms ease, background 120ms ease',
                                     '&:hover': {
                                         borderColor: isSelected
                                             ? agent.accent_color
@@ -139,14 +136,13 @@ export function GlyphPickerModal({ open, agent, currentGlyph, onClose }: Props) 
                                 <Box
                                     component="span"
                                     className="material-symbols-rounded"
+                                    aria-hidden="true"
                                     sx={{
                                         fontSize: 26,
                                         color: isSelected
                                             ? agent.accent_color
                                             : ATLAS_PALETTE.slate60,
-                                        fontVariationSettings: isSelected
-                                            ? "'FILL' 1"
-                                            : "'FILL' 0",
+                                        fontVariationSettings: isSelected ? "'FILL' 1" : "'FILL' 0",
                                         flexShrink: 0,
                                     }}
                                 >

@@ -34,12 +34,12 @@ function baseHandlers(projects = [makeProject()]) {
                 total: projects.length,
                 page: 1,
                 limit: 20,
-            }),
+            })
         ),
         http.get(`${BASE}/projects`, () => HttpResponse.json(projects)),
         http.get(`${BASE}/agents`, () => HttpResponse.json([makeAgent()])),
         http.get(`${BASE}/tasks`, () =>
-            HttpResponse.json([makeTaskListItem({ project_id: 'p1' })]),
+            HttpResponse.json([makeTaskListItem({ project_id: 'p1' })])
         ),
         ...defaultHandlers,
     ];
@@ -126,8 +126,9 @@ describe('Projects page', () => {
         await screen.findByText('Atlas');
         fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
         // Open the row menu by clicking the menu trigger (last icon button in the row).
-        const menuTrigger = container.querySelector('button[aria-haspopup="true"]')
-            ?? container.querySelector('button[aria-label*="ore" i]');
+        const menuTrigger =
+            container.querySelector('button[aria-haspopup="true"]') ??
+            container.querySelector('button[aria-label*="ore" i]');
         if (menuTrigger) fireEvent.click(menuTrigger);
         // If the menu opened, click any menu items present to fire their handlers.
         const menuItems = document.querySelectorAll('[role="menuitem"]');
@@ -163,7 +164,7 @@ describe('Projects page', () => {
     it('renders the pagination controls when totalProjects > limit', async () => {
         // Return 25 projects via the paged endpoint; limit is 20.
         const many = Array.from({ length: 25 }, (_, i) =>
-            makeProject({ id: `p${i + 1}`, name: `Project ${i + 1}` }),
+            makeProject({ id: `p${i + 1}`, name: `Project ${i + 1}` })
         );
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
@@ -172,10 +173,10 @@ describe('Projects page', () => {
                     total: many.length,
                     page: 1,
                     limit: 20,
-                }),
+                })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json(many)),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         // Wait for the rows count line; pagination has "Showing 1–20 of 25".
@@ -200,7 +201,9 @@ describe('Projects page', () => {
 
     it('exercises card menu onCopyUrl (Copy repo URL) in card view', async () => {
         // Mock clipboard
-        Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+        Object.assign(navigator, {
+            clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+        });
         server.use(...baseHandlers());
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('Atlas');
@@ -230,12 +233,12 @@ describe('Projects page', () => {
         const task = makeTaskListItem({ project_id: 'p1', assignee_agent_id: 'a1' });
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([agent])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([task])),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('Atlas');
@@ -249,16 +252,16 @@ describe('Projects page', () => {
     it('sums sub_task_count across tasks for the sub-task totals', async () => {
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
             http.get(`${BASE}/tasks`, () =>
                 HttpResponse.json([
                     makeTaskListItem({ id: 't1', project_id: 'p1', sub_task_count: 2 }),
                     makeTaskListItem({ id: 't2', project_id: 'p1', sub_task_count: 1 }),
-                ]),
+                ])
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         expect(await screen.findByText(/2 tasks · 3 sub-tasks/)).toBeInTheDocument();
@@ -266,14 +269,14 @@ describe('Projects page', () => {
 
     it('exercises the rows-per-page change (setLimit + setPage)', async () => {
         const many = Array.from({ length: 25 }, (_, i) =>
-            makeProject({ id: `p${i + 1}`, name: `Project ${i + 1}` }),
+            makeProject({ id: `p${i + 1}`, name: `Project ${i + 1}` })
         );
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: many.slice(0, 20), total: 25, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: many.slice(0, 20), total: 25, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json(many)),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText(/1–20 of 25/);
@@ -286,7 +289,9 @@ describe('Projects page', () => {
     });
 
     it('exercises table-view onCopyUrl via Copy repo URL menu item (fn#19)', async () => {
-        Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+        Object.assign(navigator, {
+            clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+        });
         server.use(...baseHandlers());
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('Atlas');
@@ -307,7 +312,7 @@ describe('Projects page', () => {
         await screen.findByText('Atlas');
         // PageFab renders with aria-label="New Project"
         const allBtns = screen.getAllByRole('button');
-        const fabBtn = allBtns.find(b => b.getAttribute('aria-label') === 'New Project');
+        const fabBtn = allBtns.find((b) => b.getAttribute('aria-label') === 'New Project');
         if (fabBtn) fireEvent.click(fabBtn);
         expect(document.body).toBeTruthy();
     });
@@ -320,9 +325,12 @@ describe('Projects page', () => {
         const newBtns = screen.getAllByRole('button', { name: /New Project/i });
         if (newBtns[0]) {
             fireEvent.click(newBtns[0]);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 5000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                },
+                { timeout: 5000 }
+            ).catch(() => {});
             const dialog = document.querySelector('[role="dialog"]');
             if (dialog) fireEvent.keyDown(dialog, { key: 'Escape' });
         }
@@ -339,9 +347,12 @@ describe('Projects page', () => {
         const deleteItem = screen.queryByText(/Delete project/i);
         if (deleteItem) {
             fireEvent.click(deleteItem);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 5000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                },
+                { timeout: 5000 }
+            ).catch(() => {});
             // Close via Cancel
             const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
             if (cancelBtn) {
@@ -358,32 +369,32 @@ describe('Projects page', () => {
         // Project has no tasks so categoriesByProject is empty → software-dev filter yields 0 projects
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('Atlas');
         // Click "Software dev queue" chip — project has no matching tasks so filteredProjects is empty
         fireEvent.click(screen.getByText('Software dev queue'));
         await waitFor(() =>
-            expect(screen.getByText(/no projects match this filter/i)).toBeInTheDocument(),
+            expect(screen.getByText(/no projects match this filter/i)).toBeInTheDocument()
         );
     });
 
     it('exercises pagination page change via MuiPagination onChange', async () => {
         const many = Array.from({ length: 25 }, (_, i) =>
-            makeProject({ id: `p${i + 1}`, name: `Project ${i + 1}` }),
+            makeProject({ id: `p${i + 1}`, name: `Project ${i + 1}` })
         );
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: many.slice(0, 20), total: 25, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: many.slice(0, 20), total: 25, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json(many)),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText(/1–20 of 25/);
@@ -419,12 +430,12 @@ describe('Projects page', () => {
         const task = makeTaskListItem({ project_id: 'p1', assignee_agent_id: 'a1' });
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [p1, p2], total: 2, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [p1, p2], total: 2, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([p1, p2])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([agent])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([task])),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('SW Project');
@@ -444,13 +455,13 @@ describe('Projects page', () => {
         const p = makeProject({ id: 'p1', name: 'Git Project', issue_key_prefix: 'GP' });
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [p], total: 1, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [p], total: 1, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([p])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             reposAre(makeProjectRepo({ git_url: 'https://github.com/example/repo.git' })),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('Git Project');
@@ -464,7 +475,7 @@ describe('Projects page', () => {
         const p = makeProject({ id: 'p1', name: 'Multi Project' });
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [p], total: 1, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [p], total: 1, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([p])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
@@ -472,9 +483,9 @@ describe('Projects page', () => {
             reposAre(
                 makeProjectRepo({ id: 'r1', git_url: 'https://github.com/example/first.git' }),
                 makeProjectRepo({ id: 'r2', git_url: 'https://github.com/example/second.git' }),
-                makeProjectRepo({ id: 'r3', git_url: 'https://github.com/example/third.git' }),
+                makeProjectRepo({ id: 'r3', git_url: 'https://github.com/example/third.git' })
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('Multi Project');
@@ -484,14 +495,14 @@ describe('Projects page', () => {
         expect(await screen.findByText('github.com/example/first +2')).toBeInTheDocument();
     });
 
-    it('cards show each project\'s repo count from the single /repos fetch', async () => {
+    it("cards show each project's repo count from the single /repos fetch", async () => {
         const one = makeProject({ id: 'p1', name: 'One Repo' });
         const none = makeProject({ id: 'p2', name: 'No Repo' });
         const two = makeProject({ id: 'p3', name: 'Two Repos' });
         let repoFetches = 0;
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [one, none, two], total: 3, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [one, none, two], total: 3, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([one, none, two])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
@@ -504,7 +515,7 @@ describe('Projects page', () => {
                     makeProjectRepo({ id: 'r3', project_id: 'p3' }),
                 ]);
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         expect(await screen.findByText('1 repo')).toBeInTheDocument();
@@ -517,14 +528,16 @@ describe('Projects page', () => {
     it('exercises handleCopyUrl Undo action onClick — covers the clipboard.writeText("") catch(() => {}) branch', async () => {
         // handleCopyUrl shows a toast with an Undo action.
         // Clicking Undo calls navigator.clipboard.writeText('').catch(() => {}).
-        Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+        Object.assign(navigator, {
+            clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+        });
         server.use(...baseHandlers());
         renderWithProviders(
             <>
                 <Projects />
                 <Toast />
             </>,
-            { initialEntries: ['/projects'] },
+            { initialEntries: ['/projects'] }
         );
         await screen.findByText('Atlas');
         const menuBtn = screen.getByRole('button', { name: /Project actions/i });
@@ -534,10 +547,13 @@ describe('Projects page', () => {
         if (copyItem) {
             fireEvent.click(copyItem);
             // Toast appears with Undo button — click it to exercise the action.onClick
-            await waitFor(() => {
-                const undoBtn = screen.queryByText('Undo');
-                expect(undoBtn).toBeTruthy();
-            }, { timeout: 3000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    const undoBtn = screen.queryByText('Undo');
+                    expect(undoBtn).toBeTruthy();
+                },
+                { timeout: 3000 }
+            ).catch(() => {});
             const undoBtn = screen.queryByText('Undo');
             if (undoBtn) fireEvent.click(undoBtn);
         }
@@ -550,12 +566,12 @@ describe('Projects page', () => {
         const task = makeTaskListItem({ project_id: 'p1', assignee_agent_id: 'unknown-agent' });
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])), // no agents → category lookup misses
             http.get(`${BASE}/tasks`, () => HttpResponse.json([task])),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('Atlas');
@@ -570,13 +586,13 @@ describe('Projects page', () => {
         const writeText = vi.fn().mockResolvedValue(undefined);
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [noRepos], total: 1, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [noRepos], total: 1, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([noRepos])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             reposAre(),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         Object.assign(navigator, { clipboard: { writeText } });
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
@@ -603,10 +619,11 @@ describe('Projects page', () => {
         // first would otherwise shadow this override and the `??` branch
         // would never actually fire.
         server.use(
-            http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, onboarding_complete: 1 }), // no owner_name
+            http.get(
+                `${BASE}/settings`,
+                () => HttpResponse.json({ id: 1, onboarding_complete: 1 }) // no owner_name
             ),
-            ...baseHandlers(),
+            ...baseHandlers()
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('Atlas');
@@ -624,17 +641,21 @@ describe('Projects page', () => {
         // Simplest: render table view, then intercept the menu action on a row whose
         // project id we replaced to something not present in the current paged response.
         // We do this by providing two different project lists for the two endpoints.
-        const tableProject = makeProject({ id: 'p99', name: 'Ghost Project', issue_key_prefix: 'GH' });
+        const tableProject = makeProject({
+            id: 'p99',
+            name: 'Ghost Project',
+            issue_key_prefix: 'GH',
+        });
         server.use(
             // paged returns p99
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [tableProject], total: 1, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [tableProject], total: 1, page: 1, limit: 20 })
             ),
             // full list used for projectById also returns p99 initially
             http.get(`${BASE}/projects`, () => HttpResponse.json([tableProject])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('Ghost Project');
@@ -643,7 +664,9 @@ describe('Projects page', () => {
         await waitFor(() => expect(screen.getByText('Ghost Project')).toBeInTheDocument());
         // Open menu and click Copy — should call handleRowAction('p99', 'copy')
         // which hits the projectById.get check; p99 exists so this is the happy path
-        Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+        Object.assign(navigator, {
+            clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+        });
         const menuBtns = screen.getAllByRole('button', { name: /Project actions/i });
         expect(menuBtns[0]).toBeTruthy();
         fireEvent.click(menuBtns[0]!);
@@ -709,9 +732,12 @@ describe('Projects page', () => {
         if (deleteItem) {
             fireEvent.click(deleteItem);
             // Modal open — activeProject is set; displayIdById has the id → no fallback
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 5000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                },
+                { timeout: 5000 }
+            ).catch(() => {});
         }
         expect(document.body).toBeTruthy();
     }, 30000);
@@ -726,12 +752,12 @@ describe('Projects page', () => {
         const p = makeProject({ id: 'p1', issue_key_prefix: 'ATL' });
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [p], total: 1, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [p], total: 1, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([p])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('Atlas');
@@ -764,12 +790,12 @@ describe('Projects page', () => {
         // instead of the ProjectsEmptyState CTA.
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         // The populated-page header ("0 projects · ...") should render, NOT the
@@ -777,7 +803,6 @@ describe('Projects page', () => {
         await screen.findByText(/0 projects/i);
         expect(screen.queryByText(/New Project/i)).toBeTruthy();
     });
-
 
     it('L181/L468: tableRows displayId fallback — project missing issue_key_prefix in the raw API payload', async () => {
         // `displayId: displayIdById.get(p.id) ?? ''` at L181, and the same
@@ -807,12 +832,12 @@ describe('Projects page', () => {
         };
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: [rawProject], total: 1, page: 1, limit: 20 }),
+                HttpResponse.json({ rows: [rawProject], total: 1, page: 1, limit: 20 })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([rawProject])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('Atlas');
@@ -828,13 +853,14 @@ describe('Projects page', () => {
             const deleteItem = screen.queryByText(/Delete project/i);
             if (deleteItem) {
                 fireEvent.click(deleteItem);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 5000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 5000 }
+                ).catch(() => {});
             }
         }
         expect(document.body).toBeTruthy();
     }, 30000);
-
-
 }, 15000);

@@ -71,7 +71,12 @@ function PaletteChip({ item, label, icon, color, onAdd }: ChipProps) {
             >
                 {label}
             </Typography>
-            <Box component="span" className="material-symbols-rounded" sx={{ fontSize: 16, color: ATLAS_PALETTE.slate40 }}>
+            <Box
+                component="span"
+                className="material-symbols-rounded"
+                aria-hidden="true"
+                sx={{ fontSize: 16, color: ATLAS_PALETTE.slate40 }}
+            >
                 {icon}
             </Box>
         </Box>
@@ -80,7 +85,10 @@ function PaletteChip({ item, label, icon, color, onAdd }: ChipProps) {
 
 function Heading({ children }: { children: string }) {
     return (
-        <Typography variant="overline" sx={{ color: ATLAS_PALETTE.slate60, display: 'block', mt: 1 }}>
+        <Typography
+            variant="overline"
+            sx={{ color: ATLAS_PALETTE.slate60, display: 'block', mt: 1 }}
+        >
             {children}
         </Typography>
     );
@@ -115,14 +123,40 @@ export function NodePalette({ agents, showSubtasks, onAdd }: PaletteProps) {
             }}
         >
             <Heading>Flow</Heading>
-            <PaletteChip item={{ type: 'owner' }} label="Owner" icon="person" color={ATLAS_PALETTE.warning} onAdd={onAdd} />
+            <PaletteChip
+                item={{ type: 'owner' }}
+                label="Owner"
+                icon="person"
+                color={ATLAS_PALETTE.warning}
+                onAdd={onAdd}
+            />
             {showSubtasks && (
-                <PaletteChip item={{ type: 'subtasks' }} label="Sub-tasks" icon="checklist" color={ATLAS_PALETTE.brandBlue} onAdd={onAdd} />
+                <PaletteChip
+                    item={{ type: 'subtasks' }}
+                    label="Sub-tasks"
+                    icon="checklist"
+                    color={ATLAS_PALETTE.brandBlue}
+                    onAdd={onAdd}
+                />
             )}
-            <PaletteChip item={{ type: 'end' }} label="End" icon="flag" color={ATLAS_PALETTE.success} onAdd={onAdd} />
+            <PaletteChip
+                item={{ type: 'end' }}
+                label="End"
+                icon="flag"
+                color={ATLAS_PALETTE.success}
+                onAdd={onAdd}
+            />
             <Heading>Agents</Heading>
             <SearchTextInput value={q} onChange={setQ} label="Search agents" minWidth={0} />
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, overflowY: 'auto', minHeight: 0 }}>
+            <Box
+                sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1.5,
+                    overflowY: 'auto',
+                    minHeight: 0,
+                }}
+            >
                 {shown.map((a) => (
                     <PaletteChip
                         key={a.id}

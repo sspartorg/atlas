@@ -96,6 +96,7 @@ export function SearchResults({
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 16, color: ATLAS_PALETTE.slate60 }}
                     >
                         sort
@@ -154,6 +155,7 @@ export function SearchResults({
                                     <Box
                                         component="span"
                                         className="material-symbols-rounded"
+                                        aria-hidden="true"
                                         sx={{ fontSize: 16, color }}
                                     >
                                         {TYPE_ICON[t]}
@@ -251,6 +253,7 @@ export function SearchResults({
                                                         <Box
                                                             component="span"
                                                             className="material-symbols-rounded"
+                                                            aria-hidden="true"
                                                             sx={{ fontSize: 12 }}
                                                         >
                                                             {view?.glyph ?? 'developer_board'}

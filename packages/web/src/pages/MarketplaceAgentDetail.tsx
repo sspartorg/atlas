@@ -37,9 +37,7 @@ function KvRow({ k, v }: { k: string; v: string | number }) {
     return (
         <Box sx={KV_ROW_SX}>
             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>{k}</Typography>
-            <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate }}>
-                {String(v)}
-            </Typography>
+            <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate }}>{String(v)}</Typography>
         </Box>
     );
 }
@@ -176,6 +174,7 @@ export function MarketplaceAgentDetail() {
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 32, fontVariationSettings: "'FILL' 1" }}
                     >
                         {agent.glyph || 'smart_toy'}
@@ -265,7 +264,12 @@ export function MarketplaceAgentDetail() {
             <CliUnavailableAlert cli={agent.cli} beforeInstall={!isInstalled} sx={{ mb: 3 }} />
 
             <Box
-                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' }, gap: 4, mt: 5 }}
+                sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' },
+                    gap: 4,
+                    mt: 5,
+                }}
             >
                 <Box>
                     {agent.summary && (

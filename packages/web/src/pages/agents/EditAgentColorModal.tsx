@@ -61,8 +61,8 @@ export function EditAgentColorModal({ open, agent, onClose }: Props) {
             </DialogTitle>
             <DialogContent sx={{ pt: 1 }}>
                 <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate60, mb: 3 }}>
-                    The accent appears on this agent&apos;s avatar, card border, and chip across
-                    the app.
+                    The accent appears on this agent&apos;s avatar, card border, and chip across the
+                    app.
                 </Typography>
                 <AccentColorPicker value={color} onChange={setColor} />
             </DialogContent>

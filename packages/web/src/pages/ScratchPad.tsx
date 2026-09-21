@@ -46,7 +46,7 @@ export function ScratchPad() {
                         detail: e.message,
                     });
                 },
-            },
+            }
         );
     }
 
@@ -80,8 +80,8 @@ export function ScratchPad() {
                         Scratch Pad
                     </Typography>
                     <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 2 }}>
-                        Free-form markdown tiles. Use them for half-formed thoughts before
-                        they become a Task.
+                        Free-form markdown tiles. Use them for half-formed thoughts before they
+                        become a Task.
                     </Typography>
                 </Box>
                 <Box sx={{ display: { xs: 'none', md: 'flex' } }}>
@@ -100,9 +100,7 @@ export function ScratchPad() {
             {!isLoading && tiles.length === 0 ? (
                 <HeroEmptyState
                     icon={
-                        <StickyNote2Rounded
-                            sx={{ fontSize: 30, color: ATLAS_PALETTE.slate60 }}
-                        />
+                        <StickyNote2Rounded sx={{ fontSize: 30, color: ATLAS_PALETTE.slate60 }} />
                     }
                     title="No scratch pad tiles yet"
                     description="Use New tile to capture a thought. Tiles autosave every 5 seconds while open."
@@ -116,11 +114,7 @@ export function ScratchPad() {
                     }}
                 >
                     {tiles.map((tile) => (
-                        <TileCard
-                            key={tile.id}
-                            tile={tile}
-                            onOpen={() => setEditingId(tile.id)}
-                        />
+                        <TileCard key={tile.id} tile={tile} onOpen={() => setEditingId(tile.id)} />
                     ))}
                 </Box>
             )}

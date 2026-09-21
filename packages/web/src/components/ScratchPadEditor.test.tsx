@@ -55,7 +55,7 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
 
     it('does NOT render Edit / Split / Preview chips or a MarkdownPreview surface', () => {
         renderWithProviders(
-            <ScratchPadEditor open onClose={vi.fn()} tile={makeTile({ body_md: '# heading' })} />,
+            <ScratchPadEditor open onClose={vi.fn()} tile={makeTile({ body_md: '# heading' })} />
         );
         // Chips
         expect(screen.queryByText('Edit')).not.toBeInTheDocument();
@@ -72,7 +72,7 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
                 open
                 onClose={vi.fn()}
                 tile={makeTile({ title: 'Hello', body_md: 'world' })}
-            />,
+            />
         );
         const textareas = screen.getAllByRole('textbox');
         // One textbox for the title input + one for the body textarea.
@@ -98,9 +98,9 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
                         id: params['id'] as string,
                         title: body.title ?? '',
                         body_md: body.body_md ?? '',
-                    }),
+                    })
                 );
-            }),
+            })
         );
 
         renderWithProviders(
@@ -108,7 +108,7 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
                 open
                 onClose={onClose}
                 tile={makeTile({ id: 'tile-7', title: '', body_md: '' })}
-            />,
+            />
         );
 
         const bodyArea = screen.getByPlaceholderText('Take a note...');
@@ -144,9 +144,9 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
                         id: 'tile-8',
                         title: body.title ?? '',
                         body_md: body.body_md ?? '',
-                    }),
+                    })
                 );
-            }),
+            })
         );
 
         renderWithProviders(<ScratchPadEditor open onClose={onClose} tile={tile} />);
@@ -170,7 +170,7 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
                 open
                 onClose={vi.fn()}
                 tile={makeTile({ id: 'tile-9', title: 'My note' })}
-            />,
+            />
         );
         // No confirm modal visible initially.
         expect(screen.queryByText(/Delete this scratch tile\?/i)).not.toBeInTheDocument();
@@ -180,9 +180,7 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
         // the impact copy and a primary "Delete scratch tile" action button.
         expect(screen.getByText(/Delete this scratch tile\?/i)).toBeInTheDocument();
         expect(screen.getByText('My note')).toBeInTheDocument();
-        expect(
-            screen.getByRole('button', { name: /Delete scratch tile/i }),
-        ).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Delete scratch tile/i })).toBeInTheDocument();
     });
 
     it('issues a DELETE and closes the editor when the modal is confirmed', async () => {
@@ -192,11 +190,11 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
             http.delete(`${BASE}/scratch-pad/:id`, () => {
                 deleted = true;
                 return new HttpResponse(null, { status: 204 });
-            }),
+            })
         );
 
         renderWithProviders(
-            <ScratchPadEditor open onClose={onClose} tile={makeTile({ id: 'tile-10' })} />,
+            <ScratchPadEditor open onClose={onClose} tile={makeTile({ id: 'tile-10' })} />
         );
 
         await userEvent.click(screen.getByRole('button', { name: /Delete tile/i }));
@@ -209,33 +207,33 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
     it('Cancel in the delete modal closes the confirm dialog but keeps the editor open', async () => {
         const onClose = vi.fn();
         renderWithProviders(
-            <ScratchPadEditor open onClose={onClose} tile={makeTile({ id: 'tile-11' })} />,
+            <ScratchPadEditor open onClose={onClose} tile={makeTile({ id: 'tile-11' })} />
         );
         await userEvent.click(screen.getByRole('button', { name: /Delete tile/i }));
         await userEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
         await waitFor(() =>
-            expect(screen.queryByText(/Delete this scratch tile\?/i)).not.toBeInTheDocument(),
+            expect(screen.queryByText(/Delete this scratch tile\?/i)).not.toBeInTheDocument()
         );
         expect(onClose).not.toHaveBeenCalled();
     });
 
     it('does not render a formatting toolbar', () => {
         renderWithProviders(
-            <ScratchPadEditor open onClose={vi.fn()} tile={makeTile({ body_md: 'x' })} />,
+            <ScratchPadEditor open onClose={vi.fn()} tile={makeTile({ body_md: 'x' })} />
         );
         // No B/I/H1/H2 style buttons; the only buttons in the dialog are
         // Delete tile + Close.
         const buttons = screen.getAllByRole('button');
         const labels = buttons.map((b) => b.getAttribute('aria-label') ?? b.textContent ?? '');
         const formattingLabels = labels.filter((l) =>
-            /\b(Bold|Italic|H1|H2|H3|Heading|Bullet)\b/i.test(l),
+            /\b(Bold|Italic|H1|H2|H3|Heading|Bullet)\b/i.test(l)
         );
         expect(formattingLabels).toHaveLength(0);
     });
 
     it('renders nothing when tile is null (tile=null branch)', () => {
         const { container } = renderWithProviders(
-            <ScratchPadEditor open onClose={vi.fn()} tile={null} />,
+            <ScratchPadEditor open onClose={vi.fn()} tile={null} />
         );
         // When tile is null, the dialog should still render (open=true) but
         // delete button should be disabled (disabled={!tile})
@@ -248,7 +246,7 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
             http.patch(`${BASE}/scratch-pad/:id`, async ({ request }) => {
                 patchSpy(await request.json());
                 return HttpResponse.json(makeTile());
-            }),
+            })
         );
         const onClose = vi.fn();
         renderWithProviders(<ScratchPadEditor open onClose={onClose} tile={null} />);
@@ -263,7 +261,7 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
                 open
                 onClose={vi.fn()}
                 tile={makeTile({ title: 'Note', body_md: 'initial' })}
-            />,
+            />
         );
         const bodyArea = screen.getByPlaceholderText('Take a note...') as HTMLTextAreaElement;
         await userEvent.clear(bodyArea);
@@ -277,7 +275,7 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
                 open
                 onClose={vi.fn()}
                 tile={makeTile({ title: 'Fresh', body_md: '' })}
-            />,
+            />
         );
         expect(screen.getByText('Not saved yet')).toBeInTheDocument();
     });
@@ -287,10 +285,16 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
         const patchSpy = vi.fn();
         server.use(
             http.patch(`${BASE}/scratch-pad/:id`, async ({ request }) => {
-                const body = await request.json() as Record<string, unknown>;
+                const body = (await request.json()) as Record<string, unknown>;
                 patchSpy(body);
-                return HttpResponse.json(makeTile({ id: 'tile-1', title: String(body['title'] ?? ''), body_md: String(body['body_md'] ?? '') }));
-            }),
+                return HttpResponse.json(
+                    makeTile({
+                        id: 'tile-1',
+                        title: String(body['title'] ?? ''),
+                        body_md: String(body['body_md'] ?? ''),
+                    })
+                );
+            })
         );
         const onClose = vi.fn();
         renderWithProviders(
@@ -298,7 +302,7 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
                 open
                 onClose={onClose}
                 tile={makeTile({ id: 'tile-1', title: 'Existing', body_md: 'Content' })}
-            />,
+            />
         );
         // Close immediately without making any changes
         await userEvent.click(screen.getByRole('button', { name: /Close/i }));
@@ -310,7 +314,7 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
     it('renders correctly when open=false (autosave useEffect !open early return)', () => {
         // open=false → both autosave effect and re-tick effect hit early return
         const { container } = renderWithProviders(
-            <ScratchPadEditor open={false} onClose={vi.fn()} tile={makeTile()} />,
+            <ScratchPadEditor open={false} onClose={vi.fn()} tile={makeTile()} />
         );
         expect(container).toBeInTheDocument();
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -323,7 +327,7 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
             http.patch(`${BASE}/scratch-pad/:id`, async ({ request }) => {
                 patchSpy(await request.json());
                 return HttpResponse.json(makeTile());
-            }),
+            })
         );
         renderWithProviders(<ScratchPadEditor open onClose={vi.fn()} tile={null} />);
         await act(async () => {
@@ -353,9 +357,13 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
             http.patch(`${BASE}/scratch-pad/:id`, async ({ request }) => {
                 const body = (await request.json()) as { title?: string; body_md?: string };
                 return HttpResponse.json(
-                    makeTile({ id: 'tile-timing', title: body.title ?? '', body_md: body.body_md ?? '' }),
+                    makeTile({
+                        id: 'tile-timing',
+                        title: body.title ?? '',
+                        body_md: body.body_md ?? '',
+                    })
                 );
-            }),
+            })
         );
 
         renderWithProviders(
@@ -363,7 +371,7 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
                 open
                 onClose={vi.fn()}
                 tile={makeTile({ id: 'tile-timing', title: 'Original', body_md: 'Original body' })}
-            />,
+            />
         );
 
         const bodyArea = screen.getByPlaceholderText('Take a note...') as HTMLTextAreaElement;
@@ -411,14 +419,14 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
             http.patch(`${BASE}/scratch-pad/:id`, async ({ request }) => {
                 patchSpy(await request.json());
                 return HttpResponse.json(makeTile());
-            }),
+            })
         );
         renderWithProviders(
             <ScratchPadEditor
                 open
                 onClose={vi.fn()}
                 tile={makeTile({ id: 'tile-revert', title: 'Kept', body_md: 'Kept body' })}
-            />,
+            />
         );
         const bodyArea = screen.getByPlaceholderText('Take a note...') as HTMLTextAreaElement;
         fireEvent.change(bodyArea, { target: { value: 'Temporary change' } });
@@ -441,16 +449,20 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
                     resolvePatch = resolve;
                 });
                 return HttpResponse.json(
-                    makeTile({ id: 'tile-pending', title: body.title ?? '', body_md: body.body_md ?? '' }),
+                    makeTile({
+                        id: 'tile-pending',
+                        title: body.title ?? '',
+                        body_md: body.body_md ?? '',
+                    })
                 );
-            }),
+            })
         );
         renderWithProviders(
             <ScratchPadEditor
                 open
                 onClose={vi.fn()}
                 tile={makeTile({ id: 'tile-pending', title: 'Orig', body_md: 'Orig body' })}
-            />,
+            />
         );
         const bodyArea = screen.getByPlaceholderText('Take a note...') as HTMLTextAreaElement;
         fireEvent.change(bodyArea, { target: { value: 'Pending change' } });

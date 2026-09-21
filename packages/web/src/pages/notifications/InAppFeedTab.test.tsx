@@ -10,9 +10,7 @@ vi.mock('./InAppFeedTabContent.js', () => ({
 
 describe('InAppFeedTab', () => {
     it('renders InAppFeedTabContent with the forwarded props', () => {
-        const { getByTestId } = renderWithProviders(
-            <InAppFeedTab allRows={[]} agents={[]} />,
-        );
+        const { getByTestId } = renderWithProviders(<InAppFeedTab allRows={[]} agents={[]} />);
         const stub = getByTestId('iaf-content');
         expect(stub).toBeInTheDocument();
         const props = JSON.parse(stub.dataset['props'] ?? '{}');
@@ -24,7 +22,7 @@ describe('InAppFeedTab', () => {
             <InAppFeedTab
                 allRows={[{ id: 1 } as never, { id: 2 } as never]}
                 agents={[{ id: 'a' } as never]}
-            />,
+            />
         );
         const props = JSON.parse(getByTestId('iaf-content').dataset['props'] ?? '{}');
         expect(props.allRows).toEqual([{ id: 1 }, { id: 2 }]);

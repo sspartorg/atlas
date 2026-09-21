@@ -60,8 +60,8 @@ describe('Reminders page', () => {
                 HttpResponse.json([
                     makeReminder(),
                     makeReminder({ id: 2, label: 'Old reminder', status: 'cancelled' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
@@ -80,8 +80,9 @@ describe('Reminders page', () => {
         const { container } = renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
         // Edit button has aria-label "Edit reminder" via the Tooltip wrapper.
-        const editBtn = container.querySelector('button[aria-label="Edit reminder"]')
-            ?? container.querySelectorAll('button')[2];
+        const editBtn =
+            container.querySelector('button[aria-label="Edit reminder"]') ??
+            container.querySelectorAll('button')[2];
         if (editBtn) fireEvent.click(editBtn);
     });
 
@@ -93,7 +94,7 @@ describe('Reminders page', () => {
         const cancelBtns = container.querySelectorAll('button');
         // Last action icon should be cancel. Click it.
         const cancelBtn = Array.from(cancelBtns).find(
-            (b) => b.getAttribute('aria-label') === 'Cancel reminder',
+            (b) => b.getAttribute('aria-label') === 'Cancel reminder'
         );
         if (cancelBtn) {
             fireEvent.click(cancelBtn);
@@ -112,12 +113,12 @@ describe('Reminders page', () => {
             http.get(`${BASE}/reminders`, () => HttpResponse.json([makeReminder()])),
             http.post(`${BASE}/reminders/1/cancel`, () => HttpResponse.json({ ok: true })),
             http.patch(`${BASE}/reminders/1`, () => HttpResponse.json({ ok: true })),
-            http.delete(`${BASE}/reminders/1`, () => HttpResponse.json({ ok: true })),
+            http.delete(`${BASE}/reminders/1`, () => HttpResponse.json({ ok: true }))
         );
         const { container } = renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
         const cancelBtn = Array.from(container.querySelectorAll('button')).find(
-            (b) => b.getAttribute('aria-label') === 'Cancel reminder',
+            (b) => b.getAttribute('aria-label') === 'Cancel reminder'
         );
         if (cancelBtn) {
             fireEvent.click(cancelBtn);
@@ -146,24 +147,24 @@ describe('Reminders page', () => {
 
     it('formatSchedule helper covers each schedule_kind branch', () => {
         expect(
-            formatSchedule({ schedule_kind: 'once', schedule_value: '2030-01-01T09:00:00Z' }),
+            formatSchedule({ schedule_kind: 'once', schedule_value: '2030-01-01T09:00:00Z' })
         ).toMatch(/Once on/);
         expect(formatSchedule({ schedule_kind: 'daily', schedule_value: '09:00' })).toBe(
-            'Daily at 09:00',
+            'Daily at 09:00'
         );
         expect(formatSchedule({ schedule_kind: 'weekly', schedule_value: '09:00|1,3,5' })).toMatch(
-            /Weekly/,
+            /Weekly/
         );
         expect(formatSchedule({ schedule_kind: 'cron', schedule_value: '0 9 * * 1-5' })).toBe(
-            'cron: 0 9 * * 1-5',
+            'cron: 0 9 * * 1-5'
         );
         // Invalid once date falls back to raw value.
         expect(formatSchedule({ schedule_kind: 'once', schedule_value: 'not-a-date' })).toBe(
-            'not-a-date',
+            'not-a-date'
         );
         // Weekly missing pipe falls back to raw value.
         expect(formatSchedule({ schedule_kind: 'weekly', schedule_value: 'broken' })).toBe(
-            'broken',
+            'broken'
         );
     });
 
@@ -173,8 +174,8 @@ describe('Reminders page', () => {
                 HttpResponse.json([
                     makeReminder({ id: 1, label: 'Ext one', channel: 'external' }),
                     makeReminder({ id: 2, label: 'Both one', channel: 'both' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Ext one');
@@ -184,8 +185,8 @@ describe('Reminders page', () => {
     it('renders the paused status chip branch', async () => {
         server.use(
             http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([makeReminder({ status: 'paused' })]),
-            ),
+                HttpResponse.json([makeReminder({ status: 'paused' })])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
@@ -215,10 +216,8 @@ describe('Reminders page', () => {
     it('renders history-only when no active reminders', async () => {
         server.use(
             http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder({ id: 7, label: 'Done one', status: 'completed' }),
-                ]),
-            ),
+                HttpResponse.json([makeReminder({ id: 7, label: 'Done one', status: 'completed' })])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText(/No active reminders/i);
@@ -249,8 +248,8 @@ describe('Reminders page', () => {
                 HttpResponse.json([
                     makeReminder({ id: 1, status: 'active' }),
                     makeReminder({ id: 2, label: 'X', status: 'cancelled' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
@@ -267,8 +266,8 @@ describe('Reminders page', () => {
                 HttpResponse.json([
                     makeReminder({ id: 1, status: 'active' }),
                     makeReminder({ id: 2, label: 'Y', status: 'completed' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
@@ -286,8 +285,8 @@ describe('Reminders page', () => {
                 HttpResponse.json([
                     makeReminder({ id: 1, label: 'WithBody', body: 'Detail text here' }),
                     makeReminder({ id: 2, label: 'NoBody', body: '' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('WithBody');
@@ -299,8 +298,8 @@ describe('Reminders page', () => {
     it('renders in-app-only channel (no external-channel icon)', async () => {
         server.use(
             http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([makeReminder({ id: 1, channel: 'notification' })]),
-            ),
+                HttpResponse.json([makeReminder({ id: 1, channel: 'notification' })])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
@@ -314,9 +313,12 @@ describe('Reminders page', () => {
         server.use(
             http.get(`${BASE}/reminders`, () =>
                 HttpResponse.json([
-                    makeReminder({ id: 1, next_fire_at: new Date(Date.now() + 55 * 1000).toISOString() }),
-                ]),
-            ),
+                    makeReminder({
+                        id: 1,
+                        next_fire_at: new Date(Date.now() + 55 * 1000).toISOString(),
+                    }),
+                ])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
@@ -329,9 +331,12 @@ describe('Reminders page', () => {
         server.use(
             http.get(`${BASE}/reminders`, () =>
                 HttpResponse.json([
-                    makeReminder({ id: 1, next_fire_at: new Date(Date.now() - 10 * 60 * 1000).toISOString() }),
-                ]),
-            ),
+                    makeReminder({
+                        id: 1,
+                        next_fire_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+                    }),
+                ])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
@@ -343,9 +348,12 @@ describe('Reminders page', () => {
         server.use(
             http.get(`${BASE}/reminders`, () =>
                 HttpResponse.json([
-                    makeReminder({ id: 1, next_fire_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() }),
-                ]),
-            ),
+                    makeReminder({
+                        id: 1,
+                        next_fire_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+                    }),
+                ])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
@@ -357,9 +365,12 @@ describe('Reminders page', () => {
         server.use(
             http.get(`${BASE}/reminders`, () =>
                 HttpResponse.json([
-                    makeReminder({ id: 1, next_fire_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() }),
-                ]),
-            ),
+                    makeReminder({
+                        id: 1,
+                        next_fire_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+                    }),
+                ])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
@@ -371,9 +382,12 @@ describe('Reminders page', () => {
         server.use(
             http.get(`${BASE}/reminders`, () =>
                 HttpResponse.json([
-                    makeReminder({ id: 1, next_fire_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString() }),
-                ]),
-            ),
+                    makeReminder({
+                        id: 1,
+                        next_fire_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+                    }),
+                ])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
@@ -385,9 +399,12 @@ describe('Reminders page', () => {
         server.use(
             http.get(`${BASE}/reminders`, () =>
                 HttpResponse.json([
-                    makeReminder({ id: 1, next_fire_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() }),
-                ]),
-            ),
+                    makeReminder({
+                        id: 1,
+                        next_fire_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+                    }),
+                ])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
@@ -399,9 +416,12 @@ describe('Reminders page', () => {
         server.use(
             http.get(`${BASE}/reminders`, () =>
                 HttpResponse.json([
-                    makeReminder({ id: 1, next_fire_at: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString() }),
-                ]),
-            ),
+                    makeReminder({
+                        id: 1,
+                        next_fire_at: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+                    }),
+                ])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
@@ -413,10 +433,8 @@ describe('Reminders page', () => {
         // Number.isNaN(d.getTime()) → return ''
         server.use(
             http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder({ id: 1, next_fire_at: 'not-a-date' }),
-                ]),
-            ),
+                HttpResponse.json([makeReminder({ id: 1, next_fire_at: 'not-a-date' })])
+            )
         );
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
@@ -429,7 +447,9 @@ describe('Reminders page', () => {
         // a cancel mutation that is in-flight while the dialog Close is clicked.
         // We delay the cancel API so isPending is true, then click "Keep".
         let resolveCancel!: () => void;
-        const cancelPending = new Promise<void>((res) => { resolveCancel = res; });
+        const cancelPending = new Promise<void>((res) => {
+            resolveCancel = res;
+        });
         server.use(
             http.get(`${BASE}/reminders`, () => HttpResponse.json([makeReminder()])),
             http.post(`${BASE}/reminders/1/cancel`, async () => {
@@ -443,12 +463,12 @@ describe('Reminders page', () => {
             http.delete(`${BASE}/reminders/1`, async () => {
                 await cancelPending;
                 return new HttpResponse(null, { status: 204 });
-            }),
+            })
         );
         const { container } = renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
         const cancelBtn = Array.from(container.querySelectorAll('button')).find(
-            (b) => b.getAttribute('aria-label') === 'Cancel reminder',
+            (b) => b.getAttribute('aria-label') === 'Cancel reminder'
         );
         if (cancelBtn) {
             fireEvent.click(cancelBtn);

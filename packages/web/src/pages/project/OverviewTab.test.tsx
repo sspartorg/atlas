@@ -6,8 +6,7 @@ import { OverviewTab } from './OverviewTab.js';
 describe('Project OverviewTab', () => {
     it('mounts without crashing', () => {
         const { container } = renderWithProviders(
-            <OverviewTab counts={undefined} projectId="p1"
-                onJumpToHistory={vi.fn()} />,
+            <OverviewTab counts={undefined} projectId="p1" onJumpToHistory={vi.fn()} />
         );
         expect(container.firstChild).toBeInTheDocument();
     });
@@ -23,7 +22,7 @@ describe('Project OverviewTab', () => {
                 }}
                 projectId="p1"
                 onJumpToHistory={vi.fn()}
-            />,
+            />
         );
 
         await waitFor(() => expect(screen.getByText('3')).toBeInTheDocument());

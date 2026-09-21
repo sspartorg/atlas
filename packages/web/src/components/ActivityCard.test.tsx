@@ -31,13 +31,9 @@ describe('ActivityCard', () => {
     it('mounts with no activity rows', () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () =>
-                HttpResponse.json([]),
-            ),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([]))
         );
-        const { container } = renderWithProviders(
-            <ActivityCard issueType="task" issueId="S1" />,
-        );
+        const { container } = renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         expect(container.firstChild).toBeInTheDocument();
     });
 
@@ -58,16 +54,12 @@ describe('ActivityCard', () => {
         server.use(
             ...defaultHandlers,
             handlers.listAgents([makeAgent({ id: 'agent-coder', name: 'Coder' })]),
-            http.get(`${BASE}/issues/task/S1/activity`, () =>
-                HttpResponse.json(activity),
-            ),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
 
         expect(await screen.findByText(/Dispatch blocked for/)).toBeInTheDocument();
-        expect(
-            screen.getByText('ATL-12 (in_progress), ATL-15 (in_review)'),
-        ).toBeInTheDocument();
+        expect(screen.getByText('ATL-12 (in_progress), ATL-15 (in_review)')).toBeInTheDocument();
     });
 
     it("renders a 'field_updated' event with a human-friendly field label (B11)", async () => {
@@ -86,9 +78,7 @@ describe('ActivityCard', () => {
         const activity: IActivityItem[] = [{ kind: 'event', data: event }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () =>
-                HttpResponse.json(activity),
-            ),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
 
@@ -112,9 +102,7 @@ describe('ActivityCard', () => {
         const activity: IActivityItem[] = [{ kind: 'event', data: event }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () =>
-                HttpResponse.json(activity),
-            ),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
 
@@ -123,7 +111,7 @@ describe('ActivityCard', () => {
         expect(screen.getByText('high')).toBeInTheDocument();
     });
 
-    it("truncates long before/after values to ~60 chars per side (B11)", async () => {
+    it('truncates long before/after values to ~60 chars per side (B11)', async () => {
         const longBefore = 'a'.repeat(100);
         const longAfter = 'b'.repeat(100);
         const event: IIssueEvent = {
@@ -141,9 +129,7 @@ describe('ActivityCard', () => {
         const activity: IActivityItem[] = [{ kind: 'event', data: event }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () =>
-                HttpResponse.json(activity),
-            ),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
 
@@ -155,128 +141,189 @@ describe('ActivityCard', () => {
     });
 
     it("renders 'status_changed' event with from → to labels", async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'status_changed',
-            from_value: 'todo',
-            to_value: 'in_progress',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'status_changed',
+                    from_value: 'todo',
+                    to_value: 'in_progress',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/moved status/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/moved status/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         expect(document.body).toBeTruthy();
     });
 
     it("renders 'assigned' event with reassignment text", async () => {
         const agent = makeAgent({ id: 'agent-coder', name: 'Coder' });
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'assigned',
-            actor_agent_id: null,
-            from_value: null,
-            to_value: 'agent-coder',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'assigned',
+                    actor_agent_id: null,
+                    from_value: null,
+                    to_value: 'agent-coder',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(document.body).toBeTruthy());
     });
 
     it("renders 'comment_added' event", async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'comment_added',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'comment_added',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/added a comment/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/added a comment/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it("renders 'link_created' event with linked item reference", async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'link_created',
-            to_value: 'ATL-5',
-            detail: 'depends_on',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'link_created',
+                    to_value: 'ATL-5',
+                    detail: 'depends_on',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/linked/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/linked/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it("renders 'link_deleted' event", async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'link_deleted',
-            to_value: 'ATL-5',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'link_deleted',
+                    to_value: 'ATL-5',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/removed link/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/removed link/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it("renders 'rounds_reset' event with previous count", async () => {
         const agent = makeAgent({ id: 'agent-coder', name: 'Coder' });
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'rounds_reset',
-            to_value: 'agent-coder',
-            from_value: '5',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'rounds_reset',
+                    to_value: 'agent-coder',
+                    from_value: '5',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/reset rounds/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/reset rounds/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it("renders 'deleted' event", async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'deleted',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'deleted',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/deleted this item/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/deleted this item/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it("renders 'created' event", async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'created',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'created',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/created the item/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/created the item/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 });
 
@@ -284,7 +331,12 @@ describe('ConversationCard', () => {
     describe('owner-reply resume hint', () => {
         const coder = makeAgent({ id: 'agent-coder', name: 'Coder', status: 'active' });
         const run = (created_at: string, workflow_run_id: string | null) =>
-            ({ id: `r-${created_at}`, agent_id: 'agent-coder', created_at, workflow_run_id }) as IAgentRun;
+            ({
+                id: `r-${created_at}`,
+                agent_id: 'agent-coder',
+                created_at,
+                workflow_run_id,
+            }) as IAgentRun;
         const hint = /Replying continues the waiting workflow run/;
 
         function renderCard(overrides: Partial<Parameters<typeof ConversationCard>[0]> = {}) {
@@ -297,9 +349,12 @@ describe('ConversationCard', () => {
                     agents={[coder]}
                     status="waiting_for_info"
                     assigneeAgentId={null}
-                    runs={[run('2026-09-01T09:00:00.000Z', null), run('2026-09-02T09:00:00.000Z', 'wr-1')]}
+                    runs={[
+                        run('2026-09-01T09:00:00.000Z', null),
+                        run('2026-09-02T09:00:00.000Z', 'wr-1'),
+                    ]}
                     {...overrides}
-                />,
+                />
             );
         }
 
@@ -323,22 +378,31 @@ describe('ConversationCard', () => {
     it('renders with no comments and shows empty state', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([])),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([]))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/No comments yet/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/No comments yet/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('exercises submit by typing in the draft field and clicking Post', async () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([])),
-            http.post(`${BASE}/comments`, () => HttpResponse.json(makeComment({ id: 99 }))),
+            http.post(`${BASE}/comments`, () => HttpResponse.json(makeComment({ id: 99 })))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => expect(screen.queryByPlaceholderText(/Comment on this item/i) ?? document.body).toBeTruthy(), { timeout: 3000 });
+        await waitFor(
+            () =>
+                expect(
+                    screen.queryByPlaceholderText(/Comment on this item/i) ?? document.body
+                ).toBeTruthy(),
+            { timeout: 3000 }
+        );
         const textarea = screen.queryByPlaceholderText(/Comment on this item/i);
         if (textarea) {
             fireEvent.change(textarea, { target: { value: 'Test comment' } });
@@ -354,27 +418,38 @@ describe('ConversationCard', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('Owner says hi') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('Owner says hi') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('renders a comment row with agent author', async () => {
         const agent = makeAgent({ id: 'agent-coder', name: 'Coder' });
-        const comment = makeComment({ id: 2, author: 'agent', agent_id: 'agent-coder', body: 'Agent says hello' });
+        const comment = makeComment({
+            id: 2,
+            author: 'agent',
+            agent_id: 'agent-coder',
+            body: 'Agent says hello',
+        });
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('Agent says hello') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('Agent says hello') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('exercises beginEdit by clicking the Edit icon on a comment', async () => {
@@ -382,20 +457,26 @@ describe('ConversationCard', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('Editable comment') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('Editable comment') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         const editBtn = screen.queryByRole('button', { name: /Edit comment/i });
         if (editBtn) {
             fireEvent.click(editBtn);
             // After clicking Edit, Cancel and Save buttons should appear
-            await waitFor(() => {
-                const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
-                expect(cancelBtn ?? document.body).toBeTruthy();
-            }, { timeout: 2000 });
+            await waitFor(
+                () => {
+                    const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
+                    expect(cancelBtn ?? document.body).toBeTruthy();
+                },
+                { timeout: 2000 }
+            );
         }
         expect(document.body).toBeTruthy();
     });
@@ -405,19 +486,25 @@ describe('ConversationCard', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('Cancel test') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('Cancel test') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         const editBtn = screen.queryByRole('button', { name: /Edit comment/i });
         if (editBtn) {
             fireEvent.click(editBtn);
-            await waitFor(() => {
-                const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
-                if (cancelBtn) fireEvent.click(cancelBtn);
-            }, { timeout: 2000 });
+            await waitFor(
+                () => {
+                    const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
+                    if (cancelBtn) fireEvent.click(cancelBtn);
+                },
+                { timeout: 2000 }
+            );
         }
         expect(document.body).toBeTruthy();
     });
@@ -428,20 +515,26 @@ describe('ConversationCard', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
-            http.delete(`${BASE}/comments/5`, () => HttpResponse.json({})),
+            http.delete(`${BASE}/comments/5`, () => HttpResponse.json({}))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('Delete me') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('Delete me') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         const deleteBtn = screen.queryByRole('button', { name: /Delete comment/i });
         if (deleteBtn) {
             fireEvent.click(deleteBtn);
             // Confirm dialog should appear
-            await waitFor(() => {
-                const dialogTitle = screen.queryByText(/Delete this comment/i);
-                expect(dialogTitle ?? document.body).toBeTruthy();
-            }, { timeout: 2000 });
+            await waitFor(
+                () => {
+                    const dialogTitle = screen.queryByText(/Delete this comment/i);
+                    expect(dialogTitle ?? document.body).toBeTruthy();
+                },
+                { timeout: 2000 }
+            );
             // Click the confirm Delete button
             const confirmBtn = screen.queryByRole('button', { name: /^Delete$/i });
             if (confirmBtn) fireEvent.click(confirmBtn);
@@ -450,16 +543,28 @@ describe('ConversationCard', () => {
     });
 
     it('renders comment with edited_at badge showing "edited" label', async () => {
-        const comment = makeComment({ id: 6, author: 'owner', body: 'Edited comment', edited_at: '2026-05-27T10:00:00.000Z' });
+        const comment = makeComment({
+            id: 6,
+            author: 'owner',
+            body: 'Edited comment',
+            edited_at: '2026-05-27T10:00:00.000Z',
+        });
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('edited') ?? screen.queryByText('Edited comment') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(
+                    screen.queryByText('edited') ??
+                        screen.queryByText('Edited comment') ??
+                        document.body
+                ).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         expect(document.body).toBeTruthy();
     });
 });
@@ -468,12 +573,15 @@ describe('ActivityLogCard', () => {
     it('renders with no events and shows empty state', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([])),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([]))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/No activity yet/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/No activity yet/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('renders with pre-supplied activity prop (skips fetch)', () => {
@@ -482,258 +590,370 @@ describe('ActivityLogCard', () => {
         ];
         server.use(...defaultHandlers);
         const { container } = renderWithProviders(
-            <ActivityLogCard issueType="task" issueId="S1" activity={activity} />,
+            <ActivityLogCard issueType="task" issueId="S1" activity={activity} />
         );
         expect(container.firstChild).toBeInTheDocument();
     });
 
     it('renders status_changed event with override badge when detail=override', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'status_changed',
-            from_value: 'todo',
-            to_value: 'done',
-            detail: 'override',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'status_changed',
+                    from_value: 'todo',
+                    to_value: 'done',
+                    detail: 'override',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(document.body).toBeTruthy());
     });
 
     it('renders status_changed with null from/to values showing em-dashes', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'status_changed',
-            from_value: null,
-            to_value: null,
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'status_changed',
+                    from_value: null,
+                    to_value: null,
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/moved status/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/moved status/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('renders status_changed with unknown status values (not in STATUS_LABELS)', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'status_changed',
-            from_value: 'custom_status_x',
-            to_value: 'custom_status_y',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'status_changed',
+                    from_value: 'custom_status_x',
+                    to_value: 'custom_status_y',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(document.body).toBeTruthy(), { timeout: 3000 });
     });
 
     it('humanFieldLabel: null field renders "a field" label', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'field_updated',
-            field: null,
-            from_value: 'old',
-            to_value: 'new',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'field_updated',
+                    field: null,
+                    from_value: 'old',
+                    to_value: 'new',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/a field/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/a field/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('humanFieldLabel: unknown field uses underscores-to-spaces fallback', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'field_updated',
-            field: 'custom_unknown_field' as unknown as IssueEventField,
-            from_value: null,
-            to_value: 'val',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'field_updated',
+                    field: 'custom_unknown_field' as unknown as IssueEventField,
+                    from_value: null,
+                    to_value: 'val',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/custom unknown field/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/custom unknown field/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('field_updated with only from_value set (no to_value)', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'field_updated',
-            field: 'title',
-            from_value: 'old title',
-            to_value: null,
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'field_updated',
+                    field: 'title',
+                    from_value: 'old title',
+                    to_value: null,
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('title') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('title') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('field_updated with only to_value set (no from_value)', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'field_updated',
-            field: 'title',
-            from_value: null,
-            to_value: 'new title',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'field_updated',
+                    field: 'title',
+                    from_value: null,
+                    to_value: 'new title',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/new title/) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/new title/) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('field_updated with both null from/to — no inline value span rendered', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'field_updated',
-            field: 'spec_md',
-            from_value: null,
-            to_value: null,
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'field_updated',
+                    field: 'spec_md',
+                    from_value: null,
+                    to_value: null,
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            // "spec" is the FIELD_LABELS entry for spec_md
-            expect(screen.queryByText('spec') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                // "spec" is the FIELD_LABELS entry for spec_md
+                expect(screen.queryByText('spec') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('link_created without detail renders without extra annotation', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'link_created',
-            to_value: 'ATL-7',
-            detail: null,
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'link_created',
+                    to_value: 'ATL-7',
+                    detail: null,
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('ATL-7') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('ATL-7') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('link_created without to_value falls back to "another item"', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'link_created',
-            to_value: null,
-            detail: null,
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'link_created',
+                    to_value: null,
+                    detail: null,
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/another item/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/another item/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('link_deleted without detail renders without annotation', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'link_deleted',
-            to_value: 'ATL-9',
-            detail: null,
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'link_deleted',
+                    to_value: 'ATL-9',
+                    detail: null,
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('ATL-9') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('ATL-9') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('rounds_reset without from_value (no previous count shown)', async () => {
         const agent = makeAgent({ id: 'agent-coder', name: 'Coder' });
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'rounds_reset',
-            to_value: 'agent-coder',
-            from_value: null,
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'rounds_reset',
+                    to_value: 'agent-coder',
+                    from_value: null,
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/reset rounds/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/reset rounds/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('rounds_reset with unknown agent id falls back to "the assigned agent"', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'rounds_reset',
-            to_value: 'agent-unknown-xyz',
-            from_value: '3',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'rounds_reset',
+                    to_value: 'agent-unknown-xyz',
+                    from_value: '3',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/the assigned agent/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/the assigned agent/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('dispatch_blocked without detail renders without waiting-on clause', async () => {
         const agent = makeAgent({ id: 'agent-coder', name: 'Coder' });
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'dispatch_blocked',
-            actor_agent_id: 'agent-coder',
-            detail: null,
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'dispatch_blocked',
+                    actor_agent_id: 'agent-coder',
+                    detail: null,
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText(/Dispatch blocked for/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/Dispatch blocked for/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('renders with pre-supplied agents prop (skips agents fetch)', async () => {
         const agent = makeAgent({ id: 'agent-x', name: 'AgentX' });
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'created',
-            actor_agent_id: 'agent-x',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'created',
+                    actor_agent_id: 'agent-x',
+                }),
+            },
+        ];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
-        renderWithProviders(
-            <ActivityLogCard issueType="task" issueId="S1" agents={[agent]} />,
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" agents={[agent]} />);
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/created the item/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
         );
-        await waitFor(() => {
-            expect(screen.queryByText(/created the item/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
     });
 });
 
@@ -741,37 +961,57 @@ describe('ConversationCard — additional comment branches', () => {
     it('renders empty-state text exactly for zero comments', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([])),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([]))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(
-                screen.queryByText(/No comments yet — your replies and any agent notes will appear here\./i) ??
-                screen.queryByText(/No comments yet/i) ??
-                document.body
-            ).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(
+                    screen.queryByText(
+                        /No comments yet — your replies and any agent notes will appear here\./i
+                    ) ??
+                        screen.queryByText(/No comments yet/i) ??
+                        document.body
+                ).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('comment with agent author shows "Agent" fallback when agent_id not in agentsById', async () => {
-        const comment = makeComment({ id: 10, author: 'agent', agent_id: 'agent-missing', body: 'Hello from unknown agent' });
+        const comment = makeComment({
+            id: 10,
+            author: 'agent',
+            agent_id: 'agent-missing',
+            body: 'Hello from unknown agent',
+        });
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('Hello from unknown agent') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(
+                    screen.queryByText('Hello from unknown agent') ?? document.body
+                ).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('an agent comment with no agent_id is labelled as the workflow', async () => {
-        const comment = makeComment({ id: 12, author: 'agent', agent_id: null, body: '**Development** is waiting for you: unclear' });
+        const comment = makeComment({
+            id: 12,
+            author: 'agent',
+            agent_id: null,
+            body: '**Development** is waiting for you: unclear',
+        });
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         expect(await screen.findByText('Workflow')).toBeInTheDocument();
@@ -779,31 +1019,48 @@ describe('ConversationCard — additional comment branches', () => {
 
     it('agent-authored comment enters edit mode and shows Preview/Back to editor toggle', async () => {
         const agent = makeAgent({ id: 'agent-writer', name: 'Writer' });
-        const comment = makeComment({ id: 11, author: 'agent', agent_id: 'agent-writer', body: '## Agent markdown' });
+        const comment = makeComment({
+            id: 11,
+            author: 'agent',
+            agent_id: 'agent-writer',
+            body: '## Agent markdown',
+        });
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('## Agent markdown') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('## Agent markdown') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         const editBtn = screen.queryByRole('button', { name: /Edit comment/i });
         if (editBtn) {
             fireEvent.click(editBtn);
-            await waitFor(() => {
-                // Markdown label visible in agent edit mode
-                expect(screen.queryByText(/Markdown/i) ?? document.body).toBeTruthy();
-            }, { timeout: 2000 });
+            await waitFor(
+                () => {
+                    // Markdown label visible in agent edit mode
+                    expect(screen.queryByText(/Markdown/i) ?? document.body).toBeTruthy();
+                },
+                { timeout: 2000 }
+            );
             // Click the Preview toggle
             const previewBtn = screen.queryByRole('button', { name: /Preview/i });
             if (previewBtn) {
                 fireEvent.click(previewBtn);
-                await waitFor(() => {
-                    expect(screen.queryByRole('button', { name: /Back to editor/i }) ?? document.body).toBeTruthy();
-                }, { timeout: 2000 });
+                await waitFor(
+                    () => {
+                        expect(
+                            screen.queryByRole('button', { name: /Back to editor/i }) ??
+                                document.body
+                        ).toBeTruthy();
+                    },
+                    { timeout: 2000 }
+                );
                 // Toggle back
                 const backBtn = screen.queryByRole('button', { name: /Back to editor/i });
                 if (backBtn) fireEvent.click(backBtn);
@@ -817,18 +1074,26 @@ describe('ConversationCard — additional comment branches', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('Unchanged body') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('Unchanged body') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         const editBtn = screen.queryByRole('button', { name: /Edit comment/i });
         if (editBtn) {
             fireEvent.click(editBtn);
-            await waitFor(() => {
-                expect(screen.queryByRole('button', { name: /Save/i }) ?? document.body).toBeTruthy();
-            }, { timeout: 2000 });
+            await waitFor(
+                () => {
+                    expect(
+                        screen.queryByRole('button', { name: /Save/i }) ?? document.body
+                    ).toBeTruthy();
+                },
+                { timeout: 2000 }
+            );
             // Click Save without changing the text — should just cancel edit
             const saveBtn = screen.queryByRole('button', { name: /Save/i });
             if (saveBtn) fireEvent.click(saveBtn);
@@ -843,18 +1108,28 @@ describe('ConversationCard — additional comment branches', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
-            http.patch(`${BASE}/comments/13`, () => HttpResponse.json({ ...comment, body: 'Updated text' })),
+            http.patch(`${BASE}/comments/13`, () =>
+                HttpResponse.json({ ...comment, body: 'Updated text' })
+            )
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('Original text') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('Original text') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         const editBtn = screen.queryByRole('button', { name: /Edit comment/i });
         if (editBtn) {
             fireEvent.click(editBtn);
-            await waitFor(() => {
-                expect(screen.queryByRole('button', { name: /Save/i }) ?? document.body).toBeTruthy();
-            }, { timeout: 2000 });
+            await waitFor(
+                () => {
+                    expect(
+                        screen.queryByRole('button', { name: /Save/i }) ?? document.body
+                    ).toBeTruthy();
+                },
+                { timeout: 2000 }
+            );
             // Find the edit textarea and change the value
             const textarea = document.querySelector('textarea');
             if (textarea) {
@@ -871,19 +1146,25 @@ describe('ConversationCard — additional comment branches', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
-        await waitFor(() => {
-            expect(screen.queryByText('Keep me') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('Keep me') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         const deleteBtn = screen.queryByRole('button', { name: /Delete comment/i });
         if (deleteBtn) {
             fireEvent.click(deleteBtn);
-            await waitFor(() => {
-                const dialogTitle = screen.queryByText(/Delete this comment/i);
-                expect(dialogTitle ?? document.body).toBeTruthy();
-            }, { timeout: 2000 });
+            await waitFor(
+                () => {
+                    const dialogTitle = screen.queryByText(/Delete this comment/i);
+                    expect(dialogTitle ?? document.body).toBeTruthy();
+                },
+                { timeout: 2000 }
+            );
             // Click Cancel inside the dialog
             const cancelBtns = screen.queryAllByRole('button', { name: /Cancel/i });
             const dialogCancelBtn = cancelBtns[cancelBtns.length - 1];
@@ -894,52 +1175,67 @@ describe('ConversationCard — additional comment branches', () => {
 
     it('renders with pre-supplied activity and agents props (both skips)', async () => {
         const agent = makeAgent({ id: 'agent-q', name: 'QAgent' });
-        const comment = makeComment({ id: 15, author: 'agent', agent_id: 'agent-q', body: 'Agent provided comment' });
+        const comment = makeComment({
+            id: 15,
+            author: 'agent',
+            agent_id: 'agent-q',
+            body: 'Agent provided comment',
+        });
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(...defaultHandlers);
         renderWithProviders(
-            <ConversationCard
-                issueType="task"
-                issueId="S1"
-                activity={activity}
-                agents={[agent]}
-            />,
+            <ConversationCard issueType="task" issueId="S1" activity={activity} agents={[agent]} />
         );
-        await waitFor(() => {
-            expect(screen.queryByText('Agent provided comment') ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('Agent provided comment') ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 });
 
 // ── Additional branch coverage for EventRow / ActivityLogCard ────────────
 describe('ActivityLogCard — EventRow branch coverage', () => {
     it('assigned event: from_value set but agent not found → shows "unknown" as fromName', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'assigned',
-            actor_agent_id: null,
-            from_value: 'agent-gone',
-            to_value: null,
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'assigned',
+                    actor_agent_id: null,
+                    from_value: 'agent-gone',
+                    to_value: null,
+                }),
+            },
+        ];
         server.use(...defaultHandlers);
         // Pass agents=[] directly so agentsById is empty — no fetch involved
         renderWithProviders(
-            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />,
+            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />
         );
         // from_value truthy, agent not found → fromName = 'unknown'
-        await waitFor(() => expect(screen.getByText(/reassigned from/i)).toBeInTheDocument(), { timeout: 3000 });
+        await waitFor(() => expect(screen.getByText(/reassigned from/i)).toBeInTheDocument(), {
+            timeout: 3000,
+        });
         expect(screen.getByText('unknown')).toBeInTheDocument();
     });
 
     it('assigned event: to_value set but agent not found → shows "unknown" as toName', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'assigned',
-            actor_agent_id: null,
-            from_value: null,
-            to_value: 'agent-gone-2',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'assigned',
+                    actor_agent_id: null,
+                    from_value: null,
+                    to_value: 'agent-gone-2',
+                }),
+            },
+        ];
         server.use(...defaultHandlers);
         renderWithProviders(
-            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />,
+            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />
         );
         await screen.findByText(/reassigned from/i);
         // to_value truthy, agent not found → toName = 'unknown'
@@ -947,13 +1243,18 @@ describe('ActivityLogCard — EventRow branch coverage', () => {
     });
 
     it('EventRow: actor_agent_id set but agent not found → falls back to ownerName', async () => {
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'created',
-            actor_agent_id: 'agent-ghost',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'created',
+                    actor_agent_id: 'agent-ghost',
+                }),
+            },
+        ];
         server.use(...defaultHandlers);
         renderWithProviders(
-            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />,
+            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />
         );
         await screen.findByText(/created the item/i);
         // When actor_agent_id agent is not found, actorName = ownerName = 'Owner'
@@ -970,7 +1271,7 @@ describe('CommentRow — strong interaction tests', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         // Comment text must appear
@@ -991,7 +1292,7 @@ describe('CommentRow — strong interaction tests', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Unchanged save test');
@@ -1011,7 +1312,9 @@ describe('CommentRow — strong interaction tests', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
-            http.patch(`${BASE}/comments/52`, () => HttpResponse.json({ ...comment, body: 'Edited body' })),
+            http.patch(`${BASE}/comments/52`, () =>
+                HttpResponse.json({ ...comment, body: 'Edited body' })
+            )
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Original body');
@@ -1027,9 +1330,12 @@ describe('CommentRow — strong interaction tests', () => {
         const saveBtn = screen.getByRole('button', { name: /Save/i });
         fireEvent.click(saveBtn);
         // After save, edit mode exits
-        await waitFor(() => {
-            expect(screen.queryByRole('button', { name: /Save/i })).toBeNull();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByRole('button', { name: /Save/i })).toBeNull();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('confirmDelete: clicking Delete opens dialog; clicking Confirm calls deleteComment mutation', async () => {
@@ -1038,7 +1344,7 @@ describe('CommentRow — strong interaction tests', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
-            http.delete(`${BASE}/comments/53`, () => HttpResponse.json({})),
+            http.delete(`${BASE}/comments/53`, () => HttpResponse.json({}))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Delete confirm test');
@@ -1050,9 +1356,12 @@ describe('CommentRow — strong interaction tests', () => {
         const allDeleteBtns = screen.getAllByRole('button', { name: /Delete/i });
         fireEvent.click(allDeleteBtns[allDeleteBtns.length - 1]!);
         // Dialog closes
-        await waitFor(() => {
-            expect(screen.queryByText(/Delete this comment/i)).toBeNull();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/Delete this comment/i)).toBeNull();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('Delete dialog Cancel: dialog closes without deleting', async () => {
@@ -1060,7 +1369,7 @@ describe('CommentRow — strong interaction tests', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Dialog cancel test');
@@ -1071,20 +1380,28 @@ describe('CommentRow — strong interaction tests', () => {
         const cancelBtns = screen.getAllByRole('button', { name: /Cancel/i });
         fireEvent.click(cancelBtns[cancelBtns.length - 1]!);
         // Dialog closes — comment text still present
-        await waitFor(() => {
-            expect(screen.queryByText(/Delete this comment/i)).toBeNull();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/Delete this comment/i)).toBeNull();
+            },
+            { timeout: 3000 }
+        );
         expect(screen.getByText('Dialog cancel test')).toBeInTheDocument();
     });
 
     it('agent comment edit mode: showPreview toggle — clicks Preview then Back to editor', async () => {
         const agent = makeAgent({ id: 'agent-w', name: 'Writer' });
-        const comment = makeComment({ id: 55, author: 'agent', agent_id: 'agent-w', body: '## Heading' });
+        const comment = makeComment({
+            id: 55,
+            author: 'agent',
+            agent_id: 'agent-w',
+            body: '## Heading',
+        });
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
             handlers.listAgents([agent]),
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         // Wait for comment to render (agent markdown shows as h2 via MarkdownPreview)
@@ -1104,12 +1421,12 @@ describe('CommentRow — strong interaction tests', () => {
     it('ConversationCard: submitting empty draft returns early (line 696 !body guard)', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([])),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([]))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         // Placeholder is "Comment on this item…"
         await waitFor(() =>
-            expect(screen.getByPlaceholderText(/Comment on this item/i)).toBeInTheDocument(),
+            expect(screen.getByPlaceholderText(/Comment on this item/i)).toBeInTheDocument()
         );
         // Post button is disabled when draft is empty — no mutation fires
         const postBtn = screen.getByRole('button', { name: /^Post$/i });
@@ -1129,8 +1446,8 @@ describe('CommentRow — strong interaction tests', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/issues/task/S1/activity`, () =>
-                HttpResponse.json([{ kind: 'event', data: event }]),
-            ),
+                HttpResponse.json([{ kind: 'event', data: event }])
+            )
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => {
@@ -1148,13 +1465,11 @@ describe('CommentRow — strong interaction tests', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/issues/task/S1/activity`, () =>
-                HttpResponse.json([{ kind: 'event', data: event }]),
-            ),
+                HttpResponse.json([{ kind: 'event', data: event }])
+            )
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
-        await waitFor(() =>
-            expect(screen.getAllByText('—').length).toBeGreaterThan(0),
-        );
+        await waitFor(() => expect(screen.getAllByText('—').length).toBeGreaterThan(0));
     });
 
     it('link_created with null to_value: renders "another item" fallback (line 513)', async () => {
@@ -1165,13 +1480,11 @@ describe('CommentRow — strong interaction tests', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/issues/task/S1/activity`, () =>
-                HttpResponse.json([{ kind: 'event', data: event }]),
-            ),
+                HttpResponse.json([{ kind: 'event', data: event }])
+            )
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
-        await waitFor(() =>
-            expect(screen.getByText('another item')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('another item')).toBeInTheDocument());
     });
 
     it('link_deleted with null to_value: renders "another item" fallback (line 529)', async () => {
@@ -1182,13 +1495,11 @@ describe('CommentRow — strong interaction tests', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/issues/task/S1/activity`, () =>
-                HttpResponse.json([{ kind: 'event', data: event }]),
-            ),
+                HttpResponse.json([{ kind: 'event', data: event }])
+            )
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
-        await waitFor(() =>
-            expect(screen.getByText('another item')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('another item')).toBeInTheDocument());
     });
 
     it('assigned event: from/to agent ids not in agentsById map (lines 469-470 unknown fallback)', async () => {
@@ -1203,12 +1514,12 @@ describe('CommentRow — strong interaction tests', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/issues/task/S1/activity`, () =>
-                HttpResponse.json([{ kind: 'event', data: event }]),
-            ),
+                HttpResponse.json([{ kind: 'event', data: event }])
+            )
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() =>
-            expect(screen.getAllByText('unknown').length).toBeGreaterThanOrEqual(2),
+            expect(screen.getAllByText('unknown').length).toBeGreaterThanOrEqual(2)
         );
     });
 
@@ -1223,13 +1534,11 @@ describe('CommentRow — strong interaction tests', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/issues/task/S1/activity`, () =>
-                HttpResponse.json([{ kind: 'event', data: event }]),
-            ),
+                HttpResponse.json([{ kind: 'event', data: event }])
+            )
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
-        await waitFor(() =>
-            expect(screen.getByText(/custom unknown field/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/custom unknown field/i)).toBeInTheDocument());
     });
 
     it('CommentRow saveEdit: Save button disabled when draft is empty (line 137 !draft guard)', async () => {
@@ -1239,7 +1548,7 @@ describe('CommentRow — strong interaction tests', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Original body');
@@ -1247,9 +1556,9 @@ describe('CommentRow — strong interaction tests', () => {
         await screen.findByRole('button', { name: /^Save$/i });
         // Clear the edit textarea
         const textareas = screen.getAllByRole('textbox');
-        const editTextarea = textareas.find(
-            (el) => (el as HTMLTextAreaElement).value === 'Original body',
-        ) ?? textareas[0]!;
+        const editTextarea =
+            textareas.find((el) => (el as HTMLTextAreaElement).value === 'Original body') ??
+            textareas[0]!;
         fireEvent.change(editTextarea, { target: { value: '' } });
         // Save is now disabled (exercises the disabled=!draft.trim() branch)
         const saveBtn = screen.getByRole('button', { name: /^Save$/i });
@@ -1257,7 +1566,7 @@ describe('CommentRow — strong interaction tests', () => {
         // Cancel exits edit mode
         fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
         await waitFor(() =>
-            expect(screen.queryByRole('button', { name: /^Save$/i })).not.toBeInTheDocument(),
+            expect(screen.queryByRole('button', { name: /^Save$/i })).not.toBeInTheDocument()
         );
     }, 15000);
 
@@ -1267,7 +1576,7 @@ describe('CommentRow — strong interaction tests', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Same body');
@@ -1279,7 +1588,7 @@ describe('CommentRow — strong interaction tests', () => {
         // Cancel exits edit mode
         fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
         await waitFor(() =>
-            expect(screen.queryByRole('button', { name: /^Save$/i })).not.toBeInTheDocument(),
+            expect(screen.queryByRole('button', { name: /^Save$/i })).not.toBeInTheDocument()
         );
     }, 15000);
 });
@@ -1289,10 +1598,15 @@ describe('ActivityLogCard — actor NOT in agentsById (null ?? fallback paths)',
     it('EventRow actor_agent_id provided but agent missing from agents list — ownerName fallback (L421/L422)', async () => {
         // actor_agent_id is set but NOT in agents array → actor = undefined →
         // actor?.name → undefined → ?? ownerName fires (right side of ?? at L421/L422).
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'created',
-            actor_agent_id: 'agent-missing',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'created',
+                    actor_agent_id: 'agent-missing',
+                }),
+            },
+        ];
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
@@ -1300,23 +1614,28 @@ describe('ActivityLogCard — actor NOT in agentsById (null ?? fallback paths)',
                 issueId="S1"
                 activity={activity}
                 agents={[]} // empty — actor lookup misses
-            />,
+            />
         );
         // Falls back to ownerName from useSettings → default 'Owner'
-        await waitFor(() =>
-            expect(screen.getByText('Owner')).toBeInTheDocument(),
-        { timeout: 3000 });
+        await waitFor(() => expect(screen.getByText('Owner')).toBeInTheDocument(), {
+            timeout: 3000,
+        });
     });
 
     it('EventRow assigned event — from/to agents NOT in map → ?? "unknown" fallback (L469/L470)', async () => {
         // from_value and to_value reference agent ids that are NOT in agents array →
         // fromAgent and toAgent both undefined → ?? 'unknown' fires at L469 and L470.
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'assigned',
-            actor_agent_id: null,
-            from_value: 'agent-gone-from',
-            to_value: 'agent-gone-to',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'assigned',
+                    actor_agent_id: null,
+                    from_value: 'agent-gone-from',
+                    to_value: 'agent-gone-to',
+                }),
+            },
+        ];
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
@@ -1324,35 +1643,36 @@ describe('ActivityLogCard — actor NOT in agentsById (null ?? fallback paths)',
                 issueId="S1"
                 activity={activity}
                 agents={[]} // empty — both lookups miss
-            />,
+            />
         );
         // Both names fall back to 'unknown' at L469/L470
-        await waitFor(() =>
-            expect(screen.getAllByText('unknown').length).toBeGreaterThanOrEqual(1),
-        { timeout: 3000 });
+        await waitFor(
+            () => expect(screen.getAllByText('unknown').length).toBeGreaterThanOrEqual(1),
+            { timeout: 3000 }
+        );
     });
 
     it('EventRow rounds_reset with null to_value — subjectAgent = null → "the assigned agent" fallback (L548)', async () => {
         // to_value is null → `event.to_value ? ... : null` takes the null branch at L548.
         // subjectName falls back to 'the assigned agent'.
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'rounds_reset',
-            actor_agent_id: null,
-            to_value: null,
-            from_value: '2',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'rounds_reset',
+                    actor_agent_id: null,
+                    to_value: null,
+                    from_value: '2',
+                }),
+            },
+        ];
         server.use(...defaultHandlers);
         renderWithProviders(
-            <ActivityLogCard
-                issueType="task"
-                issueId="S1"
-                activity={activity}
-                agents={[]}
-            />,
+            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />
         );
-        await waitFor(() =>
-            expect(screen.getByText(/the assigned agent/i)).toBeInTheDocument(),
-        { timeout: 3000 });
+        await waitFor(() => expect(screen.getByText(/the assigned agent/i)).toBeInTheDocument(), {
+            timeout: 3000,
+        });
     });
 });
 
@@ -1361,11 +1681,20 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
     it('EventRow with actor_agent_id matching provided agent — actor?.name non-null path (L421/L422)', async () => {
         // Pass an agent whose id matches actor_agent_id so agentsById.get() returns it.
         // This exercises the non-null (left) side of actor?.name ?? ownerName at L421.
-        const knownAgent = makeAgent({ id: 'agent-known', name: 'Known Agent', accent_color: '#ff0000' });
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'created',
-            actor_agent_id: 'agent-known',
-        }) }];
+        const knownAgent = makeAgent({
+            id: 'agent-known',
+            name: 'Known Agent',
+            accent_color: '#ff0000',
+        });
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'created',
+                    actor_agent_id: 'agent-known',
+                }),
+            },
+        ];
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
@@ -1373,12 +1702,12 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
                 issueId="S1"
                 activity={activity}
                 agents={[knownAgent]}
-            />,
+            />
         );
         // actor?.name = 'Known Agent' (non-null) — the left-side of ?? fires
-        await waitFor(() =>
-            expect(screen.getByText('Known Agent')).toBeInTheDocument(),
-        { timeout: 3000 });
+        await waitFor(() => expect(screen.getByText('Known Agent')).toBeInTheDocument(), {
+            timeout: 3000,
+        });
     });
 
     it('EventRow assigned event — from_value and to_value match provided agents (L469/L470)', async () => {
@@ -1386,12 +1715,17 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
         // non-null paths at L469 and L470.
         const fromAgent = makeAgent({ id: 'agent-from', name: 'From Agent' });
         const toAgent = makeAgent({ id: 'agent-to', name: 'To Agent' });
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'assigned',
-            actor_agent_id: null,
-            from_value: 'agent-from',
-            to_value: 'agent-to',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'assigned',
+                    actor_agent_id: null,
+                    from_value: 'agent-from',
+                    to_value: 'agent-to',
+                }),
+            },
+        ];
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
@@ -1399,12 +1733,12 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
                 issueId="S1"
                 activity={activity}
                 agents={[fromAgent, toAgent]}
-            />,
+            />
         );
         // fromAgent?.name and toAgent?.name are both non-null — left side of ?? fires
-        await waitFor(() =>
-            expect(screen.getByText('From Agent')).toBeInTheDocument(),
-        { timeout: 3000 });
+        await waitFor(() => expect(screen.getByText('From Agent')).toBeInTheDocument(), {
+            timeout: 3000,
+        });
         expect(screen.getByText('To Agent')).toBeInTheDocument();
     });
 
@@ -1412,12 +1746,17 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
         // to_value is set and the agent IS in agentsById — exercises the true branch of
         // `event.to_value ? agentsById.get(event.to_value) : null` at L548.
         const resetAgent = makeAgent({ id: 'agent-reset', name: 'Reset Agent' });
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'rounds_reset',
-            actor_agent_id: null,
-            to_value: 'agent-reset',
-            from_value: '3',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'rounds_reset',
+                    actor_agent_id: null,
+                    to_value: 'agent-reset',
+                    from_value: '3',
+                }),
+            },
+        ];
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
@@ -1425,21 +1764,26 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
                 issueId="S1"
                 activity={activity}
                 agents={[resetAgent]}
-            />,
+            />
         );
         // subjectAgent = agentsById.get('agent-reset') — non-null, subjectName = 'Reset Agent'
-        await waitFor(() =>
-            expect(screen.getByText('Reset Agent')).toBeInTheDocument(),
-        { timeout: 3000 });
+        await waitFor(() => expect(screen.getByText('Reset Agent')).toBeInTheDocument(), {
+            timeout: 3000,
+        });
     });
 
     it('EventRow actor_agent_id set but NOT in agents — ownerName ?? fallback fires (L421/L422)', async () => {
         // actor_agent_id 'agent-missing' is NOT in agents array → actor = undefined →
         // actor?.name = undefined → ?? ownerName fires (the null/undefined side of ?? at L421/L422).
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'created',
-            actor_agent_id: 'agent-missing',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'created',
+                    actor_agent_id: 'agent-missing',
+                }),
+            },
+        ];
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
@@ -1447,23 +1791,28 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
                 issueId="S1"
                 activity={activity}
                 agents={[]} // empty — actor lookup misses
-            />,
+            />
         );
         // Falls back to ownerName from useSettings → 'Owner'
-        await waitFor(() =>
-            expect(screen.getByText('Owner')).toBeInTheDocument(),
-        { timeout: 3000 });
+        await waitFor(() => expect(screen.getByText('Owner')).toBeInTheDocument(), {
+            timeout: 3000,
+        });
     });
 
     it('EventRow assigned event — from/to agents NOT in map → "unknown" ?? fallback (L469/L470)', async () => {
         // from_value and to_value reference agent ids NOT in agents array →
         // fromAgent/toAgent both undefined → ?? "unknown" fires at L469 and L470.
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'assigned',
-            actor_agent_id: null,
-            from_value: 'agent-gone-from',
-            to_value: 'agent-gone-to',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'assigned',
+                    actor_agent_id: null,
+                    from_value: 'agent-gone-from',
+                    to_value: 'agent-gone-to',
+                }),
+            },
+        ];
         server.use(...defaultHandlers);
         renderWithProviders(
             <ActivityLogCard
@@ -1471,47 +1820,48 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
                 issueId="S1"
                 activity={activity}
                 agents={[]} // empty — both lookups miss → ?? 'unknown'
-            />,
+            />
         );
-        await waitFor(() =>
-            expect(screen.getAllByText('unknown').length).toBeGreaterThanOrEqual(1),
-        { timeout: 3000 });
+        await waitFor(
+            () => expect(screen.getAllByText('unknown').length).toBeGreaterThanOrEqual(1),
+            { timeout: 3000 }
+        );
     });
 
     it('EventRow rounds_reset with null to_value — "the assigned agent" ?? fallback (L548 null branch)', async () => {
         // to_value is null → `event.to_value ? agentsById.get(event.to_value) : null` takes the
         // null branch at L548. subjectName falls back to 'the assigned agent'.
-        const activity: IActivityItem[] = [{ kind: 'event', data: makeEvent({
-            event_type: 'rounds_reset',
-            actor_agent_id: null,
-            to_value: null,
-            from_value: '2',
-        }) }];
+        const activity: IActivityItem[] = [
+            {
+                kind: 'event',
+                data: makeEvent({
+                    event_type: 'rounds_reset',
+                    actor_agent_id: null,
+                    to_value: null,
+                    from_value: '2',
+                }),
+            },
+        ];
         server.use(...defaultHandlers);
         renderWithProviders(
-            <ActivityLogCard
-                issueType="task"
-                issueId="S1"
-                activity={activity}
-                agents={[]}
-            />,
+            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />
         );
-        await waitFor(() =>
-            expect(screen.getByText(/the assigned agent/i)).toBeInTheDocument(),
-        { timeout: 3000 });
+        await waitFor(() => expect(screen.getByText(/the assigned agent/i)).toBeInTheDocument(), {
+            timeout: 3000,
+        });
     });
 
     it('ConversationCard submit with empty comment body — early return (L696)', async () => {
         // submit() returns early when body is empty, covering the `if (!body) return` at L696.
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([])),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json([]))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         // Wait for the compose box to render
-        await waitFor(() =>
-            expect(document.querySelector('textarea')).toBeInTheDocument(),
-        { timeout: 3000 });
+        await waitFor(() => expect(document.querySelector('textarea')).toBeInTheDocument(), {
+            timeout: 3000,
+        });
         const textarea = document.querySelector('textarea') as HTMLTextAreaElement;
         // Leave the textarea empty — draft is ''
         expect(textarea.value).toBe('');

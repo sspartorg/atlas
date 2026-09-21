@@ -155,7 +155,8 @@ export function TerminalStandalone() {
                                 session={s}
                                 credentialLabel={
                                     s.credential_id
-                                        ? credentialLabelById.get(s.credential_id) ?? s.credential_id
+                                        ? (credentialLabelById.get(s.credential_id) ??
+                                          s.credential_id)
                                         : null
                                 }
                                 onOpen={() => navigate(sessionDetailUrl(s))}
@@ -216,11 +217,7 @@ interface StandaloneSessionCardProps {
     onOpen: () => void;
 }
 
-function StandaloneSessionCard({
-    session,
-    credentialLabel,
-    onOpen,
-}: StandaloneSessionCardProps) {
+function StandaloneSessionCard({ session, credentialLabel, onOpen }: StandaloneSessionCardProps) {
     const CliIcon = cliIcon(session.cli);
     const folder = session.worktree_path ?? '';
     return (

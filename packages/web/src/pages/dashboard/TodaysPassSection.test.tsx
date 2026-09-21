@@ -31,7 +31,7 @@ describe('TodaysPassSection', () => {
                     items: [],
                     total: 0,
                 }}
-            />,
+            />
         );
         expect(screen.getByText('Software dev')).toBeInTheDocument();
         expect(screen.getByText('Content')).toBeInTheDocument();
@@ -40,16 +40,28 @@ describe('TodaysPassSection', () => {
 
     it('filters items into dev/content/design categories (covers filter branches)', () => {
         const devItem = makeItem({ agent_category: 'software-dev', agent_name: 'DevAgent' });
-        const contentItem = makeItem({ run_id: 'r2', agent_category: 'content', agent_name: 'ContentAgent' });
-        const designItem = makeItem({ run_id: 'r3', agent_category: 'design', agent_name: 'DesignAgent' });
-        const marketingItem = makeItem({ run_id: 'r4', agent_category: 'marketing', agent_name: 'MarketAgent' });
+        const contentItem = makeItem({
+            run_id: 'r2',
+            agent_category: 'content',
+            agent_name: 'ContentAgent',
+        });
+        const designItem = makeItem({
+            run_id: 'r3',
+            agent_category: 'design',
+            agent_name: 'DesignAgent',
+        });
+        const marketingItem = makeItem({
+            run_id: 'r4',
+            agent_category: 'marketing',
+            agent_name: 'MarketAgent',
+        });
         renderWithProviders(
             <TodaysPassSection
                 todaysPass={{
                     items: [devItem, contentItem, designItem, marketingItem],
                     total: 4,
                 }}
-            />,
+            />
         );
         // Each category card gets its items
         expect(screen.getByText(/DevAgent/)).toBeInTheDocument();
@@ -67,7 +79,7 @@ describe('TodaysPassSection', () => {
                     items,
                     total: undefined as unknown as number,
                 }}
-            />,
+            />
         );
         // total = undefined ?? items.length = 2 → "2 outputs"
         expect(document.body.textContent).toContain('outputs');

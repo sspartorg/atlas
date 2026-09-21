@@ -77,7 +77,7 @@ describe('InAppFeedTabContent', () => {
             http.patch(`${BASE}/notifications/1/read`, () => {
                 markRead = true;
                 return HttpResponse.json({ ok: true });
-            }),
+            })
         );
         const rows = [
             makeNotification({
@@ -116,7 +116,7 @@ describe('InAppFeedTabContent', () => {
             <>
                 <InAppFeedTabContent allRows={rows} agents={[]} />
                 <LocationDisplay />
-            </>,
+            </>
         );
         fireEvent.click(screen.getByText(`Click ${t}`));
         expect(screen.getByTestId('location').textContent).toBe(path);
@@ -153,7 +153,7 @@ describe('InAppFeedTabContent', () => {
             <>
                 <InAppFeedTabContent allRows={rows} agents={[]} />
                 <LocationDisplay />
-            </>,
+            </>
         );
         fireEvent.click(screen.getByText('Lonely system message'));
         expect(screen.getByTestId('location').textContent).toBe('/tasks');
@@ -179,7 +179,7 @@ describe('InAppFeedTabContent', () => {
             <>
                 <InAppFeedTabContent allRows={rows} agents={[]} />
                 <LocationDisplay />
-            </>,
+            </>
         );
         fireEvent.click(screen.getByText('Time to stretch'));
         expect(screen.getByTestId('location').textContent).toBe('/reminders');
@@ -207,7 +207,7 @@ describe('InAppFeedTabContent', () => {
             <>
                 <InAppFeedTabContent allRows={rows} agents={[]} />
                 <LocationDisplay />
-            </>,
+            </>
         );
         fireEvent.click(screen.getByText('Terminal session link'));
         expect(screen.getByTestId('location').textContent).toBe('/terminal/sess-abc');
@@ -219,7 +219,7 @@ describe('InAppFeedTabContent', () => {
             http.patch(`${BASE}/notifications/500/read`, () => {
                 patched = true;
                 return HttpResponse.json({ ok: true });
-            }),
+            })
         );
         const rows = [
             makeNotification({

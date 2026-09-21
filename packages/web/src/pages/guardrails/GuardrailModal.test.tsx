@@ -35,7 +35,7 @@ describe('GuardrailModal — closed', () => {
                 editing={null}
                 onClose={vi.fn()}
                 onSubmit={vi.fn()}
-            />,
+            />
         );
         expect(screen.queryByText('Add rule')).not.toBeInTheDocument();
     });
@@ -47,7 +47,7 @@ describe('GuardrailModal — open add mode', () => {
     function renderAdd(
         initialCategory: GuardrailCategory = 'file_system',
         onClose = vi.fn(),
-        onSubmit = vi.fn(),
+        onSubmit = vi.fn()
     ) {
         return renderWithProviders(
             <GuardrailModal
@@ -56,7 +56,7 @@ describe('GuardrailModal — open add mode', () => {
                 editing={null}
                 onClose={onClose}
                 onSubmit={onSubmit}
-            />,
+            />
         );
     }
 
@@ -67,9 +67,7 @@ describe('GuardrailModal — open add mode', () => {
 
     it('shows subtitle with merge note', () => {
         renderAdd();
-        expect(
-            screen.getByText(/Merged into every agent prompt/i),
-        ).toBeInTheDocument();
+        expect(screen.getByText(/Merged into every agent prompt/i)).toBeInTheDocument();
     });
 
     it('renders all GUARDRAIL_CATEGORIES as selector buttons', () => {
@@ -117,12 +115,9 @@ describe('GuardrailModal — submit success', () => {
                 editing={null}
                 onClose={onClose}
                 onSubmit={onSubmit}
-            />,
+            />
         );
-        await userEvent.type(
-            screen.getByLabelText(/^Rule/),
-            'Never commit secrets to git.',
-        );
+        await userEvent.type(screen.getByLabelText(/^Rule/), 'Never commit secrets to git.');
         const addBtn = screen.getByRole('button', { name: /Add Rule/i });
         expect(addBtn).not.toBeDisabled();
         await userEvent.click(addBtn);
@@ -133,7 +128,7 @@ describe('GuardrailModal — submit success', () => {
                 category: 'file_system',
                 severity: 'block',
                 detail: null,
-            }),
+            })
         );
         await waitFor(() => expect(onClose).toHaveBeenCalled());
     });
@@ -147,15 +142,15 @@ describe('GuardrailModal — submit success', () => {
                 editing={null}
                 onClose={vi.fn()}
                 onSubmit={onSubmit}
-            />,
+            />
         );
         await userEvent.type(screen.getByLabelText(/^Rule/), 'Block secrets.');
         await userEvent.type(screen.getByLabelText(/^Detail/), 'Some extra context.');
         await userEvent.click(screen.getByRole('button', { name: /Add Rule/i }));
         await waitFor(() =>
             expect(onSubmit).toHaveBeenCalledWith(
-                expect.objectContaining({ detail: 'Some extra context.' }),
-            ),
+                expect.objectContaining({ detail: 'Some extra context.' })
+            )
         );
     });
 });
@@ -173,13 +168,11 @@ describe('GuardrailModal — submit error', () => {
                 editing={null}
                 onClose={onClose}
                 onSubmit={onSubmit}
-            />,
+            />
         );
         await userEvent.type(screen.getByLabelText(/^Rule/), 'Block bad stuff.');
         await userEvent.click(screen.getByRole('button', { name: /Add Rule/i }));
-        await waitFor(() =>
-            expect(screen.getByText('Server error')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Server error')).toBeInTheDocument());
         expect(screen.getByRole('alert')).toBeInTheDocument();
         expect(onClose).not.toHaveBeenCalled();
     });
@@ -193,7 +186,7 @@ describe('GuardrailModal — submit error', () => {
                 editing={null}
                 onClose={vi.fn()}
                 onSubmit={onSubmit}
-            />,
+            />
         );
         // Add Rule button is disabled when ruleText is empty, so we cannot
         // click it — verify it is disabled which itself covers the empty-rule guard.
@@ -215,7 +208,7 @@ describe('GuardrailModal — cancel', () => {
                 editing={null}
                 onClose={onClose}
                 onSubmit={vi.fn()}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
         expect(onClose).toHaveBeenCalled();
@@ -230,7 +223,7 @@ describe('GuardrailModal — cancel', () => {
                 editing={null}
                 onClose={onClose}
                 onSubmit={vi.fn()}
-            />,
+            />
         );
         // The icon button has no label but can be found since it wraps CloseRounded
         // The close icon button is among the dialog's icon buttons
@@ -252,11 +245,11 @@ describe('GuardrailModal — edit mode', () => {
                 editing={existingRule}
                 onClose={vi.fn()}
                 onSubmit={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('Edit rule')).toBeInTheDocument();
         expect(
-            screen.getByDisplayValue('Never delete files outside the project directory.'),
+            screen.getByDisplayValue('Never delete files outside the project directory.')
         ).toBeInTheDocument();
         expect(screen.getByDisplayValue('Applies to rm, unlink, rmdir.')).toBeInTheDocument();
     });
@@ -269,7 +262,7 @@ describe('GuardrailModal — edit mode', () => {
                 editing={existingRule}
                 onClose={vi.fn()}
                 onSubmit={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: /Save Changes/i })).toBeInTheDocument();
     });
@@ -283,7 +276,7 @@ describe('GuardrailModal — edit mode', () => {
                 onClose={vi.fn()}
                 onSubmit={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: /Delete rule/i })).toBeInTheDocument();
     });
@@ -297,12 +290,10 @@ describe('GuardrailModal — edit mode', () => {
                 onClose={vi.fn()}
                 onSubmit={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /Delete rule/i }));
-        await waitFor(() =>
-            expect(screen.getByText('Delete this rule?')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Delete this rule?')).toBeInTheDocument());
         expect(screen.getByRole('button', { name: /^Delete$/ })).toBeInTheDocument();
     });
 
@@ -317,7 +308,7 @@ describe('GuardrailModal — edit mode', () => {
                 onClose={onClose}
                 onSubmit={vi.fn()}
                 onDelete={onDelete}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /Delete rule/i }));
         await waitFor(() => screen.getByText('Delete this rule?'));
@@ -336,7 +327,7 @@ describe('GuardrailModal — edit mode', () => {
                 onClose={vi.fn()}
                 onSubmit={vi.fn()}
                 onDelete={onDelete}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /Delete rule/i }));
         await waitFor(() => screen.getByText('Delete this rule?'));
@@ -345,7 +336,7 @@ describe('GuardrailModal — edit mode', () => {
         const cancelBtns = screen.getAllByRole('button', { name: /^Cancel$/ });
         await userEvent.click(cancelBtns[cancelBtns.length - 1]!);
         await waitFor(() =>
-            expect(screen.queryByText('Delete this rule?')).not.toBeInTheDocument(),
+            expect(screen.queryByText('Delete this rule?')).not.toBeInTheDocument()
         );
         expect(onDelete).not.toHaveBeenCalled();
     });
@@ -367,15 +358,13 @@ describe('GuardrailModal — catch branches', () => {
                     editing={null}
                     onClose={vi.fn()}
                     onSubmit={onSubmit}
-                />,
+                />
             );
             await userEvent.type(screen.getByLabelText(/^Rule/), 'Some rule text.');
             await userEvent.click(screen.getByRole('button', { name: /Add Rule/i }));
-            await waitFor(() =>
-                expect(screen.getByText('plain string error')).toBeInTheDocument(),
-            );
+            await waitFor(() => expect(screen.getByText('plain string error')).toBeInTheDocument());
             expect(screen.getByRole('alert')).toBeInTheDocument();
-        },
+        }
     );
 
     it(
@@ -392,15 +381,15 @@ describe('GuardrailModal — catch branches', () => {
                     onClose={vi.fn()}
                     onSubmit={vi.fn()}
                     onDelete={onDelete}
-                />,
+                />
             );
             await userEvent.click(screen.getByRole('button', { name: /Delete rule/i }));
             await waitFor(() => screen.getByText('Delete this rule?'));
             await userEvent.click(screen.getByRole('button', { name: /^Delete$/ }));
             await waitFor(() =>
-                expect(screen.getByText('Delete server error')).toBeInTheDocument(),
+                expect(screen.getByText('Delete server error')).toBeInTheDocument()
             );
-        },
+        }
     );
 
     it(
@@ -417,15 +406,13 @@ describe('GuardrailModal — catch branches', () => {
                     onClose={vi.fn()}
                     onSubmit={vi.fn()}
                     onDelete={onDelete}
-                />,
+                />
             );
             await userEvent.click(screen.getByRole('button', { name: /Delete rule/i }));
             await waitFor(() => screen.getByText('Delete this rule?'));
             await userEvent.click(screen.getByRole('button', { name: /^Delete$/ }));
-            await waitFor(() =>
-                expect(screen.getByText('delete plain error')).toBeInTheDocument(),
-            );
-        },
+            await waitFor(() => expect(screen.getByText('delete plain error')).toBeInTheDocument());
+        }
     );
 });
 
@@ -440,7 +427,7 @@ describe('GuardrailModal — form interactions', () => {
                 editing={null}
                 onClose={vi.fn()}
                 onSubmit={vi.fn()}
-            />,
+            />
         );
         const ruleField = screen.getByLabelText(/^Rule/);
         const addBtn = screen.getByRole('button', { name: /Add Rule/i });
@@ -457,7 +444,7 @@ describe('GuardrailModal — form interactions', () => {
                 editing={null}
                 onClose={vi.fn()}
                 onSubmit={vi.fn()}
-            />,
+            />
         );
         // Category buttons have role="button"
         // GUARDRAIL_CATEGORIES includes secrets_credentials which has label from meta
@@ -466,7 +453,10 @@ describe('GuardrailModal — form interactions', () => {
         // This verifies the onClick path runs without error
         const catButtons = screen
             .getAllByRole('button')
-            .filter((b) => !['Cancel', 'Add Rule', 'Save Changes'].some((t) => b.textContent?.includes(t)));
+            .filter(
+                (b) =>
+                    !['Cancel', 'Add Rule', 'Save Changes'].some((t) => b.textContent?.includes(t))
+            );
         if (catButtons.length > 1) {
             await userEvent.click(catButtons[1]!);
         }
@@ -482,7 +472,7 @@ describe('GuardrailModal — form interactions', () => {
                 editing={null}
                 onClose={vi.fn()}
                 onSubmit={onSubmit}
-            />,
+            />
         );
         // Severity cards also use role="button"
         // The 3 severity cards: block, ask_owner, warn
@@ -500,7 +490,10 @@ describe('GuardrailModal — form interactions', () => {
             // They have explicit role=button and their aria content suggests severity
             return (
                 b.getAttribute('role') === 'button' &&
-                !b.closest('[role="dialog"]')?.querySelector('h6')?.textContent?.includes(b.textContent ?? 'x')
+                !b
+                    .closest('[role="dialog"]')
+                    ?.querySelector('h6')
+                    ?.textContent?.includes(b.textContent ?? 'x')
             );
         });
         // Just verify no crash when clicking

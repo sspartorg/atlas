@@ -22,7 +22,7 @@ function stubTaskFull(
         external_links: unknown[];
         activity: unknown[];
         agents: ReturnType<typeof makeAgent>[];
-    }> = {},
+    }> = {}
 ) {
     server.use(
         ...defaultHandlers,
@@ -35,7 +35,7 @@ function stubTaskFull(
                 external_links: overrides.external_links ?? [],
                 activity: overrides.activity ?? [],
                 agents: overrides.agents ?? [],
-            }),
+            })
         ),
         // Item-scoped agent-run cost sum + activity + labels endpoints fire
         // on every detail mount.
@@ -43,7 +43,7 @@ function stubTaskFull(
         http.get(`${BASE}/issues/task/${id}/activity`, () => HttpResponse.json([])),
         http.get(`${BASE}/issues/task/${id}/links`, () => HttpResponse.json([])),
         http.get(`${BASE}/issues/task/${id}/external-links`, () => HttpResponse.json([])),
-        http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+        http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
     );
 }
 
@@ -53,14 +53,16 @@ function renderTask(id: string) {
             <Route path="/tasks/:id" element={<TaskDetail />} />
             <Route path="/sub-tasks/:id" element={<>sub-task page</>} />
         </Routes>,
-        { initialEntries: [`/tasks/${id}`] },
+        { initialEntries: [`/tasks/${id}`] }
     );
 }
 
 describe('TaskDetail page', () => {
     it('lists sub-tasks with their labels and opens one on click', async () => {
         stubTaskFull('T1', {
-            sub_tasks: [makeSubTask({ id: 'ST-1', task_id: 'T1', title: 'Build it', labels: ['dev'] })],
+            sub_tasks: [
+                makeSubTask({ id: 'ST-1', task_id: 'T1', title: 'Build it', labels: ['dev'] }),
+            ],
         });
         renderTask('T1');
         await screen.findByText('Build it');
@@ -76,7 +78,7 @@ describe('TaskDetail page', () => {
             http.post(`${BASE}/tasks/T2/sub-tasks`, async ({ request }) => {
                 body = await request.json();
                 return HttpResponse.json(makeSubTask({ id: 'ST-2', task_id: 'T2' }));
-            }),
+            })
         );
         renderTask('T2');
         await screen.findByText('Task One');
@@ -90,7 +92,7 @@ describe('TaskDetail page', () => {
         });
         fireEvent.click(submit);
         await waitFor(() =>
-            expect(screen.queryByRole('form', { name: 'Add sub-task' })).not.toBeInTheDocument(),
+            expect(screen.queryByRole('form', { name: 'Add sub-task' })).not.toBeInTheDocument()
         );
         expect(body).toEqual({
             title: 'Write docs',
@@ -105,8 +107,8 @@ describe('TaskDetail page', () => {
         stubTaskFull('T3');
         server.use(
             http.post(`${BASE}/tasks/T3/sub-tasks`, () =>
-                HttpResponse.json({ error: 'nope' }, { status: 400 }),
-            ),
+                HttpResponse.json({ error: 'nope' }, { status: 400 })
+            )
         );
         renderTask('T3');
         await screen.findByText('Task One');
@@ -131,7 +133,7 @@ describe('TaskDetail page', () => {
         expect(await screen.findByText('Plan')).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'https://github.com/o/r/pull/7' })).toHaveAttribute(
             'href',
-            'https://github.com/o/r/pull/7',
+            'https://github.com/o/r/pull/7'
         );
     });
 
@@ -150,7 +152,7 @@ describe('TaskDetail page', () => {
             http.patch(`${BASE}/tasks/T6`, async ({ request }) => {
                 body = await request.json();
                 return HttpResponse.json(makeTask({ id: 'T6', acceptance_criteria: '- new' }));
-            }),
+            })
         );
         renderTask('T6');
         await screen.findByText('old');
@@ -163,7 +165,6 @@ describe('TaskDetail page', () => {
         fireEvent.click(screen.getByRole('button', { name: /^Save$/i }));
         await waitFor(() => expect(body).toEqual({ acceptance_criteria: '- new' }));
     });
-
 
     it('renders without crashing for a valid task id', () => {
         stubTaskFull('E1');
@@ -215,8 +216,8 @@ describe('TaskDetail page', () => {
         });
         server.use(
             http.patch(`${BASE}/tasks/E4`, () =>
-                HttpResponse.json(makeTask({ id: 'E4', description: 'new body' })),
-            ),
+                HttpResponse.json(makeTask({ id: 'E4', description: 'new body' }))
+            )
         );
         renderTask('E4');
         await screen.findByText('Task One');
@@ -236,9 +237,7 @@ describe('TaskDetail page', () => {
 
         // Cancel (cancelEdit callback).
         fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
-        await waitFor(() =>
-            expect(screen.queryByDisplayValue('new body')).not.toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.queryByDisplayValue('new body')).not.toBeInTheDocument());
 
         // Re-open and Save (save callback hits PATCH).
         const editAgain = screen
@@ -277,9 +276,7 @@ describe('TaskDetail page', () => {
 
     it('picks a status from the StatusPickerPopover (fires onStatusPick)', async () => {
         stubTaskFull('E6b');
-        server.use(
-            http.patch(`${BASE}/tasks/E6b/status`, () => HttpResponse.json({ ok: true })),
-        );
+        server.use(http.patch(`${BASE}/tasks/E6b/status`, () => HttpResponse.json({ ok: true })));
         renderTask('E6b');
         await screen.findByText('Task One');
 
@@ -345,10 +342,10 @@ describe('TaskDetail page', () => {
                     external_links: [],
                     activity: [],
                     agents: [],
-                }),
+                })
             ),
             http.get(`${BASE}/run`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderTask('missing');
         const back = await screen.findByRole('button', { name: /Back to Tasks/i });
@@ -360,11 +357,28 @@ describe('TaskDetail page', () => {
 
     it('shows the project in the rail when the task has one', async () => {
         stubTaskFull('E16', {
-            project: { id: 'p1', name: 'My Project', issue_key_prefix: 'ATL', git_path: null, git_url: null, credential_id: null, default_branch: 'main', clone_status: 'ready', description: '', status: 'active', guardrails_md: '', setup_sh_body: '', setup_ps1_body: '', created_at: '2026-05-16T00:00:00.000Z', updated_at: '2026-05-16T00:00:00.000Z', last_activity_at: '2026-05-16T00:00:00.000Z' },
+            project: {
+                id: 'p1',
+                name: 'My Project',
+                issue_key_prefix: 'ATL',
+                git_path: null,
+                git_url: null,
+                credential_id: null,
+                default_branch: 'main',
+                clone_status: 'ready',
+                description: '',
+                status: 'active',
+                guardrails_md: '',
+                setup_sh_body: '',
+                setup_ps1_body: '',
+                created_at: '2026-05-16T00:00:00.000Z',
+                updated_at: '2026-05-16T00:00:00.000Z',
+                last_activity_at: '2026-05-16T00:00:00.000Z',
+            },
         });
         server.use(
             http.get(`${BASE}/workflows`, () => HttpResponse.json([])),
-            http.get(`${BASE}/items/E16/workflow-runs`, () => HttpResponse.json([])),
+            http.get(`${BASE}/items/E16/workflow-runs`, () => HttpResponse.json([]))
         );
         renderTask('E16');
         await screen.findByText('Task One');
@@ -380,7 +394,11 @@ describe('TaskDetail page', () => {
             category: 'software-dev',
         });
         stubTaskFull('E17', {
-            task: makeTask({ id: 'E17', assignee_agent_id: 'agent-1', reporter_agent_id: 'agent-1' }),
+            task: makeTask({
+                id: 'E17',
+                assignee_agent_id: 'agent-1',
+                reporter_agent_id: 'agent-1',
+            }),
             agents: [agent],
         });
         renderTask('E17');
@@ -400,18 +418,30 @@ describe('TaskDetail page', () => {
                     related_links: [],
                     activity: [],
                     agents: [],
-                }),
+                })
             ),
             // Return item runs with cost so totalCostUsd is non-null
             http.get(`${BASE}/run`, () =>
                 HttpResponse.json([
-                    { id: 'run-1', item_id: 'E18', total_cost_usd: 0.05, status: 'done', created_at: '2026-05-16T00:00:00.000Z' },
-                    { id: 'run-2', item_id: 'E18', total_cost_usd: 0.10, status: 'done', created_at: '2026-05-16T00:00:00.000Z' },
-                ]),
+                    {
+                        id: 'run-1',
+                        item_id: 'E18',
+                        total_cost_usd: 0.05,
+                        status: 'done',
+                        created_at: '2026-05-16T00:00:00.000Z',
+                    },
+                    {
+                        id: 'run-2',
+                        item_id: 'E18',
+                        total_cost_usd: 0.1,
+                        status: 'done',
+                        created_at: '2026-05-16T00:00:00.000Z',
+                    },
+                ])
             ),
             http.get(`${BASE}/issues/task/E18/activity`, () => HttpResponse.json([])),
             http.get(`${BASE}/issues/task/E18/links`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderTask('E18');
         await screen.findByText('Task One');
@@ -430,17 +460,23 @@ describe('TaskDetail page', () => {
                     related_links: [],
                     activity: [],
                     agents: [],
-                }),
+                })
             ),
             // Runs with null cost → hasAny stays false → totalCostUsd = null
             http.get(`${BASE}/run`, () =>
                 HttpResponse.json([
-                    { id: 'run-1', item_id: 'E19', total_cost_usd: null, status: 'done', created_at: '2026-05-16T00:00:00.000Z' },
-                ]),
+                    {
+                        id: 'run-1',
+                        item_id: 'E19',
+                        total_cost_usd: null,
+                        status: 'done',
+                        created_at: '2026-05-16T00:00:00.000Z',
+                    },
+                ])
             ),
             http.get(`${BASE}/issues/task/E19/activity`, () => HttpResponse.json([])),
             http.get(`${BASE}/issues/task/E19/links`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderTask('E19');
         await screen.findByText('Task One');
@@ -462,14 +498,15 @@ describe('TaskDetail page', () => {
         stubTaskFull('E23');
         server.use(
             http.patch(`${BASE}/tasks/E23`, () =>
-                HttpResponse.json(makeTask({ id: 'E23', labels: ['backend'] })),
-            ),
+                HttpResponse.json(makeTask({ id: 'E23', labels: ['backend'] }))
+            )
         );
         renderTask('E23');
         await screen.findByText('Task One');
 
         // Click "Add labels" to open the autocomplete editor
-        const addLabels = screen.queryByRole('button', { name: /Add labels/i }) ??
+        const addLabels =
+            screen.queryByRole('button', { name: /Add labels/i }) ??
             screen.queryByText(/Add labels/i);
         if (addLabels) {
             fireEvent.click(addLabels);
@@ -505,8 +542,8 @@ describe('TaskDetail page', () => {
                     body: 'A new comment',
                     edited_at: null,
                     created_at: '2026-05-16T00:00:00.000Z',
-                }),
-            ),
+                })
+            )
         );
         fireEvent.click(post);
     });
@@ -516,7 +553,11 @@ describe('TaskDetail page', () => {
         // This exercises the truthy branches at L102 (`? agentsById.get(...)`) and L105.
         const agent = makeAgent({ id: 'agent-ra', name: 'ReporterAgent' });
         stubTaskFull('E_RA', {
-            task: makeTask({ id: 'E_RA', reporter_agent_id: 'agent-ra', assignee_agent_id: 'agent-ra' }),
+            task: makeTask({
+                id: 'E_RA',
+                reporter_agent_id: 'agent-ra',
+                assignee_agent_id: 'agent-ra',
+            }),
             agents: [agent],
         });
         renderTask('E_RA');
@@ -541,7 +582,11 @@ describe('TaskDetail page', () => {
         // array is empty, agentsById.get() returns undefined → the ?? null
         // fallback at L102 and L105 fires, yielding reporter = null, assignee = null.
         stubTaskFull('E_GHOST', {
-            task: makeTask({ id: 'E_GHOST', reporter_agent_id: 'ghost-r', assignee_agent_id: 'ghost-a' }),
+            task: makeTask({
+                id: 'E_GHOST',
+                reporter_agent_id: 'ghost-r',
+                assignee_agent_id: 'ghost-a',
+            }),
             agents: [], // empty — .get() returns undefined → ?? null fires
         });
         renderTask('E_GHOST');
@@ -557,8 +602,8 @@ describe('TaskDetail page', () => {
         });
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: null, onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({ id: 1, owner_name: null, onboarding_complete: 1 })
+            )
         );
         renderTask('E_OWN_NULL');
         expect(await screen.findByText('Task One')).toBeInTheDocument();
@@ -574,13 +619,17 @@ describe('TaskDetail page', () => {
         });
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: 'Owner', accent_color: '#9B59B6', onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({
+                    id: 1,
+                    owner_name: 'Owner',
+                    accent_color: '#9B59B6',
+                    onboarding_complete: 1,
+                })
+            )
         );
         renderTask('E_ACCENT');
         expect(await screen.findByText('Task One')).toBeInTheDocument();
         // settings.accent_color = '#9B59B6' → ownerAccent = '#9B59B6' (left branch fires)
         expect(document.body).toBeTruthy();
     }, 15000);
-
 });

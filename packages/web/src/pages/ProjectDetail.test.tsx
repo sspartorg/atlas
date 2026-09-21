@@ -30,7 +30,14 @@ function subTaskNode(overrides: Partial<IIssueTreeNode> = {}): IIssueTreeNode {
 }
 
 function taskNode(id: string, children: IIssueTreeNode[] = []): IIssueTreeNode {
-    return subTaskNode({ id, short_id: id, kind: 'task', task_id: null, task_title: null, children });
+    return subTaskNode({
+        id,
+        short_id: id,
+        kind: 'task',
+        task_id: null,
+        task_title: null,
+        children,
+    });
 }
 import { ProjectDetail } from './ProjectDetail.js';
 
@@ -51,12 +58,8 @@ function registerProjectMocks(
         ...extra,
         ...defaultHandlers,
         http.get('http://localhost:3000/api/projects/p1', () => HttpResponse.json(project)),
-        http.get('http://localhost:3000/api/projects/p1/guardrails', () =>
-            HttpResponse.json([]),
-        ),
-        http.get('http://localhost:3000/api/counts/project/p1', () =>
-            HttpResponse.json({}),
-        ),
+        http.get('http://localhost:3000/api/projects/p1/guardrails', () => HttpResponse.json([])),
+        http.get('http://localhost:3000/api/counts/project/p1', () => HttpResponse.json({}))
     );
 }
 
@@ -67,7 +70,7 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         expect(container.firstChild).toBeInTheDocument();
     });
@@ -82,7 +85,7 @@ describe('ProjectDetail page', () => {
                     <Route path="/projects/:id" element={<ProjectDetail />} />
                 </Routes>
             </>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
 
         const tasksTab = await screen.findByRole('tab', { name: /tasks/i });
@@ -105,7 +108,7 @@ describe('ProjectDetail page', () => {
                     <Route path="/projects/:id" element={<ProjectDetail />} />
                 </Routes>
             </>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
 
         // First click of the right-rail "Edit →" while on Overview flips to Guardrails.
@@ -130,11 +133,12 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
         // Find the "more" / project actions menu button
-        const moreBtn = screen.queryByRole('button', { name: /project actions/i }) ??
+        const moreBtn =
+            screen.queryByRole('button', { name: /project actions/i }) ??
             screen.queryByText('more_horiz');
         if (moreBtn) {
             fireEvent.click(moreBtn);
@@ -142,9 +146,12 @@ describe('ProjectDetail page', () => {
             if (renameItem) {
                 fireEvent.click(renameItem);
                 // RenameProjectModal should open
-                await waitFor(() => {
-                    expect(screen.queryByRole('dialog') ?? document.body).toBeTruthy();
-                }, { timeout: 2000 });
+                await waitFor(
+                    () => {
+                        expect(screen.queryByRole('dialog') ?? document.body).toBeTruthy();
+                    },
+                    { timeout: 2000 }
+                );
             }
         }
     });
@@ -156,19 +163,23 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
-        const moreBtn = screen.queryByRole('button', { name: /project actions/i }) ??
+        const moreBtn =
+            screen.queryByRole('button', { name: /project actions/i }) ??
             screen.queryByText('more_horiz');
         if (moreBtn) {
             fireEvent.click(moreBtn);
             const secretsItem = screen.queryByText(/Manage Secrets/i);
             if (secretsItem) {
                 fireEvent.click(secretsItem);
-                await waitFor(() => {
-                    expect(screen.queryByRole('dialog') ?? document.body).toBeTruthy();
-                }, { timeout: 2000 });
+                await waitFor(
+                    () => {
+                        expect(screen.queryByRole('dialog') ?? document.body).toBeTruthy();
+                    },
+                    { timeout: 2000 }
+                );
             }
         }
     });
@@ -179,7 +190,7 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
         const refreshBtn = screen.queryByRole('button', { name: /refresh/i });
@@ -195,19 +206,23 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
-        const moreBtn = screen.queryByRole('button', { name: /project actions/i }) ??
+        const moreBtn =
+            screen.queryByRole('button', { name: /project actions/i }) ??
             screen.queryByText('more_horiz');
         if (moreBtn) {
             fireEvent.click(moreBtn);
             const deleteItem = screen.queryByText(/Delete project/i);
             if (deleteItem) {
                 fireEvent.click(deleteItem);
-                await waitFor(() => {
-                    expect(screen.queryByRole('dialog') ?? document.body).toBeTruthy();
-                }, { timeout: 2000 });
+                await waitFor(
+                    () => {
+                        expect(screen.queryByRole('dialog') ?? document.body).toBeTruthy();
+                    },
+                    { timeout: 2000 }
+                );
             }
         }
         expect(document.body).toBeTruthy();
@@ -219,10 +234,11 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
-        const moreBtn = screen.queryByRole('button', { name: /project actions/i }) ??
+        const moreBtn =
+            screen.queryByRole('button', { name: /project actions/i }) ??
             screen.queryByText('more_horiz');
         if (moreBtn) {
             fireEvent.click(moreBtn);
@@ -239,18 +255,21 @@ describe('ProjectDetail page', () => {
         server.use(
             ...defaultHandlers,
             http.get('http://localhost:3000/api/projects/not-found', () =>
-                HttpResponse.json(null, { status: 404 }),
-            ),
+                HttpResponse.json(null, { status: 404 })
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/not-found'] },
+            { initialEntries: ['/projects/not-found'] }
         );
-        await waitFor(() => {
-            expect(screen.getByText(/Project not found/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Project not found/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
         const backBtn = screen.queryByRole('button', { name: /Back to Projects/i });
         if (backBtn) fireEvent.click(backBtn);
         expect(document.body).toBeTruthy();
@@ -262,19 +281,23 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
-        const moreBtn = screen.queryByRole('button', { name: /project actions/i }) ??
+        const moreBtn =
+            screen.queryByRole('button', { name: /project actions/i }) ??
             screen.queryByText('more_horiz');
         if (moreBtn) {
             fireEvent.click(moreBtn);
             const deleteItem = screen.queryByText(/Delete project/i);
             if (deleteItem) {
                 fireEvent.click(deleteItem);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 5000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 5000 }
+                ).catch(() => {});
                 const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
                 if (cancelBtn) {
                     fireEvent.click(cancelBtn);
@@ -293,19 +316,23 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
-        const moreBtn = screen.queryByRole('button', { name: /project actions/i }) ??
+        const moreBtn =
+            screen.queryByRole('button', { name: /project actions/i }) ??
             screen.queryByText('more_horiz');
         if (moreBtn) {
             fireEvent.click(moreBtn);
             const secretsItem = screen.queryByText(/Manage Secrets/i);
             if (secretsItem) {
                 fireEvent.click(secretsItem);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 5000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 5000 }
+                ).catch(() => {});
                 const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
                 if (cancelBtn) {
                     fireEvent.click(cancelBtn);
@@ -324,19 +351,23 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
-        const moreBtn = screen.queryByRole('button', { name: /project actions/i }) ??
+        const moreBtn =
+            screen.queryByRole('button', { name: /project actions/i }) ??
             screen.queryByText('more_horiz');
         if (moreBtn) {
             fireEvent.click(moreBtn);
             const renameItem = screen.queryByText(/Rename project/i);
             if (renameItem) {
                 fireEvent.click(renameItem);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 5000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 5000 }
+                ).catch(() => {});
                 const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
                 if (cancelBtn) {
                     fireEvent.click(cancelBtn);
@@ -355,19 +386,23 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
-        const moreBtn = screen.queryByRole('button', { name: /project actions/i }) ??
+        const moreBtn =
+            screen.queryByRole('button', { name: /project actions/i }) ??
             screen.queryByText('more_horiz');
         if (moreBtn) {
             fireEvent.click(moreBtn);
             const scaffoldItem = screen.queryByText(/AI.*scaffold|scaffold.*AI|Generate.*AI/i);
             if (scaffoldItem) {
                 fireEvent.click(scaffoldItem);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 5000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 5000 }
+                ).catch(() => {});
                 const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
                 if (cancelBtn) {
                     fireEvent.click(cancelBtn);
@@ -389,15 +424,18 @@ describe('ProjectDetail page', () => {
                     <Route path="/projects/:id" element={<ProjectDetail />} />
                 </Routes>
             </>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
         const historyTab = screen.queryByRole('tab', { name: /history/i });
         if (historyTab) {
             fireEvent.click(historyTab);
-            await waitFor(() => {
-                expect(screen.getByTestId('search').textContent).toContain('history');
-            }, { timeout: 2000 });
+            await waitFor(
+                () => {
+                    expect(screen.getByTestId('search').textContent).toContain('history');
+                },
+                { timeout: 2000 }
+            );
         }
         expect(document.body).toBeTruthy();
     });
@@ -408,14 +446,14 @@ describe('ProjectDetail page', () => {
         registerProjectMocks(
             undefined,
             http.get('http://localhost:3000/api/issues/tree', () =>
-                HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] }),
-            ),
+                HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] })
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         expect(await screen.findByRole('tab', { name: /tasks\s+0/i })).toBeInTheDocument();
     });
@@ -439,14 +477,14 @@ describe('ProjectDetail page', () => {
                         makeTask({ id: 'ATL-1', title: 'Task With Sub-tasks' }),
                         makeTask({ id: 'ATL-9', title: 'Task Without Sub-tasks' }),
                     ],
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await user.click(await screen.findByRole('tab', { name: /tasks\s+2/i }));
         // The sub-task count cell sits right after the title cell.
@@ -461,14 +499,19 @@ describe('ProjectDetail page', () => {
         registerProjectMocks(
             undefined,
             http.get('http://localhost:3000/api/settings', () =>
-                HttpResponse.json({ id: 1, owner_name: 'Jamie Owner', accent_color: '#123456', onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({
+                    id: 1,
+                    owner_name: 'Jamie Owner',
+                    accent_color: '#123456',
+                    onboarding_complete: 1,
+                })
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
         expect(document.body).toBeTruthy();
@@ -478,14 +521,14 @@ describe('ProjectDetail page', () => {
         registerProjectMocks(
             undefined,
             http.get('http://localhost:3000/api/settings', () =>
-                HttpResponse.json({ id: 1, onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({ id: 1, onboarding_complete: 1 })
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
         expect(document.body).toBeTruthy();
@@ -497,7 +540,7 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         const matches = await screen.findAllByText('Atlas');
         expect(matches.length).toBeGreaterThan(0);
@@ -511,30 +554,42 @@ describe('ProjectDetail page', () => {
         registerProjectMocks(
             undefined,
             http.get('http://localhost:3000/api/agents', () =>
-                HttpResponse.json([agentA, agentB, agentDoneTask, agentDoneSub]),
+                HttpResponse.json([agentA, agentB, agentDoneTask, agentDoneSub])
             ),
             http.get('http://localhost:3000/api/issues/tree', () =>
                 HttpResponse.json({
                     tree: [
                         taskNode('ATL-1', [
-                            subTaskNode({ id: 'ATL-2', assignee_agent_id: 'agent-b', status: 'in_progress' }),
-                            subTaskNode({ id: 'ATL-3', assignee_agent_id: 'agent-done-sub', status: 'done' }),
+                            subTaskNode({
+                                id: 'ATL-2',
+                                assignee_agent_id: 'agent-b',
+                                status: 'in_progress',
+                            }),
+                            subTaskNode({
+                                id: 'ATL-3',
+                                assignee_agent_id: 'agent-done-sub',
+                                status: 'done',
+                            }),
                         ]),
                     ],
                     projects: [],
                     agents: [],
                     tasks: [
                         makeTask({ id: 'ATL-1', assignee_agent_id: 'agent-a' }),
-                        makeTask({ id: 'ATL-4', assignee_agent_id: 'agent-done-task', status: 'done' }),
+                        makeTask({
+                            id: 'ATL-4',
+                            assignee_agent_id: 'agent-done-task',
+                            status: 'done',
+                        }),
                     ],
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         // Active agents surface in the right rail: Agent A (task) + Agent B (open sub-task).
         expect(await screen.findByText('Agent A')).toBeInTheDocument();
@@ -545,13 +600,13 @@ describe('ProjectDetail page', () => {
 
     it('guardrailsActive renders "Guard-rails active" pill when guardrails_md is non-empty', async () => {
         registerProjectMocks(
-            makeProject({ id: 'p1', name: 'Atlas', guardrails_md: '## Rule one\nBe nice.' }),
+            makeProject({ id: 'p1', name: 'Atlas', guardrails_md: '## Rule one\nBe nice.' })
         );
         renderWithProviders(
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         expect(await screen.findByText(/Guard-rails active/i)).toBeInTheDocument();
     });
@@ -562,7 +617,7 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
         expect(screen.queryByText(/Guard-rails active/i)).not.toBeInTheDocument();
@@ -575,7 +630,7 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         // On Overview (default tab), the right rail's "Active agents" panel is visible.
         expect(await screen.findByText(/Active agents/i)).toBeInTheDocument();
@@ -603,17 +658,18 @@ describe('ProjectDetail page', () => {
                 HttpResponse.json([
                     makeProjectRepo({ id: 'r1', clone_status: 'cloning' }),
                     makeProjectRepo({ id: 'r2', clone_status: 'ready' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
-        const moreBtn = screen.queryByRole('button', { name: /project actions/i }) ??
+        const moreBtn =
+            screen.queryByRole('button', { name: /project actions/i }) ??
             screen.queryByText('more_horiz');
         expect(moreBtn).toBeTruthy();
         if (moreBtn) {
@@ -628,17 +684,18 @@ describe('ProjectDetail page', () => {
         registerProjectMocks(
             undefined,
             http.get('http://localhost:3000/api/projects/p1/repos', () =>
-                HttpResponse.json([makeProjectRepo({ id: 'r1', clone_status: 'cloning' })]),
-            ),
+                HttpResponse.json([makeProjectRepo({ id: 'r1', clone_status: 'cloning' })])
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
-        const moreBtn = screen.queryByRole('button', { name: /project actions/i }) ??
+        const moreBtn =
+            screen.queryByRole('button', { name: /project actions/i }) ??
             screen.queryByText('more_horiz');
         expect(moreBtn).toBeTruthy();
         if (moreBtn) {
@@ -655,7 +712,7 @@ describe('ProjectDetail page', () => {
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
-            { initialEntries: ['/projects/p1'] },
+            { initialEntries: ['/projects/p1'] }
         );
         await screen.findByRole('tab', { name: /overview/i });
         const refreshBtn = await screen.findByRole('button', { name: /refresh/i });

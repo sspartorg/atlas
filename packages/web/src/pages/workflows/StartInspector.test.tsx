@@ -96,8 +96,14 @@ describe('StartInspector', () => {
 
     it('marks the workflow input the workflow currently uses', () => {
         mount({ input_kind: 'item' });
-        expect(screen.getByRole('button', { name: /Per Task/ })).toHaveAttribute('aria-pressed', 'true');
-        expect(screen.getByRole('button', { name: /Project run/ })).toHaveAttribute('aria-pressed', 'false');
+        expect(screen.getByRole('button', { name: /Per Task/ })).toHaveAttribute(
+            'aria-pressed',
+            'true'
+        );
+        expect(screen.getByRole('button', { name: /Project run/ })).toHaveAttribute(
+            'aria-pressed',
+            'false'
+        );
     });
 
     // A sub-task workflow never starts on its own — a Task run's Sub-tasks step
@@ -157,7 +163,10 @@ describe('StartInspector', () => {
     it('shows the preset cards for a scheduled trigger', () => {
         mount({ trigger: 'schedule', schedule_preset: 'daily' });
         expect(screen.getByRole('button', { name: /Every hour/ })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /Daily/ })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name: /Daily/ })).toHaveAttribute(
+            'aria-pressed',
+            'true'
+        );
     });
 
     // Only daily and weekly runs happen at a time of day; asking for one on an
@@ -170,13 +179,21 @@ describe('StartInspector', () => {
     });
 
     it('patches the time of day', () => {
-        const onChange = mount({ trigger: 'schedule', schedule_preset: 'daily', schedule_time_of_day: '09:00' });
+        const onChange = mount({
+            trigger: 'schedule',
+            schedule_preset: 'daily',
+            schedule_time_of_day: '09:00',
+        });
         fireEvent.change(screen.getByLabelText('Time of day'), { target: { value: '06:45' } });
         expect(onChange).toHaveBeenCalledWith({ schedule_time_of_day: '06:45' });
     });
 
     it('clears an emptied time of day to null rather than an empty string', () => {
-        const onChange = mount({ trigger: 'schedule', schedule_preset: 'daily', schedule_time_of_day: '09:00' });
+        const onChange = mount({
+            trigger: 'schedule',
+            schedule_preset: 'daily',
+            schedule_time_of_day: '09:00',
+        });
         fireEvent.change(screen.getByLabelText('Time of day'), { target: { value: '' } });
         expect(onChange).toHaveBeenCalledWith({ schedule_time_of_day: null });
     });
@@ -191,7 +208,11 @@ describe('StartInspector', () => {
     // Sunday is weekday 0, so the forward has to test `!== undefined` and not
     // truthiness — a truthiness check silently refuses to schedule on Sundays.
     it('forwards Sunday, whose weekday number is falsy', async () => {
-        const onChange = mount({ trigger: 'schedule', schedule_preset: 'weekly', schedule_weekday: 3 });
+        const onChange = mount({
+            trigger: 'schedule',
+            schedule_preset: 'weekly',
+            schedule_weekday: 3,
+        });
         openSelect('Weekday');
         await userEvent.click(screen.getByRole('option', { name: 'Sun' }));
         expect(onChange).toHaveBeenCalledWith({ schedule_weekday: 0 });
@@ -204,7 +225,11 @@ describe('StartInspector', () => {
     });
 
     it('clears an emptied cron expression to null rather than an empty string', async () => {
-        const onChange = mount({ trigger: 'schedule', schedule_preset: 'custom', cron_expr: '*/5 * * * *' });
+        const onChange = mount({
+            trigger: 'schedule',
+            schedule_preset: 'custom',
+            cron_expr: '*/5 * * * *',
+        });
         await userEvent.clear(screen.getByLabelText('Cron expression'));
         expect(onChange).toHaveBeenCalledWith({ cron_expr: null });
     });

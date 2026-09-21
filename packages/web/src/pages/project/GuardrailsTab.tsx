@@ -4,7 +4,7 @@ import Skeleton from '@mui/material/Skeleton';
 import type { IProject } from '@atlas/shared';
 
 const ProjectGuardrailsBody = lazy(() =>
-    import('../ProjectGuardrails.js').then((m) => ({ default: m.ProjectGuardrailsBody })),
+    import('../ProjectGuardrails.js').then((m) => ({ default: m.ProjectGuardrailsBody }))
 );
 
 interface Props {

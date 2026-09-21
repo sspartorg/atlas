@@ -49,7 +49,7 @@ describe('NewReminderModal', () => {
                     schedule_kind: 'daily',
                     schedule_value: '09:00',
                 })}
-            />,
+            />
         );
         expect((screen.getByLabelText(/label/i) as HTMLInputElement).value).toBe('Standup');
     });
@@ -63,7 +63,7 @@ describe('NewReminderModal', () => {
                     schedule_kind: 'once',
                     schedule_value: '2030-01-01T09:00:00Z',
                 })}
-            />,
+            />
         );
         // Submit button label flips to "Save changes" in edit mode.
         expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
@@ -78,7 +78,7 @@ describe('NewReminderModal', () => {
                     schedule_kind: 'weekly',
                     schedule_value: '09:00|1,3,5',
                 })}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
     });
@@ -92,7 +92,7 @@ describe('NewReminderModal', () => {
                     schedule_kind: 'cron',
                     schedule_value: '0 9 * * 1-5',
                 })}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
     });
@@ -154,7 +154,7 @@ describe('NewReminderModal', () => {
                     created_at: '2026-05-16T00:00:00Z',
                     updated_at: '2026-05-16T00:00:00Z',
                 });
-            }),
+            })
         );
         const onClose = vi.fn();
         renderWithProviders(<NewReminderModal open onClose={onClose} />);
@@ -182,11 +182,9 @@ describe('NewReminderModal', () => {
                     created_at: '2026-05-16T00:00:00Z',
                     updated_at: '2026-05-16T00:00:00Z',
                 });
-            }),
+            })
         );
-        renderWithProviders(
-            <NewReminderModal open onClose={() => {}} editing={makeReminder()} />,
-        );
+        renderWithProviders(<NewReminderModal open onClose={() => {}} editing={makeReminder()} />);
         // Save button reads "Save changes" in edit mode.
         fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -233,8 +231,8 @@ describe('NewReminderModal', () => {
                     created_at: '2026-05-16T00:00:00Z',
                     updated_at: '2026-05-16T00:00:00Z',
                     created_by_agent_id: null,
-                }),
-            ),
+                })
+            )
         );
         const onClose = vi.fn();
         renderWithProviders(<NewReminderModal open onClose={onClose} />);
@@ -263,13 +261,11 @@ describe('NewReminderModal', () => {
                     created_at: '2026-05-16T00:00:00Z',
                     updated_at: '2026-05-16T00:00:00Z',
                     created_by_agent_id: null,
-                }),
-            ),
+                })
+            )
         );
         const onClose = vi.fn();
-        renderWithProviders(
-            <NewReminderModal open onClose={onClose} editing={makeReminder()} />,
-        );
+        renderWithProviders(<NewReminderModal open onClose={onClose} editing={makeReminder()} />);
         // Submit in edit mode to exercise updateReminder.mutate + onSuccess
         fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
         await new Promise((r) => setTimeout(r, 800));
@@ -286,7 +282,9 @@ describe('NewReminderModal', () => {
     it('exercises setOnce onChange on the datetime input', () => {
         renderWithProviders(<NewReminderModal open onClose={() => {}} />);
         // Default kind is "once" — the datetime-local input should be present
-        const datetimeInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement | null;
+        const datetimeInput = document.querySelector(
+            'input[type="datetime-local"]'
+        ) as HTMLInputElement | null;
         if (datetimeInput) {
             fireEvent.change(datetimeInput, { target: { value: '2030-06-15T10:00' } });
             expect(datetimeInput.value).toBe('2030-06-15T10:00');
@@ -298,7 +296,9 @@ describe('NewReminderModal', () => {
         renderWithProviders(<NewReminderModal open onClose={() => {}} />);
         fireEvent.change(screen.getByLabelText(/label/i), { target: { value: 'Bad once' } });
         // Default kind is 'once'. Clear the datetime-local value to force buildSchedule to return null.
-        const datetimeInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement | null;
+        const datetimeInput = document.querySelector(
+            'input[type="datetime-local"]'
+        ) as HTMLInputElement | null;
         if (datetimeInput) {
             fireEvent.change(datetimeInput, { target: { value: '' } });
         }
@@ -321,11 +321,13 @@ describe('NewReminderModal', () => {
     it('create-mode onError: shows error message on network failure', async () => {
         server.use(
             http.post(`${BASE}/reminders`, () =>
-                HttpResponse.json({ message: 'Internal server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ message: 'Internal server error' }, { status: 500 })
+            )
         );
         renderWithProviders(<NewReminderModal open onClose={() => {}} />);
-        fireEvent.change(screen.getByLabelText(/label/i), { target: { value: 'Failing reminder' } });
+        fireEvent.change(screen.getByLabelText(/label/i), {
+            target: { value: 'Failing reminder' },
+        });
         fireEvent.click(screen.getByRole('radio', { name: /^daily$/i }));
         fireEvent.click(screen.getByRole('button', { name: /create reminder/i }));
         // Wait for the mutation's onError callback to set the error state.
@@ -338,12 +340,10 @@ describe('NewReminderModal', () => {
     it('edit-mode onError: shows error message on network failure', async () => {
         server.use(
             http.patch(`${BASE}/reminders/1`, () =>
-                HttpResponse.json({ message: 'Conflict' }, { status: 409 }),
-            ),
+                HttpResponse.json({ message: 'Conflict' }, { status: 409 })
+            )
         );
-        renderWithProviders(
-            <NewReminderModal open onClose={() => {}} editing={makeReminder()} />,
-        );
+        renderWithProviders(<NewReminderModal open onClose={() => {}} editing={makeReminder()} />);
         fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
         await new Promise((r) => setTimeout(r, 800));
         expect(document.body).toBeTruthy();
@@ -355,13 +355,20 @@ describe('NewReminderModal', () => {
             http.post(`${BASE}/reminders`, async ({ request }) => {
                 captured = await request.json();
                 return HttpResponse.json({
-                    id: 3, label: 'Weekly', body: '', schedule_kind: 'weekly',
-                    schedule_value: '09:00|1,2,3,4,5', channel: 'notification',
-                    status: 'active', next_fire_at: '2030-01-01T00:00:00Z',
-                    last_fired_at: null, created_at: '2026-05-16T00:00:00Z',
-                    updated_at: '2026-05-16T00:00:00Z', created_by_agent_id: null,
+                    id: 3,
+                    label: 'Weekly',
+                    body: '',
+                    schedule_kind: 'weekly',
+                    schedule_value: '09:00|1,2,3,4,5',
+                    channel: 'notification',
+                    status: 'active',
+                    next_fire_at: '2030-01-01T00:00:00Z',
+                    last_fired_at: null,
+                    created_at: '2026-05-16T00:00:00Z',
+                    updated_at: '2026-05-16T00:00:00Z',
+                    created_by_agent_id: null,
                 });
-            }),
+            })
         );
         renderWithProviders(<NewReminderModal open onClose={() => {}} />);
         fireEvent.change(screen.getByLabelText(/label/i), { target: { value: 'Weekly' } });
@@ -383,13 +390,20 @@ describe('NewReminderModal', () => {
             http.post(`${BASE}/reminders`, async ({ request }) => {
                 captured = await request.json();
                 return HttpResponse.json({
-                    id: 4, label: 'Cron', body: '', schedule_kind: 'cron',
-                    schedule_value: '0 9 * * 1-5', channel: 'notification',
-                    status: 'active', next_fire_at: '2030-01-01T00:00:00Z',
-                    last_fired_at: null, created_at: '2026-05-16T00:00:00Z',
-                    updated_at: '2026-05-16T00:00:00Z', created_by_agent_id: null,
+                    id: 4,
+                    label: 'Cron',
+                    body: '',
+                    schedule_kind: 'cron',
+                    schedule_value: '0 9 * * 1-5',
+                    channel: 'notification',
+                    status: 'active',
+                    next_fire_at: '2030-01-01T00:00:00Z',
+                    last_fired_at: null,
+                    created_at: '2026-05-16T00:00:00Z',
+                    updated_at: '2026-05-16T00:00:00Z',
+                    created_by_agent_id: null,
                 });
-            }),
+            })
         );
         renderWithProviders(<NewReminderModal open onClose={() => {}} />);
         fireEvent.change(screen.getByLabelText(/label/i), { target: { value: 'Cron' } });
@@ -421,22 +435,29 @@ describe('NewReminderModal', () => {
 
     it('shows Saving/Creating label when mutation is in-flight (line 290)', async () => {
         let resolvePatch!: () => void;
-        const patchPromise = new Promise<void>((res) => { resolvePatch = res; });
+        const patchPromise = new Promise<void>((res) => {
+            resolvePatch = res;
+        });
         server.use(
             http.patch(`${BASE}/reminders/1`, async () => {
                 await patchPromise;
                 return HttpResponse.json({
-                    id: 1, label: 'Standup', body: '', schedule_kind: 'daily',
-                    schedule_value: '09:00', channel: 'notification',
-                    status: 'active', next_fire_at: '2030-01-01T00:00:00Z',
-                    last_fired_at: null, created_at: '2026-05-16T00:00:00Z',
-                    updated_at: '2026-05-16T00:00:00Z', created_by_agent_id: null,
+                    id: 1,
+                    label: 'Standup',
+                    body: '',
+                    schedule_kind: 'daily',
+                    schedule_value: '09:00',
+                    channel: 'notification',
+                    status: 'active',
+                    next_fire_at: '2030-01-01T00:00:00Z',
+                    last_fired_at: null,
+                    created_at: '2026-05-16T00:00:00Z',
+                    updated_at: '2026-05-16T00:00:00Z',
+                    created_by_agent_id: null,
                 });
-            }),
+            })
         );
-        renderWithProviders(
-            <NewReminderModal open onClose={() => {}} editing={makeReminder()} />,
-        );
+        renderWithProviders(<NewReminderModal open onClose={() => {}} editing={makeReminder()} />);
         // Click Save in edit mode — the button label becomes "Saving…" while pending
         const saveBtn = screen.getByRole('button', { name: /save changes/i });
         fireEvent.click(saveBtn);
@@ -453,7 +474,7 @@ describe('NewReminderModal', () => {
                 open
                 onClose={vi.fn()}
                 editing={makeReminder({ body: null as unknown as string })}
-            />,
+            />
         );
         // Modal renders with body=null; body field defaults to '' via ?? fallback
         expect(screen.getAllByRole('dialog').length).toBeGreaterThan(0);
@@ -463,8 +484,8 @@ describe('NewReminderModal', () => {
         // Render in create mode, switch to "once" schedule, leave once field empty, try submit
         renderWithProviders(<NewReminderModal open onClose={vi.fn()} />);
         // Select the "once" schedule type if the UI allows
-        const onceOption = screen.queryByRole('option', { name: /once/i }) ??
-                           screen.queryByText(/once/i);
+        const onceOption =
+            screen.queryByRole('option', { name: /once/i }) ?? screen.queryByText(/once/i);
         if (onceOption) fireEvent.click(onceOption);
         const labelInput = screen.queryByLabelText(/label/i) as HTMLInputElement | null;
         if (labelInput) fireEvent.change(labelInput, { target: { value: 'Test reminder' } });
@@ -483,7 +504,7 @@ describe('NewReminderModal', () => {
                 onClose={vi.fn()}
                 // schedule_value='10:00' has no '|' → split gives ['10:00'], csv=undefined
                 editing={makeReminder({ schedule_kind: 'weekly', schedule_value: '10:00' })}
-            />,
+            />
         );
         // Modal renders; hydrateScheduleFromRow fires and hits the ?? fallback
         expect(screen.getAllByRole('dialog').length).toBeGreaterThan(0);
@@ -502,18 +523,27 @@ describe('NewReminderModal', () => {
 
     it('handleClose guard: cancel blocked while mutation is in-flight (isPending=true)', async () => {
         let resolvePost!: () => void;
-        const postPromise = new Promise<void>((res) => { resolvePost = res; });
+        const postPromise = new Promise<void>((res) => {
+            resolvePost = res;
+        });
         server.use(
             http.post(`${BASE}/reminders`, async () => {
                 await postPromise;
                 return HttpResponse.json({
-                    id: 5, label: 'Pending', body: '', schedule_kind: 'daily',
-                    schedule_value: '09:00', channel: 'notification',
-                    status: 'active', next_fire_at: '2030-01-01T00:00:00Z',
-                    last_fired_at: null, created_at: '2026-05-16T00:00:00Z',
-                    updated_at: '2026-05-16T00:00:00Z', created_by_agent_id: null,
+                    id: 5,
+                    label: 'Pending',
+                    body: '',
+                    schedule_kind: 'daily',
+                    schedule_value: '09:00',
+                    channel: 'notification',
+                    status: 'active',
+                    next_fire_at: '2030-01-01T00:00:00Z',
+                    last_fired_at: null,
+                    created_at: '2026-05-16T00:00:00Z',
+                    updated_at: '2026-05-16T00:00:00Z',
+                    created_by_agent_id: null,
                 });
-            }),
+            })
         );
         const onClose = vi.fn();
         renderWithProviders(<NewReminderModal open onClose={onClose} />);
@@ -521,10 +551,13 @@ describe('NewReminderModal', () => {
         fireEvent.click(screen.getByRole('radio', { name: /^daily$/i }));
         fireEvent.click(screen.getByRole('button', { name: /create reminder/i }));
         // While POST is in-flight, the submit button is disabled (isPending=true)
-        await waitFor(() => {
-            const createBtn = screen.queryByRole('button', { name: /creating…/i });
-            expect(createBtn).toBeInTheDocument();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                const createBtn = screen.queryByRole('button', { name: /creating…/i });
+                expect(createBtn).toBeInTheDocument();
+            },
+            { timeout: 3000 }
+        );
         // Cancel is also disabled while pending; clicking it should not call onClose
         const cancelBtn = screen.getByRole('button', { name: /cancel/i });
         expect(cancelBtn).toBeDisabled();
@@ -540,12 +573,14 @@ describe('NewReminderModal', () => {
                 open
                 onClose={vi.fn()}
                 editing={makeReminder({ schedule_kind: 'once', schedule_value: 'not-a-date' })}
-            />,
+            />
         );
         // The modal renders in edit mode without crashing (NaN guard prevents setOnce)
         expect(screen.getAllByRole('dialog').length).toBeGreaterThan(0);
         // The datetime-local input should be present with the default once value (not the bad date)
-        const dateInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement | null;
+        const dateInput = document.querySelector(
+            'input[type="datetime-local"]'
+        ) as HTMLInputElement | null;
         if (dateInput) {
             // The value should be the defaultOnceValue(), not 'not-a-date'
             expect(dateInput.value).not.toBe('not-a-date');
@@ -569,7 +604,9 @@ describe('NewReminderModal', () => {
         renderWithProviders(<NewReminderModal open onClose={vi.fn()} />);
         fireEvent.change(screen.getByLabelText(/label/i), { target: { value: 'Bad date' } });
         // Default kind is 'once'; set a non-parseable datetime string
-        const dateInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement | null;
+        const dateInput = document.querySelector(
+            'input[type="datetime-local"]'
+        ) as HTMLInputElement | null;
         if (dateInput) {
             fireEvent.change(dateInput, { target: { value: 'not-a-datetime' } });
         }
@@ -579,27 +616,39 @@ describe('NewReminderModal', () => {
 
     it('create-mode Saving/Creating label: button shows "Creating…" while in-flight', async () => {
         let resolvePost!: () => void;
-        const postGate = new Promise<void>((res) => { resolvePost = res; });
+        const postGate = new Promise<void>((res) => {
+            resolvePost = res;
+        });
         server.use(
             http.post(`${BASE}/reminders`, async () => {
                 await postGate;
                 return HttpResponse.json({
-                    id: 6, label: 'InFlight', body: '', schedule_kind: 'daily',
-                    schedule_value: '09:00', channel: 'notification',
-                    status: 'active', next_fire_at: '2030-01-01T00:00:00Z',
-                    last_fired_at: null, created_at: '2026-05-16T00:00:00Z',
-                    updated_at: '2026-05-16T00:00:00Z', created_by_agent_id: null,
+                    id: 6,
+                    label: 'InFlight',
+                    body: '',
+                    schedule_kind: 'daily',
+                    schedule_value: '09:00',
+                    channel: 'notification',
+                    status: 'active',
+                    next_fire_at: '2030-01-01T00:00:00Z',
+                    last_fired_at: null,
+                    created_at: '2026-05-16T00:00:00Z',
+                    updated_at: '2026-05-16T00:00:00Z',
+                    created_by_agent_id: null,
                 });
-            }),
+            })
         );
         renderWithProviders(<NewReminderModal open onClose={vi.fn()} />);
         fireEvent.change(screen.getByLabelText(/label/i), { target: { value: 'InFlight' } });
         fireEvent.click(screen.getByRole('radio', { name: /^daily$/i }));
         fireEvent.click(screen.getByRole('button', { name: /create reminder/i }));
         // While POST is in-flight the button label changes to "Creating…"
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /creating…/i })).toBeInTheDocument();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.getByRole('button', { name: /creating…/i })).toBeInTheDocument();
+            },
+            { timeout: 3000 }
+        );
         resolvePost();
     });
 }, 15000);

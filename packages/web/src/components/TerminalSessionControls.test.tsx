@@ -25,8 +25,8 @@ beforeEach(() => {
                 base_ref: 'origin/main',
                 base_sha: 'a'.repeat(40),
                 commits_ahead_of_base: 0,
-            }),
-        ),
+            })
+        )
     );
 });
 
@@ -55,13 +55,13 @@ function makeSession(overrides: Record<string, unknown> = {}): ICliSession {
 // Helper that renders controls + Toast in the same provider tree so toast text is visible.
 function renderControls(
     session: ICliSession,
-    props: Partial<React.ComponentProps<typeof TerminalSessionControls>> = {},
+    props: Partial<React.ComponentProps<typeof TerminalSessionControls>> = {}
 ) {
     return renderWithProviders(
         <>
             <TerminalSessionControls session={session} {...props} />
             <Toast />
-        </>,
+        </>
     );
 }
 
@@ -69,11 +69,11 @@ function renderControls(
 beforeEach(() => {
     server.use(
         http.post(`${BASE}/cli/sessions/sess-1/pause`, () =>
-            HttpResponse.json(makeSession({ status: 'paused' })),
+            HttpResponse.json(makeSession({ status: 'paused' }))
         ),
         http.post(`${BASE}/cli/sessions/sess-1/resume`, () =>
-            HttpResponse.json(makeSession({ status: 'active' })),
-        ),
+            HttpResponse.json(makeSession({ status: 'active' }))
+        )
     );
 });
 
@@ -104,7 +104,7 @@ describe('TerminalSessionControls — non-compact, active session', () => {
             http.post(`${BASE}/cli/sessions/sess-1/pause`, () => {
                 called = true;
                 return HttpResponse.json(makeSession({ status: 'paused' }));
-            }),
+            })
         );
         renderControls(makeSession());
         fireEvent.click(screen.getByRole('button', { name: /pause/i }));
@@ -120,8 +120,8 @@ describe('TerminalSessionControls — non-compact, active session', () => {
     it('shows error toast when pause fails', async () => {
         server.use(
             http.post(`${BASE}/cli/sessions/sess-1/pause`, () =>
-                HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Server error' }, { status: 500 })
+            )
         );
         renderControls(makeSession());
         fireEvent.click(screen.getByRole('button', { name: /pause/i }));
@@ -131,8 +131,8 @@ describe('TerminalSessionControls — non-compact, active session', () => {
     it('opens StopSessionModal when Stop is clicked (owns modal)', async () => {
         server.use(
             http.post(`${BASE}/cli/sessions/sess-1/preflight-stop`, () =>
-                HttpResponse.json({ unstaged: [], current_branch: 'main', ahead_of_remote: 0 }),
-            ),
+                HttpResponse.json({ unstaged: [], current_branch: 'main', ahead_of_remote: 0 })
+            )
         );
         renderControls(makeSession());
         fireEvent.click(screen.getByRole('button', { name: /stop/i }));
@@ -169,7 +169,7 @@ describe('TerminalSessionControls — non-compact, paused session', () => {
             http.post(`${BASE}/cli/sessions/sess-1/resume`, () => {
                 called = true;
                 return HttpResponse.json(makeSession({ status: 'active' }));
-            }),
+            })
         );
         renderControls(makeSession({ status: 'paused' }));
         fireEvent.click(screen.getByRole('button', { name: /resume/i }));
@@ -185,8 +185,8 @@ describe('TerminalSessionControls — non-compact, paused session', () => {
     it('shows error toast when resume fails', async () => {
         server.use(
             http.post(`${BASE}/cli/sessions/sess-1/resume`, () =>
-                HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Server error' }, { status: 500 })
+            )
         );
         renderControls(makeSession({ status: 'paused' }));
         fireEvent.click(screen.getByRole('button', { name: /resume/i }));
@@ -299,8 +299,8 @@ describe('TerminalSessionControls — onClose / onClosed callbacks in StopSessio
         // Register the preflight handler so the modal can open fully.
         server.use(
             http.post(`${BASE}/cli/sessions/sess-1/preflight-stop`, () =>
-                HttpResponse.json({ unstaged: [], current_branch: 'main', ahead_of_remote: 0 }),
-            ),
+                HttpResponse.json({ unstaged: [], current_branch: 'main', ahead_of_remote: 0 })
+            )
         );
         renderControls(makeSession());
         // Open the stop modal
@@ -312,9 +312,7 @@ describe('TerminalSessionControls — onClose / onClosed callbacks in StopSessio
             code: 'Escape',
         });
         await waitFor(() =>
-            expect(
-                screen.queryByText(/stop session — review/i),
-            ).not.toBeInTheDocument(),
+            expect(screen.queryByText(/stop session — review/i)).not.toBeInTheDocument()
         );
     });
 
@@ -322,12 +320,12 @@ describe('TerminalSessionControls — onClose / onClosed callbacks in StopSessio
         let stopCalled = false;
         server.use(
             http.post(`${BASE}/cli/sessions/sess-1/preflight-stop`, () =>
-                HttpResponse.json({ unstaged: [], current_branch: 'main', ahead_of_remote: 0 }),
+                HttpResponse.json({ unstaged: [], current_branch: 'main', ahead_of_remote: 0 })
             ),
             http.post(`${BASE}/cli/sessions/sess-1/stop`, () => {
                 stopCalled = true;
                 return HttpResponse.json(makeSession({ status: 'closed' }));
-            }),
+            })
         );
         renderControls(makeSession());
         fireEvent.click(screen.getByRole('button', { name: /stop/i }));
@@ -335,18 +333,15 @@ describe('TerminalSessionControls — onClose / onClosed callbacks in StopSessio
         const confirmBtn = await screen.findByRole('button', { name: /Stop session/i });
         fireEvent.click(confirmBtn);
         // Wait for the POST /stop to be called, which triggers onClosed → toast
-        await waitFor(
-            () => expect(stopCalled).toBe(true),
-            { timeout: 10000 },
-        );
+        await waitFor(() => expect(stopCalled).toBe(true), { timeout: 10000 });
         expect(document.body).toBeTruthy();
     }, 30000);
 
     it('exercises onClose (fn#1) and onClosed (fn#2) via useTerminalStopModal', async () => {
         server.use(
             http.post(`${BASE}/cli/sessions/sess-1/preflight-stop`, () =>
-                HttpResponse.json({ unstaged: [], current_branch: 'feature', ahead_of_remote: 1 }),
-            ),
+                HttpResponse.json({ unstaged: [], current_branch: 'feature', ahead_of_remote: 1 })
+            )
         );
         const session = makeSession();
         const wrapper = makeWrapper();
@@ -391,7 +386,7 @@ describe('TerminalSessionControls — standalone session', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
 
         expect(
-            await screen.findByText(/\/Users\/owner\/code\/atlas is left exactly as it is/),
+            await screen.findByText(/\/Users\/owner\/code\/atlas is left exactly as it is/)
         ).toBeInTheDocument();
     });
 
@@ -406,7 +401,7 @@ describe('TerminalSessionControls — standalone session', () => {
                     committed: false,
                     finalize_pr_url: null,
                 });
-            }),
+            })
         );
         const onStopped = vi.fn();
         renderControls(standalone(), { onStopped });

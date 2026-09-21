@@ -8,7 +8,13 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
 import { useQueryClient, useIsFetching } from '@tanstack/react-query';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
-import { useAgent, useUpdateAgent, useAgentRuns, useAgents, useAgentMemory } from '../hooks/useAgents.js';
+import {
+    useAgent,
+    useUpdateAgent,
+    useAgentRuns,
+    useAgents,
+    useAgentMemory,
+} from '../hooks/useAgents.js';
 import { useQueueDepthByAgent } from '../hooks/useQueueDepthByAgent.js';
 import { RefreshButton } from '../components/index.js';
 import { useToast } from '../hooks/useToast.js';
@@ -30,13 +36,7 @@ import { DeleteAgentModal } from './agents/DeleteAgentModal.js';
 import { MarketplaceUpgradeBanner } from './agents/MarketplaceUpgradeBanner.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 
-const TAB_KEYS = [
-    'overview',
-    'prompt',
-    'test',
-    'runs',
-    'memory',
-] as const;
+const TAB_KEYS = ['overview', 'prompt', 'test', 'runs', 'memory'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 export function AgentDetail() {
@@ -117,7 +117,7 @@ export function AgentDetail() {
             onDelete: handleDelete,
             onExport: handleExport,
         }),
-        [handleDuplicate, handlePauseToggle, handleDelete, handleExport],
+        [handleDuplicate, handlePauseToggle, handleDelete, handleExport]
     );
 
     if (isLoading) {
@@ -234,6 +234,7 @@ export function AgentDetail() {
                                     <Box
                                         component="span"
                                         className="material-symbols-rounded"
+                                        aria-hidden="true"
                                         sx={{ fontSize: 16 }}
                                     >
                                         info
@@ -248,6 +249,7 @@ export function AgentDetail() {
                                     <Box
                                         component="span"
                                         className="material-symbols-rounded"
+                                        aria-hidden="true"
                                         sx={{ fontSize: 16 }}
                                     >
                                         article
@@ -262,6 +264,7 @@ export function AgentDetail() {
                                     <Box
                                         component="span"
                                         className="material-symbols-rounded"
+                                        aria-hidden="true"
                                         sx={{ fontSize: 16 }}
                                     >
                                         terminal
@@ -276,6 +279,7 @@ export function AgentDetail() {
                                     <Box
                                         component="span"
                                         className="material-symbols-rounded"
+                                        aria-hidden="true"
                                         sx={{ fontSize: 16 }}
                                     >
                                         history
@@ -290,6 +294,7 @@ export function AgentDetail() {
                                     <Box
                                         component="span"
                                         className="material-symbols-rounded"
+                                        aria-hidden="true"
                                         sx={{ fontSize: 16 }}
                                     >
                                         psychology
@@ -330,9 +335,7 @@ export function AgentDetail() {
                 />
             )}
 
-            {runNowOpen && (
-                <RunNowDialog open agent={agent} onClose={() => setRunNowOpen(false)} />
-            )}
+            {runNowOpen && <RunNowDialog open agent={agent} onClose={() => setRunNowOpen(false)} />}
 
             {colorOpen && (
                 <EditAgentColorModal open agent={agent} onClose={() => setColorOpen(false)} />

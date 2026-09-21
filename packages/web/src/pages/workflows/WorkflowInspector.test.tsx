@@ -37,7 +37,7 @@ function mount(opts: MountOptions = {}) {
             workflows={opts.workflows ?? []}
             onChange={onChange}
             onNodeData={onNodeData}
-        />,
+        />
     );
     return { onChange, onNodeData };
 }
@@ -76,7 +76,7 @@ describe('WorkflowInspector', () => {
                     workflows={[]}
                     onChange={vi.fn()}
                     onNodeData={vi.fn()}
-                />,
+                />
             );
             expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
             unmount();
@@ -93,12 +93,23 @@ describe('WorkflowInspector', () => {
     it('shows the picked agent‘s CLI, model and effort, and links to it', () => {
         mount({
             node: node('agent', { agent_id: 'agent-coder' }),
-            agents: [makeAgent({ id: 'agent-coder', name: 'Coder', cli: 'copilot', model: 'gpt-5', effort: 'high' })],
+            agents: [
+                makeAgent({
+                    id: 'agent-coder',
+                    name: 'Coder',
+                    cli: 'copilot',
+                    model: 'gpt-5',
+                    effort: 'high',
+                }),
+            ],
         });
         expect(screen.getByText('copilot')).toBeInTheDocument();
         expect(screen.getByText('gpt-5')).toBeInTheDocument();
         expect(screen.getByText('high')).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: /Open agent/ })).toHaveAttribute('href', '/agents/agent-coder');
+        expect(screen.getByRole('link', { name: /Open agent/ })).toHaveAttribute(
+            'href',
+            '/agents/agent-coder'
+        );
     });
 
     // A workflow installed from a template references catalog agent ids, and
@@ -123,7 +134,10 @@ describe('WorkflowInspector', () => {
     it('patches the node data when an agent is picked', async () => {
         const { onNodeData } = mount({
             node: node('agent'),
-            agents: [makeAgent({ id: 'agent-coder', name: 'Coder' }), makeAgent({ id: 'agent-rev', name: 'Reviewer' })],
+            agents: [
+                makeAgent({ id: 'agent-coder', name: 'Coder' }),
+                makeAgent({ id: 'agent-rev', name: 'Reviewer' }),
+            ],
         });
         openSelect('Agent');
         await userEvent.click(screen.getByRole('option', { name: 'Reviewer' }));
@@ -142,9 +156,24 @@ describe('WorkflowInspector', () => {
             workflow: { project_id: 'p1' },
             node: node('subtasks'),
             workflows: [
-                makeWorkflow({ id: 'w-sub', name: 'Build sub-task', input_kind: 'sub_task', project_id: 'p1' }),
-                makeWorkflow({ id: 'w-far', name: 'Other project sub', input_kind: 'sub_task', project_id: 'p2' }),
-                makeWorkflow({ id: 'w-task', name: 'Task level', input_kind: 'item', project_id: 'p1' }),
+                makeWorkflow({
+                    id: 'w-sub',
+                    name: 'Build sub-task',
+                    input_kind: 'sub_task',
+                    project_id: 'p1',
+                }),
+                makeWorkflow({
+                    id: 'w-far',
+                    name: 'Other project sub',
+                    input_kind: 'sub_task',
+                    project_id: 'p2',
+                }),
+                makeWorkflow({
+                    id: 'w-task',
+                    name: 'Task level',
+                    input_kind: 'item',
+                    project_id: 'p1',
+                }),
             ],
         });
         openSelect('Sub-workflow');
@@ -158,7 +187,7 @@ describe('WorkflowInspector', () => {
     it('says to create a sub-task workflow first when the project has none', () => {
         mount({ node: node('subtasks'), workflows: [] });
         expect(
-            screen.getByText('Create a workflow with the Sub-task workflow input first'),
+            screen.getByText('Create a workflow with the Sub-task workflow input first')
         ).toBeInTheDocument();
     });
 
@@ -166,7 +195,14 @@ describe('WorkflowInspector', () => {
         mount({
             workflow: { project_id: 'p1' },
             node: node('subtasks'),
-            workflows: [makeWorkflow({ id: 'w-sub', name: 'Build', input_kind: 'sub_task', project_id: 'p1' })],
+            workflows: [
+                makeWorkflow({
+                    id: 'w-sub',
+                    name: 'Build',
+                    input_kind: 'sub_task',
+                    project_id: 'p1',
+                }),
+            ],
         });
         expect(screen.getByText('Runs once per sub-task')).toBeInTheDocument();
     });
@@ -175,16 +211,33 @@ describe('WorkflowInspector', () => {
         mount({
             workflow: { project_id: 'p1' },
             node: node('subtasks', { sub_workflow_id: 'w-sub' }),
-            workflows: [makeWorkflow({ id: 'w-sub', name: 'Build', input_kind: 'sub_task', project_id: 'p1' })],
+            workflows: [
+                makeWorkflow({
+                    id: 'w-sub',
+                    name: 'Build',
+                    input_kind: 'sub_task',
+                    project_id: 'p1',
+                }),
+            ],
         });
-        expect(screen.getByRole('link', { name: 'Open Build' })).toHaveAttribute('href', '/workflows/w-sub');
+        expect(screen.getByRole('link', { name: 'Open Build' })).toHaveAttribute(
+            'href',
+            '/workflows/w-sub'
+        );
     });
 
     it('patches the sub-workflow id when one is picked', async () => {
         const { onNodeData } = mount({
             workflow: { project_id: 'p1' },
             node: node('subtasks'),
-            workflows: [makeWorkflow({ id: 'w-sub', name: 'Build', input_kind: 'sub_task', project_id: 'p1' })],
+            workflows: [
+                makeWorkflow({
+                    id: 'w-sub',
+                    name: 'Build',
+                    input_kind: 'sub_task',
+                    project_id: 'p1',
+                }),
+            ],
         });
         openSelect('Sub-workflow');
         await userEvent.click(await screen.findByRole('option', { name: 'Build' }));
@@ -225,7 +278,10 @@ describe('WorkflowInspector', () => {
         const cases: Array<[Partial<IWorkflow>, RegExp]> = [
             [{ push_code: true, raises_pr: true, push_to_default: false }, /Push \+ pull request/],
             [{ push_code: true, raises_pr: false, push_to_default: false }, /Push branch/],
-            [{ push_code: true, raises_pr: false, push_to_default: true }, /Push to the default branch/],
+            [
+                { push_code: true, raises_pr: false, push_to_default: true },
+                /Push to the default branch/,
+            ],
             [{ push_code: false, raises_pr: false, push_to_default: false }, /Keep local/],
         ];
         for (const [flags, selected] of cases) {
@@ -238,11 +294,18 @@ describe('WorkflowInspector', () => {
                     workflows={[]}
                     onChange={vi.fn()}
                     onNodeData={vi.fn()}
-                />,
+                />
             );
-            expect(screen.getByRole('button', { name: selected })).toHaveAttribute('aria-pressed', 'true');
+            expect(screen.getByRole('button', { name: selected })).toHaveAttribute(
+                'aria-pressed',
+                'true'
+            );
             // Exactly one card is ever selected.
-            expect(screen.getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true')).toHaveLength(1);
+            expect(
+                screen
+                    .getAllByRole('button')
+                    .filter((b) => b.getAttribute('aria-pressed') === 'true')
+            ).toHaveLength(1);
             unmount();
         }
     });
@@ -251,9 +314,18 @@ describe('WorkflowInspector', () => {
     // state a half-applied patch leaves behind. Reading it as "pull request"
     // would show a review step that never happens.
     it('reads a push-to-default workflow as publishing straight to the default branch', () => {
-        mount({ node: node('end'), workflow: { push_code: true, raises_pr: true, push_to_default: true } });
-        expect(screen.getByRole('button', { name: /Push to the default branch/ })).toHaveAttribute('aria-pressed', 'true');
-        expect(screen.getByRole('button', { name: /Push \+ pull request/ })).toHaveAttribute('aria-pressed', 'false');
+        mount({
+            node: node('end'),
+            workflow: { push_code: true, raises_pr: true, push_to_default: true },
+        });
+        expect(screen.getByRole('button', { name: /Push to the default branch/ })).toHaveAttribute(
+            'aria-pressed',
+            'true'
+        );
+        expect(screen.getByRole('button', { name: /Push \+ pull request/ })).toHaveAttribute(
+            'aria-pressed',
+            'false'
+        );
     });
 
     // Each card patches all three delivery flags together. A patch that only
@@ -265,7 +337,11 @@ describe('WorkflowInspector', () => {
             workflow: { push_code: true, raises_pr: true, push_to_default: false },
         });
         await userEvent.click(screen.getByRole('button', { name: /Push branch/ }));
-        expect(onChange).toHaveBeenCalledWith({ push_code: true, raises_pr: false, push_to_default: false });
+        expect(onChange).toHaveBeenCalledWith({
+            push_code: true,
+            raises_pr: false,
+            push_to_default: false,
+        });
     });
 
     it('clears the PR flag when publishing straight to the default branch', async () => {
@@ -274,7 +350,11 @@ describe('WorkflowInspector', () => {
             workflow: { push_code: true, raises_pr: true, push_to_default: false },
         });
         await userEvent.click(screen.getByRole('button', { name: /Push to the default branch/ }));
-        expect(onChange).toHaveBeenCalledWith({ push_code: true, raises_pr: false, push_to_default: true });
+        expect(onChange).toHaveBeenCalledWith({
+            push_code: true,
+            raises_pr: false,
+            push_to_default: true,
+        });
     });
 
     it('turns every push flag off for a local-only workflow', async () => {
@@ -283,7 +363,11 @@ describe('WorkflowInspector', () => {
             workflow: { push_code: true, raises_pr: true, push_to_default: false },
         });
         await userEvent.click(screen.getByRole('button', { name: /Keep local/ }));
-        expect(onChange).toHaveBeenCalledWith({ push_code: false, raises_pr: false, push_to_default: false });
+        expect(onChange).toHaveBeenCalledWith({
+            push_code: false,
+            raises_pr: false,
+            push_to_default: false,
+        });
     });
 
     it('toggles the shared worktree', async () => {
@@ -302,8 +386,6 @@ describe('WorkflowInspector', () => {
     it('gives the toggle the bare label as its accessible name, not the help text too', () => {
         mount({ node: node('end'), workflow: { use_worktree: true } });
         expect(screen.getByRole('switch', { name: 'Use a worktree' })).toBeInTheDocument();
-        expect(
-            screen.queryByRole('switch', { name: /All steps share one checkout/ }),
-        ).toBeNull();
+        expect(screen.queryByRole('switch', { name: /All steps share one checkout/ })).toBeNull();
     });
 });

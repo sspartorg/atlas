@@ -53,16 +53,14 @@ export interface RenderWithProvidersOptions extends Omit<RenderOptions, 'wrapper
 
 export function renderWithProviders(
     ui: ReactElement,
-    { initialEntries, queryClient, ...options }: RenderWithProvidersOptions = {},
+    { initialEntries, queryClient, ...options }: RenderWithProvidersOptions = {}
 ): RenderResult {
     const providerProps = {
         ...(initialEntries ? { initialEntries } : {}),
         ...(queryClient ? { queryClient } : {}),
     };
     return render(ui, {
-        wrapper: ({ children }) => (
-            <AllProviders {...providerProps}>{children}</AllProviders>
-        ),
+        wrapper: ({ children }) => <AllProviders {...providerProps}>{children}</AllProviders>,
         ...options,
     });
 }

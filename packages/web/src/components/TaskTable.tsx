@@ -92,6 +92,7 @@ function SortableHeader({
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{
                         fontSize: 14,
                         color: active ? ATLAS_PALETTE.slate60 : ATLAS_PALETTE.slate30,
@@ -161,6 +162,7 @@ const TaskRow = memo(function TaskRow({
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 18, color: ATLAS_PALETTE.cerulean, flexShrink: 0 }}
                 >
                     flag
@@ -326,14 +328,14 @@ export function TaskTable({
             if (onPageSizeChange) onPageSizeChange(next);
             else setInternalPageSize(next);
         },
-        [onPageSizeChange],
+        [onPageSizeChange]
     );
     const setPage = useCallback(
         (next: number) => {
             if (onPageChange) onPageChange(next);
             else setInternalPage(next);
         },
-        [onPageChange],
+        [onPageChange]
     );
 
     // All hooks must run on every render — keep the isMobile branch BELOW them,
@@ -437,7 +439,9 @@ export function TaskTable({
                             dir={sortDir}
                             onChange={toggleSort}
                         />
-                        <Typography sx={{ ...HEADER_SX, textAlign: 'center' }}>Sub-tasks</Typography>
+                        <Typography sx={{ ...HEADER_SX, textAlign: 'center' }}>
+                            Sub-tasks
+                        </Typography>
                         <Typography sx={HEADER_SX}>Reporter</Typography>
                         <Typography sx={HEADER_SX}>Assignee</Typography>
                         <Typography sx={HEADER_SX}>Status</Typography>
@@ -453,9 +457,7 @@ export function TaskTable({
 
                     {sorted.length === 0 ? (
                         <Box sx={{ py: 16, textAlign: 'center' }}>
-                            <Typography
-                                sx={{ fontSize: 13, color: ATLAS_PALETTE.slate40, mb: 3 }}
-                            >
+                            <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate40, mb: 3 }}>
                                 No tasks match this view.
                             </Typography>
                             {onCreate && (

@@ -3,10 +3,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { createAtlasTheme } from '../theme/theme.js';
 import { useThemeMode } from '../hooks/useThemeMode.js';
-import {
-    ThemeModeContext,
-    type ThemeModeContextValue,
-} from '../hooks/useThemeModeContext.js';
+import { ThemeModeContext, type ThemeModeContextValue } from '../hooks/useThemeModeContext.js';
 
 // 2026-06-10 — Combined theme-state + MUI ThemeProvider wrapper.
 // Consumes `useThemeMode` for state + persistence, rebuilds the MUI theme
@@ -26,7 +23,7 @@ export function ThemeModeProvider({ children }: { children: ReactNode }) {
             setMode,
             toggle: () => setMode(mode === 'light' ? 'dark' : 'light'),
         }),
-        [mode, setMode],
+        [mode, setMode]
     );
 
     return (

@@ -38,7 +38,7 @@ describe('UnifiedDiffView', () => {
                 wrap={false}
                 onExpandContext={undefined}
                 canExpand={false}
-            />,
+            />
         );
         expect(screen.getByText('keep')).toBeInTheDocument();
         expect(screen.getByText('alpha')).toBeInTheDocument();
@@ -53,7 +53,7 @@ describe('UnifiedDiffView', () => {
                 wrap={false}
                 onExpandContext={undefined}
                 canExpand={false}
-            />,
+            />
         );
         expect(screen.getByText('+')).toBeInTheDocument();
         expect(screen.getByText('−')).toBeInTheDocument();
@@ -67,7 +67,7 @@ describe('UnifiedDiffView', () => {
                 wrap={false}
                 onExpandContext={undefined}
                 canExpand={false}
-            />,
+            />
         );
         // The context line carries old=1 and new=1.
         expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(2);
@@ -81,7 +81,7 @@ describe('UnifiedDiffView', () => {
                 wrap={false}
                 onExpandContext={undefined}
                 canExpand={false}
-            />,
+            />
         );
         expect(screen.queryByText('keep')).not.toBeInTheDocument();
     });
@@ -96,7 +96,7 @@ describe('SplitDiffView', () => {
                 wrap
                 onExpandContext={undefined}
                 canExpand={false}
-            />,
+            />
         );
         expect(screen.getByText('alpha')).toBeInTheDocument();
         expect(screen.getByText('beta')).toBeInTheDocument();
@@ -110,7 +110,7 @@ describe('SplitDiffView', () => {
                 wrap
                 onExpandContext={undefined}
                 canExpand={false}
-            />,
+            />
         );
         expect(screen.getAllByText('keep')).toHaveLength(2);
     });
@@ -132,7 +132,7 @@ describe('SplitDiffView', () => {
                 wrap
                 onExpandContext={undefined}
                 canExpand={false}
-            />,
+            />
         );
         expect(screen.getByText('one')).toBeInTheDocument();
         expect(screen.getByText('two')).toBeInTheDocument();
@@ -167,7 +167,7 @@ describe('windowed rendering above the threshold', () => {
                 wrap={false}
                 onExpandContext={undefined}
                 canExpand={false}
-            />,
+            />
         );
         // The plain path would put every line in the DOM; the windowed path
         // renders only what fits the viewport (none, under jsdom's noop
@@ -185,8 +185,8 @@ describe('windowed rendering above the threshold', () => {
                     wrap
                     onExpandContext={undefined}
                     canExpand={false}
-                />,
-            ),
+                />
+            )
         ).not.toThrow();
     });
 
@@ -200,7 +200,7 @@ describe('windowed rendering above the threshold', () => {
                 wrap={false}
                 onExpandContext={undefined}
                 canExpand={false}
-            />,
+            />
         );
         // Plain rendering emits every row, so the last line's number is there.
         // (The tokenizer splits `line 499` into separate spans, hence the
@@ -218,7 +218,7 @@ describe('hunk separator', () => {
                 wrap={false}
                 onExpandContext={undefined}
                 canExpand={false}
-            />,
+            />
         );
         expect(screen.getByText(/17 unchanged lines/)).toBeInTheDocument();
     });
@@ -232,7 +232,7 @@ describe('hunk separator', () => {
                 wrap={false}
                 onExpandContext={onExpand}
                 canExpand
-            />,
+            />
         );
         fireEvent.click(screen.getByText(/17 unchanged lines/));
         expect(onExpand).toHaveBeenCalledTimes(1);
@@ -247,7 +247,7 @@ describe('hunk separator', () => {
                 wrap={false}
                 onExpandContext={onExpand}
                 canExpand={false}
-            />,
+            />
         );
         fireEvent.click(screen.getByText(/17 unchanged lines/));
         expect(onExpand).not.toHaveBeenCalled();

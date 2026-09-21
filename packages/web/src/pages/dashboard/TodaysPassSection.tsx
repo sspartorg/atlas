@@ -56,24 +56,14 @@ export function TodaysPassSection({ todaysPass }: ITodaysPassSectionProps) {
                     gap: 6,
                 }}
             >
-                <TodaysPassCard
-                    label="Software dev"
-                    color={devColor}
-                    icon="code"
-                    items={dev}
-                />
+                <TodaysPassCard label="Software dev" color={devColor} icon="code" items={dev} />
                 <TodaysPassCard
                     label="Content"
                     color={contentColor}
                     icon="menu_book"
                     items={content}
                 />
-                <TodaysPassCard
-                    label="Design"
-                    color={designColor}
-                    icon="brush"
-                    items={design}
-                />
+                <TodaysPassCard label="Design" color={designColor} icon="brush" items={design} />
             </Box>
         </Box>
     );

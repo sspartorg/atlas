@@ -112,6 +112,7 @@ export function BottomNav({ onOpenMore }: Props) {
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{
                                     fontSize: 24,
                                     fontVariationSettings:

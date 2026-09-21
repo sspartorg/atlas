@@ -11,7 +11,7 @@ const BASE = 'http://localhost:3000/api';
 function baseHandlers(opts: { rules?: unknown[]; scripts?: unknown[] } = {}) {
     return [
         http.get(`${BASE}/guardrails`, () =>
-            HttpResponse.json({ rules: opts.rules ?? [], published_at: null }),
+            HttpResponse.json({ rules: opts.rules ?? [], published_at: null })
         ),
         http.get(`${BASE}/guardrail-scripts`, () => HttpResponse.json(opts.scripts ?? [])),
         ...defaultHandlers,
@@ -53,7 +53,7 @@ describe('Guardrails page', () => {
                     ok: true,
                     published_at: '2026-06-01T00:00:00.000Z',
                 });
-            }),
+            })
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         const btn = await screen.findByRole('button', { name: /Save Guard-rails/i });
@@ -91,7 +91,7 @@ describe('Guardrails page', () => {
                         updated_at: '2026-05-01T00:00:00.000Z',
                     },
                 ],
-            }),
+            })
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         const ruleText = await screen.findByText(/No deleting node_modules/);
@@ -104,17 +104,15 @@ describe('Guardrails page', () => {
                 HttpResponse.json({
                     rules: [],
                     published_at: '2026-05-01T00:00:00.000Z',
-                }),
+                })
             ),
             http.get(`${BASE}/guardrail-scripts`, () => HttpResponse.json([])),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         await screen.findByRole('tab', { name: /Rules/ });
         expect(
-            screen.getAllByText((_c, el) =>
-                (el?.textContent ?? '').includes('Saved'),
-            ).length,
+            screen.getAllByText((_c, el) => (el?.textContent ?? '').includes('Saved')).length
         ).toBeGreaterThan(0);
     });
 
@@ -131,8 +129,8 @@ describe('Guardrails page', () => {
                     sort_order: 1,
                     created_at: '2026-06-01T00:00:00.000Z',
                     updated_at: '2026-06-01T00:00:00.000Z',
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         await screen.findByRole('tab', { name: /Rules/ });
@@ -140,11 +138,16 @@ describe('Guardrails page', () => {
         const addBtns = screen.queryAllByRole('button', { name: /Add rule|Add/i });
         if (addBtns[0]) {
             fireEvent.click(addBtns[0]);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 3000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                },
+                { timeout: 3000 }
+            ).catch(() => {});
             // Fill in the rule text and submit
-            const ruleInput = document.querySelector('textarea, input[name="rule_text"], input[placeholder*="rule" i]');
+            const ruleInput = document.querySelector(
+                'textarea, input[name="rule_text"], input[placeholder*="rule" i]'
+            );
             if (ruleInput) {
                 fireEvent.change(ruleInput, { target: { value: 'No deleting node_modules' } });
             }
@@ -161,9 +164,12 @@ describe('Guardrails page', () => {
         const addBtns = screen.queryAllByRole('button', { name: /Add rule|Add/i });
         if (addBtns[0]) {
             fireEvent.click(addBtns[0]);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 3000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                },
+                { timeout: 3000 }
+            ).catch(() => {});
             const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
             if (cancelBtn) {
                 fireEvent.click(cancelBtn);
@@ -191,15 +197,18 @@ describe('Guardrails page', () => {
                     },
                 ],
             }),
-            http.delete(`${BASE}/guardrails/r1`, () => new HttpResponse(null, { status: 204 })),
+            http.delete(`${BASE}/guardrails/r1`, () => new HttpResponse(null, { status: 204 }))
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         await screen.findByText(/No rm -rf/);
         // Click the rule to open the edit modal
         fireEvent.click(screen.getByText(/No rm -rf/));
-        await waitFor(() => {
-            expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-        }, { timeout: 3000 }).catch(() => {});
+        await waitFor(
+            () => {
+                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+            },
+            { timeout: 3000 }
+        ).catch(() => {});
         // Click Delete button in the modal
         const deleteBtn = screen.queryByRole('button', { name: /Delete rule|Delete/i });
         if (deleteBtn) fireEvent.click(deleteBtn);
@@ -238,7 +247,7 @@ describe('Guardrails page', () => {
                         updated_at: '2026-05-01T00:00:00.000Z',
                     },
                 ],
-            }),
+            })
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         const scriptsTab = await screen.findByRole('tab', { name: /Scripts/ });
@@ -251,7 +260,7 @@ describe('Guardrails page', () => {
         server.use(
             http.get(`${BASE}/guardrails`, () => new Promise(() => {})),
             http.get(`${BASE}/guardrail-scripts`, () => HttpResponse.json([])),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         // While loading, page shows a CircularProgress — just check we don't crash
@@ -276,20 +285,25 @@ describe('Guardrails page', () => {
                     ...existingRule,
                     rule_text: 'No writing to /etc — updated',
                     updated_at: '2026-06-01T00:00:00.000Z',
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         // Click the rule text to open the edit modal
         await screen.findByText(/No writing to \/etc/);
         fireEvent.click(screen.getByText(/No writing to \/etc/));
         // Wait for modal
-        await waitFor(() => {
-            expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-        }, { timeout: 3000 }).catch(() => {});
+        await waitFor(
+            () => {
+                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+            },
+            { timeout: 3000 }
+        ).catch(() => {});
         // Find the Rule text field and update it
-        const ruleInput = document.querySelector('input[aria-label="Rule"], input[id*="rule"], input[name*="rule"]') ??
-            document.querySelector('[role="dialog"] input');
+        const ruleInput =
+            document.querySelector(
+                'input[aria-label="Rule"], input[id*="rule"], input[name*="rule"]'
+            ) ?? document.querySelector('[role="dialog"] input');
         if (ruleInput) {
             fireEvent.change(ruleInput, { target: { value: 'No writing to /etc — updated' } });
         }
@@ -312,8 +326,8 @@ describe('Guardrails page', () => {
                     sort_order: 1,
                     created_at: '2026-06-01T00:00:00.000Z',
                     updated_at: '2026-06-01T00:00:00.000Z',
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         await screen.findByRole('tab', { name: /Rules/ });
@@ -321,12 +335,17 @@ describe('Guardrails page', () => {
         const addBtns = screen.queryAllByRole('button', { name: /Add rule|Add/i });
         if (addBtns[0]) {
             fireEvent.click(addBtns[0]);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 3000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                },
+                { timeout: 3000 }
+            ).catch(() => {});
             // Fill the rule text input in the modal
-            const ruleInput = document.querySelector('[role="dialog"] input[type="text"], [role="dialog"] input:not([type])') ??
-                document.querySelector('[role="dialog"] input');
+            const ruleInput =
+                document.querySelector(
+                    '[role="dialog"] input[type="text"], [role="dialog"] input:not([type])'
+                ) ?? document.querySelector('[role="dialog"] input');
             if (ruleInput) {
                 fireEvent.change(ruleInput, { target: { value: 'No curl to external' } });
             }
@@ -334,9 +353,12 @@ describe('Guardrails page', () => {
             if (addRuleBtn) {
                 fireEvent.click(addRuleBtn);
                 // After submit, dirtyCount increments; status bar should show "changed this session"
-                await waitFor(() => {
-                    expect(document.body).toBeTruthy();
-                }, { timeout: 2000 });
+                await waitFor(
+                    () => {
+                        expect(document.body).toBeTruthy();
+                    },
+                    { timeout: 2000 }
+                );
             }
         }
         expect(document.body).toBeTruthy();
@@ -358,7 +380,7 @@ describe('Guardrails page', () => {
                     created_at: '2026-06-01T00:00:00.000Z',
                     updated_at: '2026-06-01T00:00:00.000Z',
                 });
-            }),
+            })
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         await screen.findByRole('tab', { name: /Rules/ });
@@ -369,23 +391,25 @@ describe('Guardrails page', () => {
             if (addBtns.length === 0) return;
             fireEvent.click(addBtns[0]!);
             await waitFor(() => document.querySelector('[role="dialog"]'), { timeout: 3000 });
-            const ruleInput = screen.queryByLabelText(/^Rule$/i) ??
+            const ruleInput =
+                screen.queryByLabelText(/^Rule$/i) ??
                 document.querySelector('[role="dialog"] input[type="text"]');
             if (!ruleInput) return;
             fireEvent.change(ruleInput, { target: { value: ruleText } });
             // Scope to the dialog to avoid ambiguity when multiple "Add Rule" buttons are in the DOM
             const dialog = document.querySelector('[role="dialog"]');
             const submitBtns = dialog
-                ? Array.from(dialog.querySelectorAll('button')).filter(
-                    (b) => /Add Rule/i.test(b.textContent ?? ''),
-                )
+                ? Array.from(dialog.querySelectorAll('button')).filter((b) =>
+                      /Add Rule/i.test(b.textContent ?? '')
+                  )
                 : screen.queryAllByRole('button', { name: /Add Rule/i });
             const submitBtn = submitBtns[0] ?? null;
             if (submitBtn) {
                 fireEvent.click(submitBtn);
                 // Wait for modal to close
-                await waitFor(() => !document.querySelector('[role="dialog"]'), { timeout: 3000 })
-                    .catch(() => {});
+                await waitFor(() => !document.querySelector('[role="dialog"]'), {
+                    timeout: 3000,
+                }).catch(() => {});
             }
         }
 
@@ -393,11 +417,14 @@ describe('Guardrails page', () => {
         await addOneRule('Second rule');
 
         // After 2 rules added, dirtyCount=2 → "2 rules changed this session"
-        await waitFor(() => {
-            const txt = document.body.textContent ?? '';
-            // Line 226: dirtyCount === 1 is FALSE → 's' appended → "2 rules changed this session"
-            expect(txt).toMatch(/2 rules changed this session/);
-        }, { timeout: 5000 }).catch(() => {});
+        await waitFor(
+            () => {
+                const txt = document.body.textContent ?? '';
+                // Line 226: dirtyCount === 1 is FALSE → 's' appended → "2 rules changed this session"
+                expect(txt).toMatch(/2 rules changed this session/);
+            },
+            { timeout: 5000 }
+        ).catch(() => {});
         expect(document.body).toBeTruthy();
     }, 30000);
 
@@ -414,8 +441,8 @@ describe('Guardrails page', () => {
                     sort_order: 1,
                     created_at: '2026-06-01T00:00:00.000Z',
                     updated_at: '2026-06-01T00:00:00.000Z',
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         await screen.findByRole('tab', { name: /Rules/ });
@@ -423,11 +450,15 @@ describe('Guardrails page', () => {
         const addBtns = screen.queryAllByRole('button', { name: /Add rule|Add/i });
         if (addBtns.length > 0) {
             fireEvent.click(addBtns[0]!);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 3000 });
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                },
+                { timeout: 3000 }
+            );
             // Find the "Rule" text field by label and fill it
-            const ruleInput = screen.queryByLabelText(/^Rule$/i) ??
+            const ruleInput =
+                screen.queryByLabelText(/^Rule$/i) ??
                 document.querySelector('[role="dialog"] input[type="text"]');
             if (ruleInput) {
                 fireEvent.change(ruleInput, { target: { value: 'Only one rule here' } });
@@ -436,11 +467,14 @@ describe('Guardrails page', () => {
                 if (submitBtn) {
                     fireEvent.click(submitBtn);
                     // After submit, modal closes and dirtyCount increments to 1
-                    await waitFor(() => {
-                        const txt = document.body.textContent ?? '';
-                        // Line 226: dirtyCount === 1 → '' (not 's') → "1 rule changed this session"
-                        expect(txt).toMatch(/1 rule changed this session/);
-                    }, { timeout: 5000 });
+                    await waitFor(
+                        () => {
+                            const txt = document.body.textContent ?? '';
+                            // Line 226: dirtyCount === 1 → '' (not 's') → "1 rule changed this session"
+                            expect(txt).toMatch(/1 rule changed this session/);
+                        },
+                        { timeout: 5000 }
+                    );
                 }
             }
         }
@@ -467,34 +501,43 @@ describe('Guardrails page', () => {
             http.delete(`${BASE}/guardrails/r-del`, () => {
                 deleted = true;
                 return new HttpResponse(null, { status: 204 });
-            }),
+            })
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         await screen.findByText(/No touching \/etc/);
         // Step 1: click rule text to open edit modal
         fireEvent.click(screen.getByText(/No touching \/etc/));
-        await waitFor(() => {
-            expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         // Step 2: click "Delete rule" icon button to open confirm dialog
         const deleteRuleBtn = screen.queryByRole('button', { name: /Delete rule/i });
         if (deleteRuleBtn) {
             fireEvent.click(deleteRuleBtn);
             // Confirm dialog appears with a "Delete" button (contained, error color)
-            await waitFor(() => {
-                expect(screen.queryByText('Delete this rule?')).toBeTruthy();
-            }, { timeout: 3000 });
+            await waitFor(
+                () => {
+                    expect(screen.queryByText('Delete this rule?')).toBeTruthy();
+                },
+                { timeout: 3000 }
+            );
             // Step 3: click "Delete" in confirm dialog → triggers handleDelete in Guardrails
             const confirmDeleteBtn = screen.queryByRole('button', { name: /^Delete$/ });
             if (confirmDeleteBtn) {
                 fireEvent.click(confirmDeleteBtn);
                 await waitFor(() => expect(deleted).toBe(true), { timeout: 5000 });
                 // After handleDelete fires, dirtyCount=1 → status bar shows "1 rule changed"
-                await waitFor(() => {
-                    const txt = document.body.textContent ?? '';
-                    // Covers line 226: dirtyCount === 1 → empty string (not 's')
-                    expect(txt).toMatch(/1 rule changed this session/);
-                }, { timeout: 3000 });
+                await waitFor(
+                    () => {
+                        const txt = document.body.textContent ?? '';
+                        // Covers line 226: dirtyCount === 1 → empty string (not 's')
+                        expect(txt).toMatch(/1 rule changed this session/);
+                    },
+                    { timeout: 3000 }
+                );
             }
         }
         expect(document.body).toBeTruthy();
@@ -503,21 +546,23 @@ describe('Guardrails page', () => {
     it('saveAll.isPending = true renders CircularProgress in Save button (line 252)', async () => {
         // Make the save endpoint slow so we can observe the isPending=true state
         let resolveSave!: () => void;
-        const savePromise = new Promise<void>((res) => { resolveSave = res; });
+        const savePromise = new Promise<void>((res) => {
+            resolveSave = res;
+        });
         server.use(
             ...baseHandlers(),
             http.post(`${BASE}/guardrails/save`, async () => {
                 await savePromise;
                 return HttpResponse.json({ ok: true, published_at: '2026-06-25T12:00:00.000Z' });
-            }),
+            })
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         const saveBtn = await screen.findByRole('button', { name: /Save Guard-rails/i });
         // Click save → mutation starts → isPending = true → CircularProgress renders
         fireEvent.click(saveBtn);
-        await waitFor(() =>
-            expect(document.querySelector('.MuiCircularProgress-root')).not.toBeNull(),
-            { timeout: 3000 },
+        await waitFor(
+            () => expect(document.querySelector('.MuiCircularProgress-root')).not.toBeNull(),
+            { timeout: 3000 }
         );
         // Resolve the save to clean up
         resolveSave();
@@ -533,20 +578,23 @@ describe('Guardrails page', () => {
                     ok: true,
                     published_at: '2026-06-25T12:00:00.000Z',
                 });
-            }),
+            })
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         const saveBtn = await screen.findByRole('button', { name: /Save Guard-rails/i });
         fireEvent.click(saveBtn);
         await waitFor(() => expect(savedCount).toBe(1), { timeout: 5000 });
         // After save, status bar should say "No unsaved changes"
-        await waitFor(() => {
-            expect(
-                screen.getAllByText((_c, el) =>
-                    (el?.textContent ?? '').includes('No unsaved changes'),
-                ).length,
-            ).toBeGreaterThan(0);
-        }, { timeout: 3000 }).catch(() => {});
+        await waitFor(
+            () => {
+                expect(
+                    screen.getAllByText((_c, el) =>
+                        (el?.textContent ?? '').includes('No unsaved changes')
+                    ).length
+                ).toBeGreaterThan(0);
+            },
+            { timeout: 3000 }
+        ).catch(() => {});
         expect(document.body).toBeTruthy();
     });
 
@@ -564,8 +612,8 @@ describe('Guardrails page', () => {
                     sort_order: 1,
                     created_at: '2026-06-01T00:00:00.000Z',
                     updated_at: '2026-06-01T00:00:00.000Z',
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
         await screen.findByRole('tab', { name: /Rules/ });
@@ -573,11 +621,16 @@ describe('Guardrails page', () => {
         const addBtns = screen.queryAllByRole('button', { name: /Add rule|Add/i });
         if (addBtns[0]) {
             fireEvent.click(addBtns[0]);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 3000 }).catch(() => {});
-            const ruleInput = document.querySelector('[role="dialog"] input[type="text"], [role="dialog"] input:not([type])') ??
-                document.querySelector('[role="dialog"] input');
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                },
+                { timeout: 3000 }
+            ).catch(() => {});
+            const ruleInput =
+                document.querySelector(
+                    '[role="dialog"] input[type="text"], [role="dialog"] input:not([type])'
+                ) ?? document.querySelector('[role="dialog"] input');
             if (ruleInput) {
                 fireEvent.change(ruleInput, { target: { value: 'No rm' } });
             }
@@ -585,9 +638,12 @@ describe('Guardrails page', () => {
             if (addRuleBtn) {
                 fireEvent.click(addRuleBtn);
                 // Wait for modal to close
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeFalsy();
-                }, { timeout: 3000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeFalsy();
+                    },
+                    { timeout: 3000 }
+                ).catch(() => {});
             }
         }
         // Now click Discard (should be enabled since dirtyCount > 0)

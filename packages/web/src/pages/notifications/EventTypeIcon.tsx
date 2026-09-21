@@ -128,6 +128,7 @@ export function EventTypeIcon({ eventType, size = 28 }: Props) {
             <Box
                 component="span"
                 className="material-symbols-rounded"
+                aria-hidden="true"
                 sx={{ fontSize: size * 0.6, color: meta.color }}
             >
                 {meta.icon}

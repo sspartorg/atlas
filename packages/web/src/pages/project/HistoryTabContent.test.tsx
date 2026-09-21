@@ -36,7 +36,7 @@ describe('HistoryTabContent', () => {
     it('renders the empty state when no runs', async () => {
         server.use(
             http.get(`${BASE}/run`, () => HttpResponse.json([])),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
@@ -48,8 +48,8 @@ describe('HistoryTabContent', () => {
         server.use(
             http.get(`${BASE}/run`, () => HttpResponse.json([makeRun({ issue_type: 'task' })])),
             http.get(`${BASE}/agents`, () =>
-                HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'Coder' })]),
-            ),
+                HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'Coder' })])
+            )
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
@@ -60,9 +60,9 @@ describe('HistoryTabContent', () => {
     it('shows "unknown agent" when run.agent_id not in agents map (covers agent=undefined branch)', async () => {
         server.use(
             http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ agent_id: 'agent-missing' })]),
+                HttpResponse.json([makeRun({ agent_id: 'agent-missing' })])
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
@@ -72,10 +72,8 @@ describe('HistoryTabContent', () => {
 
     it('shows total cost when at least one run has total_cost_usd (covers totalCostUsd != null)', async () => {
         server.use(
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ total_cost_usd: 1.5 })]),
-            ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/run`, () => HttpResponse.json([makeRun({ total_cost_usd: 1.5 })])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
@@ -87,23 +85,24 @@ describe('HistoryTabContent', () => {
     it('links a sub_task run to its sub-task page', async () => {
         server.use(
             http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ issue_type: 'sub_task', issue_id: 'ATL-ST1' })]),
+                HttpResponse.json([makeRun({ issue_type: 'sub_task', issue_id: 'ATL-ST1' })])
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
             expect(screen.getByText('ATL-ST1')).toBeInTheDocument();
         });
-        expect(screen.getByText('ATL-ST1').closest('a')).toHaveAttribute('href', '/sub-tasks/ATL-ST1');
+        expect(screen.getByText('ATL-ST1').closest('a')).toHaveAttribute(
+            'href',
+            '/sub-tasks/ATL-ST1'
+        );
     });
 
     it('shows run status label (Completed)', async () => {
         server.use(
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ status: 'completed' })]),
-            ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/run`, () => HttpResponse.json([makeRun({ status: 'completed' })])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
@@ -113,10 +112,8 @@ describe('HistoryTabContent', () => {
 
     it('shows run status label for error status', async () => {
         server.use(
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ status: 'error' })]),
-            ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/run`, () => HttpResponse.json([makeRun({ status: 'error' })])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
@@ -126,10 +123,8 @@ describe('HistoryTabContent', () => {
 
     it('shows run status label for queued status', async () => {
         server.use(
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ status: 'queued' })]),
-            ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/run`, () => HttpResponse.json([makeRun({ status: 'queued' })])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
@@ -139,10 +134,8 @@ describe('HistoryTabContent', () => {
 
     it('shows run status label for in_progress status', async () => {
         server.use(
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ status: 'in_progress' })]),
-            ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/run`, () => HttpResponse.json([makeRun({ status: 'in_progress' })])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
@@ -152,10 +145,8 @@ describe('HistoryTabContent', () => {
 
     it('shows run status label for cancelled status', async () => {
         server.use(
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ status: 'cancelled' })]),
-            ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/run`, () => HttpResponse.json([makeRun({ status: 'cancelled' })])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
@@ -165,10 +156,8 @@ describe('HistoryTabContent', () => {
 
     it('shows run status label for setup_failed status', async () => {
         server.use(
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ status: 'setup_failed' })]),
-            ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/run`, () => HttpResponse.json([makeRun({ status: 'setup_failed' })])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
@@ -182,9 +171,9 @@ describe('HistoryTabContent', () => {
                 HttpResponse.json([
                     makeRun({ total_cost_usd: null }),
                     makeRun({ id: 'r2', total_cost_usd: null }),
-                ]),
+                ])
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
@@ -198,9 +187,9 @@ describe('HistoryTabContent', () => {
     it('L192: ?? started_at fallback — run with completed_at null uses started_at for timestamp', async () => {
         server.use(
             http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ completed_at: null, started_at: ISO })]),
+                HttpResponse.json([makeRun({ completed_at: null, started_at: ISO })])
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
@@ -211,9 +200,11 @@ describe('HistoryTabContent', () => {
     it('L192: ?? created_at fallback — run with both completed_at and started_at null uses created_at', async () => {
         server.use(
             http.get(`${BASE}/run`, () =>
-                HttpResponse.json([makeRun({ completed_at: null, started_at: null, created_at: ISO })]),
+                HttpResponse.json([
+                    makeRun({ completed_at: null, started_at: null, created_at: ISO }),
+                ])
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         await waitFor(() => {
@@ -224,8 +215,14 @@ describe('HistoryTabContent', () => {
     it('renders skeleton when isPending (covers isPending skeleton branch)', async () => {
         // Return a never-resolving response so isPending stays true
         server.use(
-            http.get(`${BASE}/run`, () => new Promise(() => { /* never resolves */ })),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(
+                `${BASE}/run`,
+                () =>
+                    new Promise(() => {
+                        /* never resolves */
+                    })
+            ),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTabContent projectId="p1" />);
         // The Skeleton is rendered immediately before data arrives

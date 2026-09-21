@@ -13,10 +13,7 @@ import LinkOffRounded from '@mui/icons-material/LinkOffRounded';
 import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
 import type { ICliSession, CliSessionStatus } from '@atlas/shared';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
-import {
-    TerminalSessionControls,
-    useTerminalStopModal,
-} from './TerminalSessionControls.js';
+import { TerminalSessionControls, useTerminalStopModal } from './TerminalSessionControls.js';
 import { useNavigate } from 'react-router-dom';
 import { sessionDetailUrl } from '../utils/cliSessionRouting.js';
 

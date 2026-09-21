@@ -65,8 +65,7 @@ export function HelpAboutTab() {
         );
     }
 
-    const feedbackUrl =
-        data.vars.find((v) => v.key === 'ATLAS_FEEDBACK_URL')?.value?.trim() ?? '';
+    const feedbackUrl = data.vars.find((v) => v.key === 'ATLAS_FEEDBACK_URL')?.value?.trim() ?? '';
     const effectiveUrl = feedbackUrl || DEFAULT_FEEDBACK_URL;
     const isMailto = effectiveUrl.toLowerCase().startsWith('mailto:');
 
@@ -122,11 +121,10 @@ export function HelpAboutTab() {
                     </FactRow>
 
                     <FactRow label="Documentation">
-                        <ExternalLink href={DOCS_URL}>
-                            Docs on GitHub
-                        </ExternalLink>
+                        <ExternalLink href={DOCS_URL}>Docs on GitHub</ExternalLink>
                         <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
-                            Root overview, section pages, and per-page walkthroughs for every route in Atlas.
+                            Root overview, section pages, and per-page walkthroughs for every route
+                            in Atlas.
                         </Typography>
                     </FactRow>
                 </Box>
@@ -155,10 +153,7 @@ export function HelpAboutTab() {
                 </Box>
             </SettingsSection>
 
-            <SettingsSection
-                title="Credits"
-                subtitle="Who built Atlas, and how it got here."
-            >
+            <SettingsSection title="Credits" subtitle="Who built Atlas, and how it got here.">
                 <Box
                     sx={{
                         display: 'grid',
@@ -169,7 +164,10 @@ export function HelpAboutTab() {
                     }}
                 >
                     <FactRow label="Author">
-                        <Typography component="span" sx={{ fontSize: 13, color: ATLAS_PALETTE.slate, fontWeight: 500 }}>
+                        <Typography
+                            component="span"
+                            sx={{ fontSize: 13, color: ATLAS_PALETTE.slate, fontWeight: 500 }}
+                        >
                             sspart
                         </Typography>
                         {' · '}
@@ -179,26 +177,42 @@ export function HelpAboutTab() {
                     </FactRow>
 
                     <FactRow label="Built with">
-                        <Typography component="span" sx={{ fontSize: 13, color: ATLAS_PALETTE.slate }}>
-                            Claude Code CLI (primary agent) · Playwright MCP (screenshots + verification)
+                        <Typography
+                            component="span"
+                            sx={{ fontSize: 13, color: ATLAS_PALETTE.slate }}
+                        >
+                            Claude Code CLI (primary agent) · Playwright MCP (screenshots +
+                            verification)
                         </Typography>
                     </FactRow>
 
                     <FactRow label="Stack">
-                        <Typography component="span" sx={{ fontSize: 13, color: ATLAS_PALETTE.slate }}>
-                            React 19 · MUI · Fastify · Postgres 16 · Knex · Zod · node-pty · xterm.js · MCP · pnpm monorepo
+                        <Typography
+                            component="span"
+                            sx={{ fontSize: 13, color: ATLAS_PALETTE.slate }}
+                        >
+                            React 19 · MUI · Fastify · Postgres 16 · Knex · Zod · node-pty ·
+                            xterm.js · MCP · pnpm monorepo
                         </Typography>
                     </FactRow>
 
                     <FactRow label="Timeline">
-                        <Typography component="span" sx={{ fontSize: 13, color: ATLAS_PALETTE.slate }}>
-                            First commit May 2026 · v1.0 shipped July 2026 · ~2 months of nights &amp; weekends
+                        <Typography
+                            component="span"
+                            sx={{ fontSize: 13, color: ATLAS_PALETTE.slate }}
+                        >
+                            First commit May 2026 · v1.0 shipped July 2026 · ~2 months of nights
+                            &amp; weekends
                         </Typography>
                     </FactRow>
 
                     <FactRow label="Scope">
-                        <Typography component="span" sx={{ fontSize: 13, color: ATLAS_PALETTE.slate }}>
-                            32 user-facing pages · 16 seeded agent roles · 13 consolidated MCP tools · projects → tasks → sub-tasks
+                        <Typography
+                            component="span"
+                            sx={{ fontSize: 13, color: ATLAS_PALETTE.slate }}
+                        >
+                            32 user-facing pages · 16 seeded agent roles · 13 consolidated MCP tools
+                            · projects → tasks → sub-tasks
                         </Typography>
                     </FactRow>
                 </Box>
@@ -232,7 +246,8 @@ export function HelpAboutTab() {
                             )}
                         </Typography>
                         <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 1 }}>
-                            Edit under Settings → Environment ({'ATLAS_FEEDBACK_URL'}). Live-applied — no restart.
+                            Edit under Settings → Environment ({'ATLAS_FEEDBACK_URL'}). Live-applied
+                            — no restart.
                         </Typography>
                     </Box>
 

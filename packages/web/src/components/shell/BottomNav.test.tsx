@@ -34,7 +34,9 @@ describe('BottomNav', () => {
         renderWithProviders(<BottomNav onOpenMore={onOpenMore} />, {
             initialEntries: ['/tasks'],
         });
-        const homeBtn = screen.getAllByRole('button').find((b) => /Home/i.test(b.textContent ?? ''));
+        const homeBtn = screen
+            .getAllByRole('button')
+            .find((b) => /Home/i.test(b.textContent ?? ''));
         expect(homeBtn).toBeDefined();
         if (homeBtn) {
             await userEvent.click(homeBtn);
@@ -48,7 +50,9 @@ describe('BottomNav', () => {
         renderWithProviders(<BottomNav onOpenMore={onOpenMore} />, {
             initialEntries: ['/'],
         });
-        const tasksBtn = screen.getAllByRole('button').find((b) => /Tasks/i.test(b.textContent ?? ''));
+        const tasksBtn = screen
+            .getAllByRole('button')
+            .find((b) => /Tasks/i.test(b.textContent ?? ''));
         expect(tasksBtn).toBeDefined();
         if (tasksBtn) {
             await userEvent.click(tasksBtn);
@@ -61,7 +65,9 @@ describe('BottomNav', () => {
         renderWithProviders(<BottomNav onOpenMore={onOpenMore} />, {
             initialEntries: ['/'],
         });
-        const queueBtn = screen.getAllByRole('button').find((b) => /Queue/i.test(b.textContent ?? ''));
+        const queueBtn = screen
+            .getAllByRole('button')
+            .find((b) => /Queue/i.test(b.textContent ?? ''));
         expect(queueBtn).toBeDefined();
         if (queueBtn) {
             await userEvent.click(queueBtn);
@@ -103,7 +109,9 @@ describe('BottomNav', () => {
         renderWithProviders(<BottomNav onOpenMore={vi.fn()} />, {
             initialEntries: ['/'],
         });
-        const homeBtn = screen.getAllByRole('button').find((b) => /Home/i.test(b.textContent ?? ''));
+        const homeBtn = screen
+            .getAllByRole('button')
+            .find((b) => /Home/i.test(b.textContent ?? ''));
         expect(homeBtn).toBeDefined();
         if (homeBtn) {
             // pointerenter triggers the onPointerEnter handler which calls prefetchRoute
@@ -117,7 +125,9 @@ describe('BottomNav', () => {
         renderWithProviders(<BottomNav onOpenMore={vi.fn()} />, {
             initialEntries: ['/'],
         });
-        const tasksBtn = screen.getAllByRole('button').find((b) => /Tasks/i.test(b.textContent ?? ''));
+        const tasksBtn = screen
+            .getAllByRole('button')
+            .find((b) => /Tasks/i.test(b.textContent ?? ''));
         if (tasksBtn) {
             fireEvent.pointerEnter(tasksBtn);
             expect(tasksBtn).toBeInTheDocument();
@@ -128,7 +138,9 @@ describe('BottomNav', () => {
         renderWithProviders(<BottomNav onOpenMore={vi.fn()} />, {
             initialEntries: ['/'],
         });
-        const moreBtn = screen.getAllByRole('button').find((b) => /More/i.test(b.textContent ?? ''));
+        const moreBtn = screen
+            .getAllByRole('button')
+            .find((b) => /More/i.test(b.textContent ?? ''));
         if (moreBtn) {
             // tab.key === 'more' so prefetchRoute is skipped — should not throw
             fireEvent.pointerEnter(moreBtn);

@@ -8,7 +8,7 @@ describe('SettingsSection', () => {
         renderWithProviders(
             <SettingsSection title="Profile" subtitle="your info">
                 <div>child</div>
-            </SettingsSection>,
+            </SettingsSection>
         );
         expect(screen.getByText('Profile')).toBeInTheDocument();
         expect(screen.getByText('your info')).toBeInTheDocument();
@@ -19,7 +19,7 @@ describe('SettingsSection', () => {
         renderWithProviders(
             <SettingsSection title="X" rightAdornment={<button>edit</button>}>
                 body
-            </SettingsSection>,
+            </SettingsSection>
         );
         expect(screen.getByRole('button', { name: 'edit' })).toBeInTheDocument();
     });

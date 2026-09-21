@@ -33,7 +33,7 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         expect(await screen.findByText('My Coder')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Run now/i })).toBeInTheDocument();
@@ -51,7 +51,7 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         expect(await screen.findByRole('button', { name: /Resume/i })).toBeInTheDocument();
         expect(screen.getByText('Paused')).toBeInTheDocument();
@@ -69,7 +69,7 @@ describe('AgentHero', () => {
                 onRunNow={onRunNow}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         await userEvent.click(await screen.findByRole('button', { name: /Run now/i }));
         expect(onRunNow).toHaveBeenCalledOnce();
@@ -87,7 +87,7 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={onPauseToggle}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         await userEvent.click(await screen.findByRole('button', { name: /Pause/i }));
         expect(onPauseToggle).toHaveBeenCalledOnce();
@@ -104,7 +104,7 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         expect(await screen.findByText(/Queue:/i)).toHaveTextContent('Queue: 3 items');
         expect(screen.getByText(/Last run:/i)).toBeInTheDocument();
@@ -115,8 +115,8 @@ describe('AgentHero', () => {
         server.use(
             ...defaultHandlers,
             http.patch('http://localhost:3000/api/agents/agent-coder', () =>
-                HttpResponse.json({ ...agent, name: 'Coder Renamed' }),
-            ),
+                HttpResponse.json({ ...agent, name: 'Coder Renamed' })
+            )
         );
         renderWithProviders(
             <AgentHero
@@ -127,10 +127,12 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         // Find the rename button (aria-label="Rename agent")
-        await waitFor(() => expect(screen.queryByRole('button', { name: /Rename agent/i })).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole('button', { name: /Rename agent/i })).toBeInTheDocument()
+        );
         const renameBtn = screen.getByRole('button', { name: /Rename agent/i });
         await userEvent.click(renameBtn);
         // Now in edit mode — find the text input and type new name
@@ -155,7 +157,7 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         await waitFor(() => expect(screen.queryByText('Coder')).toBeInTheDocument());
         // Click the agent name Typography which has onClick={() => setEditingTitle(true)}
@@ -184,10 +186,12 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         // Enter edit mode via Rename button
-        await waitFor(() => expect(screen.queryByRole('button', { name: /Rename agent/i })).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole('button', { name: /Rename agent/i })).toBeInTheDocument()
+        );
         await userEvent.click(screen.getByRole('button', { name: /Rename agent/i }));
         // In edit mode — press Escape to cancel
         const input = document.querySelector('input') as HTMLInputElement | null;
@@ -211,10 +215,12 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         // Enter edit mode then blur immediately without changing — should not fire mutation
-        await waitFor(() => expect(screen.queryByRole('button', { name: /Rename agent/i })).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole('button', { name: /Rename agent/i })).toBeInTheDocument()
+        );
         await userEvent.click(screen.getByRole('button', { name: /Rename agent/i }));
         const input = document.querySelector('input') as HTMLInputElement | null;
         if (input) {
@@ -236,7 +242,7 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         expect(await screen.findByText('Queued')).toBeInTheDocument();
     });
@@ -252,7 +258,7 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         expect(await screen.findByText('Queued')).toBeInTheDocument();
         expect(screen.queryByText('Idle')).not.toBeInTheDocument();
@@ -269,7 +275,7 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         const label = await screen.findByText('Failed');
         expect(label).toHaveStyle({ color: ATLAS_PALETTE.error });
@@ -288,7 +294,7 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         await waitFor(() => expect(document.body.textContent).toMatch(/Last run:.+ago/));
     });
@@ -305,7 +311,7 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         expect(await screen.findByRole('button', { name: /Run now/i })).toBeInTheDocument();
     });
@@ -321,12 +327,12 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         // "Queue: 1 item" — no trailing 's' when exactly 1
-        await waitFor(() =>
-            expect(screen.queryByText(/Queue:/i)).toBeInTheDocument(),
-        { timeout: 3000 }).catch(() => {});
+        await waitFor(() => expect(screen.queryByText(/Queue:/i)).toBeInTheDocument(), {
+            timeout: 3000,
+        }).catch(() => {});
         // The queueDepth===1 branch shows '' (no 's'), so "1 item" (not "1 items")
         expect(document.body.textContent).not.toMatch(/1 items/);
     });
@@ -335,8 +341,8 @@ describe('AgentHero', () => {
         server.use(
             ...defaultHandlers,
             http.patch(`http://localhost:3000/api/agents/${makeAgent().id}`, () =>
-                HttpResponse.json(makeAgent()),
-            ),
+                HttpResponse.json(makeAgent())
+            )
         );
         renderWithProviders(
             <AgentHero
@@ -347,18 +353,23 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
-        await waitFor(() => expect(screen.getByRole('button', { name: /Run now/i })).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: /Run now/i })).toBeInTheDocument()
+        );
         // Click the agent title to open the inline editor
         const agentName = screen.queryAllByText(/Test Agent/i);
         if (agentName.length > 0) {
             // Click to enter edit mode (double-click or single click on title)
             fireEvent.click(agentName[0]!);
-            await waitFor(() => {
-                const titleInput = document.querySelector('input[type="text"], textarea');
-                return titleInput !== null;
-            }, { timeout: 2000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    const titleInput = document.querySelector('input[type="text"], textarea');
+                    return titleInput !== null;
+                },
+                { timeout: 2000 }
+            ).catch(() => {});
         }
         // Try pressing Enter in any text input inside the component
         const titleInput = document.querySelector('input') as HTMLInputElement | null;
@@ -375,8 +386,8 @@ describe('AgentHero', () => {
         server.use(
             ...defaultHandlers,
             http.patch('http://localhost:3000/api/agents/agent-coder', () =>
-                HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Server error' }, { status: 500 })
+            )
         );
         renderWithProviders(
             <AgentHero
@@ -387,11 +398,11 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         // Enter edit mode via Rename button
         await waitFor(() =>
-            expect(screen.queryByRole('button', { name: /Rename agent/i })).toBeInTheDocument(),
+            expect(screen.queryByRole('button', { name: /Rename agent/i })).toBeInTheDocument()
         );
         await userEvent.click(screen.getByRole('button', { name: /Rename agent/i }));
         // Change the title so commitTitle fires the mutation
@@ -403,9 +414,7 @@ describe('AgentHero', () => {
             await userEvent.tab();
         }
         // After PATCH fails, the title is restored to original
-        await waitFor(() =>
-            expect(document.body).toBeTruthy(),
-        { timeout: 3000 });
+        await waitFor(() => expect(document.body).toBeTruthy(), { timeout: 3000 });
     }, 15000);
 
     it('commitTitle early-return when trimmed title is empty (L59 !next branch)', async () => {
@@ -422,10 +431,10 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         await waitFor(() =>
-            expect(screen.queryByRole('button', { name: /Rename agent/i })).toBeInTheDocument(),
+            expect(screen.queryByRole('button', { name: /Rename agent/i })).toBeInTheDocument()
         );
         await userEvent.click(screen.getByRole('button', { name: /Rename agent/i }));
         // Clear the input to get empty string — trimmed = '' → !next is true
@@ -446,9 +455,9 @@ describe('AgentHero', () => {
                     { cli: 'claude', binary: 'claude', available: true, version: '1.0.0' },
                     { cli: 'copilot', binary: 'copilot', available: false, version: null },
                     { cli: 'ollama', binary: 'claude', available: true, version: '1.0.0' },
-                ]),
+                ])
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(
             <AgentHero
@@ -459,12 +468,12 @@ describe('AgentHero', () => {
                 onRunNow={vi.fn()}
                 onPauseToggle={vi.fn()}
                 menuActions={noopMenuActions}
-            />,
+            />
         );
         expect(
             await screen.findByText(
-                'copilot is not installed on this machine — runs will fail until it is, or switch the agent to claude.',
-            ),
+                'copilot is not installed on this machine — runs will fail until it is, or switch the agent to claude.'
+            )
         ).toBeInTheDocument();
     });
 });

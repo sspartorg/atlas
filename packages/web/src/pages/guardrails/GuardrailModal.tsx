@@ -181,6 +181,7 @@ export function GuardrailModal({
                                 <Box
                                     component="span"
                                     className="material-symbols-rounded"
+                                    aria-hidden="true"
                                     sx={{ fontSize: 14 }}
                                 >
                                     {meta.icon}

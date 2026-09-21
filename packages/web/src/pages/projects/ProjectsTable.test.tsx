@@ -112,7 +112,7 @@ describe('ProjectsTable', () => {
         const onRowClick = vi.fn();
         const { container } = renderTable({ onRowClick });
         const actionCell = container.querySelector(
-            'button[aria-label="Project actions"]',
+            'button[aria-label="Project actions"]'
         )?.parentElement;
         if (actionCell) {
             fireEvent.click(actionCell);
@@ -149,7 +149,7 @@ describe('ProjectsTable', () => {
             displayId: 'B',
             name: 'Bravo',
             gitPath: '',
-            tasks: 3,  // same as rowA — compare returns 0
+            tasks: 3, // same as rowA — compare returns 0
             subTasks: 3,
             lastActivity: 'now',
             updatedAt: '2026-05-16T00:00:00.000Z',
@@ -161,7 +161,7 @@ describe('ProjectsTable', () => {
                 onRowClick={vi.fn()}
                 onCopyUrl={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         // Sort by Tasks — both rows have tasks=3, compare returns 0 for the equality case
         fireEvent.click(screen.getByText('Tasks'));

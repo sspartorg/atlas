@@ -15,10 +15,7 @@ import type {
     IssueType,
     IAgent,
 } from '@atlas/shared';
-import {
-    useIssueLinks,
-    useDeleteIssueLink,
-} from '../hooks/useIssueLinks.js';
+import { useIssueLinks, useDeleteIssueLink } from '../hooks/useIssueLinks.js';
 import {
     useIssueExternalLinks,
     useDeleteIssueExternalLink,
@@ -110,10 +107,7 @@ export function RelatedItemsCard({
     const ownerName = settings?.owner_name ?? 'Owner';
     const ownerAccent = settings?.accent_color ?? ATLAS_PALETTE.slate;
 
-    const agentsById = useMemo(
-        () => new Map(agents.map((w) => [w.id, w] as const)),
-        [agents]
-    );
+    const agentsById = useMemo(() => new Map(agents.map((w) => [w.id, w] as const)), [agents]);
 
     // Partition into "blocked by" (depends_on, where this item is the
     // dependent), "tested by / tests" (tested_by, dev↔QA twin), and
@@ -121,15 +115,15 @@ export function RelatedItemsCard({
     // each row keeps a stable key including the relation.
     const dependsLinks = useMemo(
         () => links.filter((l) => l.relation_type === 'depends_on'),
-        [links],
+        [links]
     );
     const testedByLinks = useMemo(
         () => links.filter((l) => l.relation_type === 'tested_by'),
-        [links],
+        [links]
     );
     const relatesLinks = useMemo(
         () => links.filter((l) => l.relation_type === 'relates_to'),
-        [links],
+        [links]
     );
 
     function toRow(l: (typeof links)[number]): WorkItemTableRow {
@@ -513,18 +507,32 @@ export function RelatedItemsCard({
                                 fontSize: 13,
                                 color: ATLAS_PALETTE.brandBlue,
                                 textDecoration: 'none',
-                                '&:hover': { background: ATLAS_PALETTE.cloud, textDecoration: 'underline' },
+                                '&:hover': {
+                                    background: ATLAS_PALETTE.cloud,
+                                    textDecoration: 'underline',
+                                },
                             }}
                         >
                             <Box
                                 component="span"
-                                sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono, fontSize: 12, fontWeight: 600, color: ATLAS_PALETTE.slate60 }}
+                                sx={{
+                                    fontFamily: TYPOGRAPHY.fontFamilyMono,
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: ATLAS_PALETTE.slate60,
+                                }}
                             >
                                 {l.external_ref}
                             </Box>
                             <Box
                                 component="span"
-                                sx={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                sx={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                }}
                             >
                                 {l.title ?? l.url}
                             </Box>

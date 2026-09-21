@@ -37,22 +37,14 @@ const makeCred = (overrides: Partial<ICredential> = {}): ICredential => ({
 describe('CredentialsTable', () => {
     it('renders rows (active status, no expiry, no last_used_at)', () => {
         renderWithProviders(
-            <CredentialsTable
-                rows={[makeCred()]}
-                onEdit={vi.fn()}
-                onDelete={vi.fn()}
-            />,
+            <CredentialsTable rows={[makeCred()]} onEdit={vi.fn()} onDelete={vi.fn()} />
         );
         expect(screen.getByText('My PAT')).toBeInTheDocument();
     });
 
     it('shows "Active" status chip when credential is active', () => {
         renderWithProviders(
-            <CredentialsTable
-                rows={[makeCred()]}
-                onEdit={vi.fn()}
-                onDelete={vi.fn()}
-            />,
+            <CredentialsTable rows={[makeCred()]} onEdit={vi.fn()} onDelete={vi.fn()} />
         );
         expect(screen.getByText('Active')).toBeInTheDocument();
     });
@@ -60,10 +52,15 @@ describe('CredentialsTable', () => {
     it('never shows expiry for a GitHub App — its installation token re-mints hourly', () => {
         renderWithProviders(
             <CredentialsTable
-                rows={[makeCred({ kind: 'github_app', expires_at: new Date(Date.now() + 3600_000).toISOString() })]}
+                rows={[
+                    makeCred({
+                        kind: 'github_app',
+                        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+                    }),
+                ]}
                 onEdit={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         expect(screen.queryByText(/Expires in/)).not.toBeInTheDocument();
         expect(screen.getByText('Active')).toBeInTheDocument();
@@ -75,7 +72,7 @@ describe('CredentialsTable', () => {
                 rows={[makeCred({ expires_at: TEN_DAYS_FROM_NOW })]}
                 onEdit={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         // Status chip shows "Expires in X d"
         expect(document.body.textContent).toMatch(/Expires in \d+ d/);
@@ -87,7 +84,7 @@ describe('CredentialsTable', () => {
                 rows={[makeCred({ last_used_at: FORTY_DAYS_AGO })]}
                 onEdit={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         // Status shows "Unused X d"
         expect(document.body.textContent).toMatch(/Unused \d+ d/);
@@ -99,7 +96,7 @@ describe('CredentialsTable', () => {
                 rows={[makeCred({ created_at: FORTY_DAYS_AGO, last_used_at: null })]}
                 onEdit={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         // deriveStatus: last_used_at is null, created_at is 40 days ago → kind=unused
         expect(document.body.textContent).toMatch(/Unused 30 d/);
@@ -111,7 +108,7 @@ describe('CredentialsTable', () => {
                 rows={[makeCred({ scope: 'repo,read:org' })]}
                 onEdit={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('repo')).toBeInTheDocument();
         expect(screen.getByText('read:org')).toBeInTheDocument();
@@ -124,7 +121,7 @@ describe('CredentialsTable', () => {
                 rows={[makeCred({ id: 'cred-test' })]}
                 onEdit={onEdit}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         // IconButton for Edit has an EditOutlined icon
         const editBtn = screen.getAllByRole('button')[0]!;

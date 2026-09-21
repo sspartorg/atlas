@@ -23,7 +23,7 @@ function mount(dirty: boolean) {
                 onRun={vi.fn()}
                 onDelete={vi.fn()}
             />
-        </>,
+        </>
     );
 }
 
@@ -37,7 +37,10 @@ describe('WorkflowHeader Export', () => {
 
     it('is disabled while there are unsaved changes', () => {
         mount(true);
-        expect(screen.getByRole('link', { name: /export/i })).toHaveAttribute('aria-disabled', 'true');
+        expect(screen.getByRole('link', { name: /export/i })).toHaveAttribute(
+            'aria-disabled',
+            'true'
+        );
     });
 });
 
@@ -53,7 +56,7 @@ describe('WorkflowHeader Publish', () => {
             http.post(`${BASE}/workflows/wf-1/publish`, () => {
                 hit = true;
                 return HttpResponse.json(makePublishedWorkflow({ updated_at: updatedAt }));
-            }),
+            })
         );
         mount(false);
         await userEvent.click(screen.getByRole('button', { name: /publish/i }));

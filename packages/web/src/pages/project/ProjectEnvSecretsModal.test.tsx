@@ -29,7 +29,7 @@ beforeEach(() => {
         http.get(`${BASE}/projects/p2/repos`, () => HttpResponse.json([])),
         ...defaultHandlers,
         http.get(`${BASE}/projects/p1/env`, () => HttpResponse.json(existingVars)),
-        http.get(`${BASE}/projects/p2/env`, () => HttpResponse.json({ vars: [] })),
+        http.get(`${BASE}/projects/p2/env`, () => HttpResponse.json({ vars: [] }))
     );
 });
 
@@ -38,7 +38,7 @@ beforeEach(() => {
 describe('ProjectEnvSecretsModal — closed', () => {
     it('renders nothing when project is null', () => {
         const { container } = renderWithProviders(
-            <ProjectEnvSecretsModal open project={null} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={null} displayId="ACM" onClose={vi.fn()} />
         );
         expect(container).toBeEmptyDOMElement();
     });
@@ -49,24 +49,24 @@ describe('ProjectEnvSecretsModal — closed', () => {
 describe('ProjectEnvSecretsModal — open clean', () => {
     it('shows the modal heading', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         expect(screen.getByText('Project Secrets')).toBeInTheDocument();
     });
 
     it('shows the displayId badge', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         expect(screen.getByText('ACM')).toBeInTheDocument();
     });
 
     it('shows the encryption-at-rest notice for a project with workspace', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() =>
-            expect(screen.getByText(/Encrypted at rest with AES-256-GCM/i)).toBeInTheDocument(),
+            expect(screen.getByText(/Encrypted at rest with AES-256-GCM/i)).toBeInTheDocument()
         );
     });
 
@@ -77,35 +77,25 @@ describe('ProjectEnvSecretsModal — open clean', () => {
                 project={projectNoWorkspace}
                 displayId="NWS"
                 onClose={vi.fn()}
-            />,
+            />
         );
-        await waitFor(() =>
-            expect(screen.getByText(/no repos yet/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/no repos yet/i)).toBeInTheDocument());
     });
 
     it('renders loaded env vars as rows', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
-        await waitFor(() =>
-            expect(screen.getByDisplayValue('DATABASE_URL')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByDisplayValue('DATABASE_URL')).toBeInTheDocument());
         expect(screen.getByDisplayValue('API_SECRET')).toBeInTheDocument();
     });
 
     it('shows empty-state message when project has no vars', async () => {
-        server.use(
-            http.get(`${BASE}/projects/p1/env`, () => HttpResponse.json({ vars: [] })),
-        );
+        server.use(http.get(`${BASE}/projects/p1/env`, () => HttpResponse.json({ vars: [] })));
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
-        await waitFor(() =>
-            expect(
-                screen.getByText(/No secrets yet/i),
-            ).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/No secrets yet/i)).toBeInTheDocument());
     });
 });
 
@@ -116,11 +106,11 @@ describe('ProjectEnvSecretsModal — submit success', () => {
         const onClose = vi.fn();
         server.use(
             http.put(`${BASE}/projects/p1/env`, () =>
-                HttpResponse.json({ vars: [{ key: 'NEW_KEY', value: 'value1' }] }),
-            ),
+                HttpResponse.json({ vars: [{ key: 'NEW_KEY', value: 'value1' }] })
+            )
         );
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={onClose} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={onClose} />
         );
         // Wait for existing rows to appear, then add a new row to make it dirty
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
@@ -141,11 +131,11 @@ describe('ProjectEnvSecretsModal — submit error', () => {
         const onClose = vi.fn();
         server.use(
             http.put(`${BASE}/projects/p1/env`, () =>
-                HttpResponse.json({ error: 'DB error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'DB error' }, { status: 500 })
+            )
         );
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={onClose} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={onClose} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         // Delete a row to make dirty
@@ -165,7 +155,7 @@ describe('ProjectEnvSecretsModal — cancel', () => {
     it('Cancel button calls onClose', async () => {
         const onClose = vi.fn();
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={onClose} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={onClose} />
         );
         await userEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
         expect(onClose).toHaveBeenCalled();
@@ -177,7 +167,7 @@ describe('ProjectEnvSecretsModal — cancel', () => {
 describe('ProjectEnvSecretsModal — form interactions', () => {
     it('Add variable button appends a new row', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const addBtn = screen.getByRole('button', { name: /Add variable/i });
@@ -189,7 +179,7 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
 
     it('typing in the key field updates the value and auto-uppercases', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const addBtn = screen.getByRole('button', { name: /Add variable/i });
@@ -197,28 +187,26 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
         const newKeyInput = screen.getAllByPlaceholderText('MY_KEY').at(-1)!;
         await userEvent.type(newKeyInput, 'my_new_key', { delay: 10 });
         // The component auto-uppercases typed keys
-        await waitFor(() =>
-            expect(newKeyInput).toHaveValue('MY_NEW_KEY'),
-        );
+        await waitFor(() => expect(newKeyInput).toHaveValue('MY_NEW_KEY'));
     }, 30_000);
 
     it('search filter narrows the rows shown', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const searchInput = screen.getByPlaceholderText(/Search by key/i);
         await userEvent.type(searchInput, 'API');
         // Only API_SECRET should remain visible; DATABASE_URL should be gone
         await waitFor(() =>
-            expect(screen.queryByDisplayValue('DATABASE_URL')).not.toBeInTheDocument(),
+            expect(screen.queryByDisplayValue('DATABASE_URL')).not.toBeInTheDocument()
         );
         expect(screen.getByDisplayValue('API_SECRET')).toBeInTheDocument();
     });
 
     it('Reveal all toggles to Hide all and back', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const revealBtn = screen.getByRole('button', { name: /Reveal all/i });
@@ -230,27 +218,23 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
 
     it('deleting a row shows unsaved changes indicator', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const deleteButtons = screen.getAllByRole('button', { name: /remove/i });
         await userEvent.click(deleteButtons[0]!);
-        await waitFor(() =>
-            expect(screen.getByText(/unsaved change/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/unsaved change/i)).toBeInTheDocument());
     });
 
     it('Save is disabled when there are validation errors (empty key)', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         // Add an empty-key row — that triggers "Key required" validation error
         const addBtn = screen.getByRole('button', { name: /Add variable/i });
         await userEvent.click(addBtn);
-        await waitFor(() =>
-            expect(screen.getByText('Key required')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Key required')).toBeInTheDocument());
         const saveBtn = screen.getByRole('button', { name: /Save secrets/i });
         expect(saveBtn).toBeDisabled();
     });
@@ -262,7 +246,7 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
             value: { writeText },
         });
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         // Each row has a Copy tooltip wrapping an icon button with title "Copy".
@@ -274,7 +258,7 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
 
     it('clicking Reveal icon on a single row toggles its visibility', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         // First row's Reveal icon button — tooltip title is "Reveal" when hidden.
@@ -296,7 +280,7 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
         const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
         try {
             renderWithProviders(
-                <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+                <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
             );
             await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
             await userEvent.click(screen.getByRole('button', { name: /^Export$/ }));
@@ -314,12 +298,12 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
 
     it('clicking Import triggers the hidden file input', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         // The hidden file input is the only input[type=file] on the page.
         const fileInput = document.querySelector(
-            'input[type="file"][accept*="json"]',
+            'input[type="file"][accept*="json"]'
         ) as HTMLInputElement | null;
         expect(fileInput).not.toBeNull();
         const inputClickSpy = vi.spyOn(fileInput!, 'click');
@@ -328,23 +312,25 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
         inputClickSpy.mockRestore();
     });
 
-    it('selecting a JSON file via the import input merges secrets into the rows', { timeout: 30_000 }, async () => {
-        renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
-        );
-        await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
-        const fileInput = document.querySelector(
-            'input[type="file"][accept*="json"]',
-        ) as HTMLInputElement;
-        // parseJsonSecrets accepts a {key:value} object — this brings in NEW_VAR
-        // as a fresh row and overwrites API_SECRET's value.
-        const payload = JSON.stringify({ NEW_VAR: 'newval', API_SECRET: 'rotated' });
-        const file = new File([payload], 'env.json', { type: 'application/json' });
-        await userEvent.upload(fileInput, file);
-        await waitFor(() =>
-            expect(screen.getByDisplayValue('NEW_VAR')).toBeInTheDocument(),
-        );
-    });
+    it(
+        'selecting a JSON file via the import input merges secrets into the rows',
+        { timeout: 30_000 },
+        async () => {
+            renderWithProviders(
+                <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
+            );
+            await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
+            const fileInput = document.querySelector(
+                'input[type="file"][accept*="json"]'
+            ) as HTMLInputElement;
+            // parseJsonSecrets accepts a {key:value} object — this brings in NEW_VAR
+            // as a fresh row and overwrites API_SECRET's value.
+            const payload = JSON.stringify({ NEW_VAR: 'newval', API_SECRET: 'rotated' });
+            const file = new File([payload], 'env.json', { type: 'application/json' });
+            await userEvent.upload(fileInput, file);
+            await waitFor(() => expect(screen.getByDisplayValue('NEW_VAR')).toBeInTheDocument());
+        }
+    );
 
     it('onImportFile — no file selected (early return, no FileReader created)', async () => {
         // Verify the early-return branch: when a change event fires but files is
@@ -353,14 +339,18 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
         const readerSpy = vi.fn();
         // Temporarily replace FileReader so we can detect if it was called.
         // @ts-expect-error intentional mock
-        globalThis.FileReader = class { constructor() { readerSpy(); } };
+        globalThis.FileReader = class {
+            constructor() {
+                readerSpy();
+            }
+        };
         try {
             renderWithProviders(
-                <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+                <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
             );
             await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
             const fileInput = document.querySelector(
-                'input[type="file"][accept*="json"]',
+                'input[type="file"][accept*="json"]'
             ) as HTMLInputElement;
             // Dispatch change with an empty FileList — simulates user opening and
             // immediately cancelling the dialog (files remains empty).
@@ -381,13 +371,13 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const fileInput = document.querySelector(
-            'input[type="file"][accept*="json"]',
+            'input[type="file"][accept*="json"]'
         ) as HTMLInputElement;
         // An empty object has zero valid secrets.
         const file = new File(['{}'], 'empty.json', { type: 'application/json' });
         await userEvent.upload(fileInput, file);
         await waitFor(() =>
-            expect(screen.getByText('No secrets found in file')).toBeInTheDocument(),
+            expect(screen.getByText('No secrets found in file')).toBeInTheDocument()
         );
     });
 
@@ -400,7 +390,7 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const fileInput = document.querySelector(
-            'input[type="file"][accept*="json"]',
+            'input[type="file"][accept*="json"]'
         ) as HTMLInputElement;
         // One good key, one bad key (not UPPER_SNAKE_CASE), one non-string value.
         const payload = JSON.stringify({ GOOD_KEY: 'val', 'bad-key': 'val2', NUM_KEY: 42 });
@@ -424,7 +414,7 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const fileInput = document.querySelector(
-            'input[type="file"][accept*="json"]',
+            'input[type="file"][accept*="json"]'
         ) as HTMLInputElement;
         // One good key, two bad keys (lowercase names are invalid per KEY_RE).
         const payload = JSON.stringify({ GOOD_KEY: 'val', 'bad-one': 'x', 'bad-two': 'y' });
@@ -440,19 +430,19 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
 
     it('search filter shows "No keys match your search." when nothing matches', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const searchInput = screen.getByPlaceholderText(/Search by key/i);
         await userEvent.type(searchInput, 'XYZZZNOTEXIST');
         await waitFor(() =>
-            expect(screen.getByText('No keys match your search.')).toBeInTheDocument(),
+            expect(screen.getByText('No keys match your search.')).toBeInTheDocument()
         );
     });
 
     it('UPPER_SNAKE_CASE only validation error appears for a key starting with a digit', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         // Add a new row and set its key to a value that starts with a digit
@@ -463,14 +453,12 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
         const keyInputs = screen.getAllByPlaceholderText('MY_KEY');
         const newKeyInput = keyInputs.at(-1)!;
         fireEvent.change(newKeyInput, { target: { value: '1INVALID' } });
-        await waitFor(() =>
-            expect(screen.getByText('UPPER_SNAKE_CASE only')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('UPPER_SNAKE_CASE only')).toBeInTheDocument());
     });
 
     it('Duplicate key validation error appears for two rows with the same key', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         // Add a new row and type the key that already exists (DATABASE_URL).
@@ -480,9 +468,7 @@ describe('ProjectEnvSecretsModal — form interactions', () => {
         const newKeyInput = keyInputs.at(-1)!;
         // The component auto-uppercases — type 'DATABASE_URL' directly.
         await userEvent.type(newKeyInput, 'DATABASE_URL', { delay: 5 });
-        await waitFor(() =>
-            expect(screen.getByText('Duplicate key')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Duplicate key')).toBeInTheDocument());
     }, 30_000);
 });
 
@@ -493,7 +479,7 @@ describe('ProjectEnvSecretsModal — onSave validation guard', () => {
         // The Save button is disabled when hasErrors = true.
         // This verifies the guard that would show "Fix N rows first" toast.
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const addBtn = screen.getByRole('button', { name: /Add variable/i });
@@ -502,9 +488,7 @@ describe('ProjectEnvSecretsModal — onSave validation guard', () => {
         const newKeyInput = keyInputs.at(-1)!;
         // Force an invalid key value directly via fireEvent to bypass auto-uppercase.
         fireEvent.change(newKeyInput, { target: { value: '1BAD' } });
-        await waitFor(() =>
-            expect(screen.getByText('UPPER_SNAKE_CASE only')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('UPPER_SNAKE_CASE only')).toBeInTheDocument());
         // Save button should be disabled because hasErrors = true.
         const saveBtn = screen.getByRole('button', { name: /Save secrets/i });
         expect(saveBtn).toBeDisabled();
@@ -528,9 +512,7 @@ describe('ProjectEnvSecretsModal — clipboard failure', () => {
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const copyBtns = screen.getAllByLabelText(/^Copy$/);
         await userEvent.click(copyBtns[0]!);
-        await waitFor(() =>
-            expect(screen.getByText('Clipboard blocked')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Clipboard blocked')).toBeInTheDocument());
     });
 });
 
@@ -539,7 +521,7 @@ describe('ProjectEnvSecretsModal — clipboard failure', () => {
 describe('ProjectEnvSecretsModal — value field onChange', () => {
     it('typing into the value field updates row value', async () => {
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('postgres://localhost/acme'));
         // The value input for DATABASE_URL is of type=password initially (not revealed).
@@ -547,7 +529,7 @@ describe('ProjectEnvSecretsModal — value field onChange', () => {
         const valueInput = screen.getByDisplayValue('postgres://localhost/acme');
         fireEvent.change(valueInput, { target: { value: 'postgres://new/db' } });
         await waitFor(() =>
-            expect(screen.getByDisplayValue('postgres://new/db')).toBeInTheDocument(),
+            expect(screen.getByDisplayValue('postgres://new/db')).toBeInTheDocument()
         );
     });
 });
@@ -564,13 +546,13 @@ describe('ProjectEnvSecretsModal — import invalid JSON structure', () => {
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const fileInput = document.querySelector(
-            'input[type="file"][accept*="json"]',
+            'input[type="file"][accept*="json"]'
         ) as HTMLInputElement;
         // An array is not a { KEY: value } object — parseJsonSecrets should throw.
         const file = new File(['[1,2,3]'], 'bad.json', { type: 'application/json' });
         await userEvent.upload(fileInput, file);
         await waitFor(() =>
-            expect(screen.getByText('Could not import secrets')).toBeInTheDocument(),
+            expect(screen.getByText('Could not import secrets')).toBeInTheDocument()
         );
     });
 
@@ -583,12 +565,12 @@ describe('ProjectEnvSecretsModal — import invalid JSON structure', () => {
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const fileInput = document.querySelector(
-            'input[type="file"][accept*="json"]',
+            'input[type="file"][accept*="json"]'
         ) as HTMLInputElement;
         const file = new File(['null'], 'null.json', { type: 'application/json' });
         await userEvent.upload(fileInput, file);
         await waitFor(() =>
-            expect(screen.getByText('Could not import secrets')).toBeInTheDocument(),
+            expect(screen.getByText('Could not import secrets')).toBeInTheDocument()
         );
     });
 
@@ -601,12 +583,12 @@ describe('ProjectEnvSecretsModal — import invalid JSON structure', () => {
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const fileInput = document.querySelector(
-            'input[type="file"][accept*="json"]',
+            'input[type="file"][accept*="json"]'
         ) as HTMLInputElement;
         const file = new File(['not json at all {{{'], 'broken.json', { type: 'application/json' });
         await userEvent.upload(fileInput, file);
         await waitFor(() =>
-            expect(screen.getByText('Could not import secrets')).toBeInTheDocument(),
+            expect(screen.getByText('Could not import secrets')).toBeInTheDocument()
         );
     });
 });
@@ -643,7 +625,7 @@ describe('ProjectEnvSecretsModal — onSave guard with errors', () => {
 describe('ProjectEnvSecretsModal — close resets search and revealAll', () => {
     it('reopening after search/revealAll clears both states', async () => {
         const { rerender } = renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         // Set a search value.
@@ -655,11 +637,16 @@ describe('ProjectEnvSecretsModal — close resets search and revealAll', () => {
         expect(screen.getByRole('button', { name: /Hide all/i })).toBeInTheDocument();
         // Now close the modal (open=false triggers the effect).
         rerender(
-            <ProjectEnvSecretsModal open={false} project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal
+                open={false}
+                project={project}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         // Reopen.
         rerender(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         // Search should be cleared — DATABASE_URL visible again.
@@ -696,9 +683,7 @@ describe('ProjectEnvSecretsModal — copy with empty-key row', () => {
         // Click Copy on the new row (last Copy button).
         const copyBtns = screen.getAllByLabelText(/^Copy$/);
         await userEvent.click(copyBtns[copyBtns.length - 1]!);
-        await waitFor(() =>
-            expect(screen.getByText('value copied')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('value copied')).toBeInTheDocument());
     });
 });
 
@@ -708,15 +693,17 @@ describe('ProjectEnvSecretsModal — save pending spinner', () => {
     it('shows CircularProgress and "Saving…" text while save is pending', async () => {
         // Return a never-resolving promise so isPending stays true long enough to assert.
         let resolveSave!: () => void;
-        const pendingPromise = new Promise<void>((res) => { resolveSave = res; });
+        const pendingPromise = new Promise<void>((res) => {
+            resolveSave = res;
+        });
         server.use(
             http.put(`${BASE}/projects/p1/env`, async () => {
                 await pendingPromise;
                 return HttpResponse.json({ vars: [] });
-            }),
+            })
         );
         renderWithProviders(
-            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />,
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         // Make the form dirty so Save is enabled.
@@ -726,7 +713,7 @@ describe('ProjectEnvSecretsModal — save pending spinner', () => {
         await userEvent.click(saveBtn);
         // The save is now pending — button text should flip to "Saving…".
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Saving/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /Saving/i })).toBeInTheDocument()
         );
         // Clean up: resolve so the component doesn't hang.
         resolveSave();
@@ -745,7 +732,7 @@ describe('ProjectEnvSecretsModal — import skipped non-string values only', () 
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         const fileInput = document.querySelector(
-            'input[type="file"][accept*="json"]',
+            'input[type="file"][accept*="json"]'
         ) as HTMLInputElement;
         // Two valid keys with good names but non-string (number) values + one good string key.
         const payload = JSON.stringify({ GOOD_KEY: 'val', NUM_ONE: 1, NUM_TWO: 2 });
@@ -781,14 +768,14 @@ function mountStored() {
         http.get(`${BASE}/projects/p1/env/:key/value`, ({ params }) =>
             params['key'] === 'API_SECRET'
                 ? HttpResponse.json({ key: 'API_SECRET', value: 'sup3rs3cr3t' })
-                : HttpResponse.json({ key: 'DATABASE_URL', value: 'postgres://prod/acme' }),
-        ),
+                : HttpResponse.json({ key: 'DATABASE_URL', value: 'postgres://prod/acme' })
+        )
     );
     return renderWithProviders(
         <>
             <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
             <Toast />
-        </>,
+        </>
     );
 }
 
@@ -814,7 +801,7 @@ describe('ProjectEnvSecretsModal — revealing stored secrets', () => {
 
         await userEvent.click(screen.getAllByLabelText(/^Hide$/)[0]!);
         await waitFor(() =>
-            expect(screen.queryByDisplayValue('postgres://prod/acme')).not.toBeInTheDocument(),
+            expect(screen.queryByDisplayValue('postgres://prod/acme')).not.toBeInTheDocument()
         );
     });
 
@@ -822,14 +809,14 @@ describe('ProjectEnvSecretsModal — revealing stored secrets', () => {
         server.use(
             http.get(`${BASE}/projects/p1/env`, () => HttpResponse.json(storedOnly)),
             http.get(`${BASE}/projects/p1/env/:key/value`, () =>
-                HttpResponse.json({ error: 'Secret store is locked' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Secret store is locked' }, { status: 500 })
+            )
         );
         renderWithProviders(
             <>
                 <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
                 <Toast />
-            </>,
+            </>
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         await userEvent.click(screen.getAllByLabelText(/^Reveal$/)[0]!);
@@ -853,14 +840,14 @@ describe('ProjectEnvSecretsModal — revealing stored secrets', () => {
             http.get(`${BASE}/projects/p1/env/:key/value`, ({ params }) =>
                 params['key'] === 'API_SECRET'
                     ? HttpResponse.json({ error: 'nope' }, { status: 500 })
-                    : HttpResponse.json({ key: 'DATABASE_URL', value: 'postgres://prod/acme' }),
-            ),
+                    : HttpResponse.json({ key: 'DATABASE_URL', value: 'postgres://prod/acme' })
+            )
         );
         renderWithProviders(
             <>
                 <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
                 <Toast />
-            </>,
+            </>
         );
         await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
         await userEvent.click(screen.getByRole('button', { name: /Reveal all/i }));

@@ -54,30 +54,61 @@ function StepRow({ step, onOpen }: { step: IWorkflowRunStep; onOpen: () => void 
             <Box sx={{ width: 10, height: 10, mt: 1, borderRadius: '50%', background: tone.dot }} />
             <Box sx={{ minWidth: 0 }}>
                 <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, flexWrap: 'wrap' }}>
-                    <Typography sx={{ fontSize: 13.5, fontWeight: 600, color: ATLAS_PALETTE.slate }}>
+                    <Typography
+                        sx={{ fontSize: 13.5, fontWeight: 600, color: ATLAS_PALETTE.slate }}
+                    >
                         {step.agent_name ?? step.agent_id}
                     </Typography>
                     <Typography sx={{ fontSize: 11, fontWeight: 600, color: tone.fg }}>
                         {step.status.replace('_', ' ')}
                     </Typography>
                     {step.outcome_kind && (
-                        <Typography sx={{ fontSize: 11, fontFamily: TYPOGRAPHY.fontFamilyMono, color: ATLAS_PALETTE.slate60 }}>
+                        <Typography
+                            sx={{
+                                fontSize: 11,
+                                fontFamily: TYPOGRAPHY.fontFamilyMono,
+                                color: ATLAS_PALETTE.slate60,
+                            }}
+                        >
                             outcome: {step.outcome_kind}
                         </Typography>
                     )}
                 </Box>
                 {note && (
-                    <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate70, mt: 1 }}>{note}</Typography>
+                    <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate70, mt: 1 }}>
+                        {note}
+                    </Typography>
                 )}
-                <Typography sx={{ fontSize: 11, fontFamily: TYPOGRAPHY.fontFamilyMono, color: ATLAS_PALETTE.slate60, mt: 1 }}>
-                    {[step.cli, step.model, step.effort && `${step.effort} effort`].filter(Boolean).join(' · ')}
+                <Typography
+                    sx={{
+                        fontSize: 11,
+                        fontFamily: TYPOGRAPHY.fontFamilyMono,
+                        color: ATLAS_PALETTE.slate60,
+                        mt: 1,
+                    }}
+                >
+                    {[step.cli, step.model, step.effort && `${step.effort} effort`]
+                        .filter(Boolean)
+                        .join(' · ')}
                 </Typography>
             </Box>
             <Box sx={{ textAlign: 'right' }}>
-                <Typography sx={{ fontSize: 12, fontFamily: TYPOGRAPHY.fontFamilyMono, color: ATLAS_PALETTE.slate }}>
+                <Typography
+                    sx={{
+                        fontSize: 12,
+                        fontFamily: TYPOGRAPHY.fontFamilyMono,
+                        color: ATLAS_PALETTE.slate,
+                    }}
+                >
                     {durationLabel(step.started_at, step.completed_at)}
                 </Typography>
-                <Typography sx={{ fontSize: 11, fontFamily: TYPOGRAPHY.fontFamilyMono, color: ATLAS_PALETTE.slate60 }}>
+                <Typography
+                    sx={{
+                        fontSize: 11,
+                        fontFamily: TYPOGRAPHY.fontFamilyMono,
+                        color: ATLAS_PALETTE.slate60,
+                    }}
+                >
                     {formatCostUsd(step.total_cost_usd)}
                 </Typography>
             </Box>
@@ -108,11 +139,24 @@ function ChildRow({ child, onOpen }: { child: IWorkflowRunSummary; onOpen: () =>
             }}
         >
             <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ fontSize: 11, fontFamily: TYPOGRAPHY.fontFamilyMono, color: ATLAS_PALETTE.slate60 }}>
+                <Typography
+                    sx={{
+                        fontSize: 11,
+                        fontFamily: TYPOGRAPHY.fontFamilyMono,
+                        color: ATLAS_PALETTE.slate60,
+                    }}
+                >
                     {child.item_id}
                 </Typography>
                 <Typography
-                    sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    sx={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: ATLAS_PALETTE.slate,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                    }}
                 >
                     {child.item_title ?? 'Sub-task'}
                 </Typography>
@@ -162,7 +206,11 @@ function RunBanner({ run, itemPath }: { run: IWorkflowRunDetail; itemPath: strin
         );
     }
     if (run.status === 'error') {
-        return <Alert severity="error" sx={{ mb: 3 }}>The run stopped on an error. Check the failed step&apos;s log.</Alert>;
+        return (
+            <Alert severity="error" sx={{ mb: 3 }}>
+                The run stopped on an error. Check the failed step&apos;s log.
+            </Alert>
+        );
     }
     return null;
 }
@@ -185,7 +233,7 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
             runStates: nodeRunStates(run),
             delivery: workflows.find((w) => w.id === run.workflow_id) ?? null,
         }),
-        [agents, run, workflows],
+        [agents, run, workflows]
     );
     const itemPath = run.item_id ? itemPathIn(tree, run.item_id) : null;
     const live = run.status === 'running' || run.status === 'waiting_for_owner';
@@ -197,14 +245,33 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 3, flexWrap: 'wrap', mb: 3 }}>
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    justifyContent: 'space-between',
+                    gap: 3,
+                    flexWrap: 'wrap',
+                    mb: 3,
+                }}
+            >
                 <Box sx={{ minWidth: 0 }}>
                     <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate60 }}>
-                        <Link component={RouterLink} to="/workflows" underline="hover" color="inherit">
+                        <Link
+                            component={RouterLink}
+                            to="/workflows"
+                            underline="hover"
+                            color="inherit"
+                        >
                             Workflows
                         </Link>
                         {' / '}
-                        <Link component={RouterLink} to={`/workflows/${run.workflow_id}?tab=runs`} underline="hover" color="inherit">
+                        <Link
+                            component={RouterLink}
+                            to={`/workflows/${run.workflow_id}?tab=runs`}
+                            underline="hover"
+                            color="inherit"
+                        >
                             {run.workflow_name}
                         </Link>
                         {run.parent_workflow_run_id && (
@@ -229,7 +296,11 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
                     </Box>
                     <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1 }}>
                         {run.item_id && itemPath ? (
-                            <Link component={RouterLink} to={itemPath} sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono }}>
+                            <Link
+                                component={RouterLink}
+                                to={itemPath}
+                                sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono }}
+                            >
                                 {run.item_id}
                             </Link>
                         ) : (
@@ -243,13 +314,19 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
                         </Box>
                         {' · '}
                         <Box component="span" sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono }}>
-                            {durationLabel(run.started_at, run.finished_at)} · {formatCostUsd(run.total_cost_usd)}
-                            {run.loop_count > 0 ? ` · ${run.loop_count} loop${run.loop_count === 1 ? '' : 's'}` : ''}
+                            {durationLabel(run.started_at, run.finished_at)} ·{' '}
+                            {formatCostUsd(run.total_cost_usd)}
+                            {run.loop_count > 0
+                                ? ` · ${run.loop_count} loop${run.loop_count === 1 ? '' : 's'}`
+                                : ''}
                         </Box>
                         {run.branch && (
                             <>
                                 {' · '}
-                                <Box component="span" sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono }}>
+                                <Box
+                                    component="span"
+                                    sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono }}
+                                >
                                     {run.branch}
                                 </Box>
                             </>
@@ -262,7 +339,13 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
                             variant="contained"
                             onClick={() => act(resume, 'resume')}
                             disabled={resume.isPending}
-                            sx={{ textTransform: 'none', fontWeight: 600, bgcolor: ATLAS_PALETTE.green, boxShadow: 'none', '&:hover': { bgcolor: ATLAS_PALETTE.greenDark, boxShadow: 'none' } }}
+                            sx={{
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                bgcolor: ATLAS_PALETTE.green,
+                                boxShadow: 'none',
+                                '&:hover': { bgcolor: ATLAS_PALETTE.greenDark, boxShadow: 'none' },
+                            }}
                         >
                             Resume
                         </Button>
@@ -279,7 +362,13 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
                         </Button>
                     )}
                     {run.pr_url && (
-                        <Button variant="outlined" href={run.pr_url} target="_blank" rel="noreferrer" sx={{ textTransform: 'none', fontWeight: 600 }}>
+                        <Button
+                            variant="outlined"
+                            href={run.pr_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            sx={{ textTransform: 'none', fontWeight: 600 }}
+                        >
                             Pull request
                         </Button>
                     )}
@@ -297,7 +386,12 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
             >
                 <Box sx={{ height: { xs: 360, md: 'calc(100vh - 280px)' }, minHeight: 360 }}>
                     <ReactFlowProvider>
-                        <WorkflowCanvas nodes={flow.nodes} edges={flow.edges} context={context} readOnly />
+                        <WorkflowCanvas
+                            nodes={flow.nodes}
+                            edges={flow.edges}
+                            context={context}
+                            readOnly
+                        />
                     </ReactFlowProvider>
                 </Box>
                 <Box
@@ -313,28 +407,51 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
                 >
                     {/* A Task run whose work so far is all in its sub-tasks has no steps of its own to list. */}
                     {(run.steps.length > 0 || run.children.length === 0) && (
-                        <Typography variant="overline" sx={{ display: 'block', px: 4, pt: 3, color: ATLAS_PALETTE.slate60 }}>
+                        <Typography
+                            variant="overline"
+                            sx={{ display: 'block', px: 4, pt: 3, color: ATLAS_PALETTE.slate60 }}
+                        >
                             Steps · {run.steps.length}
                         </Typography>
                     )}
-                    {run.steps.length === 0 ? (
-                        run.children.length === 0 && (
-                            <Typography sx={{ px: 4, py: 3, fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                                No steps have started yet.
-                            </Typography>
-                        )
-                    ) : (
-                        run.steps.map((s) => (
-                            <StepRow key={s.id} step={s} onOpen={() => navigate(`/agents/${s.agent_id}/runs/${s.id}`)} />
-                        ))
-                    )}
+                    {run.steps.length === 0
+                        ? run.children.length === 0 && (
+                              <Typography
+                                  sx={{ px: 4, py: 3, fontSize: 13, color: ATLAS_PALETTE.slate60 }}
+                              >
+                                  No steps have started yet.
+                              </Typography>
+                          )
+                        : run.steps.map((s) => (
+                              <StepRow
+                                  key={s.id}
+                                  step={s}
+                                  onOpen={() => navigate(`/agents/${s.agent_id}/runs/${s.id}`)}
+                              />
+                          ))}
                     {run.children.length > 0 && (
                         <>
-                            <Typography variant="overline" sx={{ display: 'block', px: 4, pt: 3, color: ATLAS_PALETTE.slate60 }}>
-                                Sub-tasks · {run.children.filter((c) => c.status === 'completed').length} of {run.children.length} done
+                            <Typography
+                                variant="overline"
+                                sx={{
+                                    display: 'block',
+                                    px: 4,
+                                    pt: 3,
+                                    color: ATLAS_PALETTE.slate60,
+                                }}
+                            >
+                                Sub-tasks ·{' '}
+                                {run.children.filter((c) => c.status === 'completed').length} of{' '}
+                                {run.children.length} done
                             </Typography>
                             {run.children.map((c) => (
-                                <ChildRow key={c.id} child={c} onOpen={() => navigate(`/workflows/${c.workflow_id}/runs/${c.id}`)} />
+                                <ChildRow
+                                    key={c.id}
+                                    child={c}
+                                    onOpen={() =>
+                                        navigate(`/workflows/${c.workflow_id}/runs/${c.id}`)
+                                    }
+                                />
                             ))}
                         </>
                     )}
@@ -359,7 +476,9 @@ export function WorkflowRunDetail() {
     if (!run) {
         return (
             <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-                <Typography sx={{ fontSize: 16, color: ATLAS_PALETTE.slate60 }}>Workflow run not found.</Typography>
+                <Typography sx={{ fontSize: 16, color: ATLAS_PALETTE.slate60 }}>
+                    Workflow run not found.
+                </Typography>
             </Box>
         );
     }

@@ -83,16 +83,13 @@ export function RunNowDialog({ open, agent, onClose }: Props) {
                         mb: 3,
                     }}
                 >
-                    Starts a run with no item. It spawns immediately and streams output into
-                    the Runs tab. To run an agent on an item, assign the item to a workflow.
+                    Starts a run with no item. It spawns immediately and streams output into the
+                    Runs tab. To run an agent on an item, assign the item to a workflow.
                 </Typography>
 
                 {triggerRun.error && (
                     <Box sx={{ mb: 2 }}>
-                        <ApiErrorAlert
-                            error={triggerRun.error}
-                            contextLabel="Couldn't start run"
-                        />
+                        <ApiErrorAlert error={triggerRun.error} contextLabel="Couldn't start run" />
                     </Box>
                 )}
 
@@ -114,6 +111,7 @@ export function RunNowDialog({ open, agent, onClose }: Props) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 18 }}
                         >
                             visibility
@@ -140,6 +138,7 @@ export function RunNowDialog({ open, agent, onClose }: Props) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 18 }}
                         >
                             play_arrow

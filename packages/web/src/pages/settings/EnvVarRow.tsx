@@ -101,11 +101,7 @@ export function EnvVarRow({ env, value, onChange }: Props) {
                         (default — info)
                     </MenuItem>
                     {LOG_LEVELS.map((level) => (
-                        <MenuItem
-                            key={level}
-                            value={level}
-                            sx={{ fontFamily: MONO, fontSize: 13 }}
-                        >
+                        <MenuItem key={level} value={level} sx={{ fontFamily: MONO, fontSize: 13 }}>
                             {level}
                         </MenuItem>
                     ))}
@@ -124,7 +120,10 @@ export function EnvVarRow({ env, value, onChange }: Props) {
                                 <InputAdornment position="end">
                                     {isSecret && (
                                         <Tooltip title={revealed ? 'Hide' : 'Reveal'}>
-                                            <IconButton size="small" onClick={() => setRevealed((v) => !v)}>
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => setRevealed((v) => !v)}
+                                            >
                                                 {revealed ? (
                                                     <VisibilityOffOutlined sx={{ fontSize: 16 }} />
                                                 ) : (

@@ -34,7 +34,7 @@ export function RowActionMenu({ ariaLabel, items }: RowActionMenuProps) {
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const close = () => setAnchor(null);
     const visible = items.filter(
-        (i): i is RowActionMenuItem => i !== false && i !== null && i !== undefined,
+        (i): i is RowActionMenuItem => i !== false && i !== null && i !== undefined
     );
 
     return (

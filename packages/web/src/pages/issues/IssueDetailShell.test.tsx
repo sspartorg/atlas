@@ -15,14 +15,17 @@ describe('IssueDetailShell', () => {
     it('renders title and breadcrumbs', () => {
         renderWithProviders(
             <IssueDetailShell
-                breadcrumbs={[{ label: 'Tasks', href: '/tasks' }, { label: 'S1', mono: true }]}
+                breadcrumbs={[
+                    { label: 'Tasks', href: '/tasks' },
+                    { label: 'S1', mono: true },
+                ]}
                 title="My task"
                 onTitleSave={vi.fn().mockResolvedValue(undefined)}
                 issueType="task"
                 rightRail={<div>rail</div>}
             >
                 <div>body</div>
-            </IssueDetailShell>,
+            </IssueDetailShell>
         );
         expect(screen.getByText('My task')).toBeInTheDocument();
         expect(screen.getByText('body')).toBeInTheDocument();
@@ -50,7 +53,7 @@ describe('IssueDetailShell', () => {
                     }
                 />
             </Routes>,
-            { initialEntries: ['/sub-tasks/S1'] },
+            { initialEntries: ['/sub-tasks/S1'] }
         );
         expect(screen.getByText('My task')).toBeInTheDocument();
         // Click the "Tasks" breadcrumb which has href="/tasks"
@@ -61,7 +64,10 @@ describe('IssueDetailShell', () => {
     it('renders headerExtras when provided', () => {
         renderWithProviders(
             <IssueDetailShell
-                breadcrumbs={[{ label: 'Tasks', href: '/tasks' }, { label: 'S1', mono: true }]}
+                breadcrumbs={[
+                    { label: 'Tasks', href: '/tasks' },
+                    { label: 'S1', mono: true },
+                ]}
                 title="My task"
                 onTitleSave={vi.fn().mockResolvedValue(undefined)}
                 issueType="task"
@@ -69,7 +75,7 @@ describe('IssueDetailShell', () => {
                 rightRail={<div>rail</div>}
             >
                 <div>body</div>
-            </IssueDetailShell>,
+            </IssueDetailShell>
         );
         expect(screen.getByTestId('extras')).toBeInTheDocument();
     });
@@ -77,7 +83,10 @@ describe('IssueDetailShell', () => {
     it('renders actions when provided (covers actions truthy branch, line 129)', () => {
         renderWithProviders(
             <IssueDetailShell
-                breadcrumbs={[{ label: 'Tasks', href: '/tasks' }, { label: 'S1', mono: true }]}
+                breadcrumbs={[
+                    { label: 'Tasks', href: '/tasks' },
+                    { label: 'S1', mono: true },
+                ]}
                 title="Task with actions"
                 onTitleSave={vi.fn().mockResolvedValue(undefined)}
                 issueType="task"
@@ -85,7 +94,7 @@ describe('IssueDetailShell', () => {
                 rightRail={<div>rail</div>}
             >
                 <div>body</div>
-            </IssueDetailShell>,
+            </IssueDetailShell>
         );
         expect(screen.getByText('Delete')).toBeInTheDocument();
     });
@@ -100,7 +109,7 @@ describe('IssueDetailShell', () => {
                 rightRail={<div>rail</div>}
             >
                 <div>body</div>
-            </IssueDetailShell>,
+            </IssueDetailShell>
         );
         // Click the breadcrumb that has no href — should not throw
         fireEvent.click(screen.getByText('No-href crumb'));
@@ -128,7 +137,7 @@ describe('IssueDetailShell', () => {
                 rightRail={<div>rail</div>}
             >
                 <div>children</div>
-            </IssueDetailShell>,
+            </IssueDetailShell>
         );
         expect(screen.getByText('Projects')).toBeInTheDocument();
         expect(screen.getByText('Alpha')).toBeInTheDocument();

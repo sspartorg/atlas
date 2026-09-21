@@ -36,7 +36,7 @@ describe('DashboardEmptyState', () => {
                 <Route path="/" element={<DashboardEmptyState ownerFirstName="Bob" />} />
                 <Route path="/agents/marketplace" element={<div>Marketplace page</div>} />
             </Routes>,
-            { initialEntries: ['/'] },
+            { initialEntries: ['/'] }
         );
         fireEvent.click(await screen.findByText('Agents → Marketplace'));
         expect(await screen.findByText('Marketplace page')).toBeInTheDocument();

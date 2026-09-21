@@ -18,7 +18,7 @@ describe('ErrorBoundary', () => {
         render(
             <ErrorBoundary pageName="X">
                 <Boom />
-            </ErrorBoundary>,
+            </ErrorBoundary>
         );
         expect(screen.getByText(/X failed to load/)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
@@ -30,7 +30,7 @@ describe('ErrorBoundary', () => {
         render(
             <ErrorBoundary>
                 <Boom />
-            </ErrorBoundary>,
+            </ErrorBoundary>
         );
         expect(screen.getByText('Something went wrong')).toBeInTheDocument();
         spy.mockRestore();
@@ -41,7 +41,7 @@ describe('ErrorBoundary', () => {
         render(
             <ErrorBoundary>
                 <Boom />
-            </ErrorBoundary>,
+            </ErrorBoundary>
         );
         expect(screen.getByText('Something went wrong')).toBeInTheDocument();
         // Click Try again — this calls setState({ error: null })

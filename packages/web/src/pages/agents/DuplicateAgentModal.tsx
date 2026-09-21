@@ -164,9 +164,7 @@ export function DuplicateAgentModal({ open, agent, existingIds, onClose }: Props
                     ) : view === 'error' ? (
                         <ErrorOutline sx={{ color: ATLAS_PALETTE.error, fontSize: 22 }} />
                     ) : (
-                        <ContentCopyRounded
-                            sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 20 }}
-                        />
+                        <ContentCopyRounded sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 20 }} />
                     )}
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -221,6 +219,7 @@ export function DuplicateAgentModal({ open, agent, existingIds, onClose }: Props
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 20, color: agent.accent_color }}
                         >
                             {view_.glyph}
@@ -267,7 +266,8 @@ export function DuplicateAgentModal({ open, agent, existingIds, onClose }: Props
                                 mt: 0.5,
                             }}
                         >
-                            {agent.cli} · {agent.model} · {agent.effort} effort · prompt v{agent.prompt_version}
+                            {agent.cli} · {agent.model} · {agent.effort} effort · prompt v
+                            {agent.prompt_version}
                         </Typography>
                     </Box>
                 </Box>
@@ -343,28 +343,28 @@ export function DuplicateAgentModal({ open, agent, existingIds, onClose }: Props
                         </Box>
 
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 2.5 }}>
-                            {[
-                                'Prompt history starts fresh',
-                                'Allowed tools start empty',
-                            ].map((t) => (
-                                <Box
-                                    key={t}
-                                    sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}
-                                >
+                            {['Prompt history starts fresh', 'Allowed tools start empty'].map(
+                                (t) => (
                                     <Box
-                                        component="span"
-                                        className="material-symbols-rounded"
-                                        sx={{ fontSize: 14, color: ATLAS_PALETTE.slate40 }}
+                                        key={t}
+                                        sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}
                                     >
-                                        radio_button_unchecked
+                                        <Box
+                                            component="span"
+                                            className="material-symbols-rounded"
+                                            aria-hidden="true"
+                                            sx={{ fontSize: 14, color: ATLAS_PALETTE.slate40 }}
+                                        >
+                                            radio_button_unchecked
+                                        </Box>
+                                        <Typography
+                                            sx={{ fontSize: 12, color: ATLAS_PALETTE.slate70 }}
+                                        >
+                                            {t}
+                                        </Typography>
                                     </Box>
-                                    <Typography
-                                        sx={{ fontSize: 12, color: ATLAS_PALETTE.slate70 }}
-                                    >
-                                        {t}
-                                    </Typography>
-                                </Box>
-                            ))}
+                                )
+                            )}
                         </Box>
 
                         <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end', gap: 1.5 }}>

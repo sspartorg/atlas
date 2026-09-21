@@ -80,6 +80,7 @@ export function TaskReposRow({ projectId, repoIds, onChange }: Props) {
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 16, color: ATLAS_PALETTE.slate40 }}
                     >
                         arrow_drop_down

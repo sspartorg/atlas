@@ -40,10 +40,7 @@ const RUN_STATUS_LABEL: Record<RunStatus, string> = {
 // distinguish a no-item run with no project either ("freedom") from
 // project-scope (Theme 09b ai-readiness) from
 // item-attached on the way to the row renderer.
-type RunScope =
-    | { kind: 'item'; text: string }
-    | { kind: 'freedom' }
-    | { kind: 'project' };
+type RunScope = { kind: 'item'; text: string } | { kind: 'freedom' } | { kind: 'project' };
 
 function runScope(run: IAgentRun): RunScope {
     if (run.issue_id && run.issue_id !== '') {
@@ -103,6 +100,7 @@ export function RunsTabContent({ agent, runs }: Props) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 28, color: ATLAS_PALETTE.slate40 }}
                         >
                             history
@@ -132,6 +130,7 @@ export function RunsTabContent({ agent, runs }: Props) {
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 18 }}
                             >
                                 play_arrow
@@ -272,6 +271,7 @@ export function RunsTabContent({ agent, runs }: Props) {
                                 <Box
                                     component="span"
                                     className="material-symbols-rounded"
+                                    aria-hidden="true"
                                     sx={{ fontSize: 12 }}
                                 >
                                     schedule
@@ -314,6 +314,7 @@ export function RunsTabContent({ agent, runs }: Props) {
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 18 }}
                             >
                                 delete
@@ -326,6 +327,7 @@ export function RunsTabContent({ agent, runs }: Props) {
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 18, color: ATLAS_PALETTE.slate40, flexShrink: 0 }}
                     >
                         chevron_right
@@ -479,8 +481,8 @@ export function RunsTabContent({ agent, runs }: Props) {
                         <Box component="strong" sx={{ color: ATLAS_PALETTE.slate }}>
                             ready
                         </Box>{' '}
-                        and clear the assignee so the next dispatcher tick can pick it up
-                        again. Any reviewer child run is removed too.
+                        and clear the assignee so the next dispatcher tick can pick it up again. Any
+                        reviewer child run is removed too.
                     </Typography>
                     {pendingDelete?.issue_id ? (
                         <Typography

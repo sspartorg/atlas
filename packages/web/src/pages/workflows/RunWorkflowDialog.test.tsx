@@ -22,10 +22,15 @@ describe('RunWorkflowDialog', () => {
                     tasks: [
                         makeTask({ id: 'ATL-1', title: 'Ready elsewhere', status: 'ready' }),
                         makeTask({ id: 'ATL-2', title: 'Still draft', status: 'draft' }),
-                        makeTask({ id: 'ATL-3', title: 'Queued here', status: 'ready', workflow_id: workflow.id }),
+                        makeTask({
+                            id: 'ATL-3',
+                            title: 'Queued here',
+                            status: 'ready',
+                            workflow_id: workflow.id,
+                        }),
                     ],
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<RunWorkflowDialog workflow={workflow} onClose={vi.fn()} />);
 

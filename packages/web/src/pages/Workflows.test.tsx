@@ -36,15 +36,19 @@ function mount(workflows = [makeWorkflow()]) {
     server.use(
         http.get(`${BASE}/workflows`, () => HttpResponse.json(workflows)),
         http.get(`${BASE}/workflows/templates`, () => HttpResponse.json([DEV_TEMPLATE])),
-        http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])),
-        http.get(`${BASE}/agents`, () => HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'Coder' })])),
+        http.get(`${BASE}/projects`, () =>
+            HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])
+        ),
+        http.get(`${BASE}/agents`, () =>
+            HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'Coder' })])
+        )
     );
     return renderWithProviders(
         <Routes>
             <Route path="/workflows" element={<Workflows />} />
             <Route path="/workflows/:id" element={<div>builder page</div>} />
         </Routes>,
-        { initialEntries: ['/workflows'] },
+        { initialEntries: ['/workflows'] }
     );
 }
 
@@ -54,9 +58,20 @@ describe('Workflows page', () => {
     });
 
     it('renders a card per workflow', async () => {
-        mount([makeWorkflow(), makeWorkflow({ id: 'wf-2', name: 'Planning', status: 'inactive', input_kind: 'none', trigger: 'manual' })]);
+        mount([
+            makeWorkflow(),
+            makeWorkflow({
+                id: 'wf-2',
+                name: 'Planning',
+                status: 'inactive',
+                input_kind: 'none',
+                trigger: 'manual',
+            }),
+        ]);
         expect(screen.getByRole('heading', { name: 'Workflows' })).toBeInTheDocument();
-        const dev = (await screen.findByText('Development')).closest('[role="button"]') as HTMLElement;
+        const dev = (await screen.findByText('Development')).closest(
+            '[role="button"]'
+        ) as HTMLElement;
         expect(within(dev).getByText('Active')).toBeInTheDocument();
         expect(within(dev).getByText('On item ready')).toBeInTheDocument();
         expect(within(dev).getByText('Per Task')).toBeInTheDocument();
@@ -79,7 +94,7 @@ describe('Workflows page', () => {
             http.post(`${BASE}/workflows/from-template`, async ({ request }) => {
                 sent = await request.json();
                 return HttpResponse.json(makeWorkflow({ id: 'wf-new' }), { status: 201 });
-            }),
+            })
         );
 
         await user.click(await screen.findByRole('button', { name: 'New workflow' }));
@@ -94,7 +109,9 @@ describe('Workflows page', () => {
         // Uninstalled catalog agents read as names and are flagged for install.
         expect(within(template).getByText('Reviewer')).toBeInTheDocument();
         await user.click(template);
-        expect(within(dialog).getByText(/Installs from the marketplace: Reviewer/)).toBeInTheDocument();
+        expect(
+            within(dialog).getByText(/Installs from the marketplace: Reviewer/)
+        ).toBeInTheDocument();
 
         await user.click(create);
         await waitFor(() => expect(sent).toEqual({ template_id: 'dev', project_id: 'p1' }));
@@ -138,7 +155,7 @@ describe('Workflows page', () => {
         expect(
             within(await screen.findByRole('dialog')).getByRole('button', {
                 name: 'Create workflow',
-            }),
+            })
         ).toBeInTheDocument();
     });
 
@@ -163,12 +180,19 @@ describe('Workflows page', () => {
         isMobile = true;
         mount([makeWorkflow()]);
         await screen.findByText('Development');
-        const fab = screen.getByRole('button', { name: 'New workflow' });
+        // Both the header button and the FAB are named "New workflow" — the
+        // header one used to be "addNew workflow" only because its icon
+        // ligature leaked into the name (G-015), which is not something to
+        // rely on. jsdom applies no media query, so the header button is
+        // still in the tree here even though a phone hides it with CSS.
+        // `getByLabelText` matches the FAB's explicit aria-label and not the
+        // header button, which is named by its text content.
+        const fab = screen.getByLabelText('New workflow');
         await userEvent.click(fab);
         expect(
             within(await screen.findByRole('dialog')).getByRole('button', {
                 name: 'Create workflow',
-            }),
+            })
         ).toBeInTheDocument();
     });
 });

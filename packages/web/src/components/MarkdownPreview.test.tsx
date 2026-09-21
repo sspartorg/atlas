@@ -11,7 +11,9 @@ describe('MarkdownPreview', () => {
 
     it('renders h1/h2/h3 + paragraph + bullets', () => {
         renderWithProviders(
-            <MarkdownPreview source={'# Title\n## Subtitle\n### Inner\n\nbody paragraph\n\n- one\n- two'} />,
+            <MarkdownPreview
+                source={'# Title\n## Subtitle\n### Inner\n\nbody paragraph\n\n- one\n- two'}
+            />
         );
         expect(screen.getByText('Title')).toBeInTheDocument();
         expect(screen.getByText('Subtitle')).toBeInTheDocument();
@@ -22,9 +24,7 @@ describe('MarkdownPreview', () => {
     });
 
     it('renders inline code, bold, italic', () => {
-        renderWithProviders(
-            <MarkdownPreview source={'some `code` and **bold** and *italic*'} />,
-        );
+        renderWithProviders(<MarkdownPreview source={'some `code` and **bold** and *italic*'} />);
         expect(screen.getByText('code')).toBeInTheDocument();
         expect(screen.getByText('bold')).toBeInTheDocument();
         expect(screen.getByText('italic')).toBeInTheDocument();
@@ -36,7 +36,7 @@ describe('MarkdownPreview', () => {
                 source={
                     'See [run abc12345](/agents/agent-x/runs/abc12345-full-uuid) or [docs](https://example.com).'
                 }
-            />,
+            />
         );
         const internal = screen.getByText('run abc12345').closest('a');
         expect(internal).toHaveAttribute('href', '/agents/agent-x/runs/abc12345-full-uuid');
@@ -62,9 +62,7 @@ describe('MarkdownPreview', () => {
 
     it('renders a bullet list followed immediately by a heading (flushBullets on h2)', () => {
         // Exercises flushBullets() called when h2 is encountered without blank line
-        renderWithProviders(
-            <MarkdownPreview source={'- item A\n- item B\n## After bullets'} />,
-        );
+        renderWithProviders(<MarkdownPreview source={'- item A\n- item B\n## After bullets'} />);
         expect(screen.getByText('item A')).toBeInTheDocument();
         expect(screen.getByText('item B')).toBeInTheDocument();
         expect(screen.getByText('After bullets')).toBeInTheDocument();
@@ -98,7 +96,9 @@ describe('MarkdownPreview', () => {
     });
 
     it('renders > lines as one quote block that keeps its line breaks', () => {
-        const { container } = renderWithProviders(<MarkdownPreview source={'> first line\n>\n> **Owner** · now\nafter'} />);
+        const { container } = renderWithProviders(
+            <MarkdownPreview source={'> first line\n>\n> **Owner** · now\nafter'} />
+        );
         const quote = container.querySelector('blockquote');
         expect(quote?.textContent).toBe('first line\n\nOwner · now');
         expect(screen.getByText('after').closest('blockquote')).toBeNull();

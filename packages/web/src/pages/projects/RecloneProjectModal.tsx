@@ -350,7 +350,9 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                                                         ? `1px solid ${ATLAS_PALETTE.slate06}`
                                                         : 'none',
                                                 bgcolor:
-                                                    i % 2 === 0 ? ATLAS_PALETTE.white : ATLAS_PALETTE.slate08,
+                                                    i % 2 === 0
+                                                        ? ATLAS_PALETTE.white
+                                                        : ATLAS_PALETTE.slate08,
                                             }}
                                         >
                                             <Typography

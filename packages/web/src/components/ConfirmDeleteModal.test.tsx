@@ -13,7 +13,7 @@ describe('ConfirmDeleteModal', () => {
                 entityTitle="Task A"
                 onConfirm={() => Promise.resolve()}
                 onClose={() => undefined}
-            />,
+            />
         );
         expect(screen.getByText(/Delete this task\?/i)).toBeInTheDocument();
         expect(screen.getByText('Task A')).toBeInTheDocument();
@@ -29,7 +29,7 @@ describe('ConfirmDeleteModal', () => {
                 entityTitle="Sub-task A"
                 onConfirm={onConfirm}
                 onClose={onClose}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /Delete sub-task/i }));
         await waitFor(() => expect(onConfirm).toHaveBeenCalled());
@@ -45,7 +45,7 @@ describe('ConfirmDeleteModal', () => {
                 entityTitle="E1"
                 onConfirm={onConfirm}
                 onClose={() => undefined}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /Delete task/i }));
         expect(await screen.findByText('nope')).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe('ConfirmDeleteModal', () => {
                 entityTitle="T"
                 onConfirm={() => Promise.resolve()}
                 onClose={onClose}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
         expect(onClose).toHaveBeenCalled();
@@ -75,7 +75,7 @@ describe('ConfirmDeleteModal', () => {
                 entityTitle="S1"
                 onConfirm={() => Promise.resolve()}
                 onClose={onClose}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /Close/i }));
         expect(onClose).toHaveBeenCalled();
@@ -90,7 +90,7 @@ describe('ConfirmDeleteModal', () => {
                 entityTitle="B1"
                 onConfirm={onConfirm}
                 onClose={() => undefined}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /Delete sub-task/i }));
         expect(await screen.findByText('plain string error')).toBeInTheDocument();
@@ -104,7 +104,7 @@ describe('ConfirmDeleteModal', () => {
                 entityTitle="My note"
                 onConfirm={() => Promise.resolve()}
                 onClose={() => undefined}
-            />,
+            />
         );
         expect(screen.getByText(/Delete this scratch tile\?/i)).toBeInTheDocument();
     });
@@ -114,7 +114,7 @@ describe('IssueDeleteAction', () => {
     it('shows the modal when the kebab menu Delete is clicked', async () => {
         const onDelete = vi.fn().mockResolvedValue(undefined);
         renderWithProviders(
-            <IssueDeleteAction entityKind="task" entityTitle="S1" onDelete={onDelete} />,
+            <IssueDeleteAction entityKind="task" entityTitle="S1" onDelete={onDelete} />
         );
         await userEvent.click(screen.getByRole('button', { name: /Task actions/i }));
         await userEvent.click(await screen.findByText(/Delete this task…/i));
@@ -130,7 +130,7 @@ describe('IssueDeleteAction', () => {
                 entityTitle="E1"
                 onDelete={onDelete}
                 onClone={onClone}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /Task actions/i }));
         const cloneItem = await screen.findByText(/Clone item…/i);
@@ -147,7 +147,7 @@ describe('IssueDeleteAction', () => {
                 entityTitle="S2"
                 onDelete={onDelete}
                 redirectTo="/tasks/ATL-1"
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /Sub-task actions/i }));
         await userEvent.click(await screen.findByText(/Delete this sub-task…/i));

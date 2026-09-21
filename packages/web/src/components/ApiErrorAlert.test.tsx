@@ -30,12 +30,12 @@ describe('ApiErrorAlert', () => {
             const { getByRole } = renderWithProviders(<ApiErrorAlert error={err} />);
             const alert = getByRole('alert');
             expect(alert.textContent ?? '').toMatch(TITLE_FOR[kind]);
-        },
+        }
     );
 
     it('falls back to String(error) for non-AtlasApiError throws', () => {
         const { getByRole } = renderWithProviders(
-            <ApiErrorAlert error={new Error('network down')} />,
+            <ApiErrorAlert error={new Error('network down')} />
         );
         const alert = getByRole('alert');
         expect(alert.textContent ?? '').toMatch(/network down/);
@@ -50,7 +50,7 @@ describe('ApiErrorAlert', () => {
     it('renders the contextLabel prefix when provided', () => {
         const err = new AtlasApiError('boom', 'not_found', 404);
         const { getByRole } = renderWithProviders(
-            <ApiErrorAlert error={err} contextLabel="Couldn't load" />,
+            <ApiErrorAlert error={err} contextLabel="Couldn't load" />
         );
         const alert = getByRole('alert');
         expect(alert.textContent ?? '').toMatch(/Couldn['']t load/);
@@ -89,7 +89,7 @@ describe('ApiErrorAlert', () => {
 
     it('renders contextLabel prefix for non-AtlasApiError', () => {
         const { getByRole } = renderWithProviders(
-            <ApiErrorAlert error={new Error('boom')} contextLabel="Load failed" />,
+            <ApiErrorAlert error={new Error('boom')} contextLabel="Load failed" />
         );
         const alert = getByRole('alert');
         expect(alert.textContent ?? '').toMatch(/Load failed: /);
@@ -98,7 +98,10 @@ describe('ApiErrorAlert', () => {
     it('renders actionSlot when cta is undefined', () => {
         const err = new AtlasApiError('too many', 'rate_limited', 429);
         const { getByTestId } = renderWithProviders(
-            <ApiErrorAlert error={err} actionSlot={<button data-testid="custom-action">Retry</button>} />,
+            <ApiErrorAlert
+                error={err}
+                actionSlot={<button data-testid="custom-action">Retry</button>}
+            />
         );
         expect(getByTestId('custom-action')).toBeInTheDocument();
     });

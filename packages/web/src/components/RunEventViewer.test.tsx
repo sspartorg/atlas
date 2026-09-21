@@ -10,11 +10,9 @@ import { RunEventViewer, type RunEventViewerProps } from './RunEventViewer.js';
 function renderViewer(
     content: string | null,
     source: 'agent-stream-json' | 'claude-pty' | 'copilot' = 'agent-stream-json',
-    overrides: Partial<RunEventViewerProps> = {},
+    overrides: Partial<RunEventViewerProps> = {}
 ) {
-    return renderWithProviders(
-        <RunEventViewer content={content} source={source} {...overrides} />,
-    );
+    return renderWithProviders(<RunEventViewer content={content} source={source} {...overrides} />);
 }
 
 // ------------------------------------------------------------------
@@ -58,7 +56,10 @@ describe('RunEventViewer — tab switching', () => {
     });
 
     it('can switch from Timeline to Raw text by clicking the tab', () => {
-        const line = JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Hi' }] } });
+        const line = JSON.stringify({
+            type: 'assistant',
+            message: { content: [{ type: 'text', text: 'Hi' }] },
+        });
         renderViewer(line, 'agent-stream-json');
         fireEvent.click(screen.getByText('Raw text'));
         // Raw text view shows the raw content
@@ -119,7 +120,9 @@ describe('RunEventViewer — agent-stream-json events', () => {
     it('renders tool_result with array content', () => {
         const line = JSON.stringify({
             type: 'user',
-            message: { content: [{ type: 'tool_result', content: [{ type: 'text', text: 'result' }] }] },
+            message: {
+                content: [{ type: 'tool_result', content: [{ type: 'text', text: 'result' }] }],
+            },
         });
         renderViewer(line, 'agent-stream-json');
         expect(screen.getAllByText(/tool_result/).length).toBeGreaterThan(0);
@@ -149,7 +152,9 @@ describe('RunEventViewer — agent-stream-json events', () => {
     it('marks events with atlas-api error as error color (hasApiError=true)', () => {
         const line = JSON.stringify({
             type: 'user',
-            message: { content: [{ type: 'tool_result', content: '[atlas-api-422] validation failed' }] },
+            message: {
+                content: [{ type: 'tool_result', content: '[atlas-api-422] validation failed' }],
+            },
         });
         renderViewer(line, 'agent-stream-json');
         // Event still renders; the error color is a style change, just verify it renders
@@ -158,7 +163,9 @@ describe('RunEventViewer — agent-stream-json events', () => {
 
     it('handles non-JSON line as a text event', () => {
         renderViewer('[stderr] process exited with code 1', 'agent-stream-json');
-        expect(screen.getAllByText('[stderr] process exited with code 1').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('[stderr] process exited with code 1').length).toBeGreaterThan(
+            0
+        );
     });
 
     it('marks [stderr] lines as stderr tone', () => {
@@ -256,7 +263,11 @@ describe('RunEventViewer — claude-pty events', () => {
     });
 
     it('renders queue-operation event', () => {
-        const line = JSON.stringify({ type: 'queue-operation', operation: 'append', content: 'New task' });
+        const line = JSON.stringify({
+            type: 'queue-operation',
+            operation: 'append',
+            content: 'New task',
+        });
         renderViewer(line, 'claude-pty');
         expect(screen.getAllByText('queue-operation').length).toBeGreaterThan(0);
     });
@@ -280,7 +291,10 @@ describe('RunEventViewer — claude-pty events', () => {
 
 describe('RunEventViewer — copilot events', () => {
     it('defaults to Raw text mode for copilot', () => {
-        const line = JSON.stringify({ type: 'assistant.message', data: { content: 'Hello', outputTokens: 100 } });
+        const line = JSON.stringify({
+            type: 'assistant.message',
+            data: { content: 'Hello', outputTokens: 100 },
+        });
         renderViewer(line, 'copilot');
         // Raw text mode: shows raw content
         expect(screen.getByText(line)).toBeInTheDocument();
@@ -467,7 +481,10 @@ describe('RunEventViewer — event selection', () => {
 
     it('multiple events — clicking different rows shows different detail', () => {
         const lines = [
-            JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'first' }] } }),
+            JSON.stringify({
+                type: 'assistant',
+                message: { content: [{ type: 'text', text: 'first' }] },
+            }),
             '[stderr] err line',
         ].join('\n');
         renderViewer(lines, 'agent-stream-json');

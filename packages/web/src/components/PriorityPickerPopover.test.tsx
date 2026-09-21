@@ -11,7 +11,7 @@ describe('PriorityPickerPopover', () => {
                 onClose={vi.fn()}
                 current="normal"
                 onPick={vi.fn()}
-            />,
+            />
         );
     });
 });

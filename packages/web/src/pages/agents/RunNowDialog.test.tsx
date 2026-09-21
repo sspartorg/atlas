@@ -43,7 +43,7 @@ describe('RunNowDialog', () => {
             http.post(`${BASE}/run`, async ({ request }) => {
                 body = await request.json();
                 return HttpResponse.json({ runId: 'run-abc123' });
-            }),
+            })
         );
         const onClose = vi.fn();
         renderWithProviders(<RunNowDialog agent={scout} open onClose={onClose} />);
@@ -56,8 +56,8 @@ describe('RunNowDialog', () => {
         server.use(
             ...defaultHandlers,
             http.post(`${BASE}/run`, () =>
-                HttpResponse.json({ error: 'Agent busy' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Agent busy' }, { status: 500 })
+            )
         );
         const onClose = vi.fn();
         renderWithProviders(<RunNowDialog agent={scout} open onClose={onClose} />);
@@ -72,12 +72,12 @@ describe('RunNowDialog', () => {
             http.post(`${BASE}/run`, async () => {
                 await delay(50);
                 return HttpResponse.json({ runId: 'run-pending' });
-            }),
+            })
         );
         renderWithProviders(<RunNowDialog agent={scout} open onClose={() => {}} />);
         fireEvent.click(await screen.findByRole('button', { name: /Run now/i }));
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Starting…/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /Starting…/i })).toBeInTheDocument()
         );
     });
 
@@ -96,7 +96,7 @@ describe('RunNowDialog', () => {
                     guardrails_count: 0,
                     sections: ['System'],
                 });
-            }),
+            })
         );
         renderWithProviders(<RunNowDialog agent={scout} open onClose={() => {}} />);
         await userEvent.click(await screen.findByRole('button', { name: /Preview prompt/i }));
@@ -107,13 +107,13 @@ describe('RunNowDialog', () => {
         server.use(
             ...defaultHandlers,
             http.post(`${BASE}/agents/agent-scout/compile-prompt`, () =>
-                HttpResponse.json({ error: 'Compile failed' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Compile failed' }, { status: 500 })
+            )
         );
         renderWithProviders(<RunNowDialog agent={scout} open onClose={() => {}} />);
         await userEvent.click(await screen.findByRole('button', { name: /Preview prompt/i }));
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Preview prompt/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /Preview prompt/i })).not.toBeDisabled()
         );
     });
 
@@ -124,15 +124,15 @@ describe('RunNowDialog', () => {
                     { cli: 'claude', binary: 'claude', available: true, version: '1.0.0' },
                     { cli: 'copilot', binary: 'copilot', available: false, version: null },
                     { cli: 'ollama', binary: 'claude', available: true, version: '1.0.0' },
-                ]),
+                ])
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(
-            <RunNowDialog agent={makeAgent({ cli: 'copilot' })} open onClose={() => {}} />,
+            <RunNowDialog agent={makeAgent({ cli: 'copilot' })} open onClose={() => {}} />
         );
         expect(
-            await screen.findByText(/copilot is not installed on this machine/),
+            await screen.findByText(/copilot is not installed on this machine/)
         ).toBeInTheDocument();
     });
 });

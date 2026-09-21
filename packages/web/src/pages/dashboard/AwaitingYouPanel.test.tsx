@@ -20,12 +20,7 @@ describe('AwaitingYouPanel', () => {
     });
 
     it('renders rows', () => {
-        renderWithProviders(
-            <AwaitingYouPanel
-                rows={[makeRow()]}
-                isLoading={false}
-            />,
-        );
+        renderWithProviders(<AwaitingYouPanel rows={[makeRow()]} isLoading={false} />);
         expect(screen.getByText('A login flow')).toBeInTheDocument();
     });
 
@@ -36,10 +31,12 @@ describe('AwaitingYouPanel', () => {
 
     it('filter dropdown: selecting "Sub-tasks" filters to only sub-task items (covers filter !== all branch)', async () => {
         const taskRow = makeRow({ id: 'ATL-T1', issue_type: 'task', title: 'Task item' });
-        const subTaskRow = makeRow({ id: 'ATL-S1', issue_type: 'sub_task', title: 'Sub-task item' });
-        renderWithProviders(
-            <AwaitingYouPanel rows={[taskRow, subTaskRow]} isLoading={false} />,
-        );
+        const subTaskRow = makeRow({
+            id: 'ATL-S1',
+            issue_type: 'sub_task',
+            title: 'Sub-task item',
+        });
+        renderWithProviders(<AwaitingYouPanel rows={[taskRow, subTaskRow]} isLoading={false} />);
         // Both items visible initially (filter=all)
         expect(screen.getByText('Task item')).toBeInTheDocument();
         expect(screen.getByText('Sub-task item')).toBeInTheDocument();

@@ -21,7 +21,7 @@ describe('Project HistoryTab', () => {
         mockMount.mockReturnValue(true);
         server.use(
             http.get(`${BASE}/run`, () => HttpResponse.json([])),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         const { container } = renderWithProviders(<HistoryTab projectId="p1" />);
         expect(container.firstChild).toBeInTheDocument();
@@ -38,7 +38,7 @@ describe('Project HistoryTab', () => {
         mockMount.mockReturnValue(true);
         server.use(
             http.get(`${BASE}/run`, () => HttpResponse.json([])),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<HistoryTab projectId="p1" />);
         // When ready, no skeleton blocks should appear; content area renders

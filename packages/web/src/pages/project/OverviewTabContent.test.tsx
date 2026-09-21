@@ -34,17 +34,13 @@ describe('OverviewTabContent', () => {
     beforeEach(() => {
         server.use(
             http.get(`${BASE}/run`, () => HttpResponse.json([])),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
     });
 
     it('renders KPI tiles with zero counts', async () => {
         renderWithProviders(
-            <OverviewTabContent
-                counts={emptyCounts}
-                projectId="proj-1"
-                onJumpToHistory={vi.fn()}
-            />,
+            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />
         );
         // KPI tiles rendered
         await waitFor(() => expect(screen.getByText('Open tasks')).toBeInTheDocument());
@@ -53,11 +49,7 @@ describe('OverviewTabContent', () => {
 
     it('renders KPI tiles with counts', async () => {
         renderWithProviders(
-            <OverviewTabContent
-                counts={countsWith}
-                projectId="proj-1"
-                onJumpToHistory={vi.fn()}
-            />,
+            <OverviewTabContent counts={countsWith} projectId="proj-1" onJumpToHistory={vi.fn()} />
         );
         await waitFor(() => expect(screen.getByText('Open tasks')).toBeInTheDocument());
         // Check counts appear
@@ -66,25 +58,15 @@ describe('OverviewTabContent', () => {
 
     it('shows "No recent activity yet" when runs is empty', async () => {
         renderWithProviders(
-            <OverviewTabContent
-                counts={emptyCounts}
-                projectId="proj-1"
-                onJumpToHistory={vi.fn()}
-            />,
+            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />
         );
-        await waitFor(() =>
-            expect(screen.getByText('No recent activity yet')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('No recent activity yet')).toBeInTheDocument());
     });
 
     it('calls onJumpToHistory when Full history → is clicked', async () => {
         const onJump = vi.fn();
         renderWithProviders(
-            <OverviewTabContent
-                counts={emptyCounts}
-                projectId="proj-1"
-                onJumpToHistory={onJump}
-            />,
+            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={onJump} />
         );
         await waitFor(() => screen.getByText('Full history →'));
         fireEvent.click(screen.getByText('Full history →'));
@@ -107,15 +89,11 @@ describe('OverviewTabContent', () => {
                         completed_at: '2026-06-22T10:05:00Z',
                         total_cost_usd: 0.05,
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(
-            <OverviewTabContent
-                counts={countsWith}
-                projectId="proj-1"
-                onJumpToHistory={vi.fn()}
-            />,
+            <OverviewTabContent counts={countsWith} projectId="proj-1" onJumpToHistory={vi.fn()} />
         );
         await waitFor(() => expect(screen.getByText('Recent activity')).toBeInTheDocument());
     });
@@ -126,7 +104,7 @@ describe('OverviewTabContent', () => {
                 counts={{ ...emptyCounts, tasks_ready: 3 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
-            />,
+            />
         );
         await waitFor(() => expect(screen.getByText(/awaiting pickup/i)).toBeInTheDocument());
     });
@@ -137,21 +115,17 @@ describe('OverviewTabContent', () => {
                 counts={{ ...emptyCounts, tasks_in_flight: 0 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
-            />,
+            />
         );
         await waitFor(() => expect(screen.getByText(/queue is empty/i)).toBeInTheDocument());
     });
 
     it('shows "No activity this month" in cost tile when no cost/terminal summaries', async () => {
         renderWithProviders(
-            <OverviewTabContent
-                counts={emptyCounts}
-                projectId="proj-1"
-                onJumpToHistory={vi.fn()}
-            />,
+            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />
         );
         await waitFor(() =>
-            expect(screen.getByText(/No activity this month/i)).toBeInTheDocument(),
+            expect(screen.getByText(/No activity this month/i)).toBeInTheDocument()
         );
     });
 
@@ -171,16 +145,12 @@ describe('OverviewTabContent', () => {
                         completed_at: '2026-06-22T10:05:00Z',
                         total_cost_usd: 0.02,
                     },
-                ]),
+                ])
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(
-            <OverviewTabContent
-                counts={emptyCounts}
-                projectId="proj-1"
-                onJumpToHistory={vi.fn()}
-            />,
+            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />
         );
         await waitFor(() => expect(screen.getByText('ST-42')).toBeInTheDocument());
         // The link should point to the sub-tasks route
@@ -190,11 +160,7 @@ describe('OverviewTabContent', () => {
 
     it('shows BoldKpi token count when costSummary.run_count > 0', async () => {
         renderWithProviders(
-            <OverviewTabContent
-                counts={countsWith}
-                projectId="proj-1"
-                onJumpToHistory={vi.fn()}
-            />,
+            <OverviewTabContent counts={countsWith} projectId="proj-1" onJumpToHistory={vi.fn()} />
         );
         // run_count=8 so BoldKpi renders "8" runs and "125.0K" tokens
         await waitFor(() => expect(screen.getByText('8')).toBeInTheDocument());
@@ -207,7 +173,7 @@ describe('OverviewTabContent', () => {
                 counts={{ ...emptyCounts, tasks_in_flight: 4, tasks_waiting_info: 1 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
-            />,
+            />
         );
         await waitFor(() => expect(screen.getByText('1 waiting info')).toBeInTheDocument());
     });
@@ -218,7 +184,7 @@ describe('OverviewTabContent', () => {
                 counts={{ ...emptyCounts, tasks_in_flight: 2 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
-            />,
+            />
         );
         await waitFor(() => expect(screen.getByText('none waiting on you')).toBeInTheDocument());
     });
@@ -239,12 +205,12 @@ describe('OverviewTabContent', () => {
                         completed_at: '2026-06-22T10:05:00Z',
                         total_cost_usd: 0.01,
                     },
-                ]),
+                ])
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(
-            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />,
+            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />
         );
         await waitFor(() => expect(screen.getByText('EP-1')).toBeInTheDocument());
         const link = screen.getByText('EP-1').closest('a');
@@ -267,12 +233,12 @@ describe('OverviewTabContent', () => {
                         completed_at: null,
                         total_cost_usd: 0,
                     },
-                ]),
+                ])
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(
-            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />,
+            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />
         );
         await waitFor(() => expect(screen.getByText('unknown')).toBeInTheDocument());
     });
@@ -293,12 +259,12 @@ describe('OverviewTabContent', () => {
                         completed_at: '2026-06-22T10:02:00Z',
                         total_cost_usd: 0,
                     },
-                ]),
+                ])
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(
-            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />,
+            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />
         );
         await waitFor(() => expect(screen.getByText('ST-11')).toBeInTheDocument());
         // Status "Cancelled" should appear
@@ -321,12 +287,12 @@ describe('OverviewTabContent', () => {
                         completed_at: null,
                         total_cost_usd: 0,
                     },
-                ]),
+                ])
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(
-            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />,
+            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />
         );
         await waitFor(() => expect(screen.getByText('Setup failed')).toBeInTheDocument());
     });
@@ -347,7 +313,7 @@ describe('OverviewTabContent', () => {
                         completed_at: '2026-06-22T10:05:00Z',
                         total_cost_usd: 0.1,
                     },
-                ]),
+                ])
             ),
             http.get(`${BASE}/agents`, () =>
                 HttpResponse.json([
@@ -376,11 +342,11 @@ describe('OverviewTabContent', () => {
                         created_at: '2026-01-01T00:00:00Z',
                         updated_at: '2026-01-01T00:00:00Z',
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(
-            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />,
+            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />
         );
         await waitFor(() => expect(screen.getByText('ST-20')).toBeInTheDocument());
         // Agent chip with "Coder" should appear
@@ -403,11 +369,9 @@ describe('OverviewTabContent', () => {
                 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
-            />,
+            />
         );
-        await waitFor(() =>
-            expect(screen.getByText('No activity this month')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('No activity this month')).toBeInTheDocument());
     });
 
     it('renders combined cost + session count when terminalCostSummary is present', async () => {
@@ -434,7 +398,7 @@ describe('OverviewTabContent', () => {
                 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
-            />,
+            />
         );
         // Combined value: $3.00 + $1.50 = $4.50
         await waitFor(() => expect(screen.getByText('$4.50')).toBeInTheDocument());
@@ -461,7 +425,7 @@ describe('OverviewTabContent', () => {
                 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
-            />,
+            />
         );
         await waitFor(() => expect(document.body.textContent).toContain('run'));
         // Should show "1 run" (singular)
@@ -486,7 +450,7 @@ describe('OverviewTabContent', () => {
                 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
-            />,
+            />
         );
         await waitFor(() => expect(document.body.textContent).toContain('session'));
         expect(document.body.textContent).not.toContain('1 sessions');
@@ -509,7 +473,7 @@ describe('OverviewTabContent', () => {
                 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
-            />,
+            />
         );
         await waitFor(() => expect(screen.getByText('3')).toBeInTheDocument());
     });
@@ -531,7 +495,7 @@ describe('OverviewTabContent', () => {
                 }}
                 projectId="proj-1"
                 onJumpToHistory={vi.fn()}
-            />,
+            />
         );
         await waitFor(() => expect(screen.getByText('2')).toBeInTheDocument());
     });
@@ -540,15 +504,17 @@ describe('OverviewTabContent', () => {
         // Keep the /run handler pending forever so isPending stays true.
         // The component renders the Skeleton block instead of the run rows or empty state.
         server.use(
-            http.get(`${BASE}/run`, () => new Promise(() => { /* never resolves */ })),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(
+                `${BASE}/run`,
+                () =>
+                    new Promise(() => {
+                        /* never resolves */
+                    })
+            ),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         const { container } = renderWithProviders(
-            <OverviewTabContent
-                counts={emptyCounts}
-                projectId="proj-1"
-                onJumpToHistory={vi.fn()}
-            />,
+            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />
         );
         // When the query is still pending, MUI Skeleton elements are rendered
         const skeletons = container.querySelectorAll('.MuiSkeleton-root');

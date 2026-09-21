@@ -13,7 +13,7 @@ describe('ProjectActionsMenu', () => {
                 onEditGuardrails={vi.fn()}
                 onManageSecrets={vi.fn()}
                 onDelete={onDelete}
-            />,
+            />
         );
         const triggers = screen.getAllByRole('button');
         await userEvent.click(triggers[0]!);
@@ -29,7 +29,7 @@ describe('ProjectActionsMenu', () => {
                 onEditGuardrails={vi.fn()}
                 onManageSecrets={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         await userEvent.click(screen.getAllByRole('button')[0]!);
         const renameItem = await screen.findByText('Rename project…');
@@ -45,7 +45,7 @@ describe('ProjectActionsMenu', () => {
                 onEditGuardrails={onEditGuardrails}
                 onManageSecrets={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         await userEvent.click(screen.getAllByRole('button')[0]!);
         const item = await screen.findByText('Edit guard-rails');
@@ -61,7 +61,7 @@ describe('ProjectActionsMenu', () => {
                 onEditGuardrails={vi.fn()}
                 onManageSecrets={onManageSecrets}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         await userEvent.click(screen.getAllByRole('button')[0]!);
         const item = await screen.findByText('Manage Secrets');
@@ -77,7 +77,7 @@ describe('ProjectActionsMenu', () => {
                 onEditGuardrails={vi.fn()}
                 onManageSecrets={vi.fn()}
                 onDelete={onDelete}
-            />,
+            />
         );
         await userEvent.click(screen.getAllByRole('button')[0]!);
         const item = await screen.findByText('Delete project…');
@@ -92,7 +92,7 @@ describe('ProjectActionsMenu', () => {
                 onEditGuardrails={vi.fn()}
                 onManageSecrets={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         await userEvent.click(screen.getAllByRole('button')[0]!);
         await screen.findAllByRole('menuitem');
@@ -113,7 +113,7 @@ describe('ProjectActionsMenu', () => {
                 onDelete={vi.fn()}
                 onGenerateAiScaffold={onGenerateAiScaffold}
                 aiScaffoldEnabled={true}
-            />,
+            />
         );
         await userEvent.click(screen.getAllByRole('button')[0]!);
         const scaffoldItem = await screen.findByText('Generate AI scaffold…');
@@ -132,7 +132,7 @@ describe('ProjectActionsMenu', () => {
                 onDelete={vi.fn()}
                 onGenerateAiScaffold={onGenerateAiScaffold}
                 aiScaffoldEnabled={false}
-            />,
+            />
         );
         await userEvent.click(screen.getAllByRole('button')[0]!);
         // The scaffold item is present but disabled
@@ -140,7 +140,9 @@ describe('ProjectActionsMenu', () => {
         expect(scaffoldItem).toBeInTheDocument();
         // Find the disabled menu item — it is wrapped in a Tooltip
         const menuItems = screen.getAllByRole('menuitem');
-        const disabledItem = menuItems.find((el) => el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true');
+        const disabledItem = menuItems.find(
+            (el) => el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true'
+        );
         expect(disabledItem).toBeTruthy();
     });
 
@@ -154,7 +156,7 @@ describe('ProjectActionsMenu', () => {
                 onDelete={vi.fn()}
                 onGenerateAiScaffold={onGenerateAiScaffold}
                 aiScaffoldEnabled={false}
-            />,
+            />
         );
         await userEvent.click(screen.getAllByRole('button')[0]!);
         const scaffoldItem = await screen.findByText('Generate AI scaffold…');
@@ -172,7 +174,7 @@ describe('ProjectActionsMenu', () => {
                 onEditGuardrails={vi.fn()}
                 onManageSecrets={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         await userEvent.click(screen.getAllByRole('button')[0]!);
         await screen.findAllByRole('menuitem');

@@ -63,9 +63,7 @@ export const AgentSidebar = memo(function AgentSidebar({
                             gap: 0.75,
                             cursor: onEditColor ? 'pointer' : 'default',
                             '&:hover .accent-edit-affordance': {
-                                color: onEditColor
-                                    ? ATLAS_PALETTE.brandBlue
-                                    : ATLAS_PALETTE.slate,
+                                color: onEditColor ? ATLAS_PALETTE.brandBlue : ATLAS_PALETTE.slate,
                             },
                         }}
                     >
@@ -111,6 +109,7 @@ export const AgentSidebar = memo(function AgentSidebar({
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 14 }}
                         >
                             change_circle
@@ -122,7 +121,9 @@ export const AgentSidebar = memo(function AgentSidebar({
                 </InfoRow>
             </InfoPanel>
 
-            <InfoPanel label={`Telemetry · ${new Date().toLocaleString('default', { month: 'short' })}`}>
+            <InfoPanel
+                label={`Telemetry · ${new Date().toLocaleString('default', { month: 'short' })}`}
+            >
                 <InfoRow label="Total runs">
                     <Typography
                         sx={{

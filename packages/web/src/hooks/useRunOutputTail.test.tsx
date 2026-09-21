@@ -35,7 +35,7 @@ describe('useRunOutputTail', () => {
     it('resets the buffer when runId changes', () => {
         const { result, rerender } = renderHook(
             ({ id }: { id: string | null }) => useRunOutputTail(id),
-            { initialProps: { id: 'R1' as string | null } },
+            { initialProps: { id: 'R1' as string | null } }
         );
         act(() => push({ type: 'agent_output', runId: 'R1', output: 'a' }));
         expect(result.current.lines).toEqual(['a']);

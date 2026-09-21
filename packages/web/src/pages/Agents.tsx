@@ -426,11 +426,7 @@ export function Agents() {
                 </Box>
             ) : grouped ? (
                 grouped.map(({ cat, list }) => (
-                    <AgentCategorySection
-                        key={cat}
-                        label={CATEGORY_LABEL[cat]}
-                        count={list.length}
-                    >
+                    <AgentCategorySection key={cat} label={CATEGORY_LABEL[cat]} count={list.length}>
                         {list.map((w) => (
                             <AgentCard
                                 key={w.id}
@@ -601,9 +597,7 @@ export function Agents() {
                         </Typography>
                         <AccentColorPicker
                             value={newAgent.accent_color}
-                            onChange={(hex) =>
-                                setNewAgent((p) => ({ ...p, accent_color: hex }))
-                            }
+                            onChange={(hex) => setNewAgent((p) => ({ ...p, accent_color: hex }))}
                         />
                     </Box>
                 </DialogContent>

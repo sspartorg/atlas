@@ -16,9 +16,9 @@ describe('SharedSecretsTab', () => {
     it('renders a CircularProgress while data is loading', () => {
         server.use(
             http.get(`${apiBase}/environment-secrets`, async () => {
-                await new Promise(r => setTimeout(r, 100));
+                await new Promise((r) => setTimeout(r, 100));
                 return HttpResponse.json({ vars: [] });
-            }),
+            })
         );
         renderWithProviders(<SharedSecretsTab />);
         expect(document.querySelector('.MuiCircularProgress-root')).toBeInTheDocument();
@@ -116,8 +116,8 @@ describe('SharedSecretsTab', () => {
         mountInitial([{ key: 'TOKEN', value: '' }]);
         server.use(
             http.get(`${apiBase}/environment-secrets/TOKEN/value`, () =>
-                HttpResponse.json({ value: 'secret-value' }),
-            ),
+                HttpResponse.json({ value: 'secret-value' })
+            )
         );
         const user = userEvent.setup();
         renderWithProviders(<SharedSecretsTab />);
@@ -127,8 +127,8 @@ describe('SharedSecretsTab', () => {
         expect(screen.queryByDisplayValue('secret-value')).not.toBeInTheDocument();
 
         const buttons = screen.getAllByRole('button');
-        const revealBtn = buttons.find(
-            b => b.querySelector('[data-testid="VisibilityOutlinedIcon"]'),
+        const revealBtn = buttons.find((b) =>
+            b.querySelector('[data-testid="VisibilityOutlinedIcon"]')
         );
         expect(revealBtn).toBeTruthy();
         await user.click(revealBtn!);
@@ -151,7 +151,7 @@ describe('SharedSecretsTab', () => {
 
         const deleteBtns = screen
             .getAllByRole('button')
-            .filter(b => b.querySelector('[data-testid="DeleteOutlineRoundedIcon"]'));
+            .filter((b) => b.querySelector('[data-testid="DeleteOutlineRoundedIcon"]'));
         expect(deleteBtns.length).toBe(2);
         // Click DROP row's delete (second button — first is KEEP)
         await user.click(deleteBtns[1]!);
@@ -168,7 +168,7 @@ describe('SharedSecretsTab', () => {
             http.put(`${apiBase}/environment-secrets`, async ({ request }) => {
                 putBody = (await request.json()) as typeof putBody;
                 return HttpResponse.json({ vars: putBody!.vars });
-            }),
+            })
         );
         const user = userEvent.setup();
         renderWithProviders(<SharedSecretsTab />);
@@ -221,8 +221,8 @@ describe('SharedSecretsTab', () => {
         mountInitial([{ key: 'TOKEN', value: '' }]);
         server.use(
             http.put(`${apiBase}/environment-secrets`, () =>
-                HttpResponse.json({ error: 'server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'server error' }, { status: 500 })
+            )
         );
         const user = userEvent.setup();
         renderWithProviders(<SharedSecretsTab />);
@@ -234,7 +234,9 @@ describe('SharedSecretsTab', () => {
         await waitFor(() => expect(saveBtn).not.toBeDisabled());
         await user.click(saveBtn);
         // After failure, Save button returns to enabled state
-        await waitFor(() => expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument()
+        );
     });
 
     it('rows with empty key are excluded from the save payload', async () => {
@@ -244,7 +246,7 @@ describe('SharedSecretsTab', () => {
             http.put(`${apiBase}/environment-secrets`, async ({ request }) => {
                 putBody = (await request.json()) as typeof putBody;
                 return HttpResponse.json({ vars: putBody!.vars });
-            }),
+            })
         );
         const user = userEvent.setup();
         renderWithProviders(<SharedSecretsTab />);
@@ -267,8 +269,8 @@ describe('SharedSecretsTab', () => {
         mountInitial([{ key: 'TOKEN', value: '' }]);
         server.use(
             http.put(`${apiBase}/environment-secrets`, () =>
-                HttpResponse.json({ vars: [{ key: 'TOKEN' }] }),
-            ),
+                HttpResponse.json({ vars: [{ key: 'TOKEN' }] })
+            )
         );
         const user = userEvent.setup();
         renderWithProviders(<SharedSecretsTab />);
@@ -278,18 +280,22 @@ describe('SharedSecretsTab', () => {
         const saveBtn = screen.getByRole('button', { name: /^save$/i });
         await waitFor(() => expect(saveBtn).not.toBeDisabled());
         await user.click(saveBtn);
-        await waitFor(() => expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument()
+        );
     });
 
     it('shows CircularProgress in Save button while PUT is in-flight (lines 193-196)', async () => {
         mountInitial([{ key: 'TOKEN', value: '' }]);
         let resolvePut!: () => void;
-        const putPromise = new Promise<void>((res) => { resolvePut = res; });
+        const putPromise = new Promise<void>((res) => {
+            resolvePut = res;
+        });
         server.use(
             http.put(`${apiBase}/environment-secrets`, async () => {
                 await putPromise;
                 return HttpResponse.json({ vars: [{ key: 'TOKEN' }] });
-            }),
+            })
         );
         const user = userEvent.setup();
         renderWithProviders(<SharedSecretsTab />);
@@ -299,9 +305,12 @@ describe('SharedSecretsTab', () => {
         const saveBtn = screen.getByRole('button', { name: /^save$/i });
         await waitFor(() => expect(saveBtn).not.toBeDisabled());
         await user.click(saveBtn);
-        await waitFor(() => {
-            expect(saveBtn).toBeDisabled();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(saveBtn).toBeDisabled();
+            },
+            { timeout: 3000 }
+        );
         resolvePut();
     });
 
@@ -321,8 +330,8 @@ describe('SharedSecretsTab', () => {
         mountInitial([{ key: 'TOKEN', value: '' }]);
         server.use(
             http.put(`${apiBase}/environment-secrets`, () =>
-                HttpResponse.json({ vars: [{ key: 'TOKEN' }] }),
-            ),
+                HttpResponse.json({ vars: [{ key: 'TOKEN' }] })
+            )
         );
         const user = userEvent.setup();
         renderWithProviders(<SharedSecretsTab />);
@@ -332,7 +341,9 @@ describe('SharedSecretsTab', () => {
         const saveBtn = screen.getByRole('button', { name: /^save$/i });
         await waitFor(() => expect(saveBtn).not.toBeDisabled());
         await user.click(saveBtn);
-        await waitFor(() => expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument()
+        );
     });
 
     it('save toast uses plural "entries" when multiple rows are saved (payload.length > 1 branch)', async () => {
@@ -342,14 +353,14 @@ describe('SharedSecretsTab', () => {
         ]);
         server.use(
             http.get(`${apiBase}/environment-secrets/TOKEN_A/value`, () =>
-                HttpResponse.json({ value: 'val-a' }),
+                HttpResponse.json({ value: 'val-a' })
             ),
             http.get(`${apiBase}/environment-secrets/TOKEN_B/value`, () =>
-                HttpResponse.json({ value: 'val-b' }),
+                HttpResponse.json({ value: 'val-b' })
             ),
             http.put(`${apiBase}/environment-secrets`, () =>
-                HttpResponse.json({ vars: [{ key: 'TOKEN_A' }, { key: 'TOKEN_B' }] }),
-            ),
+                HttpResponse.json({ vars: [{ key: 'TOKEN_A' }, { key: 'TOKEN_B' }] })
+            )
         );
         const user = userEvent.setup();
         renderWithProviders(<SharedSecretsTab />);
@@ -361,7 +372,9 @@ describe('SharedSecretsTab', () => {
         const saveBtn = screen.getByRole('button', { name: /^save$/i });
         await waitFor(() => expect(saveBtn).not.toBeDisabled());
         await user.click(saveBtn);
-        await waitFor(() => expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument()
+        );
     });
 
     it('dirty: row count change triggers dirty=true (rows.length !== data.vars.length branch)', async () => {
@@ -382,16 +395,16 @@ describe('SharedSecretsTab', () => {
         mountInitial([{ key: 'TOKEN', value: '' }]);
         server.use(
             http.get(`${apiBase}/environment-secrets/TOKEN/value`, () =>
-                HttpResponse.json({ value: 'secret' }),
-            ),
+                HttpResponse.json({ value: 'secret' })
+            )
         );
         const user = userEvent.setup();
         renderWithProviders(<SharedSecretsTab />);
         await waitFor(() => expect(screen.getByDisplayValue('TOKEN')).toBeInTheDocument());
         // The row starts hidden — click Reveal (fetches via API in Batch-9).
-        const revealBtn = screen.getAllByRole('button').find(
-            b => b.querySelector('[data-testid="VisibilityOutlinedIcon"]'),
-        );
+        const revealBtn = screen
+            .getAllByRole('button')
+            .find((b) => b.querySelector('[data-testid="VisibilityOutlinedIcon"]'));
         expect(revealBtn).toBeTruthy();
         await user.click(revealBtn!);
         // After reveal, the VisibilityOff icon should be present
@@ -409,8 +422,8 @@ describe('SharedSecretsTab', () => {
         mountInitial([{ key: 'TOKEN', value: '' }]);
         server.use(
             http.get(`${apiBase}/environment-secrets/TOKEN/value`, () =>
-                HttpResponse.json({ value: 'secret-value' }),
-            ),
+                HttpResponse.json({ value: 'secret-value' })
+            )
         );
         const user = userEvent.setup();
         renderWithProviders(<SharedSecretsTab />);
@@ -427,7 +440,7 @@ describe('SharedSecretsTab', () => {
             .find((b) => b.querySelector('[data-testid="VisibilityOffOutlinedIcon"]'))!;
         await user.click(hideBtn);
         await waitFor(() =>
-            expect(screen.queryByDisplayValue('secret-value')).not.toBeInTheDocument(),
+            expect(screen.queryByDisplayValue('secret-value')).not.toBeInTheDocument()
         );
     });
 });

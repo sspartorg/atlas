@@ -150,7 +150,8 @@ const secondaryBtnSx = {
 const WORKSPACE_PLACEHOLDER = (() => {
     if (typeof navigator === 'undefined') return 'e.g. C:\\Users\\You\\Projects';
     const ua = navigator.userAgent.toLowerCase();
-    if (ua.includes('mac') || ua.includes('iphone') || ua.includes('ipad')) return 'e.g. /Users/you/Projects';
+    if (ua.includes('mac') || ua.includes('iphone') || ua.includes('ipad'))
+        return 'e.g. /Users/you/Projects';
     if (ua.includes('linux') || ua.includes('android')) return 'e.g. /home/you/projects';
     return 'e.g. C:\\Users\\You\\Projects';
 })();
@@ -351,8 +352,8 @@ export function Onboarding() {
                                     lineHeight: 1.6,
                                 }}
                             >
-                                Two quick questions and you're in. You'll add credentials, a
-                                project and agents next.
+                                Two quick questions and you're in. You'll add credentials, a project
+                                and agents next.
                             </Typography>
 
                             <Box
@@ -475,8 +476,8 @@ export function Onboarding() {
                                     lineHeight: 1.6,
                                 }}
                             >
-                                Atlas will clone repos and create worktrees inside this folder.
-                                Pick something with plenty of disk space.
+                                Atlas will clone repos and create worktrees inside this folder. Pick
+                                something with plenty of disk space.
                             </Typography>
 
                             <Box

@@ -53,7 +53,11 @@ function extractStreamJsonPreview(obj: Record<string, unknown>): string {
     const message = obj['message'] as { content?: unknown } | undefined;
     if (Array.isArray(message?.content)) {
         for (const b of message.content as Array<Record<string, unknown>>) {
-            if (b['type'] === 'text' && typeof b['text'] === 'string' && (b['text'] as string).trim()) {
+            if (
+                b['type'] === 'text' &&
+                typeof b['text'] === 'string' &&
+                (b['text'] as string).trim()
+            ) {
                 return shortenPreview(b['text'] as string);
             }
             if (b['type'] === 'tool_use' && typeof b['name'] === 'string') {
@@ -64,7 +68,11 @@ function extractStreamJsonPreview(obj: Record<string, unknown>): string {
                 const inner = typeof c === 'string' ? c : Array.isArray(c) ? JSON.stringify(c) : '';
                 return shortenPreview(`tool_result · ${inner}`);
             }
-            if (b['type'] === 'thinking' && typeof b['thinking'] === 'string' && (b['thinking'] as string).trim()) {
+            if (
+                b['type'] === 'thinking' &&
+                typeof b['thinking'] === 'string' &&
+                (b['thinking'] as string).trim()
+            ) {
                 return shortenPreview(`thinking · ${b['thinking'] as string}`);
             }
         }
@@ -92,7 +100,8 @@ function extractClaudePtyPreview(obj: Record<string, unknown>): string {
                 }
                 if (block['type'] === 'tool_result') {
                     const c = block['content'];
-                    const inner = typeof c === 'string' ? c : Array.isArray(c) ? JSON.stringify(c) : '';
+                    const inner =
+                        typeof c === 'string' ? c : Array.isArray(c) ? JSON.stringify(c) : '';
                     return shortenPreview(`tool_result · ${inner}`);
                 }
             }
@@ -238,7 +247,8 @@ function parseEvents(content: string | null, source: RunEventSource): ParsedEven
             try {
                 const obj = JSON.parse(line.trim()) as Record<string, unknown>;
                 const type = typeof obj['type'] === 'string' ? (obj['type'] as string) : '';
-                const subtype = typeof obj['subtype'] === 'string' ? (obj['subtype'] as string) : '';
+                const subtype =
+                    typeof obj['subtype'] === 'string' ? (obj['subtype'] as string) : '';
                 const header = subtype ? `${type}/${subtype}` : type || 'event';
                 const hasApiError = ATLAS_API_ERROR_RE.test(line);
                 out.push({
@@ -289,7 +299,7 @@ export function RunEventViewer({
     // text with a stderr trailer); claude (stream-json and PTY) defaults to
     // Timeline since its NDJSON cards are the primary signal.
     const [viewMode, setViewMode] = useState<'timeline' | 'text'>(() =>
-        source === 'copilot' ? 'text' : 'timeline',
+        source === 'copilot' ? 'text' : 'timeline'
     );
     useEffect(() => {
         setViewMode(source === 'copilot' ? 'text' : 'timeline');
@@ -300,10 +310,11 @@ export function RunEventViewer({
     // render a "showing last N of M lines" banner in a follow-up without
     // another useMemo pass. Prefixed with _ to satisfy no-unused-vars while
     // the banner ships separately.
-    const { events, truncated: _eventsTruncated, totalLines: _eventsTotalLines } = useMemo(
-        () => parseEvents(content, source),
-        [content, source],
-    );
+    const {
+        events,
+        truncated: _eventsTruncated,
+        totalLines: _eventsTotalLines,
+    } = useMemo(() => parseEvents(content, source), [content, source]);
 
     // Right pane is single-event: the section index drives which event is
     // shown so the Owner reads one card at a time. Default to event #0;

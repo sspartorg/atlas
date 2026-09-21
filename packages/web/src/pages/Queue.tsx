@@ -12,7 +12,11 @@ import { useAgents } from '../hooks/useAgents.js';
 import { useProjects } from '../hooks/useProjects.js';
 import { useToast } from '../hooks/useToast.js';
 import { useWorkflowQueue } from '../hooks/useWorkflowQueue.js';
-import { useSetItemWorkflow, useStartWorkflowRun, useUpdateWorkflow } from '../hooks/useWorkflows.js';
+import {
+    useSetItemWorkflow,
+    useStartWorkflowRun,
+    useUpdateWorkflow,
+} from '../hooks/useWorkflows.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
@@ -45,7 +49,8 @@ export function Queue() {
 
     const entries = data?.workflows ?? [];
     const unassigned = data?.unassigned ?? [];
-    const total = (k: 'running' | 'queued' | 'waiting') => entries.reduce((n, e) => n + e[k].length, 0);
+    const total = (k: 'running' | 'queued' | 'waiting') =>
+        entries.reduce((n, e) => n + e[k].length, 0);
     const stats = [
         ['running', total('running')],
         ['queued', total('queued')],
@@ -61,12 +66,28 @@ export function Queue() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 4, mb: 5, flexWrap: 'wrap' }}>
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    justifyContent: 'space-between',
+                    gap: 4,
+                    mb: 5,
+                    flexWrap: 'wrap',
+                }}
+            >
                 <Box>
                     <Typography variant="h2" sx={{ color: ATLAS_PALETTE.slate }}>
                         Queue
                     </Typography>
-                    <Typography sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono, fontSize: 12.5, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>
+                    <Typography
+                        sx={{
+                            fontFamily: TYPOGRAPHY.fontFamilyMono,
+                            fontSize: 12.5,
+                            color: ATLAS_PALETTE.slate60,
+                            mt: 1.5,
+                        }}
+                    >
                         {stats.map(([label, n]) => `${n} ${label}`).join(' · ')}
                     </Typography>
                 </Box>
@@ -92,14 +113,24 @@ export function Queue() {
             ) : isLoading ? (
                 <Box sx={GRID_SX}>
                     {Array.from({ length: 2 }).map((_, i) => (
-                        <Skeleton key={i} variant="rounded" height={220} sx={{ borderRadius: '12px' }} />
+                        <Skeleton
+                            key={i}
+                            variant="rounded"
+                            height={220}
+                            sx={{ borderRadius: '12px' }}
+                        />
                     ))}
                 </Box>
             ) : entries.length === 0 ? (
                 <EmptyState
                     variant="dashed"
                     icon={
-                        <Box component="span" className="material-symbols-rounded" sx={{ fontSize: 32 }}>
+                        <Box
+                            component="span"
+                            className="material-symbols-rounded"
+                            aria-hidden="true"
+                            sx={{ fontSize: 32 }}
+                        >
                             account_tree
                         </Box>
                     }
@@ -122,14 +153,17 @@ export function Queue() {
                             starting={startRun.isPending}
                             onToggleActive={(active) =>
                                 updateWorkflow.mutate(
-                                    { id: entry.workflow.id, input: { status: active ? 'active' : 'inactive' } },
-                                    mutateOpts('Could not change the workflow'),
+                                    {
+                                        id: entry.workflow.id,
+                                        input: { status: active ? 'active' : 'inactive' },
+                                    },
+                                    mutateOpts('Could not change the workflow')
                                 )
                             }
                             onStart={(taskId) =>
                                 startRun.mutate(
                                     { workflowId: entry.workflow.id, itemId: taskId },
-                                    mutateOpts('Could not start the workflow'),
+                                    mutateOpts('Could not start the workflow')
                                 )
                             }
                         />
@@ -142,7 +176,10 @@ export function Queue() {
                 workflows={entries.map((e) => e.workflow).filter((w) => w.input_kind === 'item')}
                 projectName={projectName}
                 onPick={(itemId, workflowId) =>
-                    setItemWorkflow.mutate({ itemId, workflowId }, mutateOpts('Could not queue the Task'))
+                    setItemWorkflow.mutate(
+                        { itemId, workflowId },
+                        mutateOpts('Could not queue the Task')
+                    )
                 }
             />
         </Box>

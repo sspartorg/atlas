@@ -18,7 +18,7 @@ function renderAgentDetail(agentId = 'agent-coder') {
         <Routes>
             <Route path="/agents/:id" element={<AgentDetail />} />
         </Routes>,
-        { initialEntries: [`/agents/${agentId}`] },
+        { initialEntries: [`/agents/${agentId}`] }
     );
 }
 
@@ -30,7 +30,7 @@ function setupDefaultHandlers(agentId = 'agent-coder', agentData = agent) {
         http.get(`${BASE}/agents/${agentId}/memory`, () => HttpResponse.json({ body: '' })),
         http.get(`${BASE}/agents/${agentId}/commit-verifications`, () => HttpResponse.json([])),
         http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
-        ...defaultHandlers,
+        ...defaultHandlers
     );
 }
 
@@ -45,7 +45,7 @@ describe('AgentDetail', () => {
                     return HttpResponse.json(agent);
                 }),
                 http.get(`${BASE}/agents/agent-coder/runs`, () => HttpResponse.json([])),
-                ...defaultHandlers,
+                ...defaultHandlers
             );
 
             renderAgentDetail();
@@ -59,10 +59,10 @@ describe('AgentDetail', () => {
         it('shows "Agent not found." when the API returns 404', async () => {
             server.use(
                 http.get(`${BASE}/agents/agent-notfound`, () =>
-                    HttpResponse.json(null, { status: 404 }),
+                    HttpResponse.json(null, { status: 404 })
                 ),
                 http.get(`${BASE}/agents/agent-notfound/runs`, () => HttpResponse.json([])),
-                ...defaultHandlers,
+                ...defaultHandlers
             );
 
             renderAgentDetail('agent-notfound');
@@ -82,9 +82,13 @@ describe('AgentDetail', () => {
             server.use(
                 http.get(`${BASE}/sub-tasks`, () =>
                     HttpResponse.json([
-                        makeSubTask({ id: 'SDB-4', assignee_agent_id: 'agent-coder', status: 'ready' }),
-                    ]),
-                ),
+                        makeSubTask({
+                            id: 'SDB-4',
+                            assignee_agent_id: 'agent-coder',
+                            status: 'ready',
+                        }),
+                    ])
+                )
             );
             renderAgentDetail();
             expect(await screen.findByText(/Queue:/)).toHaveTextContent('Queue: 1 item');
@@ -158,7 +162,9 @@ describe('AgentDetail', () => {
                 const tabs = screen.getAllByRole('tab');
                 // The Runs tab label includes an icon span ("history") + "Runs".
                 // Use includes() since textContent may be "historyRuns" or "history Runs".
-                const found = tabs.find((t) => t.textContent?.includes('Runs') && !t.textContent?.includes('Test'));
+                const found = tabs.find(
+                    (t) => t.textContent?.includes('Runs') && !t.textContent?.includes('Test')
+                );
                 expect(found).toBeTruthy();
                 runsTab = found!;
             });
@@ -182,7 +188,7 @@ describe('AgentDetail', () => {
             // Prompt tab should NOT be selected.
             expect(screen.getByRole('tab', { name: /prompt/i })).toHaveAttribute(
                 'aria-selected',
-                'false',
+                'false'
             );
         });
     });
@@ -218,7 +224,7 @@ describe('AgentDetail', () => {
             await waitFor(() => {
                 expect(screen.getByRole('tab', { name: /overview/i })).toHaveAttribute(
                     'aria-selected',
-                    'true',
+                    'true'
                 );
             });
         });
@@ -231,10 +237,14 @@ describe('AgentDetail', () => {
 
         it('calls PATCH when Pause button is clicked', async () => {
             server.use(
-                http.patch(`${BASE}/agents/agent-coder`, () => HttpResponse.json({ ...agent, status: 'inactive' })),
+                http.patch(`${BASE}/agents/agent-coder`, () =>
+                    HttpResponse.json({ ...agent, status: 'inactive' })
+                )
             );
             renderAgentDetail();
-            await waitFor(() => expect(screen.getByRole('button', { name: /pause/i })).toBeInTheDocument());
+            await waitFor(() =>
+                expect(screen.getByRole('button', { name: /pause/i })).toBeInTheDocument()
+            );
             await userEvent.click(screen.getByRole('button', { name: /pause/i }));
             // PATCH fired — no assertion on the toast (toast DOM varies); just assert no unhandled error
             expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
@@ -242,11 +252,16 @@ describe('AgentDetail', () => {
 
         it('deletes agent and navigates away when Delete is confirmed', async () => {
             server.use(
-                http.delete(`${BASE}/agents/agent-coder`, () => new HttpResponse(null, { status: 204 })),
-                http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+                http.delete(
+                    `${BASE}/agents/agent-coder`,
+                    () => new HttpResponse(null, { status: 204 })
+                ),
+                http.get(`${BASE}/agents`, () => HttpResponse.json([]))
             );
             renderAgentDetail();
-            await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
+            await waitFor(() =>
+                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
+            );
 
             // Open delete modal via the agent card menu (⋮ button)
             const menuBtns = screen.queryAllByRole('button', { name: /more/i });
@@ -255,7 +270,9 @@ describe('AgentDetail', () => {
                 const deleteItem = screen.queryByText(/^Delete$/i);
                 if (deleteItem) {
                     await userEvent.click(deleteItem);
-                    await waitFor(() => expect(screen.queryByText(/Delete agent/i)).toBeInTheDocument());
+                    await waitFor(() =>
+                        expect(screen.queryByText(/Delete agent/i)).toBeInTheDocument()
+                    );
                     const confirmBtn = screen.queryByRole('button', { name: /^Delete$/i });
                     if (confirmBtn) await userEvent.click(confirmBtn);
                 }
@@ -264,7 +281,9 @@ describe('AgentDetail', () => {
 
         it('Refresh button triggers query invalidation', async () => {
             renderAgentDetail();
-            await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
+            await waitFor(() =>
+                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
+            );
             // RefreshButton should be present in the breadcrumb row
             const refreshBtn = screen.queryByRole('button', { name: /refresh/i });
             if (refreshBtn) {
@@ -275,11 +294,11 @@ describe('AgentDetail', () => {
         });
 
         it('opens DuplicateAgentModal when Duplicate menu item is clicked', async () => {
-            server.use(
-                http.get(`${BASE}/agents`, () => HttpResponse.json([agent])),
-            );
+            server.use(http.get(`${BASE}/agents`, () => HttpResponse.json([agent])));
             renderAgentDetail();
-            await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
+            await waitFor(() =>
+                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
+            );
 
             // The AgentCardMenu trigger is the 'more_vert' text span
             const moreVertSpans = screen.queryAllByText('more_vert');
@@ -289,21 +308,28 @@ describe('AgentDetail', () => {
                 let duplicateItem: HTMLElement | null = null;
                 try {
                     duplicateItem = await screen.findByText('Duplicate', {}, { timeout: 2000 });
-                } catch { /* menu didn't open, skip */ }
+                } catch {
+                    /* menu didn't open, skip */
+                }
                 if (duplicateItem) {
                     await userEvent.click(duplicateItem);
                     // DuplicateAgentModal opens — check for dialog
-                    await waitFor(() => {
-                        const dialogs = document.querySelectorAll('[role="dialog"]');
-                        expect(dialogs.length).toBeGreaterThan(0);
-                    }, { timeout: 2000 });
+                    await waitFor(
+                        () => {
+                            const dialogs = document.querySelectorAll('[role="dialog"]');
+                            expect(dialogs.length).toBeGreaterThan(0);
+                        },
+                        { timeout: 2000 }
+                    );
                 }
             }
         });
 
         it('triggers handleExport via Export zip menu item (sets window.location.href)', async () => {
             renderAgentDetail();
-            await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
+            await waitFor(() =>
+                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
+            );
 
             const moreVertSpans = screen.queryAllByText('more_vert');
             if (moreVertSpans.length > 0) {
@@ -319,7 +345,9 @@ describe('AgentDetail', () => {
 
         it('opens EditAgentColorModal when accent color row in sidebar is clicked', async () => {
             renderAgentDetail();
-            await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
+            await waitFor(() =>
+                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
+            );
 
             // The color row shows the accent color text e.g. "#31AB46"
             const colorText = screen.queryByText('#31AB46');
@@ -333,7 +361,9 @@ describe('AgentDetail', () => {
 
         it('opens GlyphPickerModal when glyph row in sidebar is clicked', async () => {
             renderAgentDetail();
-            await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
+            await waitFor(() =>
+                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
+            );
 
             // The glyph row in AgentSidebar has a "Replace…" link text
             const replaceLink = screen.queryByText('Replace…');
@@ -347,25 +377,31 @@ describe('AgentDetail', () => {
 
         it('exercises confirmDelete by opening delete modal and confirming', async () => {
             server.use(
-                http.delete(`${BASE}/agents/agent-coder`, () => new HttpResponse(null, { status: 204 })),
-                http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+                http.delete(
+                    `${BASE}/agents/agent-coder`,
+                    () => new HttpResponse(null, { status: 204 })
+                ),
+                http.get(`${BASE}/agents`, () => HttpResponse.json([]))
             );
             renderAgentDetail();
-            await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
+            await waitFor(() =>
+                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
+            );
 
             // Open the AgentCardMenu via the more_vert text span (use fireEvent — faster than userEvent)
             const moreVertSpans = screen.queryAllByText('more_vert');
             if (moreVertSpans.length > 0) {
                 fireEvent.click(moreVertSpans[0]!);
                 // Wait for Delete menu item
-                const deleteItem = await screen.findByText('Delete', {}, { timeout: 3000 }).catch(() => null);
+                const deleteItem = await screen
+                    .findByText('Delete', {}, { timeout: 3000 })
+                    .catch(() => null);
                 if (deleteItem) {
                     fireEvent.click(deleteItem);
                     // Wait for DeleteAgentModal
-                    const deleteModal = await waitFor(
-                        () => screen.queryByText(/Delete Coder/i),
-                        { timeout: 3000 },
-                    ).catch(() => null);
+                    const deleteModal = await waitFor(() => screen.queryByText(/Delete Coder/i), {
+                        timeout: 3000,
+                    }).catch(() => null);
                     if (deleteModal) {
                         // Click "Delete agent" confirm button
                         const confirmBtn = screen.queryByRole('button', { name: /Delete agent/i });
@@ -380,11 +416,11 @@ describe('AgentDetail', () => {
 
         it('opens Duplicate modal and closes via Escape (exercises onClose at line 345)', async () => {
             setupDefaultHandlers();
-            server.use(
-                http.get(`${BASE}/agents`, () => HttpResponse.json([agent])),
-            );
+            server.use(http.get(`${BASE}/agents`, () => HttpResponse.json([agent])));
             renderAgentDetail();
-            await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
+            await waitFor(() =>
+                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
+            );
 
             const moreVertSpans = screen.queryAllByText('more_vert');
             if (moreVertSpans.length > 0) {
@@ -392,9 +428,12 @@ describe('AgentDetail', () => {
                 const dupeItem = screen.queryByText('Duplicate');
                 if (dupeItem) {
                     fireEvent.click(dupeItem);
-                    await waitFor(() => {
-                        expect(screen.queryByRole('dialog')).toBeTruthy();
-                    }, { timeout: 3000 }).catch(() => {});
+                    await waitFor(
+                        () => {
+                            expect(screen.queryByRole('dialog')).toBeTruthy();
+                        },
+                        { timeout: 3000 }
+                    ).catch(() => {});
                     // Close via Escape
                     const dialog = document.querySelector('[role="dialog"]');
                     if (dialog) {
@@ -409,18 +448,23 @@ describe('AgentDetail', () => {
             setupDefaultHandlers();
             server.use(
                 http.get(`${BASE}/projects`, () => HttpResponse.json([])),
-                http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
+                http.get(`${BASE}/tasks`, () => HttpResponse.json([]))
             );
             renderAgentDetail();
-            await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
+            await waitFor(() =>
+                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
+            );
 
             // Find "Run now" button in the AgentHero
             const runNowBtn = screen.queryByRole('button', { name: /Run now/i });
             if (runNowBtn) {
                 fireEvent.click(runNowBtn);
-                await waitFor(() => {
-                    expect(screen.queryByRole('dialog')).toBeTruthy();
-                }, { timeout: 3000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(screen.queryByRole('dialog')).toBeTruthy();
+                    },
+                    { timeout: 3000 }
+                ).catch(() => {});
                 const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
                 if (cancelBtn) fireEvent.click(cancelBtn);
             }
@@ -430,17 +474,24 @@ describe('AgentDetail', () => {
         it('opens EditAgentColorModal via "Edit color" button and closes (exercises onClose at line 354)', async () => {
             setupDefaultHandlers();
             renderAgentDetail();
-            await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
+            await waitFor(() =>
+                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
+            );
 
             // AgentSidebar renders an "Edit color" or pencil button
             const editColorBtns = screen.queryAllByText('edit');
-            const editColorBtn = screen.queryByRole('button', { name: /edit.*color|color/i }) ??
-                (editColorBtns[0] ?? null);
+            const editColorBtn =
+                screen.queryByRole('button', { name: /edit.*color|color/i }) ??
+                editColorBtns[0] ??
+                null;
             if (editColorBtn) {
                 fireEvent.click(editColorBtn);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 2000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 2000 }
+                ).catch(() => {});
                 const dialog = document.querySelector('[role="dialog"]');
                 if (dialog) {
                     fireEvent.keyDown(dialog, { key: 'Escape' });
@@ -452,16 +503,22 @@ describe('AgentDetail', () => {
         it('opens GlyphPickerModal via sidebar and closes (exercises onClose at line 362)', async () => {
             setupDefaultHandlers();
             renderAgentDetail();
-            await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
+            await waitFor(() =>
+                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
+            );
 
             // AgentSidebar may render a "Replace glyph" button
-            const glyphBtn = screen.queryByRole('button', { name: /glyph|replace/i }) ??
+            const glyphBtn =
+                screen.queryByRole('button', { name: /glyph|replace/i }) ??
                 screen.queryByText(/replace/i);
             if (glyphBtn) {
                 fireEvent.click(glyphBtn);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 2000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 2000 }
+                ).catch(() => {});
                 const dialog = document.querySelector('[role="dialog"]');
                 if (dialog) {
                     fireEvent.keyDown(dialog, { key: 'Escape' });
@@ -473,7 +530,9 @@ describe('AgentDetail', () => {
         it('opens delete modal and closes via X button (exercises onClose at line 372)', async () => {
             setupDefaultHandlers();
             renderAgentDetail();
-            await waitFor(() => expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument());
+            await waitFor(() =>
+                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
+            );
 
             const moreVertSpans = screen.queryAllByText('more_vert');
             if (moreVertSpans.length > 0) {
@@ -481,9 +540,12 @@ describe('AgentDetail', () => {
                 const deleteItem = screen.queryByText('Delete');
                 if (deleteItem) {
                     fireEvent.click(deleteItem);
-                    await waitFor(() => {
-                        expect(screen.queryByText(/Delete Coder|Delete agent/i)).toBeTruthy();
-                    }, { timeout: 3000 }).catch(() => {});
+                    await waitFor(
+                        () => {
+                            expect(screen.queryByText(/Delete Coder|Delete agent/i)).toBeTruthy();
+                        },
+                        { timeout: 3000 }
+                    ).catch(() => {});
                     // Close via Cancel button (not Confirm)
                     const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
                     if (cancelBtn) {
@@ -505,9 +567,11 @@ describe('AgentDetail', () => {
                 http.get(`${BASE}/agents/${agentId}/runs`, () => HttpResponse.json([])),
                 http.get(`${BASE}/agents/${agentId}/prompt-versions`, () => HttpResponse.json([])),
                 http.get(`${BASE}/agents/${agentId}/memory`, () => HttpResponse.json({ body: '' })),
-                http.get(`${BASE}/agents/${agentId}/commit-verifications`, () => HttpResponse.json([])),
+                http.get(`${BASE}/agents/${agentId}/commit-verifications`, () =>
+                    HttpResponse.json([])
+                ),
                 http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
-                ...defaultHandlers,
+                ...defaultHandlers
             );
         }
 
@@ -515,16 +579,19 @@ describe('AgentDetail', () => {
             setupHandlers();
             server.use(
                 http.get(`${BASE}/projects`, () => HttpResponse.json([])),
-                http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
+                http.get(`${BASE}/tasks`, () => HttpResponse.json([]))
             );
             renderWithProviders(
                 <Routes>
                     <Route path="/agents/:id" element={<AgentDetail />} />
                 </Routes>,
-                { initialEntries: ['/agents/agent-coder?tab=test'] },
+                { initialEntries: ['/agents/agent-coder?tab=test'] }
             );
             await waitFor(() =>
-                expect(screen.getByRole('tab', { name: /test run/i })).toHaveAttribute('aria-selected', 'true'),
+                expect(screen.getByRole('tab', { name: /test run/i })).toHaveAttribute(
+                    'aria-selected',
+                    'true'
+                )
             );
             expect(document.body).toBeTruthy();
         }, 15000);
@@ -535,12 +602,12 @@ describe('AgentDetail', () => {
                 <Routes>
                     <Route path="/agents/:id" element={<AgentDetail />} />
                 </Routes>,
-                { initialEntries: ['/agents/agent-coder?tab=runs'] },
+                { initialEntries: ['/agents/agent-coder?tab=runs'] }
             );
             await waitFor(() => {
                 const tabs = screen.getAllByRole('tab');
                 const runsTab = tabs.find(
-                    (t) => t.textContent?.includes('Runs') && !t.textContent?.includes('Test'),
+                    (t) => t.textContent?.includes('Runs') && !t.textContent?.includes('Test')
                 );
                 expect(runsTab).toHaveAttribute('aria-selected', 'true');
             });
@@ -553,31 +620,42 @@ describe('AgentDetail', () => {
                 <Routes>
                     <Route path="/agents/:id" element={<AgentDetail />} />
                 </Routes>,
-                { initialEntries: ['/agents/agent-coder?tab=memory'] },
+                { initialEntries: ['/agents/agent-coder?tab=memory'] }
             );
             await waitFor(() =>
-                expect(screen.getByRole('tab', { name: /memory/i })).toHaveAttribute('aria-selected', 'true'),
+                expect(screen.getByRole('tab', { name: /memory/i })).toHaveAttribute(
+                    'aria-selected',
+                    'true'
+                )
             );
             expect(document.body).toBeTruthy();
         }, 15000);
 
         it('handlePauseToggle with isPaused=true (inactive agent resume) covers line 87 isPaused branch', async () => {
-            const inactiveAgent = makeAgent({ id: 'agent-coder', name: 'Coder', status: 'inactive' });
+            const inactiveAgent = makeAgent({
+                id: 'agent-coder',
+                name: 'Coder',
+                status: 'inactive',
+            });
             server.use(
                 http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(inactiveAgent)),
                 http.get(`${BASE}/agents/agent-coder/runs`, () => HttpResponse.json([])),
                 http.get(`${BASE}/agents/agent-coder/prompt-versions`, () => HttpResponse.json([])),
-                http.get(`${BASE}/agents/agent-coder/memory`, () => HttpResponse.json({ body: '' })),
-                http.get(`${BASE}/agents/agent-coder/commit-verifications`, () => HttpResponse.json([])),
+                http.get(`${BASE}/agents/agent-coder/memory`, () =>
+                    HttpResponse.json({ body: '' })
+                ),
+                http.get(`${BASE}/agents/agent-coder/commit-verifications`, () =>
+                    HttpResponse.json([])
+                ),
                 http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
                 http.patch(`${BASE}/agents/agent-coder`, () =>
-                    HttpResponse.json({ ...inactiveAgent, status: 'active' }),
+                    HttpResponse.json({ ...inactiveAgent, status: 'active' })
                 ),
-                ...defaultHandlers,
+                ...defaultHandlers
             );
             renderAgentDetail();
             await waitFor(() =>
-                expect(screen.getByRole('button', { name: /resume/i })).toBeInTheDocument(),
+                expect(screen.getByRole('button', { name: /resume/i })).toBeInTheDocument()
             );
             await userEvent.click(screen.getByRole('button', { name: /resume/i }));
             expect(document.body).toBeTruthy();
@@ -589,17 +667,21 @@ describe('AgentDetail', () => {
                 http.get(`${BASE}/agents/agent-coder`, () => HttpResponse.json(agent)),
                 http.get(`${BASE}/agents/agent-coder/runs`, () => HttpResponse.json([])),
                 http.get(`${BASE}/agents/agent-coder/prompt-versions`, () => HttpResponse.json([])),
-                http.get(`${BASE}/agents/agent-coder/memory`, () => HttpResponse.json({ body: '' })),
-                http.get(`${BASE}/agents/agent-coder/commit-verifications`, () => HttpResponse.json([])),
+                http.get(`${BASE}/agents/agent-coder/memory`, () =>
+                    HttpResponse.json({ body: '' })
+                ),
+                http.get(`${BASE}/agents/agent-coder/commit-verifications`, () =>
+                    HttpResponse.json([])
+                ),
                 http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
                 http.delete(`${BASE}/agents/agent-coder`, () =>
-                    HttpResponse.json({ error: 'Internal server error' }, { status: 500 }),
+                    HttpResponse.json({ error: 'Internal server error' }, { status: 500 })
                 ),
-                ...defaultHandlers,
+                ...defaultHandlers
             );
             renderAgentDetail();
             await waitFor(() =>
-                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument(),
+                expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
             );
 
             const menuBtns = screen.queryAllByRole('button', { name: /more/i });
@@ -608,9 +690,9 @@ describe('AgentDetail', () => {
                 const deleteItem = screen.queryByText(/^Delete$/i);
                 if (deleteItem) {
                     fireEvent.click(deleteItem);
-                    await waitFor(() =>
-                        expect(screen.queryByText(/Delete Coder/i)).toBeTruthy(),
-                    { timeout: 3000 }).catch(() => {});
+                    await waitFor(() => expect(screen.queryByText(/Delete Coder/i)).toBeTruthy(), {
+                        timeout: 3000,
+                    }).catch(() => {});
                     const confirmBtn = screen.queryByRole('button', { name: /Delete agent/i });
                     if (confirmBtn) {
                         fireEvent.click(confirmBtn);

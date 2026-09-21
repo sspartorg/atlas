@@ -8,7 +8,7 @@ describe('AgentCategorySection', () => {
         renderWithProviders(
             <AgentCategorySection label="Software dev" count={3}>
                 <div>child</div>
-            </AgentCategorySection>,
+            </AgentCategorySection>
         );
         expect(screen.getByText('Software dev')).toBeTruthy();
     });
@@ -17,7 +17,7 @@ describe('AgentCategorySection', () => {
         renderWithProviders(
             <AgentCategorySection label="Marketing" count={5}>
                 <div>child</div>
-            </AgentCategorySection>,
+            </AgentCategorySection>
         );
         expect(screen.getByText('5')).toBeTruthy();
     });
@@ -26,7 +26,7 @@ describe('AgentCategorySection', () => {
         renderWithProviders(
             <AgentCategorySection label="Content" count={2}>
                 <div data-testid="child-card">Card</div>
-            </AgentCategorySection>,
+            </AgentCategorySection>
         );
         expect(screen.getByTestId('child-card')).toBeTruthy();
     });
@@ -35,7 +35,7 @@ describe('AgentCategorySection', () => {
         renderWithProviders(
             <AgentCategorySection label="Design" count={0}>
                 <span />
-            </AgentCategorySection>,
+            </AgentCategorySection>
         );
         expect(screen.getByText('0')).toBeTruthy();
     });

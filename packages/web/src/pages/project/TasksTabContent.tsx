@@ -62,6 +62,7 @@ export function TasksTabContent({
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 14 }}
                     >
                         open_in_new

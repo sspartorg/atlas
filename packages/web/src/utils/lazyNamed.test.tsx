@@ -7,12 +7,12 @@ describe('lazyNamed', () => {
     it('rebrands a named export as default for React.lazy', async () => {
         const Greeting = lazyNamed(
             () => Promise.resolve({ Greeting: () => <div>hello-named</div> }),
-            'Greeting',
+            'Greeting'
         );
         render(
             <Suspense fallback={<div>loading</div>}>
                 <Greeting />
-            </Suspense>,
+            </Suspense>
         );
         expect(await screen.findByText('hello-named')).toBeInTheDocument();
     });

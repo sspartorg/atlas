@@ -195,7 +195,7 @@ export function HeaderMascot({ size = 40 }: HeaderMascotProps) {
     // session that the user gets to know.
     const variantUrls = useMemo(
         () => ({ idle: pickRandom(IDLE_URLS), working: pickRandom(WORKING_URLS) }),
-        [],
+        []
     );
 
     useEffect(() => {
@@ -225,7 +225,7 @@ export function HeaderMascot({ size = 40 }: HeaderMascotProps) {
     // Lottie loop (rare enough to be invisible).
     const animationData = useMemo(
         () => (rawAnimationData ? recolorWarm(rawAnimationData, mascotHue(mode)) : null),
-        [rawAnimationData, mode],
+        [rawAnimationData, mode]
     );
     const tooltipLabel = hasActiveRuns
         ? `${count} agent${count === 1 ? '' : 's'} working`

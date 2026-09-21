@@ -154,6 +154,7 @@ function PromptEditorCard({
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 18, color: ATLAS_PALETTE.brandBlue }}
                 >
                     {headerIcon}
@@ -194,17 +195,31 @@ function PromptEditorCard({
                         background: ATLAS_PALETTE.slate08,
                     }}
                 >
-                    <ViewModeChip mode="edit" current={mode} onClick={() => setMode('edit')} label="Edit" />
-                    <ViewModeChip mode="split" current={mode} onClick={() => setMode('split')} label="Split" />
-                    <ViewModeChip mode="preview" current={mode} onClick={() => setMode('preview')} label="Preview" />
+                    <ViewModeChip
+                        mode="edit"
+                        current={mode}
+                        onClick={() => setMode('edit')}
+                        label="Edit"
+                    />
+                    <ViewModeChip
+                        mode="split"
+                        current={mode}
+                        onClick={() => setMode('split')}
+                        label="Split"
+                    />
+                    <ViewModeChip
+                        mode="preview"
+                        current={mode}
+                        onClick={() => setMode('preview')}
+                        label="Preview"
+                    />
                 </Box>
             </Box>
 
             <Box
                 sx={{
                     display: 'grid',
-                    gridTemplateColumns:
-                        mode === 'split' ? { xs: '1fr', md: '1fr 1fr' } : '1fr',
+                    gridTemplateColumns: mode === 'split' ? { xs: '1fr', md: '1fr 1fr' } : '1fr',
                     gridAutoRows: {
                         xs: mode === 'split' ? 'minmax(420px, auto)' : 'minmax(520px, auto)',
                         md: 'minmax(420px, auto)',
@@ -275,9 +290,7 @@ function PromptEditorCard({
                     background: ATLAS_PALETTE.cloud,
                 }}
             >
-                <Typography
-                    sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate60, fontFamily: MONO }}
-                >
+                <Typography sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate60, fontFamily: MONO }}>
                     {statusLabel} · {lineCount} {lineCount === 1 ? 'line' : 'lines'}
                 </Typography>
                 <Box sx={{ flex: 1 }} />
@@ -341,6 +354,7 @@ function VersionHistoryCard({
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 18, color: ATLAS_PALETTE.slate60 }}
                 >
                     history
@@ -528,6 +542,7 @@ function VersionHistoryCard({
                                                 <Box
                                                     component="span"
                                                     className="material-symbols-rounded"
+                                                    aria-hidden="true"
                                                     sx={{ fontSize: 14 }}
                                                 >
                                                     undo
@@ -567,9 +582,9 @@ function autoPrependedPreamble(agentId: string): string {
     return [
         `You are agent \`${agentId}\`. Before doing anything else, read these files at the working-directory root:`,
         '',
-        '1. `.atlas/constitution.md` — the project\'s rules of engagement',
+        "1. `.atlas/constitution.md` — the project's rules of engagement",
         '2. `.atlas/current-task.md` — the item this run targets (absent when the run works on the project as a whole)',
-        '3. `.atlas/outcome.md` — how to report this run\'s result; the workflow routes on it',
+        "3. `.atlas/outcome.md` — how to report this run's result; the workflow routes on it",
         '4. `.atlas/self-memory.md` — your past course-corrections',
         '',
         'You are one step in a workflow. Do your own job, commit your work, and end with the `atlas-outcome` block. Do not assign the item, change its status, push, or open pull requests — the workflow does that.',
@@ -591,6 +606,7 @@ function AutoPreambleBanner({ agentId }: { agentId: string }) {
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 16, color: ATLAS_PALETTE.slate60 }}
                 >
                     auto_awesome
@@ -640,10 +656,7 @@ export function PromptTabContent({ agent }: Props) {
         setDraft(agent.prompt_md);
     }, [agent.id, agent.prompt_md]);
 
-    const promptFileName = useMemo(
-        () => `${slug(agent.name)}.prompt.md`,
-        [agent.name],
-    );
+    const promptFileName = useMemo(() => `${slug(agent.name)}.prompt.md`, [agent.name]);
 
     async function savePrompt() {
         try {
@@ -669,7 +682,7 @@ export function PromptTabContent({ agent }: Props) {
                 },
                 onError: (e) =>
                     toast.show({ message: 'Revert failed', detail: (e as Error).message }),
-            },
+            }
         );
     }
 

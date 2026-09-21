@@ -36,7 +36,7 @@ const TaskDetail = lazyNamed(() => import('./pages/TaskDetail.js'), 'TaskDetail'
 const TaskNew = lazyNamed(() => import('./pages/TaskNew.js'), 'TaskNew');
 const ProjectGuardrails = lazyNamed(
     () => import('./pages/ProjectGuardrails.js'),
-    'ProjectGuardrails',
+    'ProjectGuardrails'
 );
 const SubTaskDetail = lazyNamed(() => import('./pages/SubTaskDetail.js'), 'SubTaskDetail');
 const Queue = lazyNamed(() => import('./pages/Queue.js'), 'Queue');
@@ -47,28 +47,28 @@ const TerminalLayout = lazyNamed(() => import('./pages/TerminalLayout.js'), 'Ter
 const TerminalHistory = lazyNamed(() => import('./pages/TerminalHistory.js'), 'TerminalHistory');
 const TerminalStandalone = lazyNamed(
     () => import('./pages/TerminalStandalone.js'),
-    'TerminalStandalone',
+    'TerminalStandalone'
 );
 const Agents = lazyNamed(() => import('./pages/Agents.js'), 'Agents');
 const AgentDetail = lazyNamed(() => import('./pages/AgentDetail.js'), 'AgentDetail');
 const Marketplace = lazyNamed(() => import('./pages/Marketplace.js'), 'Marketplace');
 const MarketplaceAgentDetail = lazyNamed(
     () => import('./pages/MarketplaceAgentDetail.js'),
-    'MarketplaceAgentDetail',
+    'MarketplaceAgentDetail'
 );
 const MarketplaceWorkflowDetail = lazyNamed(
     () => import('./pages/MarketplaceWorkflowDetail.js'),
-    'MarketplaceWorkflowDetail',
+    'MarketplaceWorkflowDetail'
 );
 const AgentRunDetail = lazyNamed(() => import('./pages/AgentRunDetail.js'), 'AgentRunDetail');
 const Workflows = lazyNamed(() => import('./pages/Workflows.js'), 'Workflows');
 const WorkflowBuilder = lazyNamed(
     () => import('./pages/workflows/WorkflowBuilder.js'),
-    'WorkflowBuilder',
+    'WorkflowBuilder'
 );
 const WorkflowRunDetail = lazyNamed(
     () => import('./pages/workflows/WorkflowRunDetail.js'),
-    'WorkflowRunDetail',
+    'WorkflowRunDetail'
 );
 const McpTools = lazyNamed(() => import('./pages/McpTools.js'), 'McpTools');
 const Guardrails = lazyNamed(() => import('./pages/Guardrails.js'), 'Guardrails');
@@ -79,12 +79,9 @@ const Credentials = lazyNamed(() => import('./pages/Credentials.js'), 'Credentia
 const AnalyticsPage = lazyNamed(() => import('./pages/Analytics.js'), 'Analytics');
 const AnalyticsProjectPage = lazyNamed(
     () => import('./pages/AnalyticsProject.js'),
-    'AnalyticsProject',
+    'AnalyticsProject'
 );
-const AnalyticsTaskPage = lazyNamed(
-    () => import('./pages/AnalyticsTask.js'),
-    'AnalyticsTask',
-);
+const AnalyticsTaskPage = lazyNamed(() => import('./pages/AnalyticsTask.js'), 'AnalyticsTask');
 
 // Freshness model: SSE drives invalidation on every server-side mutation
 // (see `useSSE`), so explicit re-fetch on every mount was pure waste — it
@@ -148,9 +145,7 @@ function AppShell() {
                         {isMobile ? (
                             <MobileAppBar />
                         ) : (
-                            <Topbar
-                                onShortcutsOpen={() => setShortcutsOpen(true)}
-                            />
+                            <Topbar onShortcutsOpen={() => setShortcutsOpen(true)} />
                         )}
                         <Box
                             sx={{
@@ -162,10 +157,7 @@ function AppShell() {
                                     : 0,
                             }}
                         >
-                            <Suspense
-                                key={location.pathname}
-                                fallback={<BrandedFallback />}
-                            >
+                            <Suspense key={location.pathname} fallback={<BrandedFallback />}>
                                 <Outlet />
                             </Suspense>
                             <NavigationCurtain />
@@ -177,10 +169,7 @@ function AppShell() {
                             <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
                         </>
                     )}
-                    <ShortcutsDialog
-                        open={shortcutsOpen}
-                        onClose={() => setShortcutsOpen(false)}
-                    />
+                    <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
                     <Toast />
                 </Box>
             </PageTitleProvider>

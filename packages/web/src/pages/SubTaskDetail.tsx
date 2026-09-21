@@ -40,9 +40,9 @@ export function SubTaskDetail() {
     const deleteSubTask = useDeleteSubTask();
 
     const [saving, setSaving] = useState(false);
-    const [pickerMode, setPickerMode] = useState<
-        'relates_to' | 'depends_on' | 'tested_by' | null
-    >(null);
+    const [pickerMode, setPickerMode] = useState<'relates_to' | 'depends_on' | 'tested_by' | null>(
+        null
+    );
 
     const subTask = full?.sub_task;
     const parentTask = full?.task ?? null;
@@ -71,7 +71,10 @@ export function SubTaskDetail() {
         let sum = 0;
         let hasAny = false;
         for (const r of itemRuns) {
-            if (r.total_cost_usd != null) { sum += r.total_cost_usd; hasAny = true; }
+            if (r.total_cost_usd != null) {
+                sum += r.total_cost_usd;
+                hasAny = true;
+            }
         }
         return hasAny ? sum : null;
     }, [itemRuns]);
@@ -107,7 +110,6 @@ export function SubTaskDetail() {
         await qc.invalidateQueries({ queryKey: ['sub-tasks'] });
         await qc.invalidateQueries({ queryKey: ['issues'] });
     }
-
 
     if (isLoading) {
         return <IssueDetailLoading />;
@@ -162,117 +164,117 @@ export function SubTaskDetail() {
 
     return (
         <>
-        <IssueDetailShell
-            breadcrumbs={[
-                { label: 'Tasks', href: '/tasks' },
-                {
-                    label: parentTask?.id ?? '—',
-                    href: parentTask ? `/tasks/${parentTask.id}` : undefined,
-                    mono: true,
-                },
-                { label: subTask.id, mono: true },
-            ]}
-            title={subTask.title}
-            onTitleSave={(next) => patchSubTask({ title: next })}
-            titleSaving={saving}
-            issueType="sub_task"
-            headerExtras={<AddRelatedMenu options={addOptions} label="Add related item" />}
-            actions={
-                <IssueDeleteAction
-                    entityKind="sub_task"
-                    entityTitle={subTask.title}
-                    onDelete={async () => {
-                        await deleteSubTask.mutateAsync(subTask.id);
-                    }}
-                    redirectTo={parentTask ? `/tasks/${parentTask.id}` : '/tasks'}
-                    onClone={() => void handleClone()}
+            <IssueDetailShell
+                breadcrumbs={[
+                    { label: 'Tasks', href: '/tasks' },
+                    {
+                        label: parentTask?.id ?? '—',
+                        href: parentTask ? `/tasks/${parentTask.id}` : undefined,
+                        mono: true,
+                    },
+                    { label: subTask.id, mono: true },
+                ]}
+                title={subTask.title}
+                onTitleSave={(next) => patchSubTask({ title: next })}
+                titleSaving={saving}
+                issueType="sub_task"
+                headerExtras={<AddRelatedMenu options={addOptions} label="Add related item" />}
+                actions={
+                    <IssueDeleteAction
+                        entityKind="sub_task"
+                        entityTitle={subTask.title}
+                        onDelete={async () => {
+                            await deleteSubTask.mutateAsync(subTask.id);
+                        }}
+                        redirectTo={parentTask ? `/tasks/${parentTask.id}` : '/tasks'}
+                        onClone={() => void handleClone()}
+                    />
+                }
+                rightRail={
+                    <>
+                        <DetailsRailCard
+                            issueType="sub_task"
+                            issueId={subTask.id}
+                            externalLinks={full?.external_links}
+                            status={subTask.status}
+                            onStatusPick={(next, override) => void handleStatusPick(next, override)}
+                            assigneeAgentId={subTask.assignee_agent_id}
+                            onAssign={(agentId) => void handleAssign(agentId)}
+                            assignee={assignee}
+                            reassignLocked={subTask.status === 'in_progress'}
+                            project={project}
+                            parents={parents}
+                            reporter={reporter}
+                            ownerName={ownerName}
+                            ownerAccent={ownerAccent}
+                            priority={subTask.priority}
+                            onPriorityPick={(next) => void patchSubTask({ priority: next })}
+                            labels={subTask.labels ?? []}
+                            labelSuggestions={projectLabels?.labels ?? []}
+                            onLabelsChange={(next) => patchSubTask({ labels: next })}
+                            createdAt={subTask.created_at}
+                            updatedAt={subTask.updated_at}
+                            totalCostUsd={totalCostUsd}
+                        />
+                        <ActivityLogCard
+                            issueType="sub_task"
+                            issueId={subTask.id}
+                            activity={full?.activity}
+                            agents={agents}
+                        />
+                    </>
+                }
+            >
+                <EditableMarkdownCard
+                    title="Description"
+                    value={subTask.description}
+                    placeholder="Describe what this sub-task does…"
+                    emptyHint="Click to add a description…"
+                    saving={saving}
+                    onSave={(next) => patchSubTask({ description: next })}
                 />
-            }
-            rightRail={
-                <>
-                    <DetailsRailCard
-                        issueType="sub_task"
-                        issueId={subTask.id}
-                        externalLinks={full?.external_links}
-                        status={subTask.status}
-                        onStatusPick={(next, override) => void handleStatusPick(next, override)}
-                        assigneeAgentId={subTask.assignee_agent_id}
-                        onAssign={(agentId) => void handleAssign(agentId)}
-                        assignee={assignee}
-                        reassignLocked={subTask.status === 'in_progress'}
-                        project={project}
-                        parents={parents}
-                        reporter={reporter}
-                        ownerName={ownerName}
-                        ownerAccent={ownerAccent}
-                        priority={subTask.priority}
-                        onPriorityPick={(next) => void patchSubTask({ priority: next })}
-                        labels={subTask.labels ?? []}
-                        labelSuggestions={projectLabels?.labels ?? []}
-                        onLabelsChange={(next) => patchSubTask({ labels: next })}
-                        createdAt={subTask.created_at}
-                        updatedAt={subTask.updated_at}
-                        totalCostUsd={totalCostUsd}
-                    />
-                    <ActivityLogCard
-                        issueType="sub_task"
-                        issueId={subTask.id}
-                        activity={full?.activity}
-                        agents={agents}
-                    />
-                </>
-            }
-        >
-            <EditableMarkdownCard
-                title="Description"
-                value={subTask.description}
-                placeholder="Describe what this sub-task does…"
-                emptyHint="Click to add a description…"
-                saving={saving}
-                onSave={(next) => patchSubTask({ description: next })}
-            />
 
-            <EditableMarkdownCard
-                title="Acceptance criteria"
-                value={subTask.acceptance_criteria}
-                placeholder={'- User can…\n- System ensures…'}
-                emptyHint="Click to add acceptance criteria, one per line…"
-                saving={saving}
-                onSave={(next) => patchSubTask({ acceptance_criteria: next })}
-            />
+                <EditableMarkdownCard
+                    title="Acceptance criteria"
+                    value={subTask.acceptance_criteria}
+                    placeholder={'- User can…\n- System ensures…'}
+                    emptyHint="Click to add acceptance criteria, one per line…"
+                    saving={saving}
+                    onSave={(next) => patchSubTask({ acceptance_criteria: next })}
+                />
 
-            <RelatedItemsCard
-                issueType="sub_task"
-                issueId={subTask.id}
-                relatedLinks={full?.related_links}
-                externalLinks={full?.external_links}
-                agents={agents}
-                onOpenPicker={setPickerMode}
-                allowAddTestLink
-            />
+                <RelatedItemsCard
+                    issueType="sub_task"
+                    issueId={subTask.id}
+                    relatedLinks={full?.related_links}
+                    externalLinks={full?.external_links}
+                    agents={agents}
+                    onOpenPicker={setPickerMode}
+                    allowAddTestLink
+                />
 
-            <ConversationCard
-                issueType="sub_task"
-                issueId={subTask.id}
-                activity={full?.activity}
-                agents={agents}
-                status={subTask.status}
-                assigneeAgentId={subTask.assignee_agent_id}
-                runs={itemRuns}
-            />
-        </IssueDetailShell>
+                <ConversationCard
+                    issueType="sub_task"
+                    issueId={subTask.id}
+                    activity={full?.activity}
+                    agents={agents}
+                    status={subTask.status}
+                    assigneeAgentId={subTask.assignee_agent_id}
+                    runs={itemRuns}
+                />
+            </IssueDetailShell>
 
-        {pickerMode !== null && (
-            <LinkPickerDialog
-                open
-                mode={pickerMode}
-                fromIssueType="sub_task"
-                fromIssueId={subTask.id}
-                links={full?.related_links}
-                restrictToTaskId={pickerMode === 'tested_by' ? subTask.task_id : undefined}
-                onClose={() => setPickerMode(null)}
-            />
-        )}
+            {pickerMode !== null && (
+                <LinkPickerDialog
+                    open
+                    mode={pickerMode}
+                    fromIssueType="sub_task"
+                    fromIssueId={subTask.id}
+                    links={full?.related_links}
+                    restrictToTaskId={pickerMode === 'tested_by' ? subTask.task_id : undefined}
+                    onClose={() => setPickerMode(null)}
+                />
+            )}
         </>
     );
 }

@@ -50,6 +50,7 @@ function RuleCard({ rule, projectId }: { rule: IProjectGuardrail; projectId: str
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 22, color: ATLAS_PALETTE.purple }}
                     >
                         {rule.icon}
@@ -156,10 +157,11 @@ function AddRuleDialog({
                     }}
                 >
                     <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Add guard-rail</Typography>
-                    <IconButton onClick={onClose} size="small">
+                    <IconButton onClick={onClose} size="small" aria-label="Close">
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 20, color: ATLAS_PALETTE.slate60 }}
                         >
                             close
@@ -240,238 +242,256 @@ export function ProjectGuardrailsBody({
 
             {tab === 'rules' && (
                 <>
-            <Box
-                sx={{
-                    display: 'flex',
-                    flexDirection: { xs: 'column', sm: 'row' },
-                    alignItems: { xs: 'stretch', sm: 'center' },
-                    justifyContent: 'space-between',
-                    gap: { xs: 1.5, sm: 2 },
-                    mb: 4,
-                }}
-            >
-                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                    Rules every agent must respect inside this project ·{' '}
                     <Box
-                        component="span"
                         sx={{
-                            fontFamily: '"JetBrains Mono", monospace',
-                            color: ATLAS_PALETTE.slate,
+                            display: 'flex',
+                            flexDirection: { xs: 'column', sm: 'row' },
+                            alignItems: { xs: 'stretch', sm: 'center' },
+                            justifyContent: 'space-between',
+                            gap: { xs: 1.5, sm: 2 },
+                            mb: 4,
                         }}
                     >
-                        {active.length}
-                    </Box>{' '}
-                    active
-                </Typography>
-                <Button
-                    variant="contained"
-                    onClick={() => setAddOpen(true)}
-                    startIcon={
-                        <Box
-                            component="span"
-                            className="material-symbols-rounded"
-                            sx={{ fontSize: 16 }}
-                        >
-                            add
-                        </Box>
-                    }
-                    sx={{
-                        height: 32,
-                        textTransform: 'none',
-                        fontFamily: '"Inter", system-ui, sans-serif',
-                        fontSize: 12.5,
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0,
-                        alignSelf: { xs: 'flex-end', sm: 'auto' },
-                    }}
-                >
-                    Add rule
-                </Button>
-            </Box>
-
-            <Box
-                sx={{
-                    display: 'grid',
-                    gridTemplateColumns: 'auto minmax(0, 1fr) auto',
-                    gridTemplateAreas: {
-                        xs: `"icon title switch" "icon desc desc"`,
-                        sm: `"icon title-and-desc switch"`,
-                    },
-                    columnGap: { xs: 1.75, sm: 3 },
-                    rowGap: { xs: 0.75, sm: 0 },
-                    alignItems: { xs: 'start', sm: 'center' },
-                    p: { xs: 2.5, sm: 4 },
-                    mb: 5,
-                    bgcolor: ATLAS_PALETTE.accentSoft,
-                    border: `1px solid ${ATLAS_PALETTE.slate12}`,
-                    borderRadius: '12px',
-                }}
-            >
-                <Box
-                    sx={{
-                        gridArea: 'icon',
-                        width: 36,
-                        height: 36,
-                        borderRadius: '10px',
-                        bgcolor: ATLAS_PALETTE.cloud,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                        alignSelf: 'center',
-                    }}
-                >
-                    <Box
-                        component="span"
-                        className="material-symbols-rounded"
-                        sx={{ fontSize: 20, color: ATLAS_PALETTE.slate }}
-                    >
-                        shield
-                    </Box>
-                </Box>
-                <Typography
-                    sx={{
-                        gridArea: { xs: 'title', sm: 'title-and-desc' },
-                        fontSize: 14,
-                        fontWeight: 600,
-                        color: ATLAS_PALETTE.slate,
-                        alignSelf: 'center',
-                    }}
-                >
-                    Guard-rails are active
-                    <Box
-                        component="span"
-                        sx={{
-                            display: { xs: 'none', sm: 'block' },
-                            fontSize: 12.5,
-                            fontWeight: 400,
-                            color: ATLAS_PALETTE.slate60,
-                            lineHeight: 1.6,
-                            mt: 0.5,
-                        }}
-                    >
-                        Every task and sub-task under {projectName ?? 'this project'} inherits these
-                        rules. The{' '}
-                        <Box
-                            component="span"
-                            className="material-symbols-rounded"
+                        <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
+                            Rules every agent must respect inside this project ·{' '}
+                            <Box
+                                component="span"
+                                sx={{
+                                    fontFamily: '"JetBrains Mono", monospace',
+                                    color: ATLAS_PALETTE.slate,
+                                }}
+                            >
+                                {active.length}
+                            </Box>{' '}
+                            active
+                        </Typography>
+                        <Button
+                            variant="contained"
+                            onClick={() => setAddOpen(true)}
+                            startIcon={
+                                <Box
+                                    component="span"
+                                    className="material-symbols-rounded"
+                                    aria-hidden="true"
+                                    sx={{ fontSize: 16 }}
+                                >
+                                    add
+                                </Box>
+                            }
                             sx={{
-                                fontSize: 14,
-                                color: ATLAS_PALETTE.purple,
-                                verticalAlign: 'middle',
+                                height: 32,
+                                textTransform: 'none',
+                                fontFamily: '"Inter", system-ui, sans-serif',
+                                fontSize: 12.5,
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                                alignSelf: { xs: 'flex-end', sm: 'auto' },
                             }}
                         >
-                            shield
-                        </Box>{' '}
-                        icon appears next to the rule anywhere it's listed.
+                            Add rule
+                        </Button>
                     </Box>
-                </Typography>
-                <Typography
-                    sx={{
-                        gridArea: 'desc',
-                        display: { xs: 'block', sm: 'none' },
-                        fontSize: 12.5,
-                        color: ATLAS_PALETTE.slate60,
-                        lineHeight: 1.6,
-                    }}
-                >
-                    Every task and sub-task under {projectName ?? 'this project'} inherits these
-                    rules. The{' '}
-                    <Box
-                        component="span"
-                        className="material-symbols-rounded"
-                        sx={{
-                            fontSize: 14,
-                            color: ATLAS_PALETTE.purple,
-                            verticalAlign: 'middle',
-                        }}
-                    >
-                        shield
-                    </Box>{' '}
-                    icon appears next to the rule anywhere it's listed.
-                </Typography>
-                <Box
-                    sx={{
-                        gridArea: 'switch',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        alignSelf: 'center',
-                    }}
-                >
-                    <Typography
-                        sx={{
-                            fontSize: 12,
-                            fontWeight: 500,
-                            color: ATLAS_PALETTE.green,
-                            display: { xs: 'none', sm: 'inline' },
-                        }}
-                    >
-                        Enabled
-                    </Typography>
-                    <Switch checked readOnly size="small" />
-                </Box>
-            </Box>
 
-            {isLoading ? (
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
-                    {[1, 2, 3, 4].map((i) => (
-                        <Skeleton
-                            key={i}
-                            variant="rectangular"
-                            height={160}
-                            sx={{ borderRadius: '12px' }}
-                        />
-                    ))}
-                </Box>
-            ) : rules.length === 0 ? (
-                <Box
-                    sx={{
-                        textAlign: 'center',
-                        py: 16,
-                        background: ATLAS_PALETTE.white,
-                        border: `1px solid ${ATLAS_PALETTE.slate10}`,
-                        borderRadius: '12px',
-                    }}
-                >
                     <Box
-                        component="span"
-                        className="material-symbols-rounded"
                         sx={{
-                            fontSize: 48,
-                            color: ATLAS_PALETTE.slate40,
-                            display: 'block',
-                            mb: 3,
+                            display: 'grid',
+                            gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+                            gridTemplateAreas: {
+                                xs: `"icon title switch" "icon desc desc"`,
+                                sm: `"icon title-and-desc switch"`,
+                            },
+                            columnGap: { xs: 1.75, sm: 3 },
+                            rowGap: { xs: 0.75, sm: 0 },
+                            alignItems: { xs: 'start', sm: 'center' },
+                            p: { xs: 2.5, sm: 4 },
+                            mb: 5,
+                            bgcolor: ATLAS_PALETTE.accentSoft,
+                            border: `1px solid ${ATLAS_PALETTE.slate12}`,
+                            borderRadius: '12px',
                         }}
                     >
-                        shield
+                        <Box
+                            sx={{
+                                gridArea: 'icon',
+                                width: 36,
+                                height: 36,
+                                borderRadius: '10px',
+                                bgcolor: ATLAS_PALETTE.cloud,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                alignSelf: 'center',
+                            }}
+                        >
+                            <Box
+                                component="span"
+                                className="material-symbols-rounded"
+                                aria-hidden="true"
+                                sx={{ fontSize: 20, color: ATLAS_PALETTE.slate }}
+                            >
+                                shield
+                            </Box>
+                        </Box>
+                        <Typography
+                            sx={{
+                                gridArea: { xs: 'title', sm: 'title-and-desc' },
+                                fontSize: 14,
+                                fontWeight: 600,
+                                color: ATLAS_PALETTE.slate,
+                                alignSelf: 'center',
+                            }}
+                        >
+                            Guard-rails are active
+                            <Box
+                                component="span"
+                                sx={{
+                                    display: { xs: 'none', sm: 'block' },
+                                    fontSize: 12.5,
+                                    fontWeight: 400,
+                                    color: ATLAS_PALETTE.slate60,
+                                    lineHeight: 1.6,
+                                    mt: 0.5,
+                                }}
+                            >
+                                Every task and sub-task under {projectName ?? 'this project'}{' '}
+                                inherits these rules. The{' '}
+                                <Box
+                                    component="span"
+                                    className="material-symbols-rounded"
+                                    aria-hidden="true"
+                                    sx={{
+                                        fontSize: 14,
+                                        color: ATLAS_PALETTE.purple,
+                                        verticalAlign: 'middle',
+                                    }}
+                                >
+                                    shield
+                                </Box>{' '}
+                                icon appears next to the rule anywhere it's listed.
+                            </Box>
+                        </Typography>
+                        <Typography
+                            sx={{
+                                gridArea: 'desc',
+                                display: { xs: 'block', sm: 'none' },
+                                fontSize: 12.5,
+                                color: ATLAS_PALETTE.slate60,
+                                lineHeight: 1.6,
+                            }}
+                        >
+                            Every task and sub-task under {projectName ?? 'this project'} inherits
+                            these rules. The{' '}
+                            <Box
+                                component="span"
+                                className="material-symbols-rounded"
+                                aria-hidden="true"
+                                sx={{
+                                    fontSize: 14,
+                                    color: ATLAS_PALETTE.purple,
+                                    verticalAlign: 'middle',
+                                }}
+                            >
+                                shield
+                            </Box>{' '}
+                            icon appears next to the rule anywhere it's listed.
+                        </Typography>
+                        <Box
+                            sx={{
+                                gridArea: 'switch',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                                alignSelf: 'center',
+                            }}
+                        >
+                            <Typography
+                                sx={{
+                                    fontSize: 12,
+                                    fontWeight: 500,
+                                    color: ATLAS_PALETTE.green,
+                                    display: { xs: 'none', sm: 'inline' },
+                                }}
+                            >
+                                Enabled
+                            </Typography>
+                            <Switch checked readOnly size="small" />
+                        </Box>
                     </Box>
-                    <Typography
-                        sx={{
-                            fontSize: 14,
-                            fontWeight: 600,
-                            color: ATLAS_PALETTE.slate60,
-                            mb: 1.5,
-                        }}
-                    >
-                        No guard-rails yet for this project
-                    </Typography>
-                    <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate40, mb: 4 }}>
-                        Workspace rules still apply. Add a rule to enforce something
-                        project-specific.
-                    </Typography>
-                    <Button variant="contained" onClick={() => setAddOpen(true)}>
-                        Add first rule
-                    </Button>
-                </Box>
-            ) : (
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
-                    {rules.map((r) => (
-                        <RuleCard key={r.id} rule={r} projectId={projectId} />
-                    ))}
-                </Box>
-            )}
 
+                    {isLoading ? (
+                        <Box
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                gap: 3,
+                            }}
+                        >
+                            {[1, 2, 3, 4].map((i) => (
+                                <Skeleton
+                                    key={i}
+                                    variant="rectangular"
+                                    height={160}
+                                    sx={{ borderRadius: '12px' }}
+                                />
+                            ))}
+                        </Box>
+                    ) : rules.length === 0 ? (
+                        <Box
+                            sx={{
+                                textAlign: 'center',
+                                py: 16,
+                                background: ATLAS_PALETTE.white,
+                                border: `1px solid ${ATLAS_PALETTE.slate10}`,
+                                borderRadius: '12px',
+                            }}
+                        >
+                            <Box
+                                component="span"
+                                className="material-symbols-rounded"
+                                aria-hidden="true"
+                                sx={{
+                                    fontSize: 48,
+                                    color: ATLAS_PALETTE.slate40,
+                                    display: 'block',
+                                    mb: 3,
+                                }}
+                            >
+                                shield
+                            </Box>
+                            <Typography
+                                sx={{
+                                    fontSize: 14,
+                                    fontWeight: 600,
+                                    color: ATLAS_PALETTE.slate60,
+                                    mb: 1.5,
+                                }}
+                            >
+                                No guard-rails yet for this project
+                            </Typography>
+                            <Typography
+                                sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate40, mb: 4 }}
+                            >
+                                Workspace rules still apply. Add a rule to enforce something
+                                project-specific.
+                            </Typography>
+                            <Button variant="contained" onClick={() => setAddOpen(true)}>
+                                Add first rule
+                            </Button>
+                        </Box>
+                    ) : (
+                        <Box
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                gap: 3,
+                            }}
+                        >
+                            {rules.map((r) => (
+                                <RuleCard key={r.id} rule={r} projectId={projectId} />
+                            ))}
+                        </Box>
+                    )}
                 </>
             )}
 

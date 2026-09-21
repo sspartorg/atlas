@@ -293,6 +293,7 @@ export function HistoryTabContent({ projectId }: Props) {
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{
                             fontSize: 40,
                             color: ATLAS_PALETTE.slate40,
@@ -320,18 +321,14 @@ export function HistoryTabContent({ projectId }: Props) {
                             mx: 'auto',
                         }}
                     >
-                        Every time an agent runs against a task or sub-task in this project, the
-                        run lands here with a link straight to the item and the full run log.
+                        Every time an agent runs against a task or sub-task in this project, the run
+                        lands here with a link straight to the item and the full run log.
                     </Typography>
                 </Box>
             ) : (
                 <Box>
                     {rows.map((run) => (
-                        <RunRow
-                            key={run.id}
-                            run={run}
-                            agent={agentsById.get(run.agent_id)}
-                        />
+                        <RunRow key={run.id} run={run} agent={agentsById.get(run.agent_id)} />
                     ))}
                 </Box>
             )}

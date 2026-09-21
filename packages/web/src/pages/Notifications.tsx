@@ -72,7 +72,7 @@ export function Notifications() {
     }
 
     const externalConnected = Boolean(
-        settings?.external_notification_token && settings?.external_notification_chat_id,
+        settings?.external_notification_token && settings?.external_notification_chat_id
     );
     const endpointLabel = settings?.external_notification_endpoint_label ?? null;
 
@@ -133,10 +133,7 @@ export function Notifications() {
                 {externalConnected && endpointLabel ? (
                     <>
                         {' · connected to '}
-                        <Box
-                            component="span"
-                            sx={{ fontFamily: MONO, color: ATLAS_PALETTE.slate }}
-                        >
+                        <Box component="span" sx={{ fontFamily: MONO, color: ATLAS_PALETTE.slate }}>
                             {endpointLabel}
                         </Box>
                         {' · last delivery '}
@@ -147,10 +144,7 @@ export function Notifications() {
                 ) : (
                     <>
                         {' · '}
-                        <Box
-                            component="span"
-                            sx={{ color: ATLAS_PALETTE.error, fontWeight: 700 }}
-                        >
+                        <Box component="span" sx={{ color: ATLAS_PALETTE.error, fontWeight: 700 }}>
                             not connected
                         </Box>
                         {' — visit '}
@@ -215,9 +209,7 @@ export function Notifications() {
                 </Tabs>
             </Box>
 
-            {tab === 'external' && (
-                <NotificationLogTab settings={settings} allRows={allRows} />
-            )}
+            {tab === 'external' && <NotificationLogTab settings={settings} allRows={allRows} />}
             {tab === 'in-app' && <InAppFeedTab allRows={allRows} agents={agents} />}
         </Box>
     );

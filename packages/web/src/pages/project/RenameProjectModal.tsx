@@ -123,8 +123,8 @@ export function RenameProjectModal({ open, project, displayId, onClose }: Props)
                             </Box>
                         </Box>
                         <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 1 }}>
-                            Display label only. The workspace folder on disk and all git
-                            operations are unaffected.
+                            Display label only. The workspace folder on disk and all git operations
+                            are unaffected.
                         </Typography>
                     </Box>
                     <IconButton onClick={onClose} size="small" disabled={updateProject.isPending}>

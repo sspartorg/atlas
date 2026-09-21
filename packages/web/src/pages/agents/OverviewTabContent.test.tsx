@@ -32,9 +32,7 @@ const view: AgentView = {
 function baseHandlers() {
     return [
         ...defaultHandlers,
-        http.get(`${BASE}/agents/${agent.id}/commit-verifications`, () =>
-            HttpResponse.json([]),
-        ),
+        http.get(`${BASE}/agents/${agent.id}/commit-verifications`, () => HttpResponse.json([])),
         http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
     ];
 }
@@ -45,12 +43,8 @@ beforeEach(() => {
 
 describe('OverviewTabContent', () => {
     it('renders without crashing', async () => {
-        const { container } = renderWithProviders(
-            <OverviewTabContent agent={agent} view={view} />,
-        );
-        await waitFor(() =>
-            expect(container.firstChild).toBeInTheDocument(),
-        );
+        const { container } = renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
+        await waitFor(() => expect(container.firstChild).toBeInTheDocument());
     });
 
     it('shows edit icon for description section', async () => {
@@ -64,17 +58,15 @@ describe('OverviewTabContent', () => {
 
     it('clicking edit icon shows description textarea and Save/Cancel buttons', async () => {
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
-        await waitFor(() =>
-            screen.getByText('Implements specs end-to-end.'),
-        );
+        await waitFor(() => screen.getByText('Implements specs end-to-end.'));
         const buttons = screen.getAllByRole('button');
         const editBtn = buttons.find(
-            (b) => b.querySelector('.material-symbols-rounded')?.textContent === 'edit',
+            (b) => b.querySelector('.material-symbols-rounded')?.textContent === 'edit'
         );
         expect(editBtn).toBeDefined();
         await userEvent.click(editBtn!);
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /^Save$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /^Save$/i })).toBeInTheDocument()
         );
         expect(screen.getByRole('button', { name: /Cancel/i })).toBeInTheDocument();
     });
@@ -85,17 +77,17 @@ describe('OverviewTabContent', () => {
 
         const buttons = screen.getAllByRole('button');
         const editBtn = buttons.find(
-            (b) => b.querySelector('.material-symbols-rounded')?.textContent === 'edit',
+            (b) => b.querySelector('.material-symbols-rounded')?.textContent === 'edit'
         );
         await userEvent.click(editBtn!);
 
         await waitFor(() =>
-            expect(screen.getAllByRole('button', { name: /Cancel/i })[0]).toBeInTheDocument(),
+            expect(screen.getAllByRole('button', { name: /Cancel/i })[0]).toBeInTheDocument()
         );
         await userEvent.click(screen.getAllByRole('button', { name: /Cancel/i })[0]!);
 
         await waitFor(() =>
-            expect(screen.getByText('Implements specs end-to-end.')).toBeInTheDocument(),
+            expect(screen.getByText('Implements specs end-to-end.')).toBeInTheDocument()
         );
         expect(screen.queryByRole('button', { name: /^Save$/i })).not.toBeInTheDocument();
     });
@@ -106,30 +98,30 @@ describe('OverviewTabContent', () => {
             http.patch(`${BASE}/agents/${agent.id}`, () => {
                 patched = true;
                 return HttpResponse.json({ ...agent });
-            }),
+            })
         );
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
         await waitFor(() => screen.getByText('Implements specs end-to-end.'));
 
         const buttons = screen.getAllByRole('button');
         const editBtn = buttons.find(
-            (b) => b.querySelector('.material-symbols-rounded')?.textContent === 'edit',
+            (b) => b.querySelector('.material-symbols-rounded')?.textContent === 'edit'
         );
         await userEvent.click(editBtn!);
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /^Save$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /^Save$/i })).toBeInTheDocument()
         );
         const textareas = screen.getAllByRole('textbox');
         const descTextarea = textareas.find(
-            (t) => (t as HTMLElement).tagName === 'TEXTAREA' && !t.hasAttribute('aria-hidden'),
+            (t) => (t as HTMLElement).tagName === 'TEXTAREA' && !t.hasAttribute('aria-hidden')
         );
         expect(descTextarea).toBeDefined();
         await userEvent.clear(descTextarea!);
         await userEvent.type(descTextarea!, 'Updated description');
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled()
         );
         await userEvent.click(screen.getByRole('button', { name: /^Save$/i }));
 
@@ -138,9 +130,7 @@ describe('OverviewTabContent', () => {
 
     it('shows "No changes" when no edits made', async () => {
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
-        await waitFor(() =>
-            expect(screen.getByText('No changes')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('No changes')).toBeInTheDocument());
     });
 
     it('Save changes PATCHes only cli/model/effort, and Discard reverts', async () => {
@@ -149,12 +139,14 @@ describe('OverviewTabContent', () => {
             http.patch(`${BASE}/agents/${agent.id}`, async ({ request }) => {
                 body = await request.json();
                 return HttpResponse.json({ ...agent });
-            }),
+            })
         );
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
         await waitFor(() => screen.getByText('No changes'));
 
-        const effortSelect = screen.getAllByRole('combobox').find((c) => c.textContent === 'medium');
+        const effortSelect = screen
+            .getAllByRole('combobox')
+            .find((c) => c.textContent === 'medium');
         fireEvent.mouseDown(effortSelect!);
         fireEvent.click(await screen.findByRole('option', { name: 'high' }));
         await waitFor(() => screen.getByText('Unsaved changes'));
@@ -162,19 +154,29 @@ describe('OverviewTabContent', () => {
         await userEvent.click(screen.getByRole('button', { name: /Discard/i }));
         await waitFor(() => screen.getByText('No changes'));
 
-        fireEvent.mouseDown(screen.getAllByRole('combobox').find((c) => c.textContent === 'medium')!);
+        fireEvent.mouseDown(
+            screen.getAllByRole('combobox').find((c) => c.textContent === 'medium')!
+        );
         fireEvent.click(await screen.findByRole('option', { name: 'high' }));
         await userEvent.click(await screen.findByRole('button', { name: /Save changes/i }));
 
         await waitFor(() =>
-            expect(body).toEqual({ cli: 'claude', model: 'claude-opus-4-7', effort: 'high' }),
+            expect(body).toEqual({ cli: 'claude', model: 'claude-opus-4-7', effort: 'high' })
         );
     });
 
     it('does not render the removed schedule / concurrency / git-flag controls', async () => {
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
         await waitFor(() => screen.getByText('No changes'));
-        for (const label of [/^Schedule$/, /Concurrent runs/, /Max rounds/, /Item required/, /Requires worktree/, /Push code/, /Raises PR/]) {
+        for (const label of [
+            /^Schedule$/,
+            /Concurrent runs/,
+            /Max rounds/,
+            /Item required/,
+            /Requires worktree/,
+            /Push code/,
+            /Raises PR/,
+        ]) {
             expect(screen.queryByText(label)).not.toBeInTheDocument();
         }
         expect(screen.getByText('Quality checklist')).toBeInTheDocument();
@@ -183,11 +185,7 @@ describe('OverviewTabContent', () => {
     it('commit-discipline section shows "No agent runs have been verified yet" when empty', async () => {
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
         await waitFor(() =>
-            expect(
-                screen.getByText(
-                    /No agent runs have been verified yet/i,
-                ),
-            ).toBeInTheDocument(),
+            expect(screen.getByText(/No agent runs have been verified yet/i)).toBeInTheDocument()
         );
     });
 
@@ -209,26 +207,24 @@ describe('OverviewTabContent', () => {
                         commit_count: 0,
                         problems: [{ commit_sha: 'abc123', reason: 'No commit message' }],
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
-        await waitFor(() =>
-            expect(screen.getByText(/Newest first/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Newest first/i)).toBeInTheDocument());
     });
 
     it('RoleSection shows designation field', async () => {
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
         await waitFor(() =>
-            expect(screen.getByPlaceholderText(/Product Owner/i)).toBeInTheDocument(),
+            expect(screen.getByPlaceholderText(/Product Owner/i)).toBeInTheDocument()
         );
     });
 
     it('RoleSection "Save role" button is disabled when nothing changed', async () => {
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Save role/i })).toBeDisabled(),
+            expect(screen.getByRole('button', { name: /Save role/i })).toBeDisabled()
         );
     });
 
@@ -238,18 +234,18 @@ describe('OverviewTabContent', () => {
             http.patch(`${BASE}/agents/${agent.id}`, () => {
                 patched = true;
                 return HttpResponse.json({ ...agent });
-            }),
+            })
         );
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
         await waitFor(() =>
-            expect(screen.getByPlaceholderText(/Product Owner/i)).toBeInTheDocument(),
+            expect(screen.getByPlaceholderText(/Product Owner/i)).toBeInTheDocument()
         );
         const designationInput = screen.getByPlaceholderText(/Product Owner/i);
         await userEvent.clear(designationInput);
         await userEvent.type(designationInput, 'Lead Dev');
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Save role/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /Save role/i })).not.toBeDisabled()
         );
         await userEvent.click(screen.getByRole('button', { name: /Save role/i }));
         await waitFor(() => expect(patched).toBe(true));
@@ -260,17 +256,17 @@ describe('OverviewTabContent', () => {
         await waitFor(() => screen.getByText('No changes'));
         // Find the CLI combobox — it has value "claude"
         const comboboxes = screen.getAllByRole('combobox');
-        const cliSelect = comboboxes.find(c => {
+        const cliSelect = comboboxes.find((c) => {
             const val = (c as HTMLSelectElement).value ?? (c as HTMLElement).textContent;
             return val?.includes('claude');
         });
         if (cliSelect) {
             fireEvent.mouseDown(cliSelect);
             const opts = screen.queryAllByRole('option');
-            const copilotOpt = opts.find(o => o.textContent === 'copilot');
+            const copilotOpt = opts.find((o) => o.textContent === 'copilot');
             if (copilotOpt) fireEvent.click(copilotOpt);
             await waitFor(() =>
-                expect(screen.queryByText('Unsaved changes') ?? document.body).toBeTruthy(),
+                expect(screen.queryByText('Unsaved changes') ?? document.body).toBeTruthy()
             );
         }
         expect(document.body).toBeTruthy();
@@ -281,17 +277,17 @@ describe('OverviewTabContent', () => {
         await waitFor(() => screen.getByText('No changes'));
         // Find the effort combobox — it has value "medium"
         const comboboxes = screen.getAllByRole('combobox');
-        const effortSelect = comboboxes.find(c => {
+        const effortSelect = comboboxes.find((c) => {
             const val = (c as HTMLSelectElement).value ?? (c as HTMLElement).textContent;
             return val?.includes('medium');
         });
         if (effortSelect) {
             fireEvent.mouseDown(effortSelect);
             const opts = screen.queryAllByRole('option');
-            const highOpt = opts.find(o => o.textContent === 'high');
+            const highOpt = opts.find((o) => o.textContent === 'high');
             if (highOpt) fireEvent.click(highOpt);
             await waitFor(() =>
-                expect(screen.queryByText('Unsaved changes') ?? document.body).toBeTruthy(),
+                expect(screen.queryByText('Unsaved changes') ?? document.body).toBeTruthy()
             );
         }
         expect(document.body).toBeTruthy();
@@ -312,7 +308,9 @@ describe('OverviewTabContent', () => {
         }
         if (memoryCadenceInput) {
             fireEvent.change(memoryCadenceInput!, { target: { value: '5' } });
-            await waitFor(() => expect(screen.getByRole('button', { name: /Save role/i })).not.toBeDisabled());
+            await waitFor(() =>
+                expect(screen.getByRole('button', { name: /Save role/i })).not.toBeDisabled()
+            );
         }
         expect(document.body).toBeTruthy();
     });
@@ -328,14 +326,12 @@ describe('OverviewTabContent', () => {
                         commit_count: 1,
                         problems: [],
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
         // The tile renders the dot regardless of unknown result key; "Newest first" label confirms it rendered
-        await waitFor(() =>
-            expect(screen.getByText(/Newest first/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Newest first/i)).toBeInTheDocument());
     });
 
     // ── CommitDisciplineTile: sha present in problems ────────────────────────
@@ -364,13 +360,11 @@ describe('OverviewTabContent', () => {
                         commit_count: 0,
                         problems: [],
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
-        await waitFor(() =>
-            expect(screen.getByText(/Newest first/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Newest first/i)).toBeInTheDocument());
     });
 
     // ── formatNextSlotAbsolute branch coverage via active preset nextSlot ────
@@ -384,7 +378,7 @@ describe('OverviewTabContent', () => {
         // Find the helper text element, then go up to the TextField root, then find the input
         const helperTexts = Array.from(document.querySelectorAll('p.MuiFormHelperText-root'));
         const memoryCadenceHelper = helperTexts.find((p) =>
-            p.textContent?.includes('memory regeneration'),
+            p.textContent?.includes('memory regeneration')
         );
         expect(memoryCadenceHelper).toBeDefined();
         // The input is a sibling of the MuiInputBase div within the same TextField
@@ -395,7 +389,7 @@ describe('OverviewTabContent', () => {
         fireEvent.change(memoryCadenceInput!, { target: { value: '10' } });
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Save role/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /Save role/i })).not.toBeDisabled()
         );
     });
 
@@ -406,7 +400,7 @@ describe('OverviewTabContent', () => {
 
         const helperTexts = Array.from(document.querySelectorAll('p.MuiFormHelperText-root'));
         const memoryCadenceHelper = helperTexts.find((p) =>
-            p.textContent?.includes('memory regeneration'),
+            p.textContent?.includes('memory regeneration')
         );
         if (memoryCadenceHelper) {
             const textFieldRoot = memoryCadenceHelper.closest('.MuiTextField-root');
@@ -428,8 +422,8 @@ describe('OverviewTabContent', () => {
         });
         server.use(
             http.get(`${BASE}/agents/${nullEffortAgent.id}/commit-verifications`, () =>
-                HttpResponse.json([]),
-            ),
+                HttpResponse.json([])
+            )
         );
         renderWithProviders(<OverviewTabContent agent={nullEffortAgent} view={view} />);
         await waitFor(() => screen.getByText('No changes'));
@@ -464,49 +458,47 @@ describe('OverviewTabContent', () => {
             fireEvent.click(highOpt);
         }
 
-        await waitFor(() =>
-            expect(screen.getByText('Unsaved changes')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeInTheDocument());
     });
 
     // ── description Save button shows 'Saving…' (L235 branch) ────────────────
     it('description Save button shows Saving… text while mutation is pending (L235 branch)', async () => {
         let resolvePatched!: () => void;
-        const patchPromise = new Promise<void>((res) => { resolvePatched = res; });
+        const patchPromise = new Promise<void>((res) => {
+            resolvePatched = res;
+        });
         server.use(
             http.patch(`${BASE}/agents/${agent.id}`, async () => {
                 await patchPromise;
                 return HttpResponse.json({ ...agent });
-            }),
+            })
         );
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
         await waitFor(() => screen.getByText('Implements specs end-to-end.'));
 
         const buttons = screen.getAllByRole('button');
         const editBtn = buttons.find(
-            (b) => b.querySelector('.material-symbols-rounded')?.textContent === 'edit',
+            (b) => b.querySelector('.material-symbols-rounded')?.textContent === 'edit'
         );
         await userEvent.click(editBtn!);
 
         const textareas = screen.getAllByRole('textbox');
         const descTextarea = textareas.find(
-            (t) => (t as HTMLElement).tagName === 'TEXTAREA' && !t.hasAttribute('aria-hidden'),
+            (t) => (t as HTMLElement).tagName === 'TEXTAREA' && !t.hasAttribute('aria-hidden')
         );
         // Use fireEvent.change (instant) instead of userEvent.type (slow keystroke-by-keystroke)
         // to avoid exceeding the 30s test timeout under v8 instrumentation
         fireEvent.change(descTextarea!, { target: { value: 'Updated desc for saving test' } });
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled()
         );
 
         // Click Save — mutation starts but we keep it pending
         await userEvent.click(screen.getByRole('button', { name: /^Save$/i }));
 
         // While pending, button should show 'Saving…'
-        await waitFor(() =>
-            expect(screen.getByText('Saving…')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Saving…')).toBeInTheDocument());
 
         resolvePatched();
     }, 30000);
@@ -514,16 +506,18 @@ describe('OverviewTabContent', () => {
     // ── Save role button shows 'Saving…' while pending (L1354 branch) ────────
     it('Save role button shows Saving… while mutation pending (L1354 branch)', async () => {
         let resolveRolePatched!: () => void;
-        const rolePatchPromise = new Promise<void>((res) => { resolveRolePatched = res; });
+        const rolePatchPromise = new Promise<void>((res) => {
+            resolveRolePatched = res;
+        });
         server.use(
             http.patch(`${BASE}/agents/${agent.id}`, async () => {
                 await rolePatchPromise;
                 return HttpResponse.json({ ...agent });
-            }),
+            })
         );
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
         await waitFor(() =>
-            expect(screen.getByPlaceholderText(/Product Owner/i)).toBeInTheDocument(),
+            expect(screen.getByPlaceholderText(/Product Owner/i)).toBeInTheDocument()
         );
 
         // Make role dirty
@@ -532,16 +526,14 @@ describe('OverviewTabContent', () => {
         fireEvent.change(designationInput, { target: { value: 'Lead Architect' } });
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Save role/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /Save role/i })).not.toBeDisabled()
         );
 
         // Click Save role — keep mutation pending
         await userEvent.click(screen.getByRole('button', { name: /Save role/i }));
 
         // Should show 'Saving…'
-        await waitFor(() =>
-            expect(screen.getByText('Saving…')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Saving…')).toBeInTheDocument());
 
         resolveRolePatched();
     }, 30000);
@@ -561,13 +553,11 @@ describe('OverviewTabContent', () => {
                             { reason: 'Agent produced no commit' },
                         ],
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
-        await waitFor(() =>
-            expect(screen.getByText(/Newest first/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Newest first/i)).toBeInTheDocument());
     });
 
     // ── RoleSection: null-default agent fields (lines 1205-1222 ?? fallback branches) ──
@@ -580,13 +570,13 @@ describe('OverviewTabContent', () => {
         });
         server.use(
             http.get(`${BASE}/agents/${nullFieldAgent.id}/commit-verifications`, () =>
-                HttpResponse.json([]),
-            ),
+                HttpResponse.json([])
+            )
         );
         renderWithProviders(<OverviewTabContent agent={nullFieldAgent} view={view} />);
         // RoleSection renders with ?? defaults — designation placeholder visible
         await waitFor(() =>
-            expect(screen.getByPlaceholderText(/Product Owner/i)).toBeInTheDocument(),
+            expect(screen.getByPlaceholderText(/Product Owner/i)).toBeInTheDocument()
         );
         // dirty===false because all fields match their ?? default values
         expect(screen.getByRole('button', { name: /Save role/i })).toBeDisabled();
@@ -596,30 +586,53 @@ describe('OverviewTabContent', () => {
         server.use(
             http.get(`${BASE}/cli-models`, () =>
                 HttpResponse.json([
-                    { id: 'm1', cli: 'claude', model_name: 'claude-sonnet-4-6', note: null, sort_order: 2, created_at: '' },
-                    { id: 'm2', cli: 'claude', model_name: 'claude-opus-4-7', note: null, sort_order: 1, created_at: '' },
-                    { id: 'm3', cli: 'copilot', model_name: 'gpt-5', note: null, sort_order: 1, created_at: '' },
-                ]),
+                    {
+                        id: 'm1',
+                        cli: 'claude',
+                        model_name: 'claude-sonnet-4-6',
+                        note: null,
+                        sort_order: 2,
+                        created_at: '',
+                    },
+                    {
+                        id: 'm2',
+                        cli: 'claude',
+                        model_name: 'claude-opus-4-7',
+                        note: null,
+                        sort_order: 1,
+                        created_at: '',
+                    },
+                    {
+                        id: 'm3',
+                        cli: 'copilot',
+                        model_name: 'gpt-5',
+                        note: null,
+                        sort_order: 1,
+                        created_at: '',
+                    },
+                ])
             ),
-            http.get(`${BASE}/cli/availability`, () => HttpResponse.json([
+            http.get(`${BASE}/cli/availability`, () =>
+                HttpResponse.json([
                     { cli: 'claude', binary: 'claude', available: true, version: '1.0.0' },
                     { cli: 'copilot', binary: 'copilot', available: false, version: null },
                     { cli: 'ollama', binary: 'claude', available: true, version: '1.0.0' },
-                ])),
+                ])
+            )
         );
         renderWithProviders(<OverviewTabContent agent={agent} view={view} />);
         await waitFor(() => screen.getByText('No changes'));
-        const cliSelect = screen
-            .getAllByRole('combobox')
-            .find((c) => c.textContent === 'claude');
+        const cliSelect = screen.getAllByRole('combobox').find((c) => c.textContent === 'claude');
         fireEvent.mouseDown(cliSelect!);
         fireEvent.click(await screen.findByRole('option', { name: 'copilot' }));
         await waitFor(() =>
-            expect(screen.getAllByRole('combobox').some((c) => c.textContent === 'gpt-5')).toBe(true),
+            expect(screen.getAllByRole('combobox').some((c) => c.textContent === 'gpt-5')).toBe(
+                true
+            )
         );
         expect(screen.queryByText(/not in registry/)).not.toBeInTheDocument();
         expect(
-            await screen.findByText(/copilot is not installed on this machine/),
+            await screen.findByText(/copilot is not installed on this machine/)
         ).toBeInTheDocument();
     });
 });

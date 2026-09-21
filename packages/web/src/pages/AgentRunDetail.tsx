@@ -115,7 +115,6 @@ function parseErrorKindMarker(output: string | null | undefined): {
     return { kind: m[1] as ApiErrorKind, details };
 }
 
-
 function durationLabel(run: IAgentRun): string {
     if (!run.started_at) return '—';
     const end = run.completed_at ? new Date(run.completed_at) : new Date();
@@ -455,6 +454,7 @@ export function AgentRunDetail() {
                                     <Box
                                         component="span"
                                         className="material-symbols-rounded"
+                                        aria-hidden="true"
                                         sx={{ fontSize: 18 }}
                                     >
                                         stop_circle
@@ -476,7 +476,12 @@ export function AgentRunDetail() {
                             </Button>
                         )}
                         {workflowRunHref && (
-                            <Button component={RouterLink} to={workflowRunHref} variant="outlined" sx={{ textTransform: 'none', fontWeight: 600 }}>
+                            <Button
+                                component={RouterLink}
+                                to={workflowRunHref}
+                                variant="outlined"
+                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                            >
                                 Open workflow run
                             </Button>
                         )}
@@ -489,6 +494,7 @@ export function AgentRunDetail() {
                                     <Box
                                         component="span"
                                         className="material-symbols-rounded"
+                                        aria-hidden="true"
                                         sx={{ fontSize: 18 }}
                                     >
                                         replay
@@ -515,6 +521,7 @@ export function AgentRunDetail() {
                                 <Box
                                     component="span"
                                     className="material-symbols-rounded"
+                                    aria-hidden="true"
                                     sx={{ fontSize: 18 }}
                                 >
                                     content_copy
@@ -537,6 +544,7 @@ export function AgentRunDetail() {
                                 <Box
                                     component="span"
                                     className="material-symbols-rounded"
+                                    aria-hidden="true"
                                     sx={{ fontSize: 18 }}
                                 >
                                     download
@@ -579,6 +587,7 @@ export function AgentRunDetail() {
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 18, color: ATLAS_PALETTE.brandBlue }}
                 >
                     flag
@@ -599,6 +608,7 @@ export function AgentRunDetail() {
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 18, color: ATLAS_PALETTE.slate40 }}
                     >
                         chevron_right
@@ -842,7 +852,13 @@ export function AgentRunDetail() {
                         </Button>
                     )}
                     {workflowRunHref && (
-                        <Button component={RouterLink} to={workflowRunHref} variant="outlined" fullWidth sx={{ textTransform: 'none', fontWeight: 600 }}>
+                        <Button
+                            component={RouterLink}
+                            to={workflowRunHref}
+                            variant="outlined"
+                            fullWidth
+                            sx={{ textTransform: 'none', fontWeight: 600 }}
+                        >
                             Open workflow run
                         </Button>
                     )}

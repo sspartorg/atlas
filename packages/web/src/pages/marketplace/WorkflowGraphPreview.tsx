@@ -22,12 +22,14 @@ export function WorkflowGraphPreview({ graph, subNames, delivery, agentsById }: 
         () => ({
             agentsById,
             // Sub-tasks nodes only read the sub-workflow's name.
-            workflowsById: new Map([...subNames].map(([ref, name]) => [ref, { name } as IWorkflow])),
+            workflowsById: new Map(
+                [...subNames].map(([ref, name]) => [ref, { name } as IWorkflow])
+            ),
             errorNodeIds: new Set<string>(),
             runStates: null,
             delivery,
         }),
-        [agentsById, subNames, delivery],
+        [agentsById, subNames, delivery]
     );
     return (
         <ReactFlowProvider>

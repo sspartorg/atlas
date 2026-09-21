@@ -471,7 +471,10 @@ describe('ProjectReposCard', () => {
         mockRepos([API, WEB]);
         server.use(
             http.patch(`${BASE}/projects/p1/repos/r-web`, () =>
-                HttpResponse.json({ error: 'branch "main" does not exist on the remote' }, { status: 400 })
+                HttpResponse.json(
+                    { error: 'branch "main" does not exist on the remote' },
+                    { status: 400 }
+                )
             )
         );
         renderCard();
@@ -524,9 +527,7 @@ describe('ProjectReposCard', () => {
 
         // Switching to "use existing folder" retires the field entirely.
         fireEvent.click(within(dialog).getByRole('button', { name: /use existing folder/i }));
-        await waitFor(() =>
-            expect(within(dialog).queryByLabelText(/default branch/i)).toBeNull()
-        );
+        await waitFor(() => expect(within(dialog).queryByLabelText(/default branch/i)).toBeNull());
     });
 
     it('leaves the dialog for Settings → Credentials when asked to manage them', async () => {

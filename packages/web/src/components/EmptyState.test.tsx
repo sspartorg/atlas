@@ -12,7 +12,7 @@ describe('EmptyState', () => {
                 description="Add your first item"
                 actions={<button>Add</button>}
                 supplemental={<span>extra</span>}
-            />,
+            />
         );
         expect(screen.getByText('Nothing yet')).toBeInTheDocument();
         expect(screen.getByText('Add your first item')).toBeInTheDocument();
@@ -23,11 +23,7 @@ describe('EmptyState', () => {
 
     it('renders the dashed variant', () => {
         renderWithProviders(
-            <EmptyState
-                icon={<span data-testid="icon" />}
-                title="Empty"
-                variant="dashed"
-            />,
+            <EmptyState icon={<span data-testid="icon" />} title="Empty" variant="dashed" />
         );
         expect(screen.getByText('Empty')).toBeInTheDocument();
     });

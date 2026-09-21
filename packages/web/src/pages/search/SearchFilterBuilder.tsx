@@ -115,6 +115,7 @@ function PillContainer({
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 14 }}
                     >
                         close
@@ -283,6 +284,7 @@ export function SearchFilterBuilder({
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 16, color: ATLAS_PALETTE.brandBlue }}
                         >
                             tune
@@ -294,14 +296,11 @@ export function SearchFilterBuilder({
                         >
                             Pill builder
                         </Typography>
-                        <Typography
-                            sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate60, mt: 0.25 }}
-                        >
+                        <Typography sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate60, mt: 0.25 }}>
                             Click any pill to edit · drag to reorder · X to remove
                         </Typography>
                     </Box>
                 </Box>
-
             </Box>
 
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
@@ -376,6 +375,7 @@ export function SearchFilterBuilder({
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 14 }}
                     >
                         add
@@ -535,18 +535,14 @@ export function SearchFilterBuilder({
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 14, color: ATLAS_PALETTE.slate60 }}
                 >
                     visibility
                 </Box>
-                <Typography
-                    sx={{ fontFamily: MONO, fontSize: 11.5, color: ATLAS_PALETTE.slate60 }}
-                >
+                <Typography sx={{ fontFamily: MONO, fontSize: 11.5, color: ATLAS_PALETTE.slate60 }}>
                     Showing{' '}
-                    <Box
-                        component="b"
-                        sx={{ color: ATLAS_PALETTE.slate, fontWeight: 600 }}
-                    >
+                    <Box component="b" sx={{ color: ATLAS_PALETTE.slate, fontWeight: 600 }}>
                         {resultCount} result{resultCount === 1 ? '' : 's'}
                     </Box>{' '}
                     across{' '}

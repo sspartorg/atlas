@@ -30,24 +30,26 @@ describe('GuardrailRuleRow', () => {
             <GuardrailRuleRow
                 rule={{ ...baseRule, detail: 'Extra context here' }}
                 onEdit={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText(/Extra context here/)).toBeInTheDocument();
     });
 
     it('does not render a detail paragraph when rule.detail is null', () => {
-        renderWithProviders(<GuardrailRuleRow rule={{ ...baseRule, detail: null }} onEdit={vi.fn()} />);
+        renderWithProviders(
+            <GuardrailRuleRow rule={{ ...baseRule, detail: null }} onEdit={vi.fn()} />
+        );
         expect(screen.queryByText(/Extra context/)).not.toBeInTheDocument();
     });
 
     it('renders different severity chips — warn and ask_owner', () => {
         const { unmount } = renderWithProviders(
-            <GuardrailRuleRow rule={{ ...baseRule, severity: 'warn' }} onEdit={vi.fn()} />,
+            <GuardrailRuleRow rule={{ ...baseRule, severity: 'warn' }} onEdit={vi.fn()} />
         );
         expect(screen.getByText(/Never log secrets/)).toBeInTheDocument();
         unmount();
         renderWithProviders(
-            <GuardrailRuleRow rule={{ ...baseRule, severity: 'ask_owner' }} onEdit={vi.fn()} />,
+            <GuardrailRuleRow rule={{ ...baseRule, severity: 'ask_owner' }} onEdit={vi.fn()} />
         );
         expect(screen.getByText(/Never log secrets/)).toBeInTheDocument();
     });

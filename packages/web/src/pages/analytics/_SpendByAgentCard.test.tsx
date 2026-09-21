@@ -12,11 +12,9 @@ describe('SpendByAgentCard', () => {
     it('renders the legend even when every agent has zero cost (donut handles all-zero gracefully)', () => {
         renderWithProviders(
             <SpendByAgentCard
-                byAgent={[
-                    { agent_id: 'a1', agent_name: 'Coder', total_cost_usd: 0, run_count: 0 },
-                ]}
+                byAgent={[{ agent_id: 'a1', agent_name: 'Coder', total_cost_usd: 0, run_count: 0 }]}
                 totalAgentCost={0}
-            />,
+            />
         );
         // Legend still renders the agent name with 0.0% — the empty state
         // is only used when byAgent itself is empty.
@@ -32,7 +30,7 @@ describe('SpendByAgentCard', () => {
                     { agent_id: 'a2', agent_name: 'Reviewer', total_cost_usd: 1.0, run_count: 2 },
                 ]}
                 totalAgentCost={4.0}
-            />,
+            />
         );
         expect(screen.getAllByText(/Coder/).length).toBeGreaterThan(0);
         expect(screen.getAllByText(/Reviewer/).length).toBeGreaterThan(0);

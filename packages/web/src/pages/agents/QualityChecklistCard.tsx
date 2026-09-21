@@ -29,7 +29,8 @@ export function QualityChecklistCard({ agentId }: { agentId: string }) {
     const [hydrated, setHydrated] = useState(false);
     const [pendingDeleteIdx, setPendingDeleteIdx] = useState<number | null>(null);
     const [saving, setSaving] = useState(false);
-    const pendingDeleteCheck = pendingDeleteIdx !== null ? checks[pendingDeleteIdx] ?? null : null;
+    const pendingDeleteCheck =
+        pendingDeleteIdx !== null ? (checks[pendingDeleteIdx] ?? null) : null;
 
     useEffect(() => {
         if (!checklistsQuery.data || hydrated) return;
@@ -38,7 +39,7 @@ export function QualityChecklistCard({ agentId }: { agentId: string }) {
                 key: String(c.id),
                 label: c.label,
                 required: c.required,
-            })),
+            }))
         );
         setHydrated(true);
     }, [checklistsQuery.data, hydrated]);
@@ -67,7 +68,7 @@ export function QualityChecklistCard({ agentId }: { agentId: string }) {
                         label: c.label.trim(),
                         sort_order: idx,
                         required: c.required,
-                    })),
+                    }))
             );
             await queryClient.invalidateQueries({ queryKey: ['agents', agentId, 'checklists'] });
             toast.show({ message: 'Checklist saved' });
@@ -84,8 +85,8 @@ export function QualityChecklistCard({ agentId }: { agentId: string }) {
     return (
         <FormSection label="Quality checklist">
             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: -1, mb: 2 }}>
-                The agent reports each check in its outcome. A failed required check sends the
-                work down the workflow&apos;s fail path.
+                The agent reports each check in its outcome. A failed required check sends the work
+                down the workflow&apos;s fail path.
             </Typography>
             {checks.length === 0 ? (
                 <Typography
@@ -118,8 +119,8 @@ export function QualityChecklistCard({ agentId }: { agentId: string }) {
                             onChange={(e) =>
                                 setChecks((xs) =>
                                     xs.map((x, i) =>
-                                        i === idx ? { ...x, label: e.target.value } : x,
-                                    ),
+                                        i === idx ? { ...x, label: e.target.value } : x
+                                    )
                                 )
                             }
                             slotProps={{ input: { disableUnderline: true } }}
@@ -183,8 +184,12 @@ export function QualityChecklistCard({ agentId }: { agentId: string }) {
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 3, mb: 4 }}>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                             <FormHeading>Delete this checklist item?</FormHeading>
-                            <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
-                                <strong>{pendingDeleteCheck?.label.trim() || 'this checklist item'}</strong>{' '}
+                            <Typography
+                                sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 0.5 }}
+                            >
+                                <strong>
+                                    {pendingDeleteCheck?.label.trim() || 'this checklist item'}
+                                </strong>{' '}
                                 will be removed. The change is local until you click{' '}
                                 <strong>Save checklist</strong>.
                             </Typography>

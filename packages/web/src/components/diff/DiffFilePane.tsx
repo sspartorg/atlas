@@ -48,13 +48,7 @@ export function DiffFilePane({ sessionId, scope, file, viewMode, wrap, onBack }:
     const fetchable = file !== null && !file.binary && !file.too_large && !gated;
 
     const context = CONTEXT_STEPS[contextStep] ?? CONTEXT_STEPS[0];
-    const query = useCliSessionFilePatch(
-        sessionId,
-        scope,
-        file?.path ?? null,
-        context,
-        fetchable,
-    );
+    const query = useCliSessionFilePatch(sessionId, scope, file?.path ?? null, context, fetchable);
 
     const parsed = useMemo(() => {
         const text = query.data?.patch;
@@ -127,7 +121,12 @@ export function DiffFilePane({ sessionId, scope, file, viewMode, wrap, onBack }:
         );
     } else if (gated) {
         body = (
-            <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ height: '100%', p: 4 }}>
+            <Stack
+                alignItems="center"
+                justifyContent="center"
+                spacing={1.5}
+                sx={{ height: '100%', p: 4 }}
+            >
                 <Typography variant="body2" sx={{ color: ATLAS_PALETTE.slate60 }}>
                     Large diff — {file.additions + file.deletions} changed lines.
                 </Typography>

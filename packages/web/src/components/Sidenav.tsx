@@ -184,7 +184,12 @@ export function Sidenav({ onNavigate }: SidenavProps = {}) {
                     <AtlasLogo size={22} />
                 </Box>
                 <Typography
-                    sx={{ fontSize: 14, fontWeight: 600, color: ATLAS_PALETTE.sideTextStrong, letterSpacing: '-0.01em' }}
+                    sx={{
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: ATLAS_PALETTE.sideTextStrong,
+                        letterSpacing: '-0.01em',
+                    }}
                 >
                     Atlas
                 </Typography>
@@ -266,6 +271,7 @@ export function Sidenav({ onNavigate }: SidenavProps = {}) {
                                     <Box
                                         component="span"
                                         className="material-symbols-rounded"
+                                        aria-hidden="true"
                                         sx={{
                                             fontSize: 20,
                                             width: 20,

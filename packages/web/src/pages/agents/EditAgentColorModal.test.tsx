@@ -13,9 +13,7 @@ const BASE = 'http://localhost:3000/api';
 describe('EditAgentColorModal', () => {
     it('renders title and Cancel/Save buttons when open', async () => {
         server.use(...defaultHandlers);
-        renderWithProviders(
-            <EditAgentColorModal open agent={makeAgent()} onClose={vi.fn()} />,
-        );
+        renderWithProviders(<EditAgentColorModal open agent={makeAgent()} onClose={vi.fn()} />);
         expect(await screen.findByText('Edit accent color')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
@@ -24,7 +22,7 @@ describe('EditAgentColorModal', () => {
     it('does not render when open=false', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
-            <EditAgentColorModal open={false} agent={makeAgent()} onClose={vi.fn()} />,
+            <EditAgentColorModal open={false} agent={makeAgent()} onClose={vi.fn()} />
         );
         expect(screen.queryByText('Edit accent color')).not.toBeInTheDocument();
     });
@@ -36,12 +34,10 @@ describe('EditAgentColorModal', () => {
             http.patch(`${BASE}/agents/agent-coder`, () => {
                 patchSpy();
                 return HttpResponse.json(makeAgent());
-            }),
+            })
         );
         const onClose = vi.fn();
-        renderWithProviders(
-            <EditAgentColorModal open agent={makeAgent()} onClose={onClose} />,
-        );
+        renderWithProviders(<EditAgentColorModal open agent={makeAgent()} onClose={onClose} />);
         await screen.findByText('Edit accent color');
         await userEvent.click(screen.getByRole('button', { name: 'Save' }));
         expect(onClose).toHaveBeenCalled();
@@ -51,9 +47,7 @@ describe('EditAgentColorModal', () => {
     it('calls onClose when Cancel is clicked', async () => {
         server.use(...defaultHandlers);
         const onClose = vi.fn();
-        renderWithProviders(
-            <EditAgentColorModal open agent={makeAgent()} onClose={onClose} />,
-        );
+        renderWithProviders(<EditAgentColorModal open agent={makeAgent()} onClose={onClose} />);
         await screen.findByText('Edit accent color');
         await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
         expect(onClose).toHaveBeenCalled();
@@ -66,17 +60,21 @@ describe('EditAgentColorModal', () => {
             http.patch(`${BASE}/agents/agent-coder`, () => {
                 patchCalled = true;
                 return HttpResponse.json(makeAgent({ accent_color: '#336699' }));
-            }),
+            })
         );
         const onClose = vi.fn();
         renderWithProviders(
-            <EditAgentColorModal open agent={makeAgent({ accent_color: '#2E2E2E' })} onClose={onClose} />,
+            <EditAgentColorModal
+                open
+                agent={makeAgent({ accent_color: '#2E2E2E' })}
+                onClose={onClose}
+            />
         );
         await screen.findByText('Edit accent color');
         // Click an accent color button different from the current one (exercises setColor onChange)
         const colorBtns = document.querySelectorAll('[aria-label]');
-        const accentBtn = Array.from(colorBtns).find(
-            (el) => el.getAttribute('aria-label')?.startsWith('Accent '),
+        const accentBtn = Array.from(colorBtns).find((el) =>
+            el.getAttribute('aria-label')?.startsWith('Accent ')
         ) as HTMLElement | undefined;
         if (accentBtn) {
             await userEvent.click(accentBtn);
@@ -92,11 +90,19 @@ describe('EditAgentColorModal', () => {
         // Simulate open=true transitioning: useEffect fires setting color to agent.accent_color
         server.use(...defaultHandlers);
         const { rerender } = renderWithProviders(
-            <EditAgentColorModal open={false} agent={makeAgent({ accent_color: '#336699' })} onClose={vi.fn()} />,
+            <EditAgentColorModal
+                open={false}
+                agent={makeAgent({ accent_color: '#336699' })}
+                onClose={vi.fn()}
+            />
         );
         // Re-open with a different accent color: useEffect fires setColor
         rerender(
-            <EditAgentColorModal open agent={makeAgent({ accent_color: '#FF6633' })} onClose={vi.fn()} />,
+            <EditAgentColorModal
+                open
+                agent={makeAgent({ accent_color: '#FF6633' })}
+                onClose={vi.fn()}
+            />
         );
         // The modal now shows the new color
         await screen.findByText('Edit accent color');
@@ -107,17 +113,21 @@ describe('EditAgentColorModal', () => {
         server.use(
             ...defaultHandlers,
             http.patch(`${BASE}/agents/agent-coder`, () =>
-                HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Server error' }, { status: 500 })
+            )
         );
         renderWithProviders(
-            <EditAgentColorModal open agent={makeAgent({ accent_color: '#2E2E2E' })} onClose={vi.fn()} />,
+            <EditAgentColorModal
+                open
+                agent={makeAgent({ accent_color: '#2E2E2E' })}
+                onClose={vi.fn()}
+            />
         );
         await screen.findByText('Edit accent color');
         // Change color by clicking a different accent option
         const colorBtns = document.querySelectorAll('[aria-label]');
-        const accentBtn = Array.from(colorBtns).find(
-            (el) => el.getAttribute('aria-label')?.startsWith('Accent '),
+        const accentBtn = Array.from(colorBtns).find((el) =>
+            el.getAttribute('aria-label')?.startsWith('Accent ')
         ) as HTMLElement | undefined;
         if (accentBtn) {
             await userEvent.click(accentBtn);

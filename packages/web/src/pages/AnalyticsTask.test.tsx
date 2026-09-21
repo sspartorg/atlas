@@ -115,7 +115,7 @@ function renderAt(path: string) {
         <Routes>
             <Route path="/analytics/task/:taskId" element={<AnalyticsTask />} />
         </Routes>,
-        { initialEntries: [path] },
+        { initialEntries: [path] }
     );
 }
 
@@ -124,8 +124,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(minimalTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 25 }),
-            ),
+                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 25 })
+            )
         );
         const { container } = renderAt('/analytics/task/ATL-1');
         await waitFor(() => {
@@ -142,8 +142,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(populatedTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json(populatedChildren),
-            ),
+                HttpResponse.json(populatedChildren)
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => {
@@ -157,8 +157,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(populatedTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json(populatedChildren),
-            ),
+                HttpResponse.json(populatedChildren)
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => {
@@ -176,8 +176,8 @@ describe('AnalyticsTask page', () => {
     it('renders the error state on summary failure', async () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () =>
-                HttpResponse.json({ error: 'boom' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'boom' }, { status: 500 })
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => {
@@ -198,8 +198,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(populatedTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json({ rows: rows.slice(0, 25), total: 30, page: 1, limit: 25 }),
-            ),
+                HttpResponse.json({ rows: rows.slice(0, 25), total: 30, page: 1, limit: 25 })
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Child 1')).toBeInTheDocument());
@@ -222,13 +222,15 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(populatedTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json(populatedChildren),
-            ),
+                HttpResponse.json(populatedChildren)
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Child Row')).toBeInTheDocument());
         // Click a kind card to apply filter
-        const kindCards = screen.getAllByRole('button').filter((b) => /Sub-task|Task/i.test(b.textContent ?? ''));
+        const kindCards = screen
+            .getAllByRole('button')
+            .filter((b) => /Sub-task|Task/i.test(b.textContent ?? ''));
         if (kindCards[0]) {
             fireEvent.click(kindCards[0]);
             // Now click "Clear filter" or similar
@@ -241,7 +243,7 @@ describe('AnalyticsTask page', () => {
     it('renders loading skeleton when summary query is pending', () => {
         // summary.isPending → renders skeletons, no content yet
         server.use(
-            http.get(`${BASE}/analytics/task/ATL-1`, () => new Promise(() => {})), // never resolves
+            http.get(`${BASE}/analytics/task/ATL-1`, () => new Promise(() => {})) // never resolves
         );
         renderAt('/analytics/task/ATL-1');
         // Three Skeleton elements are rendered; just assert the page doesn't crash
@@ -268,8 +270,8 @@ describe('AnalyticsTask page', () => {
                     total: 1,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Null Run Item')).toBeInTheDocument());
@@ -297,8 +299,8 @@ describe('AnalyticsTask page', () => {
                     total: 1,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Invalid Date Item')).toBeInTheDocument());
@@ -326,8 +328,8 @@ describe('AnalyticsTask page', () => {
                     total: 1,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Just Now Item')).toBeInTheDocument());
@@ -355,8 +357,8 @@ describe('AnalyticsTask page', () => {
                     total: 1,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Ten Mins Item')).toBeInTheDocument());
@@ -384,8 +386,8 @@ describe('AnalyticsTask page', () => {
                     total: 1,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Three Hours Item')).toBeInTheDocument());
@@ -413,8 +415,8 @@ describe('AnalyticsTask page', () => {
                     total: 1,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Three Days Item')).toBeInTheDocument());
@@ -442,8 +444,8 @@ describe('AnalyticsTask page', () => {
                     total: 1,
                     page: 1,
                     limit: 25,
-                }),
-            ),
+                })
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Old Item')).toBeInTheDocument());
@@ -456,8 +458,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(minimalTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 25 }),
-            ),
+                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 25 })
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => {
@@ -473,8 +475,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(populatedTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 25 }),
-            ),
+                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 25 })
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => {
@@ -489,8 +491,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(populatedTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json(populatedChildren),
-            ),
+                HttpResponse.json(populatedChildren)
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Child Row')).toBeInTheDocument());
@@ -506,7 +508,8 @@ describe('AnalyticsTask page', () => {
             const chip = screen.queryByText(/Showing only:/i);
             if (chip) {
                 // Click the delete button (× on the Chip)
-                const deleteBtn = document.querySelector('[aria-label="Cancel"]') ??
+                const deleteBtn =
+                    document.querySelector('[aria-label="Cancel"]') ??
                     document.querySelector('svg[data-testid="CancelIcon"]')?.closest('button');
                 if (deleteBtn) {
                     fireEvent.click(deleteBtn);
@@ -525,8 +528,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(noNameTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 25 }),
-            ),
+                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 25 })
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => {
@@ -545,8 +548,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(noIdNoNameTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 25 }),
-            ),
+                HttpResponse.json({ rows: [], total: 0, page: 1, limit: 25 })
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Task One')).toBeInTheDocument());
@@ -559,8 +562,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(singleDescTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json(populatedChildren),
-            ),
+                HttpResponse.json(populatedChildren)
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Task One')).toBeInTheDocument());
@@ -571,13 +574,11 @@ describe('AnalyticsTask page', () => {
     it('shows "unknown error" when the summary error has no message', async () => {
         server.use(
             // Return a non-JSON body so the fetch parsing throws without a .message
-            http.get(`${BASE}/analytics/task/ATL-1`, () =>
-                new HttpResponse(null, { status: 500 }),
-            ),
+            http.get(`${BASE}/analytics/task/ATL-1`, () => new HttpResponse(null, { status: 500 }))
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() =>
-            expect(screen.getByText(/Failed to load task analytics/i)).toBeInTheDocument(),
+            expect(screen.getByText(/Failed to load task analytics/i)).toBeInTheDocument()
         );
         // The message branch: if error.message is undefined/empty → 'unknown error'
         // (api client may throw without message — just assert the error UI renders)
@@ -593,8 +594,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(singleCountTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json(populatedChildren),
-            ),
+                HttpResponse.json(populatedChildren)
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Task One')).toBeInTheDocument());
@@ -627,8 +628,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(unknownKindTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json(unknownKindChildren),
-            ),
+                HttpResponse.json(unknownKindChildren)
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Unknown Kind Child')).toBeInTheDocument());
@@ -641,8 +642,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(populatedTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json(populatedChildren),
-            ),
+                HttpResponse.json(populatedChildren)
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Child Row')).toBeInTheDocument());
@@ -660,9 +661,7 @@ describe('AnalyticsTask page', () => {
             fireEvent.click(kindCards[0]);
         }
         // After toggle-off, the "Showing all kinds" chip should return
-        await waitFor(() =>
-            expect(screen.queryByText('Showing all kinds')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.queryByText('Showing all kinds')).toBeInTheDocument());
     });
 
     // ── L351 onDelete: Chip × button clears typeFilter and resets page ──
@@ -670,8 +669,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(populatedTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json(populatedChildren),
-            ),
+                HttpResponse.json(populatedChildren)
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Child Row')).toBeInTheDocument());
@@ -684,14 +683,12 @@ describe('AnalyticsTask page', () => {
         fireEvent.click(kindCards[0]!);
 
         // Wait for the filter Chip to appear
-        await waitFor(() =>
-            expect(screen.queryByText(/Showing only:/i)).toBeTruthy(),
-        );
+        await waitFor(() => expect(screen.queryByText(/Showing only:/i)).toBeTruthy());
 
         // MUI Chip renders the delete affordance as an <svg data-testid="CancelIcon">.
         // Click the SVG directly (same pattern used in SubTaskDetail tests).
         const cancelIcon = document.querySelector(
-            'svg[data-testid="CancelIcon"]',
+            'svg[data-testid="CancelIcon"]'
         ) as HTMLElement | null;
         if (cancelIcon) {
             fireEvent.click(cancelIcon);
@@ -702,9 +699,7 @@ describe('AnalyticsTask page', () => {
         }
 
         // After delete, the "Showing all kinds" chip replaces the filter chip
-        await waitFor(() =>
-            expect(screen.getByText('Showing all kinds')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Showing all kinds')).toBeInTheDocument());
     });
 
     // ── L490: children.isPending skeleton when summary resolved but children pending ──
@@ -712,7 +707,7 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(populatedTask)),
             // Children never resolves
-            http.get(`${BASE}/analytics/task/ATL-1/children`, () => new Promise(() => {})),
+            http.get(`${BASE}/analytics/task/ATL-1/children`, () => new Promise(() => {}))
         );
         renderAt('/analytics/task/ATL-1');
         // Wait until summary has rendered (Hero title visible)
@@ -727,8 +722,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(populatedTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json(populatedChildren),
-            ),
+                HttpResponse.json(populatedChildren)
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Task One')).toBeInTheDocument());
@@ -740,7 +735,7 @@ describe('AnalyticsTask page', () => {
         const result = fmt(1.5, undefined, { payload: { type: 'sub_task' } }) as [string, string];
         expect(Array.isArray(result)).toBe(true);
         expect(result[0]).toContain('1'); // formatted cost string contains '1'
-        expect(result[1]).toBe('Sub-task');  // ITEM_TYPE_LABEL['sub_task']
+        expect(result[1]).toBe('Sub-task'); // ITEM_TYPE_LABEL['sub_task']
 
         // Unknown type: payload.type = 'custom_type' (not in ITEM_TYPE_LABEL → raw)
         const resultUnknown = fmt(0.5, undefined, {
@@ -753,7 +748,10 @@ describe('AnalyticsTask page', () => {
         expect(resultNoType[1]).toBe('');
 
         // value is null → formatCostUsd(0)
-        const resultNoValue = fmt(null, undefined, { payload: { type: 'task' } }) as [string, string];
+        const resultNoValue = fmt(null, undefined, { payload: { type: 'task' } }) as [
+            string,
+            string,
+        ];
         expect(resultNoValue[1]).toBe('Task');
     });
 
@@ -763,8 +761,8 @@ describe('AnalyticsTask page', () => {
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(populatedTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
-                HttpResponse.json(populatedChildren),
-            ),
+                HttpResponse.json(populatedChildren)
+            )
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => expect(screen.getByText('Task One')).toBeInTheDocument());

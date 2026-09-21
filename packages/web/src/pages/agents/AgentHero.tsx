@@ -120,6 +120,7 @@ export const AgentHero = memo(function AgentHero({
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 28, color: agent.accent_color }}
                     >
                         {view.glyph}
@@ -222,6 +223,7 @@ export const AgentHero = memo(function AgentHero({
                                     <Box
                                         component="span"
                                         className="material-symbols-rounded"
+                                        aria-hidden="true"
                                         sx={{ fontSize: 18 }}
                                     >
                                         edit
@@ -293,6 +295,7 @@ export const AgentHero = memo(function AgentHero({
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 18 }}
                         >
                             play_arrow
@@ -318,6 +321,7 @@ export const AgentHero = memo(function AgentHero({
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 18 }}
                         >
                             {isPaused ? 'play_arrow' : 'pause'}

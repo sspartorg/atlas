@@ -5,7 +5,12 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
-import { ATLAS_PALETTE, LABEL_COLORS, type LabelColorKey, type LabelColorPair } from '../theme/tokens.js';
+import {
+    ATLAS_PALETTE,
+    LABEL_COLORS,
+    type LabelColorKey,
+    type LabelColorPair,
+} from '../theme/tokens.js';
 import { useThemeModeContext } from '../hooks/useThemeModeContext.js';
 
 interface Props {
@@ -71,7 +76,7 @@ export function LabelsRailRow({ labels, onChange, suggestions }: Props) {
     // already-added chip drops out of the dropdown immediately.
     const optionPool = useMemo(
         () => suggestions.filter((s) => !displayValue.includes(s)),
-        [suggestions, displayValue],
+        [suggestions, displayValue]
     );
 
     async function flush() {
@@ -255,7 +260,8 @@ export function LabelsRailRow({ labels, onChange, suggestions }: Props) {
                         fontFamily: CHIP_FONT,
                         fontSize: 11,
                         cursor: 'pointer',
-                        transition: 'border-color 120ms ease, color 120ms ease, background 120ms ease',
+                        transition:
+                            'border-color 120ms ease, color 120ms ease, background 120ms ease',
                         '&:hover, &:focus-visible': {
                             outline: 'none',
                             borderColor: ATLAS_PALETTE.brandBlue,
