@@ -42,17 +42,44 @@ export function tokensMatch(provided: string, expected: string): boolean {
  *   1. If ATLAS_MCP_TOKEN is unset/empty → allow (fully-open mode). Reaching
  *      this through `main.ts` now requires ATLAS_MCP_TOKEN_OPEN=1, since an
  *      empty token is otherwise replaced with a generated one at boot.
- *   2. Else if `Sec-Fetch-Site: same-origin` is present (Sec-Fetch-* are
- *      forbidden headers — set by the browser, cannot be set by JS or a
- *      non-browser client) AND either
- *        (a) Origin is absent — this is a same-origin GET; browsers omit
- *            Origin by spec, and Sec-Fetch-Site: same-origin proves the
- *            initiator's origin matches the target's, so an empty Origin
- *            is trustworthy here; OR
- *        (b) Origin is in the trusted set — same-origin write or CORS
- *            fetch where the browser did attach Origin.
- *      → allow. Sec-Fetch-Site is the tamper-proof anchor; the Origin
- *      check when present filters LAN misconfiguration edge cases.
+ *   2. Else if `Sec-Fetch-Site: same-origin` is present AND either Origin is
+ *      absent (browsers omit it on same-origin GETs) or Origin is trusted
+ *      → allow. This is what lets the web UI work without a token.
+ *
+ *      **G-023 — read this before relying on it.** This branch is a
+ *      convenience for the browser, NOT a security boundary, and the comment
+ *      here used to claim otherwise ("cannot be set by ... a non-browser
+ *      client"). That is false. "Forbidden header" in the Fetch spec means
+ *      *browser JavaScript* may not set it; curl, a script, or any spawned
+ *      CLI sets it freely. Proven on 2026-09-21 against a running API:
+ *
+ *          GET  /api/credentials/<id>/token                     -> 401
+ *          GET  ... -H 'Sec-Fetch-Site: same-origin'            -> 400  (handler reached)
+ *          DELETE /api/credentials/<id>                         -> 401
+ *          DELETE ... -H 'Sec-Fetch-Site: same-origin'          -> 404  (handler reached)
+ *
+ *      So one header reaches every gated route. No header-based check can
+ *      fix this: nothing an HTTP request carries distinguishes a browser
+ *      from a local process, and tightening the Origin arm only means
+ *      forging two headers instead of one.
+ *
+ *      What this gate DOES buy, honestly: it stops a naive or accidental
+ *      local caller, and it keeps a cross-origin page from driving the API
+ *      (that is the Origin check plus CORS, which do hold). What it does NOT
+ *      do is defend against a hostile process running as the Owner — and
+ *      such a process can read `ATLAS_MCP_TOKEN` out of `.env` anyway, so
+ *      the token is no stronger against that threat.
+ *
+ *      Closing it properly needs the browser to prove itself with a secret:
+ *      a same-origin bootstrap setting an HttpOnly `SameSite=Strict` cookie,
+ *      after which this branch can be deleted. Baking the token into the web
+ *      bundle is NOT the answer — with `ATLAS_LAN_ACCESS=true` the bundle is
+ *      served to the LAN and the token goes with it. That is an Owner-level
+ *      architecture decision, tracked as G-023, not something to improvise.
+ *
+ *      AGENTS.md's domain rules say Atlas is single-owner with no auth, so
+ *      this being defence-in-depth rather than a boundary is consistent with
+ *      the product — it just has to be described accurately.
  *   3. Else compare X-Atlas-Token against ATLAS_MCP_TOKEN.
  */
 export async function requireMcpToken(
@@ -64,10 +91,9 @@ export async function requireMcpToken(
 
     const origin = (req.headers['origin'] as string | undefined) ?? '';
     const secFetchSite = (req.headers['sec-fetch-site'] as string | undefined) ?? '';
-    // Sec-Fetch-Site is a browser-forbidden header — its presence proves
-    // a real browser initiated the request. `same-origin` proves the
-    // initiator's origin matches the target's, so an absent Origin
-    // (which browsers omit on same-origin GETs) is safe here.
+    // G-023 — this admits the browser without a token. It does NOT prove the
+    // caller is a browser: any local client can set this header. See the
+    // block comment above for what that does and does not buy.
     if (secFetchSite === 'same-origin') {
         if (!origin || getTrustedBrowserOrigins().has(origin)) return;
     }

@@ -1,11 +1,15 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { access } from 'node:fs/promises';
+import { writeFile, unlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { mergeSecrets } from './secret-substitution.js';
 import { environmentSecretsService } from './environment-secrets.js';
 import { projectEnvFileService } from './project-env-file.js';
 import { redactSecretValues } from './project-setup-runner.js';
+import { guardrailScriptsService } from './guardrailScripts.js';
+import { projectGuardrailScriptsService } from './projectGuardrailScripts.js';
 
 // ADR 0020 — Atlas runs the verification gate itself.
 //
@@ -43,19 +47,46 @@ const MAX_BUFFER = 8 * 1024 * 1024;
 /** Enough of the tail to identify the failure without pasting a whole suite. */
 const MAX_REPORTED_OUTPUT = 4000;
 
+/**
+ * The child's environment: an allowlist, not `{...process.env}`.
+ *
+ * G-021 — the gate's failure output is persisted to the run log and rendered
+ * to the Owner, and `redactSecretValues` masks only `environment_secrets` and
+ * the project env file. The parent process carries `DATABASE_URL` (with the
+ * password), `POSTGRES_PASSWORD` and `ATLAS_MCP_TOKEN`, none of which are in
+ * that mask set — so a test that dumps its environment on failure, which is
+ * common, wrote a live DB password into a stored log with nobody doing
+ * anything wrong.
+ *
+ * An allowlist is a smaller change than widening the mask and is a guarantee
+ * rather than a best effort: a secret that never enters the child cannot be
+ * printed by it. Project secrets still reach the script the way they always
+ * have — inlined by the setup runner — not through here.
+ */
+function gateEnv(): NodeJS.ProcessEnv {
+    const allow = ['PATH', 'HOME', 'SHELL', 'LANG', 'LC_ALL', 'TMPDIR', 'TERM', 'USER', 'LOGNAME'];
+    const env: NodeJS.ProcessEnv = {};
+    for (const key of allow) {
+        const value = process.env[key];
+        if (value !== undefined) env[key] = value;
+    }
+    // Node toolchains need these to resolve a runtime; they carry no secret.
+    for (const [key, value] of Object.entries(process.env)) {
+        if (/^(NODE_|npm_config_prefix$|VOLTA_|NVM_|ASDF_|PNPM_HOME$|COREPACK_)/.test(key) && value !== undefined) {
+            env[key] = value;
+        }
+    }
+    env['CI'] = '1';
+    return env;
+}
+
 export type GateResult =
     | { kind: 'pass' }
     | { kind: 'fail'; output: string }
     | { kind: 'unavailable'; reason: string };
 
-/** The staged guardrail script that runs typecheck, lint and the test suite. */
+/** The guardrail script id whose body is the gate. Project row overrides the Atlas one. */
 const GATE_SCRIPT_ID = 'coder-tests-green';
-
-export function gateScriptPath(repoPath: string): string {
-    return process.platform === 'win32'
-        ? join(repoPath, '.atlas', 'scripts', 'powershell', `check-${GATE_SCRIPT_ID}.ps1`)
-        : join(repoPath, '.atlas', 'scripts', 'bash', `check-${GATE_SCRIPT_ID}.sh`);
-}
 
 function tail(text: string): string {
     return text.length <= MAX_REPORTED_OUTPUT ? text : text.slice(-MAX_REPORTED_OUTPUT);
@@ -72,14 +103,33 @@ export async function runVerificationGate(opts: {
     /** Passed through as the script's first argument; unused by the script today. */
     itemId: string;
 }): Promise<GateResult> {
-    const scriptPath = gateScriptPath(opts.repoPath);
-    try {
-        await access(scriptPath);
-    } catch {
-        // The worktree was staged without guardrail scripts, or torn down
-        // already. No evidence either way — do not call it a failure.
-        return { kind: 'unavailable', reason: `no verification script at ${scriptPath}` };
+    // G-022 — run the script Atlas HAS, never the one sitting in the repo.
+    //
+    // This used to `execFile` `<repo>/.atlas/scripts/bash/check-…​.sh` directly.
+    // `constitution-assembler` normally writes that file during staging, but
+    // the gate never verified it had: a repository that ships its own copy of
+    // that path gets it executed with `cwd` = the repo, on a worktree that was
+    // never staged or whose guardrail row was deleted. `access()` tested
+    // existence, which a planted file also satisfies. Note the execute bit is
+    // no defence either — `bash <path>` ignores it.
+    //
+    // The body now comes from `guardrail_scripts` (project override wins, the
+    // same precedence `mergeScriptsById` uses) and is written to a 0600 tmpfile
+    // outside the worktree, mirroring `project-setup-runner.ts`. A repo can no
+    // longer choose what Atlas executes.
+    const body = await gateScriptBody(opts.projectId);
+    if (!body) {
+        return {
+            kind: 'unavailable',
+            reason: `no '${GATE_SCRIPT_ID}' guardrail script is configured`,
+        };
     }
+    const isWin = process.platform === 'win32';
+    const scriptPath = join(tmpdir(), `atlas-gate-${randomUUID()}.${isWin ? 'ps1' : 'sh'}`);
+    await writeFile(scriptPath, body.endsWith('\n') ? body : body + '\n', {
+        encoding: 'utf8',
+        mode: 0o600,
+    });
 
     // Same secret set the setup runner masks with. Failing to load them must
     // not block delivery, but it does mean we cannot mask — in that case the
@@ -95,16 +145,17 @@ export async function runVerificationGate(opts: {
     }
 
     const timeoutMs = Number(process.env['ATLAS_GATE_TIMEOUT_MS']) || DEFAULT_TIMEOUT_MS;
-    const isWindows = process.platform === 'win32';
+    const isWindows = isWin;
     const bin = isWindows ? 'powershell.exe' : 'bash';
     const args = isWindows
         ? ['-NoProfile', '-NonInteractive', '-File', scriptPath, opts.itemId, '--run-tests']
         : [scriptPath, opts.itemId, '--run-tests'];
 
     try {
+      try {
         await execFileAsync(bin, args, {
             cwd: opts.repoPath,
-            env: { ...process.env },
+            env: gateEnv(),
             timeout: timeoutMs,
             maxBuffer: MAX_BUFFER,
             windowsHide: true,
@@ -134,5 +185,26 @@ export async function runVerificationGate(opts: {
             ? redactSecretValues(raw, secrets)
             : '(output withheld — the secret set could not be loaded to mask it)';
         return { kind: 'fail', output: tail(output) };
+      }
+    } finally {
+        // The body can contain nothing secret, but it is Atlas-authored code
+        // in a shared tmpdir — remove it even when the run throws.
+        await unlink(scriptPath).catch(() => undefined);
+    }
+}
+
+/** The `coder-tests-green` body, project override first. */
+async function gateScriptBody(projectId: string): Promise<string | null> {
+    const pick = (r: { id: string; body_sh: string; body_ps1: string }) =>
+        process.platform === 'win32' ? r.body_ps1 : r.body_sh;
+    try {
+        const project = await projectGuardrailScriptsService.list(projectId);
+        const override = project.find((r) => r.id === GATE_SCRIPT_ID);
+        if (override) return pick(override) || null;
+        const atlas = await guardrailScriptsService.list();
+        const row = atlas.find((r) => r.id === GATE_SCRIPT_ID);
+        return row ? pick(row) || null : null;
+    } catch {
+        return null;
     }
 }

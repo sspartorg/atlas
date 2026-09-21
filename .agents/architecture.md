@@ -110,6 +110,18 @@ The CORS allowlist + `requireMcpToken` trusted-browser-origin set are computed f
 
 ### Security â€” write gate & origin allowlist
 
+> **G-023 (2026-09-21) â€” the write gate is defence-in-depth, not a security
+> boundary.** A request carrying `Sec-Fetch-Site: same-origin` passes it
+> without a token, and *any* local client can set that header â€” proven with
+> curl against a running API: `DELETE /api/credentials/<id>` returns 401
+> without it and reaches the handler with it. No header-based check can fix
+> this, because nothing in an HTTP request distinguishes a browser from a
+> local process. It does still stop naive callers and, with CORS, cross-origin
+> pages. A hostile process running as the Owner can read `ATLAS_MCP_TOKEN`
+> from `.env` regardless, so the token is no stronger against that threat.
+> Closing it needs a same-origin bootstrap setting an HttpOnly
+> `SameSite=Strict` cookie â€” an Owner decision, not an improvisation.
+
 The API has exactly one auth gate: a global Fastify `onRequest` hook (`server.ts:76â€“80`) that delegates to `requireMcpToken` (`plugins/mcp-auth.ts`) for every `POST/PUT/PATCH/DELETE`. The same `getAllowedOrigins()` set feeds `@fastify/cors`, so CORS preflight and the gate agree.
 
 **What is checked**

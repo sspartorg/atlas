@@ -1,5 +1,10 @@
 import { test, expect, type Page, type Request } from '@playwright/test';
 import { goto } from './helpers/nav.js';
+import {
+    firstAgentId,
+    firstAgentRunId,
+    firstProjectId,
+} from './helpers/entities.js';
 
 // W8 — No-duplicate / no-unintended API call audit.
 //
@@ -167,20 +172,27 @@ for (const route of STATIC_ROUTES) {
 }
 
 // -----------------------------------------------------------------------
-// Parameterised route tests — navigate to list page first, extract ID.
+// Parameterised route tests.
+//
+// G-018 — these used to scrape an `<a href>` off the list page and skip when
+// the locator found nothing. The app navigates its cards with onClick, so the
+// locator matched nothing even with a fully seeded database, and the skip
+// blamed "no seeded project" for what was a stale selector. Ids now come from
+// the API via `helpers/entities.ts`, which fails loudly on an empty fixture.
+//
+// The four `test.skip` calls that remain are honest: the e2e seed genuinely
+// does not start an agent run or leave a closed CLI session behind, and their
+// messages say so rather than implying a lookup failed.
 // -----------------------------------------------------------------------
 
 test.describe('/projects/:id — no dup API calls on project detail', () => {
     test('first project detail passes dup audit', async ({ page }) => {
         // Navigate to list to get the first project href.
         await goto(page, '/projects');
-        const firstLink = page.locator('a[href^="/projects/"]').first();
-        if ((await firstLink.count()) === 0) {
-            test.skip(true, 'no seeded project — skipping /projects/:id dup audit');
-            return;
-        }
-        const href = await firstLink.getAttribute('href');
-        if (!href) return;
+        // G-018 — resolved from the API, not from an `<a href>`. Project cards
+        // navigate via onClick, so the old anchor locator found nothing and the
+        // test skipped claiming "no seeded project" — which was never true.
+        const href = `/projects/${await firstProjectId(page)}`;
 
         const fetches = await captureApiFetches(page, () => goto(page, href));
 
@@ -213,13 +225,7 @@ test.describe('/projects/:id — no dup API calls on project detail', () => {
 test.describe('/projects/:id/guardrails — no dup API calls', () => {
     test('project guardrails page passes dup audit', async ({ page }) => {
         await goto(page, '/projects');
-        const firstLink = page.locator('a[href^="/projects/"]').first();
-        if ((await firstLink.count()) === 0) {
-            test.skip(true, 'no seeded project — skipping /projects/:id/guardrails dup audit');
-            return;
-        }
-        const href = await firstLink.getAttribute('href');
-        if (!href) return;
+        const href = `/projects/${await firstProjectId(page)}`;
         const projectId = href.replace('/projects/', '').split('/')[0];
         const route = `/projects/${projectId}/guardrails`;
 
@@ -253,17 +259,9 @@ for (const route of ['/tasks/ETM-1', '/sub-tasks/ETM-2']) {
 test.describe('/agents/:id — no dup API calls on agent detail', () => {
     test('first agent detail (all tabs) passes dup audit', async ({ page }) => {
         await goto(page, '/agents');
-        const firstLink = page
-            .locator('a[href^="/agents/"]')
-            .filter({ hasNot: page.locator('[href="/agents/mcp-tools"]') })
-            .filter({ hasNot: page.locator('[href="/agents/marketplace"]') })
-            .first();
-        if ((await firstLink.count()) === 0) {
-            test.skip(true, 'no seeded agent — skipping /agents/:id dup audit');
-            return;
-        }
-        const href = await firstLink.getAttribute('href');
-        if (!href) return;
+        // The seed installs `agent-po-writer`; the roster renders Cards with
+        // onClick, not anchors, so the old locator could never match it.
+        const href = `/agents/${await firstAgentId(page)}`;
 
         // Test the landing tab (overview) for dups.
         const fetches = await captureApiFetches(page, () => goto(page, href));
@@ -289,23 +287,13 @@ test.describe('/agents/:id — no dup API calls on agent detail', () => {
 test.describe('/agents/:id/runs/:runId — no dup API calls on run detail', () => {
     test('first agent run detail passes dup audit', async ({ page }) => {
         await goto(page, '/agents');
-        const firstLink = page
-            .locator('a[href^="/agents/"]')
-            .filter({ hasNot: page.locator('[href="/agents/mcp-tools"]') })
-            .filter({ hasNot: page.locator('[href="/agents/marketplace"]') })
-            .first();
-        if ((await firstLink.count()) === 0) {
-            test.skip(true, 'no seeded agent — skipping run detail dup audit');
-            return;
-        }
-        const agentHref = await firstLink.getAttribute('href');
-        if (!agentHref) return;
+        const agentHref = `/agents/${await firstAgentId(page)}`;
 
         // Navigate to the runs tab to find a run link.
         await goto(page, `${agentHref}?tab=runs`);
         const runLink = page.locator(`a[href^="${agentHref}/runs/"]`).first();
         if ((await runLink.count()) === 0) {
-            test.skip(true, 'no agent runs visible — skipping run detail dup audit');
+            test.skip(true, 'e2e seed starts no agent run (that would spawn a CLI) — genuinely absent, not a failed lookup');
             return;
         }
         const runHref = await runLink.getAttribute('href');
@@ -347,7 +335,7 @@ test.describe('/terminal/:id — no dup API calls on terminal session', () => {
             .filter({ hasNot: page.locator('a[href*="/history"]') })
             .first();
         if ((await sessionLink.count()) === 0) {
-            test.skip(true, 'no active terminal sessions — skipping terminal session dup audit');
+            test.skip(true, 'no live CLI session in this run — genuinely absent, not a failed lookup');
             return;
         }
         const href = await sessionLink.getAttribute('href');
@@ -367,7 +355,7 @@ test.describe('/terminal/:id/history — no dup API calls on terminal history', 
         await goto(page, '/terminal');
         const historyLink = page.locator('a[href*="/history"]').first();
         if ((await historyLink.count()) === 0) {
-            test.skip(true, 'no terminal history links — skipping terminal history dup audit');
+            test.skip(true, 'no closed CLI session to show history for — genuinely absent, not a failed lookup');
             return;
         }
         const href = await historyLink.getAttribute('href');
@@ -391,7 +379,7 @@ test.describe('/analytics/project/:projectId — no dup API calls', () => {
         await goto(page, '/analytics');
         const projectLink = page.locator('a[href^="/analytics/project/"]').first();
         if ((await projectLink.count()) === 0) {
-            test.skip(true, 'no analytics project links — skipping dup audit');
+            test.skip(true, 'no project has cost rows to link from Analytics — genuinely absent, not a failed lookup');
             return;
         }
         const href = await projectLink.getAttribute('href');
@@ -468,13 +456,7 @@ test.describe('useAgentRuns family — endpoint distinctness audit', () => {
     // Tighten the filter to match only project-scoped calls.
     test('useProjectAgentRuns on ProjectDetail overview tab fires at most once', async ({ page }) => {
         await goto(page, '/projects');
-        const firstLink = page.locator('a[href^="/projects/"]').first();
-        if ((await firstLink.count()) === 0) {
-            test.skip(true, 'no seeded project — skipping useProjectAgentRuns overview audit');
-            return;
-        }
-        const href = await firstLink.getAttribute('href');
-        if (!href) return;
+        const href = `/projects/${await firstProjectId(page)}`;
 
         // Navigate to the overview tab (default).
         const fetches = await captureApiFetches(page, () => goto(page, `${href}?tab=overview`));
@@ -496,13 +478,7 @@ test.describe('useAgentRuns family — endpoint distinctness audit', () => {
 test.describe('per-kind list endpoints vs useIssues tree — double-fetch audit', () => {
     test('ProjectDetail calls /api/issues/tree once and no per-kind list endpoint', async ({ page }) => {
         await goto(page, '/projects');
-        const firstLink = page.locator('a[href^="/projects/"]').first();
-        if ((await firstLink.count()) === 0) {
-            test.skip(true, 'no seeded project — skipping tree double-fetch audit');
-            return;
-        }
-        const href = await firstLink.getAttribute('href');
-        if (!href) return;
+        const href = `/projects/${await firstProjectId(page)}`;
 
         const fetches = await captureApiFetches(page, () => goto(page, href));
         const gets = (path: string) => fetches.filter((f) => f.method === 'GET' && f.path === path);
