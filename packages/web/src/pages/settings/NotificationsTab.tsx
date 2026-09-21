@@ -354,10 +354,6 @@ export function NotificationsTab() {
                                             ? '••••  Stored — click 🔍 to reveal, or type to replace'
                                             : '123456789:ABC-def…'
                                     }
-                                    // If a revealed value is displayed, prevent
-                                    // accidental edits — Owner explicitly
-                                    // hides or waits for auto-mask.
-                                    InputProps={{ readOnly: revealedToken !== null }}
                                     // Mono font for the visible token, system font when
                                     // masked — mono's bullets are wide and look chunky
                                     // on iOS where the input is forced to 16 px.
@@ -370,6 +366,16 @@ export function NotificationsTab() {
                                     }}
                                     slotProps={{
                                         input: {
+                                            // If a revealed value is displayed, prevent
+                                            // accidental edits — Owner explicitly
+                                            // hides or waits for auto-mask. This MUST
+                                            // live in `slotProps.input`: MUI v7 ignores
+                                            // the deprecated `InputProps` entirely once
+                                            // `slotProps.input` is present, so the
+                                            // read-only guard silently did nothing here
+                                            // and one stray keystroke on a revealed
+                                            // token committed a mangled value on blur.
+                                            readOnly: revealedToken !== null,
                                             endAdornment: (
                                                 <InputAdornment position="end">
                                                     <IconButton
@@ -440,7 +446,6 @@ export function NotificationsTab() {
                                             ? '••••  Stored — click 🔍 to reveal, or type to replace'
                                             : 'https://…powerautomate.com/…/triggers/manual/paths/invoke?…sig=…'
                                     }
-                                    InputProps={{ readOnly: revealedWebhook !== null }}
                                     inputProps={{
                                         style: {
                                             fontFamily: showWebhook || revealedWebhook !== null ? MONO : 'inherit',
@@ -450,6 +455,10 @@ export function NotificationsTab() {
                                     }}
                                     slotProps={{
                                         input: {
+                                            // Same as the token field above: `readOnly`
+                                            // has to be here, not on `InputProps`, or
+                                            // MUI v7 drops it.
+                                            readOnly: revealedWebhook !== null,
                                             endAdornment: (
                                                 <InputAdornment position="end">
                                                     <IconButton

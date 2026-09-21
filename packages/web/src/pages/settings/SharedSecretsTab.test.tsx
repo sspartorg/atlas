@@ -400,4 +400,34 @@ describe('SharedSecretsTab', () => {
             expect(hideBtn).toBeInTheDocument();
         });
     });
+
+    it('hiding a revealed secret drops the plaintext from the DOM', async () => {
+        // Re-masking has to clear the fetched value, not just flip the input
+        // back to type="password" — a password field still hands its value
+        // to anything reading the DOM, and this tab is one screenshot away
+        // from leaking every shared secret at once.
+        mountInitial([{ key: 'TOKEN', value: '' }]);
+        server.use(
+            http.get(`${apiBase}/environment-secrets/TOKEN/value`, () =>
+                HttpResponse.json({ value: 'secret-value' }),
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithProviders(<SharedSecretsTab />);
+        await waitFor(() => expect(screen.getByDisplayValue('TOKEN')).toBeInTheDocument());
+
+        const revealBtn = screen
+            .getAllByRole('button')
+            .find((b) => b.querySelector('[data-testid="VisibilityOutlinedIcon"]'))!;
+        await user.click(revealBtn);
+        await screen.findByDisplayValue('secret-value');
+
+        const hideBtn = screen
+            .getAllByRole('button')
+            .find((b) => b.querySelector('[data-testid="VisibilityOffOutlinedIcon"]'))!;
+        await user.click(hideBtn);
+        await waitFor(() =>
+            expect(screen.queryByDisplayValue('secret-value')).not.toBeInTheDocument(),
+        );
+    });
 });

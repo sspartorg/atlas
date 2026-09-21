@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
+import { Route, Routes } from 'react-router-dom';
 import { server } from '../test-setup.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { makeAgent, makeSubTask } from '../test-utils/factories.js';
@@ -25,7 +26,15 @@ vi.mock('../hooks/useToast.js', async (importOriginal) => {
     };
 });
 
+// `PageFab` renders only on mobile; flipping this reaches the FAB, which is
+// the only way to add an agent on a phone (the header button is hidden there).
+let isMobile = false;
+vi.mock('../hooks/useIsMobile.js', () => ({
+    useIsMobile: () => isMobile,
+}));
+
 beforeEach(() => {
+    isMobile = false;
     server.use(
         http.get(`${BASE}/run`, () => HttpResponse.json([])),
         http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([])),
@@ -1284,4 +1293,126 @@ describe('Agents — Add Agent surfaces API errors (F-002)', () => {
 
         expect(shown.join(' ')).toMatch(/registry/i);
     }, 30000);
+});
+
+// ─── Card grid, retry and the Add-Agent model field ─────────────────────────
+
+describe('Agents page — list interactions', () => {
+    it('retries the agents query after a failed load', async () => {
+        // The error card is the only way back from a transient API blip; if
+        // Retry stops refetching the Owner has to reload the whole SPA.
+        let attempt = 0;
+        server.use(
+            http.get(`${BASE}/agents`, () => {
+                attempt += 1;
+                return attempt === 1
+                    ? HttpResponse.json({ error: 'Server error' }, { status: 500 })
+                    : HttpResponse.json([makeAgent({ id: 'a1', name: 'Coder' })]);
+            }),
+        );
+        renderWithProviders(<Agents />);
+        await screen.findByText(/couldn't load agents/i);
+
+        await userEvent.click(screen.getByRole('button', { name: /^Retry$/i }));
+        expect(await screen.findByText('Coder')).toBeInTheDocument();
+    });
+
+    it('stars an agent from the grouped list and filters down to it', async () => {
+        // The default view groups by category; the star lives on the card in
+        // that grouped branch, and the whole point of it is the Favorites
+        // filter picking the agent up afterwards.
+        window.localStorage.removeItem('atlas.agentFavorites');
+        server.use(
+            handlers.listAgents([
+                makeAgent({ id: 'a1', name: 'Coder' }),
+                makeAgent({ id: 'a2', name: 'Reviewer' }),
+            ]),
+        );
+        renderWithProviders(<Agents />);
+        await screen.findByText('Coder');
+
+        await userEvent.click(screen.getAllByLabelText(/Add to favorites/i)[0]!);
+        // The star flips in place, so the Owner can tell it took.
+        expect(await screen.findByLabelText(/Remove from favorites/i)).toBeInTheDocument();
+
+        await userEvent.click(screen.getByRole('button', { name: /My favorites/i }));
+        expect(await screen.findByText('Coder')).toBeInTheDocument();
+        expect(screen.queryByText('Reviewer')).not.toBeInTheDocument();
+    });
+
+    it('un-stars from the flat favorites grid and empties it', async () => {
+        // The Favorites filter renders the ungrouped grid — a second copy of
+        // the card wiring. Un-starring there has to reach the same store, or
+        // the Owner can add a favorite but never remove one.
+        window.localStorage.setItem('atlas.agentFavorites', JSON.stringify(['a1']));
+        server.use(handlers.listAgents([makeAgent({ id: 'a1', name: 'Coder' })]));
+        renderWithProviders(<Agents />);
+        await screen.findByText('Coder');
+
+        await userEvent.click(screen.getByRole('button', { name: /My favorites/i }));
+        await screen.findByText('Coder');
+        await userEvent.click(screen.getByLabelText(/Remove from favorites/i));
+
+        expect(
+            await screen.findByText(/No favorites yet/i),
+        ).toBeInTheDocument();
+        window.localStorage.removeItem('atlas.agentFavorites');
+    });
+
+    it('opens the agent from the flat favorites grid', async () => {
+        window.localStorage.setItem('atlas.agentFavorites', JSON.stringify(['a1']));
+        server.use(handlers.listAgents([makeAgent({ id: 'a1', name: 'Coder' })]));
+        renderWithProviders(
+            <Routes>
+                <Route path="/agents" element={<Agents />} />
+                <Route path="/agents/:id" element={<div>agent detail a1</div>} />
+            </Routes>,
+            { initialEntries: ['/agents'] },
+        );
+        await screen.findByText('Coder');
+        await userEvent.click(screen.getByRole('button', { name: /My favorites/i }));
+        await userEvent.click(await screen.findByText('Coder'));
+        expect(await screen.findByText('agent detail a1')).toBeInTheDocument();
+        window.localStorage.removeItem('atlas.agentFavorites');
+    });
+
+    it('creates the agent with the model picked in the dialog', async () => {
+        // The model is validated server-side against the cli_models registry,
+        // so sending the untouched default instead of the Owner's choice
+        // produces an agent that runs on the wrong model silently.
+        let body: Record<string, unknown> | null = null;
+        server.use(
+            handlers.listAgents([]),
+            http.get(`${BASE}/cli-models`, () =>
+                HttpResponse.json([
+                    { id: 1, cli: 'claude', model_name: 'claude-sonnet-4-6', sort_order: 1, note: null },
+                    { id: 2, cli: 'claude', model_name: 'claude-opus-4-7', sort_order: 2, note: null },
+                ]),
+            ),
+            http.post(`${BASE}/agents`, async ({ request }) => {
+                body = (await request.json()) as Record<string, unknown>;
+                return HttpResponse.json(makeAgent({ id: 'new', name: 'Probe' }));
+            }),
+        );
+        renderWithProviders(<Agents />);
+        await userEvent.click(await screen.findByRole('button', { name: /^add agent$/i }));
+        await userEvent.type(await screen.findByLabelText(/agent name/i), 'Probe');
+
+        await userEvent.click(screen.getByRole('combobox', { name: /Model/i }));
+        await userEvent.click(await screen.findByRole('option', { name: /claude-opus-4-7/ }));
+
+        await userEvent.click(screen.getAllByRole('button', { name: /^add agent$/i }).at(-1)!);
+        await waitFor(() => expect(body).not.toBeNull());
+        expect(body).toMatchObject({ name: 'Probe', model: 'claude-opus-4-7', cli: 'claude' });
+    }, 30000);
+
+    it('offers the Add Agent FAB on mobile', async () => {
+        isMobile = true;
+        server.use(handlers.listAgents([]));
+        renderWithProviders(<Agents />);
+        await screen.findByText(/no agents installed/i);
+        const fab = screen.getAllByRole('button', { name: /^Add Agent$/i }).at(-1)!;
+        await userEvent.click(fab);
+        expect(await screen.findByRole('heading', { name: /add agent/i })).toBeInTheDocument();
+    });
 });

@@ -932,3 +932,47 @@ describe('api.agents.importZip (postForm path)', () => {
         expect(result).toEqual({ id: 'a1', name: 'Imported' });
     });
 });
+
+describe('api.credentials (rotation + reveal)', () => {
+    it('rotates a GitHub App installation token via POST /credentials/:id/refresh', async () => {
+        // An expired installation token is why an agent's push suddenly 403s;
+        // this is the one-click way out of it, so the path has to be right.
+        const cap = captureMethod('post', '/credentials/c1/refresh', { id: 'c1' });
+        await api.credentials.refresh('c1');
+        expect(cap.url).toMatch(/\/credentials\/c1\/refresh$/);
+        expect(cap.body).toEqual({});
+    });
+
+    it('reads a stored PAT back from the dedicated reveal route', async () => {
+        // The list endpoint is metadata-only — the plaintext lives behind
+        // this separate, audited GET and must never be folded into it.
+        const cap = captureGet('/credentials/c1/token', { id: 'c1', value: 'ghp_x' });
+        const r = await api.credentials.revealToken('c1');
+        expect(r.value).toBe('ghp_x');
+        expect(cap.url).toMatch(/\/credentials\/c1\/token$/);
+    });
+});
+
+describe('api.workflows.create / api.workflowRuns.stop', () => {
+    it('POSTs a new workflow with its graph intact', async () => {
+        const cap = captureMethod('post', '/workflows', { id: 'wf-1' });
+        await api.workflows.create({
+            name: 'Release',
+            project_id: 'p1',
+            input_kind: 'item',
+            trigger: 'manual',
+            graph: { nodes: [], edges: [] },
+        } as Parameters<typeof api.workflows.create>[0]);
+        expect(cap.url).toMatch(/\/workflows$/);
+        expect(cap.body).toMatchObject({ name: 'Release', project_id: 'p1' });
+    });
+
+    it('stops a run with an empty POST body', async () => {
+        // Stop is the Owner's kill switch on a runaway agent — a wrong path
+        // here means the run keeps burning tokens with no way to halt it.
+        const cap = captureMethod('post', '/workflow-runs/run-9/stop', { id: 'run-9' });
+        await api.workflowRuns.stop('run-9');
+        expect(cap.url).toMatch(/\/workflow-runs\/run-9\/stop$/);
+        expect(cap.body).toEqual({});
+    });
+});

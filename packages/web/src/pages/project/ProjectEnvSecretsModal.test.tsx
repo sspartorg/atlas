@@ -758,3 +758,129 @@ describe('ProjectEnvSecretsModal — import skipped non-string values only', () 
         });
     });
 });
+
+// ─── Enterprise read model: on-demand reveal ─────────────────────────────────
+//
+// In production GET /projects/:id/env is metadata-only — every stored row
+// arrives with no `value`. Flipping the input type therefore shows an empty
+// box unless the plaintext is fetched from the per-key reveal endpoint (each
+// reveal is an audited action, so there is no batch form). The tests above
+// use a fixture that still carries plaintext, so none of them reach that
+// path; these do.
+
+const storedOnly = {
+    vars: [
+        { key: 'DATABASE_URL', has_value: true as const },
+        { key: 'API_SECRET', has_value: true as const },
+    ],
+};
+
+function mountStored() {
+    server.use(
+        http.get(`${BASE}/projects/p1/env`, () => HttpResponse.json(storedOnly)),
+        http.get(`${BASE}/projects/p1/env/:key/value`, ({ params }) =>
+            params['key'] === 'API_SECRET'
+                ? HttpResponse.json({ key: 'API_SECRET', value: 'sup3rs3cr3t' })
+                : HttpResponse.json({ key: 'DATABASE_URL', value: 'postgres://prod/acme' }),
+        ),
+    );
+    return renderWithProviders(
+        <>
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
+            <Toast />
+        </>,
+    );
+}
+
+describe('ProjectEnvSecretsModal — revealing stored secrets', () => {
+    it('fetches the plaintext when a stored row is revealed', async () => {
+        mountStored();
+        await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
+        // Nothing is in the DOM until the Owner asks for it.
+        expect(screen.queryByDisplayValue('postgres://prod/acme')).not.toBeInTheDocument();
+
+        await userEvent.click(screen.getAllByLabelText(/^Reveal$/)[0]!);
+        expect(await screen.findByDisplayValue('postgres://prod/acme')).toBeInTheDocument();
+    });
+
+    it('drops the plaintext from the DOM when the row is hidden again', async () => {
+        // Hiding must clear the fetched value, not just re-mask the input —
+        // a `type="password"` field still hands its plaintext to anything
+        // reading the DOM.
+        mountStored();
+        await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
+        await userEvent.click(screen.getAllByLabelText(/^Reveal$/)[0]!);
+        await screen.findByDisplayValue('postgres://prod/acme');
+
+        await userEvent.click(screen.getAllByLabelText(/^Hide$/)[0]!);
+        await waitFor(() =>
+            expect(screen.queryByDisplayValue('postgres://prod/acme')).not.toBeInTheDocument(),
+        );
+    });
+
+    it('says so when a reveal is refused instead of showing a blank box', async () => {
+        server.use(
+            http.get(`${BASE}/projects/p1/env`, () => HttpResponse.json(storedOnly)),
+            http.get(`${BASE}/projects/p1/env/:key/value`, () =>
+                HttpResponse.json({ error: 'Secret store is locked' }, { status: 500 }),
+            ),
+        );
+        renderWithProviders(
+            <>
+                <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
+                <Toast />
+            </>,
+        );
+        await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
+        await userEvent.click(screen.getAllByLabelText(/^Reveal$/)[0]!);
+        expect(await screen.findByText('Could not reveal secret')).toBeInTheDocument();
+        expect(await screen.findByText('Secret store is locked')).toBeInTheDocument();
+    });
+
+    it('Reveal all decrypts every stored row', async () => {
+        mountStored();
+        await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
+        await userEvent.click(screen.getByRole('button', { name: /Reveal all/i }));
+        expect(await screen.findByDisplayValue('postgres://prod/acme')).toBeInTheDocument();
+        expect(screen.getByDisplayValue('sup3rs3cr3t')).toBeInTheDocument();
+    });
+
+    it('Reveal all names how many rows it could not decrypt', async () => {
+        // A partial failure must be reported — otherwise one silently-blank
+        // row reads as "this secret is empty" and the Owner overwrites it.
+        server.use(
+            http.get(`${BASE}/projects/p1/env`, () => HttpResponse.json(storedOnly)),
+            http.get(`${BASE}/projects/p1/env/:key/value`, ({ params }) =>
+                params['key'] === 'API_SECRET'
+                    ? HttpResponse.json({ error: 'nope' }, { status: 500 })
+                    : HttpResponse.json({ key: 'DATABASE_URL', value: 'postgres://prod/acme' }),
+            ),
+        );
+        renderWithProviders(
+            <>
+                <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
+                <Toast />
+            </>,
+        );
+        await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
+        await userEvent.click(screen.getByRole('button', { name: /Reveal all/i }));
+        expect(await screen.findByText('Could not reveal 1 secret')).toBeInTheDocument();
+        expect(screen.getByDisplayValue('postgres://prod/acme')).toBeInTheDocument();
+    });
+
+    it('copying a stored row fetches the plaintext first', async () => {
+        // The row is displayed empty; copying what is on screen would put the
+        // empty string on the clipboard — the exact bug the comment on this
+        // handler records.
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, 'clipboard', {
+            configurable: true,
+            value: { writeText },
+        });
+        mountStored();
+        await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
+        await userEvent.click(screen.getAllByLabelText(/^Copy$/)[0]!);
+        await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+        expect(writeText.mock.calls[0]?.[0]).toBe('postgres://prod/acme');
+    });
+});

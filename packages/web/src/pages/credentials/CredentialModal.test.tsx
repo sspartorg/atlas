@@ -609,3 +609,116 @@ describe('CredentialModal — updateCred mutation edge cases', () => {
         expect(screen.getByText('acme/*,mantra-*')).toBeInTheDocument();
     });
 });
+
+// ─── GitHub App / PAT attribution fields ─────────────────────────────────────
+//
+// These fields decide who a commit is credited to and who a PR is assigned
+// to. If one stops reaching the API, every commit an agent makes under the
+// credential silently loses its Co-Authored-By trailer and every PR lands
+// unassigned — a change nobody notices until a review is owed to no one.
+
+describe('CredentialModal — attribution fields reach the API', () => {
+    async function openAppForm() {
+        renderWithProviders(<CredentialModal open mode={{ kind: 'add' }} onClose={vi.fn()} />);
+        await userEvent.click(screen.getByRole('radio', { name: /GitHub App/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+        await screen.findByText('Add GitHub App');
+    }
+
+    it('sends every GitHub App field the form collects', { timeout: 30_000 }, async () => {
+        let body: Record<string, unknown> | null = null;
+        server.use(
+            http.post(`${BASE}/credentials`, async ({ request }) => {
+                body = (await request.json()) as Record<string, unknown>;
+                return HttpResponse.json({ ...savedCred, kind: 'github_app' });
+            }),
+        );
+        await openAppForm();
+
+        await userEvent.type(screen.getByLabelText(/^Label/), 'atlas-bot');
+        await userEvent.type(
+            screen.getByLabelText(/Bot info folder/i),
+            '/home/me/bots-info/atlas-bot',
+        );
+        await userEvent.type(screen.getByLabelText(/Installation owner/i), 'sspartorg');
+        await userEvent.type(screen.getByLabelText(/Your name/i), 'Sunny');
+        await userEvent.type(screen.getByLabelText(/Your email/i), 'sunny@acme.test');
+        await userEvent.type(screen.getByLabelText(/Your GitHub login/i), 'sunnysabhanam');
+        await userEvent.type(screen.getByLabelText(/Repo scope/i), 'acme/*, mantra-*');
+        await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+
+        await waitFor(() => expect(body).not.toBeNull());
+        expect(body).toEqual({
+            label: 'atlas-bot',
+            host: 'github',
+            kind: 'github_app',
+            bot_info_path: '/home/me/bots-info/atlas-bot',
+            app_installation_owner: 'sspartorg',
+            scope: 'acme/*, mantra-*',
+            human_name: 'Sunny',
+            human_email: 'sunny@acme.test',
+            human_gh_login: 'sunnysabhanam',
+        });
+    });
+
+    it('sends null, not an empty string, for an omitted App identity', { timeout: 30_000 }, async () => {
+        // The trailer is optional. Sending '' would write a blank
+        // Co-Authored-By into every commit instead of omitting it.
+        let body: Record<string, unknown> | null = null;
+        server.use(
+            http.post(`${BASE}/credentials`, async ({ request }) => {
+                body = (await request.json()) as Record<string, unknown>;
+                return HttpResponse.json({ ...savedCred, kind: 'github_app' });
+            }),
+        );
+        await openAppForm();
+
+        await userEvent.type(screen.getByLabelText(/^Label/), 'atlas-bot');
+        await userEvent.type(screen.getByLabelText(/Bot info folder/i), '/bots/atlas');
+        await userEvent.type(screen.getByLabelText(/Installation owner/i), 'sspartorg');
+        // Whitespace only — must be treated as "not set", not as a name.
+        await userEvent.type(screen.getByLabelText(/Your name/i), '   ');
+        await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+
+        await waitFor(() => expect(body).not.toBeNull());
+        expect(body).toMatchObject({
+            human_name: null,
+            human_email: null,
+            human_gh_login: null,
+        });
+    });
+
+    it('sends the PAT commit identity as the author', { timeout: 30_000 }, async () => {
+        // A PAT has no bot identity of its own, so these two become the
+        // commit AUTHOR rather than a co-author. Getting them to the API is
+        // the whole difference between "Sunny committed" and whatever git
+        // config the runner host happens to carry.
+        let body: Record<string, unknown> | null = null;
+        server.use(
+            http.post(`${BASE}/credentials`, async ({ request }) => {
+                body = (await request.json()) as Record<string, unknown>;
+                return HttpResponse.json(savedCred);
+            }),
+        );
+        renderWithProviders(<CredentialModal open mode={{ kind: 'add' }} onClose={vi.fn()} />);
+        await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+        await screen.findByLabelText(/^Label/);
+
+        await userEvent.type(screen.getByLabelText(/^Label/), 'my-pat');
+        await userEvent.type(screen.getByLabelText(/^Token/), 'ghp_1234567890abcdef');
+        await userEvent.type(screen.getByLabelText(/Your name/i), 'Sunny');
+        await userEvent.type(screen.getByLabelText(/Your email/i), 'sunny@acme.test');
+        await userEvent.type(screen.getByLabelText(/Repo scope/i), 'acme/*');
+        await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+
+        await waitFor(() => expect(body).not.toBeNull());
+        expect(body).toMatchObject({
+            kind: 'pat',
+            human_name: 'Sunny',
+            human_email: 'sunny@acme.test',
+            scope: 'acme/*',
+        });
+        // `human_gh_login` is App-only — a PAT has no installation to assign from.
+        expect(body).not.toHaveProperty('human_gh_login');
+    });
+});

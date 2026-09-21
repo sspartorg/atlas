@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { act, screen, fireEvent, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../test-setup.js';
 import { defaultHandlers } from '../../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
+import { Toast } from '../../components/Toast.js';
 import { NotificationsTab } from './NotificationsTab.js';
 
 const BASE = 'http://localhost:3000/api';
@@ -1248,4 +1249,139 @@ describe('NotificationsTab', () => {
         }, { timeout: 8000 });
     });
 
+    // ─── On-demand secret reveal (Batch-9 enterprise read model) ────────────
+    //
+    // GET /api/settings never returns the plaintext token or webhook URL.
+    // The Owner has to ask for it, and what comes back must disappear again
+    // on its own — a revealed bot token left in the DOM on an unattended
+    // screen is exactly the leak the read model was introduced to stop.
+
+    it('reveals the stored Telegram token, then hides it again after 30s', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        try {
+            server.use(
+                http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
+                http.post(`${BASE}/settings/external-notification/reveal-token`, () =>
+                    HttpResponse.json({ value: '123456789:ABC-real-token' }),
+                ),
+                ...defaultHandlers,
+            );
+            renderWithProviders(<NotificationsTab />);
+            await screen.findByText(/Untested/i);
+
+            fireEvent.click(screen.getByLabelText(/reveal token/i));
+            const revealed = await screen.findByDisplayValue('123456789:ABC-real-token');
+            // G-BUG: this `readOnly` used to be passed via the deprecated
+            // `InputProps`, which MUI v7 discards outright when `slotProps.input`
+            // is also set — so the guard was dead and a stray keystroke on a
+            // revealed token rewrote it, then `commitConnection` PATCHed the
+            // mangled value on blur. Keep this assertion.
+            expect(revealed).toHaveAttribute('readonly');
+
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(30_000);
+            });
+            expect(screen.queryByDisplayValue('123456789:ABC-real-token')).not.toBeInTheDocument();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('reveals the stored Teams webhook URL, then hides it again after 30s', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        try {
+            server.use(
+                http.get(`${BASE}/settings`, () =>
+                    HttpResponse.json(
+                        settings({
+                            external_notification_provider: 'teams',
+                            external_notification_webhook_url_set: true,
+                        }),
+                    ),
+                ),
+                http.post(`${BASE}/settings/external-notification/reveal-webhook-url`, () =>
+                    HttpResponse.json({
+                        value: 'https://acme.powerautomate.com/triggers/manual/paths/invoke?sig=secret',
+                    }),
+                ),
+                ...defaultHandlers,
+            );
+            renderWithProviders(<NotificationsTab />);
+            await screen.findByText(/Untested/i);
+
+            fireEvent.click(await screen.findByLabelText(/reveal webhook url/i));
+            const revealed = await screen.findByDisplayValue(
+                'https://acme.powerautomate.com/triggers/manual/paths/invoke?sig=secret',
+            );
+            // A revealed URL is read-only: editing it would send the masked
+            // placeholder text back as the new secret.
+            expect(revealed).toHaveAttribute('readonly');
+
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(30_000);
+            });
+            expect(
+                screen.queryByDisplayValue(
+                    'https://acme.powerautomate.com/triggers/manual/paths/invoke?sig=secret',
+                ),
+            ).not.toBeInTheDocument();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('says so when a webhook reveal is refused rather than showing nothing', async () => {
+        // A silent no-op here reads as "there is no webhook stored", which
+        // would send the Owner off to re-enter a secret they already have.
+        server.use(
+            http.get(`${BASE}/settings`, () =>
+                HttpResponse.json(
+                    settings({
+                        external_notification_provider: 'teams',
+                        external_notification_webhook_url_set: true,
+                    }),
+                ),
+            ),
+            http.post(`${BASE}/settings/external-notification/reveal-webhook-url`, () =>
+                HttpResponse.json({ error: 'Secret store is locked' }, { status: 500 }),
+            ),
+            ...defaultHandlers,
+        );
+        renderWithProviders(
+            <>
+                <NotificationsTab />
+                <Toast />
+            </>,
+        );
+        await screen.findByText(/Untested/i);
+        fireEvent.click(await screen.findByLabelText(/reveal webhook url/i));
+        expect(await screen.findByText('Could not reveal webhook URL')).toBeInTheDocument();
+        expect(await screen.findByText('Secret store is locked')).toBeInTheDocument();
+    });
+
+    it('confirms a per-event notification toggle was saved', async () => {
+        // The switch flips optimistically from local state; without the
+        // success toast the Owner has no way to tell a saved preference
+        // from one the API rejected.
+        let patched: Record<string, unknown> | null = null;
+        server.use(
+            http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
+            http.patch(`${BASE}/settings/notifications`, async ({ request }) => {
+                patched = (await request.json()) as Record<string, unknown>;
+                return HttpResponse.json(settings());
+            }),
+            ...defaultHandlers,
+        );
+        const { container } = renderWithProviders(
+            <>
+                <NotificationsTab />
+                <Toast />
+            </>,
+        );
+        await screen.findByText(/Untested/i);
+        const first = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+        fireEvent.click(first);
+        expect(await screen.findByText('Notification preferences saved')).toBeInTheDocument();
+        expect(patched).not.toBeNull();
+    });
 }, 15000);
