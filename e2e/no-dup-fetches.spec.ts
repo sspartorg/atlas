@@ -174,6 +174,14 @@ for (const route of STATIC_ROUTES) {
 // -----------------------------------------------------------------------
 // Parameterised route tests.
 //
+// These do NOT visit the list page first. That step only ever existed to
+// scrape an `<a href>`, and once the id comes from the API it is not merely
+// redundant — it is a race. `goto` fails a test on any network failure, and
+// navigating away immediately aborts the list page's in-flight requests, so
+// CI saw `net::ERR_ABORTED` on vite chunks and `/api/counts` while a faster
+// local machine finished loading in time and passed. Go straight to the URL
+// under test.
+//
 // G-018 — these used to scrape an `<a href>` off the list page and skip when
 // the locator found nothing. The app navigates its cards with onClick, so the
 // locator matched nothing even with a fully seeded database, and the skip
@@ -187,8 +195,6 @@ for (const route of STATIC_ROUTES) {
 
 test.describe('/projects/:id — no dup API calls on project detail', () => {
     test('first project detail passes dup audit', async ({ page }) => {
-        // Navigate to list to get the first project href.
-        await goto(page, '/projects');
         // G-018 — resolved from the API, not from an `<a href>`. Project cards
         // navigate via onClick, so the old anchor locator found nothing and the
         // test skipped claiming "no seeded project" — which was never true.
@@ -224,7 +230,6 @@ test.describe('/projects/:id — no dup API calls on project detail', () => {
 
 test.describe('/projects/:id/guardrails — no dup API calls', () => {
     test('project guardrails page passes dup audit', async ({ page }) => {
-        await goto(page, '/projects');
         const href = `/projects/${await firstProjectId(page)}`;
         const projectId = href.replace('/projects/', '').split('/')[0];
         const route = `/projects/${projectId}/guardrails`;
@@ -258,7 +263,6 @@ for (const route of ['/tasks/ETM-1', '/sub-tasks/ETM-2']) {
 
 test.describe('/agents/:id — no dup API calls on agent detail', () => {
     test('first agent detail (all tabs) passes dup audit', async ({ page }) => {
-        await goto(page, '/agents');
         // The seed installs `agent-po-writer`; the roster renders Cards with
         // onClick, not anchors, so the old locator could never match it.
         const href = `/agents/${await firstAgentId(page)}`;
@@ -286,7 +290,6 @@ test.describe('/agents/:id — no dup API calls on agent detail', () => {
 
 test.describe('/agents/:id/runs/:runId — no dup API calls on run detail', () => {
     test('first agent run detail passes dup audit', async ({ page }) => {
-        await goto(page, '/agents');
         const agentHref = `/agents/${await firstAgentId(page)}`;
 
         // Navigate to the runs tab to find a run link.
@@ -455,7 +458,6 @@ test.describe('useAgentRuns family — endpoint distinctness audit', () => {
     // ProjectDetail overview; the shell-level recent-runs is expected.
     // Tighten the filter to match only project-scoped calls.
     test('useProjectAgentRuns on ProjectDetail overview tab fires at most once', async ({ page }) => {
-        await goto(page, '/projects');
         const href = `/projects/${await firstProjectId(page)}`;
 
         // Navigate to the overview tab (default).
@@ -477,7 +479,6 @@ test.describe('useAgentRuns family — endpoint distinctness audit', () => {
 
 test.describe('per-kind list endpoints vs useIssues tree — double-fetch audit', () => {
     test('ProjectDetail calls /api/issues/tree once and no per-kind list endpoint', async ({ page }) => {
-        await goto(page, '/projects');
         const href = `/projects/${await firstProjectId(page)}`;
 
         const fetches = await captureApiFetches(page, () => goto(page, href));
