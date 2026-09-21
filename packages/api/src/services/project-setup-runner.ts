@@ -51,7 +51,7 @@ const REDACT_MIN_LENGTH = 4;
 // Replace every secret value (long enough to be a real token) with `***`.
 // Short values aren't masked — masking `"1"` would replace every digit `1`
 // across stdout and produce garbage with no real protection.
-function redactSecretValues(text: string, secrets: ReadonlyMap<string, string>): string {
+export function redactSecretValues(text: string, secrets: ReadonlyMap<string, string>): string {
     let out = text;
     for (const value of secrets.values()) {
         if (value.length < REDACT_MIN_LENGTH) continue;

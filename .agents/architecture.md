@@ -188,6 +188,8 @@ goTo(node after Start)
    │     CLI runs in the shared worktree, commits, ends with an atlas-outcome block
    │     runner: completeRun / errorRun / setup_failed / stop / sweep / reaper → onStepFinished
    │        done (+ required checklist passed) → pass connection → goTo(next)   (no tick wait)
+   │        NB the checklist is the agent's own self-report. Since ADR 0020 the
+   │        binding check is the verification gate at End, not this block.
    │        rejected / checklist failed        → fail connection, loop_count+1 (past max_loops → park)
    │        asked_question / no outcome / error → park
    │        cancelled                          → cancel run
@@ -201,8 +203,11 @@ goTo(node after Start)
    │     none left → pass connection
    └─ end node → End gate (Task runs with Sub-tasks nodes): open claimed sub-task → back to its
                   Sub-tasks node (loop_count+1) · open unclaimed sub-task → park
-                  finishRun: commit leftovers · push run branch (push_code) or default branch
-                  (push_to_default) · PR (raises_pr; body lists the sub-tasks) · cleanup
+                  finishRun: commit leftovers · ADR 0020 verification gate per repo (runs the
+                  project's own typecheck/lint/test script in that checkout; fail OR unavailable
+                  skips the repo and parks at End with its output) · push run branch (push_code)
+                  or default branch (push_to_default) · PR (raises_pr; body lists the sub-tasks)
+                  · cleanup
                   Task → in_review (PR or any sub-task not done) | done · kick dispatch
 
 park   → run waiting_for_owner · item waiting_for_info, no assignee · comment + one notification · worktree kept

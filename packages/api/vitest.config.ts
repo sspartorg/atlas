@@ -66,6 +66,8 @@ export default defineConfig({
             'src/services/secret-substitution.test.ts',
             'src/services/environment-secrets.test.ts',
             'src/services/project-setup-runner.test.ts',
+            // ADR 0020 — Atlas runs the project's own gate before it pushes.
+            'src/services/verification-gate.test.ts',
             'src/services/env-file.test.ts',
             'src/services/git-head.test.ts',
             'src/services/guards.test.ts',
