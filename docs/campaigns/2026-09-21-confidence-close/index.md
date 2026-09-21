@@ -1,7 +1,7 @@
 # confidence-close — the board
 
 > **CLOSED — 2026-09-21. All 10 rows done.** 25 findings, 24 fixed, **1 open
-> by necessity (G-023, an architecture decision).** `pnpm -w run gate` exit 0, `pnpm e2e` 224 passed / 0 failed, `pnpm audit` clean — all re-run after the final fixes.
+> by necessity (G-023, an architecture decision).** `pnpm -w run gate` exit 0, `pnpm e2e` 229 passed / 0 failed, `pnpm audit` clean, and all four gated suites (162 specs) run and green — every one re-run after the security fixes.
 > **Twelve real defects were found, five of them P1 — including four security
 > findings, two of which this campaign's own work introduced.**
 > Read *Closing* at the foot of this file first.
@@ -180,7 +180,7 @@ architecture decision.
 ### What is now proven
 
 `pnpm -w run gate` **green, exit 0** — it was red at the predecessor's close.
-**7,492 tests** pass, up from 7,210. `pnpm e2e` 224 passed / 0 failed.
+**7,493 tests** pass, up from 7,210. `pnpm e2e` 224 passed / 0 failed.
 `pnpm audit` clean. Six of the eight non-branch coverage metrics on `api` and
 `web` are at or above the Owner's 95% bar; one was, at the start.
 

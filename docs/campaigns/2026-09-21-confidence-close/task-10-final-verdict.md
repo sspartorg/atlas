@@ -32,30 +32,44 @@ made the remaining work findable. Repeat it.
 
 ### The gates
 
-**`pnpm -w run gate` — GREEN, exit 0.** Typecheck, knip, per-package coverage
-against the ratcheted thresholds, build, bundle budget. Re-run after the final
-three fixes (G-013, G-015, G-016), not before them.
+**`pnpm -w run gate` — GREEN, exit 0.** Typecheck (now including `e2e/`, which
+had never been type-checked — G-019), knip, per-package coverage against the
+ratcheted thresholds, build, bundle budget. Re-run after every security fix,
+not before them.
 
 ```
 @atlas/shared   6 files    249 tests   100   / 100   / 100   / 100
 @atlas/mcp     12 files    167 tests   100   / 100   / 100   / 100
-@atlas/web    336 files  4,361 tests   96.18 / 92.50 / 95.05 / 97.29
-@atlas/api    155 files  2,715 tests   95.08 / 87.82 / 96.69 / 96.08
+@atlas/web    336 files  4,361 tests   96.18 / 92.51 / 95.05 / 97.29
+@atlas/api    155 files  2,716 tests   95.05 / 87.77 / 96.57 / 96.08
                         ─────────────
-                         7,492 tests, all passing
-
-Initial chunk total: 256.4 KB gz (budget 264.0 KB)
-Total app size:      856.5 KB gz (budget 880.0 KB)
-Bundle budget OK.
+                         7,493 tests, all passing
 ```
 
-**`pnpm e2e` — 224 passed, 323 skipped, 0 failed, exit 0**, 6.0m.
+**`pnpm e2e` — 229 passed, 318 skipped, 0 failed, exit 0**, 6.2m.
 
-The skip count moved 315 → 323 because task-07 added eight `GUIDE=1` captures
-to the same gated family as `PERF` / `FORENSIC` / `FUNCTIONAL`. Passing count
-is unchanged at 224, which is the number that matters.
+Passing rose 224 → 229 because G-018 converted five abstaining specs into real
+tests. The remaining skips are env gates, the mobile/ipad project matrix,
+Linux-only visual baselines, and four specs where the seed genuinely creates no
+fixture and now says so.
 
-**`pnpm audit` — `No known vulnerabilities found`, exit 0.**
+**The gated suites were run, for the first time on this board, and all pass:**
+
+```
+state-transitions   10 passed
+functional          33 passed
+forensic            47 passed
+perf                72 passed
+```
+
+That took two attempts. The first reported `state-transitions` **1 failed /
+9 passed** — a phantom. `playwright.forensic.config.ts` hardcoded
+`localhost:4000` while this machine runs on 4100, so the suites tested a stale
+Vite server whose `/api/*` returned HTML. The failure was meaningless and so
+were the nine passes (**G-017**, fixed: the port is now read from `.env`).
+
+**`pnpm audit` — `No known vulnerabilities found`, exit 0.** Dependencies only;
+see the note under *What is still not true*.
 
 ### Coverage — measured, not asserted
 
