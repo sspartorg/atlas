@@ -13,12 +13,15 @@ const makeComment = (overrides = {}) => makeCommentFactory({ issue_id: 'S1', ...
 
 const ACTIVITY_URL = 'http://localhost:3000/api/issues/task/S1/activity';
 
-function setupEvent(event: IIssueEvent, agents = [makeAgent({ id: 'agent-coder', name: 'Coder' })]): void {
+function setupEvent(
+    event: IIssueEvent,
+    agents = [makeAgent({ id: 'agent-coder', name: 'Coder' })]
+): void {
     const activity: IActivityItem[] = [{ kind: 'event', data: event }];
     server.use(
         ...defaultHandlers,
         handlers.listAgents(agents),
-        http.get(ACTIVITY_URL, () => HttpResponse.json(activity)),
+        http.get(ACTIVITY_URL, () => HttpResponse.json(activity))
     );
 }
 
@@ -52,7 +55,7 @@ describe('ActivityCard event-type rendering', () => {
                 from_value: 'ready',
                 to_value: 'in_progress',
                 actor_agent_id: 'agent-coder',
-            }),
+            })
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/moved status from/i)).toBeInTheDocument());
@@ -69,7 +72,7 @@ describe('ActivityCard event-type rendering', () => {
                 to_value: 'done',
                 detail: 'override',
                 actor_agent_id: 'agent-coder',
-            }),
+            })
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/override/i)).toBeInTheDocument());
@@ -87,7 +90,7 @@ describe('ActivityCard event-type rendering', () => {
                 to_value: 'agent-coder',
                 actor_agent_id: 'agent-architect',
             }),
-            agents,
+            agents
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/reassigned from/i)).toBeInTheDocument());
@@ -101,7 +104,7 @@ describe('ActivityCard event-type rendering', () => {
                 from_value: 'normal',
                 to_value: 'high',
                 actor_agent_id: 'agent-coder',
-            }),
+            })
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/updated/)).toBeInTheDocument());
@@ -112,7 +115,7 @@ describe('ActivityCard event-type rendering', () => {
             baseEvent({
                 event_type: 'comment_added',
                 actor_agent_id: 'agent-coder',
-            }),
+            })
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/added a comment/i)).toBeInTheDocument());
@@ -125,7 +128,7 @@ describe('ActivityCard event-type rendering', () => {
                 to_value: 'ATL-12',
                 detail: 'depends_on → ATL-12',
                 actor_agent_id: 'agent-coder',
-            }),
+            })
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/linked/i)).toBeInTheDocument());
@@ -139,7 +142,7 @@ describe('ActivityCard event-type rendering', () => {
                 to_value: 'ATL-9',
                 detail: 'depends_on → ATL-9',
                 actor_agent_id: 'agent-coder',
-            }),
+            })
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/removed link to/i)).toBeInTheDocument());
@@ -155,7 +158,7 @@ describe('ActivityCard event-type rendering', () => {
                 to_value: 'agent-coder',
                 actor_agent_id: null,
             }),
-            agents,
+            agents
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/reset rounds for/i)).toBeInTheDocument());
@@ -167,7 +170,7 @@ describe('ActivityCard event-type rendering', () => {
             baseEvent({
                 event_type: 'deleted',
                 actor_agent_id: 'agent-coder',
-            }),
+            })
         );
         renderWithProviders(<ActivityCard issueType="task" issueId="S1" />);
         await waitFor(() => expect(screen.getByText(/deleted this item/i)).toBeInTheDocument());
@@ -198,7 +201,7 @@ describe('CommentRow — edited_at badge branch', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         // findByText throws on timeout — ensures the branch is actually executed
@@ -216,7 +219,7 @@ describe('CommentRow — edited_at badge branch', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Unedited comment');
@@ -233,7 +236,7 @@ describe('CommentRow — saveEdit early-return branch', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Some text');
@@ -248,12 +251,17 @@ describe('CommentRow — saveEdit early-return branch', () => {
         if (textarea) {
             fireEvent.change(textarea, { target: { value: 'Different text' } });
         }
-        await waitFor(() => expect(screen.getByRole('button', { name: /Save/i })).not.toBeDisabled(), { timeout: 2000 });
+        await waitFor(
+            () => expect(screen.getByRole('button', { name: /Save/i })).not.toBeDisabled(),
+            { timeout: 2000 }
+        );
         // Clear the textarea — Save becomes disabled again (empty draft)
         if (textarea) {
             fireEvent.change(textarea, { target: { value: '' } });
         }
-        await waitFor(() => expect(screen.getByRole('button', { name: /Save/i })).toBeDisabled(), { timeout: 2000 });
+        await waitFor(() => expect(screen.getByRole('button', { name: /Save/i })).toBeDisabled(), {
+            timeout: 2000,
+        });
     });
 
     it('saveEdit: draft unchanged from comment.body keeps Save disabled', async () => {
@@ -261,7 +269,7 @@ describe('CommentRow — saveEdit early-return branch', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
         await screen.findByText('Original content');
@@ -276,11 +284,16 @@ describe('CommentRow — saveEdit early-return branch', () => {
         if (textarea) {
             fireEvent.change(textarea, { target: { value: 'Temporary change' } });
         }
-        await waitFor(() => expect(screen.getByRole('button', { name: /Save/i })).not.toBeDisabled(), { timeout: 2000 });
+        await waitFor(
+            () => expect(screen.getByRole('button', { name: /Save/i })).not.toBeDisabled(),
+            { timeout: 2000 }
+        );
         if (textarea) {
             fireEvent.change(textarea, { target: { value: 'Original content' } });
         }
-        await waitFor(() => expect(screen.getByRole('button', { name: /Save/i })).toBeDisabled(), { timeout: 2000 });
+        await waitFor(() => expect(screen.getByRole('button', { name: /Save/i })).toBeDisabled(), {
+            timeout: 2000,
+        });
     });
 });
 
@@ -299,12 +312,7 @@ describe('CommentRow — agent color fallback branch', () => {
         server.use(...defaultHandlers);
         // Pass activity and empty agents directly so agentsById is an empty map
         renderWithProviders(
-            <ConversationCard
-                issueType="task"
-                issueId="S1"
-                activity={activity}
-                agents={[]}
-            />,
+            <ConversationCard issueType="task" issueId="S1" activity={activity} agents={[]} />
         );
         await screen.findByText('Comment from unknown agent');
         // Falls back to 'Agent' name when agent not in map
@@ -322,16 +330,11 @@ describe('CommentRow — agent color fallback branch', () => {
         const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity)),
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
         );
         // Pass agents prop directly so the map is populated without a fetch
         renderWithProviders(
-            <ConversationCard
-                issueType="task"
-                issueId="S1"
-                activity={activity}
-                agents={[agent]}
-            />,
+            <ConversationCard issueType="task" issueId="S1" activity={activity} agents={[agent]} />
         );
         await screen.findByText('Known agent comment');
         expect(await screen.findByText('KnownAgent')).toBeInTheDocument();
@@ -350,7 +353,7 @@ describe('ActivityLogCard — truncateValue empty-string branch', () => {
             event_type: 'field_updated',
             actor_agent_id: null,
             field: 'title',
-            from_value: '',   // empty string → truncateValue returns null → no before span
+            from_value: '', // empty string → truncateValue returns null → no before span
             to_value: 'New title',
             detail: null,
             created_at: '2026-06-10T08:00:00.000Z',
@@ -358,12 +361,7 @@ describe('ActivityLogCard — truncateValue empty-string branch', () => {
         const activity: IActivityItem[] = [{ kind: 'event', data: event }];
         server.use(...defaultHandlers);
         renderWithProviders(
-            <ActivityLogCard
-                issueType="task"
-                issueId="S1"
-                activity={activity}
-                agents={[]}
-            />,
+            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />
         );
         await screen.findByText('title');
         // from_value was '' → treated as null → no before span rendered
@@ -380,19 +378,14 @@ describe('ActivityLogCard — truncateValue empty-string branch', () => {
             actor_agent_id: null,
             field: 'description',
             from_value: 'Old description',
-            to_value: '',     // empty string → truncateValue returns null → no after span
+            to_value: '', // empty string → truncateValue returns null → no after span
             detail: null,
             created_at: '2026-06-10T09:00:00.000Z',
         };
         const activity: IActivityItem[] = [{ kind: 'event', data: event }];
         server.use(...defaultHandlers);
         renderWithProviders(
-            <ActivityLogCard
-                issueType="task"
-                issueId="S1"
-                activity={activity}
-                agents={[]}
-            />,
+            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />
         );
         await screen.findByText('description');
         // from_value was 'Old description' → before span rendered
@@ -416,12 +409,7 @@ describe('ActivityLogCard — truncateValue empty-string branch', () => {
         const activity: IActivityItem[] = [{ kind: 'event', data: event }];
         server.use(...defaultHandlers);
         renderWithProviders(
-            <ActivityLogCard
-                issueType="task"
-                issueId="S1"
-                activity={activity}
-                agents={[]}
-            />,
+            <ActivityLogCard issueType="task" issueId="S1" activity={activity} agents={[]} />
         );
         await screen.findByText(/a field/i);
     });

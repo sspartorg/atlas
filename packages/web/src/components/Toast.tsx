@@ -53,7 +53,9 @@ export function Toast() {
                 >
                     {iconForMessage(t.message)}
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate }}>
+                        <Typography
+                            sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate }}
+                        >
                             {t.message}
                         </Typography>
                         {t.detail && (

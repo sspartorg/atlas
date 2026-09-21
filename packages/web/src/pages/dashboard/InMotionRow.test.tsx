@@ -19,7 +19,7 @@ describe('InMotionRow', () => {
                     agent_name: 'Coder',
                     accent_color: '#0A0A0A',
                 }}
-            />,
+            />
         );
         expect(screen.getByText('Build login')).toBeInTheDocument();
     });
@@ -38,7 +38,7 @@ describe('InMotionRow', () => {
                     agent_name: 'Unknown Agent',
                     accent_color: null,
                 }}
-            />,
+            />
         );
         expect(screen.getByText('Fallback name')).toBeInTheDocument();
         expect(screen.getByText('Unknown Agent')).toBeInTheDocument();
@@ -58,7 +58,7 @@ describe('InMotionRow', () => {
                     agent_name: null,
                     accent_color: null,
                 }}
-            />,
+            />
         );
         expect(screen.getByText('Unassigned')).toBeInTheDocument();
     });
@@ -77,7 +77,7 @@ describe('InMotionRow', () => {
                     agent_name: 'Coder',
                     accent_color: '#0A0A0A',
                 }}
-            />,
+            />
         );
         const title = screen.getByText('Clickable');
         fireEvent.click(title);
@@ -99,7 +99,7 @@ describe('InMotionRow', () => {
                         agent_name: 'Coder',
                         accent_color: '#0A0A0A',
                     }}
-                />,
+                />
             );
             const el = screen.getByText(`Route ${t}`);
             fireEvent.click(el);
@@ -121,7 +121,7 @@ describe('InMotionRow', () => {
                     agent_name: 'Coder',
                     accent_color: '#0A0A0A',
                 }}
-            />,
+            />
         );
         expect(screen.getByText(/3 h running/)).toBeInTheDocument();
     });
@@ -140,7 +140,7 @@ describe('InMotionRow', () => {
                     agent_name: 'Coder',
                     accent_color: '#0A0A0A',
                 }}
-            />,
+            />
         );
         expect(screen.getByText(/2 d running/)).toBeInTheDocument();
     });
@@ -159,7 +159,7 @@ describe('InMotionRow', () => {
                     agent_name: 'Coder',
                     accent_color: '#0A0A0A',
                 }}
-            />,
+            />
         );
         expect(screen.getByText('Bad date')).toBeInTheDocument();
     });
@@ -178,7 +178,7 @@ describe('InMotionRow', () => {
                     agent_name: 'Unknown Glyph',
                     accent_color: '#0A0A0A',
                 }}
-            />,
+            />
         );
         // The fallback glyph is 'smart_toy'.
         expect(screen.getByText('smart_toy')).toBeInTheDocument();

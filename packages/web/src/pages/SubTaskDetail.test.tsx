@@ -35,7 +35,7 @@ function renderPage(taskId: string) {
             <Route path="/sub-tasks/:id" element={<SubTaskDetail />} />
             <Route path="/tasks/:id" element={<>task page</>} />
         </Routes>,
-        { initialEntries: [`/sub-tasks/${taskId}`] },
+        { initialEntries: [`/sub-tasks/${taskId}`] }
     );
 }
 
@@ -50,7 +50,7 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         renderPage('T70');
         await screen.findByText('Sub-task One');
@@ -63,7 +63,12 @@ describe('SubTaskDetail page', () => {
         let linked: unknown;
         server.use(
             ...mountHandlers('T71', {
-                sub_task: makeSubTask({ id: 'T71', task_id: 'ATL-1', title: 'Source', labels: ['qa'] }),
+                sub_task: makeSubTask({
+                    id: 'T71',
+                    task_id: 'ATL-1',
+                    title: 'Source',
+                    labels: ['qa'],
+                }),
                 task: makeTask({ id: 'ATL-1' }),
                 project: null,
                 related_links: [],
@@ -73,7 +78,9 @@ describe('SubTaskDetail page', () => {
             }),
             http.post(`${BASE}/tasks/ATL-1/sub-tasks`, async ({ request }) => {
                 created = await request.json();
-                return HttpResponse.json(makeSubTask({ id: 'T72', task_id: 'ATL-1', title: 'CLONE Source' }));
+                return HttpResponse.json(
+                    makeSubTask({ id: 'T72', task_id: 'ATL-1', title: 'CLONE Source' })
+                );
             }),
             http.post(`${BASE}/issues/sub_task/T72/links`, async ({ request }) => {
                 linked = await request.json();
@@ -88,8 +95,8 @@ describe('SubTaskDetail page', () => {
                     external_links: [],
                     activity: [],
                     agents: [],
-                }),
-            ),
+                })
+            )
         );
         renderPage('T71');
         await screen.findByText('Source');
@@ -103,9 +110,12 @@ describe('SubTaskDetail page', () => {
             labels: ['qa'],
             task_id: 'ATL-1',
         });
-        expect(linked).toMatchObject({ to_type: 'sub_task', to_id: 'T71', relation_type: 'relates_to' });
+        expect(linked).toMatchObject({
+            to_type: 'sub_task',
+            to_id: 'T71',
+            relation_type: 'relates_to',
+        });
     });
-
 
     it('renders without crashing', () => {
         server.use(
@@ -117,7 +127,7 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         const { container } = renderPage('T1');
         expect(container.firstChild).toBeInTheDocument();
@@ -138,7 +148,7 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         renderPage('T2');
         // Title is rendered as a styled <p>, not a heading element.
@@ -168,7 +178,7 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         renderPage('T3');
         await screen.findByText('Description');
@@ -211,7 +221,7 @@ describe('SubTaskDetail page', () => {
             http.patch(`${BASE}/sub-tasks/T4`, async () => {
                 patched = true;
                 return HttpResponse.json(makeSubTask({ id: 'T4', description: 'After save' }));
-            }),
+            })
         );
         renderPage('T4');
         await screen.findByText('Description');
@@ -235,7 +245,7 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         renderPage('T5');
         await screen.findByText('Description');
@@ -265,7 +275,7 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         renderPage('T7');
         await screen.findByText('Description');
@@ -284,8 +294,8 @@ describe('SubTaskDetail page', () => {
         server.use(
             ...mountHandlers('TMISS', null),
             http.get(`${BASE}/sub-tasks/TMISS/full`, () =>
-                HttpResponse.json({ error: 'not found' }, { status: 404 }),
-            ),
+                HttpResponse.json({ error: 'not found' }, { status: 404 })
+            )
         );
         renderPage('TMISS');
         // useSubTaskFull → 404 → query returns undefined → "Sub-task not found" branch.
@@ -310,7 +320,7 @@ describe('SubTaskDetail page', () => {
                 const body = (await request.json()) as { title?: string };
                 if (body.title) titlePatch = body.title;
                 return HttpResponse.json(makeSubTask({ id: 'T9', title: body.title ?? '' }));
-            }),
+            })
         );
         renderPage('T9');
         // The title typography itself triggers startEdit on click.
@@ -339,7 +349,7 @@ describe('SubTaskDetail page', () => {
             http.patch(`${BASE}/sub-tasks/T10/status`, async () => {
                 transitioned = true;
                 return HttpResponse.json(makeSubTask({ id: 'T10', status: 'in_progress' }));
-            }),
+            })
         );
         renderPage('T10');
         // Click the Status row in the right rail to open the picker.
@@ -373,8 +383,8 @@ describe('SubTaskDetail page', () => {
                 agents: [agent],
             }),
             http.patch(`${BASE}/sub-tasks/T12/assign`, () =>
-                HttpResponse.json(makeSubTask({ id: 'T12', assignee_agent_id: 'agent-1' })),
-            ),
+                HttpResponse.json(makeSubTask({ id: 'T12', assignee_agent_id: 'agent-1' }))
+            )
         );
         renderPage('T12');
         await screen.findByText('Sub-task One');
@@ -397,11 +407,12 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         renderPage('T13');
         await screen.findByText('Sub-task One');
-        const addRelatedBtn = screen.queryByRole('button', { name: /Add related item/i }) ??
+        const addRelatedBtn =
+            screen.queryByRole('button', { name: /Add related item/i }) ??
             screen.queryByRole('button', { name: /add related/i });
         if (addRelatedBtn) {
             fireEvent.click(addRelatedBtn);
@@ -422,7 +433,7 @@ describe('SubTaskDetail page', () => {
                 activity: [],
                 agents: [],
             }),
-            http.delete(`${BASE}/sub-tasks/T14`, () => new HttpResponse(null, { status: 204 })),
+            http.delete(`${BASE}/sub-tasks/T14`, () => new HttpResponse(null, { status: 204 }))
         );
         renderPage('T14');
         await screen.findByText('To delete');
@@ -457,9 +468,7 @@ describe('SubTaskDetail page', () => {
                 activity: [],
                 agents: [agent],
             }),
-            http.get(`${BASE}/run`, () =>
-                HttpResponse.json([{ total_cost_usd: 0.0123 }]),
-            ),
+            http.get(`${BASE}/run`, () => HttpResponse.json([{ total_cost_usd: 0.0123 }]))
         );
         renderPage('T8');
         // Title renders -> initial load done.
@@ -483,17 +492,14 @@ describe('SubTaskDetail page', () => {
                 related_links: [],
                 activity: [],
                 agents: [agent],
-            }),
+            })
         );
         // Prepend the /run override AFTER the base handlers so it sits at
         // position 0 and wins over the empty stub inside mountHandlers.
         server.use(
             http.get(`${BASE}/run`, () =>
-                HttpResponse.json([
-                    { total_cost_usd: 0.005 },
-                    { total_cost_usd: 0.015 },
-                ]),
-            ),
+                HttpResponse.json([{ total_cost_usd: 0.005 }, { total_cost_usd: 0.015 }])
+            )
         );
         renderPage('T16');
         // Wait for the DetailsRailCard "AI cost" row which only renders when
@@ -516,8 +522,10 @@ describe('SubTaskDetail page', () => {
             }),
             http.patch(`${BASE}/sub-tasks/T17/assign`, async () => {
                 assigned = true;
-                return HttpResponse.json(makeSubTask({ id: 'T17', assignee_agent_id: 'agent-assign' }));
-            }),
+                return HttpResponse.json(
+                    makeSubTask({ id: 'T17', assignee_agent_id: 'agent-assign' })
+                );
+            })
         );
         // Prepend the /agents override so it wins over defaultHandlers' empty stub.
         server.use(http.get(`${BASE}/agents`, () => HttpResponse.json([agent])));
@@ -550,7 +558,7 @@ describe('SubTaskDetail page', () => {
             http.delete(`${BASE}/sub-tasks/T18`, () => {
                 deleted = true;
                 return new HttpResponse(null, { status: 204 });
-            }),
+            })
         );
         renderPage('T18');
         await screen.findByText('Confirm delete task');
@@ -577,13 +585,13 @@ describe('SubTaskDetail page', () => {
                 related_links: [],
                 activity: [],
                 agents: [agent],
-            }),
+            })
         );
         // Prepend /run stub that returns runs with null cost — hasAny stays false.
         server.use(
             http.get(`${BASE}/run`, () =>
-                HttpResponse.json([{ total_cost_usd: null }, { total_cost_usd: null }]),
-            ),
+                HttpResponse.json([{ total_cost_usd: null }, { total_cost_usd: null }])
+            )
         );
         renderPage('T19');
         await screen.findByText('Sub-task One');
@@ -601,7 +609,7 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         renderPage('T20');
         await screen.findByText('Description');
@@ -632,8 +640,10 @@ describe('SubTaskDetail page', () => {
             http.patch(`${BASE}/sub-tasks/T21`, async ({ request }) => {
                 const body = (await request.json()) as { priority?: string };
                 if (body.priority) priorityPatch = body.priority;
-                return HttpResponse.json(makeSubTask({ id: 'T21', priority: body.priority as never ?? 'normal' }));
-            }),
+                return HttpResponse.json(
+                    makeSubTask({ id: 'T21', priority: (body.priority as never) ?? 'normal' })
+                );
+            })
         );
         renderPage('T21');
         await screen.findByText('Sub-task One');
@@ -669,7 +679,7 @@ describe('SubTaskDetail page', () => {
                 const body = (await request.json()) as { labels?: string[] };
                 if (body.labels) labelsPatch = body.labels;
                 return HttpResponse.json(makeSubTask({ id: 'T24', labels: body.labels ?? [] }));
-            }),
+            })
         );
         renderPage('T24');
         await screen.findByText('Sub-task One');
@@ -679,7 +689,9 @@ describe('SubTaskDetail page', () => {
         if (existingChip) {
             // The chip remove button is a sibling of the chip text.
             const chipEl = existingChip.closest('[role="button"]') ?? existingChip.parentElement;
-            const removeBtn = chipEl?.querySelector('svg[data-testid="CancelIcon"]') as HTMLElement | null;
+            const removeBtn = chipEl?.querySelector(
+                'svg[data-testid="CancelIcon"]'
+            ) as HTMLElement | null;
             if (removeBtn) {
                 fireEvent.click(removeBtn);
                 await waitFor(() => expect(labelsPatch).toBeDefined());
@@ -705,9 +717,9 @@ describe('SubTaskDetail page', () => {
             http.patch(`${BASE}/sub-tasks/T8`, async (req) => {
                 patchedBody = await req.request.json();
                 return HttpResponse.json(
-                    makeSubTask({ id: 'T8', acceptance_criteria: '- New criteria' }),
+                    makeSubTask({ id: 'T8', acceptance_criteria: '- New criteria' })
                 );
-            }),
+            })
         );
         renderPage('T8');
         await screen.findByText('Acceptance criteria');
@@ -718,7 +730,7 @@ describe('SubTaskDetail page', () => {
         if (editButtons.length >= 2) {
             fireEvent.click(editButtons[1]!);
             const textarea = await screen.findByPlaceholderText(
-                /User can|System ensures|one per line/i,
+                /User can|System ensures|one per line/i
             );
             fireEvent.change(textarea, { target: { value: '- New criteria' } });
             fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -742,8 +754,8 @@ describe('SubTaskDetail page', () => {
                 agents: [],
             }),
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: null, onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({ id: 1, owner_name: null, onboarding_complete: 1 })
+            )
         );
         renderPage('T90');
         expect(await screen.findByText('Sub-task One')).toBeInTheDocument();
@@ -760,7 +772,7 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         renderPage('T91');
         expect(await screen.findByText('Sub-task One')).toBeInTheDocument();
@@ -779,7 +791,7 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         renderPage('T92');
         expect(await screen.findByText('Sub-task One')).toBeInTheDocument();
@@ -796,7 +808,7 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         renderPage('T93');
         expect(await screen.findByText('Sub-task One')).toBeInTheDocument();
@@ -817,7 +829,7 @@ describe('SubTaskDetail page', () => {
             http.delete(`${BASE}/sub-tasks/T95`, () => {
                 deleted = true;
                 return new HttpResponse(null, { status: 204 });
-            }),
+            })
         );
         renderPage('T95');
         await screen.findByText('Delete with story');
@@ -839,7 +851,7 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         renderPage('T94');
         await screen.findByText('Sub-task One');
@@ -867,16 +879,28 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         // Prepend /run override so it wins over the empty stub inside mountHandlers.
         server.use(
             http.get(`${BASE}/run`, () =>
                 HttpResponse.json([
-                    { id: 'r1', item_id: 'T_COST', total_cost_usd: 0.05, status: 'done', created_at: '2026-06-01T00:00:00.000Z' },
-                    { id: 'r2', item_id: 'T_COST', total_cost_usd: 0.03, status: 'done', created_at: '2026-06-01T00:00:00.000Z' },
-                ]),
-            ),
+                    {
+                        id: 'r1',
+                        item_id: 'T_COST',
+                        total_cost_usd: 0.05,
+                        status: 'done',
+                        created_at: '2026-06-01T00:00:00.000Z',
+                    },
+                    {
+                        id: 'r2',
+                        item_id: 'T_COST',
+                        total_cost_usd: 0.03,
+                        status: 'done',
+                        created_at: '2026-06-01T00:00:00.000Z',
+                    },
+                ])
+            )
         );
         renderPage('T_COST');
         await screen.findByText('Sub-task One');
@@ -896,13 +920,18 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         // Prepend settings override so it wins over the defaultHandlers stub inside mountHandlers.
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: null, accent_color: null, onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({
+                    id: 1,
+                    owner_name: null,
+                    accent_color: null,
+                    onboarding_complete: 1,
+                })
+            )
         );
         renderPage('T_OWN');
         await screen.findByText('Sub-task One');
@@ -921,12 +950,17 @@ describe('SubTaskDetail page', () => {
                 external_links: [],
                 activity: [],
                 agents: [],
-            }),
+            })
         );
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: 'Owner', accent_color: '#FF5733', onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({
+                    id: 1,
+                    owner_name: 'Owner',
+                    accent_color: '#FF5733',
+                    onboarding_complete: 1,
+                })
+            )
         );
         renderPage('T_ACC');
         await screen.findByText('Sub-task One');

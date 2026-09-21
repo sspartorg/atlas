@@ -261,7 +261,10 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
                         {cfg.last_sync_at ? (
                             <>
                                 Last sync{' '}
-                                <Box component="span" sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono }}>
+                                <Box
+                                    component="span"
+                                    sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono }}
+                                >
                                     {new Date(cfg.last_sync_at).toLocaleString()}
                                 </Box>
                                 {cfg.last_sync_message ? ` · ${cfg.last_sync_message}` : ''}
@@ -283,7 +286,7 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
 
             <SettingsSection
                 title="Sources"
-                subtitle="One JQL per repo. An issue matching several sources becomes one Task spanning those repos, in the project of the first source it matches; its repos in other projects are named in the notification. The first of that project's matching sources with a workflow queues it; without one it waits as a draft and notifies you to pick one."
+                subtitle="One JQL per repo. An issue matching several sources becomes one Task spanning those repos, in the project of the first source it matches; its repos in other projects are named in the notification. The first of that project's matching sources with a workflow queues it; without one it waits as a draft and notifies you to pick one. Atlas comments on a linked Jira issue when it starts work, needs you, or finishes — never on import alone. Scope each JQL narrowly on a board you share with other people."
             >
                 {cfg.sources.map((s, i) => (
                     <FormRow key={`${i}:${s.repo_id}:${s.jql}`} label={repoLabel(s.repo_id)}>

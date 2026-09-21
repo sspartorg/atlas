@@ -21,7 +21,9 @@ describe('LayoutPickerMenu', () => {
         expect(screen.getByRole('menuitem', { name: LAYOUT_LABELS.h2 })).toBeInTheDocument();
         expect(screen.getByRole('menuitem', { name: LAYOUT_LABELS.v2 })).toBeInTheDocument();
         expect(screen.getByRole('menuitem', { name: LAYOUT_LABELS['h3-top'] })).toBeInTheDocument();
-        expect(screen.getByRole('menuitem', { name: LAYOUT_LABELS['h3-bottom'] })).toBeInTheDocument();
+        expect(
+            screen.getByRole('menuitem', { name: LAYOUT_LABELS['h3-bottom'] })
+        ).toBeInTheDocument();
         expect(screen.getByRole('menuitem', { name: LAYOUT_LABELS.v3 })).toBeInTheDocument();
         expect(screen.getByRole('menuitem', { name: LAYOUT_LABELS.h3 })).toBeInTheDocument();
         expect(screen.getByRole('menuitem', { name: LAYOUT_LABELS.grid2x2 })).toBeInTheDocument();
@@ -82,7 +84,9 @@ describe('LayoutPickerMenu', () => {
         // Render each layout kind as value to exercise ShapeIcon switch arms
         const kinds = ['h3-top', 'h3-bottom', 'v3', 'h3'] as const;
         for (const kind of kinds) {
-            const { unmount } = renderWithProviders(<LayoutPickerMenu value={kind} onChange={vi.fn()} />);
+            const { unmount } = renderWithProviders(
+                <LayoutPickerMenu value={kind} onChange={vi.fn()} />
+            );
             expect(screen.getAllByRole('button').length).toBeGreaterThan(0);
             unmount();
         }
@@ -131,11 +135,11 @@ describe('LayoutPickerMenu', () => {
         fireEvent.click(screen.getAllByRole('button')[0]!);
         expect(screen.getByRole('menuitem', { name: LAYOUT_LABELS.h2 })).toHaveAttribute(
             'tabindex',
-            '-1',
+            '-1'
         );
         expect(screen.getByRole('menuitem', { name: LAYOUT_LABELS.grid2x2 })).toHaveAttribute(
             'tabindex',
-            '-1',
+            '-1'
         );
     });
 
@@ -147,15 +151,15 @@ describe('LayoutPickerMenu', () => {
         fireEvent.keyDown(menu, { key: 'ArrowRight' });
         await waitFor(() =>
             expect(document.activeElement).toBe(
-                screen.getByRole('menuitem', { name: LAYOUT_LABELS.h2 }),
-            ),
+                screen.getByRole('menuitem', { name: LAYOUT_LABELS.h2 })
+            )
         );
         // h2 → v2
         fireEvent.keyDown(menu, { key: 'ArrowRight' });
         await waitFor(() =>
             expect(document.activeElement).toBe(
-                screen.getByRole('menuitem', { name: LAYOUT_LABELS.v2 }),
-            ),
+                screen.getByRole('menuitem', { name: LAYOUT_LABELS.v2 })
+            )
         );
     });
 
@@ -167,8 +171,8 @@ describe('LayoutPickerMenu', () => {
         fireEvent.keyDown(menu, { key: 'ArrowLeft' });
         await waitFor(() =>
             expect(document.activeElement).toBe(
-                screen.getByRole('menuitem', { name: LAYOUT_LABELS.grid2x2 }),
-            ),
+                screen.getByRole('menuitem', { name: LAYOUT_LABELS.grid2x2 })
+            )
         );
     });
 
@@ -180,8 +184,8 @@ describe('LayoutPickerMenu', () => {
         // h2 (idx 1) → v2 (idx 2)
         await waitFor(() =>
             expect(document.activeElement).toBe(
-                screen.getByRole('menuitem', { name: LAYOUT_LABELS.v2 }),
-            ),
+                screen.getByRole('menuitem', { name: LAYOUT_LABELS.v2 })
+            )
         );
     });
 
@@ -192,14 +196,14 @@ describe('LayoutPickerMenu', () => {
         fireEvent.keyDown(menu, { key: 'End' });
         await waitFor(() =>
             expect(document.activeElement).toBe(
-                screen.getByRole('menuitem', { name: LAYOUT_LABELS.grid2x2 }),
-            ),
+                screen.getByRole('menuitem', { name: LAYOUT_LABELS.grid2x2 })
+            )
         );
         fireEvent.keyDown(menu, { key: 'Home' });
         await waitFor(() =>
             expect(document.activeElement).toBe(
-                screen.getByRole('menuitem', { name: LAYOUT_LABELS.single }),
-            ),
+                screen.getByRole('menuitem', { name: LAYOUT_LABELS.single })
+            )
         );
     });
 

@@ -55,7 +55,7 @@ function renderAt(path: string) {
         <Routes>
             <Route path="/marketplace/:id" element={<MarketplaceAgentDetail />} />
         </Routes>,
-        { initialEntries: [path] },
+        { initialEntries: [path] }
     );
 }
 
@@ -63,14 +63,14 @@ describe('MarketplaceAgentDetail page', () => {
     beforeEach(() => {
         server.use(
             http.get(`${BASE}/cli/availability`, () => HttpResponse.json([])),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
     });
 
     it('warns on the page and in the install modal when the agent CLI binary is missing', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
-                HttpResponse.json({ ...fullPayload, agent: { ...baseAgent, cli: 'copilot' } }),
+                HttpResponse.json({ ...fullPayload, agent: { ...baseAgent, cli: 'copilot' } })
             ),
             http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
             http.get(`${BASE}/cli/availability`, () =>
@@ -78,28 +78,28 @@ describe('MarketplaceAgentDetail page', () => {
                     { cli: 'claude', binary: 'claude', available: true, version: '1.0.0' },
                     { cli: 'copilot', binary: 'copilot', available: false, version: null },
                     { cli: 'ollama', binary: 'claude', available: true, version: '1.0.0' },
-                ]),
-            ),
+                ])
+            )
         );
         renderAt('/marketplace/agent-coder');
         expect(
             await screen.findByText(
-                'copilot is not installed on this machine — runs will fail until it is, or switch the agent to claude after installing.',
-            ),
+                'copilot is not installed on this machine — runs will fail until it is, or switch the agent to claude after installing.'
+            )
         ).toBeInTheDocument();
         fireEvent.click(await screen.findByRole('button', { name: /Add to my agents/i }));
         const dialog = await screen.findByRole('dialog');
         expect(
-            await within(dialog).findByText(/copilot is not installed on this machine/),
+            await within(dialog).findByText(/copilot is not installed on this machine/)
         ).toBeInTheDocument();
     });
 
     it('mounts without crashing while data resolves', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
-                HttpResponse.json(fullPayload),
+                HttpResponse.json(fullPayload)
             ),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         const { container } = renderAt('/marketplace/agent-coder');
         await waitFor(() => {
@@ -110,9 +110,9 @@ describe('MarketplaceAgentDetail page', () => {
     it('renders agent name + summary after data resolves', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
-                HttpResponse.json(fullPayload),
+                HttpResponse.json(fullPayload)
             ),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
@@ -122,9 +122,9 @@ describe('MarketplaceAgentDetail page', () => {
     it('clicks the breadcrumb "marketplace" to navigate back', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
-                HttpResponse.json(fullPayload),
+                HttpResponse.json(fullPayload)
             ),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
@@ -135,9 +135,9 @@ describe('MarketplaceAgentDetail page', () => {
     it('clicks "Add to my agents" to open the install modal (openAdd)', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
-                HttpResponse.json(fullPayload),
+                HttpResponse.json(fullPayload)
             ),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         renderAt('/marketplace/agent-coder');
         const addBtn = await screen.findByRole('button', { name: /Add to my agents/i });
@@ -154,9 +154,9 @@ describe('MarketplaceAgentDetail page', () => {
         };
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
-                HttpResponse.json(fullPayload),
+                HttpResponse.json(fullPayload)
             ),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([installedSummary])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([installedSummary]))
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
@@ -174,9 +174,9 @@ describe('MarketplaceAgentDetail page', () => {
         };
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
-                HttpResponse.json(fullPayload),
+                HttpResponse.json(fullPayload)
             ),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([upgradeSummary])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([upgradeSummary]))
         );
         renderAt('/marketplace/agent-coder');
         const upgradeBtn = await screen.findByRole('button', { name: /Review upgrade/i });
@@ -190,7 +190,7 @@ describe('MarketplaceAgentDetail page', () => {
         };
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
@@ -202,9 +202,9 @@ describe('MarketplaceAgentDetail page', () => {
     it('mounts without crashing for a 404 not-found response', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/missing`, () =>
-                HttpResponse.json({ error: 'not found' }, { status: 404 }),
+                HttpResponse.json({ error: 'not found' }, { status: 404 })
             ),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([]))
         );
         const { container } = renderAt('/marketplace/missing');
         await waitFor(() => {
@@ -215,16 +215,19 @@ describe('MarketplaceAgentDetail page', () => {
     it('shows error state with "Marketplace agent not found." and Back button', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/bad-agent`, () =>
-                HttpResponse.json({ error: 'not found' }, { status: 404 }),
+                HttpResponse.json({ error: 'not found' }, { status: 404 })
             ),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([]))
         );
         renderAt('/marketplace/bad-agent');
-        await waitFor(() => {
-            expect(
-                screen.queryByText(/Marketplace agent not found/i) ?? document.body
-            ).toBeTruthy();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(
+                    screen.queryByText(/Marketplace agent not found/i) ?? document.body
+                ).toBeTruthy();
+            },
+            { timeout: 5000 }
+        );
     });
 
     it('renders Custom settings block when settings_json has keys', async () => {
@@ -234,7 +237,7 @@ describe('MarketplaceAgentDetail page', () => {
         };
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
@@ -248,7 +251,7 @@ describe('MarketplaceAgentDetail page', () => {
         };
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
@@ -262,7 +265,7 @@ describe('MarketplaceAgentDetail page', () => {
         };
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
@@ -272,10 +275,10 @@ describe('MarketplaceAgentDetail page', () => {
     it('does not render AddFromMarketplaceModal when summaryRow is undefined (no list match)', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
-                HttpResponse.json(fullPayload),
+                HttpResponse.json(fullPayload)
             ),
             // Return an empty list so summaryRow is undefined
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([]))
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
@@ -291,7 +294,7 @@ describe('MarketplaceAgentDetail page', () => {
         };
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
@@ -305,7 +308,7 @@ describe('MarketplaceAgentDetail page', () => {
         };
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
@@ -320,7 +323,7 @@ describe('MarketplaceAgentDetail page', () => {
         };
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
@@ -334,7 +337,7 @@ describe('MarketplaceAgentDetail page', () => {
         };
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
@@ -345,28 +348,36 @@ describe('MarketplaceAgentDetail page', () => {
     it('handleInstall success — installs agent and navigates to /agents/:id', async () => {
         // Set up install endpoint to succeed
         server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(fullPayload)),
+            http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
+                HttpResponse.json(fullPayload)
+            ),
             http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
             http.post(`${BASE}/marketplace/agents/agent-coder/install`, () =>
-                HttpResponse.json({ id: 'my-coder', name: 'Coder', status: 'active' }),
+                HttpResponse.json({ id: 'my-coder', name: 'Coder', status: 'active' })
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderAt('/marketplace/agent-coder');
         // Open the install modal
         const addBtn = await screen.findByRole('button', { name: /Add to my agents/i });
         fireEvent.click(addBtn);
         // Modal dialog should be open
-        await waitFor(() => {
-            expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         // Click Install (the primary button in the modal)
         const dialog = document.querySelector('[role="dialog"]');
         if (dialog) {
-            const installBtn = Array.from(dialog.querySelectorAll('button'))
-                .find(b => /install|add|confirm/i.test(b.textContent ?? ''));
+            const installBtn = Array.from(dialog.querySelectorAll('button')).find((b) =>
+                /install|add|confirm/i.test(b.textContent ?? '')
+            );
             if (installBtn) {
-                await act(async () => { fireEvent.click(installBtn); });
+                await act(async () => {
+                    fireEvent.click(installBtn);
+                });
                 // After install, navigates away — just verify no crash
                 await waitFor(() => {}, { timeout: 3000 });
             }
@@ -376,26 +387,32 @@ describe('MarketplaceAgentDetail page', () => {
 
     it('closeAdd when NOT installing closes the modal (setAddOpen=false)', async () => {
         server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(fullPayload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
+                HttpResponse.json(fullPayload)
+            ),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         renderAt('/marketplace/agent-coder');
         const addBtn = await screen.findByRole('button', { name: /Add to my agents/i });
         fireEvent.click(addBtn);
         // Modal opens (addOpen=true)
-        await waitFor(() => {
-            expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         // Close the modal (calls closeAdd with installing=false)
         const dialog = document.querySelector('[role="dialog"]');
         if (dialog) {
-            const cancelBtn = Array.from(dialog.querySelectorAll('button'))
-                .find(b => /cancel/i.test(b.textContent ?? ''));
+            const cancelBtn = Array.from(dialog.querySelectorAll('button')).find((b) =>
+                /cancel/i.test(b.textContent ?? '')
+            );
             if (cancelBtn) {
                 fireEvent.click(cancelBtn);
                 // Modal should close
-                await waitFor(() =>
-                    expect(document.querySelector('[role="dialog"]')).not.toBeTruthy(),
+                await waitFor(
+                    () => expect(document.querySelector('[role="dialog"]')).not.toBeTruthy(),
                     { timeout: 3000 }
                 ).catch(() => {});
             }
@@ -405,7 +422,9 @@ describe('MarketplaceAgentDetail page', () => {
 
     it('handleInstall slug-taken branch — 409 with conflicting_id/suggested_id sets slugTaken state', async () => {
         server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(fullPayload)),
+            http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
+                HttpResponse.json(fullPayload)
+            ),
             http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
             http.post(`${BASE}/marketplace/agents/agent-coder/install`, () =>
                 HttpResponse.json(
@@ -413,28 +432,37 @@ describe('MarketplaceAgentDetail page', () => {
                         error: 'SLUG_TAKEN',
                         details: { conflicting_id: 'agent-coder', suggested_id: 'agent-coder-2' },
                     },
-                    { status: 409 },
-                ),
+                    { status: 409 }
+                )
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderAt('/marketplace/agent-coder');
         const addBtn = await screen.findByRole('button', { name: /Add to my agents/i });
         fireEvent.click(addBtn);
-        await waitFor(() => {
-            expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         const dialog = document.querySelector('[role="dialog"]');
         if (dialog) {
-            const installBtn = Array.from(dialog.querySelectorAll('button'))
-                .find(b => /install|add|confirm/i.test(b.textContent ?? ''));
+            const installBtn = Array.from(dialog.querySelectorAll('button')).find((b) =>
+                /install|add|confirm/i.test(b.textContent ?? '')
+            );
             if (installBtn) {
-                await act(async () => { fireEvent.click(installBtn); });
+                await act(async () => {
+                    fireEvent.click(installBtn);
+                });
                 // After slug-taken error, the modal is still open with suggestedId pre-filled
-                await waitFor(() => {
-                    // slugTaken is set — modal remains open
-                    expect(document.body).toBeTruthy();
-                }, { timeout: 3000 });
+                await waitFor(
+                    () => {
+                        // slugTaken is set — modal remains open
+                        expect(document.body).toBeTruthy();
+                    },
+                    { timeout: 3000 }
+                );
             }
         }
         expect(document.body).toBeTruthy();
@@ -445,13 +473,17 @@ describe('MarketplaceAgentDetail page', () => {
     it('L172 onClick — "Back to marketplace" button in error state navigates to /agents/marketplace', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/bad-id`, () =>
-                HttpResponse.json({ error: 'not found' }, { status: 404 }),
+                HttpResponse.json({ error: 'not found' }, { status: 404 })
             ),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([]))
         );
         renderAt('/marketplace/bad-id');
         // Wait for the error state to appear
-        const backBtn = await screen.findByRole('button', { name: /Back to marketplace/i }, { timeout: 5000 });
+        const backBtn = await screen.findByRole(
+            'button',
+            { name: /Back to marketplace/i },
+            { timeout: 5000 }
+        );
         expect(backBtn).toBeInTheDocument();
         fireEvent.click(backBtn);
         // Navigation completes without crash
@@ -461,9 +493,9 @@ describe('MarketplaceAgentDetail page', () => {
     it('L166-169 — error state renders "Marketplace agent not found." message', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/err-agent`, () =>
-                HttpResponse.json({ error: 'not found' }, { status: 404 }),
+                HttpResponse.json({ error: 'not found' }, { status: 404 })
             ),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([]))
         );
         renderAt('/marketplace/err-agent');
         const msg = await screen.findByText(/Marketplace agent not found/i, {}, { timeout: 5000 });
@@ -476,30 +508,40 @@ describe('MarketplaceAgentDetail page', () => {
         // Simulate slow install so installing=true when closeAdd is attempted.
         // We hang the install endpoint so the component is still in-flight.
         let resolveInstall!: (v: unknown) => void;
-        const installPromise = new Promise((res) => { resolveInstall = res; });
+        const installPromise = new Promise((res) => {
+            resolveInstall = res;
+        });
         server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(fullPayload)),
+            http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
+                HttpResponse.json(fullPayload)
+            ),
             http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
             http.post(`${BASE}/marketplace/agents/agent-coder/install`, async () => {
                 await installPromise;
                 return HttpResponse.json({ id: 'my-coder', name: 'Coder', status: 'active' });
             }),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderAt('/marketplace/agent-coder');
         const addBtn = await screen.findByRole('button', { name: /Add to my agents/i });
         fireEvent.click(addBtn);
-        await waitFor(() => {
-            expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         // Find and click Install so installing=true
         const dialog = document.querySelector('[role="dialog"]');
         if (dialog) {
-            const installBtn = Array.from(dialog.querySelectorAll('button'))
-                .find(b => /install|add|confirm/i.test(b.textContent ?? ''));
+            const installBtn = Array.from(dialog.querySelectorAll('button')).find((b) =>
+                /install|add|confirm/i.test(b.textContent ?? '')
+            );
             if (installBtn) {
                 // Don't await — we want the install to be in-flight
-                act(() => { fireEvent.click(installBtn); });
+                act(() => {
+                    fireEvent.click(installBtn);
+                });
                 // Now try calling closeAdd while install is in progress
                 // closeAdd is called via the modal's onClose
                 // We can simulate by dispatching Escape key (MUI dialog close)
@@ -516,33 +558,43 @@ describe('MarketplaceAgentDetail page', () => {
 
     it('L140-142 — handleInstall throws non-slug-taken error (re-throws)', async () => {
         server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(fullPayload)),
+            http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
+                HttpResponse.json(fullPayload)
+            ),
             http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
             http.post(`${BASE}/marketplace/agents/agent-coder/install`, () =>
                 // Generic 500 with no conflicting_id/suggested_id — triggers the `throw err` branch
-                HttpResponse.json({ error: 'Internal Server Error' }, { status: 500 }),
+                HttpResponse.json({ error: 'Internal Server Error' }, { status: 500 })
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         // handleInstall re-throws for non-slug-taken errors (L141: `throw err`).
         // Register a Node unhandledRejection handler to absorb it before Vitest's
         // global handler converts it into a test-run error.
-        const suppressRejection = () => { /* intentional swallow for this branch test */ };
+        const suppressRejection = () => {
+            /* intentional swallow for this branch test */
+        };
         process.on('unhandledRejection', suppressRejection);
         try {
             renderAt('/marketplace/agent-coder');
             const addBtn = await screen.findByRole('button', { name: /Add to my agents/i });
             fireEvent.click(addBtn);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 3000 });
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                },
+                { timeout: 3000 }
+            );
             const dialog = document.querySelector('[role="dialog"]');
             if (dialog) {
-                const installBtn = Array.from(dialog.querySelectorAll('button'))
-                    .find(b => /install|add|confirm/i.test(b.textContent ?? ''));
+                const installBtn = Array.from(dialog.querySelectorAll('button')).find((b) =>
+                    /install|add|confirm/i.test(b.textContent ?? '')
+                );
                 if (installBtn) {
                     // The error will be re-thrown but the component should still render
-                    await act(async () => { fireEvent.click(installBtn); });
+                    await act(async () => {
+                        fireEvent.click(installBtn);
+                    });
                     await waitFor(() => {}, { timeout: 2000 });
                 }
             }
@@ -562,8 +614,12 @@ describe('MarketplaceAgentDetail page', () => {
             upgrade_available: true,
         };
         server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(fullPayload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([upgradeSummaryNoInstalledId])),
+            http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
+                HttpResponse.json(fullPayload)
+            ),
+            http.get(`${BASE}/marketplace/agents`, () =>
+                HttpResponse.json([upgradeSummaryNoInstalledId])
+            )
         );
         renderAt('/marketplace/agent-coder');
         const upgradeBtn = await screen.findByRole('button', { name: /Review upgrade/i });
@@ -582,8 +638,10 @@ describe('MarketplaceAgentDetail page', () => {
             upgrade_available: false,
         };
         server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(fullPayload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([installedNoId])),
+            http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
+                HttpResponse.json(fullPayload)
+            ),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([installedNoId]))
         );
         renderAt('/marketplace/agent-coder');
         const openBtn = await screen.findByRole('button', { name: /Open installed agent/i });
@@ -599,7 +657,7 @@ describe('MarketplaceAgentDetail page', () => {
         };
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(payload)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow]))
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
@@ -610,9 +668,7 @@ describe('MarketplaceAgentDetail page', () => {
     it('mounts without crashing when no :id route param is present (full.isLoading || !id branch)', async () => {
         // Render MarketplaceAgentDetail directly (no route param) so `id` is undefined
         // and the `!id` side of `full.isLoading || !id` is exercised distinctly from isLoading.
-        server.use(
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
-        );
+        server.use(http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])));
         const { container } = renderWithProviders(<MarketplaceAgentDetail />, {
             initialEntries: ['/marketplace/no-id'],
         });
@@ -623,52 +679,62 @@ describe('MarketplaceAgentDetail page', () => {
     it('shows error state when the API call actually errors (network failure, isError=true)', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/network-fail`, () => HttpResponse.error()),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([]))
         );
         renderAt('/marketplace/network-fail');
         expect(
-            await screen.findByText(/Marketplace agent not found/i, {}, { timeout: 5000 }),
+            await screen.findByText(/Marketplace agent not found/i, {}, { timeout: 5000 })
         ).toBeInTheDocument();
     });
 
     it('shows error state when the API resolves 200 with a falsy body (full.data null, isError=false)', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/null-body`, () => HttpResponse.json(null)),
-            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([]))
         );
         renderAt('/marketplace/null-body');
         expect(
-            await screen.findByText(/Marketplace agent not found/i, {}, { timeout: 5000 }),
+            await screen.findByText(/Marketplace agent not found/i, {}, { timeout: 5000 })
         ).toBeInTheDocument();
     });
 
     it('handleInstall slug-taken branch with only conflicting_id present (missing suggested_id) re-throws', async () => {
         server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(fullPayload)),
+            http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
+                HttpResponse.json(fullPayload)
+            ),
             http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
             http.post(`${BASE}/marketplace/agents/agent-coder/install`, () =>
                 HttpResponse.json(
                     { error: 'SLUG_TAKEN', details: { conflicting_id: 'agent-coder' } },
-                    { status: 409 },
-                ),
+                    { status: 409 }
+                )
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
-        const suppressRejection = () => { /* intentional swallow for this branch test */ };
+        const suppressRejection = () => {
+            /* intentional swallow for this branch test */
+        };
         process.on('unhandledRejection', suppressRejection);
         try {
             renderAt('/marketplace/agent-coder');
             const addBtn = await screen.findByRole('button', { name: /Add to my agents/i });
             fireEvent.click(addBtn);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 3000 });
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                },
+                { timeout: 3000 }
+            );
             const dialog = document.querySelector('[role="dialog"]');
             if (dialog) {
-                const installBtn = Array.from(dialog.querySelectorAll('button'))
-                    .find(b => /install|add|confirm/i.test(b.textContent ?? ''));
+                const installBtn = Array.from(dialog.querySelectorAll('button')).find((b) =>
+                    /install|add|confirm/i.test(b.textContent ?? '')
+                );
                 if (installBtn) {
-                    await act(async () => { fireEvent.click(installBtn); });
+                    await act(async () => {
+                        fireEvent.click(installBtn);
+                    });
                     await waitFor(() => {}, { timeout: 2000 });
                 }
             }
@@ -680,28 +746,36 @@ describe('MarketplaceAgentDetail page', () => {
 
     it('L130 — toast.show is called with installed agent name after successful install', async () => {
         server.use(
-            http.get(`${BASE}/marketplace/agents/agent-coder`, () => HttpResponse.json(fullPayload)),
+            http.get(`${BASE}/marketplace/agents/agent-coder`, () =>
+                HttpResponse.json(fullPayload)
+            ),
             http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([summaryRow])),
             http.post(`${BASE}/marketplace/agents/agent-coder/install`, () =>
-                HttpResponse.json({ id: 'my-coder-99', name: 'Coder v2', status: 'active' }),
+                HttpResponse.json({ id: 'my-coder-99', name: 'Coder v2', status: 'active' })
             ),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
             http.get(`${BASE}/marketplace/agents/my-coder-99`, () =>
-                HttpResponse.json({ ...fullPayload, agent: { ...baseAgent, id: 'my-coder-99' } }),
-            ),
+                HttpResponse.json({ ...fullPayload, agent: { ...baseAgent, id: 'my-coder-99' } })
+            )
         );
         renderAt('/marketplace/agent-coder');
         const addBtn = await screen.findByRole('button', { name: /Add to my agents/i });
         fireEvent.click(addBtn);
-        await waitFor(() => {
-            expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         const dialog = document.querySelector('[role="dialog"]');
         if (dialog) {
-            const installBtn = Array.from(dialog.querySelectorAll('button'))
-                .find(b => /install|add|confirm/i.test(b.textContent ?? ''));
+            const installBtn = Array.from(dialog.querySelectorAll('button')).find((b) =>
+                /install|add|confirm/i.test(b.textContent ?? '')
+            );
             if (installBtn) {
-                await act(async () => { fireEvent.click(installBtn); });
+                await act(async () => {
+                    fireEvent.click(installBtn);
+                });
                 // After install the toast is shown and navigation occurs
                 await waitFor(() => {}, { timeout: 3000 });
             }

@@ -14,7 +14,7 @@ const baseEnv: IEnvVar = {
 };
 
 function setup(
-    overrides: Partial<IEnvVar> & { value?: string; onChange?: (v: string) => void } = {},
+    overrides: Partial<IEnvVar> & { value?: string; onChange?: (v: string) => void } = {}
 ) {
     const { value = '', onChange = vi.fn(), ...envOverrides } = overrides;
     const env: IEnvVar = { ...baseEnv, ...envOverrides };
@@ -45,7 +45,7 @@ describe('EnvVarRow', () => {
         const user = userEvent.setup();
         setup({ value: '', onChange });
         const inputs = document.querySelectorAll('input');
-        const valueInput = Array.from(inputs).find(i => !i.readOnly && i.type !== 'hidden');
+        const valueInput = Array.from(inputs).find((i) => !i.readOnly && i.type !== 'hidden');
         await user.type(valueInput!, 'x');
         expect(onChange).toHaveBeenCalled();
     });
@@ -56,8 +56,8 @@ describe('EnvVarRow', () => {
         const input = screen.getByDisplayValue('super-secret') as HTMLInputElement;
         expect(input.type).toBe('password');
         const buttons = screen.getAllByRole('button');
-        const reveal = buttons.find(b =>
-            b.querySelector('[data-testid="VisibilityOutlinedIcon"]'),
+        const reveal = buttons.find((b) =>
+            b.querySelector('[data-testid="VisibilityOutlinedIcon"]')
         );
         expect(reveal).toBeTruthy();
         await user.click(reveal!);
@@ -67,8 +67,8 @@ describe('EnvVarRow', () => {
     it('renders a Copy icon button for non-secret env vars', () => {
         setup({ value: 'value-to-copy' });
         const buttons = screen.getAllByRole('button');
-        const copyBtn = buttons.find(b =>
-            b.querySelector('[data-testid="ContentCopyRoundedIcon"]'),
+        const copyBtn = buttons.find((b) =>
+            b.querySelector('[data-testid="ContentCopyRoundedIcon"]')
         );
         expect(copyBtn).toBeTruthy();
     });
@@ -107,14 +107,17 @@ describe('EnvVarRow', () => {
         });
         setup({ value: 'copy-me', secret: false });
         const buttons = screen.getAllByRole('button');
-        const copyBtn = buttons.find(b =>
-            b.querySelector('[data-testid="ContentCopyRoundedIcon"]'),
+        const copyBtn = buttons.find((b) =>
+            b.querySelector('[data-testid="ContentCopyRoundedIcon"]')
         );
         expect(copyBtn).toBeTruthy();
         await user.click(copyBtn!);
         // clipboard.writeText was called with the current value
         expect(clipboardValue).toBe('copy-me');
-        Object.defineProperty(navigator, 'clipboard', { value: originalClipboard, configurable: true });
+        Object.defineProperty(navigator, 'clipboard', {
+            value: originalClipboard,
+            configurable: true,
+        });
     });
 
     it('clicking the Copy button shows "Clipboard blocked" toast when clipboard rejects — covers line 36', async () => {
@@ -128,8 +131,8 @@ describe('EnvVarRow', () => {
         });
         setup({ value: 'blocked-value', secret: false });
         const buttons = screen.getAllByRole('button');
-        const copyBtn = buttons.find(b =>
-            b.querySelector('[data-testid="ContentCopyRoundedIcon"]'),
+        const copyBtn = buttons.find((b) =>
+            b.querySelector('[data-testid="ContentCopyRoundedIcon"]')
         );
         expect(copyBtn).toBeTruthy();
         // Click should not throw even when clipboard rejects

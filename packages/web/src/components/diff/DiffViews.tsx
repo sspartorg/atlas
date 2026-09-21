@@ -303,7 +303,9 @@ export function SplitDiffView({
                                         text={row.left.content}
                                         path={path}
                                         side={row.left.kind}
-                                        counterpart={row.paired ? (row.right?.content ?? null) : null}
+                                        counterpart={
+                                            row.paired ? (row.right?.content ?? null) : null
+                                        }
                                     />
                                 ) : null}
                             </Box>
@@ -328,7 +330,9 @@ export function SplitDiffView({
                                         text={row.right.content}
                                         path={path}
                                         side={row.right.kind}
-                                        counterpart={row.paired ? (row.left?.content ?? null) : null}
+                                        counterpart={
+                                            row.paired ? (row.left?.content ?? null) : null
+                                        }
                                     />
                                 ) : null}
                             </Box>

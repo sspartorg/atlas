@@ -129,10 +129,7 @@ export function writeWsFrame(term: Pick<XTerm, 'write' | 'options'>, data: unkno
  * re-measures glyph metrics asynchronously after an options change.
  * No-ops when either measurement is 0 (detached host, jsdom).
  */
-export function fitFontToWidth(
-    term: Pick<XTerm, 'options' | 'element'>,
-    host: HTMLElement,
-): void {
+export function fitFontToWidth(term: Pick<XTerm, 'options' | 'element'>, host: HTMLElement): void {
     const screen = term.element?.querySelector<HTMLElement>('.xterm-screen');
     if (!screen) return;
     const avail = host.clientWidth;
@@ -141,7 +138,7 @@ export function fitFontToWidth(
     const current = term.options.fontSize ?? FONT_SIZE_DEFAULT;
     const next = Math.max(
         FONT_SIZE_MIN,
-        Math.min(FONT_SIZE_MAX, Math.floor((current * avail) / rendered)),
+        Math.min(FONT_SIZE_MAX, Math.floor((current * avail) / rendered))
     );
     if (next !== current) term.options.fontSize = next;
     const settle = () => {
@@ -312,8 +309,7 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                 const selection = term.getSelection();
                 const isPlainCtrlC = ctrl && !shift && !meta && key === 'c';
                 const isForcedCopy =
-                    (ctrl && shift && key === 'c') ||
-                    (meta && !shift && key === 'c');
+                    (ctrl && shift && key === 'c') || (meta && !shift && key === 'c');
 
                 if (isForcedCopy || (isPlainCtrlC && selection)) {
                     if (selection && navigator.clipboard?.writeText) {
@@ -537,54 +533,55 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
                     border: `1px solid ${ATLAS_PALETTE.slate12}`,
                 }}
             >
-            <Box
-                ref={hostRef}
-                tabIndex={-1}
-                onClick={() => termRef.current?.focus()}
-                sx={{
-                    position: 'absolute',
-                    inset: 0,
-                    outline: 'none',
-                    cursor: 'text',
-                }}
-            />
-            {!connected && sessionLive && (
                 <Box
+                    ref={hostRef}
+                    tabIndex={-1}
+                    onClick={() => termRef.current?.focus()}
                     sx={{
                         position: 'absolute',
                         inset: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 2,
-                        background: 'rgba(10,10,10,0.7)',
-                        color: '#d4d4d4',
+                        outline: 'none',
+                        cursor: 'text',
                     }}
-                >
-                    <CircularProgress size={18} />
-                    <Typography variant="body2">Connecting to PTY…</Typography>
-                </Box>
-            )}
-            {!sessionLive && (
-                <Box
-                    sx={{
-                        position: 'absolute',
-                        inset: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: 'rgba(10,10,10,0.7)',
-                        color: '#d4d4d4',
-                        textAlign: 'center',
-                        px: 4,
-                    }}
-                >
-                    <Typography variant="body2">
-                        Session is not active. Click Resume to re-attach, or Stop to finalize.
-                        {bytesReceived > 0 && ` (${bytesReceived.toLocaleString()} bytes received this session)`}
-                    </Typography>
-                </Box>
-            )}
+                />
+                {!connected && sessionLive && (
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            inset: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 2,
+                            background: 'rgba(10,10,10,0.7)',
+                            color: '#d4d4d4',
+                        }}
+                    >
+                        <CircularProgress size={18} />
+                        <Typography variant="body2">Connecting to PTY…</Typography>
+                    </Box>
+                )}
+                {!sessionLive && (
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            inset: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: 'rgba(10,10,10,0.7)',
+                            color: '#d4d4d4',
+                            textAlign: 'center',
+                            px: 4,
+                        }}
+                    >
+                        <Typography variant="body2">
+                            Session is not active. Click Resume to re-attach, or Stop to finalize.
+                            {bytesReceived > 0 &&
+                                ` (${bytesReceived.toLocaleString()} bytes received this session)`}
+                        </Typography>
+                    </Box>
+                )}
             </Box>
         </>
     );

@@ -16,11 +16,7 @@ function ToastSpy() {
     return (
         <div data-testid="toast-spy">
             {toasts.map((t) => (
-                <button
-                    key={t.id}
-                    data-testid={`toast-${t.id}`}
-                    onClick={() => dismiss(t.id)}
-                >
+                <button key={t.id} data-testid={`toast-${t.id}`} onClick={() => dismiss(t.id)}>
                     {t.message}
                 </button>
             ))}
@@ -53,8 +49,8 @@ describe('Notifications page', () => {
         server.use(
             ...defaultHandlers,
             http.post(`${BASE}/notifications/mark-all-read`, () =>
-                HttpResponse.json({ changed: 3 }),
-            ),
+                HttpResponse.json({ changed: 3 })
+            )
         );
         renderWithProviders(<Notifications />, { initialEntries: ['/notifications'] });
         const markAllBtn = screen.queryByRole('button', { name: /Mark all read/i });
@@ -92,13 +88,16 @@ describe('Notifications page', () => {
             ...defaultHandlers,
             // No external_notification_token — externalConnected=false
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: 'Owner', onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({ id: 1, owner_name: 'Owner', onboarding_complete: 1 })
+            )
         );
         renderWithProviders(<Notifications />, { initialEntries: ['/notifications'] });
-        await waitFor(() => {
-            expect(screen.queryByText(/not connected/i) ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/not connected/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
         // Click the "Settings → Notifications" link (onClick exercises navigate())
         const settingsLink = screen.queryByText(/settings.*notifications/i);
         if (settingsLink) {
@@ -111,8 +110,8 @@ describe('Notifications page', () => {
         server.use(
             ...defaultHandlers,
             http.post(`${BASE}/notifications/mark-all-read`, () =>
-                HttpResponse.json({ changed: 1 }),
-            ),
+                HttpResponse.json({ changed: 1 })
+            )
         );
         renderWithProviders(<Notifications />, { initialEntries: ['/notifications'] });
         await waitFor(() => expect(document.body).toBeTruthy());
@@ -139,7 +138,7 @@ describe('Notifications page', () => {
                     external_notification_token: 'tok123',
                     external_notification_chat_id: 'chat456',
                     external_notification_endpoint_label: 'Telegram',
-                }),
+                })
             ),
             // Override notifications — return the "sent" row for the recentSent query
             http.get(`${BASE}/notifications`, ({ request }) => {
@@ -158,14 +157,17 @@ describe('Notifications page', () => {
                 }
                 return HttpResponse.json([]);
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Notifications />, { initialEntries: ['/notifications'] });
         // Wait for settings to load — "connected to" replaces "not connected"
-        await waitFor(() => {
-            const body = document.body.textContent ?? '';
-            if (!body.includes('Telegram')) throw new Error('"Telegram" not yet in DOM');
-        }, { timeout: 4000 });
+        await waitFor(
+            () => {
+                const body = document.body.textContent ?? '';
+                if (!body.includes('Telegram')) throw new Error('"Telegram" not yet in DOM');
+            },
+            { timeout: 4000 }
+        );
         // The label and last-delivery stamp are rendered in the body text
         expect(document.body.textContent).toContain('Telegram');
         expect(document.body.textContent).toMatch(/last delivery/i);
@@ -183,17 +185,20 @@ describe('Notifications page', () => {
                     external_notification_token: 'tok123',
                     external_notification_chat_id: 'chat456',
                     external_notification_endpoint_label: 'Slack',
-                }),
+                })
             ),
             // Return empty array for any notifications request — no sent rows → lastDeliveryAt=null → "never"
             http.get(`${BASE}/notifications`, () => HttpResponse.json([])),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Notifications />, { initialEntries: ['/notifications'] });
         // Wait for settings to load; when connected + no sent rows, "never" appears as the stamp
-        await waitFor(() => {
-            expect(screen.queryByText('never')).toBeInTheDocument();
-        }, { timeout: 4000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText('never')).toBeInTheDocument();
+            },
+            { timeout: 4000 }
+        );
         expect(document.body).toBeTruthy();
     });
 
@@ -201,8 +206,8 @@ describe('Notifications page', () => {
         server.use(
             ...defaultHandlers,
             http.post(`${BASE}/notifications/mark-all-read`, () =>
-                HttpResponse.json({ changed: 1 }),
-            ),
+                HttpResponse.json({ changed: 1 })
+            )
         );
         // ToastSpy renders toast messages so we can assert on content.
         renderWithProviders(
@@ -210,18 +215,21 @@ describe('Notifications page', () => {
                 <Notifications />
                 <ToastSpy />
             </>,
-            { initialEntries: ['/notifications'] },
+            { initialEntries: ['/notifications'] }
         );
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /mark all read/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /mark all read/i })).toBeInTheDocument()
         );
         fireEvent.click(screen.getByRole('button', { name: /mark all read/i }));
         // Wait for the mutation's onSuccess to fire: the spy div should contain the singular form
-        await waitFor(() => {
-            const spy = screen.getByTestId('toast-spy');
-            if (!spy.textContent?.includes('Marked 1 notification read'))
-                throw new Error('singular toast not found');
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                const spy = screen.getByTestId('toast-spy');
+                if (!spy.textContent?.includes('Marked 1 notification read'))
+                    throw new Error('singular toast not found');
+            },
+            { timeout: 3000 }
+        );
         expect(screen.getByTestId('toast-spy').textContent).toMatch(/Marked 1 notification read/i);
         // Dismiss immediately so the 4s auto-dismiss timer fires into an empty list.
         // The setTimeout callback in useToast will call setToasts but find nothing to remove.
@@ -236,14 +244,17 @@ describe('Notifications page', () => {
         server.use(...defaultHandlers);
         renderWithProviders(<Notifications />, { initialEntries: ['/notifications'] });
         await waitFor(() =>
-            expect(screen.getByRole('tab', { name: /in-app feed/i })).toBeInTheDocument(),
+            expect(screen.getByRole('tab', { name: /in-app feed/i })).toBeInTheDocument()
         );
         fireEvent.click(screen.getByRole('tab', { name: /in-app feed/i }));
         // After switching tab, the InAppFeedTab should render (tab=in-app)
-        await waitFor(() => {
-            // URL param should now contain tab=in-app
-            expect(document.body).toBeTruthy();
-        }, { timeout: 2000 });
+        await waitFor(
+            () => {
+                // URL param should now contain tab=in-app
+                expect(document.body).toBeTruthy();
+            },
+            { timeout: 2000 }
+        );
         // The "in-app" tab is now selected
         const inAppTab = screen.getByRole('tab', { name: /in-app feed/i });
         expect(inAppTab).toHaveAttribute('aria-selected', 'true');
@@ -254,18 +265,25 @@ describe('Notifications page', () => {
         let resolveNotifications: (() => void) | null = null;
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/notifications`, () =>
-                new Promise<void>((resolve) => { resolveNotifications = resolve; }),
-            ),
+            http.get(
+                `${BASE}/notifications`,
+                () =>
+                    new Promise<void>((resolve) => {
+                        resolveNotifications = resolve;
+                    })
+            )
         );
         renderWithProviders(<Notifications />, { initialEntries: ['/notifications'] });
         // The RefreshButton renders with isFetching=true while the query is pending.
         // We check that the refresh button is present (it always renders).
-        await waitFor(() => {
-            expect(
-                screen.queryByRole('button', { name: /refresh/i }) ?? document.body,
-            ).toBeTruthy();
-        }, { timeout: 2000 });
+        await waitFor(
+            () => {
+                expect(
+                    screen.queryByRole('button', { name: /refresh/i }) ?? document.body
+                ).toBeTruthy();
+            },
+            { timeout: 2000 }
+        );
         // Clean up hanging promise
         if (resolveNotifications) {
             (resolveNotifications as () => void)();

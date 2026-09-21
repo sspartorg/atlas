@@ -19,9 +19,7 @@ export function StatusTransitionBar({ issueType, currentStatus, onTransition, lo
     if (nextStatuses.length === 0) {
         return (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate40 }}>
-                    Status
-                </Typography>
+                <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate40 }}>Status</Typography>
                 <StatusChip status={currentStatus} />
                 <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.success, fontWeight: 500 }}>
                     · Terminal

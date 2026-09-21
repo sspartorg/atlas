@@ -11,16 +11,18 @@ import { Toast } from '../../components/Toast.js';
 
 const BASE = 'http://localhost:3000/api';
 
-function makeMemory(over: Partial<{
-    id: number;
-    agent_id: string;
-    body_md: string;
-    version: number;
-    source: 'ai-generated' | 'manual-edit';
-    last_run_id: string | null;
-    runs_since_regen: number;
-    updated_at: string;
-}> = {}) {
+function makeMemory(
+    over: Partial<{
+        id: number;
+        agent_id: string;
+        body_md: string;
+        version: number;
+        source: 'ai-generated' | 'manual-edit';
+        last_run_id: string | null;
+        runs_since_regen: number;
+        updated_at: string;
+    }> = {}
+) {
     return {
         agent_id: 'agent-coder',
         body_md: '# Memory\n\nFirst note.',
@@ -33,20 +35,22 @@ function makeMemory(over: Partial<{
     };
 }
 
-function makeHistoryRow(over: Partial<{
-    id: number;
-    agent_id: string;
-    run_id: string | null;
-    trigger: string;
-    prev_version: number;
-    new_version: number;
-    prev_body_hash: string;
-    new_body_hash: string;
-    chars_added: number;
-    chars_removed: number;
-    boundary_flags: string[];
-    created_at: string;
-}> = {}) {
+function makeHistoryRow(
+    over: Partial<{
+        id: number;
+        agent_id: string;
+        run_id: string | null;
+        trigger: string;
+        prev_version: number;
+        new_version: number;
+        prev_body_hash: string;
+        new_body_hash: string;
+        chars_added: number;
+        chars_removed: number;
+        boundary_flags: string[];
+        created_at: string;
+    }> = {}
+) {
     return {
         id: 1,
         agent_id: 'agent-coder',
@@ -68,17 +72,15 @@ describe('MemoryTabContent', () => {
     beforeEach(() => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder/memory/history`, () =>
-                HttpResponse.json([])
-            ),
+            http.get(`${BASE}/agents/agent-coder/memory/history`, () => HttpResponse.json([]))
         );
     });
 
     it('renders without crashing', async () => {
-        renderWithProviders(
-            <MemoryTabContent agent={makeAgent()} memory={makeMemory()} />
-        );
-        expect(await screen.findByText(/Procedural memory — course corrections only/i)).toBeInTheDocument();
+        renderWithProviders(<MemoryTabContent agent={makeAgent()} memory={makeMemory()} />);
+        expect(
+            await screen.findByText(/Procedural memory — course corrections only/i)
+        ).toBeInTheDocument();
     });
 
     it('shows AI-generated label when source is ai-generated', async () => {
@@ -96,10 +98,10 @@ describe('MemoryTabContent', () => {
     });
 
     it('shows Regenerate from runs button', async () => {
-        renderWithProviders(
-            <MemoryTabContent agent={makeAgent()} memory={makeMemory()} />
-        );
-        expect(await screen.findByRole('button', { name: /Regenerate from runs/i })).toBeInTheDocument();
+        renderWithProviders(<MemoryTabContent agent={makeAgent()} memory={makeMemory()} />);
+        expect(
+            await screen.findByRole('button', { name: /Regenerate from runs/i })
+        ).toBeInTheDocument();
     });
 
     it('calls POST /api/agents/:id/memory/regenerate when Regenerate is clicked', async () => {
@@ -108,11 +110,9 @@ describe('MemoryTabContent', () => {
             http.post(`${BASE}/agents/agent-coder/memory/regenerate`, () => {
                 called = true;
                 return HttpResponse.json(makeMemory({ version: 4 }));
-            }),
+            })
         );
-        renderWithProviders(
-            <MemoryTabContent agent={makeAgent()} memory={makeMemory()} />
-        );
+        renderWithProviders(<MemoryTabContent agent={makeAgent()} memory={makeMemory()} />);
         const btn = await screen.findByRole('button', { name: /Regenerate from runs/i });
         fireEvent.click(btn);
         await waitFor(() => expect(called).toBe(true));
@@ -120,9 +120,10 @@ describe('MemoryTabContent', () => {
 
     it('regenerate failure shows error toast', async () => {
         server.use(
-            http.post(`${BASE}/agents/agent-coder/memory/regenerate`, () =>
-                new HttpResponse(null, { status: 500 }),
-            ),
+            http.post(
+                `${BASE}/agents/agent-coder/memory/regenerate`,
+                () => new HttpResponse(null, { status: 500 })
+            )
         );
         renderWithProviders(
             <>
@@ -132,9 +133,7 @@ describe('MemoryTabContent', () => {
         );
         const btn = await screen.findByRole('button', { name: /Regenerate from runs/i });
         fireEvent.click(btn);
-        await waitFor(() =>
-            expect(screen.getByText(/Regenerate failed/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Regenerate failed/i)).toBeInTheDocument());
     });
 
     it('shows version number in meta', async () => {
@@ -170,10 +169,7 @@ describe('MemoryTabContent', () => {
 
     it('does not show last run line when last_run_id is null', async () => {
         renderWithProviders(
-            <MemoryTabContent
-                agent={makeAgent()}
-                memory={makeMemory({ last_run_id: null })}
-            />
+            <MemoryTabContent agent={makeAgent()} memory={makeMemory({ last_run_id: null })} />
         );
         await screen.findByText(/Procedural memory/i);
         expect(screen.queryByText(/last run/i)).not.toBeInTheDocument();
@@ -183,18 +179,14 @@ describe('MemoryTabContent', () => {
         server.use(
             http.get(`${BASE}/agents/agent-coder/memory/history`, () =>
                 HttpResponse.json([makeHistoryRow({ trigger: 'cadence' })])
-            ),
+            )
         );
-        renderWithProviders(
-            <MemoryTabContent agent={makeAgent()} memory={makeMemory()} />
-        );
+        renderWithProviders(<MemoryTabContent agent={makeAgent()} memory={makeMemory()} />);
         expect(await screen.findByText(/Regeneration history/i)).toBeInTheDocument();
     });
 
     it('does not show regeneration history when history returns empty', async () => {
-        renderWithProviders(
-            <MemoryTabContent agent={makeAgent()} memory={makeMemory()} />
-        );
+        renderWithProviders(<MemoryTabContent agent={makeAgent()} memory={makeMemory()} />);
         await screen.findByText(/Procedural memory/i);
         expect(screen.queryByText(/Regeneration history/i)).not.toBeInTheDocument();
     });
@@ -202,12 +194,12 @@ describe('MemoryTabContent', () => {
     it('history row shows trigger badge, version delta, and chars', async () => {
         server.use(
             http.get(`${BASE}/agents/agent-coder/memory/history`, () =>
-                HttpResponse.json([makeHistoryRow({ trigger: 'high_signal', chars_added: 120, chars_removed: 30 })])
-            ),
+                HttpResponse.json([
+                    makeHistoryRow({ trigger: 'high_signal', chars_added: 120, chars_removed: 30 }),
+                ])
+            )
         );
-        renderWithProviders(
-            <MemoryTabContent agent={makeAgent()} memory={makeMemory()} />
-        );
+        renderWithProviders(<MemoryTabContent agent={makeAgent()} memory={makeMemory()} />);
         await screen.findByText(/Regeneration history/i);
         // trigger badge shows trigger text (underscore replaced with space)
         expect(screen.getByText(/high signal/i)).toBeInTheDocument();
@@ -220,11 +212,9 @@ describe('MemoryTabContent', () => {
         server.use(
             http.get(`${BASE}/agents/agent-coder/memory/history`, () =>
                 HttpResponse.json([makeHistoryRow({ boundary_flags: ['pii', 'credentials'] })])
-            ),
+            )
         );
-        renderWithProviders(
-            <MemoryTabContent agent={makeAgent()} memory={makeMemory()} />
-        );
+        renderWithProviders(<MemoryTabContent agent={makeAgent()} memory={makeMemory()} />);
         await screen.findByText(/Regeneration history/i);
         expect(screen.getByText(/boundary/i)).toBeInTheDocument();
     });
@@ -247,10 +237,13 @@ describe('MemoryTabContent', () => {
             http.put(`${BASE}/agents/agent-coder/memory`, () => {
                 putCalled = true;
                 return HttpResponse.json(makeMemory({ version: 4, source: 'manual-edit' }));
-            }),
+            })
         );
         renderWithProviders(
-            <MemoryTabContent agent={makeAgent()} memory={makeMemory({ body_md: 'Old content.' })} />
+            <MemoryTabContent
+                agent={makeAgent()}
+                memory={makeMemory({ body_md: 'Old content.' })}
+            />
         );
         await screen.findByText(/Procedural memory/i);
 
@@ -269,12 +262,12 @@ describe('MemoryTabContent', () => {
     it('history row with mcp_update trigger renders correctly', async () => {
         server.use(
             http.get(`${BASE}/agents/agent-coder/memory/history`, () =>
-                HttpResponse.json([makeHistoryRow({ trigger: 'mcp_update', chars_added: 5, chars_removed: 2 })])
-            ),
+                HttpResponse.json([
+                    makeHistoryRow({ trigger: 'mcp_update', chars_added: 5, chars_removed: 2 }),
+                ])
+            )
         );
-        renderWithProviders(
-            <MemoryTabContent agent={makeAgent()} memory={makeMemory()} />
-        );
+        renderWithProviders(<MemoryTabContent agent={makeAgent()} memory={makeMemory()} />);
         await screen.findByText(/Regeneration history/i);
         expect(screen.getByText(/mcp update/i)).toBeInTheDocument();
     });
@@ -285,7 +278,7 @@ describe('MemoryTabContent', () => {
             http.put(`${BASE}/agents/agent-coder/memory`, () => {
                 putCalled = true;
                 return HttpResponse.json(makeMemory({ version: 4, source: 'manual-edit' }));
-            }),
+            })
         );
         const body = 'Existing memory content.';
         renderWithProviders(
@@ -298,7 +291,7 @@ describe('MemoryTabContent', () => {
         // "editEdit" (icon "edit" + label "Edit"). Click it to enter edit mode.
         // We match by trimmed textContent containing exactly "Edit" (case-sensitive suffix).
         const buttons = await screen.findAllByRole('button');
-        const editBtn = buttons.find(b => (b.textContent ?? '').trimEnd().endsWith('Edit'));
+        const editBtn = buttons.find((b) => (b.textContent ?? '').trimEnd().endsWith('Edit'));
         expect(editBtn).toBeDefined();
         fireEvent.click(editBtn!);
 
@@ -322,20 +315,23 @@ describe('MemoryTabContent', () => {
             http.put(`${BASE}/agents/agent-coder/memory`, () => {
                 putCalled = true;
                 return new HttpResponse(null, { status: 500 });
-            }),
+            })
         );
 
         renderWithProviders(
             <>
-                <MemoryTabContent agent={makeAgent()} memory={makeMemory({ body_md: 'Old content.' })} />
+                <MemoryTabContent
+                    agent={makeAgent()}
+                    memory={makeMemory({ body_md: 'Old content.' })}
+                />
                 <Toast />
-            </>,
+            </>
         );
         await screen.findByText(/Procedural memory/i);
 
         // Enter edit mode
         const buttons = await screen.findAllByRole('button');
-        const editBtn = buttons.find(b => (b.textContent ?? '').trimEnd().endsWith('Edit'));
+        const editBtn = buttons.find((b) => (b.textContent ?? '').trimEnd().endsWith('Edit'));
         expect(editBtn).toBeDefined();
         fireEvent.click(editBtn!);
 
@@ -352,7 +348,9 @@ describe('MemoryTabContent', () => {
         // discards the promise, making the rejection unhandled in Node.
         // We install a persistent swallow handler (not process.once which only
         // handles one event) and remove it once we are done asserting.
-        const swallowRejection = () => { /* swallow expected save-error rejection */ };
+        const swallowRejection = () => {
+            /* swallow expected save-error rejection */
+        };
         process.on('unhandledRejection', swallowRejection);
 
         const saveBtn = await screen.findByRole('button', { name: /^Save$/i });
@@ -371,12 +369,16 @@ describe('MemoryTabContent', () => {
     it('RegenerationHistory unknown trigger color fallback: renders without crash', async () => {
         server.use(
             http.get(`${BASE}/agents/agent-coder/memory/history`, () =>
-                HttpResponse.json([makeHistoryRow({ trigger: 'unknown_trigger', chars_added: 8, chars_removed: 2 })])
-            ),
+                HttpResponse.json([
+                    makeHistoryRow({
+                        trigger: 'unknown_trigger',
+                        chars_added: 8,
+                        chars_removed: 2,
+                    }),
+                ])
+            )
         );
-        renderWithProviders(
-            <MemoryTabContent agent={makeAgent()} memory={makeMemory()} />
-        );
+        renderWithProviders(<MemoryTabContent agent={makeAgent()} memory={makeMemory()} />);
         await screen.findByText(/Regeneration history/i);
         // The unknown trigger falls back to slate60/slate70 colors — no crash
         // The trigger text renders with underscore replaced by space
@@ -387,14 +389,24 @@ describe('MemoryTabContent', () => {
         server.use(
             http.get(`${BASE}/agents/agent-coder/memory/history`, () =>
                 HttpResponse.json([
-                    makeHistoryRow({ id: 1, trigger: 'manual', new_version: 3, chars_added: 10, chars_removed: 2 }),
-                    makeHistoryRow({ id: 2, trigger: 'cadence', new_version: 4, chars_added: 20, chars_removed: 5 }),
+                    makeHistoryRow({
+                        id: 1,
+                        trigger: 'manual',
+                        new_version: 3,
+                        chars_added: 10,
+                        chars_removed: 2,
+                    }),
+                    makeHistoryRow({
+                        id: 2,
+                        trigger: 'cadence',
+                        new_version: 4,
+                        chars_added: 20,
+                        chars_removed: 5,
+                    }),
                 ])
-            ),
+            )
         );
-        renderWithProviders(
-            <MemoryTabContent agent={makeAgent()} memory={makeMemory()} />
-        );
+        renderWithProviders(<MemoryTabContent agent={makeAgent()} memory={makeMemory()} />);
         await screen.findByText(/Regeneration history/i);
         // Both trigger badges should render
         expect(screen.getByText('manual')).toBeInTheDocument();

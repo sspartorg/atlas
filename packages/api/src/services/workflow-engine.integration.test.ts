@@ -44,6 +44,20 @@ vi.mock('./worktree-orchestrator.js', async (importOriginal) => ({
     ...(await importOriginal<typeof WorktreeOrchestratorModule>()),
     ...git,
 }));
+// ADR 0020 — delivery now runs the project's own typecheck/lint/test gate in
+// each repo before pushing it. These tests mock `agent-runner`, so no agent
+// ever stages `.atlas/scripts/`, and the real gate would correctly report
+// `unavailable` for every delivery here. Mocked alongside `pushWorktree` and
+// `openPullRequest` for the same reason: this file's subject is routing and
+// delivery, not the gate. The gate's own behaviour — including that a missing
+// script is `unavailable` and never `fail` — is covered against real scripts
+// in `verification-gate.test.ts`. The tests below that DO make the verdict the
+// subject override this per-case.
+const gate = vi.hoisted(() => ({
+    runVerificationGate: vi.fn(async () => ({ kind: 'pass' as const })),
+}));
+vi.mock('./verification-gate.js', () => gate);
+
 vi.mock('./external-links.js', async (importOriginal) => ({
     ...(await importOriginal<typeof ExternalLinksModule>()),
     fetchGithubPrTitle: vi.fn(async () => null),
@@ -184,6 +198,89 @@ describe('workflow engine — happy path', () => {
         expect(await runOf(runId)).toMatchObject({ status: 'completed', pr_url: 'https://github.com/o/r/pull/7' });
         expect(await itemOf('ATL-2')).toMatchObject({ status: 'in_review' });
         expect(spawned).toHaveLength(2);
+    });
+
+    // ─── ADR 0020: the verification gate ────────────────────────────────
+    //
+    // F-012's consequence was a Task that opened two PRs with red suites while
+    // every reviewer agent reported green. These are the tests that make that
+    // impossible. Note what the agent says in each: `finishStep('completed',
+    // 'done')` is the agent asserting success. The gate overrules it.
+
+    it('does not push when the gate fails, even though every agent reported done', async () => {
+        gate.runVerificationGate.mockResolvedValueOnce({
+            kind: 'fail',
+            output: 'coder-tests-green:\n  test script failed (3 failing)',
+        } as never);
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        await finishStep('completed', 'done');
+        await finishStep('completed', 'done');
+
+        // The whole point: the agents said done, and nothing shipped.
+        expect(git.pushWorktree).not.toHaveBeenCalled();
+        expect(git.openPullRequest).not.toHaveBeenCalled();
+        expect(git.cleanupWorktreeAfterPush).not.toHaveBeenCalled();
+
+        const run = await runOf(runId);
+        expect(run).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'end' });
+        // The Owner is told it was the gate, not a push error, and is given
+        // the script's own output rather than a generic failure.
+        expect(String(run?.park_reason)).toContain('verification gate failed');
+        expect(String(run?.park_reason)).toContain('3 failing');
+        expect(await itemOf('ATL-2')).toMatchObject({ status: 'waiting_for_info' });
+    });
+
+    it('retries the gate on resume and delivers once it passes', async () => {
+        gate.runVerificationGate.mockResolvedValueOnce({ kind: 'fail', output: 'red' } as never);
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        await finishStep('completed', 'done');
+        await finishStep('completed', 'done');
+        expect(git.pushWorktree).not.toHaveBeenCalled();
+
+        // The Owner fixes the suite on the branch and resumes; the gate is
+        // re-run rather than remembered, so the fix is what decides.
+        await resumeWorkflowRun(runId);
+        expect(gate.runVerificationGate).toHaveBeenCalledTimes(2);
+        expect(git.pushWorktree).toHaveBeenCalledTimes(1);
+        expect(await runOf(runId)).toMatchObject({ status: 'completed' });
+    });
+
+    it('parks — and does NOT fail — when the gate could not run at all', async () => {
+        // The distinction ADR 0020 turns on. A missing script or a dead binary
+        // is absence of evidence. If this ever took the failure path, a
+        // misconfigured project would look identical to a red suite.
+        gate.runVerificationGate.mockResolvedValueOnce({
+            kind: 'unavailable',
+            reason: 'no verification script at /tmp/x',
+        } as never);
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        await finishStep('completed', 'done');
+        await finishStep('completed', 'done');
+
+        expect(git.pushWorktree).not.toHaveBeenCalled();
+        const run = await runOf(runId);
+        expect(run).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'end' });
+        expect(String(run?.park_reason)).toContain('could not run');
+        // Says plainly that this is not a test failure, so the Owner does not
+        // go hunting for a bug that isn't there.
+        expect(String(run?.park_reason)).toContain('not a test failure');
+    });
+
+    it('runs the gate in the repo being pushed, before the push', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        await finishStep('completed', 'done');
+        await finishStep('completed', 'done');
+        expect(await runOf(runId)).toMatchObject({ status: 'completed' });
+
+        // ADR 0017 — each repo carries its own suite, so the gate must be told
+        // which checkout to verify, not the workspace root.
+        expect(gate.runVerificationGate).toHaveBeenCalledWith(
+            expect.objectContaining({ repoPath: '/tmp/atlas-wf-test', itemId: 'ATL-2' }),
+        );
+        const gateOrder = gate.runVerificationGate.mock.invocationCallOrder[0] ?? 0;
+        const pushOrder = git.pushWorktree.mock.invocationCallOrder[0] ?? 0;
+        // Verifying after the push would prove nothing — the code is already gone.
+        expect(gateOrder).toBeLessThan(pushOrder);
     });
 
     it('refuses a second live run on the same item', async () => {

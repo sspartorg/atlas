@@ -26,11 +26,9 @@ function baseHandlers() {
                     title: 'Auth hardening',
                     assignee_agent_id: 'agent-coder',
                 }),
-            ]),
+            ])
         ),
-        http.get(`${BASE}/tasks/stats`, () =>
-            HttpResponse.json({ total: 2, awaiting_pickup: 1 }),
-        ),
+        http.get(`${BASE}/tasks/stats`, () => HttpResponse.json({ total: 2, awaiting_pickup: 1 })),
         ...defaultHandlers,
     ];
 }
@@ -114,8 +112,8 @@ describe('Tasks page', () => {
             ...defaultHandlers,
             http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             http.get(`${BASE}/tasks/stats`, () =>
-                HttpResponse.json({ total: 0, awaiting_pickup: 0 }),
-            ),
+                HttpResponse.json({ total: 0, awaiting_pickup: 0 })
+            )
         );
         renderWithProviders(<Tasks />, { initialEntries: ['/tasks'] });
         const goBtn = await screen.findByRole('button', { name: /Go to Projects/i });
@@ -150,8 +148,10 @@ describe('Tasks page', () => {
             http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([makeAgent()])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
-            http.get(`${BASE}/tasks/stats`, () => HttpResponse.json({ total: 0, awaiting_pickup: 0 })),
-            ...defaultHandlers,
+            http.get(`${BASE}/tasks/stats`, () =>
+                HttpResponse.json({ total: 0, awaiting_pickup: 0 })
+            ),
+            ...defaultHandlers
         );
         renderWithProviders(<Tasks />, { initialEntries: ['/tasks'] });
         await screen.findByText('All');
@@ -192,8 +192,14 @@ describe('Tasks page', () => {
         server.use(
             ...baseHandlers(),
             http.patch(`${BASE}/tasks/:id/status`, () =>
-                HttpResponse.json(makeTaskListItem({ id: 'ATL-1', title: 'Refunds automation', status: 'in_progress' })),
-            ),
+                HttpResponse.json(
+                    makeTaskListItem({
+                        id: 'ATL-1',
+                        title: 'Refunds automation',
+                        status: 'in_progress',
+                    })
+                )
+            )
         );
         // Pre-set localStorage so the Tasks page starts in kanban view mode.
         localStorage.setItem('atlas.viewMode.tasks', 'kanban');
@@ -206,14 +212,17 @@ describe('Tasks page', () => {
         const dataTransfer = {
             effectAllowed: '',
             dropEffect: '',
-            setData: (k: string, v: string) => { dataTransferStore[k] = v; },
+            setData: (k: string, v: string) => {
+                dataTransferStore[k] = v;
+            },
             getData: (k: string) => dataTransferStore[k] ?? '',
         };
         const card = screen.getByText('Refunds automation').closest('[draggable]') as HTMLElement;
         if (card) {
             fireEvent.dragStart(card, { dataTransfer });
             // Find the 'In Progress' column header
-            const inProgressLabel = screen.queryByText('In Progress') ?? screen.queryByText('in_progress');
+            const inProgressLabel =
+                screen.queryByText('In Progress') ?? screen.queryByText('in_progress');
             if (inProgressLabel) {
                 const column = inProgressLabel.parentElement?.parentElement as HTMLElement;
                 if (column) {
@@ -250,9 +259,12 @@ describe('Tasks page', () => {
         // 'Refunds automation' has assignee_agent_id=null so it passes the mine filter
         expect(screen.getByText('Refunds automation')).toBeInTheDocument();
         // 'Auth hardening' has assignee_agent_id='agent-coder' so it is filtered out
-        await waitFor(() => {
-            expect(screen.queryByText('Auth hardening')).toBeFalsy();
-        }, { timeout: 2000 }).catch(() => {});
+        await waitFor(
+            () => {
+                expect(screen.queryByText('Auth hardening')).toBeFalsy();
+            },
+            { timeout: 2000 }
+        ).catch(() => {});
     });
 
     it('exercises filtered useMemo ai branch — filterKey="ai" removes owner-assigned tasks', async () => {
@@ -282,9 +294,12 @@ describe('Tasks page', () => {
         await screen.findByText('Refunds automation');
         // When project is set, the subtitle shows "N tasks · ProjectName"
         // This exercises projectSlug != null -> projectId lookup (lines 55, 148)
-        await waitFor(() => {
-            expect(screen.queryByText(/Atlas/)).toBeTruthy();
-        }, { timeout: 2000 }).catch(() => {});
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/Atlas/)).toBeTruthy();
+            },
+            { timeout: 2000 }
+        ).catch(() => {});
         expect(document.body).toBeTruthy();
     });
 
@@ -294,9 +309,12 @@ describe('Tasks page', () => {
         // so awaitingPickup > 0 is true — covers line 149 branch
         renderWithProviders(<Tasks />, { initialEntries: ['/tasks'] });
         await screen.findByText('Refunds automation');
-        await waitFor(() => {
-            expect(screen.queryByText(/awaiting pickup/)).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/awaiting pickup/)).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('exercises onProjectChange with a non-null project id — calls setParam("project", p.name)', async () => {
@@ -329,20 +347,23 @@ describe('Tasks page', () => {
                 HttpResponse.json([
                     makeTaskListItem({ id: 'ATL-1', title: 'Draft Task', status: 'draft' }),
                     makeTaskListItem({ id: 'ATL-2', title: 'Ready Task', status: 'ready' }),
-                ]),
+                ])
             ),
             http.get(`${BASE}/tasks/stats`, () =>
-                HttpResponse.json({ total: 2, awaiting_pickup: 0 }),
+                HttpResponse.json({ total: 2, awaiting_pickup: 0 })
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         // Start with status=draft in URL to exercise statusFilter branch in counts useMemo (lines 84-95)
         renderWithProviders(<Tasks />, { initialEntries: ['/tasks?status=draft'] });
         await screen.findByText('Draft Task');
         // Ready Task should be filtered out by the status filter
-        await waitFor(() => {
-            expect(screen.queryByText('Ready Task')).toBeFalsy();
-        }, { timeout: 2000 }).catch(() => {});
+        await waitFor(
+            () => {
+                expect(screen.queryByText('Ready Task')).toBeFalsy();
+            },
+            { timeout: 2000 }
+        ).catch(() => {});
         expect(document.body).toBeTruthy();
     });
 
@@ -352,22 +373,33 @@ describe('Tasks page', () => {
             http.get(`${BASE}/agents`, () => HttpResponse.json([makeAgent()])),
             http.get(`${BASE}/tasks`, () =>
                 HttpResponse.json([
-                    makeTaskListItem({ id: 'ATL-1', title: 'Refunds', description: 'automate refund flows' }),
-                    makeTaskListItem({ id: 'ATL-2', title: 'Security', description: 'harden auth' }),
-                ]),
+                    makeTaskListItem({
+                        id: 'ATL-1',
+                        title: 'Refunds',
+                        description: 'automate refund flows',
+                    }),
+                    makeTaskListItem({
+                        id: 'ATL-2',
+                        title: 'Security',
+                        description: 'harden auth',
+                    }),
+                ])
             ),
             http.get(`${BASE}/tasks/stats`, () =>
-                HttpResponse.json({ total: 2, awaiting_pickup: 0 }),
+                HttpResponse.json({ total: 2, awaiting_pickup: 0 })
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         // Start with q=refund in URL to exercise searchQuery filter at mount time
         renderWithProviders(<Tasks />, { initialEntries: ['/tasks?q=refund'] });
         await screen.findByText('Refunds');
         // 'Security' should be filtered out since neither title nor description matches 'refund'
-        await waitFor(() => {
-            expect(screen.queryByText('Security')).toBeFalsy();
-        }, { timeout: 2000 }).catch(() => {});
+        await waitFor(
+            () => {
+                expect(screen.queryByText('Security')).toBeFalsy();
+            },
+            { timeout: 2000 }
+        ).catch(() => {});
         expect(document.body).toBeTruthy();
     });
 
@@ -376,8 +408,8 @@ describe('Tasks page', () => {
             ...baseHandlers(),
             // Return an error for the transition to exercise the catch block (line 277)
             http.patch(`${BASE}/tasks/:id/status`, () =>
-                HttpResponse.json({ error: 'invalid transition' }, { status: 422 }),
-            ),
+                HttpResponse.json({ error: 'invalid transition' }, { status: 422 })
+            )
         );
         localStorage.setItem('atlas.viewMode.tasks', 'kanban');
         renderWithProviders(<Tasks />, { initialEntries: ['/tasks'] });
@@ -387,13 +419,18 @@ describe('Tasks page', () => {
         const dataTransfer = {
             effectAllowed: '',
             dropEffect: '',
-            setData: (k: string, v: string) => { dataTransferStore[k] = v; },
+            setData: (k: string, v: string) => {
+                dataTransferStore[k] = v;
+            },
             getData: (k: string) => dataTransferStore[k] ?? '',
         };
-        const card = screen.queryByText('Refunds automation')?.closest('[draggable]') as HTMLElement | null;
+        const card = screen
+            .queryByText('Refunds automation')
+            ?.closest('[draggable]') as HTMLElement | null;
         if (card) {
             fireEvent.dragStart(card, { dataTransfer });
-            const inProgressLabel = screen.queryByText('In Progress') ?? screen.queryByText('in_progress');
+            const inProgressLabel =
+                screen.queryByText('In Progress') ?? screen.queryByText('in_progress');
             if (inProgressLabel) {
                 const column = inProgressLabel.parentElement?.parentElement as HTMLElement;
                 if (column) {

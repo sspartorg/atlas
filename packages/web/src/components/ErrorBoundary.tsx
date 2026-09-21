@@ -33,6 +33,7 @@ export class ErrorBoundary extends Component<Props, State> {
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 48, color: ATLAS_PALETTE.error, display: 'block', mb: 3 }}
                     >
                         error

@@ -6,11 +6,7 @@ import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 describe('LabelsRailRow', () => {
     it('renders the "Labels" heading and existing chips', () => {
         renderWithProviders(
-            <LabelsRailRow
-                labels={['frontend', 'urgent']}
-                onChange={() => {}}
-                suggestions={[]}
-            />,
+            <LabelsRailRow labels={['frontend', 'urgent']} onChange={() => {}} suggestions={[]} />
         );
         expect(screen.getByText('Labels')).toBeInTheDocument();
         expect(screen.getByText('frontend')).toBeInTheDocument();
@@ -18,17 +14,13 @@ describe('LabelsRailRow', () => {
     });
 
     it('renders the empty-add affordance when no labels', () => {
-        renderWithProviders(
-            <LabelsRailRow labels={[]} onChange={() => {}} suggestions={[]} />,
-        );
+        renderWithProviders(<LabelsRailRow labels={[]} onChange={() => {}} suggestions={[]} />);
         expect(screen.getByText('Labels')).toBeInTheDocument();
         expect(screen.getByText(/Add labels/i)).toBeInTheDocument();
     });
 
     it('switches into edit mode when the empty-add affordance is clicked', () => {
-        renderWithProviders(
-            <LabelsRailRow labels={[]} onChange={() => {}} suggestions={[]} />,
-        );
+        renderWithProviders(<LabelsRailRow labels={[]} onChange={() => {}} suggestions={[]} />);
         const target = screen.getByText(/Add labels/i);
         fireEvent.click(target);
         // After click, an input should be rendered for editing.
@@ -36,18 +28,14 @@ describe('LabelsRailRow', () => {
     });
 
     it('switches into edit mode via the keyboard (Enter)', () => {
-        renderWithProviders(
-            <LabelsRailRow labels={[]} onChange={() => {}} suggestions={[]} />,
-        );
+        renderWithProviders(<LabelsRailRow labels={[]} onChange={() => {}} suggestions={[]} />);
         const targets = screen.getAllByRole('button');
         if (targets[0]) fireEvent.keyDown(targets[0], { key: 'Enter' });
         expect(document.querySelector('input')).toBeTruthy();
     });
 
     it('switches into edit mode via the keyboard (Space) on the chip flow', () => {
-        renderWithProviders(
-            <LabelsRailRow labels={['a']} onChange={() => {}} suggestions={[]} />,
-        );
+        renderWithProviders(<LabelsRailRow labels={['a']} onChange={() => {}} suggestions={[]} />);
         const targets = screen.getAllByRole('button');
         if (targets[0]) fireEvent.keyDown(targets[0], { key: ' ' });
         expect(document.querySelector('input')).toBeTruthy();
@@ -56,11 +44,7 @@ describe('LabelsRailRow', () => {
     it('calls onChange with cleaned labels when committing via blur', async () => {
         const onChange = vi.fn().mockResolvedValue(undefined);
         renderWithProviders(
-            <LabelsRailRow
-                labels={['old']}
-                onChange={onChange}
-                suggestions={['new', 'foo']}
-            />,
+            <LabelsRailRow labels={['old']} onChange={onChange} suggestions={['new', 'foo']} />
         );
         // Open edit mode.
         const targets = screen.getAllByRole('button');
@@ -79,9 +63,7 @@ describe('LabelsRailRow', () => {
 
     it('renders many label chips without crashing', () => {
         const many = Array.from({ length: 12 }, (_, i) => `label-${i}`);
-        renderWithProviders(
-            <LabelsRailRow labels={many} onChange={() => {}} suggestions={[]} />,
-        );
+        renderWithProviders(<LabelsRailRow labels={many} onChange={() => {}} suggestions={[]} />);
         for (const l of many.slice(0, 3)) {
             expect(screen.getByText(l)).toBeInTheDocument();
         }
@@ -89,11 +71,7 @@ describe('LabelsRailRow', () => {
 
     it('shows the chip flow click target when at least one label is set', () => {
         renderWithProviders(
-            <LabelsRailRow
-                labels={['one']}
-                onChange={() => {}}
-                suggestions={[]}
-            />,
+            <LabelsRailRow labels={['one']} onChange={() => {}} suggestions={[]} />
         );
         // The whole chip flow is role=button.
         const buttons = screen.getAllByRole('button');
@@ -108,7 +86,7 @@ describe('LabelsRailRow', () => {
         // OR if we can't stage a change, flush returns early at staged===null.
         const onChange = vi.fn();
         renderWithProviders(
-            <LabelsRailRow labels={['old']} onChange={onChange} suggestions={[]} />,
+            <LabelsRailRow labels={['old']} onChange={onChange} suggestions={[]} />
         );
         const btn = screen.getAllByRole('button')[0]!;
         fireEvent.click(btn);
@@ -121,7 +99,7 @@ describe('LabelsRailRow', () => {
 
     it('keyboard Enter on chip-flow button enters edit mode (labels.length>0 keyDown branch)', () => {
         renderWithProviders(
-            <LabelsRailRow labels={['existing']} onChange={() => {}} suggestions={[]} />,
+            <LabelsRailRow labels={['existing']} onChange={() => {}} suggestions={[]} />
         );
         const buttons = screen.getAllByRole('button');
         // The chip-flow box is a button — press Enter on it
@@ -130,9 +108,7 @@ describe('LabelsRailRow', () => {
     });
 
     it('non-matching key does not open edit mode (else branch in keyDown)', () => {
-        renderWithProviders(
-            <LabelsRailRow labels={[]} onChange={() => {}} suggestions={[]} />,
-        );
+        renderWithProviders(<LabelsRailRow labels={[]} onChange={() => {}} suggestions={[]} />);
         const targets = screen.getAllByRole('button');
         if (targets[0]) fireEvent.keyDown(targets[0], { key: 'Tab' });
         // Tab key does nothing — input still not rendered

@@ -87,8 +87,12 @@ class MockWs {
         lastWs = this;
     }
 
-    send(data: unknown) { this.sent.push(data); }
-    close() { this.readyState = 3; }
+    send(data: unknown) {
+        this.sent.push(data);
+    }
+    close() {
+        this.readyState = 3;
+    }
 }
 
 // ── writeWsFrame — the entire client receive path, as a pure function ────────
@@ -198,7 +202,9 @@ class NoopObserver {
     observe() {}
     unobserve() {}
     disconnect() {}
-    takeRecords() { return []; }
+    takeRecords() {
+        return [];
+    }
 }
 
 describe('TerminalXterm — WebSocket lifecycle', () => {
@@ -306,7 +312,7 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
             lastWs?.onmessage?.(
                 new MessageEvent('message', {
                     data: Uint8Array.from('foo\x1b[', (c) => c.charCodeAt(0)).buffer,
-                }),
+                })
             );
         });
         const term = (await import('@xterm/xterm')).Terminal as unknown as {
@@ -323,7 +329,9 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
     it('ws.onclose with non-1000 code and sessionLive schedules reconnect', async () => {
         vi.useFakeTimers();
         renderWithProviders(<TerminalXterm sessionId="sess-ws-5" sessionLive={true} />);
-        await act(async () => { await vi.runAllTimersAsync(); });
+        await act(async () => {
+            await vi.runAllTimersAsync();
+        });
         // First open
         const firstWs = lastWs;
         act(() => {
@@ -333,7 +341,9 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
             firstWs?.onclose?.(new CloseEvent('close', { code: 1006, wasClean: false }));
         });
         // Advance timers for reconnect delay (1500ms)
-        await act(async () => { vi.advanceTimersByTime(2000); });
+        await act(async () => {
+            vi.advanceTimersByTime(2000);
+        });
         // A new WS should have been created
         expect(lastWs).not.toBeNull();
         vi.useRealTimers();
@@ -374,7 +384,7 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
 
     it('shows bytes received when session not live after receiving data', async () => {
         const { rerender } = renderWithProviders(
-            <TerminalXterm sessionId="sess-ws-9" sessionLive={true} />,
+            <TerminalXterm sessionId="sess-ws-9" sessionLive={true} />
         );
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
         act(() => {
@@ -382,24 +392,20 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
             lastWs?.onmessage?.(
                 new MessageEvent('message', {
                     data: Uint8Array.from('some bytes', (c) => c.charCodeAt(0)).buffer,
-                }),
+                })
             );
         });
         // Now flip to not live — the overlay should show bytes received
-        rerender(
-            <TerminalXterm sessionId="sess-ws-9" sessionLive={false} />,
-        );
+        rerender(<TerminalXterm sessionId="sess-ws-9" sessionLive={false} />);
         // The overlay "Session is not active" should appear
-        await waitFor(() =>
-            expect(screen.getByText(/session is not active/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/session is not active/i)).toBeInTheDocument());
     });
 
     it('ws.onclose when sessionLive=false does NOT reconnect (no phantom WS)', async () => {
         // Exercises the `!sessionLiveRef.current` branch: close fires after session
         // went paused (sessionLive=false), so we skip the reconnect logic.
         const { rerender } = renderWithProviders(
-            <TerminalXterm sessionId="sess-ws-11" sessionLive={true} />,
+            <TerminalXterm sessionId="sess-ws-11" sessionLive={true} />
         );
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
         const firstWs = lastWs;
@@ -420,9 +426,13 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
     it('term.onData sends keystrokes over an open WebSocket (lines 144-149)', async () => {
         renderWithProviders(<TerminalXterm sessionId="sess-ondata-1" sessionLive={true} />);
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
-        act(() => { lastWs?.onopen?.(new Event('open')); });
+        act(() => {
+            lastWs?.onopen?.(new Event('open'));
+        });
         expect(lastOnDataCallback).not.toBeNull();
-        act(() => { lastOnDataCallback?.('ls -la\r'); });
+        act(() => {
+            lastOnDataCallback?.('ls -la\r');
+        });
         expect(lastWs?.sent).toContain('ls -la\r');
     });
 
@@ -430,11 +440,15 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         renderWithProviders(<TerminalXterm sessionId="sess-ondata-2" sessionLive={true} />);
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
         // Close before opening so readyState != OPEN
-        act(() => { lastWs?.onclose?.(new CloseEvent('close', { code: 1000 })); });
+        act(() => {
+            lastWs?.onclose?.(new CloseEvent('close', { code: 1000 }));
+        });
         expect(lastOnDataCallback).not.toBeNull();
         const sentBefore = (lastWs?.sent ?? []).length;
         expect(() => {
-            act(() => { lastOnDataCallback?.('typed while disconnected'); });
+            act(() => {
+                lastOnDataCallback?.('typed while disconnected');
+            });
         }).not.toThrow();
         expect((lastWs?.sent ?? []).length).toBe(sentBefore);
     });
@@ -444,7 +458,9 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         // first reconnect attempt, a second transient close should NOT spawn another WS.
         vi.useFakeTimers();
         renderWithProviders(<TerminalXterm sessionId="sess-ws-12" sessionLive={true} />);
-        await act(async () => { await vi.runAllTimersAsync(); });
+        await act(async () => {
+            await vi.runAllTimersAsync();
+        });
         const firstWs = lastWs;
         act(() => {
             firstWs?.onopen?.(new Event('open'));
@@ -454,7 +470,9 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
             firstWs?.onclose?.(new CloseEvent('close', { code: 1006, wasClean: false }));
         });
         // Advance timers to let the reconnect fire
-        await act(async () => { vi.advanceTimersByTime(2000); });
+        await act(async () => {
+            vi.advanceTimersByTime(2000);
+        });
         const secondWs = lastWs;
         expect(secondWs).not.toBeNull();
         // Second transient close on reconnected WS — reconnectAttempted is still true
@@ -503,14 +521,20 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         // unmount can still invoke the stale handler with termRef already
         // nulled by the xterm-init cleanup.
         const { unmount } = renderWithProviders(
-            <TerminalXterm sessionId="sess-ws-21" sessionLive={true} />,
+            <TerminalXterm sessionId="sess-ws-21" sessionLive={true} />
         );
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
         const ws = lastWs!;
-        act(() => { ws.onopen?.(new Event('open')); });
-        act(() => { unmount(); });
+        act(() => {
+            ws.onopen?.(new Event('open'));
+        });
+        act(() => {
+            unmount();
+        });
         expect(() => {
-            act(() => { ws.onmessage?.(new MessageEvent('message', { data: 'after unmount' })); });
+            act(() => {
+                ws.onmessage?.(new MessageEvent('message', { data: 'after unmount' }));
+            });
         }).not.toThrow();
     });
 
@@ -518,11 +542,15 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         // Exercises `if (bytes > 0) setBytesReceived(...)` — an empty string
         // payload keeps `bytes` at 0, so the setState call is skipped.
         const { rerender } = renderWithProviders(
-            <TerminalXterm sessionId="sess-ws-23" sessionLive={true} />,
+            <TerminalXterm sessionId="sess-ws-23" sessionLive={true} />
         );
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
-        act(() => { lastWs?.onopen?.(new Event('open')); });
-        act(() => { lastWs?.onmessage?.(new MessageEvent('message', { data: '' })); });
+        act(() => {
+            lastWs?.onopen?.(new Event('open'));
+        });
+        act(() => {
+            lastWs?.onmessage?.(new MessageEvent('message', { data: '' }));
+        });
         rerender(<TerminalXterm sessionId="sess-ws-23" sessionLive={false} />);
         // "Session is not active" overlay renders without a bytes-received suffix.
         const overlay = await screen.findByText(/session is not active/i);
@@ -534,7 +562,9 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
         // ArrayBuffer (writeWsFrame returns 0 and writes nothing).
         renderWithProviders(<TerminalXterm sessionId="sess-ws-24" sessionLive={true} />);
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
-        act(() => { lastWs?.onopen?.(new Event('open')); });
+        act(() => {
+            lastWs?.onopen?.(new Event('open'));
+        });
         expect(() => {
             act(() => {
                 lastWs?.onmessage?.(new MessageEvent('message', { data: { unexpected: true } }));
@@ -545,26 +575,36 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
     it('cleanup: ws.close() throw is silently caught (line 275)', async () => {
         // Exercises the try/catch around wsRef.current.close() in the WS effect cleanup.
         const { unmount } = renderWithProviders(
-            <TerminalXterm sessionId="sess-ws-18" sessionLive={true} />,
+            <TerminalXterm sessionId="sess-ws-18" sessionLive={true} />
         );
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
-        act(() => { lastWs?.onopen?.(new Event('open')); });
+        act(() => {
+            lastWs?.onopen?.(new Event('open'));
+        });
         // Override close to throw
         if (lastWs) {
-            lastWs.close = () => { throw new Error('close failed'); };
+            lastWs.close = () => {
+                throw new Error('close failed');
+            };
         }
         // Unmounting runs cleanup — should not throw
-        expect(() => { act(() => { unmount(); }); }).not.toThrow();
+        expect(() => {
+            act(() => {
+                unmount();
+            });
+        }).not.toThrow();
     });
 
     it('!sessionLive: tears down an existing live WS when prop flips to false', async () => {
         // Exercises the `if (wsRef.current)` branch (lines 189-196): session was live,
         // WS is open, then sessionLive becomes false — the effect closes it.
         const { rerender } = renderWithProviders(
-            <TerminalXterm sessionId="sess-ws-19" sessionLive={true} />,
+            <TerminalXterm sessionId="sess-ws-19" sessionLive={true} />
         );
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
-        act(() => { lastWs?.onopen?.(new Event('open')); });
+        act(() => {
+            lastWs?.onopen?.(new Event('open'));
+        });
         const wsBeforePause = lastWs;
         expect(wsBeforePause).not.toBeNull();
         // Flip session to not-live
@@ -572,21 +612,21 @@ describe('TerminalXterm — WebSocket lifecycle', () => {
             rerender(<TerminalXterm sessionId="sess-ws-19" sessionLive={false} />);
         });
         // The overlay should switch to "not active"
-        await waitFor(() =>
-            expect(screen.getByText(/session is not active/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/session is not active/i)).toBeInTheDocument());
     });
 
     it('shows bytes-received count in not-active overlay after binary data arrives', async () => {
         // Exercises the `bytesReceived > 0` branch inside the !sessionLive overlay.
         const { rerender } = renderWithProviders(
-            <TerminalXterm sessionId="sess-ws-20" sessionLive={true} />,
+            <TerminalXterm sessionId="sess-ws-20" sessionLive={true} />
         );
         await waitFor(() => expect(lastWs).not.toBeNull(), { timeout: 2000 });
-        act(() => { lastWs?.onopen?.(new Event('open')); });
+        act(() => {
+            lastWs?.onopen?.(new Event('open'));
+        });
         act(() => {
             lastWs?.onmessage?.(
-                new MessageEvent('message', { data: new Uint8Array([1, 2, 3]).buffer }),
+                new MessageEvent('message', { data: new Uint8Array([1, 2, 3]).buffer })
             );
         });
         // Flip to not-live so the overlay renders with byte count
@@ -609,8 +649,12 @@ class ControllableObserver {
     }
     observe() {}
     unobserve() {}
-    disconnect() { lastRoCallback = null; }
-    takeRecords() { return []; }
+    disconnect() {
+        lastRoCallback = null;
+    }
+    takeRecords() {
+        return [];
+    }
 }
 
 describe('TerminalXterm — ResizeObserver branches', () => {
@@ -636,7 +680,9 @@ describe('TerminalXterm — ResizeObserver branches', () => {
         renderWithProviders(<TerminalXterm sessionId="sess-ro-1" sessionLive={true} />);
         // Fire immediately — xterm hasn't initialised yet
         expect(() => {
-            act(() => { lastRoCallback?.(); });
+            act(() => {
+                lastRoCallback?.();
+            });
         }).not.toThrow();
         vi.useRealTimers();
     });
@@ -647,15 +693,21 @@ describe('TerminalXterm — ResizeObserver branches', () => {
         // ConPTY resize corruption.
         vi.useFakeTimers();
         renderWithProviders(<TerminalXterm sessionId="sess-ro-3" sessionLive={true} />);
-        await act(async () => { await vi.runAllTimersAsync(); });
-        act(() => { lastWs?.onopen?.(new Event('open')); });
+        await act(async () => {
+            await vi.runAllTimersAsync();
+        });
+        act(() => {
+            lastWs?.onopen?.(new Event('open'));
+        });
         const sentBefore = (lastWs?.sent ?? []).length;
         act(() => {
             lastRoCallback?.();
             lastRoCallback?.();
             lastRoCallback?.();
         });
-        await act(async () => { vi.advanceTimersByTime(500); });
+        await act(async () => {
+            vi.advanceTimersByTime(500);
+        });
         expect((lastWs?.sent ?? []).length).toBe(sentBefore);
         vi.useRealTimers();
     });
@@ -666,13 +718,14 @@ describe('TerminalXterm — ResizeObserver branches', () => {
         // means createdTerm is still null, so cleanup should skip teardown
         // without throwing.
         const { unmount } = renderWithProviders(
-            <TerminalXterm sessionId="sess-early-unmount" sessionLive={true} />,
+            <TerminalXterm sessionId="sess-early-unmount" sessionLive={true} />
         );
         expect(() => {
-            act(() => { unmount(); });
+            act(() => {
+                unmount();
+            });
         }).not.toThrow();
     });
-
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -738,7 +791,7 @@ describe('fitFontToWidth', () => {
         fitFontToWidth(term, makeHost(780));
         expect(term.options.fontSize).toBe(12);
         await new Promise<void>((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
         );
         expect(term.options.fontSize).toBe(11);
     });
@@ -849,10 +902,14 @@ describe('TerminalXterm — copy/paste', () => {
         await waitFor(() => expect(lastKeyEventHandler).not.toBeNull());
 
         const term = (await import('@xterm/xterm')).Terminal as unknown as {
-            mock: { results: Array<{ value: {
-                getSelection: ReturnType<typeof vi.fn>;
-                clearSelection: ReturnType<typeof vi.fn>;
-            } }> };
+            mock: {
+                results: Array<{
+                    value: {
+                        getSelection: ReturnType<typeof vi.fn>;
+                        clearSelection: ReturnType<typeof vi.fn>;
+                    };
+                }>;
+            };
         };
         const instance = term.mock.results[term.mock.results.length - 1]!.value;
         instance.getSelection.mockReturnValue('selected line');

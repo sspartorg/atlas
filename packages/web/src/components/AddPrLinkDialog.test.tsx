@@ -10,12 +10,7 @@ describe('AddPrLinkDialog', () => {
     it('does not render its body when open=false', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
-            <AddPrLinkDialog
-                open={false}
-                onClose={vi.fn()}
-                issueType="task"
-                issueId="S1"
-            />,
+            <AddPrLinkDialog open={false} onClose={vi.fn()} issueType="task" issueId="S1" />
         );
         expect(screen.queryByLabelText('GitHub PR URL')).not.toBeInTheDocument();
     });
@@ -23,12 +18,7 @@ describe('AddPrLinkDialog', () => {
     it('shows the URL field and Add/Cancel buttons when open', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
-            <AddPrLinkDialog
-                open
-                onClose={vi.fn()}
-                issueType="task"
-                issueId="S1"
-            />,
+            <AddPrLinkDialog open onClose={vi.fn()} issueType="task" issueId="S1" />
         );
         expect(screen.getByLabelText('GitHub PR URL')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Add link/i })).toBeInTheDocument();
@@ -42,18 +32,15 @@ describe('AddPrLinkDialog', () => {
             http.post('http://localhost:3000/api/issues/task/S1/external-links', () => {
                 calls.push('hit');
                 return HttpResponse.json({ id: 1 });
-            }),
+            })
         );
         renderWithProviders(
-            <AddPrLinkDialog
-                open
-                onClose={vi.fn()}
-                issueType="task"
-                issueId="S1"
-            />,
+            <AddPrLinkDialog open onClose={vi.fn()} issueType="task" issueId="S1" />
         );
         const input = screen.getByLabelText('GitHub PR URL');
-        fireEvent.change(input, { target: { value: 'https://gitlab.com/foo/bar/-/merge_requests/1' } });
+        fireEvent.change(input, {
+            target: { value: 'https://gitlab.com/foo/bar/-/merge_requests/1' },
+        });
         fireEvent.click(screen.getByRole('button', { name: /Add link/i }));
         expect(screen.getByText(/GitHub PR URL/i)).toBeInTheDocument();
         expect(calls).toEqual([]);
@@ -64,22 +51,25 @@ describe('AddPrLinkDialog', () => {
         let body: { url?: string; link_kind?: string } = {};
         server.use(
             ...defaultHandlers,
-            http.post('http://localhost:3000/api/issues/task/S1/external-links', async ({ request }) => {
-                body = (await request.json()) as typeof body;
-                return HttpResponse.json({
-                    id: 7,
-                    item_id: 'S1',
-                    link_kind: 'pull_request',
-                    url: body.url ?? '',
-                    title: null,
-                    external_ref: '42',
-                    created_at: '2026-06-30T00:00:00Z',
-                    created_by_run_id: null,
-                });
-            }),
+            http.post(
+                'http://localhost:3000/api/issues/task/S1/external-links',
+                async ({ request }) => {
+                    body = (await request.json()) as typeof body;
+                    return HttpResponse.json({
+                        id: 7,
+                        item_id: 'S1',
+                        link_kind: 'pull_request',
+                        url: body.url ?? '',
+                        title: null,
+                        external_ref: '42',
+                        created_at: '2026-06-30T00:00:00Z',
+                        created_by_run_id: null,
+                    });
+                }
+            )
         );
         renderWithProviders(
-            <AddPrLinkDialog open onClose={onClose} issueType="task" issueId="S1" />,
+            <AddPrLinkDialog open onClose={onClose} issueType="task" issueId="S1" />
         );
         fireEvent.change(screen.getByLabelText('GitHub PR URL'), {
             target: { value: 'https://github.com/foo/bar/pull/42' },
@@ -104,11 +94,11 @@ describe('AddPrLinkDialog', () => {
                     external_ref: '9',
                     created_at: '2026-06-30T00:00:00Z',
                     created_by_run_id: null,
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(
-            <AddPrLinkDialog open onClose={onClose} issueType="task" issueId="S1" />,
+            <AddPrLinkDialog open onClose={onClose} issueType="task" issueId="S1" />
         );
         const input = screen.getByLabelText('GitHub PR URL');
         fireEvent.change(input, { target: { value: 'https://github.com/foo/bar/pull/9' } });
@@ -124,10 +114,10 @@ describe('AddPrLinkDialog', () => {
             http.post('http://localhost:3000/api/issues/task/S1/external-links', () => {
                 calls.push('hit');
                 return HttpResponse.json({});
-            }),
+            })
         );
         renderWithProviders(
-            <AddPrLinkDialog open onClose={onClose} issueType="task" issueId="S1" />,
+            <AddPrLinkDialog open onClose={onClose} issueType="task" issueId="S1" />
         );
         fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));
         expect(onClose).toHaveBeenCalled();
@@ -137,7 +127,7 @@ describe('AddPrLinkDialog', () => {
     it('error is cleared when the URL input changes after a validation error', () => {
         server.use(...defaultHandlers);
         renderWithProviders(
-            <AddPrLinkDialog open onClose={vi.fn()} issueType="task" issueId="S1" />,
+            <AddPrLinkDialog open onClose={vi.fn()} issueType="task" issueId="S1" />
         );
         const input = screen.getByLabelText('GitHub PR URL');
         // Trigger a validation error first
@@ -154,26 +144,24 @@ describe('AddPrLinkDialog', () => {
         server.use(
             ...defaultHandlers,
             http.post('http://localhost:3000/api/issues/task/S1/external-links', () =>
-                HttpResponse.json({ message: 'Duplicate PR link' }, { status: 422 }),
-            ),
+                HttpResponse.json({ message: 'Duplicate PR link' }, { status: 422 })
+            )
         );
         renderWithProviders(
-            <AddPrLinkDialog open onClose={vi.fn()} issueType="task" issueId="S1" />,
+            <AddPrLinkDialog open onClose={vi.fn()} issueType="task" issueId="S1" />
         );
         fireEvent.change(screen.getByLabelText('GitHub PR URL'), {
             target: { value: 'https://github.com/foo/bar/pull/42' },
         });
         fireEvent.click(screen.getByRole('button', { name: /Add link/i }));
-        await waitFor(() =>
-            expect(screen.getByText(/422/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/422/i)).toBeInTheDocument());
     });
 
     it('X button calls onClose', () => {
         const onClose = vi.fn();
         server.use(...defaultHandlers);
         renderWithProviders(
-            <AddPrLinkDialog open onClose={onClose} issueType="task" issueId="S1" />,
+            <AddPrLinkDialog open onClose={onClose} issueType="task" issueId="S1" />
         );
         fireEvent.click(screen.getByRole('button', { name: /Close add PR link dialog/i }));
         expect(onClose).toHaveBeenCalled();
@@ -182,18 +170,22 @@ describe('AddPrLinkDialog', () => {
     it('shows "Adding…" and disables the Add button while mutation is in-flight (isPending branch)', async () => {
         // Use a delayed response to inspect isPending state
         let resolveRequest!: () => void;
-        const requestStarted = new Promise<void>((r) => { resolveRequest = r; });
+        const requestStarted = new Promise<void>((r) => {
+            resolveRequest = r;
+        });
         server.use(
             ...defaultHandlers,
             http.post('http://localhost:3000/api/issues/task/S1/external-links', async () => {
                 resolveRequest();
                 // Never resolve — keeps isPending=true
-                await new Promise(() => { /* hang */ });
+                await new Promise(() => {
+                    /* hang */
+                });
                 return HttpResponse.json({});
-            }),
+            })
         );
         renderWithProviders(
-            <AddPrLinkDialog open onClose={vi.fn()} issueType="task" issueId="S1" />,
+            <AddPrLinkDialog open onClose={vi.fn()} issueType="task" issueId="S1" />
         );
         fireEvent.change(screen.getByLabelText('GitHub PR URL'), {
             target: { value: 'https://github.com/owner/repo/pull/1' },
@@ -203,8 +195,6 @@ describe('AddPrLinkDialog', () => {
         // Wait for request to start
         await requestStarted;
         // The button now shows "Adding…" (isPending=true branch)
-        await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Adding/i })).toBeDisabled(),
-        );
+        await waitFor(() => expect(screen.getByRole('button', { name: /Adding/i })).toBeDisabled());
     });
 });

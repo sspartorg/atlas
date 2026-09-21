@@ -195,7 +195,7 @@ const populatedResponse = {
 describe('Analytics page', () => {
     it('renders the loading skeleton state', () => {
         server.use(
-            http.get(`${BASE}/analytics`, () => new Promise(() => {})), // never resolves
+            http.get(`${BASE}/analytics`, () => new Promise(() => {})) // never resolves
         );
         renderWithProviders(<Analytics />);
         expect(screen.getByText('Analytics')).toBeInTheDocument();
@@ -203,7 +203,7 @@ describe('Analytics page', () => {
 
     it('renders without crashing for an empty-data response', async () => {
         server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json(minimalAnalyticsResponse)),
+            http.get(`${BASE}/analytics`, () => HttpResponse.json(minimalAnalyticsResponse))
         );
         renderWithProviders(<Analytics />);
         await waitFor(() => {
@@ -212,9 +212,7 @@ describe('Analytics page', () => {
     });
 
     it('renders the populated dashboard (hero + KPIs + donut + lazy panels)', async () => {
-        server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)),
-        );
+        server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)));
         renderWithProviders(<Analytics />);
         // Wait for the populated branch to render — monthLabel appears in
         // the "Total Spend · …" eyebrow, the byAgent legend ("Coder"), and
@@ -226,7 +224,7 @@ describe('Analytics page', () => {
 
     it('renders the per-card empty states when no data exists', async () => {
         server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json(minimalAnalyticsResponse)),
+            http.get(`${BASE}/analytics`, () => HttpResponse.json(minimalAnalyticsResponse))
         );
         renderWithProviders(<Analytics />);
         // Each chart card owns its own empty state — assert a sampling.
@@ -238,9 +236,7 @@ describe('Analytics page', () => {
             // Two cards surface a "no terminal sessions" line: the
             // TerminalDailyCard and the existing TerminalSessionsCard.
             // Use getAllByText to allow either or both.
-            expect(
-                screen.getAllByText(/No terminal sessions for/i).length,
-            ).toBeGreaterThan(0);
+            expect(screen.getAllByText(/No terminal sessions for/i).length).toBeGreaterThan(0);
         });
         await waitFor(() => {
             expect(screen.getByText(/No completed runs this month/i)).toBeInTheDocument();
@@ -271,9 +267,7 @@ describe('Analytics page', () => {
     it('renders the headline insight branch — month-over-month when delta >= 25%', async () => {
         // populatedResponse already has 8 → 12.34 (~54% up), which crosses
         // the 25% threshold, so the MoM branch is chosen.
-        server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)),
-        );
+        server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)));
         renderWithProviders(<Analytics />);
         await waitFor(() => {
             expect(screen.getByText(/Month-over-month/i)).toBeInTheDocument();
@@ -281,9 +275,7 @@ describe('Analytics page', () => {
     });
 
     it('hovers a Recharts tooltip cell to fire the tooltip formatter callback', async () => {
-        server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)),
-        );
+        server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)));
         const { container } = renderWithProviders(<Analytics />);
         await waitFor(() => {
             expect(screen.getAllByText(/Coder/).length).toBeGreaterThan(0);
@@ -298,9 +290,7 @@ describe('Analytics page', () => {
     });
 
     it('exercises YAxis tickFormatter callbacks (fn#9 $toFixed and fn#10 formatTokenCount)', async () => {
-        server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)),
-        );
+        server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)));
         const { container } = renderWithProviders(<Analytics />);
         await waitFor(() => {
             expect(screen.getAllByText(/Coder/).length).toBeGreaterThan(0);
@@ -320,9 +310,7 @@ describe('Analytics page', () => {
     });
 
     it('exercises Daily Pulse Tooltip formatter callback (fn#11 — Cost / token branch)', async () => {
-        server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)),
-        );
+        server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)));
         const { container } = renderWithProviders(<Analytics />);
         await waitFor(() => {
             expect(screen.getAllByText(/Coder/).length).toBeGreaterThan(0);
@@ -354,12 +342,42 @@ describe('Analytics page', () => {
             },
             cacheEfficiency: 0.2,
             monthly: [
-                { month: '2026-04', total_cost_usd: 4.8, input_tokens: 48000, output_tokens: 24000, cache_read_tokens: 9000, run_count: 9 },
-                { month: '2026-05', total_cost_usd: 5.0, input_tokens: 50000, output_tokens: 25000, cache_read_tokens: 10000, run_count: 10 },
+                {
+                    month: '2026-04',
+                    total_cost_usd: 4.8,
+                    input_tokens: 48000,
+                    output_tokens: 24000,
+                    cache_read_tokens: 9000,
+                    run_count: 9,
+                },
+                {
+                    month: '2026-05',
+                    total_cost_usd: 5.0,
+                    input_tokens: 50000,
+                    output_tokens: 25000,
+                    cache_read_tokens: 10000,
+                    run_count: 10,
+                },
             ],
             byAgent: [
-                { agent_id: 'a1', agent_name: 'Dominant Agent', total_cost_usd: 4.0, input_tokens: 40000, output_tokens: 20000, cache_read_tokens: 8000, run_count: 8 },
-                { agent_id: 'a2', agent_name: 'Small Agent', total_cost_usd: 1.0, input_tokens: 10000, output_tokens: 5000, cache_read_tokens: 2000, run_count: 2 },
+                {
+                    agent_id: 'a1',
+                    agent_name: 'Dominant Agent',
+                    total_cost_usd: 4.0,
+                    input_tokens: 40000,
+                    output_tokens: 20000,
+                    cache_read_tokens: 8000,
+                    run_count: 8,
+                },
+                {
+                    agent_id: 'a2',
+                    agent_name: 'Small Agent',
+                    total_cost_usd: 1.0,
+                    input_tokens: 10000,
+                    output_tokens: 5000,
+                    cache_read_tokens: 2000,
+                    run_count: 2,
+                },
             ],
         };
         server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(dominantResponse)));
@@ -368,8 +386,8 @@ describe('Analytics page', () => {
             // Workload concentration branch renders
             expect(
                 screen.queryByText(/Workload concentration/i) ??
-                screen.queryByText(/Dominant Agent/i) ??
-                document.body,
+                    screen.queryByText(/Dominant Agent/i) ??
+                    document.body
             ).toBeTruthy();
         });
     });
@@ -379,8 +397,22 @@ describe('Analytics page', () => {
         const declineResponse = {
             ...populatedResponse,
             monthly: [
-                { month: '2026-04', total_cost_usd: 20.0, input_tokens: 200000, output_tokens: 100000, cache_read_tokens: 150000, run_count: 40 },
-                { month: '2026-05', total_cost_usd: 12.34, input_tokens: 100000, output_tokens: 50000, cache_read_tokens: 80000, run_count: 24 },
+                {
+                    month: '2026-04',
+                    total_cost_usd: 20.0,
+                    input_tokens: 200000,
+                    output_tokens: 100000,
+                    cache_read_tokens: 150000,
+                    run_count: 40,
+                },
+                {
+                    month: '2026-05',
+                    total_cost_usd: 12.34,
+                    input_tokens: 100000,
+                    output_tokens: 50000,
+                    cache_read_tokens: 80000,
+                    run_count: 24,
+                },
             ],
         };
         server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(declineResponse)));
@@ -392,9 +424,7 @@ describe('Analytics page', () => {
     });
 
     it('exercises Donut Tooltip formatter callback (fn#12 — $toFixed branch)', async () => {
-        server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)),
-        );
+        server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)));
         const { container } = renderWithProviders(<Analytics />);
         await waitFor(() => {
             expect(screen.getAllByText(/Coder/).length).toBeGreaterThan(0);
@@ -618,9 +648,7 @@ describe('Analytics page', () => {
 
     it('renders the MoM cost-up badge (▲) when current month cost exceeds prior', async () => {
         // populatedResponse: prior 8.0, current 12.34 → costDelta > 0 → ▲ badge
-        server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)),
-        );
+        server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)));
         renderWithProviders(<Analytics />);
         await waitFor(() => {
             expect(screen.getAllByText(/Coder/).length).toBeGreaterThan(0);
@@ -795,7 +823,9 @@ describe('Analytics page', () => {
         // When the API call fails, useQuery returns { data: undefined, isPending: false }
         // → the `if (!data) return null` branch fires → page renders nothing (null)
         server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json({ error: 'server error' }, { status: 500 })),
+            http.get(`${BASE}/analytics`, () =>
+                HttpResponse.json({ error: 'server error' }, { status: 500 })
+            )
         );
         const { container } = renderWithProviders(<Analytics />);
         // After settling, the component returns null so the container has no
@@ -881,9 +911,7 @@ describe('Analytics page', () => {
         // measured so Recharts may not emit ticks, but the formatter is a
         // closure captured during render — we invoke it directly to confirm
         // coverage. We verify the chart section renders with non-empty data.
-        server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)),
-        );
+        server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)));
         const { container } = renderWithProviders(<Analytics />);
         await waitFor(() => {
             expect(screen.getAllByText(/Coder/).length).toBeGreaterThan(0);
@@ -901,9 +929,7 @@ describe('Analytics page', () => {
     it('tickFormatter for token YAxis (L841) — calls formatTokenCount with a numeric value', async () => {
         // The right YAxis tickFormatter at L841: (v: number) => formatTokenCount(v)
         // Same approach: render with data, trigger mouse events.
-        server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)),
-        );
+        server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)));
         const { container } = renderWithProviders(<Analytics />);
         await waitFor(() => {
             expect(screen.getAllByText(/Coder/).length).toBeGreaterThan(0);
@@ -921,9 +947,7 @@ describe('Analytics page', () => {
         //   if (name === 'Cost') return `$${Number(v).toFixed(4)}`
         //   return formatTokenCount(Number(v))
         // Recharts calls this when tooltip is active. Trigger hover + move.
-        server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)),
-        );
+        server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)));
         const { container } = renderWithProviders(<Analytics />);
         await waitFor(() => {
             expect(screen.getAllByText(/Coder/).length).toBeGreaterThan(0);
@@ -940,9 +964,7 @@ describe('Analytics page', () => {
 
     it('Pie Tooltip formatter (L955) — `$${Number(v).toFixed(4)}` fires on donut hover', async () => {
         // The PieChart Tooltip formatter at L955: (v: unknown) => `$${Number(v).toFixed(4)}`
-        server.use(
-            http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)),
-        );
+        server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)));
         const { container } = renderWithProviders(<Analytics />);
         await waitFor(() => {
             expect(screen.getAllByText(/Coder/).length).toBeGreaterThan(0);
@@ -969,17 +991,61 @@ describe('Analytics page', () => {
             },
             cacheEfficiency: 0.08,
             daily: [
-                { date: '2026-05-01', total_cost_usd: 0.1, input_tokens: 1000, output_tokens: 500, cache_read_tokens: 100, run_count: 1 },
-                { date: '2026-05-02', total_cost_usd: 0.1, input_tokens: 1000, output_tokens: 500, cache_read_tokens: 100, run_count: 1 },
-                { date: '2026-05-03', total_cost_usd: 0.1, input_tokens: 1000, output_tokens: 500, cache_read_tokens: 100, run_count: 1 },
+                {
+                    date: '2026-05-01',
+                    total_cost_usd: 0.1,
+                    input_tokens: 1000,
+                    output_tokens: 500,
+                    cache_read_tokens: 100,
+                    run_count: 1,
+                },
+                {
+                    date: '2026-05-02',
+                    total_cost_usd: 0.1,
+                    input_tokens: 1000,
+                    output_tokens: 500,
+                    cache_read_tokens: 100,
+                    run_count: 1,
+                },
+                {
+                    date: '2026-05-03',
+                    total_cost_usd: 0.1,
+                    input_tokens: 1000,
+                    output_tokens: 500,
+                    cache_read_tokens: 100,
+                    run_count: 1,
+                },
             ],
             monthly: [
-                { month: '2026-05', total_cost_usd: 0.5, input_tokens: 5000, output_tokens: 2500, cache_read_tokens: 500, run_count: 5 },
+                {
+                    month: '2026-05',
+                    total_cost_usd: 0.5,
+                    input_tokens: 5000,
+                    output_tokens: 2500,
+                    cache_read_tokens: 500,
+                    run_count: 5,
+                },
             ],
             byAgent: [],
             byProject: [
-                { project_id: 'p1', project_name: 'Alpha', total_cost_usd: 0.3, input_tokens: 3000, output_tokens: 1500, cache_read_tokens: 300, run_count: 3 },
-                { project_id: 'p2', project_name: 'Beta', total_cost_usd: 0.2, input_tokens: 2000, output_tokens: 1000, cache_read_tokens: 200, run_count: 2 },
+                {
+                    project_id: 'p1',
+                    project_name: 'Alpha',
+                    total_cost_usd: 0.3,
+                    input_tokens: 3000,
+                    output_tokens: 1500,
+                    cache_read_tokens: 300,
+                    run_count: 3,
+                },
+                {
+                    project_id: 'p2',
+                    project_name: 'Beta',
+                    total_cost_usd: 0.2,
+                    input_tokens: 2000,
+                    output_tokens: 1000,
+                    cache_read_tokens: 200,
+                    run_count: 2,
+                },
             ],
             topRuns: [],
         };
@@ -1012,7 +1078,14 @@ describe('Analytics page', () => {
             ...populatedResponse,
             daily: [
                 // Valid date — exercises the `return date` (non-null) branch of parseYMDLocal
-                { date: '2026-05-01', total_cost_usd: 0.5, input_tokens: 1000, output_tokens: 500, cache_read_tokens: 200, run_count: 1 },
+                {
+                    date: '2026-05-01',
+                    total_cost_usd: 0.5,
+                    input_tokens: 1000,
+                    output_tokens: 500,
+                    cache_read_tokens: 200,
+                    run_count: 1,
+                },
                 // Invalid date string — exercises the parseYMDLocal null return (L39 guard)
                 // '2026-00-01': m=0, which is falsy → L39 returns null → L41 NOT reached.
                 // To reach L41 we need a date string like '' or characters that parse
@@ -1020,7 +1093,14 @@ describe('Analytics page', () => {
                 // e.g., '1-1-1' → y=1, m=1, d=1 → valid Date, doesn't reach NaN branch.
                 // L41 NaN-Date branch is only reachable if new Date(y,m-1,d) == NaN,
                 // which JS doesn't do for integer args. Cover it via trusted render path.
-                { date: '2026-05-02', total_cost_usd: 0.7, input_tokens: 1500, output_tokens: 750, cache_read_tokens: 300, run_count: 2 },
+                {
+                    date: '2026-05-02',
+                    total_cost_usd: 0.7,
+                    input_tokens: 1500,
+                    output_tokens: 750,
+                    cache_read_tokens: 300,
+                    run_count: 2,
+                },
             ],
         };
         server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(mixedDateResponse)));
@@ -1037,18 +1117,18 @@ describe('Analytics page', () => {
         // while the rest of the component still loads normally.
         let callCount = 0;
         const originalFn = Intl.DateTimeFormat.prototype.resolvedOptions;
-        const spy = vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockImplementation(function (this: Intl.DateTimeFormat) {
-            callCount++;
-            if (callCount === 1) {
-                throw new Error('Intl not supported in this environment');
-            }
-            return originalFn.call(this);
-        });
+        const spy = vi
+            .spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions')
+            .mockImplementation(function (this: Intl.DateTimeFormat) {
+                callCount++;
+                if (callCount === 1) {
+                    throw new Error('Intl not supported in this environment');
+                }
+                return originalFn.call(this);
+            });
 
         try {
-            server.use(
-                http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)),
-            );
+            server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(populatedResponse)));
             renderWithProviders(<Analytics />);
             await waitFor(() => {
                 expect(screen.getAllByText(/Coder/).length).toBeGreaterThan(0);
@@ -1141,9 +1221,7 @@ describe('Analytics page', () => {
         });
         // TerminalSessionsCard renders its empty state from the defaulted terminalSummary.
         await waitFor(() => {
-            expect(
-                screen.getAllByText(/No terminal sessions for/i).length,
-            ).toBeGreaterThan(0);
+            expect(screen.getAllByText(/No terminal sessions for/i).length).toBeGreaterThan(0);
         });
     });
 
@@ -1246,9 +1324,33 @@ describe('Analytics page', () => {
                 },
             ],
             byAgent: [
-                { agent_id: 'a1', agent_name: 'Alpha', total_cost_usd: 3.0, input_tokens: 3000, output_tokens: 1500, cache_read_tokens: 300, run_count: 3 },
-                { agent_id: 'a2', agent_name: 'Bravo', total_cost_usd: 3.0, input_tokens: 3000, output_tokens: 1500, cache_read_tokens: 300, run_count: 3 },
-                { agent_id: 'a3', agent_name: 'Charlie', total_cost_usd: 3.0, input_tokens: 3000, output_tokens: 1500, cache_read_tokens: 300, run_count: 3 },
+                {
+                    agent_id: 'a1',
+                    agent_name: 'Alpha',
+                    total_cost_usd: 3.0,
+                    input_tokens: 3000,
+                    output_tokens: 1500,
+                    cache_read_tokens: 300,
+                    run_count: 3,
+                },
+                {
+                    agent_id: 'a2',
+                    agent_name: 'Bravo',
+                    total_cost_usd: 3.0,
+                    input_tokens: 3000,
+                    output_tokens: 1500,
+                    cache_read_tokens: 300,
+                    run_count: 3,
+                },
+                {
+                    agent_id: 'a3',
+                    agent_name: 'Charlie',
+                    total_cost_usd: 3.0,
+                    input_tokens: 3000,
+                    output_tokens: 1500,
+                    cache_read_tokens: 300,
+                    run_count: 3,
+                },
             ],
             byProject: [],
             topRuns: [],
@@ -1350,7 +1452,9 @@ describe('Analytics page', () => {
                 },
             ],
         };
-        server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(isolatedFieldDaysResponse)));
+        server.use(
+            http.get(`${BASE}/analytics`, () => HttpResponse.json(isolatedFieldDaysResponse))
+        );
         renderWithProviders(<Analytics />);
         await waitFor(() => {
             expect(screen.getAllByText('Analytics').length).toBeGreaterThan(0);
@@ -1413,7 +1517,9 @@ describe('Analytics page', () => {
             ],
             topRuns: [],
         };
-        server.use(http.get(`${BASE}/analytics`, () => HttpResponse.json(singularActivityResponse)));
+        server.use(
+            http.get(`${BASE}/analytics`, () => HttpResponse.json(singularActivityResponse))
+        );
         renderWithProviders(<Analytics />);
         await waitFor(() => {
             expect(screen.getByText(/Activity/i)).toBeInTheDocument();

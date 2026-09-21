@@ -38,9 +38,9 @@ export function SpendByAgentCard({ byAgent, totalAgentCost }: Props) {
     const AGENT_RING = useMemo(
         () =>
             (CHART_RAMP_KEYS as readonly LabelColorKey[]).map(
-                (key) => LABEL_COLORS[key][mode].border,
+                (key) => LABEL_COLORS[key][mode].border
             ),
-        [mode],
+        [mode]
     );
 
     if (byAgent.length === 0) {
@@ -101,7 +101,10 @@ export function SpendByAgentCard({ byAgent, totalAgentCost }: Props) {
                                 {byAgent.slice(0, 8).map((_, i) => (
                                     <Cell
                                         key={i}
-                                        fill={AGENT_RING[i % AGENT_RING.length] ?? ATLAS_PALETTE.brandBlue}
+                                        fill={
+                                            AGENT_RING[i % AGENT_RING.length] ??
+                                            ATLAS_PALETTE.brandBlue
+                                        }
                                     />
                                 ))}
                             </Pie>
@@ -165,7 +168,8 @@ export function SpendByAgentCard({ byAgent, totalAgentCost }: Props) {
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     {byAgent.slice(0, 6).map((a, i) => {
-                        const pct = totalAgentCost > 0 ? (a.total_cost_usd / totalAgentCost) * 100 : 0;
+                        const pct =
+                            totalAgentCost > 0 ? (a.total_cost_usd / totalAgentCost) * 100 : 0;
                         return (
                             <Box
                                 key={a.agent_id}

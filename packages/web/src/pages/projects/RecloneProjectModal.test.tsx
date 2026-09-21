@@ -30,14 +30,20 @@ const statusOk = {
 beforeEach(() => {
     server.use(
         ...defaultHandlers,
-        http.get(`${BASE}/projects/p1/repos/r1/status`, () => HttpResponse.json(statusOk)),
+        http.get(`${BASE}/projects/p1/repos/r1/status`, () => HttpResponse.json(statusOk))
     );
 });
 
 describe('RecloneProjectModal — closed', () => {
     it('renders nothing when project is null', () => {
         const { container } = renderWithProviders(
-            <RecloneProjectModal open project={null} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={null}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         expect(container).toBeEmptyDOMElement();
     });
@@ -50,7 +56,7 @@ describe('RecloneProjectModal — closed', () => {
                 repo={null}
                 displayId="ACM"
                 onClose={vi.fn()}
-            />,
+            />
         );
         expect(container).toBeEmptyDOMElement();
     });
@@ -59,7 +65,13 @@ describe('RecloneProjectModal — closed', () => {
 describe('RecloneProjectModal — confirm view', () => {
     it('renders the dialog heading and project details', async () => {
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         expect(screen.getByText('Re-clone from remote?')).toBeInTheDocument();
         expect(screen.getByText('Acme')).toBeInTheDocument();
@@ -67,11 +79,15 @@ describe('RecloneProjectModal — confirm view', () => {
 
     it('shows git status once loaded', async () => {
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
-        await waitFor(() =>
-            expect(screen.getByText('abc123')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument());
         expect(screen.getByText('2 commits')).toBeInTheDocument();
         expect(screen.getByText('clean')).toBeInTheDocument();
     });
@@ -79,7 +95,13 @@ describe('RecloneProjectModal — confirm view', () => {
     it('Cancel button calls onClose', async () => {
         const onClose = vi.fn();
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={onClose}
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
         expect(onClose).toHaveBeenCalled();
@@ -88,73 +110,97 @@ describe('RecloneProjectModal — confirm view', () => {
     it('Stash & re-clone button starts reclone job', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-1' }),
-            ),
+                HttpResponse.json({ reclone_id: 'rc-1' })
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         // Wait for status to load before clicking submit
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() =>
-            expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
     });
 
     it('shows error alert when reclone API call fails', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ error: 'failed' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'failed' }, { status: 500 })
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() =>
-            expect(screen.getByRole('alert')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     });
 
     it('shows error when status endpoint fails', async () => {
         server.use(
             http.get(`${BASE}/projects/p1/repos/r1/status`, () =>
-                HttpResponse.json({ error: 'bad' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'bad' }, { status: 500 })
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         await waitFor(() =>
-            expect(screen.getByText(/Could not read git status/i)).toBeInTheDocument(),
+            expect(screen.getByText(/Could not read git status/i)).toBeInTheDocument()
         );
     });
 
     it('shows uncommitted warning when there are dirty files', async () => {
         server.use(
             http.get(`${BASE}/projects/p1/repos/r1/status`, () =>
-                HttpResponse.json({ ...statusOk, uncommitted: 3 }),
-            ),
+                HttpResponse.json({ ...statusOk, uncommitted: 3 })
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
-        await waitFor(() =>
-            expect(screen.getByText(/3 uncommitted files/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/3 uncommitted files/i)).toBeInTheDocument());
     });
 
     it('close button does nothing while reclone is running (handleClose guard)', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-guard' }),
-            ),
+                HttpResponse.json({ reclone_id: 'rc-guard' })
+            )
         );
         const onClose = vi.fn();
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={onClose}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -168,11 +214,17 @@ describe('RecloneProjectModal — confirm view', () => {
     it('transitions to success view and shows Open project button on reclone_completed SSE', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-ok' }),
-            ),
+                HttpResponse.json({ reclone_id: 'rc-ok' })
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -188,7 +240,7 @@ describe('RecloneProjectModal — confirm view', () => {
         });
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Open project/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /Open project/i })).toBeInTheDocument()
         );
         expect(screen.getByText('Project re-cloned')).toBeInTheDocument();
     });
@@ -196,11 +248,17 @@ describe('RecloneProjectModal — confirm view', () => {
     it('transitions to error view on reclone_error SSE and Try again resets to confirm', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-fail' }),
-            ),
+                HttpResponse.json({ reclone_id: 'rc-fail' })
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -214,26 +272,28 @@ describe('RecloneProjectModal — confirm view', () => {
             });
         });
 
-        await waitFor(() =>
-            expect(screen.getByText(/Re-clone failed/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Re-clone failed/i)).toBeInTheDocument());
         expect(screen.getByText(/fatal: diverged history/i)).toBeInTheDocument();
 
         // Click "Try again" — should go back to confirm view
         await userEvent.click(screen.getByRole('button', { name: /Try again/i }));
-        await waitFor(() =>
-            expect(screen.getByText('Re-clone from remote?')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Re-clone from remote?')).toBeInTheDocument());
     });
 
     it('shows deriveStepIndex progress when reclone_output lines match step keywords', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-steps' }),
-            ),
+                HttpResponse.json({ reclone_id: 'rc-steps' })
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -265,11 +325,9 @@ describe('RecloneProjectModal — confirm view', () => {
         // After these lines, stepIndex=3 so all steps show as done
         // The terminal output area should contain the lines
         await waitFor(() =>
-            expect(screen.getByText(/Stashing local changes/i)).toBeInTheDocument(),
+            expect(screen.getByText(/Stashing local changes/i)).toBeInTheDocument()
         );
-        await waitFor(() =>
-            expect(screen.getByText(/Fetching remote/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Fetching remote/i)).toBeInTheDocument());
     });
 
     it('shows "Original credential was deleted" error alert and Manage credentials button', async () => {
@@ -277,21 +335,25 @@ describe('RecloneProjectModal — confirm view', () => {
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json(
                     { error: 'Original credential was deleted — re-attach one first' },
-                    { status: 422 },
-                ),
-            ),
+                    { status: 422 }
+                )
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
         await waitFor(() =>
-            expect(screen.getByText(/Original credential was deleted/i)).toBeInTheDocument(),
+            expect(screen.getByText(/Original credential was deleted/i)).toBeInTheDocument()
         );
-        expect(
-            screen.getByRole('button', { name: /Manage credentials/i }),
-        ).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Manage credentials/i })).toBeInTheDocument();
     });
 
     // ─── Additional branch coverage ────────────────────────────────────────────
@@ -310,32 +372,32 @@ describe('RecloneProjectModal — confirm view', () => {
                 repo={noUrlRepo}
                 displayId="ACM"
                 onClose={vi.fn()}
-            />,
+            />
         );
         // The chip should display the git_path alone (no " · " separator)
-        await waitFor(() =>
-            expect(screen.getByText('/tmp/only-path')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('/tmp/only-path')).toBeInTheDocument());
         // Confirm we did NOT render the joined form with the URL separator
-        expect(
-            screen.queryByText(/https?:\/\/.*·.*\/tmp\/only-path/),
-        ).not.toBeInTheDocument();
+        expect(screen.queryByText(/https?:\/\/.*·.*\/tmp\/only-path/)).not.toBeInTheDocument();
     });
 
     it('deriveStepIndex matches /Re-indexing/i keyword via SSE output line', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-reidx' }),
-            ),
+                HttpResponse.json({ reclone_id: 'rc-reidx' })
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() =>
-            expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
 
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
@@ -346,25 +408,27 @@ describe('RecloneProjectModal — confirm view', () => {
         });
 
         // Step 3 of 3 indicates the /Re-indexing/i branch advanced stepIndex
-        await waitFor(() =>
-            expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument());
     });
 
     it('success view shows commits/files stats parsed from Fast-forward output', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-stats' }),
-            ),
+                HttpResponse.json({ reclone_id: 'rc-stats' })
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() =>
-            expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
 
         // Push a Fast-forward line so the regex populates `commits` and `files`
         act(() => {
@@ -388,28 +452,30 @@ describe('RecloneProjectModal — confirm view', () => {
                 screen.getByText(
                     (_, el) =>
                         el?.tagName === 'STRONG' &&
-                        /Fast-forwarded 7 commits.*42 files changed/i.test(
-                            el?.textContent ?? '',
-                        ),
-                ),
-            ).toBeInTheDocument(),
+                        /Fast-forwarded 7 commits.*42 files changed/i.test(el?.textContent ?? '')
+                )
+            ).toBeInTheDocument()
         );
     });
 
     it('success view shows stashPath when SSE includes a non-null stashPath', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-stash' }),
-            ),
+                HttpResponse.json({ reclone_id: 'rc-stash' })
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() =>
-            expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
 
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
@@ -420,26 +486,28 @@ describe('RecloneProjectModal — confirm view', () => {
         });
 
         await waitFor(() =>
-            expect(
-                screen.getByText(/\.atlas\/stash\/2026-06-25-abc/i),
-            ).toBeInTheDocument(),
+            expect(screen.getByText(/\.atlas\/stash\/2026-06-25-abc/i)).toBeInTheDocument()
         );
     });
 
     it('success view shows "Already up to date" when no commits regex matched', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-noop' }),
-            ),
+                HttpResponse.json({ reclone_id: 'rc-noop' })
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() =>
-            expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
 
         // Complete with no commits/files lines pushed → stats.commits === 0
         act(() => {
@@ -464,26 +532,30 @@ describe('RecloneProjectModal — confirm view', () => {
                 screen.getByText(
                     (_, el) =>
                         el?.tagName === 'STRONG' &&
-                        /Already up to date/i.test(el?.textContent ?? ''),
-                ),
-            ).toBeInTheDocument(),
+                        /Already up to date/i.test(el?.textContent ?? '')
+                )
+            ).toBeInTheDocument()
         );
     });
 
     it('error view falls back to job.lines when errorDetail is absent', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-no-detail' }),
-            ),
+                HttpResponse.json({ reclone_id: 'rc-no-detail' })
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() =>
-            expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
 
         // Push an output line first so job.lines is non-empty
         act(() => {
@@ -505,30 +577,30 @@ describe('RecloneProjectModal — confirm view', () => {
             });
         });
 
-        await waitFor(() =>
-            expect(screen.getByText(/Re-clone failed/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Re-clone failed/i)).toBeInTheDocument());
         // The stderr panel should fall back to job.lines content
-        expect(
-            screen.getByText(/some pre-error chatter/i),
-        ).toBeInTheDocument();
+        expect(screen.getByText(/some pre-error chatter/i)).toBeInTheDocument();
     });
 
     it('Open project button calls onClose and navigates to /projects/:id', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-open' }),
-            ),
+                HttpResponse.json({ reclone_id: 'rc-open' })
+            )
         );
         const onClose = vi.fn();
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={onClose}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() =>
-            expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
 
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
@@ -551,13 +623,19 @@ describe('RecloneProjectModal — confirm view', () => {
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json(
                     { error: 'Original credential was deleted — re-attach one first' },
-                    { status: 422 },
-                ),
-            ),
+                    { status: 422 }
+                )
+            )
         );
         const onClose = vi.fn();
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={onClose}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
@@ -569,49 +647,67 @@ describe('RecloneProjectModal — confirm view', () => {
     it('running view shows "Waiting for output…" fallback when no output lines have arrived', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-wait' }),
-            ),
+                HttpResponse.json({ reclone_id: 'rc-wait' })
+            )
         );
         renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={vi.fn()}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
 
         // Immediately after starting the job, no output lines have arrived yet.
         // The terminal box renders the fallback text.
-        await waitFor(() =>
-            expect(screen.getByText('Waiting for output…')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Waiting for output…')).toBeInTheDocument());
     });
 
     it('useEffect resets view to confirm and clears state when modal is closed (open=false)', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-reset' }),
-            ),
+                HttpResponse.json({ reclone_id: 'rc-reset' })
+            )
         );
         const onClose = vi.fn();
         const { rerender } = renderWithProviders(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={onClose}
+            />
         );
         await waitFor(() => screen.getByText('clean'));
         await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() =>
-            expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
 
         // Close the modal by setting open=false — the useEffect resets state back to confirm
         rerender(
-            <RecloneProjectModal open={false} project={project} repo={repo} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal
+                open={false}
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={onClose}
+            />
         );
 
         // Re-open — should be back at the confirm view with the project heading
         rerender(
-            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={onClose} />,
+            <RecloneProjectModal
+                open
+                project={project}
+                repo={repo}
+                displayId="ACM"
+                onClose={onClose}
+            />
         );
-        await waitFor(() =>
-            expect(screen.getByText('Re-clone from remote?')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Re-clone from remote?')).toBeInTheDocument());
     });
 });

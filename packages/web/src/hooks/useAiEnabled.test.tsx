@@ -9,8 +9,8 @@ describe('useAiEnabled', () => {
     it('returns aiEnabled=true when settings says ai_enabled=true', async () => {
         server.use(
             http.get('http://localhost:3000/api/settings', () =>
-                HttpResponse.json({ ai_enabled: true, owner_name: 'Owner', workspace_path: '/x' }),
-            ),
+                HttpResponse.json({ ai_enabled: true, owner_name: 'Owner', workspace_path: '/x' })
+            )
         );
         const { result } = renderHook(() => useAiEnabled(), { wrapper: makeWrapper() });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -20,8 +20,8 @@ describe('useAiEnabled', () => {
     it('returns aiEnabled=false when settings says ai_enabled=false', async () => {
         server.use(
             http.get('http://localhost:3000/api/settings', () =>
-                HttpResponse.json({ ai_enabled: false, owner_name: 'Owner', workspace_path: '/x' }),
-            ),
+                HttpResponse.json({ ai_enabled: false, owner_name: 'Owner', workspace_path: '/x' })
+            )
         );
         const { result } = renderHook(() => useAiEnabled(), { wrapper: makeWrapper() });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -30,7 +30,7 @@ describe('useAiEnabled', () => {
 
     it('returns aiEnabled=undefined while loading (so the Topbar can skip the chip until we know)', () => {
         server.use(
-            http.get('http://localhost:3000/api/settings', () => new Promise<Response>(() => {})),
+            http.get('http://localhost:3000/api/settings', () => new Promise<Response>(() => {}))
         );
         const { result } = renderHook(() => useAiEnabled(), { wrapper: makeWrapper() });
         expect(result.current.isLoading).toBe(true);

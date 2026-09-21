@@ -47,7 +47,7 @@ describe('AcceptUpgradeModal', () => {
                 marketplaceId="agent-coder"
                 onAccepted={() => {}}
                 onDismissed={() => {}}
-            />,
+            />
         );
         expect(screen.queryByText(/review marketplace upgrade/i)).not.toBeInTheDocument();
     });
@@ -55,8 +55,8 @@ describe('AcceptUpgradeModal', () => {
     it('renders the loading state then the diff body', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder/diff/agent-coder`, () =>
-                HttpResponse.json(diff),
-            ),
+                HttpResponse.json(diff)
+            )
         );
         renderWithProviders(
             <AcceptUpgradeModal
@@ -66,7 +66,7 @@ describe('AcceptUpgradeModal', () => {
                 marketplaceId="agent-coder"
                 onAccepted={() => {}}
                 onDismissed={() => {}}
-            />,
+            />
         );
         await waitFor(() => {
             expect(screen.getByText(/marketplace v4/i)).toBeInTheDocument();
@@ -76,10 +76,9 @@ describe('AcceptUpgradeModal', () => {
 
     it('shows an error state on diff fetch failure', async () => {
         server.use(
-            http.get(
-                `${BASE}/marketplace/agents/agent-coder/diff/agent-coder`,
-                () => HttpResponse.json({ error: 'boom' }, { status: 500 }),
-            ),
+            http.get(`${BASE}/marketplace/agents/agent-coder/diff/agent-coder`, () =>
+                HttpResponse.json({ error: 'boom' }, { status: 500 })
+            )
         );
         renderWithProviders(
             <AcceptUpgradeModal
@@ -89,7 +88,7 @@ describe('AcceptUpgradeModal', () => {
                 marketplaceId="agent-coder"
                 onAccepted={() => {}}
                 onDismissed={() => {}}
-            />,
+            />
         );
         await waitFor(() => {
             expect(screen.queryByText(/loading diff/i)).not.toBeInTheDocument();
@@ -100,8 +99,8 @@ describe('AcceptUpgradeModal', () => {
         const onClose = vi.fn();
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder/diff/agent-coder`, () =>
-                HttpResponse.json(diff),
-            ),
+                HttpResponse.json(diff)
+            )
         );
         renderWithProviders(
             <AcceptUpgradeModal
@@ -111,7 +110,7 @@ describe('AcceptUpgradeModal', () => {
                 marketplaceId="agent-coder"
                 onAccepted={() => {}}
                 onDismissed={() => {}}
-            />,
+            />
         );
         await waitFor(() => {
             expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
@@ -123,8 +122,8 @@ describe('AcceptUpgradeModal', () => {
     it('toggles a changed field checkbox to deselect it', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder/diff/agent-coder`, () =>
-                HttpResponse.json(diff),
-            ),
+                HttpResponse.json(diff)
+            )
         );
         renderWithProviders(
             <AcceptUpgradeModal
@@ -134,7 +133,7 @@ describe('AcceptUpgradeModal', () => {
                 marketplaceId="agent-coder"
                 onAccepted={() => {}}
                 onDismissed={() => {}}
-            />,
+            />
         );
         const cb = (await screen.findByRole('checkbox')) as HTMLInputElement;
         // Initially checked because prompt_md is changed.
@@ -149,8 +148,8 @@ describe('AcceptUpgradeModal', () => {
     it('renders the "no changes" message when nothing is different', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder/diff/agent-coder`, () =>
-                HttpResponse.json(diffNoChange),
-            ),
+                HttpResponse.json(diffNoChange)
+            )
         );
         renderWithProviders(
             <AcceptUpgradeModal
@@ -160,7 +159,7 @@ describe('AcceptUpgradeModal', () => {
                 marketplaceId="agent-coder"
                 onAccepted={() => {}}
                 onDismissed={() => {}}
-            />,
+            />
         );
         await waitFor(() => {
             expect(screen.getByText(/catalog version is identical/i)).toBeInTheDocument();
@@ -171,11 +170,11 @@ describe('AcceptUpgradeModal', () => {
         const onAccepted = vi.fn();
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder/diff/agent-coder`, () =>
-                HttpResponse.json(diff),
+                HttpResponse.json(diff)
             ),
             http.post(`${BASE}/agents/agent-coder/accept-upgrade`, () =>
-                HttpResponse.json({ id: 'agent-coder' }),
-            ),
+                HttpResponse.json({ id: 'agent-coder' })
+            )
         );
         renderWithProviders(
             <AcceptUpgradeModal
@@ -185,7 +184,7 @@ describe('AcceptUpgradeModal', () => {
                 marketplaceId="agent-coder"
                 onAccepted={onAccepted}
                 onDismissed={() => {}}
-            />,
+            />
         );
         const acceptBtn = await screen.findByRole('button', { name: /Accept selected/i });
         fireEvent.click(acceptBtn);
@@ -199,11 +198,11 @@ describe('AcceptUpgradeModal', () => {
         const onDismissed = vi.fn();
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder/diff/agent-coder`, () =>
-                HttpResponse.json(diff),
+                HttpResponse.json(diff)
             ),
             http.post(`${BASE}/agents/agent-coder/dismiss-upgrade`, () =>
-                HttpResponse.json({ id: 'agent-coder' }),
-            ),
+                HttpResponse.json({ id: 'agent-coder' })
+            )
         );
         renderWithProviders(
             <AcceptUpgradeModal
@@ -213,7 +212,7 @@ describe('AcceptUpgradeModal', () => {
                 marketplaceId="agent-coder"
                 onAccepted={() => {}}
                 onDismissed={onDismissed}
-            />,
+            />
         );
         const dismissBtn = await screen.findByRole('button', { name: /Dismiss upgrade/i });
         fireEvent.click(dismissBtn);
@@ -225,8 +224,8 @@ describe('AcceptUpgradeModal', () => {
     it('renders all changed JSON/text fields with their checkboxes', async () => {
         server.use(
             http.get(`${BASE}/marketplace/agents/agent-coder/diff/agent-coder`, () =>
-                HttpResponse.json(diffMultiChange),
-            ),
+                HttpResponse.json(diffMultiChange)
+            )
         );
         renderWithProviders(
             <AcceptUpgradeModal
@@ -236,7 +235,7 @@ describe('AcceptUpgradeModal', () => {
                 marketplaceId="agent-coder"
                 onAccepted={() => {}}
                 onDismissed={() => {}}
-            />,
+            />
         );
         await waitFor(() => {
             expect(screen.getByText('Apply Prompt')).toBeInTheDocument();

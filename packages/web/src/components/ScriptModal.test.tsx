@@ -6,24 +6,14 @@ import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 describe('ScriptModal', () => {
     it('does not render content when open=false', () => {
         renderWithProviders(
-            <ScriptModal
-                open={false}
-                editing={null}
-                onClose={() => {}}
-                onSubmit={() => {}}
-            />,
+            <ScriptModal open={false} editing={null} onClose={() => {}} onSubmit={() => {}} />
         );
         expect(screen.queryByText(/script/i)).not.toBeInTheDocument();
     });
 
     it('renders an empty form in add mode', () => {
         renderWithProviders(
-            <ScriptModal
-                open
-                editing={null}
-                onClose={() => {}}
-                onSubmit={() => {}}
-            />,
+            <ScriptModal open editing={null} onClose={() => {}} onSubmit={() => {}} />
         );
         const inputs = screen.getAllByRole('textbox');
         expect(inputs.length).toBeGreaterThan(0);
@@ -45,7 +35,7 @@ describe('ScriptModal', () => {
                 }}
                 onClose={() => {}}
                 onSubmit={() => {}}
-            />,
+            />
         );
         expect((screen.getByLabelText(/name/i) as HTMLInputElement).value).toBe('Lint');
     });
@@ -53,16 +43,11 @@ describe('ScriptModal', () => {
     it('keeps the submit button disabled while form is empty', () => {
         const onSubmit = vi.fn();
         renderWithProviders(
-            <ScriptModal
-                open
-                editing={null}
-                onClose={() => {}}
-                onSubmit={onSubmit}
-            />,
+            <ScriptModal open editing={null} onClose={() => {}} onSubmit={onSubmit} />
         );
-        const saveBtn = screen.getAllByRole('button').find((b) =>
-            /save|add|create/i.test(b.textContent ?? ''),
-        );
+        const saveBtn = screen
+            .getAllByRole('button')
+            .find((b) => /save|add|create/i.test(b.textContent ?? ''));
         expect(saveBtn).toBeDefined();
         expect(saveBtn).toBeDisabled();
     });
@@ -70,12 +55,7 @@ describe('ScriptModal', () => {
     it('enables submit once all required fields are filled', () => {
         const onSubmit = vi.fn();
         renderWithProviders(
-            <ScriptModal
-                open
-                editing={null}
-                onClose={() => {}}
-                onSubmit={onSubmit}
-            />,
+            <ScriptModal open editing={null} onClose={() => {}} onSubmit={onSubmit} />
         );
         fireEvent.change(screen.getByLabelText(/slug \(id\)/i), { target: { value: 'lint' } });
         fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: 'X' } });
@@ -85,9 +65,9 @@ describe('ScriptModal', () => {
         fireEvent.change(screen.getByLabelText(/\.ps1 body/i), {
             target: { value: 'echo' },
         });
-        const saveBtn = screen.getAllByRole('button').find((b) =>
-            /^(save|add script|create)$/i.test((b.textContent ?? '').trim()),
-        );
+        const saveBtn = screen
+            .getAllByRole('button')
+            .find((b) => /^(save|add script|create)$/i.test((b.textContent ?? '').trim()));
         expect(saveBtn).toBeDefined();
         expect(saveBtn).not.toBeDisabled();
     });
@@ -95,12 +75,7 @@ describe('ScriptModal', () => {
     it('fires onClose from the Cancel/Close trigger', () => {
         const onClose = vi.fn();
         renderWithProviders(
-            <ScriptModal
-                open
-                editing={null}
-                onClose={onClose}
-                onSubmit={() => {}}
-            />,
+            <ScriptModal open editing={null} onClose={onClose} onSubmit={() => {}} />
         );
         const buttons = screen.getAllByRole('button');
         const cancel = buttons.find((b) => /cancel|close/i.test(b.textContent ?? ''));
@@ -113,15 +88,12 @@ describe('ScriptModal', () => {
     it('handleSubmit shows error when slug is invalid in add mode (line 75 branch)', async () => {
         // In add mode, SLUG_RE.test fails for uppercase or special chars
         renderWithProviders(
-            <ScriptModal
-                open
-                editing={null}
-                onClose={() => {}}
-                onSubmit={() => {}}
-            />,
+            <ScriptModal open editing={null} onClose={() => {}} onSubmit={() => {}} />
         );
         // Fill all required fields but provide an invalid slug (uppercase letters fail SLUG_RE)
-        fireEvent.change(screen.getByLabelText(/slug \(id\)/i), { target: { value: 'Invalid_SLUG!' } });
+        fireEvent.change(screen.getByLabelText(/slug \(id\)/i), {
+            target: { value: 'Invalid_SLUG!' },
+        });
         fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: 'My Script' } });
         fireEvent.change(screen.getByLabelText(/\.sh body/i), { target: { value: 'echo hi' } });
         fireEvent.change(screen.getByLabelText(/\.ps1 body/i), { target: { value: 'echo hi' } });
@@ -133,14 +105,14 @@ describe('ScriptModal', () => {
         // slug = 'lint-' ends with hyphen, trim passes but SLUG_RE fails (must end with letter/digit)
         fireEvent.change(screen.getByLabelText(/slug \(id\)/i), { target: { value: 'lint-' } });
         // Now button is enabled (slug.trim() non-empty, name non-empty, bodies non-empty)
-        const saveBtn = screen.getAllByRole('button').find((b) =>
-            /^(save|add script|create)$/i.test((b.textContent ?? '').trim()),
-        );
+        const saveBtn = screen
+            .getAllByRole('button')
+            .find((b) => /^(save|add script|create)$/i.test((b.textContent ?? '').trim()));
         expect(saveBtn).toBeDefined();
         expect(saveBtn).not.toBeDisabled();
         fireEvent.click(saveBtn!);
         await waitFor(() =>
-            expect(screen.getByText(/slug must be lowercase/i)).toBeInTheDocument(),
+            expect(screen.getByText(/slug must be lowercase/i)).toBeInTheDocument()
         );
     });
 
@@ -153,13 +125,13 @@ describe('ScriptModal', () => {
                 editing={{ id: 's1', name: '', description: '', body_sh: 'echo', body_ps1: 'echo' }}
                 onClose={() => {}}
                 onSubmit={() => {}}
-            />,
+            />
         );
         // In edit mode the button is enabled when name.trim() is truthy — but we start with empty name
         // Check button is disabled (name is empty)
-        const saveBtn = screen.getAllByRole('button').find((b) =>
-            /^save changes$/i.test((b.textContent ?? '').trim()),
-        );
+        const saveBtn = screen
+            .getAllByRole('button')
+            .find((b) => /^save changes$/i.test((b.textContent ?? '').trim()));
         expect(saveBtn).toBeDefined();
         expect(saveBtn).toBeDisabled();
         // To exercise line 81 branch: programmatically call submit while name is empty.
@@ -180,12 +152,12 @@ describe('ScriptModal', () => {
                 editing={{ id: 's1', name: 'Lint', description: '', body_sh: '', body_ps1: 'echo' }}
                 onClose={() => {}}
                 onSubmit={() => {}}
-            />,
+            />
         );
         // Button is disabled in edit mode when body_sh is empty
-        const saveBtn = screen.getAllByRole('button').find((b) =>
-            /^save changes$/i.test((b.textContent ?? '').trim()),
-        );
+        const saveBtn = screen
+            .getAllByRole('button')
+            .find((b) => /^save changes$/i.test((b.textContent ?? '').trim()));
         expect(saveBtn).toBeDefined();
         expect(saveBtn).toBeDisabled();
     });
@@ -196,20 +168,24 @@ describe('ScriptModal', () => {
         renderWithProviders(
             <ScriptModal
                 open
-                editing={{ id: 's1', name: 'Lint', description: '', body_sh: 'echo', body_ps1: 'echo' }}
+                editing={{
+                    id: 's1',
+                    name: 'Lint',
+                    description: '',
+                    body_sh: 'echo',
+                    body_ps1: 'echo',
+                }}
                 onClose={onClose}
                 onSubmit={onSubmit}
-            />,
+            />
         );
-        const saveBtn = screen.getAllByRole('button').find((b) =>
-            /^save changes$/i.test((b.textContent ?? '').trim()),
-        );
+        const saveBtn = screen
+            .getAllByRole('button')
+            .find((b) => /^save changes$/i.test((b.textContent ?? '').trim()));
         expect(saveBtn).toBeDefined();
         expect(saveBtn).not.toBeDisabled();
         fireEvent.click(saveBtn!);
-        await waitFor(() =>
-            expect(screen.getByText('Server rejected')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Server rejected')).toBeInTheDocument());
         // onClose should NOT have been called (submit failed)
         expect(onClose).not.toHaveBeenCalled();
     });
@@ -219,18 +195,22 @@ describe('ScriptModal', () => {
         renderWithProviders(
             <ScriptModal
                 open
-                editing={{ id: 's1', name: 'Test', description: '', body_sh: 'echo', body_ps1: 'echo' }}
+                editing={{
+                    id: 's1',
+                    name: 'Test',
+                    description: '',
+                    body_sh: 'echo',
+                    body_ps1: 'echo',
+                }}
                 onClose={() => {}}
                 onSubmit={onSubmit}
-            />,
+            />
         );
-        const saveBtn = screen.getAllByRole('button').find((b) =>
-            /^save changes$/i.test((b.textContent ?? '').trim()),
-        );
+        const saveBtn = screen
+            .getAllByRole('button')
+            .find((b) => /^save changes$/i.test((b.textContent ?? '').trim()));
         fireEvent.click(saveBtn!);
-        await waitFor(() =>
-            expect(screen.getByText('raw string error')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('raw string error')).toBeInTheDocument());
     });
 
     it('renders Delete button in edit mode when onDelete is provided (line 213 branch)', () => {
@@ -238,11 +218,17 @@ describe('ScriptModal', () => {
         renderWithProviders(
             <ScriptModal
                 open
-                editing={{ id: 's1', name: 'Lint', description: '', body_sh: 'echo', body_ps1: 'echo' }}
+                editing={{
+                    id: 's1',
+                    name: 'Lint',
+                    description: '',
+                    body_sh: 'echo',
+                    body_ps1: 'echo',
+                }}
                 onClose={() => {}}
                 onSubmit={() => {}}
                 onDelete={onDelete}
-            />,
+            />
         );
         // Delete button should be rendered when isEdit && onDelete
         const deleteBtn = screen.getByRole('button', { name: /delete/i });
@@ -255,11 +241,17 @@ describe('ScriptModal', () => {
         renderWithProviders(
             <ScriptModal
                 open
-                editing={{ id: 's1', name: 'Lint', description: '', body_sh: 'echo', body_ps1: 'echo' }}
+                editing={{
+                    id: 's1',
+                    name: 'Lint',
+                    description: '',
+                    body_sh: 'echo',
+                    body_ps1: 'echo',
+                }}
                 onClose={onClose}
                 onSubmit={() => {}}
                 onDelete={onDelete}
-            />,
+            />
         );
         const deleteBtn = screen.getByRole('button', { name: /delete/i });
         fireEvent.click(deleteBtn);
@@ -272,17 +264,21 @@ describe('ScriptModal', () => {
         renderWithProviders(
             <ScriptModal
                 open
-                editing={{ id: 's1', name: 'Lint', description: '', body_sh: 'echo', body_ps1: 'echo' }}
+                editing={{
+                    id: 's1',
+                    name: 'Lint',
+                    description: '',
+                    body_sh: 'echo',
+                    body_ps1: 'echo',
+                }}
                 onClose={() => {}}
                 onSubmit={() => {}}
                 onDelete={onDelete}
-            />,
+            />
         );
         const deleteBtn = screen.getByRole('button', { name: /delete/i });
         fireEvent.click(deleteBtn);
-        await waitFor(() =>
-            expect(screen.getByText('Delete failed')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Delete failed')).toBeInTheDocument());
     });
 
     it('handleDelete early-return when editing.id missing (line 108 guard)', () => {
@@ -296,7 +292,7 @@ describe('ScriptModal', () => {
                 onClose={() => {}}
                 onSubmit={() => {}}
                 onDelete={onDelete}
-            />,
+            />
         );
         // Without id, isEdit is false → Delete button NOT rendered (isEdit && onDelete is false)
         expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
@@ -304,7 +300,7 @@ describe('ScriptModal', () => {
 
     it('shows "Add script" title in add mode and "Edit script" in edit mode', () => {
         const { unmount } = renderWithProviders(
-            <ScriptModal open editing={null} onClose={() => {}} onSubmit={() => {}} />,
+            <ScriptModal open editing={null} onClose={() => {}} onSubmit={() => {}} />
         );
         // "Add script" may appear multiple times (heading + submit button); at least one heading exists
         const headings = screen.getAllByRole('heading', { name: 'Add script' });
@@ -314,10 +310,16 @@ describe('ScriptModal', () => {
         renderWithProviders(
             <ScriptModal
                 open
-                editing={{ id: 's1', name: 'X', description: '', body_sh: 'echo', body_ps1: 'echo' }}
+                editing={{
+                    id: 's1',
+                    name: 'X',
+                    description: '',
+                    body_sh: 'echo',
+                    body_ps1: 'echo',
+                }}
                 onClose={() => {}}
                 onSubmit={() => {}}
-            />,
+            />
         );
         const editHeadings = screen.getAllByRole('heading', { name: 'Edit script' });
         expect(editHeadings.length).toBeGreaterThan(0);

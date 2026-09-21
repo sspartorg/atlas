@@ -14,7 +14,10 @@ export interface ICanvasContext {
     workflowsById: Map<string, IWorkflow>;
     errorNodeIds: Set<string>;
     runStates: Map<string, INodeRunInfo> | null;
-    delivery: Pick<IWorkflow, 'push_code' | 'raises_pr' | 'push_to_default' | 'input_kind' | 'trigger'> | null;
+    delivery: Pick<
+        IWorkflow,
+        'push_code' | 'raises_pr' | 'push_to_default' | 'input_kind' | 'trigger'
+    > | null;
 }
 
 export const CanvasContext = createContext<ICanvasContext>({
@@ -48,7 +51,12 @@ function Glyph({ name, color, bg }: { name: string; color: string; bg: string })
                 flexShrink: 0,
             }}
         >
-            <Box component="span" className="material-symbols-rounded" sx={{ fontSize: 18 }}>
+            <Box
+                component="span"
+                className="material-symbols-rounded"
+                aria-hidden="true"
+                sx={{ fontSize: 18 }}
+            >
                 {name}
             </Box>
         </Box>
@@ -100,6 +108,7 @@ function RunBadge({ info }: { info: INodeRunInfo }) {
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{
                         fontSize: 20,
                         color: STATE_BORDER[info.state],
@@ -111,7 +120,14 @@ function RunBadge({ info }: { info: INodeRunInfo }) {
                     {icon}
                 </Box>
             ) : (
-                <Box sx={{ p: 1.5, background: ATLAS_PALETTE.white, borderRadius: '50%', display: 'flex' }}>
+                <Box
+                    sx={{
+                        p: 1.5,
+                        background: ATLAS_PALETTE.white,
+                        borderRadius: '50%',
+                        display: 'flex',
+                    }}
+                >
                     <LiveDot size={8} label="Running" color="info" />
                 </Box>
             )}
@@ -188,7 +204,11 @@ function NodeShell({ id, selected, accent, children, handles, pill }: ShellProps
                 '& .wf-handle-pass': { background: ATLAS_PALETTE.success },
                 '& .wf-handle-fail': { background: ATLAS_PALETTE.error, top: '66%' },
                 // The side entry only matters for loops; keep it faint until hovered.
-                '& .wf-handle-loop': { background: ATLAS_PALETTE.slate40, top: '30%', opacity: 0.25 },
+                '& .wf-handle-loop': {
+                    background: ATLAS_PALETTE.slate40,
+                    top: '30%',
+                    opacity: 0.25,
+                },
                 '&:hover .wf-handle-loop': { opacity: 1 },
             }}
         >
@@ -272,7 +292,14 @@ function StartNode({ id, selected }: NodeProps<WfNode>) {
             id={id}
             selected={selected}
             pill
-            handles={<Handle type="source" position={Position.Bottom} id="pass" className="wf-handle-pass" />}
+            handles={
+                <Handle
+                    type="source"
+                    position={Position.Bottom}
+                    id="pass"
+                    className="wf-handle-pass"
+                />
+            }
         >
             <Glyph name="play_arrow" color={ATLAS_PALETTE.onAccent} bg={ATLAS_PALETTE.slate} />
             <Box sx={{ minWidth: 0 }}>
@@ -299,8 +326,18 @@ function AgentNode({ id, data, selected }: NodeProps<WfNode>) {
             handles={
                 <>
                     <TargetHandles />
-                    <Handle type="source" position={Position.Bottom} id="pass" className="wf-handle-pass" />
-                    <Handle type="source" position={Position.Right} id="fail" className="wf-handle-fail" />
+                    <Handle
+                        type="source"
+                        position={Position.Bottom}
+                        id="pass"
+                        className="wf-handle-pass"
+                    />
+                    <Handle
+                        type="source"
+                        position={Position.Right}
+                        id="fail"
+                        className="wf-handle-fail"
+                    />
                     <FailLabel />
                 </>
             }
@@ -312,7 +349,9 @@ function AgentNode({ id, data, selected }: NodeProps<WfNode>) {
             />
             <Box sx={{ minWidth: 0, pr: 8 }}>
                 <Title>{agent?.name ?? data.agent_id ?? 'Choose an agent'}</Title>
-                <Caption mono>{agent ? `${agent.cli} · ${agent.model} · ${agent.effort}` : 'not installed'}</Caption>
+                <Caption mono>
+                    {agent ? `${agent.cli} · ${agent.model} · ${agent.effort}` : 'not installed'}
+                </Caption>
             </Box>
         </NodeShell>
     );
@@ -326,7 +365,12 @@ function OwnerNode({ id, selected }: NodeProps<WfNode>) {
             handles={
                 <>
                     <TargetHandles />
-                    <Handle type="source" position={Position.Bottom} id="pass" className="wf-handle-pass" />
+                    <Handle
+                        type="source"
+                        position={Position.Bottom}
+                        id="pass"
+                        className="wf-handle-pass"
+                    />
                 </>
             }
         >
@@ -351,7 +395,12 @@ function SubtasksNode({ id, data, selected }: NodeProps<WfNode>) {
             handles={
                 <>
                     <TargetHandles />
-                    <Handle type="source" position={Position.Bottom} id="pass" className="wf-handle-pass" />
+                    <Handle
+                        type="source"
+                        position={Position.Bottom}
+                        id="pass"
+                        className="wf-handle-pass"
+                    />
                 </>
             }
         >
@@ -359,7 +408,9 @@ function SubtasksNode({ id, data, selected }: NodeProps<WfNode>) {
             <Box sx={{ minWidth: 0 }}>
                 <Title>{sub?.name ?? 'Sub-tasks'}</Title>
                 <Caption>
-                    {progress ? `${progress.done} of ${progress.started} sub-tasks done` : subtasksLabel(data.label)}
+                    {progress
+                        ? `${progress.done} of ${progress.started} sub-tasks done`
+                        : subtasksLabel(data.label)}
                 </Caption>
             </Box>
         </NodeShell>
@@ -369,12 +420,7 @@ function SubtasksNode({ id, data, selected }: NodeProps<WfNode>) {
 function EndNode({ id, selected }: NodeProps<WfNode>) {
     const { delivery } = useContext(CanvasContext);
     return (
-        <NodeShell
-            id={id}
-            selected={selected}
-            pill
-            handles={<TargetHandles />}
-        >
+        <NodeShell id={id} selected={selected} pill handles={<TargetHandles />}>
             <Glyph name="flag" color={ATLAS_PALETTE.successFg} bg={ATLAS_PALETTE.successSoft} />
             <Box sx={{ minWidth: 0 }}>
                 <Title>End</Title>

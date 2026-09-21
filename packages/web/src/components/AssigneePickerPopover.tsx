@@ -38,9 +38,7 @@ export function AssigneePickerPopover({
     const ownerAccent = settings?.accent_color ?? ATLAS_PALETTE.slate;
 
     const activeAgents = agents.filter((w: IAgent) => w.status === 'active');
-    const suggested = suggestedRole
-        ? activeAgents.filter((w) => w.role_id === suggestedRole)
-        : [];
+    const suggested = suggestedRole ? activeAgents.filter((w) => w.role_id === suggestedRole) : [];
     const others = activeAgents.filter((w) => !suggested.includes(w));
 
     const agentItem = (w: IAgent) => (
@@ -72,6 +70,7 @@ export function AssigneePickerPopover({
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 18, color: ATLAS_PALETTE.brandBlue }}
                 >
                     check
@@ -140,6 +139,7 @@ export function AssigneePickerPopover({
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 18, color: ATLAS_PALETTE.brandBlue }}
                     >
                         check

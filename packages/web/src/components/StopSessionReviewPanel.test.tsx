@@ -82,13 +82,11 @@ function stubPatch() {
                 truncated: false,
                 byte_size: 120,
             });
-        }),
+        })
     );
 }
 
-function renderPanel(
-    overrides: Partial<React.ComponentProps<typeof StopSessionReviewPanel>> = {},
-) {
+function renderPanel(overrides: Partial<React.ComponentProps<typeof StopSessionReviewPanel>> = {}) {
     const props: React.ComponentProps<typeof StopSessionReviewPanel> = {
         sessionId: 'sess-1',
         summary: SUMMARY,
@@ -162,7 +160,7 @@ describe('StopSessionReviewPanel', () => {
         stubPatch();
         renderPanel({ scope: 'committed' });
         expect(
-            screen.queryByRole('checkbox', { name: /stage src\/done\.ts/i }),
+            screen.queryByRole('checkbox', { name: /stage src\/done\.ts/i })
         ).not.toBeInTheDocument();
     });
 
@@ -213,7 +211,7 @@ describe('StopSessionReviewPanel', () => {
                         addEventListener: vi.fn(),
                         removeEventListener: vi.fn(),
                         dispatchEvent: vi.fn(),
-                    }) as unknown as MediaQueryList,
+                    }) as unknown as MediaQueryList
             );
         }
 
@@ -241,7 +239,7 @@ describe('StopSessionReviewPanel', () => {
             renderPanel();
             fireEvent.click(screen.getByText('foo.ts'));
             expect(
-                await screen.findByRole('button', { name: /back to file list/i }),
+                await screen.findByRole('button', { name: /back to file list/i })
             ).toBeInTheDocument();
         });
     });
@@ -249,7 +247,13 @@ describe('StopSessionReviewPanel', () => {
     it('handles a scope with no files', () => {
         const empty = {
             ...SUMMARY,
-            uncommitted: { files: [], total_files: 0, truncated: false, additions: 0, deletions: 0 },
+            uncommitted: {
+                files: [],
+                total_files: 0,
+                truncated: false,
+                additions: 0,
+                deletions: 0,
+            },
         };
         renderPanel({ summary: empty });
         expect(screen.getByText(/no changes in this view/i)).toBeInTheDocument();

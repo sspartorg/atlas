@@ -16,7 +16,7 @@ describe('AgenticDailyCard', () => {
                 runCount={0}
                 totalAgentTokens={0}
                 totalAgentCost={0}
-            />,
+            />
         );
         expect(screen.getByText(/No agent runs for May 2026/i)).toBeInTheDocument();
     });
@@ -33,7 +33,7 @@ describe('AgenticDailyCard', () => {
                 runCount={3}
                 totalAgentTokens={3_800}
                 totalAgentCost={1.3}
-            />,
+            />
         );
         expect(screen.getByText(/Autonomous runs — May 2026/i)).toBeInTheDocument();
         expect(screen.getByText(/2 active days/i)).toBeInTheDocument();

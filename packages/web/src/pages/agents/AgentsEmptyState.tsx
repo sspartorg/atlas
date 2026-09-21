@@ -15,6 +15,7 @@ export function AgentsEmptyState({ onBrowse }: Props) {
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 32, color: ATLAS_PALETTE.slate40 }}
                 >
                     smart_toy
@@ -34,6 +35,7 @@ export function AgentsEmptyState({ onBrowse }: Props) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 18 }}
                         >
                             storefront

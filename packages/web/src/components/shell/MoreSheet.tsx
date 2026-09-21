@@ -123,6 +123,7 @@ export function MoreSheet({ open, onClose }: Props) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 22 }}
                         >
                             close
@@ -151,6 +152,7 @@ export function MoreSheet({ open, onClose }: Props) {
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{
                                     fontSize: 24,
                                     color: ATLAS_PALETTE.slate60,
@@ -192,6 +194,7 @@ export function MoreSheet({ open, onClose }: Props) {
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 20, color: ATLAS_PALETTE.slate40 }}
                             >
                                 chevron_right

@@ -50,14 +50,25 @@ function OptionCard({ title, description, meta, selected, onClick, children }: O
                 border: `1.5px solid ${selected ? ATLAS_PALETTE.brandBlue : ATLAS_PALETTE.slate10}`,
                 background: selected ? ATLAS_PALETTE.accentSoft : ATLAS_PALETTE.white,
                 transition: 'border-color 120ms ease, background 120ms ease',
-                '&:hover': { borderColor: selected ? ATLAS_PALETTE.brandBlue : ATLAS_PALETTE.slate30 },
+                '&:hover': {
+                    borderColor: selected ? ATLAS_PALETTE.brandBlue : ATLAS_PALETTE.slate30,
+                },
             }}
         >
-            <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2 }}>
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: 'baseline',
+                    justifyContent: 'space-between',
+                    gap: 2,
+                }}
+            >
                 <Typography sx={{ fontSize: 14, fontWeight: 600, color: ATLAS_PALETTE.slate }}>
                     {title}
                 </Typography>
-                <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, whiteSpace: 'nowrap' }}>
+                <Typography
+                    sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, whiteSpace: 'nowrap' }}
+                >
                     {meta}
                 </Typography>
             </Box>
@@ -69,7 +80,13 @@ function OptionCard({ title, description, meta, selected, onClick, children }: O
     );
 }
 
-export function AgentChips({ ids, agentsById }: { ids: string[]; agentsById: Map<string, Pick<IAgent, 'name' | 'accent_color'>> }) {
+export function AgentChips({
+    ids,
+    agentsById,
+}: {
+    ids: string[];
+    agentsById: Map<string, Pick<IAgent, 'name' | 'accent_color'>>;
+}) {
     return (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 2 }}>
             {ids.map((id, i) => {
@@ -139,7 +156,10 @@ export function NewWorkflowDialog({
     async function handleCreate() {
         const wf =
             choice === BLANK
-                ? await createBlank.mutateAsync({ name: 'Untitled workflow', project_id: projectId })
+                ? await createBlank.mutateAsync({
+                      name: 'Untitled workflow',
+                      project_id: projectId,
+                  })
                 : await createFromTemplate.mutateAsync({ templateId: choice, projectId });
         onClose();
         navigate(`/workflows/${wf.id}`);
@@ -148,7 +168,9 @@ export function NewWorkflowDialog({
     return (
         <Dialog open={open} onClose={pending ? undefined : onClose} maxWidth="md" fullWidth>
             <DialogTitle sx={{ fontSize: 18, fontWeight: 600, pb: 2 }}>New workflow</DialogTitle>
-            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 4, pt: '8px !important' }}>
+            <DialogContent
+                sx={{ display: 'flex', flexDirection: 'column', gap: 4, pt: '8px !important' }}
+            >
                 <TextField
                     select
                     label="Project"
@@ -196,7 +218,8 @@ export function NewWorkflowDialog({
 
                 {missing.length > 0 && (
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
-                        Installs from the marketplace: {missing.map((id) => agentLabel(id, agentsById)).join(', ')}
+                        Installs from the marketplace:{' '}
+                        {missing.map((id) => agentLabel(id, agentsById)).join(', ')}
                     </Typography>
                 )}
                 {error && <Alert severity="error">{error.message}</Alert>}

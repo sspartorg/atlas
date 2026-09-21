@@ -52,7 +52,7 @@ export function SetupTab({ projectId }: Props) {
         () =>
             repo !== undefined &&
             (sh !== (repo.setup_sh_body ?? '') || ps1 !== (repo.setup_ps1_body ?? '')),
-        [repo, sh, ps1],
+        [repo, sh, ps1]
     );
 
     async function handleSave(): Promise<void> {
@@ -64,7 +64,7 @@ export function SetupTab({ projectId }: Props) {
             },
             {
                 onSuccess: () => toast.show({ message: 'Setup scripts saved' }),
-            },
+            }
         );
     }
 
@@ -79,8 +79,8 @@ export function SetupTab({ projectId }: Props) {
     if (!repo) {
         return (
             <Alert severity="info">
-                This project has no repos yet. Setup scripts belong to a repo — add one on the
-                Repos tab.
+                This project has no repos yet. Setup scripts belong to a repo — add one on the Repos
+                tab.
             </Alert>
         );
     }
@@ -120,10 +120,10 @@ export function SetupTab({ projectId }: Props) {
                         }}
                     >
                         Runs in this repo&apos;s fresh worktree before the agent CLI starts —
-                        symlinks, env-file generation, system checks, anything project-specific.
-                        The API host runs the PowerShell body on Windows and the shell body
-                        elsewhere; leave blank if not needed. A failing script ends the run as
-                        setup failed and the CLI never starts.
+                        symlinks, env-file generation, system checks, anything project-specific. The
+                        API host runs the PowerShell body on Windows and the shell body elsewhere;
+                        leave blank if not needed. A failing script ends the run as setup failed and
+                        the CLI never starts.
                     </Typography>
                 </Box>
                 <Button
@@ -208,9 +208,9 @@ export function SetupTab({ projectId }: Props) {
                     <Box component="span" sx={{ fontFamily: MONO, color: ATLAS_PALETTE.slate }}>
                         ${'{variable.KEY}'}
                     </Box>{' '}
-                    anywhere in the script body. Before the orchestrator runs the script it
-                    replaces each placeholder with the resolved value — the substituted text is
-                    what actually gets executed, so the shell never sees{' '}
+                    anywhere in the script body. Before the orchestrator runs the script it replaces
+                    each placeholder with the resolved value — the substituted text is what actually
+                    gets executed, so the shell never sees{' '}
                     <Box component="span" sx={{ fontFamily: MONO }}>
                         ${'{variable.…}'}
                     </Box>
@@ -260,8 +260,8 @@ export function SetupTab({ projectId }: Props) {
                     </li>
                     <li>
                         Values resolve from <strong>Settings &gt; Shared Secrets</strong> first,
-                        then <strong>Project &gt; Manage Secrets</strong> — project entries
-                        override shared ones on key collision.
+                        then <strong>Project &gt; Manage Secrets</strong> — project entries override
+                        shared ones on key collision.
                     </li>
                     <li>
                         Native shell expansions like{' '}

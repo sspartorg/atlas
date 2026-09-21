@@ -47,7 +47,7 @@ export function NotificationsTab() {
 
     const qc = useQueryClient();
     const [provider, setProvider] = useState<ExternalNotificationProvider>(
-        settings?.external_notification_provider ?? 'telegram',
+        settings?.external_notification_provider ?? 'telegram'
     );
     const [token, setToken] = useState(settings?.external_notification_token ?? '');
     const [chatId, setChatId] = useState(settings?.external_notification_chat_id ?? '');
@@ -65,11 +65,11 @@ export function NotificationsTab() {
     const [revealedWebhook, setRevealedWebhook] = useState<string | null>(null);
     const tokenIsStored = Boolean(
         (settings as unknown as { external_notification_token_set?: boolean } | undefined)
-            ?.external_notification_token_set,
+            ?.external_notification_token_set
     );
     const webhookIsStored = Boolean(
         (settings as unknown as { external_notification_webhook_url_set?: boolean } | undefined)
-            ?.external_notification_webhook_url_set,
+            ?.external_notification_webhook_url_set
     );
 
     useEffect(() => {
@@ -132,7 +132,7 @@ export function NotificationsTab() {
         setProvider(next);
         updateExternal.mutate(
             { external_notification_provider: next },
-            { onSuccess: () => toast.show({ message: `Provider set to ${providerLabel(next)}` }) },
+            { onSuccess: () => toast.show({ message: `Provider set to ${providerLabel(next)}` }) }
         );
     }
 
@@ -146,7 +146,7 @@ export function NotificationsTab() {
         if (trimmed.length === 0) return;
         updateExternal.mutate(
             { external_notification_webhook_url: trimmed },
-            { onSuccess: () => toast.show({ message: 'Webhook URL saved' }) },
+            { onSuccess: () => toast.show({ message: 'Webhook URL saved' }) }
         );
     }
 
@@ -223,7 +223,11 @@ export function NotificationsTab() {
             if (r.ok) {
                 toast.show({ message: 'Test message sent' });
             } else {
-                toast.show(r.error ? { message: 'Test failed', detail: r.error } : { message: 'Test failed' });
+                toast.show(
+                    r.error
+                        ? { message: 'Test failed', detail: r.error }
+                        : { message: 'Test failed' }
+                );
             }
         } finally {
             setTesting(false);
@@ -255,7 +259,9 @@ export function NotificationsTab() {
 
     // Terminal idle threshold (minutes). Server stores seconds; UI prefers
     // minutes because the practical range is 1-60.
-    const idleMinutesFromSettings = Math.round((settings?.terminal_idle_notify_seconds ?? 300) / 60);
+    const idleMinutesFromSettings = Math.round(
+        (settings?.terminal_idle_notify_seconds ?? 300) / 60
+    );
     const [idleMinutes, setIdleMinutes] = useState(idleMinutesFromSettings);
     useEffect(() => {
         setIdleMinutes(idleMinutesFromSettings);
@@ -269,7 +275,7 @@ export function NotificationsTab() {
         }
         updateNotifications.mutate(
             { terminal_idle_notify_seconds: idleMinutes * 60 },
-            { onSuccess: () => toast.show({ message: 'Idle threshold saved' }) },
+            { onSuccess: () => toast.show({ message: 'Idle threshold saved' }) }
         );
     }
 
@@ -303,8 +309,7 @@ export function NotificationsTab() {
         if (value) {
             if (!settings?.quiet_hours_from) patch.quiet_hours_from = quietFrom;
             if (!settings?.quiet_hours_to) patch.quiet_hours_to = quietTo;
-            if (!settings?.quiet_hours_timezone)
-                patch.quiet_hours_timezone = detectedTimezone;
+            if (!settings?.quiet_hours_timezone) patch.quiet_hours_timezone = detectedTimezone;
         }
         updateNotifications.mutate(patch, {
             onSuccess: () =>
@@ -354,10 +359,6 @@ export function NotificationsTab() {
                                             ? '••••  Stored — click 🔍 to reveal, or type to replace'
                                             : '123456789:ABC-def…'
                                     }
-                                    // If a revealed value is displayed, prevent
-                                    // accidental edits — Owner explicitly
-                                    // hides or waits for auto-mask.
-                                    InputProps={{ readOnly: revealedToken !== null }}
                                     // Mono font for the visible token, system font when
                                     // masked — mono's bullets are wide and look chunky
                                     // on iOS where the input is forced to 16 px.
@@ -370,6 +371,16 @@ export function NotificationsTab() {
                                     }}
                                     slotProps={{
                                         input: {
+                                            // If a revealed value is displayed, prevent
+                                            // accidental edits — Owner explicitly
+                                            // hides or waits for auto-mask. This MUST
+                                            // live in `slotProps.input`: MUI v7 ignores
+                                            // the deprecated `InputProps` entirely once
+                                            // `slotProps.input` is present, so the
+                                            // read-only guard silently did nothing here
+                                            // and one stray keystroke on a revealed
+                                            // token committed a mangled value on blur.
+                                            readOnly: revealedToken !== null,
                                             endAdornment: (
                                                 <InputAdornment position="end">
                                                     <IconButton
@@ -396,9 +407,13 @@ export function NotificationsTab() {
                                                         sx={{ color: ATLAS_PALETTE.slate60 }}
                                                     >
                                                         {showToken || revealedToken !== null ? (
-                                                            <VisibilityOffOutlined sx={{ fontSize: 18 }} />
+                                                            <VisibilityOffOutlined
+                                                                sx={{ fontSize: 18 }}
+                                                            />
                                                         ) : (
-                                                            <VisibilityOutlined sx={{ fontSize: 18 }} />
+                                                            <VisibilityOutlined
+                                                                sx={{ fontSize: 18 }}
+                                                            />
                                                         )}
                                                     </IconButton>
                                                 </InputAdornment>
@@ -428,7 +443,11 @@ export function NotificationsTab() {
                                 <TextField
                                     fullWidth
                                     size="small"
-                                    type={showWebhook || revealedWebhook !== null ? 'text' : 'password'}
+                                    type={
+                                        showWebhook || revealedWebhook !== null
+                                            ? 'text'
+                                            : 'password'
+                                    }
                                     value={revealedWebhook ?? webhookUrl}
                                     onChange={(e) => {
                                         setRevealedWebhook(null);
@@ -440,16 +459,25 @@ export function NotificationsTab() {
                                             ? '••••  Stored — click 🔍 to reveal, or type to replace'
                                             : 'https://…powerautomate.com/…/triggers/manual/paths/invoke?…sig=…'
                                     }
-                                    InputProps={{ readOnly: revealedWebhook !== null }}
                                     inputProps={{
                                         style: {
-                                            fontFamily: showWebhook || revealedWebhook !== null ? MONO : 'inherit',
+                                            fontFamily:
+                                                showWebhook || revealedWebhook !== null
+                                                    ? MONO
+                                                    : 'inherit',
                                             fontSize: 13,
-                                            letterSpacing: showWebhook || revealedWebhook !== null ? 'normal' : '0.05em',
+                                            letterSpacing:
+                                                showWebhook || revealedWebhook !== null
+                                                    ? 'normal'
+                                                    : '0.05em',
                                         },
                                     }}
                                     slotProps={{
                                         input: {
+                                            // Same as the token field above: `readOnly`
+                                            // has to be here, not on `InputProps`, or
+                                            // MUI v7 drops it.
+                                            readOnly: revealedWebhook !== null,
                                             endAdornment: (
                                                 <InputAdornment position="end">
                                                     <IconButton
@@ -473,9 +501,13 @@ export function NotificationsTab() {
                                                         sx={{ color: ATLAS_PALETTE.slate60 }}
                                                     >
                                                         {showWebhook || revealedWebhook !== null ? (
-                                                            <VisibilityOffOutlined sx={{ fontSize: 18 }} />
+                                                            <VisibilityOffOutlined
+                                                                sx={{ fontSize: 18 }}
+                                                            />
                                                         ) : (
-                                                            <VisibilityOutlined sx={{ fontSize: 18 }} />
+                                                            <VisibilityOutlined
+                                                                sx={{ fontSize: 18 }}
+                                                            />
                                                         )}
                                                     </IconButton>
                                                 </InputAdornment>

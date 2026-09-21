@@ -23,17 +23,15 @@ describe('ThemeModeToggle', () => {
 
     it('Light segment is checked when mode is light', () => {
         renderWithProviders(<ThemeModeToggle />);
-        const lightRadio = screen.getAllByRole('radio').find(
-            (r) => r.textContent?.includes('Light'),
-        );
+        const lightRadio = screen
+            .getAllByRole('radio')
+            .find((r) => r.textContent?.includes('Light'));
         expect(lightRadio).toHaveAttribute('aria-checked', 'true');
     });
 
     it('clicking Dark changes active segment', () => {
         renderWithProviders(<ThemeModeToggle />);
-        const darkRadio = screen.getAllByRole('radio').find(
-            (r) => r.textContent?.includes('Dark'),
-        );
+        const darkRadio = screen.getAllByRole('radio').find((r) => r.textContent?.includes('Dark'));
         fireEvent.click(darkRadio!);
         // Dark should now be checked
         expect(darkRadio).toHaveAttribute('aria-checked', 'true');
@@ -41,77 +39,77 @@ describe('ThemeModeToggle', () => {
 
     it('clicking Light segment sets mode to light', () => {
         renderWithProviders(<ThemeModeToggle />);
-        const lightRadio = screen.getAllByRole('radio').find(
-            (r) => r.textContent?.includes('Light'),
-        );
+        const lightRadio = screen
+            .getAllByRole('radio')
+            .find((r) => r.textContent?.includes('Light'));
         fireEvent.click(lightRadio!);
         expect(lightRadio).toHaveAttribute('aria-checked', 'true');
     });
 
     it('Enter key activates the segment', () => {
         renderWithProviders(<ThemeModeToggle />);
-        const darkRadio = screen.getAllByRole('radio').find(
-            (r) => r.textContent?.includes('Dark'),
-        )!;
+        const darkRadio = screen
+            .getAllByRole('radio')
+            .find((r) => r.textContent?.includes('Dark'))!;
         fireEvent.keyDown(darkRadio, { key: 'Enter' });
         expect(darkRadio).toHaveAttribute('aria-checked', 'true');
     });
 
     it('Space key activates the segment', () => {
         renderWithProviders(<ThemeModeToggle />);
-        const darkRadio = screen.getAllByRole('radio').find(
-            (r) => r.textContent?.includes('Dark'),
-        )!;
+        const darkRadio = screen
+            .getAllByRole('radio')
+            .find((r) => r.textContent?.includes('Dark'))!;
         fireEvent.keyDown(darkRadio, { key: ' ' });
         expect(darkRadio).toHaveAttribute('aria-checked', 'true');
     });
 
     it('ArrowRight key moves to next segment', () => {
         renderWithProviders(<ThemeModeToggle />);
-        const lightRadio = screen.getAllByRole('radio').find(
-            (r) => r.textContent?.includes('Light'),
-        )!;
+        const lightRadio = screen
+            .getAllByRole('radio')
+            .find((r) => r.textContent?.includes('Light'))!;
         fireEvent.keyDown(lightRadio, { key: 'ArrowRight' });
-        const darkRadio = screen.getAllByRole('radio').find(
-            (r) => r.textContent?.includes('Dark'),
-        )!;
+        const darkRadio = screen
+            .getAllByRole('radio')
+            .find((r) => r.textContent?.includes('Dark'))!;
         expect(darkRadio).toHaveAttribute('aria-checked', 'true');
     });
 
     it('ArrowDown key moves to next segment', () => {
         renderWithProviders(<ThemeModeToggle />);
-        const lightRadio = screen.getAllByRole('radio').find(
-            (r) => r.textContent?.includes('Light'),
-        )!;
+        const lightRadio = screen
+            .getAllByRole('radio')
+            .find((r) => r.textContent?.includes('Light'))!;
         fireEvent.keyDown(lightRadio, { key: 'ArrowDown' });
-        const darkRadio = screen.getAllByRole('radio').find(
-            (r) => r.textContent?.includes('Dark'),
-        )!;
+        const darkRadio = screen
+            .getAllByRole('radio')
+            .find((r) => r.textContent?.includes('Dark'))!;
         expect(darkRadio).toHaveAttribute('aria-checked', 'true');
     });
 
     it('ArrowLeft key moves to previous segment (wraps)', () => {
         renderWithProviders(<ThemeModeToggle />);
-        const lightRadio = screen.getAllByRole('radio').find(
-            (r) => r.textContent?.includes('Light'),
-        )!;
+        const lightRadio = screen
+            .getAllByRole('radio')
+            .find((r) => r.textContent?.includes('Light'))!;
         // ArrowLeft from Light wraps to Dark
         fireEvent.keyDown(lightRadio, { key: 'ArrowLeft' });
-        const darkRadio = screen.getAllByRole('radio').find(
-            (r) => r.textContent?.includes('Dark'),
-        )!;
+        const darkRadio = screen
+            .getAllByRole('radio')
+            .find((r) => r.textContent?.includes('Dark'))!;
         expect(darkRadio).toHaveAttribute('aria-checked', 'true');
     });
 
     it('ArrowUp key moves to previous segment', () => {
         renderWithProviders(<ThemeModeToggle />);
-        const lightRadio = screen.getAllByRole('radio').find(
-            (r) => r.textContent?.includes('Light'),
-        )!;
+        const lightRadio = screen
+            .getAllByRole('radio')
+            .find((r) => r.textContent?.includes('Light'))!;
         fireEvent.keyDown(lightRadio, { key: 'ArrowUp' });
-        const darkRadio = screen.getAllByRole('radio').find(
-            (r) => r.textContent?.includes('Dark'),
-        )!;
+        const darkRadio = screen
+            .getAllByRole('radio')
+            .find((r) => r.textContent?.includes('Dark'))!;
         expect(darkRadio).toHaveAttribute('aria-checked', 'true');
     });
 });

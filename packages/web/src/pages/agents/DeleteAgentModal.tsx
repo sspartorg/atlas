@@ -51,8 +51,8 @@ export function DeleteAgentModal({ open, agent, busy = false, onConfirm, onClose
             </DialogTitle>
             <DialogContent sx={{ pt: 1 }}>
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate70, mb: 2 }}>
-                    Removes this agent from Atlas. Its prompt, checklist, allowed tools,
-                    memory, and run history are wiped. This cannot be undone.
+                    Removes this agent from Atlas. Its prompt, checklist, allowed tools, memory, and
+                    run history are wiped. This cannot be undone.
                 </Typography>
                 <Alert
                     severity="warning"
@@ -63,8 +63,8 @@ export function DeleteAgentModal({ open, agent, busy = false, onConfirm, onClose
                         '& .MuiAlert-message': { fontSize: 12, lineHeight: 1.5 },
                     }}
                 >
-                    Queued runs assigned to <strong>{agent.name}</strong> are dropped — they
-                    will not re-route to another agent automatically.
+                    Queued runs assigned to <strong>{agent.name}</strong> are dropped — they will
+                    not re-route to another agent automatically.
                 </Alert>
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 3 }}>

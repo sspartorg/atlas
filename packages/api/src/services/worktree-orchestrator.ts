@@ -216,7 +216,7 @@ interface GitInvokeContext {
 
 // F-009 — discard any uncommitted state in the worktree before
 // operations that refuse dirty trees (rebase, ff-only pull). The
-// project setup-script (e.g. mono-repo's SUNNY.md regeneration)
+// project setup-script (one that regenerates a tracked file, say)
 // re-creates files on every provision, leaving the worktree dirty
 // even though no agent has committed yet. Every legitimate agent
 // run commits its changes before exit + the cleanup deletes the
@@ -1037,10 +1037,10 @@ async function openPullRequestInner(opts: {
     }
     const gitConfigPath = gitAuth.configPath;
     const env = gitInvokeEnv(gitConfigPath, gitAuth.token);
-    // Migration 025 — when the credential has a `human_gh_login`, mirror
-    // the isw-CDM-Next/cdmnext-claude-bot playbook: assign the human as
-    // PR assignee, and prepend `Requested-By: @<login>` to the body so
-    // the PR is traceable to the human even when the App is the author.
+    // Migration 025 — when the credential has a `human_gh_login`, assign
+    // the human as PR assignee and prepend `Requested-By: @<login>` to
+    // the body, so the PR is traceable to the human even when the App is
+    // the author and review requests land on a person, not a bot.
     // Both are no-ops if the credential is a PAT or the human_gh_login
     // is null.
     const humanBody =

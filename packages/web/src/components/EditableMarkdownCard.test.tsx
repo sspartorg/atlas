@@ -8,7 +8,7 @@ describe('EditableMarkdownCard', () => {
     it('renders read-mode body and toggles to edit', async () => {
         const onSave = vi.fn().mockResolvedValue(undefined);
         renderWithProviders(
-            <EditableMarkdownCard title="Plan" value="# heading" onSave={onSave} />,
+            <EditableMarkdownCard title="Plan" value="# heading" onSave={onSave} />
         );
         expect(screen.getByText('Plan')).toBeInTheDocument();
         await userEvent.click(screen.getByRole('button', { name: /Edit/i }));
@@ -23,7 +23,7 @@ describe('EditableMarkdownCard', () => {
                 value={null}
                 onSave={onSave}
                 emptyHint="Click to write"
-            />,
+            />
         );
         await userEvent.click(screen.getByText('Click to write'));
         expect(screen.getByRole('textbox')).toBeInTheDocument();
@@ -31,9 +31,7 @@ describe('EditableMarkdownCard', () => {
 
     it('saves the draft on Save', async () => {
         const onSave = vi.fn().mockResolvedValue(undefined);
-        renderWithProviders(
-            <EditableMarkdownCard title="Plan" value="existing" onSave={onSave} />,
-        );
+        renderWithProviders(<EditableMarkdownCard title="Plan" value="existing" onSave={onSave} />);
         await userEvent.click(screen.getByRole('button', { name: /Edit/i }));
         const tb = screen.getByRole('textbox');
         await userEvent.clear(tb);
@@ -44,9 +42,7 @@ describe('EditableMarkdownCard', () => {
 
     it('Cancel button leaves edit mode without saving', async () => {
         const onSave = vi.fn();
-        renderWithProviders(
-            <EditableMarkdownCard title="Plan" value="existing" onSave={onSave} />,
-        );
+        renderWithProviders(<EditableMarkdownCard title="Plan" value="existing" onSave={onSave} />);
         await userEvent.click(screen.getByRole('button', { name: /Edit/i }));
         expect(screen.getByRole('textbox')).toBeInTheDocument();
         await userEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
@@ -61,7 +57,7 @@ describe('EditableMarkdownCard', () => {
                 value="some body text"
                 onSave={vi.fn()}
                 meta={<span data-testid="meta-slot">By Alice</span>}
-            />,
+            />
         );
         expect(screen.getByTestId('meta-slot')).toBeInTheDocument();
         // meta is NOT rendered in edit mode
@@ -74,7 +70,7 @@ describe('EditableMarkdownCard', () => {
                 value="body"
                 onSave={vi.fn()}
                 meta={<span data-testid="meta-slot">By Alice</span>}
-            />,
+            />
         );
         expect(screen.getByTestId('meta-slot')).toBeInTheDocument();
         await userEvent.click(screen.getByRole('button', { name: /Edit/i }));
@@ -85,7 +81,7 @@ describe('EditableMarkdownCard', () => {
     it('disables Save and Cancel when saving=true', async () => {
         const onSave = vi.fn();
         renderWithProviders(
-            <EditableMarkdownCard title="Plan" value="existing" onSave={onSave} saving />,
+            <EditableMarkdownCard title="Plan" value="existing" onSave={onSave} saving />
         );
         await userEvent.click(screen.getByRole('button', { name: /Edit/i }));
         const saveBtn = screen.getByRole('button', { name: /^Save$/ });
@@ -95,9 +91,7 @@ describe('EditableMarkdownCard', () => {
     });
 
     it('shows default empty hint "Click to add…" when no emptyHint provided', async () => {
-        renderWithProviders(
-            <EditableMarkdownCard title="Plan" value={null} onSave={vi.fn()} />,
-        );
+        renderWithProviders(<EditableMarkdownCard title="Plan" value={null} onSave={vi.fn()} />);
         expect(screen.getByText('Click to add…')).toBeInTheDocument();
         // Click the default hint to enter edit mode
         await userEvent.click(screen.getByText('Click to add…'));

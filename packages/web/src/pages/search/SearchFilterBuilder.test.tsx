@@ -22,7 +22,7 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         expect(container.firstChild).toBeInTheDocument();
     });
@@ -43,7 +43,7 @@ describe('SearchFilterBuilder', () => {
                 resultCount={2}
                 resultTypeCount={2}
                 availableLabels={['urgent', 'frontend']}
-            />,
+            />
         );
         // Verifies every pill renders its label + value.
         expect(screen.getByText('Type:')).toBeInTheDocument();
@@ -61,7 +61,7 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={1}
                 resultTypeCount={1}
-            />,
+            />
         );
         expect(screen.getByText(/1 result$/)).toBeInTheDocument();
         expect(screen.getByText(/1 type$/)).toBeInTheDocument();
@@ -75,7 +75,7 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         openAddMenu();
         expect(screen.getByRole('menuitem', { name: 'Type' })).toBeInTheDocument();
@@ -94,16 +94,14 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         openAddMenu();
         fireEvent.click(screen.getByRole('menuitem', { name: 'Type' }));
         // The type submenu renders one menuitem per type; click "Task".
         const taskItem = screen.getByRole('menuitem', { name: /^Task/ });
         fireEvent.click(taskItem);
-        expect(setFilters).toHaveBeenCalledWith(
-            expect.objectContaining({ types: ['task'] }),
-        );
+        expect(setFilters).toHaveBeenCalledWith(expect.objectContaining({ types: ['task'] }));
         // Re-render with the task already selected; clicking it again removes it.
         rerender(
             <SearchFilterBuilder
@@ -112,15 +110,13 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         // Re-open the menu and verify clicking the chip opens the picker on it.
         fireEvent.click(screen.getByText('Type:'));
         const taskItem2 = screen.getByRole('menuitem', { name: /^Task/ });
         fireEvent.click(taskItem2);
-        expect(setFilters).toHaveBeenLastCalledWith(
-            expect.objectContaining({ types: [] }),
-        );
+        expect(setFilters).toHaveBeenLastCalledWith(expect.objectContaining({ types: [] }));
     });
 
     it('clicks Add → Project → selects a project (setProject branch)', () => {
@@ -135,14 +131,12 @@ describe('SearchFilterBuilder', () => {
                 ]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         openAddMenu();
         fireEvent.click(screen.getByRole('menuitem', { name: 'Project' }));
         fireEvent.click(screen.getByRole('menuitem', { name: 'Atlas' }));
-        expect(setFilters).toHaveBeenCalledWith(
-            expect.objectContaining({ projectIds: ['p1'] }),
-        );
+        expect(setFilters).toHaveBeenCalledWith(expect.objectContaining({ projectIds: ['p1'] }));
     });
 
     it('clicks Add → Project → (any project) clears the projectIds (setProject(null) branch)', () => {
@@ -154,14 +148,12 @@ describe('SearchFilterBuilder', () => {
                 projects={[makeProject({ id: 'p1', name: 'Atlas' })]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         // Click the existing project pill to open the project picker directly.
         fireEvent.click(screen.getByText('Project:'));
         fireEvent.click(screen.getByRole('menuitem', { name: /any project/i }));
-        expect(setFilters).toHaveBeenCalledWith(
-            expect.objectContaining({ projectIds: [] }),
-        );
+        expect(setFilters).toHaveBeenCalledWith(expect.objectContaining({ projectIds: [] }));
     });
 
     it('clicks Add → Updated → picks a range (setUpdated branch)', () => {
@@ -173,13 +165,13 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         openAddMenu();
         fireEvent.click(screen.getByRole('menuitem', { name: 'Updated' }));
         fireEvent.click(screen.getByRole('menuitem', { name: 'last 7 days' }));
         expect(setFilters).toHaveBeenCalledWith(
-            expect.objectContaining({ updated: 'last_7_days' }),
+            expect.objectContaining({ updated: 'last_7_days' })
         );
     });
 
@@ -192,13 +184,11 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         fireEvent.click(screen.getByText('Updated:'));
         fireEvent.click(screen.getByRole('menuitem', { name: /any time/i }));
-        expect(setFilters).toHaveBeenCalledWith(
-            expect.objectContaining({ updated: 'any' }),
-        );
+        expect(setFilters).toHaveBeenCalledWith(expect.objectContaining({ updated: 'any' }));
     });
 
     it('clicks Add → Status → picks a status (setStatus branch)', () => {
@@ -210,14 +200,12 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         openAddMenu();
         fireEvent.click(screen.getByRole('menuitem', { name: 'Status' }));
         fireEvent.click(screen.getByRole('menuitem', { name: 'in progress' }));
-        expect(setFilters).toHaveBeenCalledWith(
-            expect.objectContaining({ status: 'in_progress' }),
-        );
+        expect(setFilters).toHaveBeenCalledWith(expect.objectContaining({ status: 'in_progress' }));
     });
 
     it('clicks Add → Status → (any status) clears the status', () => {
@@ -229,13 +217,11 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         fireEvent.click(screen.getByText('Status:'));
         fireEvent.click(screen.getByRole('menuitem', { name: /any status/i }));
-        expect(setFilters).toHaveBeenCalledWith(
-            expect.objectContaining({ status: 'any' }),
-        );
+        expect(setFilters).toHaveBeenCalledWith(expect.objectContaining({ status: 'any' }));
     });
 
     it('clicks Add → Labels → toggles a label on and off (toggleLabel branch)', () => {
@@ -248,14 +234,12 @@ describe('SearchFilterBuilder', () => {
                 resultCount={0}
                 resultTypeCount={0}
                 availableLabels={['urgent', 'frontend']}
-            />,
+            />
         );
         openAddMenu();
         fireEvent.click(screen.getByRole('menuitem', { name: 'Labels' }));
         fireEvent.click(screen.getByRole('menuitem', { name: /urgent/i }));
-        expect(setFilters).toHaveBeenCalledWith(
-            expect.objectContaining({ labels: ['urgent'] }),
-        );
+        expect(setFilters).toHaveBeenCalledWith(expect.objectContaining({ labels: ['urgent'] }));
         rerender(
             <SearchFilterBuilder
                 filters={{ ...EMPTY_FILTERS, labels: ['urgent'] }}
@@ -264,13 +248,11 @@ describe('SearchFilterBuilder', () => {
                 resultCount={0}
                 resultTypeCount={0}
                 availableLabels={['urgent', 'frontend']}
-            />,
+            />
         );
         fireEvent.click(screen.getByText('Labels:'));
         fireEvent.click(screen.getByRole('menuitem', { name: /urgent/i }));
-        expect(setFilters).toHaveBeenLastCalledWith(
-            expect.objectContaining({ labels: [] }),
-        );
+        expect(setFilters).toHaveBeenLastCalledWith(expect.objectContaining({ labels: [] }));
     });
 
     it('renders "No labels exist yet" when availableLabels is empty', () => {
@@ -282,7 +264,7 @@ describe('SearchFilterBuilder', () => {
                 resultCount={0}
                 resultTypeCount={0}
                 availableLabels={[]}
-            />,
+            />
         );
         openAddMenu();
         fireEvent.click(screen.getByRole('menuitem', { name: 'Labels' }));
@@ -307,7 +289,7 @@ describe('SearchFilterBuilder', () => {
                 resultCount={2}
                 resultTypeCount={2}
                 availableLabels={['urgent']}
-            />,
+            />
         );
         // The remove handler sits on the `close` icon span (role=button inside the pill).
         // Each pill contains a child role=button for the X — query all of them, then click each.
@@ -333,10 +315,10 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const closeIcons = Array.from(container.querySelectorAll('[role="button"]')).filter(
-            (el) => el.textContent === 'close',
+            (el) => el.textContent === 'close'
         );
         if (closeIcons[0]) {
             fireEvent.keyDown(closeIcons[0], { key: 'Enter' });
@@ -353,11 +335,11 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         // Target the outer pill wrapper, not the inner close button
         const pillWrappers = Array.from(document.querySelectorAll('[role="button"]')).filter(
-            (el) => el.querySelector('[role="button"]') !== null,
+            (el) => el.querySelector('[role="button"]') !== null
         );
         const typePill = pillWrappers.find((el) => el.textContent?.includes('Type:'));
         if (typePill) {
@@ -373,11 +355,11 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         // Target the outer pill wrapper directly
         const pillWrappers = Array.from(document.querySelectorAll('[role="button"]')).filter(
-            (el) => el.querySelector('[role="button"]') !== null,
+            (el) => el.querySelector('[role="button"]') !== null
         );
         const typePill = pillWrappers.find((el) => el.textContent?.includes('Type:'));
         if (typePill) {
@@ -393,7 +375,7 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const addBtn = screen.getByText('Add Filter');
         fireEvent.keyDown(addBtn, { key: 'Enter' });
@@ -407,7 +389,7 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         // Fallback path: name = id when no matching project exists.
         expect(screen.getByText('unknown-id')).toBeInTheDocument();
@@ -423,7 +405,7 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         // The status pill renders 'archived' as the value (raw fallback from ??)
         expect(screen.getByText('archived')).toBeInTheDocument();
@@ -439,7 +421,7 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         expect(screen.getByText('last_365_days')).toBeInTheDocument();
     });
@@ -455,11 +437,11 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         // Find the outer pill wrapper (role=button that contains another role=button inside it)
         const pillWrappers = Array.from(document.querySelectorAll('[role="button"]')).filter(
-            (el) => el.querySelector('[role="button"]') !== null,
+            (el) => el.querySelector('[role="button"]') !== null
         );
         const typePill = pillWrappers.find((el) => el.textContent?.includes('Type:'));
         expect(typePill).toBeDefined();
@@ -481,7 +463,7 @@ describe('SearchFilterBuilder', () => {
                 projects={[]}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const addBtn = screen.getByText('Add Filter');
         // Fire a non-Enter key — should NOT open the add menu

@@ -17,7 +17,7 @@ describe('ProjectHeader', () => {
                 onEditGuardrails={vi.fn()}
                 onManageSecrets={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         expect(screen.getAllByText('Acme').length).toBeGreaterThan(0);
     });
@@ -34,7 +34,7 @@ describe('ProjectHeader', () => {
                 onEditGuardrails={vi.fn()}
                 onManageSecrets={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         const link = screen.getByRole('link', { name: 'github.com/example/atlas' });
         expect(link).toBeInTheDocument();
@@ -53,7 +53,7 @@ describe('ProjectHeader', () => {
                 onEditGuardrails={vi.fn()}
                 onManageSecrets={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('no repo URL set')).toBeInTheDocument();
         expect(screen.queryByRole('link')).not.toBeInTheDocument();
@@ -71,7 +71,7 @@ describe('ProjectHeader', () => {
                 onEditGuardrails={vi.fn()}
                 onManageSecrets={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('no repo URL set')).toBeInTheDocument();
         expect(screen.queryByRole('link')).not.toBeInTheDocument();
@@ -92,7 +92,7 @@ describe('ProjectHeader', () => {
                 onEditGuardrails={vi.fn()}
                 onManageSecrets={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('2 repos')).toBeInTheDocument();
         expect(screen.queryByRole('link')).not.toBeInTheDocument();
@@ -112,7 +112,7 @@ describe('ProjectHeader', () => {
                 onEditGuardrails={onEditGuardrails}
                 onManageSecrets={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         const btn = screen.getByRole('button', { name: /guard-rails active/i });
         expect(btn).toBeInTheDocument();
@@ -132,7 +132,7 @@ describe('ProjectHeader', () => {
                 onEditGuardrails={vi.fn()}
                 onManageSecrets={vi.fn()}
                 onDelete={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('main')).toBeInTheDocument();
     });
@@ -154,7 +154,7 @@ describe('ProjectHeader', () => {
                 onDelete={vi.fn()}
                 onGenerateAiScaffold={onGenerateAiScaffold}
                 aiScaffoldEnabled={true}
-            />,
+            />
         );
         // ProjectHeader renders — the ActionsMenu gets the scaffold prop
         expect(screen.getAllByRole('button').length).toBeGreaterThan(0);
@@ -174,7 +174,7 @@ describe('ProjectHeader', () => {
                 onManageSecrets={vi.fn()}
                 onDelete={vi.fn()}
                 // aiScaffoldEnabled deliberately omitted (undefined)
-            />,
+            />
         );
         expect(screen.getAllByRole('button').length).toBeGreaterThan(0);
     });

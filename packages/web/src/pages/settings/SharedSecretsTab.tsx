@@ -84,7 +84,7 @@ export function SharedSecretsTab() {
                 hasStoredValue: true,
                 revealed: false,
                 revealedValue: null,
-            })),
+            }))
         );
         setHydrated(true);
     }, [data, hydrated]);
@@ -109,8 +109,8 @@ export function SharedSecretsTab() {
             const res = await reveal.mutateAsync(key);
             setRows((prev) =>
                 prev.map((r) =>
-                    r.rid === rid ? { ...r, revealed: true, revealedValue: res.value } : r,
-                ),
+                    r.rid === rid ? { ...r, revealed: true, revealedValue: res.value } : r
+                )
             );
         } catch (err) {
             toast.show({
@@ -122,9 +122,7 @@ export function SharedSecretsTab() {
 
     function clearReveal(rid: string): void {
         setRows((prev) =>
-            prev.map((r) =>
-                r.rid === rid ? { ...r, revealed: false, revealedValue: null } : r,
-            ),
+            prev.map((r) => (r.rid === rid ? { ...r, revealed: false, revealedValue: null } : r))
         );
     }
 
@@ -179,9 +177,7 @@ export function SharedSecretsTab() {
         // their existing values. Fetch them via reveal if not already
         // revealed. Chatty, but only fires when the Owner has other
         // pending changes.
-        const untouched = rows.filter(
-            (r) => r.hasStoredValue && r.key !== '' && r.value === '',
-        );
+        const untouched = rows.filter((r) => r.hasStoredValue && r.key !== '' && r.value === '');
         const preserved: Array<{ key: string; value: string }> = [];
         try {
             for (const r of untouched) {
@@ -223,7 +219,7 @@ export function SharedSecretsTab() {
                     hasStoredValue: r.key !== '',
                     revealed: false,
                     revealedValue: null,
-                })),
+                }))
             );
             toast.show({
                 message: 'Shared secrets saved',
@@ -257,8 +253,8 @@ export function SharedSecretsTab() {
                     '& .MuiAlert-message': { fontSize: 12 },
                 }}
             >
-                Shared across every project. The setup runner merges these with the project&apos;s own
-                secrets — project values win on collision — before substituting{' '}
+                Shared across every project. The setup runner merges these with the project&apos;s
+                own secrets — project values win on collision — before substituting{' '}
                 <Box
                     component="code"
                     sx={{ fontFamily: MONO, bgcolor: ATLAS_PALETTE.slate08, px: 0.5 }}
@@ -308,10 +304,7 @@ export function SharedSecretsTab() {
                         variant="contained"
                         startIcon={
                             save.isPending ? (
-                                <CircularProgress
-                                    size={14}
-                                    sx={{ color: ATLAS_PALETTE.white }}
-                                />
+                                <CircularProgress size={14} sx={{ color: ATLAS_PALETTE.white }} />
                             ) : (
                                 <SaveRounded sx={{ fontSize: 16 }} />
                             )
@@ -406,7 +399,9 @@ export function SharedSecretsTab() {
                                         revealedValue: null,
                                     });
                                 }}
-                                type={row.revealed || row.revealedValue !== null ? 'text' : 'password'}
+                                type={
+                                    row.revealed || row.revealedValue !== null ? 'text' : 'password'
+                                }
                                 variant="standard"
                                 fullWidth
                                 placeholder={

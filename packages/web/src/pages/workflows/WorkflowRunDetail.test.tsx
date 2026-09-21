@@ -18,22 +18,24 @@ function mount(run: IWorkflowRunDetail) {
     server.use(
         http.get(`${BASE}/workflow-runs/${run.id}`, () => HttpResponse.json(run)),
         http.get(`${BASE}/workflows`, () => HttpResponse.json([])),
-        http.get(`${BASE}/agents`, () => HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'Coder' })])),
+        http.get(`${BASE}/agents`, () =>
+            HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'Coder' })])
+        ),
         http.get(`${BASE}/issues/tree`, () =>
             HttpResponse.json({
                 projects: [],
                 agents: [],
                 tree: [],
                 tasks: [],
-            }),
-        ),
+            })
+        )
     );
     return renderWithProviders(
         <Routes>
             <Route path="/workflows/:id/runs/:runId" element={<WorkflowRunDetail />} />
             <Route path="/agents/:id/runs/:runId" element={<div>agent run page</div>} />
         </Routes>,
-        { initialEntries: [`/workflows/${run.workflow_id}/runs/${run.id}`] },
+        { initialEntries: [`/workflows/${run.workflow_id}/runs/${run.id}`] }
     );
 }
 
@@ -45,17 +47,34 @@ describe('WorkflowRunDetail', () => {
                 current_node_id: 'review',
                 steps: [
                     makeRunStep({ id: 'r1', node_id: 'coder', status: 'completed' }),
-                    makeRunStep({ id: 'r2', node_id: 'review', status: 'completed', agent_id: 'agent-reviewer', agent_name: 'Reviewer' }),
+                    makeRunStep({
+                        id: 'r2',
+                        node_id: 'review',
+                        status: 'completed',
+                        agent_id: 'agent-reviewer',
+                        agent_name: 'Reviewer',
+                    }),
                     makeRunStep({ id: 'r3', node_id: 'coder', status: 'completed' }),
-                    makeRunStep({ id: 'r4', node_id: 'review', status: 'in_progress', agent_id: 'agent-reviewer', agent_name: 'Reviewer' }),
+                    makeRunStep({
+                        id: 'r4',
+                        node_id: 'review',
+                        status: 'in_progress',
+                        agent_id: 'agent-reviewer',
+                        agent_name: 'Reviewer',
+                    }),
                 ],
-            }),
+            })
         );
-        await waitFor(() => expect(screen.getByTestId('wf-node-coder')).toHaveAttribute('data-run-state', 'done'));
+        await waitFor(() =>
+            expect(screen.getByTestId('wf-node-coder')).toHaveAttribute('data-run-state', 'done')
+        );
         expect(screen.getByTestId('wf-node-review')).toHaveAttribute('data-run-state', 'current');
         expect(screen.getByTestId('wf-node-start')).toHaveAttribute('data-run-state', 'done');
         expect(screen.getByTestId('wf-node-end')).toHaveAttribute('data-run-state', '');
-        expect(screen.getAllByTestId('node-visits').map((b) => b.textContent)).toEqual(['×2', '×2']);
+        expect(screen.getAllByTestId('node-visits').map((b) => b.textContent)).toEqual([
+            '×2',
+            '×2',
+        ]);
         expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Resume' })).not.toBeInTheDocument();
     });
@@ -67,7 +86,14 @@ describe('WorkflowRunDetail', () => {
             current_node_id: null,
             parked_node_id: 'review',
             steps: [
-                makeRunStep({ id: 'r1', node_id: 'coder', status: 'error', outcome_kind: null, outcome_summary: null, outcome_reason: 'CLI crashed' }),
+                makeRunStep({
+                    id: 'r1',
+                    node_id: 'coder',
+                    status: 'error',
+                    outcome_kind: null,
+                    outcome_summary: null,
+                    outcome_reason: 'CLI crashed',
+                }),
             ],
         });
         let resumed = false;
@@ -75,8 +101,13 @@ describe('WorkflowRunDetail', () => {
         server.use(
             http.post(`${BASE}/workflow-runs/${run.id}/resume`, () => {
                 resumed = true;
-                return HttpResponse.json({ ...run, status: 'running', parked_node_id: null, current_node_id: 'review' });
-            }),
+                return HttpResponse.json({
+                    ...run,
+                    status: 'running',
+                    parked_node_id: null,
+                    current_node_id: 'review',
+                });
+            })
         );
 
         expect(await screen.findByText(/Reply on the item to continue/)).toBeInTheDocument();
@@ -86,7 +117,9 @@ describe('WorkflowRunDetail', () => {
 
         await user.click(screen.getByRole('button', { name: 'Resume' }));
         await waitFor(() => expect(resumed).toBe(true));
-        await waitFor(() => expect(screen.queryByRole('button', { name: 'Resume' })).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole('button', { name: 'Resume' })).not.toBeInTheDocument()
+        );
     });
 
     it('opens the agent run page when a step is clicked', async () => {
@@ -98,14 +131,30 @@ describe('WorkflowRunDetail', () => {
 
     it('lists the sub-task runs of a Task run and opens one', async () => {
         const user = userEvent.setup();
-        const child = { ...makeRunDetail({ id: 'wfr-child', workflow_id: 'wf-build', item_id: 'ATL-8', status: 'completed' }), item_title: 'Fix typo', parent_node_id: 'build' };
+        const child = {
+            ...makeRunDetail({
+                id: 'wfr-child',
+                workflow_id: 'wf-build',
+                item_id: 'ATL-8',
+                status: 'completed',
+            }),
+            item_title: 'Fix typo',
+            parent_node_id: 'build',
+        };
         mount(makeRunDetail({ children: [child] }));
         const row = await screen.findByTestId('wf-child-wfr-child');
         expect(row).toHaveTextContent('ATL-8');
         expect(row).toHaveTextContent('Fix typo');
         expect(screen.getByText('Sub-tasks · 1 of 1 done')).toBeInTheDocument();
-        server.use(http.get(`${BASE}/workflow-runs/wfr-child`, () => HttpResponse.json({ ...child, parent_workflow_run_id: 'wfr-1', children: [] })));
+        server.use(
+            http.get(`${BASE}/workflow-runs/wfr-child`, () =>
+                HttpResponse.json({ ...child, parent_workflow_run_id: 'wfr-1', children: [] })
+            )
+        );
         await user.click(row);
-        expect(await screen.findByRole('link', { name: 'part of the Task run' })).toHaveAttribute('href', '/workflows/wf-build/runs/wfr-1');
+        expect(await screen.findByRole('link', { name: 'part of the Task run' })).toHaveAttribute(
+            'href',
+            '/workflows/wf-build/runs/wfr-1'
+        );
     });
 });

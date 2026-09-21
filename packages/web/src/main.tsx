@@ -12,7 +12,8 @@ void initWebVitalsReporter();
 // whole 5.2 MB variable font instead of ~0.5 MB.
 const link = document.createElement('link');
 link.rel = 'stylesheet';
-link.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0';
+link.href =
+    'https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0';
 document.head.appendChild(link);
 
 const rootEl = document.getElementById('root');

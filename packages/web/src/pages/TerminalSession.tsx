@@ -192,7 +192,9 @@ function HeaderField({
                     variant="body2"
                     noWrap
                     sx={{
-                        fontFamily: monospace ? 'Cascadia Code, Menlo, Consolas, monospace' : undefined,
+                        fontFamily: monospace
+                            ? 'Cascadia Code, Menlo, Consolas, monospace'
+                            : undefined,
                         fontWeight: 500,
                     }}
                 >

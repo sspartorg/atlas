@@ -19,13 +19,7 @@ interface Props {
 
 const MONO = '"JetBrains Mono", monospace';
 
-export function MobileTaskList({
-    rows,
-    projects,
-    agents,
-    ownerName,
-    ownerAccent,
-}: Props) {
+export function MobileTaskList({ rows, projects, agents, ownerName, ownerAccent }: Props) {
     const navigate = useNavigate();
     const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
     const agentsById = useMemo(() => new Map(agents.map((w) => [w.id, w])), [agents]);
@@ -98,6 +92,7 @@ export function MobileTaskList({
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 20, color: ATLAS_PALETTE.cerulean }}
                             >
                                 flag

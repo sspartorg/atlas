@@ -89,9 +89,7 @@ export function ModelSelect({
                                 component="span"
                                 sx={{ fontSize: 13, color: ATLAS_PALETTE.slate40 }}
                             >
-                                {hasOptions
-                                    ? 'Pick a model…'
-                                    : 'No models registered for this CLI'}
+                                {hasOptions ? 'Pick a model…' : 'No models registered for this CLI'}
                             </Typography>
                         );
                     }

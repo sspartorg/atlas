@@ -54,7 +54,9 @@ export function SelectableCard({ title, sub, selected, onClick }: SelectableCard
             >
                 {title}
             </Typography>
-            <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, mt: 0.5, lineHeight: 1.3 }}>
+            <Typography
+                sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, mt: 0.5, lineHeight: 1.3 }}
+            >
                 {sub}
             </Typography>
         </Box>

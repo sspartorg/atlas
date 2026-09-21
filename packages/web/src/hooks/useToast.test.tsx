@@ -43,7 +43,7 @@ describe('useToast', () => {
         const { result } = renderHook(() => useToast(), { wrapper });
         const onClick = vi.fn();
         act(() =>
-            result.current.show({ message: 'm', detail: 'd', action: { label: 'Undo', onClick } }),
+            result.current.show({ message: 'm', detail: 'd', action: { label: 'Undo', onClick } })
         );
         expect(result.current.toasts[0]?.detail).toBe('d');
         expect(result.current.toasts[0]?.action?.label).toBe('Undo');

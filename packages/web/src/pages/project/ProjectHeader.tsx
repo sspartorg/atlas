@@ -68,7 +68,9 @@ export const ProjectHeader = memo(function ProjectHeader({
             {/* MobileAppBar already shows the project name + "Project" subtitle;
                 the breadcrumb's last segment would repeat that. Hide on small. */}
             <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-                <Breadcrumb items={[{ label: 'Projects', to: '/projects' }, { label: project.name }]} />
+                <Breadcrumb
+                    items={[{ label: 'Projects', to: '/projects' }, { label: project.name }]}
+                />
             </Box>
 
             <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 3 }}>
@@ -161,6 +163,7 @@ export const ProjectHeader = memo(function ProjectHeader({
                                 <Box
                                     component="span"
                                     className="material-symbols-rounded"
+                                    aria-hidden="true"
                                     sx={{ fontSize: 14 }}
                                 >
                                     shield

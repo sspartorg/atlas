@@ -34,19 +34,30 @@ function catalogAgent(id: string, name: string): IMarketplaceAgentSummary {
 function mount(entry: string, published: IPublishedWorkflow[] = []) {
     server.use(
         http.get(`${BASE}/marketplace/workflows`, () => HttpResponse.json(published)),
-        http.get(`${BASE}/agents`, () => HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'My Coder' })])),
-        http.get(`${BASE}/marketplace/agents`, () =>
-            HttpResponse.json([catalogAgent('agent-po-writer', 'PO Writer'), catalogAgent('agent-coder', 'Coder')]),
+        http.get(`${BASE}/agents`, () =>
+            HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'My Coder' })])
         ),
-        http.get(`${BASE}/workflows/templates`, () => HttpResponse.json(makeTemplates())),
+        http.get(`${BASE}/marketplace/agents`, () =>
+            HttpResponse.json([
+                catalogAgent('agent-po-writer', 'PO Writer'),
+                catalogAgent('agent-coder', 'Coder'),
+            ])
+        ),
+        http.get(`${BASE}/workflows/templates`, () => HttpResponse.json(makeTemplates()))
     );
     renderWithProviders(
         <Routes>
             <Route path="/agents/marketplace" element={<Marketplace />} />
-            <Route path="/agents/marketplace/workflows/:templateId" element={<p>Template detail</p>} />
-            <Route path="/agents/marketplace/workflows/published/:publishedId" element={<p>Published detail</p>} />
+            <Route
+                path="/agents/marketplace/workflows/:templateId"
+                element={<p>Template detail</p>}
+            />
+            <Route
+                path="/agents/marketplace/workflows/published/:publishedId"
+                element={<p>Published detail</p>}
+            />
         </Routes>,
-        { initialEntries: [entry] },
+        { initialEntries: [entry] }
     );
 }
 
@@ -98,6 +109,8 @@ describe('Marketplace — Published by you', () => {
     it('says how to publish one when there are none', async () => {
         mount('/agents/marketplace?tab=workflows');
         const mine = screen.getByRole('region', { name: 'Published by you' });
-        expect(await within(mine).findByText('Publish a workflow from its builder to list it here.')).toBeInTheDocument();
+        expect(
+            await within(mine).findByText('Publish a workflow from its builder to list it here.')
+        ).toBeInTheDocument();
     });
 });

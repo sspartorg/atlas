@@ -13,7 +13,7 @@ describe('ConfirmActionModal', () => {
                 confirmLabel="Detach"
                 onConfirm={() => {}}
                 onCancel={() => {}}
-            />,
+            />
         );
         expect(screen.getByText('Detach agent?')).toBeInTheDocument();
         expect(screen.getByText('This cannot be undone.')).toBeInTheDocument();
@@ -30,7 +30,7 @@ describe('ConfirmActionModal', () => {
                 confirmLabel="Confirm"
                 onConfirm={onConfirm}
                 onCancel={onCancel}
-            />,
+            />
         );
         fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
         fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -48,7 +48,7 @@ describe('ConfirmActionModal', () => {
                 tone="destructive"
                 onConfirm={() => {}}
                 onCancel={() => {}}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
     });
@@ -63,7 +63,7 @@ describe('ConfirmActionModal', () => {
                 tone="warning"
                 onConfirm={() => {}}
                 onCancel={() => {}}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
     });
@@ -78,7 +78,7 @@ describe('ConfirmActionModal', () => {
                 busy
                 onConfirm={() => {}}
                 onCancel={() => {}}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: /working/i })).toBeDisabled();
         expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
@@ -93,7 +93,7 @@ describe('ConfirmActionModal', () => {
                 confirmLabel="OK"
                 onConfirm={() => {}}
                 onCancel={() => {}}
-            />,
+            />
         );
         expect(screen.queryByText('Hidden')).not.toBeInTheDocument();
     });

@@ -38,14 +38,12 @@ export function SimulatedBadge({ size = 'md' }: Props) {
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: isSmall ? 12 : 14 }}
                 >
                     science
                 </Box>
-                <Typography
-                    component="span"
-                    sx={{ fontSize: isSmall ? 10 : 11, fontWeight: 600 }}
-                >
+                <Typography component="span" sx={{ fontSize: isSmall ? 10 : 11, fontWeight: 600 }}>
                     Simulated
                 </Typography>
             </Box>

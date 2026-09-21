@@ -28,7 +28,11 @@ import {
     useWorkflowTemplates,
 } from '../hooks/useWorkflows.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
-import { useCliAvailability, findMissingCli, cliUnavailableMessage } from '../hooks/useCliAvailability.js';
+import {
+    useCliAvailability,
+    findMissingCli,
+    cliUnavailableMessage,
+} from '../hooks/useCliAvailability.js';
 import { formatDate } from '../utils/time.js';
 import { lazyNamed } from '../utils/lazyNamed.js';
 import { useCatalogAgentsById, useKnownAgentsById } from './marketplace/MarketplaceWorkflows.js';
@@ -46,7 +50,7 @@ import {
 
 const WorkflowGraphPreview = lazyNamed(
     () => import('./marketplace/WorkflowGraphPreview.js'),
-    'WorkflowGraphPreview',
+    'WorkflowGraphPreview'
 );
 
 const SECTION_LABEL_SX = {
@@ -80,7 +84,10 @@ interface IView {
     publishedAt: string | null;
 }
 
-function templateView(templateId: string, templates: IWorkflowTemplate[] | undefined): IView | null {
+function templateView(
+    templateId: string,
+    templates: IWorkflowTemplate[] | undefined
+): IView | null {
     const t = templates?.find((x) => x.id === templateId);
     if (!t || !templates) return null;
     const subs = subTemplates(t, templates).map((s) => ({
@@ -133,9 +140,19 @@ function UsePublishedWorkflowDialog({ id, onClose }: { id: string; onClose: () =
 
     return (
         <Dialog open onClose={importer.isPending ? undefined : onClose} maxWidth="xs" fullWidth>
-            <DialogTitle sx={{ fontSize: 18, fontWeight: 600, pb: 2 }}>Use in a project</DialogTitle>
-            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 4, pt: '8px !important' }}>
-                <TextField select label="Project" value={projectId} onChange={(e) => setProjectId(e.target.value)} fullWidth>
+            <DialogTitle sx={{ fontSize: 18, fontWeight: 600, pb: 2 }}>
+                Use in a project
+            </DialogTitle>
+            <DialogContent
+                sx={{ display: 'flex', flexDirection: 'column', gap: 4, pt: '8px !important' }}
+            >
+                <TextField
+                    select
+                    label="Project"
+                    value={projectId}
+                    onChange={(e) => setProjectId(e.target.value)}
+                    fullWidth
+                >
                     {projects.map((p) => (
                         <MenuItem key={p.id} value={p.id}>
                             {p.name}
@@ -166,7 +183,10 @@ function UsePublishedWorkflowDialog({ id, onClose }: { id: string; onClose: () =
  * workflow the Owner published (`…/workflows/published/:publishedId`).
  */
 export function MarketplaceWorkflowDetail() {
-    const { templateId = '', publishedId = '' } = useParams<{ templateId: string; publishedId: string }>();
+    const { templateId = '', publishedId = '' } = useParams<{
+        templateId: string;
+        publishedId: string;
+    }>();
     const navigate = useNavigate();
     const toast = useToast();
     useSetPageTitle('Marketplace workflow');
@@ -180,8 +200,9 @@ export function MarketplaceWorkflowDetail() {
     const [useOpen, setUseOpen] = useState(false);
     const [unpublishOpen, setUnpublishOpen] = useState(false);
     const view = useMemo(
-        () => (publishedId ? publishedView(published.data) : templateView(templateId, templates.data)),
-        [publishedId, published.data, templateId, templates.data],
+        () =>
+            publishedId ? publishedView(published.data) : templateView(templateId, templates.data),
+        [publishedId, published.data, templateId, templates.data]
     );
     const { isLoading, isError } = publishedId ? published : templates;
     // A published workflow was built from your agents; a template names catalog ones.
@@ -211,7 +232,10 @@ export function MarketplaceWorkflowDetail() {
             back();
         } catch (err) {
             setUnpublishOpen(false);
-            toast.show({ message: 'Could not unpublish workflow', detail: err instanceof Error ? err.message : String(err) });
+            toast.show({
+                message: 'Could not unpublish workflow',
+                detail: err instanceof Error ? err.message : String(err),
+            });
         }
     }
 
@@ -226,7 +250,9 @@ export function MarketplaceWorkflowDetail() {
     if (isError || !view) {
         return (
             <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-                <Typography sx={{ color: ATLAS_PALETTE.error }}>Marketplace workflow not found.</Typography>
+                <Typography sx={{ color: ATLAS_PALETTE.error }}>
+                    Marketplace workflow not found.
+                </Typography>
                 <Button onClick={back} sx={{ mt: 2 }}>
                     Back to marketplace
                 </Button>
@@ -244,10 +270,13 @@ export function MarketplaceWorkflowDetail() {
                 Marketplace
             </Button>
 
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 4, flexWrap: 'wrap', mb: 3 }}>
+            <Box
+                sx={{ display: 'flex', alignItems: 'flex-start', gap: 4, flexWrap: 'wrap', mb: 3 }}
+            >
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{
                         fontSize: 32,
                         p: 1.5,
@@ -261,16 +290,33 @@ export function MarketplaceWorkflowDetail() {
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography
                         variant="h1"
-                        sx={{ fontSize: { xs: '1.5rem', sm: '2rem' }, fontWeight: 700, color: ATLAS_PALETTE.slate, mb: 1 }}
+                        sx={{
+                            fontSize: { xs: '1.5rem', sm: '2rem' },
+                            fontWeight: 700,
+                            color: ATLAS_PALETTE.slate,
+                            mb: 1,
+                        }}
                     >
                         {view.name}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                         <Chip size="small" label={INPUT_KIND_LABEL[view.delivery.input_kind]} />
-                        <Chip size="small" label={TRIGGER_LABEL[view.delivery.trigger]} variant="outlined" />
-                        <Chip size="small" label={deliveryLabel(view.delivery)} variant="outlined" />
+                        <Chip
+                            size="small"
+                            label={TRIGGER_LABEL[view.delivery.trigger]}
+                            variant="outlined"
+                        />
+                        <Chip
+                            size="small"
+                            label={deliveryLabel(view.delivery)}
+                            variant="outlined"
+                        />
                         {view.publishedAt && (
-                            <Chip size="small" label={`Published ${formatDate(view.publishedAt)}`} variant="outlined" />
+                            <Chip
+                                size="small"
+                                label={`Published ${formatDate(view.publishedAt)}`}
+                                variant="outlined"
+                            />
                         )}
                     </Box>
                 </Box>
@@ -292,19 +338,40 @@ export function MarketplaceWorkflowDetail() {
                             Unpublish
                         </Button>
                     )}
-                    <Button variant="contained" onClick={() => setUseOpen(true)} sx={GREEN_BUTTON_SX}>
+                    <Button
+                        variant="contained"
+                        onClick={() => setUseOpen(true)}
+                        sx={GREEN_BUTTON_SX}
+                    >
                         Use in a project
                     </Button>
                 </Box>
             </Box>
 
             {view.description && (
-                <Typography sx={{ fontSize: 14, color: ATLAS_PALETTE.slate70, maxWidth: 820 }}>{view.description}</Typography>
+                <Typography sx={{ fontSize: 14, color: ATLAS_PALETTE.slate70, maxWidth: 820 }}>
+                    {view.description}
+                </Typography>
             )}
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '2fr 1fr' }, gap: 4, mt: 5 }}>
+            <Box
+                sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '2fr 1fr' },
+                    gap: 4,
+                    mt: 5,
+                }}
+            >
                 <Box sx={{ height: { xs: 420, md: 560 } }}>
-                    <Suspense fallback={<Skeleton variant="rounded" height="100%" sx={{ borderRadius: '12px' }} />}>
+                    <Suspense
+                        fallback={
+                            <Skeleton
+                                variant="rounded"
+                                height="100%"
+                                sx={{ borderRadius: '12px' }}
+                            />
+                        }
+                    >
                         <WorkflowGraphPreview
                             graph={view.graph}
                             subNames={view.subNames}
@@ -320,12 +387,29 @@ export function MarketplaceWorkflowDetail() {
                             {missingCliAgents.length === 1
                                 ? `${agentLabel(missingCliAgents[0].id, namesById)} runs on ${missingCliAgents[0].cli}. `
                                 : `${missingCliAgents.length} of these agents run on a CLI that isn't installed. `}
-                            {cliUnavailableMessage(missingCliAgents[0].missing, { beforeInstall: true })}
+                            {cliUnavailableMessage(missingCliAgents[0].missing, {
+                                beforeInstall: true,
+                            })}
                         </Alert>
                     )}
-                    <Box component="ul" aria-label="Agents" sx={{ listStyle: 'none', p: 0, m: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Box
+                        component="ul"
+                        aria-label="Agents"
+                        sx={{
+                            listStyle: 'none',
+                            p: 0,
+                            m: 0,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 2,
+                        }}
+                    >
                         {view.agentIds.map((id) => (
-                            <Box component="li" key={id} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Box
+                                component="li"
+                                key={id}
+                                sx={{ display: 'flex', alignItems: 'center', gap: 2 }}
+                            >
                                 <Box
                                     component="span"
                                     sx={{
@@ -333,10 +417,19 @@ export function MarketplaceWorkflowDetail() {
                                         height: 8,
                                         borderRadius: '50%',
                                         flexShrink: 0,
-                                        background: namesById.get(id)?.accent_color ?? ATLAS_PALETTE.slate30,
+                                        background:
+                                            namesById.get(id)?.accent_color ??
+                                            ATLAS_PALETTE.slate30,
                                     }}
                                 />
-                                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate, flex: 1, minWidth: 0 }}>
+                                <Typography
+                                    sx={{
+                                        fontSize: 13,
+                                        color: ATLAS_PALETTE.slate,
+                                        flex: 1,
+                                        minWidth: 0,
+                                    }}
+                                >
                                     {agentLabel(id, namesById)}
                                 </Typography>
                                 <Typography sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate60 }}>
@@ -362,10 +455,13 @@ export function MarketplaceWorkflowDetail() {
                                         {s.name}
                                     </Button>
                                 ) : (
-                                    <Typography key={s.ref} sx={{ fontSize: 13, color: ATLAS_PALETTE.slate, py: 0.5 }}>
+                                    <Typography
+                                        key={s.ref}
+                                        sx={{ fontSize: 13, color: ATLAS_PALETTE.slate, py: 0.5 }}
+                                    >
                                         {s.name}
                                     </Typography>
-                                ),
+                                )
                             )}
                             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 1 }}>
                                 {publishedId
@@ -379,9 +475,16 @@ export function MarketplaceWorkflowDetail() {
 
             {useOpen &&
                 (publishedId ? (
-                    <UsePublishedWorkflowDialog id={publishedId} onClose={() => setUseOpen(false)} />
+                    <UsePublishedWorkflowDialog
+                        id={publishedId}
+                        onClose={() => setUseOpen(false)}
+                    />
                 ) : (
-                    <NewWorkflowDialog open templateId={templateId} onClose={() => setUseOpen(false)} />
+                    <NewWorkflowDialog
+                        open
+                        templateId={templateId}
+                        onClose={() => setUseOpen(false)}
+                    />
                 ))}
             <ConfirmActionModal
                 open={unpublishOpen}

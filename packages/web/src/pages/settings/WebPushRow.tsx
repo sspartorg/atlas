@@ -20,8 +20,7 @@ export function WebPushRow() {
             bodyText = "This browser doesn't support push notifications.";
             break;
         case 'denied':
-            bodyText =
-                'Browser blocked notifications. Re-enable in site settings to opt back in.';
+            bodyText = 'Browser blocked notifications. Re-enable in site settings to opt back in.';
             break;
         case 'granted-subscribed':
             bodyText = 'Enabled on this device — every published notification will pop up here.';
@@ -78,9 +77,7 @@ export function WebPushRow() {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate70 }}>
-                {bodyText}
-            </Typography>
+            <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate70 }}>{bodyText}</Typography>
             {(primary || secondary) && (
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
                     {primary}

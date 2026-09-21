@@ -45,19 +45,19 @@ function formatYMD(s: string, opts: Intl.DateTimeFormatOptions): string {
 // Mirrors `_chrome.tsx#CHART_COLORS` so the main /analytics surface and the
 // drill-down pages share a single chart vocabulary.
 const CHART_COLORS = {
-    cost:         '#3B82F6',
-    costSoft:     'rgba(59,130,246,.18)',
-    input:        '#A855F7',
-    output:       '#06B6D4',
-    cached:       '#10B981',
-    runs:         '#F59E0B',
+    cost: '#3B82F6',
+    costSoft: 'rgba(59,130,246,.18)',
+    input: '#A855F7',
+    output: '#06B6D4',
+    cached: '#10B981',
+    runs: '#F59E0B',
     // Manual terminal sessions accent — kept in sync with `_chrome.tsx`
     // so the main /analytics surface and the drill-down pages share the
     // same vocabulary.
-    terminal:     '#F97316',
+    terminal: '#F97316',
     terminalSoft: 'rgba(249,115,22,.18)',
-    grid:         'rgba(127,127,127,.16)',
-    rail:         'rgba(127,127,127,.28)',
+    grid: 'rgba(127,127,127,.16)',
+    rail: 'rgba(127,127,127,.28)',
 };
 
 // Keyframe block injected once via a hidden style tag at the top of the page.
@@ -215,7 +215,7 @@ export function Analytics() {
                 terminalOutput: d.terminal_output_tokens ?? 0,
                 terminalCached: d.terminal_cache_read_tokens ?? 0,
             })),
-        [data?.daily],
+        [data?.daily]
     );
 
     // Separate per-source datasets for the two Daily cards. Each row in
@@ -232,7 +232,7 @@ export function Analytics() {
                 cached: d.cached,
                 runs: d.runs,
             })),
-        [chartData],
+        [chartData]
     );
     const terminalDailyData = useMemo(
         () =>
@@ -244,7 +244,7 @@ export function Analytics() {
                 cached: d.terminalCached,
                 sessions: d.terminalSessions,
             })),
-        [chartData],
+        [chartData]
     );
 
     const momData = useMemo(
@@ -260,7 +260,7 @@ export function Analytics() {
                 output: m.output_tokens,
                 cached: m.cache_read_tokens,
             })),
-        [data?.monthly],
+        [data?.monthly]
     );
 
     // Month-over-month delta for hero KPIs (current vs previous month).
@@ -283,7 +283,9 @@ export function Analytics() {
     if (isPending) {
         return (
             <Box sx={{ px: { xs: 3, md: 8 }, py: { xs: 6, md: 12 } }}>
-                <Typography sx={{ fontSize: 22, fontWeight: 700, color: ATLAS_PALETTE.slate, mb: 6 }}>
+                <Typography
+                    sx={{ fontSize: 22, fontWeight: 700, color: ATLAS_PALETTE.slate, mb: 6 }}
+                >
                     Analytics
                 </Typography>
                 <Skeleton variant="rectangular" height={260} sx={{ borderRadius: '18px', mb: 4 }} />
@@ -305,12 +307,10 @@ export function Analytics() {
     const cacheEffPct = (data.cacheEfficiency * 100).toFixed(1);
 
     const totalAgentCost = data.byAgent.reduce((acc, a) => acc + a.total_cost_usd, 0);
-    const topProjectMax = data.byProject.length > 0
-        ? Math.max(...data.byProject.map((p) => p.total_cost_usd))
-        : 0;
-    const topRunsMaxCost = data.topRuns.length > 0
-        ? Math.max(...data.topRuns.map((r) => r.total_cost_usd))
-        : 0;
+    const topProjectMax =
+        data.byProject.length > 0 ? Math.max(...data.byProject.map((p) => p.total_cost_usd)) : 0;
+    const topRunsMaxCost =
+        data.topRuns.length > 0 ? Math.max(...data.topRuns.map((r) => r.total_cost_usd)) : 0;
 
     // Derived measurable metrics — these are the numbers leadership actually
     // wants to see, not the raw sums above. With terminal sessions in
@@ -346,15 +346,14 @@ export function Analytics() {
     const totalTokensAll = totalTokens + terminalTokens;
     const avgCostPerSession = sessionCount > 0 ? totalSpend / sessionCount : 0;
     const avgTokensPerSession = sessionCount > 0 ? totalTokensAll / sessionCount : 0;
-    const costPerMillionTokens =
-        totalTokensAll > 0 ? (totalSpend / totalTokensAll) * 1_000_000 : 0;
+    const costPerMillionTokens = totalTokensAll > 0 ? (totalSpend / totalTokensAll) * 1_000_000 : 0;
     const daysActive = data.daily.length;
     // Per-source active-day counts — drives the sub-line on each Daily
     // card. Counts only days where THAT source had any spend or token
     // activity, so an agentic-only month doesn't claim "30 active days"
     // on the terminal card and vice-versa.
     const agenticActiveDays = chartData.filter(
-        (d) => d.cost > 0 || d.input > 0 || d.output > 0 || d.cached > 0 || d.runs > 0,
+        (d) => d.cost > 0 || d.input > 0 || d.output > 0 || d.cached > 0 || d.runs > 0
     ).length;
     const terminalActiveDays = chartData.filter(
         (d) =>
@@ -362,7 +361,7 @@ export function Analytics() {
             d.terminalInput > 0 ||
             d.terminalOutput > 0 ||
             d.terminalCached > 0 ||
-            d.terminalSessions > 0,
+            d.terminalSessions > 0
     ).length;
     const cacheReadTokens = data.summary.cache_read_tokens;
 
@@ -378,42 +377,49 @@ export function Analytics() {
     //   2. Material cache savings (dollars + hit rate)
     //   3. Workload concentration on top agent
     //   4. Fallback: run / project / day activity counts
-    const headlineInsight: { label: string; sentence: string; tone: 'good' | 'warn' | 'neutral' } = (() => {
-        if (momDelta && momDelta.costDelta !== null && Math.abs(momDelta.costDelta) >= 0.25 && momData.length >= 2) {
-            const cur = momData[momData.length - 1]!;
-            const prev = momData[momData.length - 2]!;
-            const tone: 'good' | 'warn' = momDelta.costDelta < 0 ? 'good' : 'warn';
-            const dir = momDelta.costDelta < 0 ? 'down' : 'up';
-            return {
-                label: 'Month-over-month',
-                sentence: `Spend is ${dir} ${Math.abs(momDelta.costDelta * 100).toFixed(1)}% vs last month — ${formatCostUsd(cur.cost)} this month against ${formatCostUsd(prev.cost)} prior.`,
-                tone,
-            };
-        }
-        if (data.cacheEfficiency >= 0.5) {
-            return {
-                label: 'Cache leverage',
-                sentence: `${(data.cacheEfficiency * 100).toFixed(1)}% of input context came from cache this month — ${formatTokenCount(cacheReadTokens)} cached reads against ${formatTokenCount(data.summary.input_tokens)} fresh input across ${runCount.toLocaleString()} runs.`,
-                tone: 'good',
-            };
-        }
-        if (data.byAgent.length > 0) {
-            const top = data.byAgent[0]!;
-            const topShare = totalAgentCost > 0 ? (top.total_cost_usd / totalAgentCost) * 100 : 0;
-            if (topShare >= 40) {
+    const headlineInsight: { label: string; sentence: string; tone: 'good' | 'warn' | 'neutral' } =
+        (() => {
+            if (
+                momDelta &&
+                momDelta.costDelta !== null &&
+                Math.abs(momDelta.costDelta) >= 0.25 &&
+                momData.length >= 2
+            ) {
+                const cur = momData[momData.length - 1]!;
+                const prev = momData[momData.length - 2]!;
+                const tone: 'good' | 'warn' = momDelta.costDelta < 0 ? 'good' : 'warn';
+                const dir = momDelta.costDelta < 0 ? 'down' : 'up';
                 return {
-                    label: 'Workload concentration',
-                    sentence: `${top.agent_name} carries ${topShare.toFixed(0)}% of agent spend (${formatCostUsd(top.total_cost_usd)} of ${formatCostUsd(totalAgentCost)}) — the rest of the fleet is sharing the remainder.`,
-                    tone: 'neutral',
+                    label: 'Month-over-month',
+                    sentence: `Spend is ${dir} ${Math.abs(momDelta.costDelta * 100).toFixed(1)}% vs last month — ${formatCostUsd(cur.cost)} this month against ${formatCostUsd(prev.cost)} prior.`,
+                    tone,
                 };
             }
-        }
-        return {
-            label: 'Activity',
-            sentence: `${sessionCount.toLocaleString()} session${sessionCount === 1 ? '' : 's'} (${runCount.toLocaleString()} agentic, ${terminalSessionCount.toLocaleString()} terminal) on ${daysActive} active day${daysActive === 1 ? '' : 's'} across ${data.byProject.length} project${data.byProject.length === 1 ? '' : 's'}, averaging ${formatCostUsd(avgCostPerSession)} per session.`,
-            tone: 'neutral',
-        };
-    })();
+            if (data.cacheEfficiency >= 0.5) {
+                return {
+                    label: 'Cache leverage',
+                    sentence: `${(data.cacheEfficiency * 100).toFixed(1)}% of input context came from cache this month — ${formatTokenCount(cacheReadTokens)} cached reads against ${formatTokenCount(data.summary.input_tokens)} fresh input across ${runCount.toLocaleString()} runs.`,
+                    tone: 'good',
+                };
+            }
+            if (data.byAgent.length > 0) {
+                const top = data.byAgent[0]!;
+                const topShare =
+                    totalAgentCost > 0 ? (top.total_cost_usd / totalAgentCost) * 100 : 0;
+                if (topShare >= 40) {
+                    return {
+                        label: 'Workload concentration',
+                        sentence: `${top.agent_name} carries ${topShare.toFixed(0)}% of agent spend (${formatCostUsd(top.total_cost_usd)} of ${formatCostUsd(totalAgentCost)}) — the rest of the fleet is sharing the remainder.`,
+                        tone: 'neutral',
+                    };
+                }
+            }
+            return {
+                label: 'Activity',
+                sentence: `${sessionCount.toLocaleString()} session${sessionCount === 1 ? '' : 's'} (${runCount.toLocaleString()} agentic, ${terminalSessionCount.toLocaleString()} terminal) on ${daysActive} active day${daysActive === 1 ? '' : 's'} across ${data.byProject.length} project${data.byProject.length === 1 ? '' : 's'}, averaging ${formatCostUsd(avgCostPerSession)} per session.`,
+                tone: 'neutral',
+            };
+        })();
 
     // Insight chip lives inside the always-dark hero band — fixed hex
     // values keep these legible regardless of the mode-flipping palette.
@@ -440,7 +446,10 @@ export function Analytics() {
             {/* Inject keyframes once. */}
             <style>{ANIMATION_CSS}</style>
 
-            <Box className="atlas-anal-cascade" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Box
+                className="atlas-anal-cascade"
+                sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}
+            >
                 {/* ── Hero Command Deck ────────────────────────────────────────── */}
                 <Box
                     sx={{
@@ -519,7 +528,8 @@ export function Analytics() {
                                             inset: -3,
                                             borderRadius: '50%',
                                             border: '2px solid #7DD3FC',
-                                            animation: 'atlas-anal-pulse 1800ms ease-in-out infinite',
+                                            animation:
+                                                'atlas-anal-pulse 1800ms ease-in-out infinite',
                                         },
                                     }}
                                 />
@@ -558,13 +568,17 @@ export function Analytics() {
                                     lineHeight: 1.55,
                                 }}
                             >
-                                AI spend, throughput, and cache efficiency for {monthLabel} — autonomous agent runs and manual terminal sessions combined. All times shown in {tzShort}.
+                                AI spend, throughput, and cache efficiency for {monthLabel} —
+                                autonomous agent runs and manual terminal sessions combined. All
+                                times shown in {tzShort}.
                             </Typography>
 
                             {/* Headline metric: total cost */}
                             <Box sx={{ mt: 6 }}>
                                 <Eyebrow light>Total Spend · {monthLabel}</Eyebrow>
-                                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, mt: 1 }}>
+                                <Box
+                                    sx={{ display: 'flex', alignItems: 'baseline', gap: 2, mt: 1 }}
+                                >
                                     <Typography
                                         sx={{
                                             fontFamily: '"Inter", system-ui, sans-serif',
@@ -576,7 +590,8 @@ export function Analytics() {
                                             // gradient instead of `ATLAS_PALETTE.white` (mode-flipping token).
                                             color: '#FFFFFF',
                                             fontVariantNumeric: 'tabular-nums',
-                                            background: 'linear-gradient(180deg, #FFFFFF 0%, rgba(255,255,255,.78) 100%)',
+                                            background:
+                                                'linear-gradient(180deg, #FFFFFF 0%, rgba(255,255,255,.78) 100%)',
                                             WebkitBackgroundClip: 'text',
                                             WebkitTextFillColor: 'transparent',
                                             backgroundClip: 'text',
@@ -584,46 +599,47 @@ export function Analytics() {
                                     >
                                         {formatCostUsd(totalSpend)}
                                     </Typography>
-                                    {momDelta?.costDelta !== null && momDelta?.costDelta !== undefined && (
-                                        <Box
-                                            sx={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 0.5,
-                                                px: 1.5,
-                                                py: 0.5,
-                                                borderRadius: '999px',
-                                                // Fixed pastel rgba tints — the pill sits on the always-dark hero
-                                                // band, so ATLAS_PALETTE.green/.orange flip to near-black in light
-                                                // mode and rendered dark-on-dark. Values track the insight-chip family.
-                                                background:
-                                                    momDelta.costDelta >= 0
-                                                        ? 'rgba(252,211,77,.18)'
-                                                        : 'rgba(134,239,172,.18)',
-                                                border:
-                                                    momDelta.costDelta >= 0
-                                                        ? '1px solid rgba(252,211,77,.45)'
-                                                        : '1px solid rgba(134,239,172,.45)',
-                                                color:
-                                                    momDelta.costDelta >= 0
-                                                        ? '#FCD34D'
-                                                        : '#86EFAC',
-                                                fontFamily: MONO,
-                                                fontSize: 12,
-                                                fontWeight: 700,
-                                                whiteSpace: 'nowrap',
-                                            }}
-                                        >
-                                            {momDelta.costDelta >= 0 ? '▲' : '▼'}{' '}
-                                            {formatDeltaPct(momDelta.costDelta)}
-                                            <Typography
-                                                component="span"
-                                                sx={{ fontSize: 10, opacity: 0.7, ml: 0.5 }}
+                                    {momDelta?.costDelta !== null &&
+                                        momDelta?.costDelta !== undefined && (
+                                            <Box
+                                                sx={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: 0.5,
+                                                    px: 1.5,
+                                                    py: 0.5,
+                                                    borderRadius: '999px',
+                                                    // Fixed pastel rgba tints — the pill sits on the always-dark hero
+                                                    // band, so ATLAS_PALETTE.green/.orange flip to near-black in light
+                                                    // mode and rendered dark-on-dark. Values track the insight-chip family.
+                                                    background:
+                                                        momDelta.costDelta >= 0
+                                                            ? 'rgba(252,211,77,.18)'
+                                                            : 'rgba(134,239,172,.18)',
+                                                    border:
+                                                        momDelta.costDelta >= 0
+                                                            ? '1px solid rgba(252,211,77,.45)'
+                                                            : '1px solid rgba(134,239,172,.45)',
+                                                    color:
+                                                        momDelta.costDelta >= 0
+                                                            ? '#FCD34D'
+                                                            : '#86EFAC',
+                                                    fontFamily: MONO,
+                                                    fontSize: 12,
+                                                    fontWeight: 700,
+                                                    whiteSpace: 'nowrap',
+                                                }}
                                             >
-                                                vs last month
-                                            </Typography>
-                                        </Box>
-                                    )}
+                                                {momDelta.costDelta >= 0 ? '▲' : '▼'}{' '}
+                                                {formatDeltaPct(momDelta.costDelta)}
+                                                <Typography
+                                                    component="span"
+                                                    sx={{ fontSize: 10, opacity: 0.7, ml: 0.5 }}
+                                                >
+                                                    vs last month
+                                                </Typography>
+                                            </Box>
+                                        )}
                                 </Box>
                                 <Typography
                                     sx={{
@@ -633,9 +649,15 @@ export function Analytics() {
                                         mt: 1.5,
                                     }}
                                 >
-                                    {sessionCount.toLocaleString()} session{sessionCount === 1 ? '' : 's'} · {formatTokenCount(totalTokensAll)} tokens processed
+                                    {sessionCount.toLocaleString()} session
+                                    {sessionCount === 1 ? '' : 's'} ·{' '}
+                                    {formatTokenCount(totalTokensAll)} tokens processed
                                     {data.byAgent.length > 0 && (
-                                        <> · {data.byAgent.length} agent{data.byAgent.length === 1 ? '' : 's'} contributing</>
+                                        <>
+                                            {' '}
+                                            · {data.byAgent.length} agent
+                                            {data.byAgent.length === 1 ? '' : 's'} contributing
+                                        </>
                                     )}
                                 </Typography>
 
@@ -655,7 +677,13 @@ export function Analytics() {
                                         flexWrap: 'wrap',
                                     }}
                                 >
-                                    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                                    <Box
+                                        sx={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 0.75,
+                                        }}
+                                    >
                                         <Box
                                             sx={{
                                                 width: 8,
@@ -673,10 +701,28 @@ export function Analytics() {
                                                 fontVariantNumeric: 'tabular-nums',
                                             }}
                                         >
-                                            {formatCostUsd(data.summary.total_cost_usd)} <Box component="span" sx={{ color: 'rgba(255,255,255,.45)', ml: 0.5, fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Agentic</Box>
+                                            {formatCostUsd(data.summary.total_cost_usd)}{' '}
+                                            <Box
+                                                component="span"
+                                                sx={{
+                                                    color: 'rgba(255,255,255,.45)',
+                                                    ml: 0.5,
+                                                    fontSize: 10.5,
+                                                    letterSpacing: '0.16em',
+                                                    textTransform: 'uppercase',
+                                                }}
+                                            >
+                                                Agentic
+                                            </Box>
                                         </Typography>
                                     </Box>
-                                    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                                    <Box
+                                        sx={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 0.75,
+                                        }}
+                                    >
                                         <Box
                                             sx={{
                                                 width: 8,
@@ -694,7 +740,19 @@ export function Analytics() {
                                                 fontVariantNumeric: 'tabular-nums',
                                             }}
                                         >
-                                            {formatCostUsd(terminalSummary.total_cost_usd)} <Box component="span" sx={{ color: 'rgba(255,255,255,.45)', ml: 0.5, fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Terminal</Box>
+                                            {formatCostUsd(terminalSummary.total_cost_usd)}{' '}
+                                            <Box
+                                                component="span"
+                                                sx={{
+                                                    color: 'rgba(255,255,255,.45)',
+                                                    ml: 0.5,
+                                                    fontSize: 10.5,
+                                                    letterSpacing: '0.16em',
+                                                    textTransform: 'uppercase',
+                                                }}
+                                            >
+                                                Terminal
+                                            </Box>
                                         </Typography>
                                     </Box>
                                 </Box>
@@ -713,19 +771,29 @@ export function Analytics() {
                             >
                                 <MetricMarquee
                                     label="Avg cost / session"
-                                    value={sessionCount > 0 ? formatCostUsd(avgCostPerSession) : '—'}
+                                    value={
+                                        sessionCount > 0 ? formatCostUsd(avgCostPerSession) : '—'
+                                    }
                                     sub={`${runCount.toLocaleString()} agentic · ${terminalSessionCount.toLocaleString()} terminal`}
                                     accent="#7DD3FC"
                                 />
                                 <MetricMarquee
                                     label="Avg tokens / session"
-                                    value={sessionCount > 0 ? formatTokenCount(Math.round(avgTokensPerSession)) : '—'}
+                                    value={
+                                        sessionCount > 0
+                                            ? formatTokenCount(Math.round(avgTokensPerSession))
+                                            : '—'
+                                    }
                                     sub={`${formatTokenCount(totalTokensAll)} total`}
                                     accent="#C4B5FD"
                                 />
                                 <MetricMarquee
                                     label="Cost / 1M tokens"
-                                    value={totalTokensAll > 0 ? `$${costPerMillionTokens.toFixed(2)}` : '—'}
+                                    value={
+                                        totalTokensAll > 0
+                                            ? `$${costPerMillionTokens.toFixed(2)}`
+                                            : '—'
+                                    }
                                     sub="blended effective rate"
                                     accent="#FCD34D"
                                 />
@@ -790,9 +858,23 @@ export function Analytics() {
                                         margin={{ top: 4, right: 0, left: 0, bottom: 0 }}
                                     >
                                         <defs>
-                                            <linearGradient id="heroSpark" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor="#7DD3FC" stopOpacity={0.55} />
-                                                <stop offset="100%" stopColor="#7DD3FC" stopOpacity={0} />
+                                            <linearGradient
+                                                id="heroSpark"
+                                                x1="0"
+                                                y1="0"
+                                                x2="0"
+                                                y2="1"
+                                            >
+                                                <stop
+                                                    offset="0%"
+                                                    stopColor="#7DD3FC"
+                                                    stopOpacity={0.55}
+                                                />
+                                                <stop
+                                                    offset="100%"
+                                                    stopColor="#7DD3FC"
+                                                    stopOpacity={0}
+                                                />
                                             </linearGradient>
                                         </defs>
                                         <Area
@@ -900,10 +982,7 @@ export function Analytics() {
                         <MonthlyLadder momData={momData} />
                     </Suspense>
                     <Suspense fallback={<Skeleton variant="rounded" height={420} />}>
-                        <SpendByAgentCard
-                            byAgent={data.byAgent}
-                            totalAgentCost={totalAgentCost}
-                        />
+                        <SpendByAgentCard byAgent={data.byAgent} totalAgentCost={totalAgentCost} />
                     </Suspense>
                     <Suspense fallback={<Skeleton variant="rounded" height={420} />}>
                         <TerminalSessionsCard
@@ -922,10 +1001,7 @@ export function Analytics() {
                     </Suspense>
                     <Suspense fallback={<Skeleton variant="rounded" height={420} />}>
                         <Box sx={{ gridColumn: { md: '1 / -1' }, minWidth: 0 }}>
-                            <TopRunsTable
-                                topRuns={data.topRuns}
-                                topRunsMaxCost={topRunsMaxCost}
-                            />
+                            <TopRunsTable topRuns={data.topRuns} topRunsMaxCost={topRunsMaxCost} />
                         </Box>
                     </Suspense>
                 </Box>
@@ -933,4 +1009,3 @@ export function Analytics() {
         </Box>
     );
 }
-

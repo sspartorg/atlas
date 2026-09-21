@@ -15,7 +15,7 @@ vi.mock('./NotificationLogTabContent.js', () => ({
 describe('NotificationLogTab', () => {
     it('renders NotificationLogTabContent with the forwarded props', () => {
         const { getByTestId } = renderWithProviders(
-            <NotificationLogTab settings={undefined} allRows={[]} />,
+            <NotificationLogTab settings={undefined} allRows={[]} />
         );
         const stub = getByTestId('nlt-content');
         expect(stub).toBeInTheDocument();
@@ -26,7 +26,7 @@ describe('NotificationLogTab', () => {
     it('forwards settings when provided', () => {
         const settings = { id: 1, owner_name: 'O', onboarding_complete: 1 };
         const { getByTestId } = renderWithProviders(
-            <NotificationLogTab settings={settings as never} allRows={[{ id: 7 } as never]} />,
+            <NotificationLogTab settings={settings as never} allRows={[{ id: 7 } as never]} />
         );
         const props = JSON.parse(getByTestId('nlt-content').dataset['props'] ?? '{}');
         expect(props.settings).toEqual(settings);

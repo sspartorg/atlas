@@ -22,7 +22,7 @@ import { CredentialsTable, daysUntilExpiry } from './credentials/CredentialsTabl
 import { type CredentialModalMode } from './credentials/CredentialModal.js';
 const CredentialModal = lazyNamed(
     () => import('./credentials/CredentialModal.js'),
-    'CredentialModal',
+    'CredentialModal'
 );
 import { useSetPageTitle } from '../components/shell/index.js';
 
@@ -40,7 +40,7 @@ export function Credentials() {
 
     const expiringSoon = useMemo(
         () => rows.filter((c) => daysUntilExpiry(c) !== null).length,
-        [rows],
+        [rows]
     );
 
     const hostsCount = useMemo(() => new Set(rows.map((c) => c.host)).size, [rows]);
@@ -89,7 +89,6 @@ export function Credentials() {
         setModalMode({ kind: 'edit', credential: cred });
         setModalOpen(true);
     }
-
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>

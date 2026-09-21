@@ -8,8 +8,13 @@ vi.mock('../routes/events.js', () => ({
     broadcastSSE: vi.fn(),
 }));
 
+// The refresh route's job is classifying what GitHub said, not talking to it.
+// Mocking the minting call lets each failure mode be asserted exactly.
+const tokens = vi.hoisted(() => ({ refreshCredential: vi.fn(async () => undefined) }));
+vi.mock('../services/github-app-tokens.js', () => tokens);
+
 import { buildApp } from '../server.js';
-import { truncateAll, closeTestDb } from '../../tests/_pg-db.js';
+import { truncateAll, closeTestDb, testDb } from '../../tests/_pg-db.js';
 
 let app: FastifyInstance;
 
@@ -304,5 +309,125 @@ describe('GET /api/credentials/:id/token', () => {
             url: '/api/credentials/00000000-0000-0000-0000-000000000000/token',
         });
         expect(res.statusCode).toBe(404);
+    });
+});
+
+// ─── github_app branches ────────────────────────────────────────────────────
+//
+// A real github_app credential needs a PEM on disk and a live GitHub call, so
+// the row is inserted directly and the minting call is mocked. What is under
+// test here is the route's own classification logic, which is where the
+// security-relevant decision lives: how much of GitHub's reply reaches the
+// caller.
+
+async function insertApp(id = 'cred-app-1'): Promise<string> {
+    await testDb
+        .insertInto('credentials')
+        .values({
+            id,
+            label: 'Bot App',
+            host: 'github',
+            kind: 'github_app',
+            username: 'x-access-token',
+            scope: '',
+            app_id: 123456,
+            // `credentials_kind_fields_check` requires all three for a
+            // github_app row — the schema refuses a half-built App credential,
+            // which is why this fixture carries a placeholder ciphertext.
+            app_private_key_encrypted: 'v1:placeholder-not-a-real-key',
+            app_installation_owner: 'acme-org',
+        } as never)
+        .execute();
+    return id;
+}
+
+describe('credential kind guards', () => {
+    it('refuses to reveal a github_app token — it rotates and is not actionable', async () => {
+        const id = await insertApp();
+        const res = await app.inject({ method: 'GET', url: `/api/credentials/${id}/token` });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toMatch(/only pat credentials/i);
+    });
+
+    it('refuses to refresh a pat — there is nothing to mint', async () => {
+        const created = await app.inject({
+            method: 'POST',
+            url: '/api/credentials',
+            payload: VALID_CREDENTIAL,
+        });
+        const { id } = JSON.parse(created.body) as { id: string };
+        const res = await app.inject({ method: 'POST', url: `/api/credentials/${id}/refresh` });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toMatch(/only github_app credentials/i);
+    });
+
+    it('returns 404 refreshing an unknown credential', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/credentials/00000000-0000-0000-0000-000000000000/refresh',
+        });
+        expect(res.statusCode).toBe(404);
+    });
+});
+
+describe('POST /api/credentials/:id/refresh — classifying GitHub failures', () => {
+    beforeEach(() => {
+        tokens.refreshCredential.mockReset();
+        tokens.refreshCredential.mockResolvedValue(undefined as never);
+    });
+
+    it('turns a 401 into an actionable 400 about the key and app id', async () => {
+        const id = await insertApp();
+        tokens.refreshCredential.mockRejectedValueOnce(
+            new Error('[github-app-tokens] POST /access_tokens -> 401: {"message":"A JSON web token could not be decoded"}'),
+        );
+        const res = await app.inject({ method: 'POST', url: `/api/credentials/${id}/refresh` });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toMatch(/private key and app id/i);
+    });
+
+    it('does NOT echo GitHub\'s response body back to the caller', async () => {
+        // The body can carry installation topology and rate-limit correlation
+        // ids. The route keeps the prefix and the status and drops the rest;
+        // this is the assertion that stops a future "improve the error
+        // message" change from pasting the whole reply through.
+        const id = await insertApp();
+        tokens.refreshCredential.mockRejectedValueOnce(
+            new Error('[github-app-tokens] GET /installation -> 403: {"message":"SECRET-TOPOLOGY-DETAIL"}'),
+        );
+        const res = await app.inject({ method: 'POST', url: `/api/credentials/${id}/refresh` });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).not.toMatch(/SECRET-TOPOLOGY-DETAIL/);
+    });
+
+    it('turns a 404 into a 400 naming the installation owner as the thing to check', async () => {
+        const id = await insertApp();
+        tokens.refreshCredential.mockRejectedValueOnce(
+            new Error('[github-app-tokens] GET /orgs/acme-org/installation -> 404: {"message":"Not Found"}'),
+        );
+        const res = await app.inject({ method: 'POST', url: `/api/credentials/${id}/refresh` });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toMatch(/app_installation_owner/);
+    });
+
+    it('re-throws an error carrying no GitHub status rather than mislabelling it 400', async () => {
+        // A DNS failure or a bug in our own code is not the Owner's
+        // misconfiguration, and calling it one sends them hunting in the
+        // wrong place.
+        const id = await insertApp();
+        tokens.refreshCredential.mockRejectedValueOnce(new Error('getaddrinfo ENOTFOUND api.github.com'));
+        const res = await app.inject({ method: 'POST', url: `/api/credentials/${id}/refresh` });
+        expect(res.statusCode).toBe(500);
+    });
+
+    it('returns the refreshed row with ciphertext stripped on success', async () => {
+        const id = await insertApp();
+        const res = await app.inject({ method: 'POST', url: `/api/credentials/${id}/refresh` });
+        expect(res.statusCode).toBe(200);
+        const body = res.json() as Record<string, unknown>;
+        expect(body.id).toBe(id);
+        expect(body.app_private_key_encrypted).toBeUndefined();
+        expect(body.token_encrypted).toBeNull();
+        expect(tokens.refreshCredential).toHaveBeenCalledWith(id);
     });
 });

@@ -103,8 +103,8 @@ describe('Topbar', () => {
                     owner_name: 'Owner',
                     onboarding_complete: 1,
                     ai_enabled: false,
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<Topbar />);
         // Allow the settings query to settle before asserting. The chip
@@ -125,8 +125,8 @@ describe('Topbar', () => {
                     external_notification_webhook_url: null,
                     external_notification_webhook_url_set: true,
                     ai_enabled: true,
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<Topbar />);
         await screen.findByText('Notifications');
@@ -140,9 +140,7 @@ describe('Topbar', () => {
         renderWithProviders(<Topbar />);
         expect(screen.getByText('Reconnecting')).toBeInTheDocument();
         // Tooltip text contains the reconnecting message
-        expect(
-            screen.getByLabelText('Live updates: reconnecting'),
-        ).toBeInTheDocument();
+        expect(screen.getByLabelText('Live updates: reconnecting')).toBeInTheDocument();
     });
 
     it('renders "Connecting" label when sseState is connecting (else branch)', async () => {

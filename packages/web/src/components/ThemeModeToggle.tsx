@@ -54,7 +54,7 @@ export function ThemeModeToggle() {
                 return;
             }
         },
-        [setMode],
+        [setMode]
     );
 
     return (

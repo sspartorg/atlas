@@ -2,7 +2,13 @@ import { memo, useMemo } from 'react';
 import Box from '@mui/material/Box';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { composeSpans } from './spanCompose.js';
-import { detectLanguage, tokenizeLine, HIGHLIGHT_CHAR_CAP, type LanguageId, type TokenType } from './syntaxHighlight.js';
+import {
+    detectLanguage,
+    tokenizeLine,
+    HIGHLIGHT_CHAR_CAP,
+    type LanguageId,
+    type TokenType,
+} from './syntaxHighlight.js';
 import { diffWords, type WordSpan } from './wordDiff.js';
 
 // 2026-08-04 — Terminal finalize diff. One line of code, syntax-coloured and
@@ -29,12 +35,7 @@ interface Props {
     counterpart: string | null;
 }
 
-export const DiffLineText = memo(function DiffLineText({
-    text,
-    path,
-    side,
-    counterpart,
-}: Props) {
+export const DiffLineText = memo(function DiffLineText({ text, path, side, counterpart }: Props) {
     const lang: LanguageId = useMemo(() => detectLanguage(path), [path]);
 
     const spans = useMemo(() => {
@@ -47,7 +48,10 @@ export const DiffLineText = memo(function DiffLineText({
         const syntax = tokenizeLine(text, lang);
         let changed: WordSpan[] = [];
         if (counterpart !== null && side !== 'context') {
-            const res = diffWords(side === 'del' ? text : counterpart, side === 'del' ? counterpart : text);
+            const res = diffWords(
+                side === 'del' ? text : counterpart,
+                side === 'del' ? counterpart : text
+            );
             changed = side === 'del' ? res.left : res.right;
         }
         return composeSpans(text, syntax, changed);
@@ -66,9 +70,7 @@ export const DiffLineText = memo(function DiffLineText({
                     key={i}
                     sx={{
                         color: TOKEN_COLOR[s.token],
-                        ...(s.changed
-                            ? { bgcolor: wordBg, borderRadius: '2px' }
-                            : {}),
+                        ...(s.changed ? { bgcolor: wordBg, borderRadius: '2px' } : {}),
                     }}
                 >
                     {s.text}

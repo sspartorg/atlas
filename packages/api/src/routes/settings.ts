@@ -81,14 +81,12 @@ export async function settingsRoutes(app: FastifyInstance) {
         { preHandler: requireMcpToken },
         async (req, reply) => {
             const body = UpdateExternalNotificationSchema.parse(req.body);
-            // F-019 — every field on this schema is optional and Zod strips
-            // unknown keys, so a body whose names are all wrong parses to `{}`
-            // and used to return 200 having written nothing. That is a silent
-            // no-op for any caller that guesses the shape — including agents
-            // driving this API over MCP, for whom a 200 means the write landed.
-            // `.strict()` on the schema would be the cleaner fix, but it lives
-            // in packages/shared (AGENTS.md hard rule 1), so the route rejects
-            // the empty patch instead.
+            // G-007 — the schema is now `.strict()`, so a body with unknown
+            // keys throws above and the global handler turns it into a 400
+            // naming the key. This check is still load-bearing for the one
+            // case strictness cannot catch: a literally empty `{}`, which is
+            // valid against every-field-optional and would otherwise apply an
+            // empty patch and answer 200.
             if (Object.values(body).every((v) => v === undefined)) {
                 return reply.status(400).send({
                     error:

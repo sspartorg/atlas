@@ -195,6 +195,7 @@ export function PromptPreviewDialog({ open, data, onClose }: Props) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 18 }}
                         >
                             content_copy
@@ -212,6 +213,7 @@ export function PromptPreviewDialog({ open, data, onClose }: Props) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 18 }}
                         >
                             download

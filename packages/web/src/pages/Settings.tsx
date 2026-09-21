@@ -22,7 +22,15 @@ import { HelpAboutTab } from './settings/HelpAboutTab.js';
 import { JiraTab } from './settings/JiraTab.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 
-const TAB_KEYS = ['profile', 'environment', 'secrets', 'models', 'notifications', 'jira', 'help'] as const;
+const TAB_KEYS = [
+    'profile',
+    'environment',
+    'secrets',
+    'models',
+    'notifications',
+    'jira',
+    'help',
+] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 function isTabKey(value: string | null): value is TabKey {

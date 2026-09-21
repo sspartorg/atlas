@@ -24,7 +24,7 @@ describe('Dashboard page', () => {
                 // Never-resolving response keeps the query pending.
                 await new Promise(() => {});
                 return HttpResponse.json({});
-            }),
+            })
         );
         renderWithProviders(<Dashboard />, { initialEntries: ['/dashboard'] });
         // BrandedFallback renders the Atlas logo (img with alt) + spinner.
@@ -35,9 +35,9 @@ describe('Dashboard page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: 'Ada Lovelace', onboarding_complete: 1 }),
+                HttpResponse.json({ id: 1, owner_name: 'Ada Lovelace', onboarding_complete: 1 })
             ),
-            http.get(`${BASE}/dashboard`, () => HttpResponse.json({ kpis: { projectCount: 0 } })),
+            http.get(`${BASE}/dashboard`, () => HttpResponse.json({ kpis: { projectCount: 0 } }))
         );
         renderWithProviders(<Dashboard />, { initialEntries: ['/dashboard'] });
         // DashboardEmptyState renders the first-name greeting.
@@ -51,9 +51,9 @@ describe('Dashboard page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, onboarding_complete: 1 }),
+                HttpResponse.json({ id: 1, onboarding_complete: 1 })
             ),
-            http.get(`${BASE}/dashboard`, () => HttpResponse.json({ kpis: { projectCount: 0 } })),
+            http.get(`${BASE}/dashboard`, () => HttpResponse.json({ kpis: { projectCount: 0 } }))
         );
         renderWithProviders(<Dashboard />, { initialEntries: ['/dashboard'] });
         await waitFor(() => {
@@ -76,8 +76,8 @@ describe('Dashboard page', () => {
                     perProject: [],
                     monthlyCost: { spent: 0, limit: null, runs: 0 },
                     agentCategoryStats: [],
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<Dashboard />, { initialEntries: ['/dashboard'] });
         // The populated dashboard is rendered inside a Box that pads the
@@ -92,18 +92,15 @@ describe('Dashboard page', () => {
         // Overrides placed BEFORE defaultHandlers so they win (MSW first-match).
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: null, onboarding_complete: 1 }),
+                HttpResponse.json({ id: 1, owner_name: null, onboarding_complete: 1 })
             ),
-            http.get(`${BASE}/dashboard`, () =>
-                HttpResponse.json({ kpis: { projectCount: 0 } }),
-            ),
-            ...defaultHandlers,
+            http.get(`${BASE}/dashboard`, () => HttpResponse.json({ kpis: { projectCount: 0 } })),
+            ...defaultHandlers
         );
         renderWithProviders(<Dashboard />, { initialEntries: ['/dashboard'] });
-        await waitFor(
-            () => expect(document.body.textContent).toMatch(/No projects yet/),
-            { timeout: 3000 },
-        );
+        await waitFor(() => expect(document.body.textContent).toMatch(/No projects yet/), {
+            timeout: 3000,
+        });
     });
 
     it('empty state falls back ownerFirstName to "there" when owner_name is blank (line 24 || branch)', async () => {
@@ -111,18 +108,15 @@ describe('Dashboard page', () => {
         // Overrides placed BEFORE defaultHandlers so they win (MSW first-match).
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: '', onboarding_complete: 1 }),
+                HttpResponse.json({ id: 1, owner_name: '', onboarding_complete: 1 })
             ),
-            http.get(`${BASE}/dashboard`, () =>
-                HttpResponse.json({ kpis: { projectCount: 0 } }),
-            ),
-            ...defaultHandlers,
+            http.get(`${BASE}/dashboard`, () => HttpResponse.json({ kpis: { projectCount: 0 } })),
+            ...defaultHandlers
         );
         renderWithProviders(<Dashboard />, { initialEntries: ['/dashboard'] });
-        await waitFor(
-            () => expect(document.body.textContent).toMatch(/No projects yet/),
-            { timeout: 3000 },
-        );
+        await waitFor(() => expect(document.body.textContent).toMatch(/No projects yet/), {
+            timeout: 3000,
+        });
     });
 
     it('DashboardPopulated rendered: greeting block visible when projectCount > 0 (lines 28-33)', async () => {
@@ -131,23 +125,20 @@ describe('Dashboard page', () => {
         // (MSW v2 processes handlers in array-insertion order; first match wins).
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: 'Zephyr Test', onboarding_complete: 1 }),
+                HttpResponse.json({ id: 1, owner_name: 'Zephyr Test', onboarding_complete: 1 })
             ),
             http.get(`${BASE}/dashboard`, () =>
                 HttpResponse.json({
                     kpis: { projectCount: 5 },
                     awaiting: [],
                     queue: [],
-                }),
+                })
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<Dashboard />, { initialEntries: ['/dashboard'] });
         // DashboardPopulated -> GreetingBlock uppercases the owner name: "..., ZEPHYR"
-        await waitFor(
-            () => expect(document.body.textContent).toMatch(/ZEPHYR/),
-            { timeout: 5000 },
-        );
+        await waitFor(() => expect(document.body.textContent).toMatch(/ZEPHYR/), { timeout: 5000 });
     });
 
     it('renders empty state when dashboard data has no kpis field (kpis undefined branch)', async () => {
@@ -155,7 +146,7 @@ describe('Dashboard page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: 'Sam Test', onboarding_complete: 1 }),
+                HttpResponse.json({ id: 1, owner_name: 'Sam Test', onboarding_complete: 1 })
             ),
             http.get(`${BASE}/dashboard`, () =>
                 HttpResponse.json({
@@ -166,8 +157,8 @@ describe('Dashboard page', () => {
                     perProject: [],
                     monthlyCost: { spent: 0, limit: null, runs: 0 },
                     agentCategoryStats: [],
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<Dashboard />, { initialEntries: ['/dashboard'] });
         // With kpis undefined → projectCount defaults to 0 via `?? 0` → empty state renders
@@ -181,13 +172,13 @@ describe('Dashboard page', () => {
         // Covers the settings?.owner_name branch where settings query is still loading/undefined
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/settings`, () =>
-                // Return a null body which causes useSettings to return { data: undefined }
-                new Promise(() => {}),
+            http.get(
+                `${BASE}/settings`,
+                () =>
+                    // Return a null body which causes useSettings to return { data: undefined }
+                    new Promise(() => {})
             ),
-            http.get(`${BASE}/dashboard`, () =>
-                HttpResponse.json({ kpis: { projectCount: 0 } }),
-            ),
+            http.get(`${BASE}/dashboard`, () => HttpResponse.json({ kpis: { projectCount: 0 } }))
         );
         renderWithProviders(<Dashboard />, { initialEntries: ['/dashboard'] });
         await waitFor(() => {

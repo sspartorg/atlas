@@ -41,6 +41,9 @@ let nextCommentId: number;
 let failStatus: number | null;
 let offerDone: boolean;
 let extraCommentPage: FakeComment[];
+// Makes the fake report more comments than it hands back, as real Jira does
+// when one is deleted between the search and the follow-up fetch.
+let commentTotalOverride: number | null;
 
 function issue(key: string, labels: string[], comments: FakeComment[] = []) {
     return {
@@ -104,7 +107,7 @@ const fakeFetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
             const first = (target?.fields['comment'] as { comments: FakeComment[] }).comments;
             const all = [...first, ...extraCommentPage];
             const startAt = Number(url.searchParams.get('startAt'));
-            return json({ comments: all.slice(startAt), total: all.length });
+            return json({ comments: all.slice(startAt), total: commentTotalOverride ?? all.length });
         }
         if (m[2] === 'transitions' && method === 'GET') {
             return json({
@@ -194,6 +197,7 @@ beforeEach(async () => {
     failStatus = null;
     offerDone = true;
     extraCommentPage = [];
+    commentTotalOverride = null;
     fakeFetch.mockClear();
     vi.stubGlobal('fetch', fakeFetch);
 });
@@ -312,8 +316,12 @@ describe('jira bridge pull', () => {
             external_ref: 'ATL-1',
         });
 
-        // The first push announces the pickup on each Jira issue.
-        expect(posted.map((p) => p.key).sort()).toEqual(['ATL-1', 'ATL-2']);
+        // The first push announces the pickup — but only on the issue Atlas
+        // actually picked up. ATL-2 matched a source with no workflow, so it
+        // is `draft` and Atlas has nothing to report about it yet (G-013).
+        // It used to receive "imported. No workflow is set for it yet",
+        // which is a write to someone's board saying nothing happened.
+        expect(posted.map((p) => p.key).sort()).toEqual(['ATL-1']);
         expect(posted.find((p) => p.key === 'ATL-1')?.body).toContain(
             'queued on the WF wf-dev workflow'
         );
@@ -481,6 +489,41 @@ describe('jira bridge pull', () => {
 });
 
 describe('jira bridge push', () => {
+    // G-013 — the bridge used to write to Jira the moment it was switched on.
+    // An imported Task starts `draft`, which counted as a milestone, so every
+    // matched issue got "imported. No workflow is set for it yet" within one
+    // tick — before the Owner approved anything. Someone pointing Atlas at a
+    // real board to evaluate it found it had already commented on their work.
+    it('says nothing to Jira on import alone', async () => {
+        // `design` maps to a source with no workflow, so the Task stays draft.
+        issues = [issue('ATL-1', ['design'])];
+        await configure();
+        posted = [];
+        await jiraSync.syncNow();
+
+        // The Task exists and is linked...
+        const t1 = await taskFor('ATL-1');
+        expect(t1.status).toBe('draft');
+        // ...and Jira has heard nothing about it.
+        expect(posted).toEqual([]);
+    });
+
+    it('posts once Atlas actually starts work, not before', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        posted = [];
+
+        const t1 = await taskFor('ATL-1');
+        await setStatus(t1.id, 'in_progress');
+        await jiraSync.syncNow();
+
+        expect(posted).toHaveLength(1);
+        expect(posted[0]?.body).toContain('work in progress');
+        // The suppressed draft notice is not replayed as a backlog.
+        expect(posted[0]?.body).not.toContain('No workflow is set');
+    });
+
     it('posts a milestone with a digest of Atlas comments, leaving out Jira-sourced ones', async () => {
         issues = [issue('ATL-1', ['development'])];
         await configure();
@@ -662,5 +705,226 @@ describe('composeTaskDescription', () => {
         expect(text).toContain('human');
         expect(text).not.toContain('bot');
         expect(text).toContain(`[ATL-9](${SITE}/browse/ATL-9)`);
+    });
+});
+
+// Every Jira failure the bridge can see has to come back as a distinct
+// `ApiError.kind`, because that is what the Settings page shows the Owner
+// and what decides whether the next tick retries. A 429 reported as a
+// validation error reads as "your JQL is wrong" for something that will
+// fix itself in a minute.
+describe('jira bridge fetch failures', () => {
+    it('reports a rate limit as rate_limited rather than a config problem', async () => {
+        await configure();
+        failStatus = 429;
+        await expect(jiraSync.testConnection({})).rejects.toMatchObject({
+            kind: 'rate_limited',
+            status: 502,
+        });
+    });
+
+    it('reports a Jira 5xx as upstream_unavailable', async () => {
+        await configure();
+        failStatus = 503;
+        await expect(jiraSync.testConnection({})).rejects.toMatchObject({
+            kind: 'upstream_unavailable',
+            status: 502,
+        });
+    });
+
+    it('reports any other 4xx as a validation error carrying Jira’s own detail', async () => {
+        await configure();
+        failStatus = 404;
+        const err = await jiraSync.testConnection({}).catch((e: unknown) => e);
+        expect(err).toMatchObject({ kind: 'validation_error', status: 400 });
+        // The message has to name the endpoint and echo Jira's own text —
+        // that detail is all the Owner gets to debug a bad site URL.
+        expect((err as Error).message).toContain('/rest/api/2/myself');
+        expect((err as Error).message).toContain('nope');
+    });
+
+    it('reports an unreachable Jira instead of leaking the raw fetch error', async () => {
+        await configure();
+        vi.stubGlobal('fetch', () => Promise.reject(new Error('getaddrinfo ENOTFOUND acme')));
+        await expect(jiraSync.testConnection({})).rejects.toMatchObject({
+            kind: 'upstream_unavailable',
+            status: 502,
+        });
+    });
+
+    it('still names the failing endpoint when Jira’s error body cannot be read', async () => {
+        // An aborted/truncated error response must not turn into an opaque
+        // "body stream" error that hides which Jira call failed.
+        await configure();
+        vi.stubGlobal('fetch', () =>
+            Promise.resolve({
+                ok: false,
+                status: 418,
+                text: () => Promise.reject(new Error('stream closed')),
+            })
+        );
+        const err = await jiraSync.testConnection({}).catch((e: unknown) => e);
+        expect((err as { kind?: string }).kind).toBe('validation_error');
+        expect((err as Error).message).toContain('Jira 418 on /rest/api/2/myself');
+    });
+});
+
+describe('jira bridge source + sync guards', () => {
+    it('rejects a source pointing at a workflow that does not exist', async () => {
+        // A source saved against a deleted workflow would import Tasks that
+        // never get queued — they would sit in the backlog looking imported.
+        await expect(
+            jiraSync.saveConfig({
+                sources: [{ repo_id: 'p1', jql: 'project = ATL', workflow_id: 'wf-gone' }],
+            })
+        ).rejects.toThrow(/Source 1: workflow not found/);
+    });
+
+    it('refuses to sync until at least one source exists', async () => {
+        await configure();
+        await jiraSync.saveConfig({ sources: [] });
+        await expect(jiraSync.syncNow()).rejects.toMatchObject({ kind: 'validation_error' });
+        expect((await jiraSync.getConfig()).last_sync_message).toContain('Add a source');
+    });
+
+    it('does not call the field catalogue when no extra fields are configured', async () => {
+        // /rest/api/2/field is a whole-instance listing; calling it on every
+        // sync for nothing burns the Owner's Jira rate limit.
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.saveConfig({ extra_fields: [] });
+        fakeFetch.mockClear();
+
+        await jiraSync.syncNow();
+
+        const paths = fakeFetch.mock.calls.map((c) => new URL(String(c[0])).pathname);
+        expect(paths).not.toContain('/rest/api/2/field');
+        expect(await taskFor('ATL-1')).toBeTruthy();
+    });
+
+    it('does not import a Jira sub-task as a Task of its own', async () => {
+        // Sub-tasks are rendered inside their parent's description. Importing
+        // them separately would double-queue the same work.
+        const parent = issue('ATL-1', ['development']);
+        const child = issue('ATL-1-S', ['development']);
+        child.fields['issuetype'] = { name: 'Sub-task', subtask: true };
+        issues = [parent, child];
+        await configure();
+
+        await jiraSync.syncNow();
+
+        const keys = await testDb.selectFrom('jira_issues').select('jira_key').execute();
+        expect(keys.map((k) => k.jira_key)).toEqual(['ATL-1']);
+    });
+});
+
+describe('composeTaskDescription — field coercion', () => {
+    it('renders non-string Jira field values instead of dropping them', () => {
+        // Jira custom fields come back as numbers, booleans and bare objects.
+        // Anything `text()` cannot label is still the agent's only source for
+        // that field, so it must land in the prompt rather than vanish.
+        const i = issue('ATL-7', []);
+        i.fields['priority'] = 3;
+        i.fields['duedate'] = true;
+        // No displayName / name / value / key — falls through to JSON.
+        i.fields['assignee'] = { accountId: 'acc-123' };
+        const out = composeTaskDescription(i, SITE);
+        expect(out).toContain('- **Priority:** 3');
+        expect(out).toContain('- **Due:** true');
+        expect(out).toContain('- **Assignee:** {"accountId":"acc-123"}');
+    });
+
+    it('renders linked issues in both directions and drops a link with neither side', () => {
+        const i = issue('ATL-8', []);
+        i.fields['issuelinks'] = [
+            {
+                type: { outward: 'blocks' },
+                outwardIssue: { key: 'ATL-20', fields: { summary: 'Downstream', status: { name: 'To Do' } } },
+            },
+            {
+                type: { inward: 'is blocked by' },
+                inwardIssue: { key: 'ATL-21', fields: { summary: 'Upstream', status: { name: 'Done' } } },
+            },
+            // Jira occasionally returns a link stub with neither side expanded.
+            { type: { outward: 'relates to' } },
+        ];
+        const out = composeTaskDescription(i, SITE);
+        expect(out).toContain('- blocks ATL-20 Downstream (To Do)');
+        expect(out).toContain('- is blocked by ATL-21 Upstream (Done)');
+        expect(out).not.toMatch(/^- relates to\s*$/m);
+    });
+
+    it('lists attachments with their download URLs', () => {
+        // The agent has no other way to learn a spec PDF is attached.
+        const i = issue('ATL-10', []);
+        i.fields['attachment'] = [
+            { filename: 'spec.pdf', content: `${SITE}/secure/attachment/1/spec.pdf` },
+            {},
+        ];
+        const out = composeTaskDescription(i, SITE);
+        expect(out).toContain('## Attachments');
+        expect(out).toContain(`- spec.pdf: ${SITE}/secure/attachment/1/spec.pdf`);
+        expect(out).toContain('- file:');
+    });
+});
+
+describe('jira bridge resilience', () => {
+    it('stops fetching comments when Jira hands back fewer than it promised', async () => {
+        // `total` is a count Jira computed before the fetch. If a comment is
+        // deleted in between, the page comes back empty while `total` still
+        // says there are more — and the loop only ends because of the
+        // zero-length break. Without it the sync tick spins forever.
+        const i = issue('ATL-1', ['development'], [jiraComment('only one')]);
+        (i.fields['comment'] as { total: number }).total = 3;
+        commentTotalOverride = 3;
+        issues = [i];
+        await configure();
+
+        await jiraSync.syncNow();
+
+        expect((await taskFor('ATL-1')).description).toContain('only one');
+    });
+
+    it('notes a source whose repo was deleted and syncs the rest', async () => {
+        // Deleting a repo from a project must not take the whole Jira sync
+        // down with it — the other sources still have to run, and the Owner
+        // needs to be told which one stopped.
+        await insertRepo('r-gone', 'p1', 'gone');
+        issues = [issue('ATL-1', ['development'])];
+        await jiraSync.saveConfig({
+            enabled: true,
+            site_url: SITE,
+            email: 'me@acme.test',
+            api_token: 'secret-token',
+            extra_fields: [],
+            sources: [
+                { repo_id: 'p1', jql: 'project = ATL', workflow_id: 'wf-dev' },
+                { repo_id: 'r-gone', jql: 'project = OLD', workflow_id: null },
+            ],
+        });
+        await testDb.deleteFrom('project_repos').where('id', '=', 'r-gone').execute();
+
+        await jiraSync.syncNow();
+
+        const cfg = await jiraSync.getConfig();
+        expect(cfg.last_sync_message).toContain('Source 2 skipped: its repo no longer exists.');
+        expect(cfg.last_sync_ok).toBe(false);
+        // The surviving source still imported.
+        expect(await taskFor('ATL-1')).toBeTruthy();
+    });
+
+    it('tells Jira when a Task parks waiting on the Owner', async () => {
+        // Parking is the one state where nothing moves until the Owner
+        // answers. Someone watching only the Jira issue has to see it.
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        await setStatus((await taskFor('ATL-1')).id, 'waiting_for_info');
+        posted = [];
+
+        await jiraSync.tick(new Date());
+
+        expect(posted).toHaveLength(1);
+        expect(posted[0]!.body).toContain('waiting on the owner.');
     });
 });

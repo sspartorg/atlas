@@ -68,8 +68,7 @@ export function TerminalHistory() {
         return (
             <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
                 <Alert severity="error">
-                    Session not found.{' '}
-                    <RouterLink to="/terminal">Back to sessions.</RouterLink>
+                    Session not found. <RouterLink to="/terminal">Back to sessions.</RouterLink>
                 </Alert>
             </Box>
         );
@@ -107,11 +106,7 @@ export function TerminalHistory() {
                     variant="outlined"
                     sx={{ textTransform: 'capitalize' }}
                 />
-                <Chip
-                    size="small"
-                    label={session.status}
-                    color={STATUS_COLOUR[session.status]}
-                />
+                <Chip size="small" label={session.status} color={STATUS_COLOUR[session.status]} />
             </Stack>
 
             <Box
@@ -141,11 +136,7 @@ export function TerminalHistory() {
             {session.finalize_pr_url && /^https:\/\//i.test(session.finalize_pr_url) ? (
                 <Alert severity="success">
                     Session closed. PR:{' '}
-                    <a
-                        href={session.finalize_pr_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
+                    <a href={session.finalize_pr_url} target="_blank" rel="noopener noreferrer">
                         {session.finalize_pr_url}
                     </a>
                 </Alert>
@@ -166,9 +157,8 @@ export function TerminalHistory() {
                 </Alert>
             ) : !transcriptQuery.data?.jsonl_content ? (
                 <Alert severity="info">
-                    Transcript unavailable — the CLI may have removed its on-disk copy, or
-                    the session ended before any output was written. The session row is
-                    still preserved.
+                    Transcript unavailable — the CLI may have removed its on-disk copy, or the
+                    session ended before any output was written. The session row is still preserved.
                 </Alert>
             ) : (
                 // Reuses the same master-detail viewer the agent-run detail
@@ -178,11 +168,7 @@ export function TerminalHistory() {
                 // id changes.
                 <RunEventViewer
                     content={transcriptQuery.data.jsonl_content}
-                    source={
-                        transcriptQuery.data.source === 'copilot'
-                            ? 'copilot'
-                            : 'claude-pty'
-                    }
+                    source={transcriptQuery.data.source === 'copilot' ? 'copilot' : 'claude-pty'}
                     resetKey={id}
                 />
             )}

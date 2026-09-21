@@ -8,14 +8,7 @@ import Pagination from '@mui/material/Pagination';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import Chip from '@mui/material/Chip';
-import {
-    PieChart,
-    Pie,
-    Cell,
-    ResponsiveContainer,
-    Tooltip,
-    Legend,
-} from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import type { IssueType } from '@atlas/shared';
 import { api } from '../api/api.js';
 import { useSetPageTitle } from '../components/shell/index.js';
@@ -65,13 +58,7 @@ export function AnalyticsTask() {
         staleTime: 30_000,
     });
     const children = useQuery({
-        queryKey: [
-            'analytics-task-children',
-            safeTaskId,
-            page,
-            limit,
-            typeFilter ?? 'all',
-        ],
+        queryKey: ['analytics-task-children', safeTaskId, page, limit, typeFilter ?? 'all'],
         queryFn: () =>
             api.analytics.taskChildren(safeTaskId, {
                 page,
@@ -190,9 +177,7 @@ export function AnalyticsTask() {
                     label="Avg cost / run"
                     value={
                         data.totals.run_count > 0
-                            ? formatCostUsd(
-                                  data.totals.total_cost_usd / data.totals.run_count,
-                              )
+                            ? formatCostUsd(data.totals.total_cost_usd / data.totals.run_count)
                             : '—'
                     }
                     accent={'#F43F5E'}
@@ -241,13 +226,11 @@ export function AnalyticsTask() {
                                         formatter={(
                                             value: unknown,
                                             _n: unknown,
-                                            p: { payload?: { type?: string } },
+                                            p: { payload?: { type?: string } }
                                         ): [string, string] => [
                                             formatCostUsd(Number(value ?? 0)),
                                             (p.payload?.type &&
-                                                ITEM_TYPE_LABEL[
-                                                    p.payload.type as Kind
-                                                ]) ||
+                                                ITEM_TYPE_LABEL[p.payload.type as Kind]) ||
                                                 p.payload?.type ||
                                                 '',
                                         ]}
@@ -293,7 +276,12 @@ export function AnalyticsTask() {
                                         }}
                                     >
                                         <Box
-                                            sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}
+                                            sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 1,
+                                                mb: 1,
+                                            }}
                                         >
                                             <Box
                                                 sx={{
@@ -327,7 +315,8 @@ export function AnalyticsTask() {
                                                 mt: 0.5,
                                             }}
                                         >
-                                            {k.item_count} item{k.item_count === 1 ? '' : 's'} • {k.run_count} run
+                                            {k.item_count} item{k.item_count === 1 ? '' : 's'} •{' '}
+                                            {k.run_count} run
                                             {k.run_count === 1 ? '' : 's'}
                                         </Typography>
                                     </Box>
@@ -374,131 +363,144 @@ export function AnalyticsTask() {
                     )}
                 </Box>
                 <Box sx={{ overflowX: 'auto' }}>
-                <Box
-                    sx={{
-                        display: 'grid',
-                        gridTemplateColumns: '1.6fr 90px 70px 110px 100px',
-                        gap: 2,
-                        py: 1,
-                        borderBottom: `1px solid ${ATLAS_PALETTE.slate10}`,
-                        mb: 1,
-                        minWidth: { xs: 560, sm: 'auto' },
-                    }}
-                >
-                    {['Title', 'Type', 'Runs', 'Total cost', 'Last run'].map((h, i) => (
-                        <Eyebrow key={i}>{h}</Eyebrow>
-                    ))}
-                </Box>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: { xs: 560, sm: 'auto' } }}>
-                    {children.data?.rows.map((row) => (
-                        <Box
-                            key={row.id}
-                            sx={{
-                                display: 'grid',
-                                gridTemplateColumns: '1.6fr 90px 70px 110px 100px',
-                                gap: 2,
-                                py: 1.25,
-                                px: 1.5,
-                                alignItems: 'center',
-                                borderRadius: '8px',
-                                '&:hover': { background: ATLAS_PALETTE.cloud },
-                            }}
-                        >
+                    <Box
+                        sx={{
+                            display: 'grid',
+                            gridTemplateColumns: '1.6fr 90px 70px 110px 100px',
+                            gap: 2,
+                            py: 1,
+                            borderBottom: `1px solid ${ATLAS_PALETTE.slate10}`,
+                            mb: 1,
+                            minWidth: { xs: 560, sm: 'auto' },
+                        }}
+                    >
+                        {['Title', 'Type', 'Runs', 'Total cost', 'Last run'].map((h, i) => (
+                            <Eyebrow key={i}>{h}</Eyebrow>
+                        ))}
+                    </Box>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 0.5,
+                            minWidth: { xs: 560, sm: 'auto' },
+                        }}
+                    >
+                        {children.data?.rows.map((row) => (
                             <Box
+                                key={row.id}
                                 sx={{
-                                    minWidth: 0,
-                                    pl: `${Math.max(0, row.depth - 1) * 16}px`,
+                                    display: 'grid',
+                                    gridTemplateColumns: '1.6fr 90px 70px 110px 100px',
+                                    gap: 2,
+                                    py: 1.25,
+                                    px: 1.5,
+                                    alignItems: 'center',
+                                    borderRadius: '8px',
+                                    '&:hover': { background: ATLAS_PALETTE.cloud },
                                 }}
                             >
-                                <Typography
-                                    sx={{
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        color: ATLAS_PALETTE.slate,
-                                        whiteSpace: 'nowrap',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                    }}
-                                    title={row.title}
-                                >
-                                    {row.title}
-                                </Typography>
-                                <Typography
-                                    sx={{
-                                        fontFamily: MONO,
-                                        fontSize: 10.5,
-                                        color: ATLAS_PALETTE.slate60,
-                                    }}
-                                >
-                                    {row.id}
-                                </Typography>
-                            </Box>
-                            <Box>
                                 <Box
                                     sx={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 0.5,
-                                        px: 1.25,
-                                        py: 0.25,
-                                        borderRadius: '999px',
-                                        background: `${ITEM_TYPE_COLORS[row.type] ?? ATLAS_PALETTE.slate40}1a`,
-                                        color: ITEM_TYPE_COLORS[row.type] ?? ATLAS_PALETTE.slate60,
-                                        fontFamily: MONO,
-                                        fontSize: 10,
-                                        fontWeight: 700,
-                                        letterSpacing: '0.06em',
-                                        textTransform: 'uppercase',
+                                        minWidth: 0,
+                                        pl: `${Math.max(0, row.depth - 1) * 16}px`,
                                     }}
                                 >
-                                    {ITEM_TYPE_LABEL[row.type] ?? row.type}
+                                    <Typography
+                                        sx={{
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            color: ATLAS_PALETTE.slate,
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                        }}
+                                        title={row.title}
+                                    >
+                                        {row.title}
+                                    </Typography>
+                                    <Typography
+                                        sx={{
+                                            fontFamily: MONO,
+                                            fontSize: 10.5,
+                                            color: ATLAS_PALETTE.slate60,
+                                        }}
+                                    >
+                                        {row.id}
+                                    </Typography>
                                 </Box>
+                                <Box>
+                                    <Box
+                                        sx={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 0.5,
+                                            px: 1.25,
+                                            py: 0.25,
+                                            borderRadius: '999px',
+                                            background: `${ITEM_TYPE_COLORS[row.type] ?? ATLAS_PALETTE.slate40}1a`,
+                                            color:
+                                                ITEM_TYPE_COLORS[row.type] ?? ATLAS_PALETTE.slate60,
+                                            fontFamily: MONO,
+                                            fontSize: 10,
+                                            fontWeight: 700,
+                                            letterSpacing: '0.06em',
+                                            textTransform: 'uppercase',
+                                        }}
+                                    >
+                                        {ITEM_TYPE_LABEL[row.type] ?? row.type}
+                                    </Box>
+                                </Box>
+                                <Typography
+                                    sx={{
+                                        fontFamily: MONO,
+                                        fontSize: 12,
+                                        color: ATLAS_PALETTE.slate60,
+                                        textAlign: 'right',
+                                    }}
+                                >
+                                    {row.run_count}
+                                </Typography>
+                                <Typography
+                                    sx={{
+                                        fontFamily: MONO,
+                                        fontSize: 13,
+                                        fontWeight: 700,
+                                        color: ATLAS_PALETTE.slate,
+                                        textAlign: 'right',
+                                        fontVariantNumeric: 'tabular-nums',
+                                    }}
+                                >
+                                    {formatCostUsd(row.total_cost_usd)}
+                                </Typography>
+                                <Typography
+                                    sx={{
+                                        fontFamily: MONO,
+                                        fontSize: 11,
+                                        color: ATLAS_PALETTE.slate60,
+                                        textAlign: 'right',
+                                    }}
+                                >
+                                    {fmtRelativeOrDash(row.last_run_at)}
+                                </Typography>
                             </Box>
+                        ))}
+                        {children.isPending && (
+                            <Skeleton variant="rounded" height={48} sx={{ my: 0.5 }} />
+                        )}
+                        {!children.isPending && (children.data?.rows.length ?? 0) === 0 && (
                             <Typography
                                 sx={{
-                                    fontFamily: MONO,
-                                    fontSize: 12,
                                     color: ATLAS_PALETTE.slate60,
-                                    textAlign: 'right',
-                                }}
-                            >
-                                {row.run_count}
-                            </Typography>
-                            <Typography
-                                sx={{
-                                    fontFamily: MONO,
                                     fontSize: 13,
-                                    fontWeight: 700,
-                                    color: ATLAS_PALETTE.slate,
-                                    textAlign: 'right',
-                                    fontVariantNumeric: 'tabular-nums',
+                                    py: 4,
+                                    textAlign: 'center',
                                 }}
                             >
-                                {formatCostUsd(row.total_cost_usd)}
+                                No items match the current filter.
                             </Typography>
-                            <Typography
-                                sx={{
-                                    fontFamily: MONO,
-                                    fontSize: 11,
-                                    color: ATLAS_PALETTE.slate60,
-                                    textAlign: 'right',
-                                }}
-                            >
-                                {fmtRelativeOrDash(row.last_run_at)}
-                            </Typography>
-                        </Box>
-                    ))}
-                    {children.isPending && (
-                        <Skeleton variant="rounded" height={48} sx={{ my: 0.5 }} />
-                    )}
-                    {!children.isPending && (children.data?.rows.length ?? 0) === 0 && (
-                        <Typography
-                            sx={{ color: ATLAS_PALETTE.slate60, fontSize: 13, py: 4, textAlign: 'center' }}
-                        >
-                            No items match the current filter.
-                        </Typography>
-                    )}
-                </Box>
+                        )}
+                    </Box>
                 </Box>
                 <Box
                     sx={{

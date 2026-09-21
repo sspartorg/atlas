@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ReactElement,
+} from 'react';
 import Box from '@mui/material/Box';
 import ButtonBase from '@mui/material/ButtonBase';
 import IconButton from '@mui/material/IconButton';
@@ -7,15 +15,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 
-export type LayoutKind =
-    | 'single'
-    | 'h2'
-    | 'v2'
-    | 'h3-top'
-    | 'h3-bottom'
-    | 'v3'
-    | 'h3'
-    | 'grid2x2';
+export type LayoutKind = 'single' | 'h2' | 'v2' | 'h3-top' | 'h3-bottom' | 'v3' | 'h3' | 'grid2x2';
 
 export const LAYOUT_LABELS: Record<LayoutKind, string> = {
     single: 'Single',
@@ -66,12 +66,7 @@ function ShapeIcon({ kind, size = 32, selected }: ShapeProps & { kind: LayoutKin
     const fg = selected ? ATLAS_PALETTE.onAccent : ATLAS_PALETTE.slate;
     const bg = selected ? ATLAS_PALETTE.slate : ATLAS_PALETTE.surfaceRaised;
     const stroke = selected ? ATLAS_PALETTE.slate : ATLAS_PALETTE.slate30;
-    const cell = (
-        x: number,
-        y: number,
-        w: number,
-        h: number,
-    ): ReactElement => (
+    const cell = (x: number, y: number, w: number, h: number): ReactElement => (
         <rect
             key={`${x}-${y}-${w}-${h}`}
             x={x}
@@ -203,7 +198,7 @@ export function LayoutPickerMenu({ value, onChange }: LayoutPickerMenuProps) {
     // the currently-selected item so keyboard users don't lose their
     // place when reopening the picker.
     const [focusIndex, setFocusIndex] = useState<number>(() =>
-        Math.max(0, FLAT_LAYOUT_ORDER.indexOf(value)),
+        Math.max(0, FLAT_LAYOUT_ORDER.indexOf(value))
     );
     const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -239,7 +234,7 @@ export function LayoutPickerMenu({ value, onChange }: LayoutPickerMenuProps) {
             onChange(kind);
             setAnchor(null);
         },
-        [onChange],
+        [onChange]
     );
 
     const onKeyDown = useCallback(
@@ -284,7 +279,7 @@ export function LayoutPickerMenu({ value, onChange }: LayoutPickerMenuProps) {
                     break;
             }
         },
-        [focusIndex, commit],
+        [focusIndex, commit]
     );
 
     const groupedRows = useMemo(() => {

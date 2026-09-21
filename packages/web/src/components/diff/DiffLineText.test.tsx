@@ -12,7 +12,7 @@ function render(props: Partial<React.ComponentProps<typeof DiffLineText>> = {}) 
             side="del"
             counterpart={null}
             {...props}
-        />,
+        />
     );
 }
 
@@ -26,14 +26,19 @@ describe('DiffLineText', () => {
 
     it('reassembles to the original text', () => {
         const { container } = renderWithProviders(
-            <DiffLineText text="const a = 1;" path="src/foo.ts" side="context" counterpart={null} />,
+            <DiffLineText text="const a = 1;" path="src/foo.ts" side="context" counterpart={null} />
         );
         expect(container.textContent).toBe('const a = 1;');
     });
 
     it('renders an unknown extension as plain text', () => {
         const { container } = renderWithProviders(
-            <DiffLineText text="anything at all" path="notes.zzz" side="context" counterpart={null} />,
+            <DiffLineText
+                text="anything at all"
+                path="notes.zzz"
+                side="context"
+                counterpart={null}
+            />
         );
         expect(container.textContent).toBe('anything at all');
     });
@@ -42,7 +47,7 @@ describe('DiffLineText', () => {
     // emits whitespace rather than nothing.
     it('renders a blank line without collapsing the row', () => {
         const { container } = renderWithProviders(
-            <DiffLineText text="" path="src/foo.ts" side="context" counterpart={null} />,
+            <DiffLineText text="" path="src/foo.ts" side="context" counterpart={null} />
         );
         expect(container.textContent).not.toBe('');
         expect(container.textContent?.trim()).toBe('');
@@ -63,7 +68,7 @@ describe('DiffLineText', () => {
                 path="src/foo.ts"
                 side="context"
                 counterpart="const beta = 1;"
-            />,
+            />
         );
         expect(container.textContent).toBe('const alpha = 1;');
     });
@@ -71,7 +76,7 @@ describe('DiffLineText', () => {
     it('renders an over-long line as a single plain span', () => {
         const long = 'x'.repeat(HIGHLIGHT_CHAR_CAP + 10);
         const { container } = renderWithProviders(
-            <DiffLineText text={long} path="src/foo.ts" side="add" counterpart={null} />,
+            <DiffLineText text={long} path="src/foo.ts" side="add" counterpart={null} />
         );
         expect(container.textContent).toBe(long);
         expect(container.querySelectorAll('span').length).toBe(1);
@@ -84,7 +89,7 @@ describe('DiffLineText', () => {
                 path="src/foo.ts"
                 side="add"
                 counterpart="const alpha = 1;"
-            />,
+            />
         );
         expect(container.textContent).toBe('const beta = 2;');
     });

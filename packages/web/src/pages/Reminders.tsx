@@ -137,8 +137,8 @@ export function Reminders() {
             </Box>
 
             <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mb: 4 }}>
-                Reminders fire as in-app notifications and (optionally) external notifications.
-                They run on the same per-minute scheduler as agents.
+                Reminders fire as in-app notifications and (optionally) external notifications. They
+                run on the same per-minute scheduler as agents.
             </Typography>
 
             {!isLoading && active.length === 0 ? (
@@ -170,7 +170,12 @@ export function Reminders() {
                     >
                         History
                     </Typography>
-                    <ReminderList rows={history} onCancel={requestCancel} onEdit={requestEdit} muted />
+                    <ReminderList
+                        rows={history}
+                        onCancel={requestCancel}
+                        onEdit={requestEdit}
+                        muted
+                    />
                 </Box>
             )}
 
@@ -181,7 +186,12 @@ export function Reminders() {
                 editing={editing}
             />
 
-            <Dialog open={pendingCancel !== null} onClose={closeCancelDialog} maxWidth="xs" fullWidth>
+            <Dialog
+                open={pendingCancel !== null}
+                onClose={closeCancelDialog}
+                maxWidth="xs"
+                fullWidth
+            >
                 <DialogTitle sx={{ fontSize: 18, fontWeight: 600 }}>Cancel reminder?</DialogTitle>
                 <DialogContent>
                     <DialogContentText sx={{ fontSize: 14 }}>
@@ -253,7 +263,8 @@ function ReminderRow({ reminder, onCancel, onEdit, muted }: ReminderRowProps) {
         <Box
             sx={{
                 display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1.2fr) auto minmax(0, 1fr) auto auto',
+                gridTemplateColumns:
+                    'minmax(0, 1.4fr) minmax(0, 1.2fr) auto minmax(0, 1fr) auto auto',
                 alignItems: 'center',
                 gap: 3,
                 px: 3,
@@ -321,11 +332,7 @@ function ReminderRow({ reminder, onCancel, onEdit, muted }: ReminderRowProps) {
 
             <ChannelChip channel={reminder.channel} />
 
-            <Tooltip
-                title={new Date(reminder.next_fire_at).toLocaleString()}
-                arrow
-                placement="top"
-            >
+            <Tooltip title={new Date(reminder.next_fire_at).toLocaleString()} arrow placement="top">
                 <Typography
                     sx={{
                         fontSize: 13,
@@ -345,7 +352,10 @@ function ReminderRow({ reminder, onCancel, onEdit, muted }: ReminderRowProps) {
                         <IconButton
                             size="small"
                             onClick={() => onEdit(reminder)}
-                            sx={{ color: ATLAS_PALETTE.slate60, '&:hover': { color: ATLAS_PALETTE.slate } }}
+                            sx={{
+                                color: ATLAS_PALETTE.slate60,
+                                '&:hover': { color: ATLAS_PALETTE.slate },
+                            }}
                         >
                             <EditRounded sx={{ fontSize: 18 }} />
                         </IconButton>
@@ -358,7 +368,10 @@ function ReminderRow({ reminder, onCancel, onEdit, muted }: ReminderRowProps) {
                         <IconButton
                             size="small"
                             onClick={() => onCancel(reminder)}
-                            sx={{ color: ATLAS_PALETTE.slate60, '&:hover': { color: ATLAS_PALETTE.error } }}
+                            sx={{
+                                color: ATLAS_PALETTE.slate60,
+                                '&:hover': { color: ATLAS_PALETTE.error },
+                            }}
                         >
                             <CancelRounded sx={{ fontSize: 18 }} />
                         </IconButton>
@@ -380,7 +393,14 @@ function ChannelChip({ channel }: { channel: ReminderChannel }) {
               : 'In-app';
     return (
         <Tooltip title={label} arrow>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: ATLAS_PALETTE.slate60 }}>
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    color: ATLAS_PALETTE.slate60,
+                }}
+            >
                 {(channel === 'notification' || channel === 'both') && (
                     <NotificationsRounded sx={{ fontSize: 16 }} />
                 )}

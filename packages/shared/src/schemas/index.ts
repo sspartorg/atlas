@@ -631,12 +631,23 @@ export const UpdateCliModelSchema = z
 
 export const ExternalNotificationProviderSchema = z.enum(['telegram', 'teams']);
 
-export const UpdateExternalNotificationSchema = z.object({
-    external_notification_provider: ExternalNotificationProviderSchema.optional(),
-    external_notification_token: z.string().nullable().optional(),
-    external_notification_chat_id: z.string().nullable().optional(),
-    external_notification_webhook_url: z.string().url().nullable().optional(),
-});
+// F-019 / G-007 — `.strict()` because every field here is optional, so
+// without it Zod strips unknown keys and a body using the un-prefixed
+// names (`{provider, token, chat_id}`) parses to `{}`. The route then
+// applied an empty patch and answered 200 having written nothing. This
+// API is also driven by agents over MCP, where a wrong-shaped body is
+// likely and a 200 teaches the agent its write landed. `.strict()` names
+// the offending key instead, matching `PATCH /api/projects/:id/repos/:repoId`
+// — the two write routes used to disagree on whether an unrecognised body
+// is an error.
+export const UpdateExternalNotificationSchema = z
+    .object({
+        external_notification_provider: ExternalNotificationProviderSchema.optional(),
+        external_notification_token: z.string().nullable().optional(),
+        external_notification_chat_id: z.string().nullable().optional(),
+        external_notification_webhook_url: z.string().url().nullable().optional(),
+    })
+    .strict();
 
 export const UpdateNotificationsSchema = z.object({
     external_notification_event_toggles: z.record(z.string(), z.boolean()).optional(),

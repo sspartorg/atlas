@@ -22,7 +22,12 @@ const delivery = makeWorkflow({
     graph: {
         nodes: [
             { id: 'start', type: 'start', position: { x: 0, y: 0 } },
-            { id: 'build', type: 'subtasks', sub_workflow_id: 'wf-build', position: { x: 0, y: 130 } },
+            {
+                id: 'build',
+                type: 'subtasks',
+                sub_workflow_id: 'wf-build',
+                position: { x: 0, y: 130 },
+            },
             { id: 'end', type: 'end', position: { x: 0, y: 260 } },
         ],
         edges: [
@@ -32,22 +37,29 @@ const delivery = makeWorkflow({
     },
 });
 
-function mount(opts: { workflowId: string | null; runs: IWorkflowRunSummary[]; subTaskStatuses?: string[] }) {
+function mount(opts: {
+    workflowId: string | null;
+    runs: IWorkflowRunSummary[];
+    subTaskStatuses?: string[];
+}) {
     server.use(
         http.get(`${BASE}/tasks/ATL-7/full`, () =>
             HttpResponse.json({
                 task: { id: 'ATL-7', workflow_id: opts.workflowId },
-                sub_tasks: (opts.subTaskStatuses ?? []).map((status, i) => ({ id: `ATL-${10 + i}`, status })),
-            }),
+                sub_tasks: (opts.subTaskStatuses ?? []).map((status, i) => ({
+                    id: `ATL-${10 + i}`,
+                    status,
+                })),
+            })
         ),
         http.get(`${BASE}/workflows`, () =>
             HttpResponse.json([
                 makeWorkflow(),
                 makeWorkflow({ id: 'wf-scan', name: 'Stack scan', input_kind: 'none' }),
                 delivery,
-            ]),
+            ])
         ),
-        http.get(`${BASE}/items/ATL-7/workflow-runs`, () => HttpResponse.json(opts.runs)),
+        http.get(`${BASE}/items/ATL-7/workflow-runs`, () => HttpResponse.json(opts.runs))
     );
     return renderWithProviders(<ItemWorkflowPanel itemId="ATL-7" projectId="p1" />);
 }
@@ -61,7 +73,7 @@ describe('ItemWorkflowPanel', () => {
             http.put(`${BASE}/items/ATL-7/workflow`, async ({ request }) => {
                 sent = await request.json();
                 return new HttpResponse(null, { status: 204 });
-            }),
+            })
         );
 
         await user.click(await screen.findByRole('combobox', { name: 'Workflow' }));
@@ -86,7 +98,7 @@ describe('ItemWorkflowPanel', () => {
             http.post(`${BASE}/workflows/wf-1/runs`, async ({ request }) => {
                 sent = await request.json();
                 return HttpResponse.json({ run_id: 'wfr-2' }, { status: 202 });
-            }),
+            })
         );
         await user.click(await screen.findByRole('button', { name: 'Start now' }));
         await waitFor(() => expect(sent).toEqual({ item_id: 'ATL-7' }));
@@ -104,7 +116,7 @@ describe('ItemWorkflowPanel', () => {
             http.post(`${BASE}/workflows/wf-delivery/runs`, async ({ request }) => {
                 sent = await request.json();
                 return HttpResponse.json({ run_id: 'wfr-3' }, { status: 202 });
-            }),
+            })
         );
         await user.click(await screen.findByRole('button', { name: 'Continue · 1 open' }));
         await waitFor(() => expect(sent).toEqual({ item_id: 'ATL-7', from_subtasks: true }));

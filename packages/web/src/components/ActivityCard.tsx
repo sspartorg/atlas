@@ -107,8 +107,14 @@ function CommentRow({
     const agent = comment.agent_id ? agentsById.get(comment.agent_id) : null;
     // An agent comment with no agent_id is the workflow itself speaking
     // (e.g. "waiting for you" when a run parks).
-    const name = comment.author === 'owner' ? ownerName : comment.agent_id ? (agent?.name ?? 'Agent') : 'Workflow';
-    const color = comment.author === 'owner' ? ownerAccent : (agent?.accent_color ?? ATLAS_PALETTE.slate);
+    const name =
+        comment.author === 'owner'
+            ? ownerName
+            : comment.agent_id
+              ? (agent?.name ?? 'Agent')
+              : 'Workflow';
+    const color =
+        comment.author === 'owner' ? ownerAccent : (agent?.accent_color ?? ATLAS_PALETTE.slate);
     const isAgent = comment.author === 'agent';
 
     const updateComment = useUpdateComment(comment.issue_type, comment.issue_id);
@@ -176,11 +182,7 @@ function CommentRow({
                     <Typography sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate }}>
                         {name}
                     </Typography>
-                    <Tooltip
-                        title={formatAbsolute(comment.created_at)}
-                        placement="top"
-                        arrow
-                    >
+                    <Tooltip title={formatAbsolute(comment.created_at)} placement="top" arrow>
                         <Typography
                             component="span"
                             sx={{
@@ -239,6 +241,7 @@ function CommentRow({
                                 <Box
                                     component="span"
                                     className="material-symbols-rounded"
+                                    aria-hidden="true"
                                     sx={{ fontSize: 16 }}
                                 >
                                     edit
@@ -370,9 +373,7 @@ function CommentRow({
             </Box>
             <Dialog
                 open={confirmingDelete}
-                onClose={
-                    deleteComment.isPending ? undefined : () => setConfirmingDelete(false)
-                }
+                onClose={deleteComment.isPending ? undefined : () => setConfirmingDelete(false)}
                 maxWidth="xs"
                 fullWidth
                 PaperProps={{ sx: { borderRadius: '12px' } }}
@@ -382,9 +383,8 @@ function CommentRow({
                 </DialogTitle>
                 <DialogContent>
                     <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                        The comment will be hidden from the conversation thread. The
-                        underlying audit row stays on disk; this can&apos;t be undone from
-                        the UI.
+                        The comment will be hidden from the conversation thread. The underlying
+                        audit row stays on disk; this can&apos;t be undone from the UI.
                     </Typography>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -437,8 +437,12 @@ function EventRow({
         );
     } else if (event.event_type === 'status_changed') {
         icon = <SwapHorizRounded sx={{ fontSize: 16, color: ATLAS_PALETTE.slate60 }} />;
-        const fromLabel = event.from_value ? STATUS_LABELS[event.from_value as keyof typeof STATUS_LABELS] ?? event.from_value : '—';
-        const toLabel = event.to_value ? STATUS_LABELS[event.to_value as keyof typeof STATUS_LABELS] ?? event.to_value : '—';
+        const fromLabel = event.from_value
+            ? (STATUS_LABELS[event.from_value as keyof typeof STATUS_LABELS] ?? event.from_value)
+            : '—';
+        const toLabel = event.to_value
+            ? (STATUS_LABELS[event.to_value as keyof typeof STATUS_LABELS] ?? event.to_value)
+            : '—';
         body = (
             <>
                 <strong>{actorName}</strong> moved status from{' '}
@@ -522,7 +526,10 @@ function EventRow({
                     {other}
                 </Box>
                 {event.detail && (
-                    <Box component="span" sx={{ ml: 1, fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
+                    <Box
+                        component="span"
+                        sx={{ ml: 1, fontSize: 11, color: ATLAS_PALETTE.slate60 }}
+                    >
                         ({event.detail})
                     </Box>
                 )}
@@ -538,7 +545,10 @@ function EventRow({
                     {other}
                 </Box>
                 {event.detail && (
-                    <Box component="span" sx={{ ml: 1, fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
+                    <Box
+                        component="span"
+                        sx={{ ml: 1, fontSize: 11, color: ATLAS_PALETTE.slate60 }}
+                    >
                         ({event.detail})
                     </Box>
                 )}
@@ -556,7 +566,10 @@ function EventRow({
             <>
                 <strong>{actorName}</strong> reset rounds for <strong>{subjectName}</strong>
                 {prev != null && (
-                    <Box component="span" sx={{ ml: 1, fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
+                    <Box
+                        component="span"
+                        sx={{ ml: 1, fontSize: 11, color: ATLAS_PALETTE.slate60 }}
+                    >
                         (was {prev})
                     </Box>
                 )}
@@ -580,7 +593,8 @@ function EventRow({
                 Dispatch blocked for <strong>{actorName}</strong>
                 {event.detail && (
                     <>
-                        {' '}— waiting on{' '}
+                        {' '}
+                        — waiting on{' '}
                         <Box component="span" sx={{ fontFamily: '"JetBrains Mono", monospace' }}>
                             {event.detail}
                         </Box>
@@ -610,11 +624,7 @@ function EventRow({
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate80, lineHeight: 1.6 }}>
                     {body}
                 </Typography>
-                <Tooltip
-                    title={formatAbsolute(event.created_at)}
-                    placement="top"
-                    arrow
-                >
+                <Tooltip title={formatAbsolute(event.created_at)} placement="top" arrow>
                     <Typography
                         component="span"
                         sx={{
@@ -642,7 +652,7 @@ function useActivityData(
     issueType: IssueType,
     issueId: string,
     propActivity: IActivityItem[] | undefined,
-    propAgents: IAgent[] | undefined,
+    propAgents: IAgent[] | undefined
 ) {
     const { data: fetchedActivity = [] } = useActivity(issueType, issueId, {
         enabled: !propActivity,
@@ -697,7 +707,7 @@ export function ConversationCard({
         issueType,
         issueId,
         propActivity,
-        propAgents,
+        propAgents
     );
     // Mirrors the API's owner-reply auto-resume (commentsService, ADR 0014): a
     // reply on a parked item continues the workflow run its latest step
@@ -707,7 +717,7 @@ export function ConversationCard({
         if (status !== 'waiting_for_info' || assigneeAgentId) return false;
         const latest = (runs ?? []).reduce<IAgentRun | null>(
             (acc, r) => (!acc || r.created_at > acc.created_at ? r : acc),
-            null,
+            null
         );
         return Boolean(latest?.workflow_run_id);
     }, [status, assigneeAgentId, runs]);
@@ -729,8 +739,11 @@ export function ConversationCard({
     };
 
     const comments = useMemo(
-        () => items.filter((it): it is Extract<IActivityItem, { kind: 'comment' }> => it.kind === 'comment'),
-        [items],
+        () =>
+            items.filter(
+                (it): it is Extract<IActivityItem, { kind: 'comment' }> => it.kind === 'comment'
+            ),
+        [items]
     );
 
     return (
@@ -835,12 +848,15 @@ export function ActivityLogCard({
         issueType,
         issueId,
         propActivity,
-        propAgents,
+        propAgents
     );
 
     const events = useMemo(
-        () => items.filter((it): it is Extract<IActivityItem, { kind: 'event' }> => it.kind === 'event'),
-        [items],
+        () =>
+            items.filter(
+                (it): it is Extract<IActivityItem, { kind: 'event' }> => it.kind === 'event'
+            ),
+        [items]
     );
 
     return (

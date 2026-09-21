@@ -37,12 +37,23 @@ export function useKnownAgentsById(): Map<string, Pick<IAgent, 'name' | 'accent_
     const catalogById = useCatalogAgentsById();
     const { data: agents = [] } = useAgents();
     return useMemo(
-        () => new Map<string, Pick<IAgent, 'name' | 'accent_color' | 'cli'>>([...catalogById, ...agents.map((a) => [a.id, a] as const)]),
-        [catalogById, agents],
+        () =>
+            new Map<string, Pick<IAgent, 'name' | 'accent_color' | 'cli'>>([
+                ...catalogById,
+                ...agents.map((a) => [a.id, a] as const),
+            ]),
+        [catalogById, agents]
     );
 }
 
-const SECTION_SX = { fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: ATLAS_PALETTE.slate60, mb: 3 } as const;
+const SECTION_SX = {
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+    color: ATLAS_PALETTE.slate60,
+    mb: 3,
+} as const;
 
 function WorkflowCard({
     name,
@@ -82,13 +93,17 @@ function WorkflowCard({
                 minWidth: 0,
                 transition: 'box-shadow 150ms ease, transform 150ms ease',
                 '&:hover': { boxShadow: ELEVATION.mid, transform: 'translateY(-1px)' },
-                '&:focus-visible': { outline: `2px solid ${ATLAS_PALETTE.brandBlue}`, outlineOffset: '-2px' },
+                '&:focus-visible': {
+                    outline: `2px solid ${ATLAS_PALETTE.brandBlue}`,
+                    outlineOffset: '-2px',
+                },
             }}
         >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{
                         fontSize: 20,
                         p: 1.5,
@@ -100,8 +115,12 @@ function WorkflowCard({
                     account_tree
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
-                    <Typography sx={{ fontSize: 15, fontWeight: 600, color: ATLAS_PALETTE.slate }}>{name}</Typography>
-                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>{meta}</Typography>
+                    <Typography sx={{ fontSize: 15, fontWeight: 600, color: ATLAS_PALETTE.slate }}>
+                        {name}
+                    </Typography>
+                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
+                        {meta}
+                    </Typography>
                 </Box>
             </Box>
             <Typography
@@ -145,7 +164,12 @@ function PublishedWorkflows() {
     const agentsById = useKnownAgentsById();
 
     if (isLoading) return <CardSkeletons />;
-    if (isError) return <Typography sx={{ color: ATLAS_PALETTE.error }}>Failed to load your published workflows.</Typography>;
+    if (isError)
+        return (
+            <Typography sx={{ color: ATLAS_PALETTE.error }}>
+                Failed to load your published workflows.
+            </Typography>
+        );
     if (published.length === 0) {
         return (
             <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
@@ -177,7 +201,10 @@ function StarterWorkflows() {
     const agentsById = useCatalogAgentsById();
 
     if (isLoading) return <CardSkeletons />;
-    if (isError) return <Typography sx={{ color: ATLAS_PALETTE.error }}>Failed to load workflows.</Typography>;
+    if (isError)
+        return (
+            <Typography sx={{ color: ATLAS_PALETTE.error }}>Failed to load workflows.</Typography>
+        );
     return (
         <Box sx={GRID_SX}>
             {templates.map((t) => (

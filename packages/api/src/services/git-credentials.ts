@@ -28,7 +28,8 @@ import { credentialsService } from './credentials.js';
 // `human_name` + `human_email` set, this module installs a
 // `prepare-commit-msg` hook that appends `Co-Authored-By: <human>` to
 // every commit. The bot stays as the primary author; the human is a
-// co-author trailer — same shape isw-CDM-Next uses for `cdmnext-claude-bot`.
+// co-author trailer — the conventional shape for bot-authored commits,
+// so `git shortlog` and GitHub's contributor graph both credit the human.
 
 /**
  * Full credential material for a single git+gh invocation. The

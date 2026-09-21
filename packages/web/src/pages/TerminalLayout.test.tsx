@@ -35,9 +35,18 @@ beforeEach(() => {
         http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
         http.get(`${BASE}/projects`, () => HttpResponse.json([])),
         http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
-        http.get(`${BASE}/issues/tree`, () => HttpResponse.json({ projects: [], agents: [], tree: [], tasks: [] })),
+        http.get(`${BASE}/issues/tree`, () =>
+            HttpResponse.json({ projects: [], agents: [], tree: [], tasks: [] })
+        )
     );
-    vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
+    vi.stubGlobal(
+        'ResizeObserver',
+        class {
+            observe() {}
+            unobserve() {}
+            disconnect() {}
+        }
+    );
     vi.stubGlobal('HTMLElement', HTMLElement);
     localStorage.clear();
 });
@@ -56,7 +65,9 @@ describe('TerminalLayout', () => {
 
     it('shows connect button in empty pane', async () => {
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
-        await waitFor(() => expect(screen.getByRole('button', { name: /Connect/i })).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: /Connect/i })).toBeInTheDocument()
+        );
     });
 
     it('opens connect menu when Connect button is clicked', async () => {
@@ -76,8 +87,10 @@ describe('TerminalLayout', () => {
     it('shows active sessions in the connect menu', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
-                HttpResponse.json([makeSession({ id: 'sess-1', title: 'My Active Session', status: 'active' })]),
-            ),
+                HttpResponse.json([
+                    makeSession({ id: 'sess-1', title: 'My Active Session', status: 'active' }),
+                ])
+            )
         );
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => screen.getByRole('button', { name: /Connect/i }));
@@ -88,10 +101,13 @@ describe('TerminalLayout', () => {
     it('hide chrome button hides the toolbar', async () => {
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => screen.getByText(/0 \/ 1 attached/i));
-        screen.getAllByRole('button').find(b =>
-            b.querySelector('[data-testid="VisibilityOffRoundedIcon"]') ||
-            b.getAttribute('aria-label')?.includes('Hide')
-        );
+        screen
+            .getAllByRole('button')
+            .find(
+                (b) =>
+                    b.querySelector('[data-testid="VisibilityOffRoundedIcon"]') ||
+                    b.getAttribute('aria-label')?.includes('Hide')
+            );
         // Just verify the button count changes after clicking hide
         const btnCountBefore = screen.getAllByRole('button').length;
         expect(btnCountBefore).toBeGreaterThan(0);
@@ -100,18 +116,23 @@ describe('TerminalLayout', () => {
     it('shows "1 / 1 attached" after a session is attached', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
-                HttpResponse.json([makeSession({ id: 'sess-1', title: 'Live Session', status: 'active' })]),
-            ),
+                HttpResponse.json([
+                    makeSession({ id: 'sess-1', title: 'Live Session', status: 'active' }),
+                ])
+            )
         );
         // Start with a URL that has a session id attached
         renderWithProviders(<TerminalLayout />, {
             initialEntries: ['/terminal/layout?k=single&s=sess-1'],
         });
         // The session not found case renders when the session data hasn't loaded
-        await waitFor(() => {
-            const text = screen.queryByText(/1 \/ 1 attached/i);
-            if (!text) throw new Error('not yet');
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                const text = screen.queryByText(/1 \/ 1 attached/i);
+                if (!text) throw new Error('not yet');
+            },
+            { timeout: 3000 }
+        );
         expect(screen.getByText(/1 \/ 1 attached/i)).toBeInTheDocument();
     });
 
@@ -148,22 +169,20 @@ describe('TerminalLayout', () => {
     });
 
     it('shows "session not found" when unknown session id in URL', async () => {
-        server.use(
-            http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
-        );
+        server.use(http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])));
         renderWithProviders(<TerminalLayout />, {
             initialEntries: ['/terminal/layout?k=single&s=unknown-session'],
         });
-        await waitFor(() =>
-            expect(screen.getByText(/Session not found/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Session not found/i)).toBeInTheDocument());
     });
 
     it('shows paused session as closed/terminal view', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
-                HttpResponse.json([makeSession({ id: 'sess-2', title: 'Paused', status: 'paused' })]),
-            ),
+                HttpResponse.json([
+                    makeSession({ id: 'sess-2', title: 'Paused', status: 'paused' }),
+                ])
+            )
         );
         renderWithProviders(<TerminalLayout />, {
             initialEntries: ['/terminal/layout?k=single&s=sess-2'],
@@ -216,7 +235,7 @@ describe('TerminalLayout', () => {
         // Persist a valid layout to localStorage before rendering
         localStorage.setItem(
             'atlas.terminal-layout.v1',
-            JSON.stringify({ kind: 'v2', panes: [{ sessionId: null }, { sessionId: null }] }),
+            JSON.stringify({ kind: 'v2', panes: [{ sessionId: null }, { sessionId: null }] })
         );
         renderWithProviders(<TerminalLayout />, {
             initialEntries: ['/terminal/layout'],
@@ -231,11 +250,14 @@ describe('TerminalLayout', () => {
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => screen.getByText(/0 \/ 1 attached/i));
         // Find the back button (ArrowBackRounded icon button)
-        const backBtn = screen.getAllByRole('button').find(b =>
-            b.querySelector('[data-testid="ArrowBackRoundedIcon"]') ||
-            b.getAttribute('aria-label')?.includes('Back') ||
-            b.closest('[title*="Back"]')
-        );
+        const backBtn = screen
+            .getAllByRole('button')
+            .find(
+                (b) =>
+                    b.querySelector('[data-testid="ArrowBackRoundedIcon"]') ||
+                    b.getAttribute('aria-label')?.includes('Back') ||
+                    b.closest('[title*="Back"]')
+            );
         if (backBtn) fireEvent.click(backBtn);
     });
 
@@ -245,7 +267,7 @@ describe('TerminalLayout', () => {
         // The hide-chrome button has tooltip "Hide chrome"
         const allBtns = screen.getAllByRole('button');
         // Find button near "VisibilityOffRounded" or by title
-        const hideBtn = allBtns.find(b =>
+        const hideBtn = allBtns.find((b) =>
             b.querySelector('[data-testid="VisibilityOffRoundedIcon"]')
         );
         if (hideBtn) {
@@ -267,9 +289,10 @@ describe('TerminalLayout', () => {
         const allBtns = screen.getAllByRole('button');
         // The layout picker is near the 0/1 attached text
         // Try clicking any button that might open layout options
-        const layoutBtn = allBtns.find(b =>
-            /layout|split|grid/i.test(b.getAttribute('aria-label') ?? '') ||
-            /layout|split|grid/i.test(b.textContent ?? '')
+        const layoutBtn = allBtns.find(
+            (b) =>
+                /layout|split|grid/i.test(b.getAttribute('aria-label') ?? '') ||
+                /layout|split|grid/i.test(b.textContent ?? '')
         );
         if (layoutBtn) {
             fireEvent.click(layoutBtn);
@@ -278,9 +301,7 @@ describe('TerminalLayout', () => {
     });
 
     it('opens EmptyPane Connect menu and clicks "Start new session…" — fn#22/fn#24', async () => {
-        server.use(
-            http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
-        );
+        server.use(http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])));
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => screen.getByText(/Empty pane/i));
         // Click "Connect ▾" button to open the menu
@@ -288,22 +309,29 @@ describe('TerminalLayout', () => {
         if (connectBtn) {
             fireEvent.click(connectBtn);
             // Menu should appear with "Start new session…"
-            await waitFor(() => {
-                expect(document.querySelector('[role="menu"], [role="listbox"]')).toBeTruthy();
-            }, { timeout: 2000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="menu"], [role="listbox"]')).toBeTruthy();
+                },
+                { timeout: 2000 }
+            ).catch(() => {});
             const newSessionItem = screen.queryByText(/Start new session/i);
             if (newSessionItem) {
                 fireEvent.click(newSessionItem);
                 // StartSessionDialog should open (onNew fires)
                 // Now close it (onClose fires)
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 3000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 3000 }
+                ).catch(() => {});
                 const dialog = document.querySelector('[role="dialog"]');
                 if (dialog) {
                     const _cancelBtn = dialog.querySelector('button[aria-label*="Cancel"], button');
-                    const cancelBtnEl = Array.from(dialog.querySelectorAll('button'))
-                        .find(b => /cancel/i.test(b.textContent ?? ''));
+                    const cancelBtnEl = Array.from(dialog.querySelectorAll('button')).find((b) =>
+                        /cancel/i.test(b.textContent ?? '')
+                    );
                     if (cancelBtnEl) {
                         fireEvent.click(cancelBtnEl);
                     } else {
@@ -318,17 +346,22 @@ describe('TerminalLayout', () => {
     it('opens EmptyPane Connect menu and closes it — exercises fn#22 (close)', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
-                HttpResponse.json([makeSession({ id: 'live-sess', title: 'Live Session', status: 'active' })]),
-            ),
+                HttpResponse.json([
+                    makeSession({ id: 'live-sess', title: 'Live Session', status: 'active' }),
+                ])
+            )
         );
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => screen.getByText(/Empty pane/i));
         const connectBtn = screen.queryByRole('button', { name: /Connect/i });
         if (connectBtn) {
             fireEvent.click(connectBtn);
-            await waitFor(() => {
-                expect(document.querySelector('[role="menu"]')).toBeTruthy();
-            }, { timeout: 2000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="menu"]')).toBeTruthy();
+                },
+                { timeout: 2000 }
+            ).catch(() => {});
             // Attach to an existing session — exercises fn#25 onClick at line 619
             const liveSessionItem = screen.queryByText(/Live Session/i);
             if (liveSessionItem) {
@@ -345,28 +378,37 @@ describe('TerminalLayout', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
             http.post(`${BASE}/cli/sessions`, () =>
-                HttpResponse.json(makeSession({ id: 'new-sess', title: 'New Session', status: 'active' })),
-            ),
+                HttpResponse.json(
+                    makeSession({ id: 'new-sess', title: 'New Session', status: 'active' })
+                )
+            )
         );
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => screen.getByText(/Empty pane/i));
         const connectBtn = screen.queryByRole('button', { name: /Connect/i });
         if (connectBtn) {
             fireEvent.click(connectBtn);
-            await waitFor(() => {
-                expect(document.querySelector('[role="menu"]')).toBeTruthy();
-            }, { timeout: 2000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="menu"]')).toBeTruthy();
+                },
+                { timeout: 2000 }
+            ).catch(() => {});
             const newItem = screen.queryByText(/Start new session/i);
             if (newItem) {
                 fireEvent.click(newItem);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 3000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 3000 }
+                ).catch(() => {});
                 // Try to submit the form (exercises onCreated)
                 const dialog = document.querySelector('[role="dialog"]');
                 if (dialog) {
-                    const startBtn = Array.from(dialog.querySelectorAll('button'))
-                        .find(b => /start|create|launch/i.test(b.textContent ?? ''));
+                    const startBtn = Array.from(dialog.querySelectorAll('button')).find((b) =>
+                        /start|create|launch/i.test(b.textContent ?? '')
+                    );
                     if (startBtn) {
                         fireEvent.click(startBtn);
                     } else {
@@ -384,10 +426,11 @@ describe('TerminalLayout', () => {
         // LayoutPickerMenu button — click to open
         const allBtns = screen.getAllByRole('button');
         // Look for layout-related buttons
-        const layoutBtn = allBtns.find(b =>
-            /split|layout|2-pane|dual|quad/i.test(b.getAttribute('aria-label') ?? '') ||
-            /split|layout|2-pane|dual|quad/i.test(b.textContent ?? '') ||
-            b.querySelector('svg') !== null
+        const layoutBtn = allBtns.find(
+            (b) =>
+                /split|layout|2-pane|dual|quad/i.test(b.getAttribute('aria-label') ?? '') ||
+                /split|layout|2-pane|dual|quad/i.test(b.textContent ?? '') ||
+                b.querySelector('svg') !== null
         );
         if (layoutBtn) {
             fireEvent.click(layoutBtn);
@@ -412,7 +455,7 @@ describe('TerminalLayout', () => {
     it('exercises loadFromStorage with invalid kind (returns null, falls back to default)', async () => {
         localStorage.setItem(
             'atlas.terminal-layout.v1',
-            JSON.stringify({ kind: 'unknown-kind', panes: [] }),
+            JSON.stringify({ kind: 'unknown-kind', panes: [] })
         );
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => screen.getByText(/0 \/ 1 attached/i));
@@ -420,9 +463,7 @@ describe('TerminalLayout', () => {
     });
 
     it('exercises the Clear button on a session-not-found pane (setPane to null)', async () => {
-        server.use(
-            http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])),
-        );
+        server.use(http.get(`${BASE}/cli/sessions`, () => HttpResponse.json([])));
         renderWithProviders(<TerminalLayout />, {
             initialEntries: ['/terminal/layout?k=single&s=unknown-session'],
         });
@@ -444,28 +485,28 @@ describe('TerminalLayout', () => {
                 <TerminalLayout />
                 <Toast />
             </>,
-            { initialEntries: ['/terminal/layout?k=grid2x2&s=,,,'] },
+            { initialEntries: ['/terminal/layout?k=grid2x2&s=,,,'] }
         );
         await waitFor(() => expect(screen.getByText(/0 \/ 4 attached/i)).toBeInTheDocument());
 
         // Open the LayoutPickerMenu — it has aria-label "Choose layout" (from Tooltip title)
         const layoutPickerBtn = screen.getByRole('button', { name: /choose layout/i });
-        await act(async () => { fireEvent.click(layoutPickerBtn); });
+        await act(async () => {
+            fireEvent.click(layoutPickerBtn);
+        });
 
         // The MUI Menu renders in a portal; wait for the "Single" menu item to appear.
         // Labels moved from visible text to aria-label after the group-by-pane-count
         // redesign, so we match on the menuitem's accessible name.
         await waitFor(() =>
-            expect(screen.getByRole('menuitem', { name: 'Single' })).toBeInTheDocument(),
+            expect(screen.getByRole('menuitem', { name: 'Single' })).toBeInTheDocument()
         );
         await act(async () => {
             fireEvent.click(screen.getByRole('menuitem', { name: 'Single' }));
         });
 
         // Toast: "3 panes detached — sessions still running"
-        await waitFor(() =>
-            expect(screen.getByText(/3 panes detached/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/3 panes detached/i)).toBeInTheDocument());
         // Now only 1 pane visible
         await waitFor(() => expect(screen.getByText(/0 \/ 1 attached/i)).toBeInTheDocument());
     });
@@ -496,7 +537,7 @@ describe('TerminalLayout', () => {
 
         // Menu should be closed (Start new session no longer visible)
         await waitFor(() =>
-            expect(screen.queryByText(/Start new session/i)).not.toBeInTheDocument(),
+            expect(screen.queryByText(/Start new session/i)).not.toBeInTheDocument()
         );
     });
 
@@ -504,9 +545,13 @@ describe('TerminalLayout', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 'attach-sess', title: 'Attachable Session', status: 'active' }),
-                ]),
-            ),
+                    makeSession({
+                        id: 'attach-sess',
+                        title: 'Attachable Session',
+                        status: 'active',
+                    }),
+                ])
+            )
         );
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => screen.getByText(/Empty pane/i));
@@ -529,14 +574,14 @@ describe('TerminalLayout', () => {
 
         // Find and click the hide-chrome button (VisibilityOffRounded icon)
         const btns = screen.getAllByRole('button');
-        const hideBtn = btns.find((b) => b.querySelector('[data-testid="VisibilityOffRoundedIcon"]'));
+        const hideBtn = btns.find((b) =>
+            b.querySelector('[data-testid="VisibilityOffRoundedIcon"]')
+        );
         expect(hideBtn).toBeTruthy();
         fireEvent.click(hideBtn!);
 
         // Toolbar (attached count) should be hidden
-        await waitFor(() =>
-            expect(screen.queryByText(/0 \/ 1 attached/i)).not.toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.queryByText(/0 \/ 1 attached/i)).not.toBeInTheDocument());
 
         // The restore icon (VisibilityRounded) is rendered in a Box with onClick=setHideChrome(false)
         // It contains a VisibilityRounded SVG icon
@@ -547,15 +592,13 @@ describe('TerminalLayout', () => {
         fireEvent.click(revealBox);
 
         // Toolbar should be restored
-        await waitFor(() =>
-            expect(screen.getByText(/0 \/ 1 attached/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/0 \/ 1 attached/i)).toBeInTheDocument());
     });
 
     it('loadFromStorage with non-array panes field returns null (falls back to default)', async () => {
         localStorage.setItem(
             'atlas.terminal-layout.v1',
-            JSON.stringify({ kind: 'single', panes: 'not-an-array' }),
+            JSON.stringify({ kind: 'single', panes: 'not-an-array' })
         );
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => screen.getByText(/0 \/ 1 attached/i));
@@ -563,10 +606,7 @@ describe('TerminalLayout', () => {
     });
 
     it('loadFromStorage with missing kind field returns null (falls back to default)', async () => {
-        localStorage.setItem(
-            'atlas.terminal-layout.v1',
-            JSON.stringify({ panes: [] }),
-        );
+        localStorage.setItem('atlas.terminal-layout.v1', JSON.stringify({ panes: [] }));
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => screen.getByText(/0 \/ 1 attached/i));
         expect(screen.getByText(/Empty pane/i)).toBeInTheDocument();
@@ -579,8 +619,8 @@ describe('TerminalLayout', () => {
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
                     makeSession({ id: 'sess-1', title: 'Already Attached', status: 'active' }),
-                ]),
-            ),
+                ])
+            )
         );
         // k=v2&s=sess-1, — pane 0 has sess-1 attached (in state), pane 1 is empty
         renderWithProviders(<TerminalLayout />, {
@@ -588,12 +628,15 @@ describe('TerminalLayout', () => {
         });
         // Wait for the session data to load (need it for the "taken" label in the menu).
         // Under v8 coverage instrumentation, the API + render cycle can exceed 5s.
-        await waitFor(() => {
-            // Once sessions API resolves, "Already Attached" becomes available in state
-            // We need at least one Connect button (from pane 1, which is empty)
-            const btns = screen.queryAllByRole('button', { name: /Connect/i });
-            expect(btns.length).toBeGreaterThan(0);
-        }, { timeout: 15000 });
+        await waitFor(
+            () => {
+                // Once sessions API resolves, "Already Attached" becomes available in state
+                // We need at least one Connect button (from pane 1, which is empty)
+                const btns = screen.queryAllByRole('button', { name: /Connect/i });
+                expect(btns.length).toBeGreaterThan(0);
+            },
+            { timeout: 15000 }
+        );
 
         // Click the Connect button on the empty pane (pane 1)
         const connectBtns = screen.getAllByRole('button', { name: /Connect/i });
@@ -601,9 +644,13 @@ describe('TerminalLayout', () => {
 
         // After the sessions API resolves, "Already Attached" should appear
         // as a disabled item with "(in another pane)" label
-        await waitFor(() =>
-            expect(screen.queryAllByText('Already Attached').length > 0 || screen.queryAllByText(/in another pane/i).length > 0).toBeTruthy(),
-            { timeout: 5000 },
+        await waitFor(
+            () =>
+                expect(
+                    screen.queryAllByText('Already Attached').length > 0 ||
+                        screen.queryAllByText(/in another pane/i).length > 0
+                ).toBeTruthy(),
+            { timeout: 5000 }
         ).catch(() => {});
         // If the session appeared in the menu, verify "in another pane" is shown
         const alreadyItems = screen.queryAllByText('Already Attached');
@@ -620,17 +667,19 @@ describe('TerminalLayout', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 'closed-sess', title: 'Closed Session', status: 'closed' as const }),
-                ]),
-            ),
+                    makeSession({
+                        id: 'closed-sess',
+                        title: 'Closed Session',
+                        status: 'closed' as const,
+                    }),
+                ])
+            )
         );
         renderWithProviders(<TerminalLayout />, {
             initialEntries: ['/terminal/layout?k=single&s=closed-sess'],
         });
         // The pane renders "Session is closed. Open in single view for transcript."
-        await waitFor(() =>
-            expect(screen.getByText(/Session is closed/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Session is closed/i)).toBeInTheDocument());
     });
 
     it('parseUrl with an invalid layout kind in the URL falls back to localStorage/default', async () => {
@@ -673,7 +722,7 @@ describe('TerminalLayout', () => {
         // false branch of `p && typeof p === 'object' && 'sessionId' in p`.
         localStorage.setItem(
             'atlas.terminal-layout.v1',
-            JSON.stringify({ kind: 'v2', panes: [null, 'notanobject'] }),
+            JSON.stringify({ kind: 'v2', panes: [null, 'notanobject'] })
         );
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => {
@@ -690,8 +739,8 @@ describe('TerminalLayout', () => {
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
                     makeSession({ id: 'closed-1', title: 'Long Closed Session', status: 'closed' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => screen.getByText(/Empty pane/i));
@@ -706,9 +755,13 @@ describe('TerminalLayout', () => {
         server.use(
             http.get(`${BASE}/cli/sessions`, () =>
                 HttpResponse.json([
-                    makeSession({ id: 'branch-sess', title: 'Branched Session', worktree_branch: 'feature/foo' }),
-                ]),
-            ),
+                    makeSession({
+                        id: 'branch-sess',
+                        title: 'Branched Session',
+                        worktree_branch: 'feature/foo',
+                    }),
+                ])
+            )
         );
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => screen.getByText(/Empty pane/i));
@@ -727,8 +780,8 @@ describe('TerminalLayout', () => {
                 HttpResponse.json([
                     makeSession({ id: 'taken-sess', title: 'Taken Session', status: 'active' }),
                     makeSession({ id: 'free-sess', title: 'Free Session', status: 'active' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<TerminalLayout />, {
             initialEntries: ['/terminal/layout?k=v2&s=taken-sess,'],
@@ -740,10 +793,13 @@ describe('TerminalLayout', () => {
         // Open the Connect menu on the still-empty second pane.
         const connectBtns = screen.getAllByRole('button', { name: /Connect/i });
         fireEvent.click(connectBtns[connectBtns.length - 1]!);
-        await waitFor(() => {
-            const menu = document.querySelector('[role="menu"]') as HTMLElement | null;
-            expect(menu && within(menu).queryByText('Taken Session')).toBeTruthy();
-        }, { timeout: 15000 });
+        await waitFor(
+            () => {
+                const menu = document.querySelector('[role="menu"]') as HTMLElement | null;
+                expect(menu && within(menu).queryByText('Taken Session')).toBeTruthy();
+            },
+            { timeout: 15000 }
+        );
         const menu = document.querySelector('[role="menu"]') as HTMLElement;
         expect(within(menu).getByText('Free Session')).toBeInTheDocument();
         expect(within(menu).getByText(/in another pane/i)).toBeInTheDocument();
@@ -762,17 +818,15 @@ describe('TerminalLayout', () => {
                         cli: 'copilot',
                         worktree_branch: null,
                     }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<TerminalLayout />, { initialEntries: ['/terminal/layout'] });
         await waitFor(() => screen.getByText(/Empty pane/i));
 
         // Open the connect menu
         fireEvent.click(screen.getByRole('button', { name: /Connect/i }));
-        await waitFor(() =>
-            expect(screen.getByText('Copilot Session')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Copilot Session')).toBeInTheDocument());
         // secondary text contains 'no branch' (worktree_branch === null)
         expect(screen.getByText(/no branch/i)).toBeInTheDocument();
         // The session item has the warning dot (status !== 'active') — just verify the item rendered

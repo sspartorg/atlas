@@ -20,7 +20,7 @@ describe('ThemeModeProvider', () => {
         render(
             <ThemeModeProvider>
                 <span data-testid="child">hello</span>
-            </ThemeModeProvider>,
+            </ThemeModeProvider>
         );
         expect(screen.getByTestId('child')).toBeInTheDocument();
     });

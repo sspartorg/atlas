@@ -1,0 +1,20 @@
+{
+    // G-019 — `pnpm -r typecheck` only visits the four workspace packages, so
+    // the ~100 files under `e2e/` were never type-checked at all. A type error
+    // there surfaced only when that spec ran — and a spec that skips never runs,
+    // which is how G-018's abstentions could hide one indefinitely.
+    //
+    // DOM lib is required, not optional: `page.evaluate()` callbacks execute in
+    // the browser, so `document`, `window` and `HTMLElement` are correct there.
+    // Without it this config reports 23 false errors; with it, zero.
+    "extends": "./tsconfig.base.json",
+    "compilerOptions": {
+        "noEmit": true,
+        "types": ["node"],
+        "lib": ["ES2023", "DOM", "DOM.Iterable"],
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true
+    },
+    "include": ["e2e/**/*.ts"]
+}

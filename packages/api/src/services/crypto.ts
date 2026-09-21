@@ -128,7 +128,11 @@ function loadOrCreateKey(): Buffer {
     mkdirSync(dirname(path), { recursive: true });
     const fingerprint = readMachineFingerprint();
     const key = fingerprint ? deriveKeyFromMachine(fingerprint) : randomBytes(KEY_BYTES);
-    writeFileSync(path, key);
+    // G-024 — 0600 at creation, not after. `lockDown` chmods, but the key
+    // exists world-readable for the window between the two calls, and the
+    // parent dir is 0755. `mode` closes the window; `lockDown` stays to
+    // repair keys written before this.
+    writeFileSync(path, key, { mode: 0o600 });
     lockDown(path);
     cachedKey = key;
     return key;

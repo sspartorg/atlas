@@ -1,8 +1,5 @@
 import Box from '@mui/material/Box';
-import {
-    STATUS_PALETTE,
-    DEFAULT_STATUS_PALETTE_ENTRY,
-} from '../../theme/tokens.js';
+import { STATUS_PALETTE, DEFAULT_STATUS_PALETTE_ENTRY } from '../../theme/tokens.js';
 
 interface IStatusPillProps {
     status: string;
@@ -42,4 +39,3 @@ export function StatusPill({ status }: IStatusPillProps) {
         </Box>
     );
 }
-

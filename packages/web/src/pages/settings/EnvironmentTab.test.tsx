@@ -47,9 +47,9 @@ describe('EnvironmentTab', () => {
     it('renders the loading state before the GET resolves', () => {
         server.use(
             http.get(`${apiBase}/settings/env`, async () => {
-                await new Promise(r => setTimeout(r, 100));
+                await new Promise((r) => setTimeout(r, 100));
                 return HttpResponse.json({ vars: [] });
-            }),
+            })
         );
         renderWithProviders(<EnvironmentTab />);
         expect(document.querySelector('.MuiCircularProgress-root')).toBeInTheDocument();
@@ -81,7 +81,9 @@ describe('EnvironmentTab', () => {
         // flips the suffix on === 1).
         mountEnv([RESTART_VAR]);
         renderWithProviders(<EnvironmentTab />);
-        await waitFor(() => expect(screen.getByText(/1 requires a server restart/i)).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByText(/1 requires a server restart/i)).toBeInTheDocument()
+        );
     });
 
     it('renders one EnvVarRow per response var (each key visible)', async () => {
@@ -125,7 +127,7 @@ describe('EnvironmentTab', () => {
             http.patch(`${apiBase}/settings/env`, () => {
                 putHit = true;
                 return HttpResponse.json({ vars: [{ ...FOO_VAR, value: 'foo-valX' }] });
-            }),
+            })
         );
         const user = userEvent.setup();
         renderWithProviders(<EnvironmentTab />);
@@ -150,8 +152,8 @@ describe('EnvironmentTab', () => {
         mountEnv([FOO_VAR]);
         server.use(
             http.patch(`${apiBase}/settings/env`, () =>
-                HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Server error' }, { status: 500 })
+            )
         );
         const user = userEvent.setup();
         renderWithProviders(<EnvironmentTab />);
@@ -176,7 +178,7 @@ describe('EnvironmentTab', () => {
                 const body = await request.json();
                 patchedWith.push(body);
                 return HttpResponse.json({ vars: [{ ...FOO_VAR, value: 'foo-valX' }] });
-            }),
+            })
         );
         const user = userEvent.setup();
         renderWithProviders(<EnvironmentTab />);
@@ -198,8 +200,13 @@ describe('EnvironmentTab', () => {
             http.patch(`${apiBase}/settings/env`, async ({ request }) => {
                 const body = await request.json();
                 patchedWith.push(body);
-                return HttpResponse.json({ vars: [{ ...FOO_VAR, value: 'foo-valX' }, { ...FOO2, value: 'val2X' }] });
-            }),
+                return HttpResponse.json({
+                    vars: [
+                        { ...FOO_VAR, value: 'foo-valX' },
+                        { ...FOO2, value: 'val2X' },
+                    ],
+                });
+            })
         );
         const user = userEvent.setup();
         renderWithProviders(<EnvironmentTab />);
@@ -222,8 +229,8 @@ describe('EnvironmentTab', () => {
         mountEnv([FOO_VAR]);
         server.use(
             http.patch(`${apiBase}/settings/env`, () =>
-                HttpResponse.json({ error: 'Specific error message' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Specific error message' }, { status: 500 })
+            )
         );
         const user = userEvent.setup();
         renderWithProviders(<EnvironmentTab />);
@@ -242,12 +249,14 @@ describe('EnvironmentTab', () => {
     it('shows Saving label and disables button while PATCH is in-flight (line 136)', async () => {
         mountEnv([FOO_VAR]);
         let resolvePatch!: () => void;
-        const patchPromise = new Promise<void>((res) => { resolvePatch = res; });
+        const patchPromise = new Promise<void>((res) => {
+            resolvePatch = res;
+        });
         server.use(
             http.patch(`${apiBase}/settings/env`, async () => {
                 await patchPromise;
                 return HttpResponse.json({ vars: [{ ...FOO_VAR, value: 'foo-valX' }] });
-            }),
+            })
         );
         const user = userEvent.setup();
         renderWithProviders(<EnvironmentTab />);
@@ -258,9 +267,12 @@ describe('EnvironmentTab', () => {
         const save = screen.getByRole('button', { name: /save changes/i });
         await waitFor(() => expect(save).not.toBeDisabled());
         await user.click(save);
-        await waitFor(() => {
-            expect(screen.getByText(/Saving/i)).toBeInTheDocument();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Saving/i)).toBeInTheDocument();
+            },
+            { timeout: 3000 }
+        );
         resolvePatch();
     });
 });

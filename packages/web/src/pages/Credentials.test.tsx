@@ -30,7 +30,7 @@ describe('Credentials page', () => {
     it('renders without crashing on empty list', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
+            http.get(`${BASE}/credentials`, () => HttpResponse.json([]))
         );
         const { container } = renderWithProviders(<Credentials />, {
             initialEntries: ['/credentials'],
@@ -41,7 +41,7 @@ describe('Credentials page', () => {
     it('clicks "Add credential" header button (openAdd handler)', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
+            http.get(`${BASE}/credentials`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
         const btns = await screen.findAllByRole('button', { name: /Add credential/i });
@@ -51,7 +51,7 @@ describe('Credentials page', () => {
     it('navigates back via the Settings breadcrumb', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
+            http.get(`${BASE}/credentials`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
         const crumb = await screen.findByText('Settings');
@@ -65,8 +65,8 @@ describe('Credentials page', () => {
                 HttpResponse.json([
                     makeCredential(),
                     makeCredential({ id: 'cred-2', label: 'Org PAT' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
         await screen.findByText('GitHub PAT');
@@ -78,7 +78,7 @@ describe('Credentials page', () => {
     it('renders the singular "1 credential · 1 host" header copy', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([makeCredential()])),
+            http.get(`${BASE}/credentials`, () => HttpResponse.json([makeCredential()]))
         );
         renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
         await screen.findByText('GitHub PAT');
@@ -90,8 +90,8 @@ describe('Credentials page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/credentials`, () =>
-                HttpResponse.json([makeCredential({ kind: 'github_app', expires_at: inAnHour })]),
-            ),
+                HttpResponse.json([makeCredential({ kind: 'github_app', expires_at: inAnHour })])
+            )
         );
         renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
         await screen.findByText('GitHub PAT');
@@ -103,8 +103,8 @@ describe('Credentials page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/credentials`, () =>
-                HttpResponse.json([makeCredential({ expires_at: soon })]),
-            ),
+                HttpResponse.json([makeCredential({ expires_at: soon })])
+            )
         );
         renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
         await screen.findByText('GitHub PAT');
@@ -114,7 +114,7 @@ describe('Credentials page', () => {
     it('clicks the Edit icon to invoke openEdit handler', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([makeCredential()])),
+            http.get(`${BASE}/credentials`, () => HttpResponse.json([makeCredential()]))
         );
         const { container } = renderWithProviders(<Credentials />, {
             initialEntries: ['/credentials'],
@@ -122,7 +122,8 @@ describe('Credentials page', () => {
         await screen.findByText('GitHub PAT');
         // CredentialsTable renders an Edit IconButton with title "Edit".
         const editBtn = Array.from(container.querySelectorAll('button')).find(
-            (b) => b.textContent === '' || b.getAttribute('aria-label')?.toLowerCase().includes('edit'),
+            (b) =>
+                b.textContent === '' || b.getAttribute('aria-label')?.toLowerCase().includes('edit')
         );
         if (editBtn) fireEvent.click(editBtn);
     });
@@ -130,7 +131,7 @@ describe('Credentials page', () => {
     it('opens the row-action menu and clicks Delete → opens confirmation dialog', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([makeCredential()])),
+            http.get(`${BASE}/credentials`, () => HttpResponse.json([makeCredential()]))
         );
         const { container } = renderWithProviders(<Credentials />, {
             initialEntries: ['/credentials'],
@@ -166,7 +167,7 @@ describe('Credentials page', () => {
             http.delete(`${BASE}/credentials/cred-1`, () => {
                 deleted = true;
                 return HttpResponse.json({ ok: true });
-            }),
+            })
         );
         const { container } = renderWithProviders(<Credentials />, {
             initialEntries: ['/credentials'],
@@ -199,8 +200,11 @@ describe('Credentials page', () => {
             http.get(`${BASE}/credentials`, () => HttpResponse.json([makeCredential()])),
             http.delete(`${BASE}/credentials/cred-1`, () => {
                 deleteAttempted = true;
-                return HttpResponse.json({ error: 'Server error', kind: 'internal_error' }, { status: 500 });
-            }),
+                return HttpResponse.json(
+                    { error: 'Server error', kind: 'internal_error' },
+                    { status: 500 }
+                );
+            })
         );
         const { container } = renderWithProviders(<Credentials />, {
             initialEntries: ['/credentials'],
@@ -232,8 +236,8 @@ describe('Credentials page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/credentials`, () =>
-                HttpResponse.json([makeCredential({ expires_at: 'not-a-date' })]),
-            ),
+                HttpResponse.json([makeCredential({ expires_at: 'not-a-date' })])
+            )
         );
         renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
         await screen.findByText('GitHub PAT');
@@ -244,7 +248,7 @@ describe('Credentials page', () => {
     it('openEdit finds and opens the edit modal for an existing credential', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([makeCredential()])),
+            http.get(`${BASE}/credentials`, () => HttpResponse.json([makeCredential()]))
         );
         const { container } = renderWithProviders(<Credentials />, {
             initialEntries: ['/credentials'],
@@ -273,8 +277,8 @@ describe('Credentials page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/credentials`, () =>
-                HttpResponse.json([makeCredential({ expires_at: pastDue })]),
-            ),
+                HttpResponse.json([makeCredential({ expires_at: pastDue })])
+            )
         );
         renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
         await screen.findByText('GitHub PAT');
@@ -288,8 +292,8 @@ describe('Credentials page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/credentials`, () =>
-                HttpResponse.json([makeCredential({ expires_at: farFuture })]),
-            ),
+                HttpResponse.json([makeCredential({ expires_at: farFuture })])
+            )
         );
         renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
         await screen.findByText('GitHub PAT');
@@ -303,9 +307,14 @@ describe('Credentials page', () => {
             http.get(`${BASE}/credentials`, () =>
                 HttpResponse.json([
                     makeCredential({ id: 'c1', label: 'A', expires_at: null }),
-                    makeCredential({ id: 'c2', label: 'B', expires_at: null, host: 'gitlab' as CredentialHost }),
-                ]),
-            ),
+                    makeCredential({
+                        id: 'c2',
+                        label: 'B',
+                        expires_at: null,
+                        host: 'gitlab' as CredentialHost,
+                    }),
+                ])
+            )
         );
         renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
         await screen.findByText('A');
@@ -317,7 +326,7 @@ describe('Credentials page', () => {
     it('Cancel button in delete dialog closes via setDeleteId(null)', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([makeCredential()])),
+            http.get(`${BASE}/credentials`, () => HttpResponse.json([makeCredential()]))
         );
         const { container } = renderWithProviders(<Credentials />, {
             initialEntries: ['/credentials'],
@@ -340,7 +349,7 @@ describe('Credentials page', () => {
             fireEvent.click(cancelBtn);
             // After cancel, the dialog title should disappear
             await waitFor(() =>
-                expect(screen.queryByText(/Delete credential\?/i)).not.toBeInTheDocument(),
+                expect(screen.queryByText(/Delete credential\?/i)).not.toBeInTheDocument()
             );
         }
     });
@@ -348,7 +357,7 @@ describe('Credentials page', () => {
     it('shows the empty state when there are no credentials (rows.length === 0 branch)', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
+            http.get(`${BASE}/credentials`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
         // CredentialsEmptyState renders — wait for the page title to confirm load
@@ -361,7 +370,7 @@ describe('Credentials page', () => {
         // Never-resolving request keeps isPending=true → spinner renders
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/credentials`, () => new Promise(() => {})),
+            http.get(`${BASE}/credentials`, () => new Promise(() => {}))
         );
         const { container } = renderWithProviders(<Credentials />, {
             initialEntries: ['/credentials'],
@@ -381,9 +390,7 @@ describe('Credentials page', () => {
             // Return only 1 credential with id 'cred-1'
             http.get(`${BASE}/credentials`, () => HttpResponse.json([makeCredential()])),
             // DELETE for an id that doesn't exist in rows
-            http.delete(`${BASE}/credentials/cred-unknown`, () =>
-                HttpResponse.json({ ok: true }),
-            ),
+            http.delete(`${BASE}/credentials/cred-unknown`, () => HttpResponse.json({ ok: true }))
         );
         const { container } = renderWithProviders(<Credentials />, {
             initialEntries: ['/credentials'],

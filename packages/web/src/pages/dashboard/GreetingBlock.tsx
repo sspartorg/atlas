@@ -23,8 +23,7 @@ export function GreetingBlock({ ownerFirstName, awaitingCount }: IGreetingBlockP
             : awaitingCount === 1
               ? '1 thing needs you.'
               : `${awaitingCount} things need you.`;
-    const sentenceTwo =
-        awaitingCount === 0 ? 'Everything is in motion.' : 'The rest is in motion.';
+    const sentenceTwo = awaitingCount === 0 ? 'Everything is in motion.' : 'The rest is in motion.';
 
     return (
         <Box>

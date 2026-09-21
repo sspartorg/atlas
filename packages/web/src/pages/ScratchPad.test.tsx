@@ -37,8 +37,8 @@ describe('ScratchPad page', () => {
                         created_at: '2026-05-16T00:00:00.000Z',
                         updated_at: '2026-05-16T00:00:00.000Z',
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<ScratchPad />);
         await waitFor(() => {
@@ -57,18 +57,21 @@ describe('ScratchPad page', () => {
                         created_at: '2026-05-16T00:00:00.000Z',
                         updated_at: '2026-05-16T00:00:00.000Z',
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<ScratchPad />);
         await waitFor(() => expect(screen.getByText('Clickable tile')).toBeInTheDocument());
         fireEvent.click(screen.getByText('Clickable tile'));
         // ScratchPadEditor opens (dialog or panel)
-        await waitFor(() => {
-            const dialogs = document.querySelectorAll('[role="dialog"]');
-            // Editor may render as a dialog or a panel — just check setEditingId was called
-            expect(dialogs.length > 0 || screen.queryByText('Clickable tile')).toBeTruthy();
-        }, { timeout: 2000 });
+        await waitFor(
+            () => {
+                const dialogs = document.querySelectorAll('[role="dialog"]');
+                // Editor may render as a dialog or a panel — just check setEditingId was called
+                expect(dialogs.length > 0 || screen.queryByText('Clickable tile')).toBeTruthy();
+            },
+            { timeout: 2000 }
+        );
     });
 
     it('clicking "New tile" button calls openNew → POST /scratch-pad', async () => {
@@ -84,7 +87,7 @@ describe('ScratchPad page', () => {
                     created_at: '2026-05-16T00:00:00.000Z',
                     updated_at: '2026-05-16T00:00:00.000Z',
                 });
-            }),
+            })
         );
         renderWithProviders(<ScratchPad />);
         await waitFor(() => expect(screen.getByText('Scratch Pad')).toBeInTheDocument());
@@ -101,8 +104,8 @@ describe('ScratchPad page', () => {
         server.use(
             http.get(`${BASE}/scratch-pad`, () => HttpResponse.json([])),
             http.post(`${BASE}/scratch-pad`, () =>
-                HttpResponse.json({ error: 'Disk full' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Disk full' }, { status: 500 })
+            )
         );
         renderWithProviders(<ScratchPad />);
         await waitFor(() => expect(screen.getByText('Scratch Pad')).toBeInTheDocument());
@@ -127,8 +130,8 @@ describe('ScratchPad page', () => {
                         created_at: '2026-05-16T00:00:00.000Z',
                         updated_at: '2026-05-16T00:00:00.000Z',
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<ScratchPad />);
         await waitFor(() => expect(screen.getByText('Empty tile')).toBeInTheDocument());
@@ -147,8 +150,8 @@ describe('ScratchPad page', () => {
                         created_at: '2026-05-16T00:00:00.000Z',
                         updated_at: 'not-a-date',
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<ScratchPad />);
         await waitFor(() => expect(screen.getByText('NaN date tile')).toBeInTheDocument());
@@ -168,8 +171,8 @@ describe('ScratchPad page', () => {
                         created_at: '2026-05-16T00:00:00.000Z',
                         updated_at: '2026-05-16T00:00:00.000Z',
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<ScratchPad />);
         await waitFor(() => expect(screen.getByText('Long tile')).toBeInTheDocument());
@@ -197,7 +200,7 @@ describe('ScratchPad page', () => {
                     created_at: '2026-05-16T00:00:00.000Z',
                     updated_at: '2026-05-16T00:00:00.000Z',
                 });
-            }),
+            })
         );
         renderWithProviders(<ScratchPad />);
         await waitFor(() => expect(screen.getByText('Scratch Pad')).toBeInTheDocument());
@@ -221,13 +224,13 @@ describe('ScratchPad page', () => {
                 HttpResponse.json([
                     {
                         id: 's6',
-                        title: '   ',  // whitespace only — trim().length === 0
+                        title: '   ', // whitespace only — trim().length === 0
                         body_md: 'Some body',
                         created_at: '2026-05-16T00:00:00.000Z',
                         updated_at: '2026-05-16T00:00:00.000Z',
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<ScratchPad />);
         // The card title should fall back to 'Untitled tile'

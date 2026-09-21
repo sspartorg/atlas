@@ -71,7 +71,7 @@ export function TestRunTabContent({ agent, view: _view }: Props) {
             return;
         }
         tickRef.current = window.setInterval(() => {
-            setElapsed(((Date.now() - startedAt) / 1000));
+            setElapsed((Date.now() - startedAt) / 1000);
         }, 100);
         return () => {
             if (tickRef.current) window.clearInterval(tickRef.current);
@@ -106,11 +106,14 @@ export function TestRunTabContent({ agent, view: _view }: Props) {
         // the preview shows that prefix rather than a different command.
         const isClaudeDialect = agent.cli !== 'copilot';
         const rawModel = agent.model || FALLBACK_PREVIEW_MODEL[agent.cli];
-        const modelLabel = agent.cli === 'copilot'
-            ? rawModel.replace(/^(claude-(?:sonnet|haiku|opus))-(\d+)-(\d+)$/, '$1-$2.$3')
-            : rawModel;
+        const modelLabel =
+            agent.cli === 'copilot'
+                ? rawModel.replace(/^(claude-(?:sonnet|haiku|opus))-(\d+)-(\d+)$/, '$1-$2.$3')
+                : rawModel;
         const ollamaPrefix =
-            agent.cli === 'ollama' ? 'ANTHROPIC_BASE_URL=<ollama> ANTHROPIC_AUTH_TOKEN=ollama ' : '';
+            agent.cli === 'ollama'
+                ? 'ANTHROPIC_BASE_URL=<ollama> ANTHROPIC_AUTH_TOKEN=ollama '
+                : '';
         const commandPreview = isClaudeDialect
             ? `$ ${ollamaPrefix}claude --print --model ${modelLabel} --output-format text (ping via stdin)`
             : `$ copilot -p "<ping>" --model ${modelLabel} --allow-all-tools --no-color`;
@@ -177,7 +180,15 @@ export function TestRunTabContent({ agent, view: _view }: Props) {
         appendLine('[test] stopped by user (client-side only — server may still finish)', 'warn');
     }
 
-    const statusLabel = running ? 'Live' : lines.length > 0 ? (exitCode === 0 ? 'Done' : exitCode === null ? 'Idle' : 'Failed') : 'Idle';
+    const statusLabel = running
+        ? 'Live'
+        : lines.length > 0
+          ? exitCode === 0
+              ? 'Done'
+              : exitCode === null
+                ? 'Idle'
+                : 'Failed'
+          : 'Idle';
     const statusColor = running
         ? ATLAS_PALETTE.success
         : statusLabel === 'Done'
@@ -185,11 +196,12 @@ export function TestRunTabContent({ agent, view: _view }: Props) {
           : statusLabel === 'Failed'
             ? ATLAS_PALETTE.error
             : ATLAS_PALETTE.slate60;
-    const statusSoftBg = running || statusLabel === 'Done'
-        ? ATLAS_PALETTE.successSoft
-        : statusLabel === 'Failed'
-          ? ATLAS_PALETTE.dangerSoft
-          : ATLAS_PALETTE.accentSoft;
+    const statusSoftBg =
+        running || statusLabel === 'Done'
+            ? ATLAS_PALETTE.successSoft
+            : statusLabel === 'Failed'
+              ? ATLAS_PALETTE.dangerSoft
+              : ATLAS_PALETTE.accentSoft;
 
     return (
         <Box>
@@ -215,10 +227,10 @@ export function TestRunTabContent({ agent, view: _view }: Props) {
                     Live CLI test run
                 </Typography>
                 <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate60, mb: 2 }}>
-                    Real LLM round-trip — sends a one-line ping (&quot;reply with the single
-                    word OK&quot;) to the agent&apos;s configured CLI and model, then waits for
-                    the response. Verifies the binary is on PATH, credentials are valid, and
-                    the model accepts requests. No issue, no agent prompt, no handoffs, no MCP.
+                    Real LLM round-trip — sends a one-line ping (&quot;reply with the single word
+                    OK&quot;) to the agent&apos;s configured CLI and model, then waits for the
+                    response. Verifies the binary is on PATH, credentials are valid, and the model
+                    accepts requests. No issue, no agent prompt, no handoffs, no MCP.
                 </Typography>
                 <Typography
                     sx={{
@@ -261,6 +273,7 @@ export function TestRunTabContent({ agent, view: _view }: Props) {
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 18 }}
                             >
                                 play_arrow
@@ -282,6 +295,7 @@ export function TestRunTabContent({ agent, view: _view }: Props) {
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 18 }}
                             >
                                 stop

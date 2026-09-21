@@ -232,11 +232,26 @@ export default defineConfig({
             // Note the ADR's own table claimed this package was at 70% lines;
             // it is at 95.40, twenty-five points adrift. Measure before
             // quoting a number from a document.
+            // 2026-09-21 (confidence-close, G-003). Measured on a clean run of
+            // 335 files / 4358 tests:
+            //   stmts 96.19 / branches 92.51 / funcs 95.08 / lines 97.31
+            //
+            // `functions` is pinned at exactly 95 — the Owner's stated bar, now
+            // met — so the gate fails the moment it slips back under rather
+            // than tolerating a slide. The others sit ~0.5 below measured so
+            // ordinary jitter does not trip the build.
+            //
+            // `branches` at 92 is a ceiling, not a target. What is left is
+            // concentrated in `App.tsx`'s `lazyNamed(() => import(...))` route
+            // closures — e2e's job, not a unit test's — and in react-flow
+            // canvas internals that jsdom's no-op ResizeObserver never lets
+            // render. Excluding those files to flatter the number would be the
+            // same mistake as lowering a floor to meet it.
             thresholds: {
-                lines: 94.9,
-                statements: 93.6,
-                branches: 90,
-                functions: 91,
+                lines: 96.8,
+                statements: 95.7,
+                branches: 92,
+                functions: 95,
             },
         },
     },

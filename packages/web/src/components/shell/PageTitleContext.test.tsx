@@ -26,7 +26,7 @@ describe('PageTitleContext', () => {
         const { unmount } = render(
             <PageTitleProvider>
                 <Inner t="My Page" />
-            </PageTitleProvider>,
+            </PageTitleProvider>
         );
         unmount();
     });

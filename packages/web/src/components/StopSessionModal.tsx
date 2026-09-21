@@ -52,7 +52,7 @@ import {
 // both terminal routes pull in eagerly.
 const StopSessionReviewPanel = lazyNamed(
     () => import('./StopSessionReviewPanel.js'),
-    'StopSessionReviewPanel',
+    'StopSessionReviewPanel'
 );
 
 export interface StopSessionResult {
@@ -160,7 +160,7 @@ export function StopSessionModal({ open, sessionId, onClose, onClosed }: Props) 
                 onError: (err: Error) => {
                     toast.show({ message: 'Could not finalize session', detail: err.message });
                 },
-            },
+            }
         );
     }
 
@@ -237,9 +237,7 @@ export function StopSessionModal({ open, sessionId, onClose, onClosed }: Props) 
                         </Alert>
                     </Box>
                 ) : (
-                    <Suspense
-                        fallback={<Skeleton variant="rectangular" sx={{ flex: 1, m: 2 }} />}
-                    >
+                    <Suspense fallback={<Skeleton variant="rectangular" sx={{ flex: 1, m: 2 }} />}>
                         <StopSessionReviewPanel
                             sessionId={sessionId}
                             summary={diff.data}
@@ -307,7 +305,11 @@ export function StopSessionModal({ open, sessionId, onClose, onClosed }: Props) 
                         }
                     />
                     <Stack direction="row" spacing={1}>
-                        <Button onClick={handleClose} disabled={stop.isPending} sx={{ textTransform: 'none' }}>
+                        <Button
+                            onClick={handleClose}
+                            disabled={stop.isPending}
+                            sx={{ textTransform: 'none' }}
+                        >
                             Cancel
                         </Button>
                         <Button
@@ -318,7 +320,9 @@ export function StopSessionModal({ open, sessionId, onClose, onClosed }: Props) 
                             disabled={
                                 stop.isPending ||
                                 isLoading ||
-                                (unstaged.length > 0 && anySelected && commitMessage.trim().length === 0)
+                                (unstaged.length > 0 &&
+                                    anySelected &&
+                                    commitMessage.trim().length === 0)
                             }
                             startIcon={
                                 stop.isPending ? <CircularProgress size={16} /> : <StopRounded />

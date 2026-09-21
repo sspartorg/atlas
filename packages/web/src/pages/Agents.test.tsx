@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
+import { Route, Routes } from 'react-router-dom';
 import { server } from '../test-setup.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { makeAgent, makeSubTask } from '../test-utils/factories.js';
@@ -25,20 +26,26 @@ vi.mock('../hooks/useToast.js', async (importOriginal) => {
     };
 });
 
+// `PageFab` renders only on mobile; flipping this reaches the FAB, which is
+// the only way to add an agent on a phone (the header button is hidden there).
+let isMobile = false;
+vi.mock('../hooks/useIsMobile.js', () => ({
+    useIsMobile: () => isMobile,
+}));
+
 beforeEach(() => {
+    isMobile = false;
     server.use(
         http.get(`${BASE}/run`, () => HttpResponse.json([])),
         http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([])),
-        ...defaultHandlers,
+        ...defaultHandlers
     );
 });
 
 describe('Agents page', () => {
     it('shows Agents heading', async () => {
         renderWithProviders(<Agents />);
-        await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /Agents/i })).toBeTruthy(),
-        );
+        await waitFor(() => expect(screen.getByRole('heading', { name: /Agents/i })).toBeTruthy());
     });
 
     it('shows skeleton cards while loading', () => {
@@ -47,7 +54,7 @@ describe('Agents page', () => {
             http.get(`${BASE}/agents`, async () => {
                 await new Promise(() => {}); // never resolves during the render
                 return HttpResponse.json([]);
-            }),
+            })
         );
         renderWithProviders(<Agents />);
         // MUI Skeleton components render as elements with role="progressbar" or just divs;
@@ -61,9 +68,7 @@ describe('Agents page', () => {
     it('shows "No agents installed" when agents list is empty', async () => {
         server.use(handlers.listAgents([]));
         renderWithProviders(<Agents />);
-        await waitFor(() =>
-            expect(screen.getByText(/no agents installed/i)).toBeTruthy(),
-        );
+        await waitFor(() => expect(screen.getByText(/no agents installed/i)).toBeTruthy());
     });
 
     it('shows agent names when agents are loaded', async () => {
@@ -78,13 +83,11 @@ describe('Agents page', () => {
     it('shows error state when agents query fails', async () => {
         server.use(
             http.get(`${BASE}/agents`, () =>
-                HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Server error' }, { status: 500 })
+            )
         );
         renderWithProviders(<Agents />);
-        await waitFor(() =>
-            expect(screen.getByText(/couldn't load agents/i)).toBeTruthy(),
-        );
+        await waitFor(() => expect(screen.getByText(/couldn't load agents/i)).toBeTruthy());
     });
 
     it('shows filter chips when agents are loaded', async () => {
@@ -99,15 +102,11 @@ describe('Agents page', () => {
     it('opens Add Agent dialog when PageFab is clicked', async () => {
         server.use(handlers.listAgents([]));
         renderWithProviders(<Agents />);
-        await waitFor(() =>
-            expect(screen.getByText(/no agents installed/i)).toBeTruthy(),
-        );
+        await waitFor(() => expect(screen.getByText(/no agents installed/i)).toBeTruthy());
         // PageFab renders a Fab with aria-label or title "Add Agent"
         const fabs = screen.getAllByRole('button', { name: /add agent/i });
         await userEvent.click(fabs[0]!);
-        await waitFor(() =>
-            expect(screen.getByRole('dialog')).toBeTruthy(),
-        );
+        await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
         // The dialog title is "Add Agent"
         expect(screen.getByRole('heading', { name: /add agent/i })).toBeTruthy();
     });
@@ -115,38 +114,32 @@ describe('Agents page', () => {
     it('Add Agent dialog has agent name field', async () => {
         server.use(handlers.listAgents([]));
         renderWithProviders(<Agents />);
-        await waitFor(() =>
-            expect(screen.getByText(/no agents installed/i)).toBeTruthy(),
-        );
+        await waitFor(() => expect(screen.getByText(/no agents installed/i)).toBeTruthy());
         const fab = screen.getByRole('button', { name: /add agent/i });
         await userEvent.click(fab);
-        await waitFor(() =>
-            expect(screen.getByRole('dialog')).toBeTruthy(),
-        );
+        await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
         expect(screen.getByLabelText(/agent name/i)).toBeTruthy();
     });
 
     it('shows Retry button on error state', async () => {
         server.use(
             http.get(`${BASE}/agents`, () =>
-                HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Server error' }, { status: 500 })
+            )
         );
         renderWithProviders(<Agents />);
-        await waitFor(() =>
-            expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy(),
-        );
+        await waitFor(() => expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy());
     });
 
     it('submits the Add Agent form when name is typed and Add Agent button is clicked', async () => {
         server.use(
             handlers.listAgents([]),
-            http.post(`${BASE}/agents`, () => HttpResponse.json({ id: 'new-agent', name: 'My Agent' })),
+            http.post(`${BASE}/agents`, () =>
+                HttpResponse.json({ id: 'new-agent', name: 'My Agent' })
+            )
         );
         renderWithProviders(<Agents />);
-        await waitFor(() =>
-            expect(screen.getByText(/no agents installed/i)).toBeTruthy(),
-        );
+        await waitFor(() => expect(screen.getByText(/no agents installed/i)).toBeTruthy());
         // Open dialog via PageFab
         const fabs = screen.getAllByRole('button', { name: /add agent/i });
         await userEvent.click(fabs[0]!);
@@ -160,9 +153,7 @@ describe('Agents page', () => {
         const submitBtn = screen.getByRole('button', { name: /^Add Agent$/i });
         await userEvent.click(submitBtn);
         // Dialog should close after success
-        await waitFor(() =>
-            expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     });
 
     it('shows Duplicate modal when onDuplicate is triggered from agent card menu', async () => {
@@ -179,14 +170,19 @@ describe('Agents page', () => {
             let duplicateItem: HTMLElement | null = null;
             try {
                 duplicateItem = await screen.findByText('Duplicate', {}, { timeout: 2000 });
-            } catch { /* menu didn't open */ }
+            } catch {
+                /* menu didn't open */
+            }
             if (duplicateItem) {
                 fireEvent.click(duplicateItem);
                 // DuplicateAgentModal opens — check for dialog role
-                await waitFor(() => {
-                    const dialogs = document.querySelectorAll('[role="dialog"]');
-                    expect(dialogs.length).toBeGreaterThan(0);
-                }, { timeout: 2000 });
+                await waitFor(
+                    () => {
+                        const dialogs = document.querySelectorAll('[role="dialog"]');
+                        expect(dialogs.length).toBeGreaterThan(0);
+                    },
+                    { timeout: 2000 }
+                );
             }
         }
     });
@@ -201,12 +197,14 @@ describe('Agents page', () => {
         // find via text content "Favorites" or rely on AgentFilterChips rendering.
         const allBtns = screen.getAllByRole('button');
         const favBtn = allBtns.find(
-            (b) => b.textContent?.toLowerCase().includes('favorites') || b.textContent?.toLowerCase().includes('★'),
+            (b) =>
+                b.textContent?.toLowerCase().includes('favorites') ||
+                b.textContent?.toLowerCase().includes('★')
         );
         if (favBtn) {
             await userEvent.click(favBtn);
             await waitFor(() =>
-                expect(screen.queryByText(/no favorites yet/i)).toBeInTheDocument(),
+                expect(screen.queryByText(/no favorites yet/i)).toBeInTheDocument()
             );
         } else {
             // If the pill isn't present with that text, verify the filter chips exist
@@ -227,7 +225,9 @@ describe('Agents page', () => {
             const opts = document.querySelectorAll('[role="option"]');
             if (opts.length > 0) {
                 // Click "Last run" option if present
-                const lastRunOpt = Array.from(opts).find((o) => /last.run/i.test(o.textContent ?? ''));
+                const lastRunOpt = Array.from(opts).find((o) =>
+                    /last.run/i.test(o.textContent ?? '')
+                );
                 if (lastRunOpt) {
                     fireEvent.click(lastRunOpt);
                     break;
@@ -243,7 +243,9 @@ describe('Agents page', () => {
         const agent = makeAgent({ id: 'a1', name: 'Coder', status: 'active' });
         server.use(
             handlers.listAgents([agent]),
-            http.patch(`${BASE}/agents/a1`, () => HttpResponse.json({ ...agent, status: 'inactive' })),
+            http.patch(`${BASE}/agents/a1`, () =>
+                HttpResponse.json({ ...agent, status: 'inactive' })
+            )
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeTruthy());
@@ -281,21 +283,41 @@ describe('Agents page', () => {
             if (deleteItem) {
                 await userEvent.click(deleteItem);
                 // The Delete modal should appear
-                await waitFor(() =>
-                    expect(screen.queryByText(/Delete Coder/i) ?? screen.queryByText(/Delete agent/i)).toBeTruthy(),
-                    { timeout: 2000 },
+                await waitFor(
+                    () =>
+                        expect(
+                            screen.queryByText(/Delete Coder/i) ??
+                                screen.queryByText(/Delete agent/i)
+                        ).toBeTruthy(),
+                    { timeout: 2000 }
                 );
             }
         }
     });
 
     it('exercises catalogVersionById and upgradeByAgentId useMemos with marketplace data', async () => {
-        const agent = makeAgent({ id: 'a1', name: 'Coder', marketplace_source_id: 'mkt-1', marketplace_pulled_version: 1 });
+        const agent = makeAgent({
+            id: 'a1',
+            name: 'Coder',
+            marketplace_source_id: 'mkt-1',
+            marketplace_pulled_version: 1,
+        });
         server.use(
             handlers.listAgents([agent]),
             http.get(`${BASE}/marketplace/agents`, () =>
-                HttpResponse.json([{ id: 'mkt-1', version: 2, name: 'Coder v2', slug: 'coder', description: '', category: 'software-dev', cli: 'claude', installed_agent_id: 'a1' }]),
-            ),
+                HttpResponse.json([
+                    {
+                        id: 'mkt-1',
+                        version: 2,
+                        name: 'Coder v2',
+                        slug: 'coder',
+                        description: '',
+                        category: 'software-dev',
+                        cli: 'claude',
+                        installed_agent_id: 'a1',
+                    },
+                ])
+            )
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeTruthy());
@@ -310,9 +332,15 @@ describe('Agents page', () => {
             handlers.listAgents([agent]),
             http.get(`${BASE}/run`, () =>
                 HttpResponse.json([
-                    { id: 'run-1', agent_id: 'a1', status: 'completed', created_at: '2026-06-01T00:00:00.000Z', updated_at: '2026-06-01T00:00:00.000Z' },
-                ]),
-            ),
+                    {
+                        id: 'run-1',
+                        agent_id: 'a1',
+                        status: 'completed',
+                        created_at: '2026-06-01T00:00:00.000Z',
+                        updated_at: '2026-06-01T00:00:00.000Z',
+                    },
+                ])
+            )
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeTruthy());
@@ -378,7 +406,7 @@ describe('Agents page', () => {
         const agent = makeAgent({ id: 'a1', name: 'Coder' });
         server.use(
             handlers.listAgents([agent]),
-            http.get(`${BASE}/run`, () => HttpResponse.json({ error: 'fail' }, { status: 500 })),
+            http.get(`${BASE}/run`, () => HttpResponse.json({ error: 'fail' }, { status: 500 }))
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeInTheDocument());
@@ -447,11 +475,14 @@ describe('Agents page', () => {
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeTruthy());
         // AgentCard renders a favorite/star button — find it
-        const favBtns = screen.queryAllByRole('button').filter(
-            (b) => b.getAttribute('aria-label')?.includes('favorite') ||
-                   b.getAttribute('aria-label')?.includes('star') ||
-                   b.textContent?.includes('star'),
-        );
+        const favBtns = screen
+            .queryAllByRole('button')
+            .filter(
+                (b) =>
+                    b.getAttribute('aria-label')?.includes('favorite') ||
+                    b.getAttribute('aria-label')?.includes('star') ||
+                    b.textContent?.includes('star')
+            );
         if (favBtns.length > 0) {
             fireEvent.click(favBtns[0]!);
         }
@@ -476,7 +507,8 @@ describe('Agents page', () => {
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText(/no agents installed/i)).toBeTruthy());
         // AgentsEmptyState renders a "Browse marketplace" button
-        const browseBtn = screen.queryByRole('button', { name: /Browse marketplace/i }) ??
+        const browseBtn =
+            screen.queryByRole('button', { name: /Browse marketplace/i }) ??
             screen.queryByRole('button', { name: /marketplace/i }) ??
             screen.queryByText(/Browse marketplace/i);
         if (browseBtn) {
@@ -492,11 +524,14 @@ describe('Agents page', () => {
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeTruthy());
         // Find favorite/star buttons specifically in the grouped render path
-        const favBtns = screen.queryAllByRole('button').filter(
-            (b) => b.getAttribute('aria-label')?.toLowerCase().includes('favorite') ||
-                   b.getAttribute('aria-label')?.toLowerCase().includes('star') ||
-                   b.textContent?.includes('star'),
-        );
+        const favBtns = screen
+            .queryAllByRole('button')
+            .filter(
+                (b) =>
+                    b.getAttribute('aria-label')?.toLowerCase().includes('favorite') ||
+                    b.getAttribute('aria-label')?.toLowerCase().includes('star') ||
+                    b.textContent?.includes('star')
+            );
         if (favBtns.length > 0) {
             fireEvent.click(favBtns[0]!);
         }
@@ -507,7 +542,7 @@ describe('Agents page', () => {
         const agent = makeAgent({ id: 'a1', name: 'Coder' });
         server.use(
             handlers.listAgents([agent]),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([agent])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([agent]))
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeTruthy());
@@ -517,9 +552,12 @@ describe('Agents page', () => {
             const dupeItem = screen.queryByText('Duplicate');
             if (dupeItem) {
                 await userEvent.click(dupeItem);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 2000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 2000 }
+                ).catch(() => {});
                 const dialog = document.querySelector('[role="dialog"]');
                 if (dialog) fireEvent.keyDown(dialog, { key: 'Escape' });
             }
@@ -538,9 +576,12 @@ describe('Agents page', () => {
             const deleteItem = screen.queryByText('Delete');
             if (deleteItem) {
                 await userEvent.click(deleteItem);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 2000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 2000 }
+                ).catch(() => {});
                 const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
                 if (cancelBtn) fireEvent.click(cancelBtn);
             }
@@ -553,7 +594,7 @@ describe('Agents page', () => {
         server.use(
             handlers.listAgents([agent]),
             http.delete(`${BASE}/agents/a1`, () => new HttpResponse(null, { status: 204 })),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeTruthy());
@@ -563,9 +604,12 @@ describe('Agents page', () => {
             const deleteItem = screen.queryByText('Delete');
             if (deleteItem) {
                 await userEvent.click(deleteItem);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 2000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 2000 }
+                ).catch(() => {});
                 const confirmBtn = screen.queryByRole('button', { name: /Delete agent/i });
                 if (confirmBtn) fireEvent.click(confirmBtn);
             }
@@ -583,17 +627,33 @@ describe('Agents page', () => {
         // Close via Escape (fires the Dialog's onClose which calls setAddOpen(false))
         const dialog = screen.getByRole('dialog');
         fireEvent.keyDown(dialog, { key: 'Escape' });
-        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 3000 }).catch(() => {});
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), {
+            timeout: 3000,
+        }).catch(() => {});
         expect(document.body).toBeTruthy();
     }, 30000);
 
     it('exercises ModelSelect onChange — fn#24 (line 552)', async () => {
         server.use(
             handlers.listAgents([]),
-            http.get(`${BASE}/cli-models`, () => HttpResponse.json([
-                { id: '1', cli: 'claude', model_name: 'claude-sonnet-4-6', note: null, sort_order: 1 },
-                { id: '2', cli: 'claude', model_name: 'claude-opus', note: null, sort_order: 2 },
-            ])),
+            http.get(`${BASE}/cli-models`, () =>
+                HttpResponse.json([
+                    {
+                        id: '1',
+                        cli: 'claude',
+                        model_name: 'claude-sonnet-4-6',
+                        note: null,
+                        sort_order: 1,
+                    },
+                    {
+                        id: '2',
+                        cli: 'claude',
+                        model_name: 'claude-opus',
+                        note: null,
+                        sort_order: 2,
+                    },
+                ])
+            )
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText(/no agents installed/i)).toBeTruthy());
@@ -615,7 +675,9 @@ describe('Agents page', () => {
                     // fallback close
                     fireEvent.keyDown(sel, { key: 'Escape' });
                     break;
-                } catch { /* */ }
+                } catch {
+                    /* */
+                }
             }
         }
         expect(document.body).toBeTruthy();
@@ -629,7 +691,9 @@ describe('Agents page', () => {
         await userEvent.click(fab);
         await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
         // AccentColorPicker renders small colored boxes — click one
-        const colorBtns = document.querySelectorAll('[data-accent-hex], button[style*="background"]');
+        const colorBtns = document.querySelectorAll(
+            '[data-accent-hex], button[style*="background"]'
+        );
         if (colorBtns.length > 0) {
             fireEvent.click(colorBtns[0]!);
         } else {
@@ -637,7 +701,11 @@ describe('Agents page', () => {
             const dialogBtns = document.querySelectorAll('[role="dialog"] button');
             for (const btn of dialogBtns) {
                 const text = btn.textContent ?? '';
-                if (!text.includes('Cancel') && !text.includes('Add Agent') && !text.includes('Adding')) {
+                if (
+                    !text.includes('Cancel') &&
+                    !text.includes('Add Agent') &&
+                    !text.includes('Adding')
+                ) {
                     fireEvent.click(btn);
                     break;
                 }
@@ -655,9 +723,12 @@ describe('Agents page', () => {
         const importBtn = allBtns.find((b) => /import/i.test(b.textContent ?? ''));
         if (importBtn) {
             await userEvent.click(importBtn);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 3000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                },
+                { timeout: 3000 }
+            ).catch(() => {});
             // Close via Cancel or Escape
             const cancelBtn = screen.queryByRole('button', { name: /Cancel/i });
             if (cancelBtn) {
@@ -676,7 +747,7 @@ describe('Agents page', () => {
         await waitFor(() => expect(screen.getByText('Coder')).toBeTruthy());
         // PageFab renders with aria-label="Add Agent"
         const allBtns = screen.getAllByRole('button');
-        const fabBtn = allBtns.find(b => b.getAttribute('aria-label') === 'Add Agent');
+        const fabBtn = allBtns.find((b) => b.getAttribute('aria-label') === 'Add Agent');
         if (fabBtn) fireEvent.click(fabBtn);
         expect(document.body).toBeTruthy();
     });
@@ -686,8 +757,8 @@ describe('Agents page', () => {
         server.use(
             handlers.listAgents([agent]),
             http.delete(`${BASE}/agents/a1`, () =>
-                HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Server error' }, { status: 500 })
+            )
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeTruthy());
@@ -697,9 +768,12 @@ describe('Agents page', () => {
             const deleteItem = screen.queryByText('Delete');
             if (deleteItem) {
                 await userEvent.click(deleteItem);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 2000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 2000 }
+                ).catch(() => {});
                 const confirmBtn = screen.queryByRole('button', { name: /Delete agent/i });
                 if (confirmBtn) {
                     fireEvent.click(confirmBtn);
@@ -719,9 +793,9 @@ describe('Agents page', () => {
         await userEvent.click(fab);
         await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
         // AccentColorPicker renders role="button" elements with aria-label="Accent <name>"
-        const swatchBtns = screen.queryAllByRole('button').filter(
-            (b) => b.getAttribute('aria-label')?.startsWith('Accent '),
-        );
+        const swatchBtns = screen
+            .queryAllByRole('button')
+            .filter((b) => b.getAttribute('aria-label')?.startsWith('Accent '));
         if (swatchBtns.length > 0) {
             // Click a swatch that is NOT already selected to trigger onChange
             const unselected = swatchBtns.find((b) => b.getAttribute('aria-pressed') !== 'true');
@@ -735,7 +809,7 @@ describe('Agents page', () => {
         const importedAgent = makeAgent({ id: 'imported-1', name: 'Imported Agent' });
         server.use(
             handlers.listAgents([]),
-            http.post(`${BASE}/agents/import`, () => HttpResponse.json(importedAgent)),
+            http.post(`${BASE}/agents/import`, () => HttpResponse.json(importedAgent))
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText(/no agents installed/i)).toBeTruthy());
@@ -744,21 +818,34 @@ describe('Agents page', () => {
         const importBtn = allBtns.find((b) => /import/i.test(b.textContent ?? ''));
         if (importBtn) {
             await userEvent.click(importBtn);
-            await waitFor(() => {
-                expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-            }, { timeout: 3000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                },
+                { timeout: 3000 }
+            ).catch(() => {});
             // The ImportAgentZipModal's onImported is called after a successful upload.
             // Simulate uploading a zip file via the hidden file input
-            const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement | null;
+            const fileInput = document.querySelector(
+                'input[type="file"]'
+            ) as HTMLInputElement | null;
             if (fileInput) {
-                const fakeFile = new File(['dummy zip content'], 'agent.zip', { type: 'application/zip' });
-                Object.defineProperty(fileInput, 'files', { value: [fakeFile], configurable: true });
+                const fakeFile = new File(['dummy zip content'], 'agent.zip', {
+                    type: 'application/zip',
+                });
+                Object.defineProperty(fileInput, 'files', {
+                    value: [fakeFile],
+                    configurable: true,
+                });
                 fireEvent.change(fileInput, { target: { files: [fakeFile] } });
                 // Now click Import button to submit
-                await waitFor(() => {
-                    const importSubmitBtn = screen.queryByRole('button', { name: /^Import$/i });
-                    expect(importSubmitBtn).toBeTruthy();
-                }, { timeout: 2000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        const importSubmitBtn = screen.queryByRole('button', { name: /^Import$/i });
+                        expect(importSubmitBtn).toBeTruthy();
+                    },
+                    { timeout: 2000 }
+                ).catch(() => {});
                 const importSubmitBtn = screen.queryByRole('button', { name: /^Import$/i });
                 if (importSubmitBtn) {
                     await userEvent.click(importSubmitBtn);
@@ -782,7 +869,7 @@ describe('Agents page', () => {
         if (swDevBtn) {
             await userEvent.click(swDevBtn);
             await waitFor(() =>
-                expect(screen.queryByText(/no agents in this category/i)).toBeInTheDocument(),
+                expect(screen.queryByText(/no agents in this category/i)).toBeInTheDocument()
             );
         }
     });
@@ -799,7 +886,7 @@ describe('Agents page', () => {
         if (favBtn) {
             await userEvent.click(favBtn);
             await waitFor(() =>
-                expect(screen.queryByText(/no favorites yet/i)).toBeInTheDocument(),
+                expect(screen.queryByText(/no favorites yet/i)).toBeInTheDocument()
             );
         }
     });
@@ -839,7 +926,10 @@ describe('Agents page', () => {
         const sortSelects = screen.queryAllByRole('combobox');
         for (const sel of sortSelects) {
             const text = sel.textContent ?? '';
-            if (/all roles/i.test(text) || sel.getAttribute('aria-label')?.toLowerCase().includes('role')) {
+            if (
+                /all roles/i.test(text) ||
+                sel.getAttribute('aria-label')?.toLowerCase().includes('role')
+            ) {
                 fireEvent.mouseDown(sel);
                 const opts = document.querySelectorAll('[role="option"]');
                 // Pick "Engineer" option if present
@@ -859,13 +949,15 @@ describe('Agents page', () => {
         server.use(
             handlers.listAgents([]),
             http.post(`${BASE}/agents`, () =>
-                HttpResponse.json({ error: 'Internal error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Internal error' }, { status: 500 })
+            )
         );
         // handleAddAgent has try/finally but no catch, so a 500 produces an
         // unhandled rejection on the void-discarded promise.  Register a Node
         // handler to absorb it before Vitest's global handler sees it.
-        const nodeHandler = () => { /* suppress */ };
+        const nodeHandler = () => {
+            /* suppress */
+        };
         process.on('unhandledRejection', nodeHandler);
         try {
             renderWithProviders(<Agents />);
@@ -878,10 +970,13 @@ describe('Agents page', () => {
             const submitBtn = screen.getByRole('button', { name: /^Add Agent$/i });
             fireEvent.click(submitBtn);
             // After the failed POST the dialog remains open (no setAddOpen(false)) and saving resets
-            await waitFor(() => {
-                const btn = screen.queryByRole('button', { name: /^Add Agent$/i });
-                expect(btn).toBeTruthy();
-            }, { timeout: 3000 }).catch(() => {});
+            await waitFor(
+                () => {
+                    const btn = screen.queryByRole('button', { name: /^Add Agent$/i });
+                    expect(btn).toBeTruthy();
+                },
+                { timeout: 3000 }
+            ).catch(() => {});
         } finally {
             process.off('unhandledRejection', nodeHandler);
         }
@@ -898,7 +993,7 @@ describe('Agents page', () => {
             http.delete(`${BASE}/agents/a1`, async () => {
                 await new Promise((r) => setTimeout(r, 5000));
                 return new HttpResponse(null, { status: 204 });
-            }),
+            })
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeTruthy());
@@ -908,9 +1003,12 @@ describe('Agents page', () => {
             const deleteItem = screen.queryByText('Delete');
             if (deleteItem) {
                 await userEvent.click(deleteItem);
-                await waitFor(() => {
-                    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
-                }, { timeout: 2000 }).catch(() => {});
+                await waitFor(
+                    () => {
+                        expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+                    },
+                    { timeout: 2000 }
+                ).catch(() => {});
                 const confirmBtn = screen.queryByRole('button', { name: /Delete agent/i });
                 if (confirmBtn) {
                     // Click confirm — sets deleting=true, fires slow DELETE
@@ -931,11 +1029,13 @@ describe('Agents page', () => {
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Coder')).toBeTruthy());
         // First mark agent as favorite so filter shows it
-        const favBtns = screen.queryAllByRole('button').filter(
-            (b) =>
-                b.getAttribute('aria-label')?.toLowerCase().includes('favorite') ||
-                b.textContent?.includes('star'),
-        );
+        const favBtns = screen
+            .queryAllByRole('button')
+            .filter(
+                (b) =>
+                    b.getAttribute('aria-label')?.toLowerCase().includes('favorite') ||
+                    b.textContent?.includes('star')
+            );
         if (favBtns.length > 0) fireEvent.click(favBtns[0]!);
         // Now click "My favorites" chip — grouped becomes null, flat grid renders
         const allBtns = screen.getAllByRole('button');
@@ -954,8 +1054,8 @@ describe('Agents page', () => {
         server.use(
             handlers.listAgents([inactiveAgent]),
             http.patch(`${BASE}/agents/a1`, () =>
-                HttpResponse.json({ ...inactiveAgent, status: 'active' }),
-            ),
+                HttpResponse.json({ ...inactiveAgent, status: 'active' })
+            )
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Sleeper')).toBeTruthy());
@@ -963,8 +1063,7 @@ describe('Agents page', () => {
         if (moreVertSpans.length > 0) {
             await userEvent.click(moreVertSpans[0]!);
             // For inactive agents the menu item may say "Resume"
-            const resumeItem =
-                screen.queryByText(/Resume/i) ?? screen.queryByText(/Pause/i);
+            const resumeItem = screen.queryByText(/Resume/i) ?? screen.queryByText(/Pause/i);
             if (resumeItem) await userEvent.click(resumeItem);
         }
         expect(document.body).toBeTruthy();
@@ -980,12 +1079,14 @@ describe('Agents page', () => {
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('StarAgent')).toBeTruthy());
         // Find star/favorite buttons (role="button" with aria-label containing 'favorite' or 'star')
-        const favBtns = screen.queryAllByRole('button').filter(
-            (b) =>
-                b.getAttribute('aria-label')?.toLowerCase().includes('favorite') ||
-                b.getAttribute('aria-label')?.toLowerCase().includes('star') ||
-                b.textContent?.toLowerCase().includes('star'),
-        );
+        const favBtns = screen
+            .queryAllByRole('button')
+            .filter(
+                (b) =>
+                    b.getAttribute('aria-label')?.toLowerCase().includes('favorite') ||
+                    b.getAttribute('aria-label')?.toLowerCase().includes('star') ||
+                    b.textContent?.toLowerCase().includes('star')
+            );
         if (favBtns.length > 0) {
             fireEvent.click(favBtns[0]!);
             // After toggle, the counts useMemo re-runs with isFav returning true for the toggled agent.
@@ -1006,7 +1107,10 @@ describe('Agents page', () => {
             makeAgent({ id: 'a1', name: 'Zeta', category: 'software-dev' }),
             makeAgent({ id: 'a2', name: 'Alpha', category: 'software-dev' }),
         ];
-        server.use(handlers.listAgents(agents), http.get(`${BASE}/run`, () => HttpResponse.json([])));
+        server.use(
+            handlers.listAgents(agents),
+            http.get(`${BASE}/run`, () => HttpResponse.json([]))
+        );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Zeta')).toBeTruthy());
         const sortSelects = screen.queryAllByRole('combobox');
@@ -1048,8 +1152,8 @@ describe('Agents page', () => {
                         completed_at: '2026-06-22T10:05:00Z',
                         total_cost_usd: 0.01,
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('NoRuns')).toBeTruthy());
@@ -1101,8 +1205,8 @@ describe('Agents page', () => {
                         completed_at: '2026-06-22T10:05:00Z',
                         total_cost_usd: 0.01,
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('Earlier')).toBeTruthy());
@@ -1123,10 +1227,18 @@ describe('Agents page', () => {
 
     it('roleFilter narrows category results — agents with different role_id are excluded (line 186)', async () => {
         const agents = [
-            makeAgent({ id: 'a1', name: 'EngineerAgent', category: 'software-dev', role_id: 'engineer' }),
+            makeAgent({
+                id: 'a1',
+                name: 'EngineerAgent',
+                category: 'software-dev',
+                role_id: 'engineer',
+            }),
             makeAgent({ id: 'a2', name: 'QaAgent', category: 'software-dev', role_id: 'qa' }),
         ];
-        server.use(handlers.listAgents(agents), http.get(`${BASE}/run`, () => HttpResponse.json([])));
+        server.use(
+            handlers.listAgents(agents),
+            http.get(`${BASE}/run`, () => HttpResponse.json([]))
+        );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('EngineerAgent')).toBeTruthy());
         const roleSelects = screen.queryAllByRole('combobox');
@@ -1135,7 +1247,11 @@ describe('Agents page', () => {
             if (/all roles/i.test(text)) {
                 fireEvent.mouseDown(sel);
                 const opts = document.querySelectorAll('[role="option"]');
-                const qaOpt = Array.from(opts).find((o) => /^qa$/i.test((o.textContent ?? '').trim()) || /qa/i.test(o.textContent ?? ''));
+                const qaOpt = Array.from(opts).find(
+                    (o) =>
+                        /^qa$/i.test((o.textContent ?? '').trim()) ||
+                        /qa/i.test(o.textContent ?? '')
+                );
                 if (qaOpt) {
                     fireEvent.click(qaOpt);
                     await waitFor(() => {
@@ -1153,7 +1269,10 @@ describe('Agents page', () => {
 
     it('roleCounts increments for agents with a role_id set (line 171)', async () => {
         const agent = makeAgent({ id: 'a1', name: 'ArchitectAgent', role_id: 'architect' });
-        server.use(handlers.listAgents([agent]), http.get(`${BASE}/run`, () => HttpResponse.json([])));
+        server.use(
+            handlers.listAgents([agent]),
+            http.get(`${BASE}/run`, () => HttpResponse.json([]))
+        );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('ArchitectAgent')).toBeTruthy());
         expect(screen.getByText('ArchitectAgent')).toBeInTheDocument();
@@ -1176,7 +1295,7 @@ describe('Agents page', () => {
             http.post(`${BASE}/agents`, async ({ request }) => {
                 capturedBody = await request.json();
                 return HttpResponse.json({ id: 'new-agent', name: 'Pending Agent' });
-            }),
+            })
         );
         renderWithProviders(<Agents />);
         const fabs = screen.getAllByRole('button', { name: /add agent/i });
@@ -1204,8 +1323,8 @@ describe('Agents page', () => {
                 HttpResponse.json([
                     makeSubTask({ id: 'S1', assignee_agent_id: 'a2', status: 'ready' }),
                     makeSubTask({ id: 'S2', assignee_agent_id: 'a2', status: 'in_progress' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('LowQueue')).toBeTruthy());
@@ -1263,9 +1382,9 @@ describe('Agents — Add Agent surfaces API errors (F-002)', () => {
                         error: "model 'claude-sonnet-9-9' is not in the cli_models registry for cli 'claude'",
                         kind: 'validation_error',
                     },
-                    { status: 400 },
+                    { status: 400 }
                 );
-            }),
+            })
         );
 
         renderWithProviders(<Agents />);
@@ -1275,13 +1394,148 @@ describe('Agents — Add Agent surfaces API errors (F-002)', () => {
         await userEvent.type(name, 'Probe');
         fireEvent.click(screen.getAllByRole('button', { name: /^add agent$/i }).at(-1)!);
 
-        await waitFor(() => {
-            if (hits.length === 0) throw new Error('POST /agents was never called');
-            if (shown.length === 0) {
-                throw new Error('the create failed and nothing was shown to the Owner');
-            }
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                if (hits.length === 0) throw new Error('POST /agents was never called');
+                if (shown.length === 0) {
+                    throw new Error('the create failed and nothing was shown to the Owner');
+                }
+            },
+            { timeout: 5000 }
+        );
 
         expect(shown.join(' ')).toMatch(/registry/i);
     }, 30000);
+});
+
+// ─── Card grid, retry and the Add-Agent model field ─────────────────────────
+
+describe('Agents page — list interactions', () => {
+    it('retries the agents query after a failed load', async () => {
+        // The error card is the only way back from a transient API blip; if
+        // Retry stops refetching the Owner has to reload the whole SPA.
+        let attempt = 0;
+        server.use(
+            http.get(`${BASE}/agents`, () => {
+                attempt += 1;
+                return attempt === 1
+                    ? HttpResponse.json({ error: 'Server error' }, { status: 500 })
+                    : HttpResponse.json([makeAgent({ id: 'a1', name: 'Coder' })]);
+            })
+        );
+        renderWithProviders(<Agents />);
+        await screen.findByText(/couldn't load agents/i);
+
+        await userEvent.click(screen.getByRole('button', { name: /^Retry$/i }));
+        expect(await screen.findByText('Coder')).toBeInTheDocument();
+    });
+
+    it('stars an agent from the grouped list and filters down to it', async () => {
+        // The default view groups by category; the star lives on the card in
+        // that grouped branch, and the whole point of it is the Favorites
+        // filter picking the agent up afterwards.
+        window.localStorage.removeItem('atlas.agentFavorites');
+        server.use(
+            handlers.listAgents([
+                makeAgent({ id: 'a1', name: 'Coder' }),
+                makeAgent({ id: 'a2', name: 'Reviewer' }),
+            ])
+        );
+        renderWithProviders(<Agents />);
+        await screen.findByText('Coder');
+
+        await userEvent.click(screen.getAllByLabelText(/Add to favorites/i)[0]!);
+        // The star flips in place, so the Owner can tell it took.
+        expect(await screen.findByLabelText(/Remove from favorites/i)).toBeInTheDocument();
+
+        await userEvent.click(screen.getByRole('button', { name: /My favorites/i }));
+        expect(await screen.findByText('Coder')).toBeInTheDocument();
+        expect(screen.queryByText('Reviewer')).not.toBeInTheDocument();
+    });
+
+    it('un-stars from the flat favorites grid and empties it', async () => {
+        // The Favorites filter renders the ungrouped grid — a second copy of
+        // the card wiring. Un-starring there has to reach the same store, or
+        // the Owner can add a favorite but never remove one.
+        window.localStorage.setItem('atlas.agentFavorites', JSON.stringify(['a1']));
+        server.use(handlers.listAgents([makeAgent({ id: 'a1', name: 'Coder' })]));
+        renderWithProviders(<Agents />);
+        await screen.findByText('Coder');
+
+        await userEvent.click(screen.getByRole('button', { name: /My favorites/i }));
+        await screen.findByText('Coder');
+        await userEvent.click(screen.getByLabelText(/Remove from favorites/i));
+
+        expect(await screen.findByText(/No favorites yet/i)).toBeInTheDocument();
+        window.localStorage.removeItem('atlas.agentFavorites');
+    });
+
+    it('opens the agent from the flat favorites grid', async () => {
+        window.localStorage.setItem('atlas.agentFavorites', JSON.stringify(['a1']));
+        server.use(handlers.listAgents([makeAgent({ id: 'a1', name: 'Coder' })]));
+        renderWithProviders(
+            <Routes>
+                <Route path="/agents" element={<Agents />} />
+                <Route path="/agents/:id" element={<div>agent detail a1</div>} />
+            </Routes>,
+            { initialEntries: ['/agents'] }
+        );
+        await screen.findByText('Coder');
+        await userEvent.click(screen.getByRole('button', { name: /My favorites/i }));
+        await userEvent.click(await screen.findByText('Coder'));
+        expect(await screen.findByText('agent detail a1')).toBeInTheDocument();
+        window.localStorage.removeItem('atlas.agentFavorites');
+    });
+
+    it('creates the agent with the model picked in the dialog', async () => {
+        // The model is validated server-side against the cli_models registry,
+        // so sending the untouched default instead of the Owner's choice
+        // produces an agent that runs on the wrong model silently.
+        let body: Record<string, unknown> | null = null;
+        server.use(
+            handlers.listAgents([]),
+            http.get(`${BASE}/cli-models`, () =>
+                HttpResponse.json([
+                    {
+                        id: 1,
+                        cli: 'claude',
+                        model_name: 'claude-sonnet-4-6',
+                        sort_order: 1,
+                        note: null,
+                    },
+                    {
+                        id: 2,
+                        cli: 'claude',
+                        model_name: 'claude-opus-4-7',
+                        sort_order: 2,
+                        note: null,
+                    },
+                ])
+            ),
+            http.post(`${BASE}/agents`, async ({ request }) => {
+                body = (await request.json()) as Record<string, unknown>;
+                return HttpResponse.json(makeAgent({ id: 'new', name: 'Probe' }));
+            })
+        );
+        renderWithProviders(<Agents />);
+        await userEvent.click(await screen.findByRole('button', { name: /^add agent$/i }));
+        await userEvent.type(await screen.findByLabelText(/agent name/i), 'Probe');
+
+        await userEvent.click(screen.getByRole('combobox', { name: /Model/i }));
+        await userEvent.click(await screen.findByRole('option', { name: /claude-opus-4-7/ }));
+
+        await userEvent.click(screen.getAllByRole('button', { name: /^add agent$/i }).at(-1)!);
+        await waitFor(() => expect(body).not.toBeNull());
+        expect(body).toMatchObject({ name: 'Probe', model: 'claude-opus-4-7', cli: 'claude' });
+    }, 30000);
+
+    it('offers the Add Agent FAB on mobile', async () => {
+        isMobile = true;
+        server.use(handlers.listAgents([]));
+        renderWithProviders(<Agents />);
+        await screen.findByText(/no agents installed/i);
+        const fab = screen.getAllByRole('button', { name: /^Add Agent$/i }).at(-1)!;
+        await userEvent.click(fab);
+        expect(await screen.findByRole('heading', { name: /add agent/i })).toBeInTheDocument();
+    });
 });

@@ -13,7 +13,7 @@ describe('ProjectCostBars', () => {
                 ]}
                 terminalByProject={[]}
                 topProjectMax={4.5}
-            />,
+            />
         );
         expect(screen.getByText('Atlas')).toBeInTheDocument();
         expect(screen.getByText('Other')).toBeInTheDocument();
@@ -24,11 +24,16 @@ describe('ProjectCostBars', () => {
         renderWithProviders(
             <ProjectCostBars
                 byProject={[
-                    { project_id: null, project_name: 'Unattached', total_cost_usd: 1.5, run_count: 0 },
+                    {
+                        project_id: null,
+                        project_name: 'Unattached',
+                        total_cost_usd: 1.5,
+                        run_count: 0,
+                    },
                 ]}
                 terminalByProject={[]}
                 topProjectMax={1.5}
-            />,
+            />
         );
         expect(screen.getByText('Unattached')).toBeInTheDocument();
         // No <a> link because isClickable is false.
@@ -44,7 +49,7 @@ describe('ProjectCostBars', () => {
                 ]}
                 terminalByProject={[]}
                 topProjectMax={1}
-            />,
+            />
         );
         expect(screen.getByText(/1 project /)).toBeInTheDocument();
     });
@@ -57,10 +62,15 @@ describe('ProjectCostBars', () => {
             <ProjectCostBars
                 byProject={[]}
                 terminalByProject={[
-                    { project_id: 'p3', project_name: 'TerminalOnly', total_cost_usd: 2.5, session_count: 3 },
+                    {
+                        project_id: 'p3',
+                        project_name: 'TerminalOnly',
+                        total_cost_usd: 2.5,
+                        session_count: 3,
+                    },
                 ]}
                 topProjectMax={0}
-            />,
+            />
         );
         expect(screen.getByText('TerminalOnly')).toBeInTheDocument();
         // Session count surfaced in the sub-text.
@@ -69,11 +79,7 @@ describe('ProjectCostBars', () => {
 
     it('renders the empty-state when both byProject and terminalByProject are empty', () => {
         renderWithProviders(
-            <ProjectCostBars
-                byProject={[]}
-                terminalByProject={[]}
-                topProjectMax={0}
-            />,
+            <ProjectCostBars byProject={[]} terminalByProject={[]} topProjectMax={0} />
         );
         expect(screen.getByText(/No project spend this month/i)).toBeInTheDocument();
     });
@@ -85,10 +91,15 @@ describe('ProjectCostBars', () => {
                     { project_id: 'p1', project_name: 'Atlas', total_cost_usd: 4.0, run_count: 8 },
                 ]}
                 terminalByProject={[
-                    { project_id: 'p1', project_name: 'Atlas', total_cost_usd: 1.5, session_count: 2 },
+                    {
+                        project_id: 'p1',
+                        project_name: 'Atlas',
+                        total_cost_usd: 1.5,
+                        session_count: 2,
+                    },
                 ]}
                 topProjectMax={4.0}
-            />,
+            />
         );
         // Combined total = 4 + 1.5 = 5.50
         expect(screen.getByText('$5.50')).toBeInTheDocument();
@@ -106,13 +117,23 @@ describe('ProjectCostBars', () => {
         renderWithProviders(
             <ProjectCostBars
                 byProject={[
-                    { project_id: 'p1', project_name: 'AgentOnly', total_cost_usd: 2.0, run_count: 5 },
+                    {
+                        project_id: 'p1',
+                        project_name: 'AgentOnly',
+                        total_cost_usd: 2.0,
+                        run_count: 5,
+                    },
                 ]}
                 terminalByProject={[
-                    { project_id: null, project_name: 'NoIdTerminal', total_cost_usd: 1.0, session_count: 2 },
+                    {
+                        project_id: null,
+                        project_name: 'NoIdTerminal',
+                        total_cost_usd: 1.0,
+                        session_count: 2,
+                    },
                 ]}
                 topProjectMax={2.0}
-            />,
+            />
         );
         // Both bars must render.
         expect(screen.getByText('AgentOnly')).toBeInTheDocument();

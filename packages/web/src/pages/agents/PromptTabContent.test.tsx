@@ -21,9 +21,7 @@ const agent = makeAgent({
 function baseHandlers() {
     return [
         ...defaultHandlers,
-        http.get(`${BASE}/agents/${agent.id}/prompt-versions`, () =>
-            HttpResponse.json([]),
-        ),
+        http.get(`${BASE}/agents/${agent.id}/prompt-versions`, () => HttpResponse.json([])),
     ];
 }
 
@@ -33,18 +31,14 @@ beforeEach(() => {
 
 describe('PromptTabContent', () => {
     it('renders without crashing', async () => {
-        const { container } = renderWithProviders(
-            <PromptTabContent agent={agent} />,
-        );
+        const { container } = renderWithProviders(<PromptTabContent agent={agent} />);
         await waitFor(() => expect(container.firstChild).toBeInTheDocument());
     });
 
     it('shows auto-preamble banner', async () => {
         renderWithProviders(<PromptTabContent agent={agent} />);
         await waitFor(() =>
-            expect(
-                screen.getByText(/Auto-prepended at run time/i),
-            ).toBeInTheDocument(),
+            expect(screen.getByText(/Auto-prepended at run time/i)).toBeInTheDocument()
         );
     });
 
@@ -53,7 +47,7 @@ describe('PromptTabContent', () => {
         await waitFor(() => {
             const textareas = Array.from(document.querySelectorAll('textarea'));
             const visible = textareas.find(
-                (t) => !t.hasAttribute('aria-hidden') && t.value === 'You are a coder agent.',
+                (t) => !t.hasAttribute('aria-hidden') && t.value === 'You are a coder agent.'
             );
             expect(visible).toBeDefined();
         });
@@ -61,21 +55,19 @@ describe('PromptTabContent', () => {
 
     it('typing in textarea makes Save button enabled', async () => {
         renderWithProviders(<PromptTabContent agent={agent} />);
-        await waitFor(() =>
-            expect(screen.getByText(/Active prompt/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Active prompt/i)).toBeInTheDocument());
         const saveBtn = screen.getByRole('button', { name: /^Save$/i });
         expect(saveBtn).toBeDisabled();
 
         const textareas = Array.from(document.querySelectorAll('textarea'));
         const editableTextarea = textareas.find(
-            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
         );
         expect(editableTextarea).toBeDefined();
         await userEvent.type(editableTextarea!, ' extra text');
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled()
         );
     });
 
@@ -85,21 +77,19 @@ describe('PromptTabContent', () => {
             http.patch(`${BASE}/agents/${agent.id}`, () => {
                 patched = true;
                 return HttpResponse.json({ ...agent, prompt_version: 2 });
-            }),
+            })
         );
         renderWithProviders(<PromptTabContent agent={agent} />);
-        await waitFor(() =>
-            expect(screen.getByText(/Active prompt/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Active prompt/i)).toBeInTheDocument());
 
         const textareas = Array.from(document.querySelectorAll('textarea'));
         const editableTextarea = textareas.find(
-            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
         );
         await userEvent.type(editableTextarea!, ' extra text');
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled()
         );
         await userEvent.click(screen.getByRole('button', { name: /^Save$/i }));
 
@@ -108,9 +98,7 @@ describe('PromptTabContent', () => {
 
     it('Save failure shows error toast', async () => {
         server.use(
-            http.patch(`${BASE}/agents/${agent.id}`, () =>
-                new HttpResponse(null, { status: 500 }),
-            ),
+            http.patch(`${BASE}/agents/${agent.id}`, () => new HttpResponse(null, { status: 500 }))
         );
         renderWithProviders(
             <>
@@ -118,47 +106,41 @@ describe('PromptTabContent', () => {
                 <Toast />
             </>
         );
-        await waitFor(() =>
-            expect(screen.getByText(/Active prompt/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Active prompt/i)).toBeInTheDocument());
 
         const textareas = Array.from(document.querySelectorAll('textarea'));
         const editableTextarea = textareas.find(
-            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
         );
         await userEvent.type(editableTextarea!, ' extra text');
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled()
         );
         await userEvent.click(screen.getByRole('button', { name: /^Save$/i }));
 
-        await waitFor(() =>
-            expect(screen.getByText(/Save failed/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Save failed/i)).toBeInTheDocument());
     });
 
     it('Discard button reverts changes', async () => {
         renderWithProviders(<PromptTabContent agent={agent} />);
-        await waitFor(() =>
-            expect(screen.getByText(/Active prompt/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Active prompt/i)).toBeInTheDocument());
 
         const textareas = Array.from(document.querySelectorAll('textarea'));
         const editableTextarea = textareas.find(
-            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
         );
         await userEvent.type(editableTextarea!, ' extra text');
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Discard/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /Discard/i })).toBeInTheDocument()
         );
         await userEvent.click(screen.getByRole('button', { name: /Discard/i }));
 
         await waitFor(() => {
             const updatedTextareas = Array.from(document.querySelectorAll('textarea'));
             const updated = updatedTextareas.find(
-                (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+                (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
             );
             expect(updated?.value).toBe('You are a coder agent.');
         });
@@ -166,11 +148,7 @@ describe('PromptTabContent', () => {
 
     it('version history shows "No prompt history yet" when empty', async () => {
         renderWithProviders(<PromptTabContent agent={agent} />);
-        await waitFor(() =>
-            expect(
-                screen.getByText(/No prompt history yet/i),
-            ).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/No prompt history yet/i)).toBeInTheDocument());
     });
 
     it('version history shows versions when data provided', async () => {
@@ -185,13 +163,11 @@ describe('PromptTabContent', () => {
         };
         server.use(
             http.get(`${BASE}/agents/${agent.id}/prompt-versions`, () =>
-                HttpResponse.json([version]),
-            ),
+                HttpResponse.json([version])
+            )
         );
         renderWithProviders(<PromptTabContent agent={agent} />);
-        await waitFor(() =>
-            expect(screen.getByText('owner')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('owner')).toBeInTheDocument());
     });
 
     it('shows "Active" status badge for current version', async () => {
@@ -206,14 +182,12 @@ describe('PromptTabContent', () => {
         };
         server.use(
             http.get(`${BASE}/agents/${agent.id}/prompt-versions`, () =>
-                HttpResponse.json([version]),
-            ),
+                HttpResponse.json([version])
+            )
         );
         // agent has prompt_version: 1, version row also has version: 1 → Active
         renderWithProviders(<PromptTabContent agent={agent} />);
-        await waitFor(() =>
-            expect(screen.getByText('Active')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
     });
 
     it('shows "Replaced" status badge for non-current version', async () => {
@@ -232,13 +206,11 @@ describe('PromptTabContent', () => {
         });
         server.use(
             http.get(`${BASE}/agents/${agent.id}/prompt-versions`, () =>
-                HttpResponse.json([version]),
-            ),
+                HttpResponse.json([version])
+            )
         );
         renderWithProviders(<PromptTabContent agent={agentV2} />);
-        await waitFor(() =>
-            expect(screen.getByText('Replaced')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Replaced')).toBeInTheDocument());
     });
 
     it('shows "reverted from" annotation for reverted version', async () => {
@@ -253,13 +225,11 @@ describe('PromptTabContent', () => {
         };
         server.use(
             http.get(`${BASE}/agents/${agent.id}/prompt-versions`, () =>
-                HttpResponse.json([version]),
-            ),
+                HttpResponse.json([version])
+            )
         );
         renderWithProviders(<PromptTabContent agent={agent} />);
-        await waitFor(() =>
-            expect(screen.getByText(/rev v3/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/rev v3/i)).toBeInTheDocument());
     });
 
     it('Revert button calls POST /api/agents/:id/prompt/revert', async () => {
@@ -279,20 +249,16 @@ describe('PromptTabContent', () => {
         });
         server.use(
             http.get(`${BASE}/agents/${agent.id}/prompt-versions`, () =>
-                HttpResponse.json([version]),
+                HttpResponse.json([version])
             ),
             http.post(`${BASE}/agents/${agent.id}/prompt-versions/1/revert`, () => {
                 reverted = true;
                 return HttpResponse.json({ ...agent, prompt_version: 3 });
-            }),
+            })
         );
         renderWithProviders(<PromptTabContent agent={agentV2} />);
-        await waitFor(() =>
-            expect(screen.getByText('owner')).toBeInTheDocument(),
-        );
-        await waitFor(() =>
-            expect(screen.getByText('Revert')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('owner')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Revert')).toBeInTheDocument());
         await userEvent.click(screen.getByText('Revert'));
         await waitFor(() => expect(reverted).toBe(true));
     });
@@ -309,7 +275,7 @@ describe('PromptTabContent', () => {
         await waitFor(() => {
             // The textarea is still present in edit mode
             const textareas = Array.from(document.querySelectorAll('textarea'));
-            const visible = textareas.find(t => !t.hasAttribute('aria-hidden'));
+            const visible = textareas.find((t) => !t.hasAttribute('aria-hidden'));
             expect(visible).toBeDefined();
         });
     });
@@ -325,7 +291,7 @@ describe('PromptTabContent', () => {
         await waitFor(() => {
             const textareas = Array.from(document.querySelectorAll('textarea'));
             const visible = textareas.find(
-                t => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+                (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
             );
             // Textarea hidden in preview mode
             expect(visible).toBeUndefined();
@@ -341,9 +307,7 @@ describe('PromptTabContent', () => {
 
     it('shows "Version history (0)" in header when no versions', async () => {
         renderWithProviders(<PromptTabContent agent={agent} />);
-        await waitFor(() =>
-            expect(screen.getByText(/Version history \(0\)/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Version history \(0\)/i)).toBeInTheDocument());
     });
 
     it('shows "Version history (1)" when one version exists', async () => {
@@ -358,20 +322,16 @@ describe('PromptTabContent', () => {
         };
         server.use(
             http.get(`${BASE}/agents/${agent.id}/prompt-versions`, () =>
-                HttpResponse.json([version]),
-            ),
+                HttpResponse.json([version])
+            )
         );
         renderWithProviders(<PromptTabContent agent={agent} />);
-        await waitFor(() =>
-            expect(screen.getByText(/Version history \(1\)/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Version history \(1\)/i)).toBeInTheDocument());
     });
 
     it('shows the prompt fileName based on agent name', async () => {
         renderWithProviders(<PromptTabContent agent={agent} />);
-        await waitFor(() =>
-            expect(screen.getByText('coder.prompt.md')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('coder.prompt.md')).toBeInTheDocument());
     });
 
     it('shows line count in footer', async () => {
@@ -386,8 +346,8 @@ describe('PromptTabContent', () => {
         server.use(
             http.patch(`${BASE}/agents/${agent.id}`, () =>
                 // Return updated prompt_md so draft syncs with savedValue → dirty becomes false
-                HttpResponse.json({ ...agent, prompt_md: updatedPrompt, prompt_version: 2 }),
-            ),
+                HttpResponse.json({ ...agent, prompt_md: updatedPrompt, prompt_version: 2 })
+            )
         );
         // Use a wrapper so we can update the agent prop after mutation
         const { useState: useLocalState } = await import('react');
@@ -401,7 +361,9 @@ describe('PromptTabContent', () => {
                     <Toast />
                     <button
                         data-testid="update-agent-btn"
-                        onClick={() => setAgent({ ...agent, prompt_md: updatedPrompt, prompt_version: 2 })}
+                        onClick={() =>
+                            setAgent({ ...agent, prompt_md: updatedPrompt, prompt_version: 2 })
+                        }
                     >
                         update
                     </button>
@@ -409,16 +371,14 @@ describe('PromptTabContent', () => {
             );
         }
         renderWithProviders(<Wrapper />);
-        await waitFor(() =>
-            expect(screen.getByText(/Active prompt/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Active prompt/i)).toBeInTheDocument());
         const textareas = Array.from(document.querySelectorAll('textarea'));
         const editableTextarea = textareas.find(
-            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
         );
         await userEvent.type(editableTextarea!, ' updated content');
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled()
         );
         await userEvent.click(screen.getByRole('button', { name: /^Save$/i }));
         // Simulate agent prop updating (as would happen when react-query cache invalidates)
@@ -445,20 +405,18 @@ describe('PromptTabContent', () => {
         };
         server.use(
             http.get(`${BASE}/agents/${agent.id}/prompt-versions`, () =>
-                HttpResponse.json([version]),
+                HttpResponse.json([version])
             ),
             http.post(`${BASE}/agents/${agent.id}/prompt-versions/1/revert`, () => {
                 revertCalled = true;
                 return HttpResponse.json({ ...agent, prompt_version: 2 });
-            }),
+            })
         );
         // agent has prompt_version: 1 and the version row also has version: 1 → "Active" shown,
         // no Revert button for the active row — handleRevert early-return is covered
         // by the fact that clicking any "Active" row does nothing (Revert is hidden).
         renderWithProviders(<PromptTabContent agent={agent} />);
-        await waitFor(() =>
-            expect(screen.getByText('Active')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
         // Revert button is absent for the active version row
         expect(screen.queryByText('Revert')).not.toBeInTheDocument();
         expect(revertCalled).toBe(false);
@@ -472,14 +430,12 @@ describe('PromptTabContent', () => {
             prompt_version: 1,
         });
         server.use(
-            http.get(`${BASE}/agents/agent-pm/prompt-versions`, () =>
-                HttpResponse.json([]),
-            ),
+            http.get(`${BASE}/agents/agent-pm/prompt-versions`, () => HttpResponse.json([]))
         );
         renderWithProviders(<PromptTabContent agent={specialAgent} />);
         // slug('Product Manager #1!') → 'product-manager-1' → fileName = 'product-manager-1.prompt.md'
         await waitFor(() =>
-            expect(screen.getByText('product-manager-1.prompt.md')).toBeInTheDocument(),
+            expect(screen.getByText('product-manager-1.prompt.md')).toBeInTheDocument()
         );
     });
 
@@ -490,7 +446,7 @@ describe('PromptTabContent', () => {
         // Default is split — both textarea and MarkdownPreview present
         const initialTextareas = Array.from(document.querySelectorAll('textarea'));
         const initialVisible = initialTextareas.find(
-            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
         );
         expect(initialVisible).toBeDefined();
 
@@ -501,7 +457,7 @@ describe('PromptTabContent', () => {
         await waitFor(() => {
             const textareas = Array.from(document.querySelectorAll('textarea'));
             const visible = textareas.find(
-                (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+                (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
             );
             expect(visible).toBeDefined();
         });
@@ -522,7 +478,7 @@ describe('PromptTabContent', () => {
         await waitFor(() => {
             const textareas = Array.from(document.querySelectorAll('textarea'));
             const visible = textareas.find(
-                (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+                (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
             );
             expect(visible).toBeUndefined();
         });
@@ -534,12 +490,12 @@ describe('PromptTabContent', () => {
 
         const textareas = Array.from(document.querySelectorAll('textarea'));
         const editableTextarea = textareas.find(
-            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
         )!;
         await userEvent.type(editableTextarea, ' changed');
 
         await waitFor(() =>
-            expect(screen.getAllByText(/Unsaved changes/i).length).toBeGreaterThan(0),
+            expect(screen.getAllByText(/Unsaved changes/i).length).toBeGreaterThan(0)
         );
     });
 
@@ -554,9 +510,7 @@ describe('PromptTabContent', () => {
 
     it('VersionHistoryCard shows column headers: Version, Created, Edited by, Status, Action', async () => {
         renderWithProviders(<PromptTabContent agent={agent} />);
-        await waitFor(() =>
-            expect(screen.getByText('Version')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Version')).toBeInTheDocument());
         expect(screen.getByText('Created')).toBeInTheDocument();
         expect(screen.getByText('Edited by')).toBeInTheDocument();
         expect(screen.getByText('Status')).toBeInTheDocument();
@@ -568,8 +522,8 @@ describe('PromptTabContent', () => {
         renderWithProviders(<PromptTabContent agent={agent} />);
         await waitFor(() =>
             expect(
-                screen.getByText(/No prompt history yet\. Saving a new version starts the trail\./i),
-            ).toBeInTheDocument(),
+                screen.getByText(/No prompt history yet\. Saving a new version starts the trail\./i)
+            ).toBeInTheDocument()
         );
     });
 
@@ -585,13 +539,11 @@ describe('PromptTabContent', () => {
         };
         server.use(
             http.get(`${BASE}/agents/${agent.id}/prompt-versions`, () =>
-                HttpResponse.json([version]),
-            ),
+                HttpResponse.json([version])
+            )
         );
         renderWithProviders(<PromptTabContent agent={agent} />);
-        await waitFor(() =>
-            expect(screen.getByText(/rev v7/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/rev v7/i)).toBeInTheDocument());
     });
 
     it('revert toast shown on success', async () => {
@@ -607,11 +559,11 @@ describe('PromptTabContent', () => {
         const agentV2 = makeAgent({ ...agent, prompt_version: 2 });
         server.use(
             http.get(`${BASE}/agents/${agent.id}/prompt-versions`, () =>
-                HttpResponse.json([version]),
+                HttpResponse.json([version])
             ),
             http.post(`${BASE}/agents/${agent.id}/prompt-versions/1/revert`, () =>
-                HttpResponse.json({ ...agentV2, prompt_version: 3 }),
-            ),
+                HttpResponse.json({ ...agentV2, prompt_version: 3 })
+            )
         );
         renderWithProviders(
             <>
@@ -621,9 +573,7 @@ describe('PromptTabContent', () => {
         );
         await waitFor(() => expect(screen.getByText('Revert')).toBeInTheDocument());
         await userEvent.click(screen.getByText('Revert'));
-        await waitFor(() =>
-            expect(screen.getByText(/Reverted to v1 as v3/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Reverted to v1 as v3/i)).toBeInTheDocument());
     });
 
     it('revert failure shows error toast', async () => {
@@ -639,11 +589,12 @@ describe('PromptTabContent', () => {
         const agentV2 = makeAgent({ ...agent, prompt_version: 2 });
         server.use(
             http.get(`${BASE}/agents/${agent.id}/prompt-versions`, () =>
-                HttpResponse.json([version]),
+                HttpResponse.json([version])
             ),
-            http.post(`${BASE}/agents/${agent.id}/prompt-versions/1/revert`, () =>
-                new HttpResponse(null, { status: 500 }),
-            ),
+            http.post(
+                `${BASE}/agents/${agent.id}/prompt-versions/1/revert`,
+                () => new HttpResponse(null, { status: 500 })
+            )
         );
         renderWithProviders(
             <>
@@ -653,9 +604,7 @@ describe('PromptTabContent', () => {
         );
         await waitFor(() => expect(screen.getByText('Revert')).toBeInTheDocument());
         await userEvent.click(screen.getByText('Revert'));
-        await waitFor(() =>
-            expect(screen.getByText(/Revert failed/i)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/Revert failed/i)).toBeInTheDocument());
     });
 
     it('handleSave is a no-op when dirty=false — clicking Save while unchanged calls nothing', async () => {
@@ -664,7 +613,7 @@ describe('PromptTabContent', () => {
             http.patch(`${BASE}/agents/${agent.id}`, () => {
                 patchCalled = true;
                 return HttpResponse.json({ ...agent, prompt_version: 2 });
-            }),
+            })
         );
         renderWithProviders(<PromptTabContent agent={agent} />);
         await waitFor(() => screen.getByText(/Active prompt/i));
@@ -683,8 +632,8 @@ describe('PromptTabContent', () => {
         const updatedPrompt = 'You are a coder agent. saved content';
         server.use(
             http.patch(`${BASE}/agents/${agent.id}`, () =>
-                HttpResponse.json({ ...agent, prompt_md: updatedPrompt, prompt_version: 2 }),
-            ),
+                HttpResponse.json({ ...agent, prompt_md: updatedPrompt, prompt_version: 2 })
+            )
         );
         // Wrapper that simulates the parent updating the agent prop after mutation
         const { useState: useLocalState } = await import('react');
@@ -715,12 +664,12 @@ describe('PromptTabContent', () => {
         // Make a change so dirty becomes true
         const textareas = Array.from(document.querySelectorAll('textarea'));
         const editableTextarea = textareas.find(
-            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
         )!;
         await userEvent.type(editableTextarea, ' saved content');
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled()
         );
 
         // Save — this calls setLastSavedAt(new Date()) inside handleSave
@@ -750,12 +699,8 @@ describe('PromptTabContent', () => {
             prompt_version: 1,
         });
         server.use(
-            http.get(`${BASE}/agents/agent-alpha/prompt-versions`, () =>
-                HttpResponse.json([]),
-            ),
-            http.get(`${BASE}/agents/agent-beta/prompt-versions`, () =>
-                HttpResponse.json([]),
-            ),
+            http.get(`${BASE}/agents/agent-alpha/prompt-versions`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents/agent-beta/prompt-versions`, () => HttpResponse.json([]))
         );
 
         const { useState: useLocalState } = await import('react');
@@ -764,10 +709,7 @@ describe('PromptTabContent', () => {
             return (
                 <>
                     <PromptTabContent agent={currentAgent} />
-                    <button
-                        data-testid="switch-agent"
-                        onClick={() => setCurrentAgent(agentB)}
-                    >
+                    <button data-testid="switch-agent" onClick={() => setCurrentAgent(agentB)}>
                         switch
                     </button>
                 </>
@@ -779,13 +721,13 @@ describe('PromptTabContent', () => {
         // Type into textarea to dirty the draft
         const textareas = Array.from(document.querySelectorAll('textarea'));
         const editableTextarea = textareas.find(
-            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
         )!;
         await userEvent.type(editableTextarea, ' dirtied');
 
         await waitFor(() => {
             const ta = Array.from(document.querySelectorAll('textarea')).find(
-                (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+                (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
             );
             expect(ta?.value).toContain('dirtied');
         });
@@ -797,7 +739,7 @@ describe('PromptTabContent', () => {
         await waitFor(() => {
             const updatedTextareas = Array.from(document.querySelectorAll('textarea'));
             const ta = updatedTextareas.find(
-                (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+                (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
             );
             expect(ta?.value).toBe('Beta prompt');
         });
@@ -813,7 +755,7 @@ describe('PromptTabContent', () => {
             // Textarea present
             const textareas = Array.from(document.querySelectorAll('textarea'));
             const editable = textareas.find(
-                (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+                (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
             );
             expect(editable).toBeDefined();
         });
@@ -822,12 +764,10 @@ describe('PromptTabContent', () => {
         // Verify we can still type
         const textareas = Array.from(document.querySelectorAll('textarea'));
         const editableTextarea = textareas.find(
-            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
         )!;
         await userEvent.type(editableTextarea, ' edit-mode-text');
-        await waitFor(() =>
-            expect(editableTextarea.value).toContain('edit-mode-text'),
-        );
+        await waitFor(() => expect(editableTextarea.value).toContain('edit-mode-text'));
     });
 });
 
@@ -843,14 +783,14 @@ describe('PromptTabContent — branch gap coverage', () => {
         server.use(
             ...baseHandlers(),
             http.get(`${BASE}/agents/${singleLineAgent.id}/prompt-versions`, () =>
-                HttpResponse.json([]),
-            ),
+                HttpResponse.json([])
+            )
         );
         renderWithProviders(<PromptTabContent agent={singleLineAgent} />);
         // The footer shows "{lineCount} line" or "{lineCount} lines"
-        await waitFor(() =>
-            expect(screen.getByText(/1 line(?!s)/i)).toBeInTheDocument(),
-        { timeout: 3000 }).catch(() => {
+        await waitFor(() => expect(screen.getByText(/1 line(?!s)/i)).toBeInTheDocument(), {
+            timeout: 3000,
+        }).catch(() => {
             // Fallback: just check the component rendered
             expect(document.body).toBeTruthy();
         });
@@ -882,41 +822,41 @@ describe('PromptTabContent — branch gap coverage', () => {
         server.use(
             ...baseHandlers(),
             http.get(`${BASE}/agents/${multiLineAgent.id}/prompt-versions`, () =>
-                HttpResponse.json([]),
-            ),
+                HttpResponse.json([])
+            )
         );
         renderWithProviders(<PromptTabContent agent={multiLineAgent} />);
-        await waitFor(() =>
-            expect(screen.getAllByText(/3 lines/i).length).toBeGreaterThan(0),
-        );
+        await waitFor(() => expect(screen.getAllByText(/3 lines/i).length).toBeGreaterThan(0));
     });
 
     it('shows "Saving…" on the Save button while the update mutation is pending — covers L295 true branch', async () => {
         let resolvePatch!: (v: unknown) => void;
-        const patchProm = new Promise((res) => { resolvePatch = res; });
+        const patchProm = new Promise((res) => {
+            resolvePatch = res;
+        });
         server.use(
             ...baseHandlers(),
             http.patch(`${BASE}/agents/${agent.id}`, () =>
-                patchProm.then(() => HttpResponse.json({ ...agent, prompt_version: 2 })),
-            ),
+                patchProm.then(() => HttpResponse.json({ ...agent, prompt_version: 2 }))
+            )
         );
         renderWithProviders(<PromptTabContent agent={agent} />);
         await waitFor(() => screen.getByText(/Active prompt/i));
 
         const textareas = Array.from(document.querySelectorAll('textarea'));
         const editableTextarea = textareas.find(
-            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly'),
+            (t) => !t.hasAttribute('aria-hidden') && !t.hasAttribute('readonly')
         )!;
         await userEvent.type(editableTextarea, ' pending save');
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /^Save$/i })).not.toBeDisabled()
         );
         // Click without awaiting the mutation so isPending stays true momentarily
         fireEvent.click(screen.getByRole('button', { name: /^Save$/i }));
 
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Saving…/i })).toBeDisabled(),
+            expect(screen.getByRole('button', { name: /Saving…/i })).toBeDisabled()
         );
 
         // Unblock the in-flight request so the test doesn't leak a pending promise
@@ -925,7 +865,9 @@ describe('PromptTabContent — branch gap coverage', () => {
 
     it('Revert link shows "wait" cursor and disables pointer events while reverting — covers L515/L516 true branch', async () => {
         let resolveRevert!: (v: unknown) => void;
-        const revertProm = new Promise((res) => { resolveRevert = res; });
+        const revertProm = new Promise((res) => {
+            resolveRevert = res;
+        });
         const version = {
             id: 1,
             agent_id: 'agent-coder',
@@ -938,11 +880,11 @@ describe('PromptTabContent — branch gap coverage', () => {
         const agentV2 = makeAgent({ ...agent, prompt_version: 2 });
         server.use(
             http.get(`${BASE}/agents/${agent.id}/prompt-versions`, () =>
-                HttpResponse.json([version]),
+                HttpResponse.json([version])
             ),
             http.post(`${BASE}/agents/${agent.id}/prompt-versions/1/revert`, () =>
-                revertProm.then(() => HttpResponse.json({ ...agentV2, prompt_version: 3 })),
-            ),
+                revertProm.then(() => HttpResponse.json({ ...agentV2, prompt_version: 3 }))
+            )
         );
         renderWithProviders(<PromptTabContent agent={agentV2} />);
         await waitFor(() => expect(screen.getByText('Revert')).toBeInTheDocument());
@@ -975,19 +917,27 @@ describe('PromptTabContent — branch gap coverage', () => {
             ...baseHandlers(),
             http.get(`${BASE}/agents/${agentV2.id}/prompt-versions`, () =>
                 HttpResponse.json([
-                    { version: 2, prompt_md: 'Version 2 prompt.', created_at: '2026-05-01T00:00:00.000Z' },
-                    { version: 1, prompt_md: 'Version 1 prompt.', created_at: '2026-04-01T00:00:00.000Z' },
-                ]),
+                    {
+                        version: 2,
+                        prompt_md: 'Version 2 prompt.',
+                        created_at: '2026-05-01T00:00:00.000Z',
+                    },
+                    {
+                        version: 1,
+                        prompt_md: 'Version 1 prompt.',
+                        created_at: '2026-04-01T00:00:00.000Z',
+                    },
+                ])
             ),
             http.put(`${BASE}/agents/${agentV2.id}/prompt-versions/revert`, () =>
-                HttpResponse.json({ ...agentV2, prompt_version: 3 }),
-            ),
+                HttpResponse.json({ ...agentV2, prompt_version: 3 })
+            )
         );
         renderWithProviders(<PromptTabContent agent={agentV2} />);
         // Wait for version history to load and show "current" for active row
-        await waitFor(() =>
-            expect(screen.queryByText('current')).toBeInTheDocument(),
-        { timeout: 3000 }).catch(() => {});
+        await waitFor(() => expect(screen.queryByText('current')).toBeInTheDocument(), {
+            timeout: 3000,
+        }).catch(() => {});
         // Click "Revert" on the older (v1) row
         const revertBtn = screen.queryByText('Revert');
         if (revertBtn) {

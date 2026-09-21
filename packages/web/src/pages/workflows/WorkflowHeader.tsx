@@ -26,13 +26,28 @@ interface Props {
 
 function Icon({ name }: { name: string }) {
     return (
-        <Box component="span" className="material-symbols-rounded" sx={{ fontSize: 18 }}>
+        <Box
+            component="span"
+            className="material-symbols-rounded"
+            aria-hidden="true"
+            sx={{ fontSize: 18 }}
+        >
             {name}
         </Box>
     );
 }
 
-export function WorkflowHeader({ workflow: wf, projectName, dirty, saveDisabled, saving, runDisabledReason, onSave, onRun, onDelete }: Props) {
+export function WorkflowHeader({
+    workflow: wf,
+    projectName,
+    dirty,
+    saveDisabled,
+    saving,
+    runDisabledReason,
+    onSave,
+    onRun,
+    onDelete,
+}: Props) {
     const active = wf.status === 'active';
     const toast = useToast();
     const publish = usePublishWorkflow();
@@ -40,19 +55,49 @@ export function WorkflowHeader({ workflow: wf, projectName, dirty, saveDisabled,
     async function handlePublish() {
         try {
             const entry = await publish.mutateAsync(wf.id);
-            toast.show({ message: entry.published_at === entry.updated_at ? 'Published to the marketplace' : 'Updated in the marketplace' });
+            toast.show({
+                message:
+                    entry.published_at === entry.updated_at
+                        ? 'Published to the marketplace'
+                        : 'Updated in the marketplace',
+            });
         } catch (err) {
-            toast.show({ message: 'Could not publish workflow', detail: err instanceof Error ? err.message : String(err) });
+            toast.show({
+                message: 'Could not publish workflow',
+                detail: err instanceof Error ? err.message : String(err),
+            });
         }
     }
     return (
-        <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 3, flexWrap: 'wrap', mb: 3 }}>
+        <Box
+            sx={{
+                display: 'flex',
+                alignItems: 'flex-end',
+                justifyContent: 'space-between',
+                gap: 3,
+                flexWrap: 'wrap',
+                mb: 3,
+            }}
+        >
             <Box sx={{ minWidth: 0 }}>
-                <Link component={RouterLink} to="/workflows" underline="hover" sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate60 }}>
+                <Link
+                    component={RouterLink}
+                    to="/workflows"
+                    underline="hover"
+                    sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate60 }}
+                >
                     Workflows
                 </Link>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1, minWidth: 0 }}>
-                    <Typography variant="h2" sx={{ color: ATLAS_PALETTE.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <Typography
+                        variant="h2"
+                        sx={{
+                            color: ATLAS_PALETTE.slate,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                        }}
+                    >
                         {wf.name || 'Untitled workflow'}
                     </Typography>
                     <Box
@@ -73,11 +118,16 @@ export function WorkflowHeader({ workflow: wf, projectName, dirty, saveDisabled,
                         {active ? 'Active' : 'Inactive'}
                     </Box>
                     {dirty && (
-                        <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.warnFg, flexShrink: 0 }}>Unsaved changes</Typography>
+                        <Typography
+                            sx={{ fontSize: 12, color: ATLAS_PALETTE.warnFg, flexShrink: 0 }}
+                        >
+                            Unsaved changes
+                        </Typography>
                     )}
                 </Box>
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1 }}>
-                    {projectName} · {INPUT_KIND_LABEL[wf.input_kind]} · {TRIGGER_LABEL[wf.trigger]} · {deliveryLabel(wf)}
+                    {projectName} · {INPUT_KIND_LABEL[wf.input_kind]} · {TRIGGER_LABEL[wf.trigger]}{' '}
+                    · {deliveryLabel(wf)}
                 </Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -136,7 +186,11 @@ export function WorkflowHeader({ workflow: wf, projectName, dirty, saveDisabled,
                     </Box>
                 </Tooltip>
                 <Tooltip title="Delete workflow">
-                    <IconButton aria-label="Delete workflow" onClick={onDelete} sx={{ color: ATLAS_PALETTE.slate60 }}>
+                    <IconButton
+                        aria-label="Delete workflow"
+                        onClick={onDelete}
+                        sx={{ color: ATLAS_PALETTE.slate60 }}
+                    >
                         <Icon name="delete" />
                     </IconButton>
                 </Tooltip>

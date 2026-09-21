@@ -31,6 +31,7 @@ export function TodaysPassCard({ label, color, icon, items }: ITodaysPassCardPro
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 20, color: color.border, lineHeight: 1 }}
                 >
                     {icon}
@@ -62,6 +63,7 @@ export function TodaysPassCard({ label, color, icon, items }: ITodaysPassCardPro
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{
                                     fontSize: 14,
                                     color: color.border,

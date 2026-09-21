@@ -29,7 +29,7 @@ describe('SetupTab', () => {
             http.get(`${BASE}/projects/${PROJECT_ID}/repos`, async () => {
                 await new Promise((r) => setTimeout(r, 50));
                 return HttpResponse.json([repo()]);
-            }),
+            })
         );
         renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
         expect(screen.getByRole('progressbar')).toBeInTheDocument();
@@ -39,7 +39,7 @@ describe('SetupTab', () => {
         server.use(
             mockRepos([
                 repo({ setup_sh_body: '#!/bin/bash\necho hi', setup_ps1_body: 'Write-Host hi' }),
-            ]),
+            ])
         );
         renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
         await waitFor(() => expect(screen.getByText(/Setup scripts/i)).toBeInTheDocument());
@@ -85,9 +85,9 @@ describe('SetupTab', () => {
                     repo({
                         setup_sh_body: String(body['setup_sh_body'] ?? ''),
                         setup_ps1_body: String(body['setup_ps1_body'] ?? ''),
-                    }),
+                    })
                 );
-            }),
+            })
         );
         renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
         const editors = await screen.findAllByRole('textbox');
@@ -112,7 +112,7 @@ describe('SetupTab', () => {
                 patchedUrl = new URL(request.url).pathname;
                 patchedBody = (await request.json()) as Record<string, unknown>;
                 return HttpResponse.json(web);
-            }),
+            })
         );
         renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
 
@@ -137,7 +137,8 @@ describe('SetupTab', () => {
         // unhandled promise rejection (React doesn't await onClick handlers).
         // Suppress the rejection at the process level so vitest doesn't fail.
         const suppressRejection = (reason: unknown, promise: Promise<unknown>) => {
-            void promise; void reason; // silently swallow
+            void promise;
+            void reason; // silently swallow
         };
         process.on('unhandledRejection', suppressRejection);
 
@@ -145,8 +146,8 @@ describe('SetupTab', () => {
             server.use(
                 mockRepos([repo()]),
                 http.patch(`${BASE}/projects/${PROJECT_ID}/repos/${REPO_ID}`, () =>
-                    HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-                ),
+                    HttpResponse.json({ error: 'Server error' }, { status: 500 })
+                )
             );
             renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
             const editors = await screen.findAllByRole('textbox');
@@ -155,9 +156,12 @@ describe('SetupTab', () => {
             fireEvent.click(saveBtn);
             // When PATCH fails, react-query mutation sets isError=true
             // and the Alert "Failed to save:" should appear
-            await waitFor(() => {
-                expect(screen.queryByText(/Failed to save/i)).toBeInTheDocument();
-            }, { timeout: 5000 });
+            await waitFor(
+                () => {
+                    expect(screen.queryByText(/Failed to save/i)).toBeInTheDocument();
+                },
+                { timeout: 5000 }
+            );
         } finally {
             process.off('unhandledRejection', suppressRejection);
         }
@@ -166,13 +170,15 @@ describe('SetupTab', () => {
     it('shows CircularProgress in Save button while PATCH is in flight', async () => {
         // Delay the PATCH response so we can observe the isPending state
         let resolvePatch!: () => void;
-        const patchPromise = new Promise<void>((res) => { resolvePatch = res; });
+        const patchPromise = new Promise<void>((res) => {
+            resolvePatch = res;
+        });
         server.use(
             mockRepos([repo()]),
             http.patch(`${BASE}/projects/${PROJECT_ID}/repos/${REPO_ID}`, async () => {
                 await patchPromise;
                 return HttpResponse.json(repo());
-            }),
+            })
         );
         renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
         const editors = await screen.findAllByRole('textbox');
@@ -180,9 +186,12 @@ describe('SetupTab', () => {
         const saveBtn = screen.getByRole('button', { name: /Save/i });
         fireEvent.click(saveBtn);
         // While the PATCH is in flight, button label changes to "Saving…"
-        await waitFor(() => {
-            expect(screen.getByText(/Saving…/i)).toBeInTheDocument();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Saving…/i)).toBeInTheDocument();
+            },
+            { timeout: 3000 }
+        );
         // Also a CircularProgress (progressbar role) appears in the button
         expect(screen.getAllByRole('progressbar').length).toBeGreaterThan(0);
         // Resolve the PATCH to clean up
@@ -198,7 +207,7 @@ describe('SetupTab', () => {
                     setup_sh_body: null as unknown as string,
                     setup_ps1_body: null as unknown as string,
                 }),
-            ]),
+            ])
         );
         renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
         await waitFor(() => expect(screen.getByText(/Setup scripts/i)).toBeInTheDocument());
@@ -211,9 +220,7 @@ describe('SetupTab', () => {
     it('dirty stays false when both sh and ps1 match the repo values (dirty false branch)', async () => {
         // With matching values dirty=false → Save button stays disabled
         server.use(
-            mockRepos([
-                repo({ setup_sh_body: 'echo hello', setup_ps1_body: 'Write-Host hello' }),
-            ]),
+            mockRepos([repo({ setup_sh_body: 'echo hello', setup_ps1_body: 'Write-Host hello' })])
         );
         renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
         const saveBtn = await screen.findByRole('button', { name: /Save/i });
@@ -238,15 +245,16 @@ describe('SetupTab', () => {
         // We cannot easily force this via MSW, but we can simulate by checking the branch
         // fires when the mutation rejects with a non-Error — use an AbortError via AbortController
         const suppressRejection = (reason: unknown, promise: Promise<unknown>) => {
-            void promise; void reason;
+            void promise;
+            void reason;
         };
         process.on('unhandledRejection', suppressRejection);
         try {
             server.use(
                 mockRepos([repo()]),
                 http.patch(`${BASE}/projects/${PROJECT_ID}/repos/${REPO_ID}`, () =>
-                    HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-                ),
+                    HttpResponse.json({ error: 'Server error' }, { status: 500 })
+                )
             );
             renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
             const editors = await screen.findAllByRole('textbox');
@@ -254,9 +262,12 @@ describe('SetupTab', () => {
             const saveBtn = screen.getByRole('button', { name: /Save/i });
             fireEvent.click(saveBtn);
             // After mutation error, "Failed to save:" alert should appear
-            await waitFor(() => {
-                expect(screen.queryByText(/Failed to save/i)).toBeInTheDocument();
-            }, { timeout: 5000 });
+            await waitFor(
+                () => {
+                    expect(screen.queryByText(/Failed to save/i)).toBeInTheDocument();
+                },
+                { timeout: 5000 }
+            );
         } finally {
             process.off('unhandledRejection', suppressRejection);
         }

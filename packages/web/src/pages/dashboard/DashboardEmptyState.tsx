@@ -14,7 +14,7 @@ import { useCredentials } from '../../hooks/useCredentials.js';
 
 const NewProjectModal = lazyNamed(
     () => import('../projects/NewProjectModal.js'),
-    'NewProjectModal',
+    'NewProjectModal'
 );
 
 interface IDashboardEmptyStateProps {
@@ -55,21 +55,19 @@ export function DashboardEmptyState({
                 title="No projects yet."
                 description={
                     <>
-                        Point Atlas at a GitHub URL and we&apos;ll clone it into your workspace folder
-                        in the background — no shell, no commands, no leaked tokens. Your stored
-                        credential will be decrypted in-memory just for the clone.
+                        Point Atlas at a GitHub URL and we&apos;ll clone it into your workspace
+                        folder in the background — no shell, no commands, no leaked tokens. Your
+                        stored credential will be decrypted in-memory just for the clone.
                     </>
                 }
                 primaryAction={
                     <HeroActionCard
-                        icon={
-                            <AddRounded sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 20 }} />
-                        }
+                        icon={<AddRounded sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 20 }} />}
                         title="Add your first project"
                         description={
                             <>
-                                Paste a GitHub repository URL. Pick a saved credential.
-                                We&apos;ll do the rest.
+                                Paste a GitHub repository URL. Pick a saved credential. We&apos;ll
+                                do the rest.
                             </>
                         }
                         cta={{
@@ -82,24 +80,25 @@ export function DashboardEmptyState({
                 supplemental={
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {noCredentials && (
-                        <Alert
-                            icon={<InfoOutlined sx={{ color: ATLAS_PALETTE.brandBlue }} />}
-                            sx={alertSx}
-                        >
-                            <Box component="span" sx={{ fontWeight: 600 }}>
-                                No credentials yet?
-                            </Box>{' '}
-                            Add a Personal Access Token or GitHub App in{' '}
-                            <Box
-                                component="a"
-                                onClick={() => navigate('/settings/credentials')}
-                                sx={linkSx}
+                            <Alert
+                                icon={<InfoOutlined sx={{ color: ATLAS_PALETTE.brandBlue }} />}
+                                sx={alertSx}
                             >
-                                Settings → Credentials
-                            </Box>{' '}
-                            first. Atlas encrypts them with AES-256-GCM and never writes them to
-                            disk in plaintext.
-                        </Alert>)}
+                                <Box component="span" sx={{ fontWeight: 600 }}>
+                                    No credentials yet?
+                                </Box>{' '}
+                                Add a Personal Access Token or GitHub App in{' '}
+                                <Box
+                                    component="a"
+                                    onClick={() => navigate('/settings/credentials')}
+                                    sx={linkSx}
+                                >
+                                    Settings → Credentials
+                                </Box>{' '}
+                                first. Atlas encrypts them with AES-256-GCM and never writes them to
+                                disk in plaintext.
+                            </Alert>
+                        )}
                         {noAgents && (
                             <Alert
                                 icon={<InfoOutlined sx={{ color: ATLAS_PALETTE.brandBlue }} />}

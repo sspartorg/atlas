@@ -3,7 +3,12 @@ import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
-import { ATLAS_PALETTE, LABEL_COLORS, type LabelColorKey, type LabelColorPair } from '../theme/tokens.js';
+import {
+    ATLAS_PALETTE,
+    LABEL_COLORS,
+    type LabelColorKey,
+    type LabelColorPair,
+} from '../theme/tokens.js';
 import { useThemeModeContext } from '../hooks/useThemeModeContext.js';
 
 interface Props {

@@ -597,3 +597,347 @@ describe('ingestTranscript — non-ENOENT error', () => {
         expect(warned).toBe(true);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Subagent breakdown (Terminal v4) — `cli_session_subagents` rows.
+//
+// Why this path matters: the terminal-history page bills a session by
+// subagent. If ingest stops writing these rows (or writes them with the
+// wrong key), the Owner sees a session whose headline cost has no
+// breakdown behind it — and because every failure here is swallowed with
+// a console.warn so it can't block transcript persistence, a regression
+// is SILENT. These tests are the only thing that fails loudly.
+// ---------------------------------------------------------------------------
+
+/** One assistant event, priced by `claude-haiku-4-5` ($5/M output). */
+function assistantEvent(msgId: string, outputTokens: number, timestamp: string): string {
+    return JSON.stringify({
+        type: 'assistant',
+        timestamp,
+        message: {
+            id: msgId,
+            model: 'claude-haiku-4-5',
+            usage: { input_tokens: 0, output_tokens: outputTokens },
+        },
+    });
+}
+
+/** Lay down `<home>/.claude/projects/<encoded>/<sid>/subagents/` and return it. */
+async function makeClaudeSubagentDir(worktreePath: string, claudeSid: string): Promise<string> {
+    const encoded = encodeClaudeProjectDir(worktreePath);
+    const dir = join(tmpRoot, '.claude', 'projects', encoded, claudeSid, 'subagents');
+    await mkdir(dir, { recursive: true });
+    return dir;
+}
+
+function subagentRows(sessionId: string) {
+    return testDb
+        .selectFrom('cli_session_subagents')
+        .selectAll()
+        .where('cli_session_id', '=', sessionId)
+        .orderBy('subagent_key')
+        .execute();
+}
+
+describe('ingestTranscript — claude subagents', () => {
+    it('writes one cli_session_subagents row per subagent JSONL with meta + priced tokens (CTI-SUB-CLAUDE)', async () => {
+        const sessionId = `${SESSION_PREFIX}-sub-cl`;
+        const claudeSid = 'a1111111-0000-0000-0000-00000000cl01';
+        const worktreePath = '/home/test/projects/sub-cl';
+        await insertSession({
+            id: sessionId,
+            cli: 'claude',
+            worktree_path: worktreePath,
+            claude_session_id: claudeSid,
+            model: 'claude-haiku-4-5',
+        });
+
+        const encoded = encodeClaudeProjectDir(worktreePath);
+        const projectDir = join(tmpRoot, '.claude', 'projects', encoded);
+        await mkdir(projectDir, { recursive: true });
+        await writeFile(
+            join(projectDir, `${claudeSid}.jsonl`),
+            assistantEvent('msg_parent', 100, '2026-09-01T10:00:00.000Z'),
+            'utf8',
+        );
+
+        const subDir = await makeClaudeSubagentDir(worktreePath, claudeSid);
+        // agent-aaa: 2 events (400k + 600k output => 1M => $5.00), has meta.
+        await writeFile(
+            join(subDir, 'agent-aaa.jsonl'),
+            [
+                assistantEvent('msg_a1', 400_000, '2026-09-01T10:01:00.000Z'),
+                assistantEvent('msg_a2', 600_000, '2026-09-01T10:05:00.000Z'),
+            ].join('\n'),
+            'utf8',
+        );
+        await writeFile(
+            join(subDir, 'agent-aaa.meta.json'),
+            JSON.stringify({ agentType: 'Explore', description: 'find the graph code', spawnDepth: 1 }),
+            'utf8',
+        );
+        // agent-bbb: 1 event, NO meta.json — the JSONL alone must still yield a row.
+        await writeFile(
+            join(subDir, 'agent-bbb.jsonl'),
+            assistantEvent('msg_b1', 200_000, '2026-09-01T10:02:00.000Z'),
+            'utf8',
+        );
+        // A stray non-jsonl file in the dir must be ignored, not turned into a row.
+        await writeFile(join(subDir, 'notes.txt'), 'ignore me', 'utf8');
+
+        await ingestTranscript(sessionId);
+
+        const rows = await subagentRows(sessionId);
+        expect(rows.map((r) => r.subagent_key)).toEqual(['agent-aaa', 'agent-bbb']);
+
+        const aaa = rows[0]!;
+        expect(aaa.source).toBe('claude_jsonl');
+        expect(aaa.agent_type).toBe('Explore');
+        expect(aaa.description).toBe('find the graph code');
+        expect(aaa.spawn_depth).toBe(1);
+        expect(aaa.output_tokens).toBe(1_000_000);
+        expect(aaa.input_tokens).toBe(0);
+        expect(Number(aaa.cost_usd)).toBeCloseTo(5.0, 4);
+        // Real numbers, not a guess — the UI must not label them as estimates.
+        expect(aaa.is_estimate).toBe(false);
+        expect(new Date(aaa.started_at as unknown as string).toISOString()).toBe(
+            '2026-09-01T10:01:00.000Z',
+        );
+        expect(new Date(aaa.ended_at as unknown as string).toISOString()).toBe(
+            '2026-09-01T10:05:00.000Z',
+        );
+
+        const bbb = rows[1]!;
+        expect(bbb.agent_type).toBeNull();
+        expect(bbb.description).toBeNull();
+        expect(bbb.spawn_depth).toBeNull();
+        expect(bbb.output_tokens).toBe(200_000);
+        expect(Number(bbb.cost_usd)).toBeCloseTo(1.0, 4);
+    });
+
+    it('re-ingesting the same session updates the row instead of tripping the unique index (CTI-SUB-CLAUDE-UPSERT)', async () => {
+        // The lazy GET fallback re-runs ingest against an already-ingested
+        // session. Without the ON CONFLICT clause that second run throws on
+        // UNIQUE (cli_session_id, subagent_key), the warn swallows it, and
+        // the breakdown silently freezes at its first-seen numbers.
+        const sessionId = `${SESSION_PREFIX}-sub-upsert`;
+        const claudeSid = 'a2222222-0000-0000-0000-00000000cl02';
+        const worktreePath = '/home/test/projects/sub-upsert';
+        await insertSession({
+            id: sessionId,
+            cli: 'claude',
+            worktree_path: worktreePath,
+            claude_session_id: claudeSid,
+            model: 'claude-haiku-4-5',
+        });
+
+        const encoded = encodeClaudeProjectDir(worktreePath);
+        const projectDir = join(tmpRoot, '.claude', 'projects', encoded);
+        await mkdir(projectDir, { recursive: true });
+        await writeFile(join(projectDir, `${claudeSid}.jsonl`), '{"type":"user"}', 'utf8');
+
+        const subDir = await makeClaudeSubagentDir(worktreePath, claudeSid);
+        await writeFile(
+            join(subDir, 'agent-x.jsonl'),
+            assistantEvent('msg_x1', 100_000, '2026-09-01T11:00:00.000Z'),
+            'utf8',
+        );
+        await writeFile(
+            join(subDir, 'agent-x.meta.json'),
+            JSON.stringify({ agentType: 'Plan', description: 'first pass', spawnDepth: 0 }),
+            'utf8',
+        );
+        await ingestTranscript(sessionId);
+
+        // The subagent kept working after the first ingest: more tokens, new meta.
+        await writeFile(
+            join(subDir, 'agent-x.jsonl'),
+            [
+                assistantEvent('msg_x1', 100_000, '2026-09-01T11:00:00.000Z'),
+                assistantEvent('msg_x2', 300_000, '2026-09-01T11:30:00.000Z'),
+            ].join('\n'),
+            'utf8',
+        );
+        await writeFile(
+            join(subDir, 'agent-x.meta.json'),
+            JSON.stringify({ agentType: 'Plan', description: 'second pass', spawnDepth: 2 }),
+            'utf8',
+        );
+        await ingestTranscript(sessionId);
+
+        const rows = await subagentRows(sessionId);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.output_tokens).toBe(400_000);
+        expect(rows[0]!.description).toBe('second pass');
+        expect(rows[0]!.spawn_depth).toBe(2);
+        expect(Number(rows[0]!.cost_usd)).toBeCloseTo(2.0, 4);
+        expect(new Date(rows[0]!.ended_at as unknown as string).toISOString()).toBe(
+            '2026-09-01T11:30:00.000Z',
+        );
+    });
+
+    it('a non-date timestamp costs that subagent its lifetime, not the breakdown (CTI-SUB-ISOLATED)', async () => {
+        // G-012. This test was written to pin the OLD behaviour: a subagent
+        // event carrying a non-date `timestamp` blew up the whole batch INSERT
+        // on the `timestamp with time zone` column, `ingestTranscript`
+        // swallowed it with a warn, and the Owner silently lost every subagent
+        // row for the session. The guard in `pty-transcript-usage.ts` now
+        // nulls an unparseable timestamp at the parse site, so the insert
+        // succeeds and only that one subagent's start/end are lost.
+        //
+        // Kept rather than deleted because it is the regression test for the
+        // fix: revert the guard and this fails on the row count.
+        const sessionId = `${SESSION_PREFIX}-sub-bad-ts`;
+        const claudeSid = 'a3333333-0000-0000-0000-00000000cl03';
+        const worktreePath = '/home/test/projects/sub-bad-ts';
+        await insertSession({
+            id: sessionId,
+            cli: 'claude',
+            worktree_path: worktreePath,
+            claude_session_id: claudeSid,
+            model: 'claude-haiku-4-5',
+        });
+
+        const encoded = encodeClaudeProjectDir(worktreePath);
+        const projectDir = join(tmpRoot, '.claude', 'projects', encoded);
+        await mkdir(projectDir, { recursive: true });
+        const parentContent = assistantEvent('msg_p', 10, '2026-09-01T12:00:00.000Z');
+        await writeFile(join(projectDir, `${claudeSid}.jsonl`), parentContent, 'utf8');
+
+        const subDir = await makeClaudeSubagentDir(worktreePath, claudeSid);
+        await writeFile(
+            join(subDir, 'agent-bad.jsonl'),
+            assistantEvent('msg_bad', 1000, 'not-a-timestamp'),
+            'utf8',
+        );
+
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const result = await ingestTranscript(sessionId);
+        const warnings = warnSpy.mock.calls.map((c) => String(c[0]));
+        warnSpy.mockRestore();
+
+        expect(result!.jsonl_content).toBe(parentContent);
+        // No longer a failure, so no warning.
+        expect(warnings.some((w) => w.includes('subagent ingest failed'))).toBe(false);
+        // The row survives — this is the whole point of the fix.
+        const subs = await subagentRows(sessionId);
+        expect(subs).toHaveLength(1);
+        expect(subs[0]!.output_tokens).toBe(1000);
+        // …minus the lifetime the malformed value could not supply.
+        expect(subs[0]!.started_at).toBeNull();
+        expect(subs[0]!.ended_at).toBeNull();
+        const row = await testDb
+            .selectFrom('cli_sessions')
+            .select(['transcript_jsonl'])
+            .where('id', '=', sessionId)
+            .executeTakeFirst();
+        expect(row?.transcript_jsonl).toBe(parentContent);
+    });
+});
+
+describe('ingestTranscript — copilot subagents', () => {
+    it('collapses subagent.selected events into one estimate row per agent (CTI-SUB-COPILOT)', async () => {
+        // Copilot's on-disk format carries no per-subagent tokens, so these
+        // rows exist purely to tell the Owner WHICH agents ran and when.
+        // They must be flagged `is_estimate` so the UI never sums them into
+        // a cost the data can't support.
+        const sessionId = `${SESSION_PREFIX}-sub-cop`;
+        const copilotSid = 'b1111111-0000-0000-0000-00000000cp01';
+        await insertSession({
+            id: sessionId,
+            cli: 'copilot',
+            worktree_path: null,
+            claude_session_id: copilotSid,
+            model: 'gpt-5.4-mini',
+        });
+
+        const copilotDir = join(tmpRoot, '.copilot', 'session-state', copilotSid);
+        await mkdir(copilotDir, { recursive: true });
+        const content = [
+            JSON.stringify({
+                type: 'subagent.selected',
+                timestamp: '2026-09-02T09:00:00.000Z',
+                data: { agentName: 'reviewer', agentDisplayName: 'Design Reviewer', tools: ['read', 'grep'] },
+            }),
+            // Same agent re-selected later — one row, later lastSelectedAt.
+            JSON.stringify({
+                type: 'subagent.selected',
+                timestamp: '2026-09-02T09:45:00.000Z',
+                data: { agentName: 'reviewer', agentDisplayName: 'Design Reviewer', tools: [] },
+            }),
+            JSON.stringify({
+                type: 'subagent.selected',
+                timestamp: '2026-09-02T09:10:00.000Z',
+                data: { agentName: 'scout', agentDisplayName: null, tools: [] },
+            }),
+        ].join('\n');
+        await writeFile(join(copilotDir, 'events.jsonl'), content, 'utf8');
+
+        await ingestTranscript(sessionId);
+
+        const rows = await subagentRows(sessionId);
+        expect(rows.map((r) => r.subagent_key)).toEqual(['reviewer', 'scout']);
+
+        const reviewer = rows[0]!;
+        expect(reviewer.source).toBe('copilot_list');
+        expect(reviewer.agent_type).toBe('Design Reviewer');
+        expect(reviewer.description).toBe('Tools: read, grep');
+        expect(reviewer.is_estimate).toBe(true);
+        expect(reviewer.input_tokens).toBeNull();
+        expect(reviewer.output_tokens).toBeNull();
+        expect(reviewer.cost_usd).toBeNull();
+        expect(reviewer.spawn_depth).toBeNull();
+        expect(new Date(reviewer.started_at as unknown as string).toISOString()).toBe(
+            '2026-09-02T09:00:00.000Z',
+        );
+        expect(new Date(reviewer.ended_at as unknown as string).toISOString()).toBe(
+            '2026-09-02T09:45:00.000Z',
+        );
+
+        // No tools on the event -> no synthetic description to show.
+        expect(rows[1]!.agent_type).toBeNull();
+        expect(rows[1]!.description).toBeNull();
+    });
+
+    it('writes no subagent rows for an empty copilot events.jsonl (CTI-SUB-COPILOT-EMPTY)', async () => {
+        // Copilot creates events.jsonl before it has anything to say. An
+        // empty read must not be mistaken for "the session had no agents"
+        // in a way that throws — ingest still has to persist the row.
+        const sessionId = `${SESSION_PREFIX}-sub-cop-empty`;
+        const copilotSid = 'b2222222-0000-0000-0000-00000000cp02';
+        await insertSession({
+            id: sessionId,
+            cli: 'copilot',
+            worktree_path: null,
+            claude_session_id: copilotSid,
+        });
+        const copilotDir = join(tmpRoot, '.copilot', 'session-state', copilotSid);
+        await mkdir(copilotDir, { recursive: true });
+        await writeFile(join(copilotDir, 'events.jsonl'), '', 'utf8');
+
+        const result = await ingestTranscript(sessionId);
+        expect(result!.jsonl_content).toBe('');
+        expect(await subagentRows(sessionId)).toHaveLength(0);
+    });
+
+    it('writes no subagent rows when copilot events carry no subagent.selected (CTI-SUB-COPILOT-NONE)', async () => {
+        const sessionId = `${SESSION_PREFIX}-sub-cop-none`;
+        const copilotSid = 'b3333333-0000-0000-0000-00000000cp03';
+        await insertSession({
+            id: sessionId,
+            cli: 'copilot',
+            worktree_path: null,
+            claude_session_id: copilotSid,
+        });
+        const copilotDir = join(tmpRoot, '.copilot', 'session-state', copilotSid);
+        await mkdir(copilotDir, { recursive: true });
+        await writeFile(
+            join(copilotDir, 'events.jsonl'),
+            JSON.stringify({ type: 'session.start', data: {} }),
+            'utf8',
+        );
+
+        await ingestTranscript(sessionId);
+        expect(await subagentRows(sessionId)).toHaveLength(0);
+    });
+});

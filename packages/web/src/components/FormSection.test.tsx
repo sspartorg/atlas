@@ -10,7 +10,7 @@ describe('FormSection', () => {
                 <FormRow label="Name">
                     <input aria-label="name" />
                 </FormRow>
-            </FormSection>,
+            </FormSection>
         );
         expect(screen.getByText('Profile')).toBeInTheDocument();
         expect(screen.getByText('Name')).toBeInTheDocument();

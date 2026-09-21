@@ -26,28 +26,46 @@ describe('QualityChecklistCard', () => {
         server.use(
             http.get(`${BASE}/agents/agent-coder/checklists`, () =>
                 HttpResponse.json([
-                    { id: 1, agent_id: 'agent-coder', label: 'Tests pass', sort_order: 0, required: true },
-                    { id: 2, agent_id: 'agent-coder', label: 'Lint clean', sort_order: 1, required: false },
-                ]),
+                    {
+                        id: 1,
+                        agent_id: 'agent-coder',
+                        label: 'Tests pass',
+                        sort_order: 0,
+                        required: true,
+                    },
+                    {
+                        id: 2,
+                        agent_id: 'agent-coder',
+                        label: 'Lint clean',
+                        sort_order: 1,
+                        required: false,
+                    },
+                ])
             ),
             http.put(`${BASE}/agents/agent-coder/checklists`, async ({ request }) => {
                 saved = await request.json();
                 return HttpResponse.json([]);
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<QualityChecklistCard agentId="agent-coder" />);
-        await waitFor(() => expect(labelInputs().map((i) => i.value)).toEqual(['Tests pass', 'Lint clean']));
+        await waitFor(() =>
+            expect(labelInputs().map((i) => i.value)).toEqual(['Tests pass', 'Lint clean'])
+        );
 
         await userEvent.click(screen.getByRole('button', { name: /Add check/i }));
         const added = labelInputs()[2];
         await userEvent.clear(added!);
         await userEvent.type(added!, 'Docs updated');
 
-        await userEvent.click(screen.getByRole('button', { name: /Remove checklist item: Lint clean/i }));
+        await userEvent.click(
+            screen.getByRole('button', { name: /Remove checklist item: Lint clean/i })
+        );
         expect(await screen.findByText(/Delete this checklist item/i)).toBeInTheDocument();
         await userEvent.click(screen.getByRole('button', { name: /Delete item/i }));
-        await waitFor(() => expect(labelInputs().map((i) => i.value)).toEqual(['Tests pass', 'Docs updated']));
+        await waitFor(() =>
+            expect(labelInputs().map((i) => i.value)).toEqual(['Tests pass', 'Docs updated'])
+        );
 
         await userEvent.click(screen.getByRole('button', { name: /Save checklist/i }));
         await waitFor(() =>
@@ -56,7 +74,7 @@ describe('QualityChecklistCard', () => {
                     { label: 'Tests pass', sort_order: 0, required: true },
                     { label: 'Docs updated', sort_order: 1, required: true },
                 ],
-            }),
+            })
         );
     });
 
@@ -64,15 +82,25 @@ describe('QualityChecklistCard', () => {
         server.use(
             http.get(`${BASE}/agents/agent-coder/checklists`, () =>
                 HttpResponse.json([
-                    { id: 1, agent_id: 'agent-coder', label: 'Tests pass', sort_order: 0, required: true },
-                ]),
+                    {
+                        id: 1,
+                        agent_id: 'agent-coder',
+                        label: 'Tests pass',
+                        sort_order: 0,
+                        required: true,
+                    },
+                ])
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<QualityChecklistCard agentId="agent-coder" />);
-        await userEvent.click(await screen.findByRole('button', { name: /Remove checklist item: Tests pass/i }));
+        await userEvent.click(
+            await screen.findByRole('button', { name: /Remove checklist item: Tests pass/i })
+        );
         await userEvent.click(await screen.findByRole('button', { name: /Cancel/i }));
-        await waitFor(() => expect(screen.queryByText(/Delete this checklist item/i)).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByText(/Delete this checklist item/i)).not.toBeInTheDocument()
+        );
         expect(labelInputs().map((i) => i.value)).toEqual(['Tests pass']);
     });
 });

@@ -209,7 +209,21 @@ export const envFileService = {
         }
         const next = rewriteEnv(source, updates);
         const tmp = filePath + '.tmp';
-        fs.writeFileSync(tmp, next, 'utf8');
+        // G-020 — 0600, and chmod again after the rename.
+        //
+        // This file holds DATABASE_URL (with the password), POSTGRES_PASSWORD
+        // and ATLAS_MCP_TOKEN. Without `mode` the tmp file is created 0644 by
+        // the process umask, and `rename` carries those bits onto the target —
+        // so a write here *downgraded* an existing 0600 `.env` to
+        // world-readable. `main.ts` calls this to persist the MCP token it
+        // mints at boot, which meant the security feature published its own
+        // secret to every user on the box.
+        //
+        // The explicit `chmod` after the rename is not redundant: it repairs
+        // a `.env` that predates this fix, which `mode` alone would not touch
+        // because the target already exists.
+        fs.writeFileSync(tmp, next, { encoding: 'utf8', mode: 0o600 });
         fs.renameSync(tmp, filePath);
+        fs.chmodSync(filePath, 0o600);
     },
 };

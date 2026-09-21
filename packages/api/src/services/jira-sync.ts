@@ -801,7 +801,19 @@ async function push(
     const errors: string[] = [];
     for (const r of rows) {
         const status = r.status as IssueStatus;
-        const milestone = status !== r.pushed_status;
+        // G-013 — Atlas writes to Jira when it ACTS, not when it merely looks.
+        // An imported Task starts `draft` with `pushed_status` null, so this
+        // used to count as a milestone and posted "imported. No workflow is
+        // set for it yet" onto every matched issue within one tick of the
+        // bridge being switched on — before the Owner had approved anything.
+        // Anyone pointing Atlas at a real board to evaluate it found it had
+        // already commented on their issues.
+        //
+        // That comment also carries no information: it says Atlas is NOT
+        // doing anything. The first post is now the one that reports real
+        // work (`ready` / `in_progress`), which is both quieter and the only
+        // one a Jira reader needs.
+        const milestone = status !== r.pushed_status && status !== 'draft';
         const digest = await digestSince(
             r.task_id,
             Number(r.pushed_comment_id),

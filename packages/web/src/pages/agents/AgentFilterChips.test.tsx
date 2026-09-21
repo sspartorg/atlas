@@ -16,13 +16,15 @@ const BASE_COUNTS: Record<FilterKey, number> = {
     favorites: 1,
 };
 
-function baseProps(overrides: Partial<{
-    active: FilterKey;
-    counts: Record<FilterKey, number>;
-    onChange: (k: FilterKey) => void;
-    sort: SortKey;
-    onSortChange: (s: SortKey) => void;
-}> = {}) {
+function baseProps(
+    overrides: Partial<{
+        active: FilterKey;
+        counts: Record<FilterKey, number>;
+        onChange: (k: FilterKey) => void;
+        sort: SortKey;
+        onSortChange: (s: SortKey) => void;
+    }> = {}
+) {
     return {
         active: 'all' as FilterKey,
         counts: BASE_COUNTS,
@@ -77,7 +79,7 @@ describe('AgentFilterChips', () => {
                 role="all"
                 onRoleChange={vi.fn()}
                 roleCounts={roleCounts}
-            />,
+            />
         );
         expect(screen.getByText('Role:')).toBeInTheDocument();
         // Two comboboxes: role + sort
@@ -90,11 +92,7 @@ describe('AgentFilterChips', () => {
         // falls to the '' branch: `roleCounts ? ` (${roleCounts.all})` : ''`
         server.use(...defaultHandlers);
         renderWithProviders(
-            <AgentFilterChips
-                {...baseProps()}
-                role="all"
-                onRoleChange={vi.fn()}
-            />,
+            <AgentFilterChips {...baseProps()} role="all" onRoleChange={vi.fn()} />
         );
         expect(screen.getByText('Role:')).toBeInTheDocument();
         // "All roles" label renders without count suffix (no roleCounts)
@@ -126,11 +124,7 @@ describe('AgentFilterChips', () => {
             marketing: 2,
             content: 2,
         } as unknown as Record<FilterKey, number>;
-        renderWithProviders(
-            <AgentFilterChips
-                {...baseProps({ counts: sparseCounts })}
-            />,
-        );
+        renderWithProviders(<AgentFilterChips {...baseProps({ counts: sparseCounts })} />);
         // All pills still render even with missing counts
         expect(screen.getByText('Design')).toBeInTheDocument();
         expect(screen.getByText('My favorites')).toBeInTheDocument();
@@ -140,14 +134,17 @@ describe('AgentFilterChips', () => {
         // Line 145: onChange={(e) => onRoleChange(e.target.value as RoleFilterKey)}
         server.use(...defaultHandlers);
         const onRoleChange = vi.fn();
-        const roleCounts = { all: 5, 'software-engineer': 2 } as unknown as Record<RoleFilterKey, number>;
+        const roleCounts = { all: 5, 'software-engineer': 2 } as unknown as Record<
+            RoleFilterKey,
+            number
+        >;
         renderWithProviders(
             <AgentFilterChips
                 {...baseProps()}
                 role="all"
                 onRoleChange={onRoleChange}
                 roleCounts={roleCounts}
-            />,
+            />
         );
         // First combobox is the role select (renders before sort select)
         const selects = screen.getAllByRole('combobox');

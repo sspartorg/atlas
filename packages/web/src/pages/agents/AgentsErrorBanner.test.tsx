@@ -5,7 +5,7 @@ import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { AgentsErrorBanner } from './AgentsErrorBanner.js';
 
 describe('AgentsErrorBanner', () => {
-    it("renders the error title \"Couldn't load agent statuses\"", () => {
+    it('renders the error title "Couldn\'t load agent statuses"', () => {
         renderWithProviders(<AgentsErrorBanner onRetry={vi.fn()} />);
         expect(screen.getByText("Couldn't load agent statuses")).toBeTruthy();
     });

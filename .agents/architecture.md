@@ -110,6 +110,18 @@ The CORS allowlist + `requireMcpToken` trusted-browser-origin set are computed f
 
 ### Security â€” write gate & origin allowlist
 
+> **G-023 (2026-09-21) â€” the write gate is defence-in-depth, not a security
+> boundary.** A request carrying `Sec-Fetch-Site: same-origin` passes it
+> without a token, and *any* local client can set that header â€” proven with
+> curl against a running API: `DELETE /api/credentials/<id>` returns 401
+> without it and reaches the handler with it. No header-based check can fix
+> this, because nothing in an HTTP request distinguishes a browser from a
+> local process. It does still stop naive callers and, with CORS, cross-origin
+> pages. A hostile process running as the Owner can read `ATLAS_MCP_TOKEN`
+> from `.env` regardless, so the token is no stronger against that threat.
+> Closing it needs a same-origin bootstrap setting an HttpOnly
+> `SameSite=Strict` cookie â€” an Owner decision, not an improvisation.
+
 The API has exactly one auth gate: a global Fastify `onRequest` hook (`server.ts:76â€“80`) that delegates to `requireMcpToken` (`plugins/mcp-auth.ts`) for every `POST/PUT/PATCH/DELETE`. The same `getAllowedOrigins()` set feeds `@fastify/cors`, so CORS preflight and the gate agree.
 
 **What is checked**
@@ -188,6 +200,8 @@ goTo(node after Start)
    │     CLI runs in the shared worktree, commits, ends with an atlas-outcome block
    │     runner: completeRun / errorRun / setup_failed / stop / sweep / reaper → onStepFinished
    │        done (+ required checklist passed) → pass connection → goTo(next)   (no tick wait)
+   │        NB the checklist is the agent's own self-report. Since ADR 0020 the
+   │        binding check is the verification gate at End, not this block.
    │        rejected / checklist failed        → fail connection, loop_count+1 (past max_loops → park)
    │        asked_question / no outcome / error → park
    │        cancelled                          → cancel run
@@ -201,8 +215,11 @@ goTo(node after Start)
    │     none left → pass connection
    └─ end node → End gate (Task runs with Sub-tasks nodes): open claimed sub-task → back to its
                   Sub-tasks node (loop_count+1) · open unclaimed sub-task → park
-                  finishRun: commit leftovers · push run branch (push_code) or default branch
-                  (push_to_default) · PR (raises_pr; body lists the sub-tasks) · cleanup
+                  finishRun: commit leftovers · ADR 0020 verification gate per repo (runs the
+                  project's own typecheck/lint/test script in that checkout; fail OR unavailable
+                  skips the repo and parks at End with its output) · push run branch (push_code)
+                  or default branch (push_to_default) · PR (raises_pr; body lists the sub-tasks)
+                  · cleanup
                   Task → in_review (PR or any sub-task not done) | done · kick dispatch
 
 park   → run waiting_for_owner · item waiting_for_info, no assignee · comment + one notification · worktree kept

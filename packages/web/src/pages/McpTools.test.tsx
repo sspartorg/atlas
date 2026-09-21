@@ -12,14 +12,15 @@ const CATALOG_FIXTURE = {
             group_name: 'AGENTS',
             tools: [
                 { tool_name: 'listAgents', description: 'List all agents with compact projection' },
-                { tool_name: 'getAgent', description: 'Fetch full agent payload with handoff rules' },
+                {
+                    tool_name: 'getAgent',
+                    description: 'Fetch full agent payload with handoff rules',
+                },
             ],
         },
         {
             group_name: 'REMINDERS',
-            tools: [
-                { tool_name: 'setReminder', description: 'Schedule a reminder for the Owner' },
-            ],
+            tools: [{ tool_name: 'setReminder', description: 'Schedule a reminder for the Owner' }],
         },
     ],
 };
@@ -29,16 +30,19 @@ describe('McpTools page', () => {
         server.use(
             ...defaultHandlers,
             http.get('http://localhost:3000/api/tool-catalog', () =>
-                HttpResponse.json(CATALOG_FIXTURE),
-            ),
+                HttpResponse.json(CATALOG_FIXTURE)
+            )
         );
 
         renderWithProviders(<McpTools />, { initialEntries: ['/agents/mcp-tools'] });
 
         // Wait for a tool name — only present once the query resolves and rows render.
-        await waitFor(() => {
-            expect(screen.getByText('listAgents')).toBeInTheDocument();
-        }, { timeout: 10000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText('listAgents')).toBeInTheDocument();
+            },
+            { timeout: 10000 }
+        );
 
         // Group headers (pretty-cased) and remaining tool names
         expect(screen.getByText('Reminders')).toBeInTheDocument();
@@ -46,9 +50,7 @@ describe('McpTools page', () => {
         expect(screen.getByText('setReminder')).toBeInTheDocument();
 
         // Descriptions
-        expect(
-            screen.getByText('List all agents with compact projection'),
-        ).toBeInTheDocument();
+        expect(screen.getByText('List all agents with compact projection')).toBeInTheDocument();
         expect(screen.getByText('Schedule a reminder for the Owner')).toBeInTheDocument();
 
         // Total count line
@@ -63,8 +65,8 @@ describe('McpTools page', () => {
         server.use(
             ...defaultHandlers,
             http.get('http://localhost:3000/api/tool-catalog', () =>
-                HttpResponse.json({ groups: [] }),
-            ),
+                HttpResponse.json({ groups: [] })
+            )
         );
 
         renderWithProviders(<McpTools />, { initialEntries: ['/agents/mcp-tools'] });
@@ -78,8 +80,8 @@ describe('McpTools page', () => {
         server.use(
             ...defaultHandlers,
             http.get('http://localhost:3000/api/tool-catalog', () =>
-                HttpResponse.json({ error: 'boom' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'boom' }, { status: 500 })
+            )
         );
 
         renderWithProviders(<McpTools />, { initialEntries: ['/agents/mcp-tools'] });
@@ -93,10 +95,12 @@ describe('McpTools page', () => {
         // Never-resolving request → isLoading stays true
         server.use(
             ...defaultHandlers,
-            http.get('http://localhost:3000/api/tool-catalog', () => new Promise(() => {})),
+            http.get('http://localhost:3000/api/tool-catalog', () => new Promise(() => {}))
         );
 
-        const { container } = renderWithProviders(<McpTools />, { initialEntries: ['/agents/mcp-tools'] });
+        const { container } = renderWithProviders(<McpTools />, {
+            initialEntries: ['/agents/mcp-tools'],
+        });
         // MUI Skeleton renders three groups of skeleton elements while loading
         expect(container.firstChild).toBeTruthy();
     });
@@ -114,8 +118,8 @@ describe('McpTools page', () => {
                             tools: [{ tool_name: 'myTool', description: 'A custom tool' }],
                         },
                     ],
-                }),
-            ),
+                })
+            )
         );
 
         renderWithProviders(<McpTools />, { initialEntries: ['/agents/mcp-tools'] });

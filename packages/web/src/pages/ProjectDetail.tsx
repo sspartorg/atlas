@@ -27,11 +27,11 @@ import { SetupTab } from './project/SetupTab.js';
 import { ProjectReposCard } from './project/ProjectReposCard.js';
 const DeleteProjectModal = lazyNamed(
     () => import('./projects/DeleteProjectModal.js'),
-    'DeleteProjectModal',
+    'DeleteProjectModal'
 );
 const ProjectEnvSecretsModal = lazyNamed(
     () => import('./project/ProjectEnvSecretsModal.js'),
-    'ProjectEnvSecretsModal',
+    'ProjectEnvSecretsModal'
 );
 import { RenameProjectModal } from './project/RenameProjectModal.js';
 import { GenerateAiScaffoldDialog } from './projects/GenerateAiScaffoldDialog.js';
@@ -79,8 +79,9 @@ export function ProjectDetail() {
     const { data: counts } = useProjectCounts(id);
     const { data: issueTree } = useIssues({ projectId: id });
     const subTasks = useMemo(
-        () => (issueTree ? flattenIssueTree(issueTree.tree).filter((n) => n.kind === 'sub_task') : []),
-        [issueTree],
+        () =>
+            issueTree ? flattenIssueTree(issueTree.tree).filter((n) => n.kind === 'sub_task') : [],
+        [issueTree]
     );
     // TasksTab wants `ITaskListItem` (ITask + sub_task_count); the tree
     // already carries every sub-task in the project, so count client-side.
@@ -209,6 +210,7 @@ export function ProjectDetail() {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 16 }}
                         >
                             dashboard
@@ -223,6 +225,7 @@ export function ProjectDetail() {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 16 }}
                         >
                             flag
@@ -237,6 +240,7 @@ export function ProjectDetail() {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 16 }}
                         >
                             shield
@@ -251,6 +255,7 @@ export function ProjectDetail() {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 16 }}
                         >
                             source
@@ -265,6 +270,7 @@ export function ProjectDetail() {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 16 }}
                         >
                             terminal
@@ -279,6 +285,7 @@ export function ProjectDetail() {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 16 }}
                         >
                             history
@@ -292,9 +299,7 @@ export function ProjectDetail() {
             <Box
                 sx={{
                     display: 'grid',
-                    gridTemplateColumns: showRail
-                        ? { xs: '1fr', md: '1fr 320px' }
-                        : '1fr',
+                    gridTemplateColumns: showRail ? { xs: '1fr', md: '1fr 320px' } : '1fr',
                     gap: 4,
                     alignItems: 'flex-start',
                 }}

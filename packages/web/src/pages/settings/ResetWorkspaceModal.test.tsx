@@ -65,7 +65,7 @@ describe('ResetWorkspaceModal — open', () => {
             http.post(`${BASE}/settings/reset`, async () => {
                 await resetPromise;
                 return HttpResponse.json({ ok: true });
-            }),
+            })
         );
         renderWithProviders(<ResetWorkspaceModal open onClose={vi.fn()} />);
         const input = screen.getByPlaceholderText('RESET');
@@ -73,7 +73,7 @@ describe('ResetWorkspaceModal — open', () => {
         await userEvent.click(screen.getByRole('button', { name: /Reset Everything/i }));
         // While the API call is in-flight the button changes to "Resetting…"
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Resetting/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /Resetting/i })).toBeInTheDocument()
         );
         resolveReset();
     });
@@ -81,8 +81,8 @@ describe('ResetWorkspaceModal — open', () => {
     it('shows toast on reset failure', async () => {
         server.use(
             http.post(`${BASE}/settings/reset`, () =>
-                HttpResponse.json({ error: 'locked' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'locked' }, { status: 500 })
+            )
         );
         renderWithProviders(<ResetWorkspaceModal open onClose={vi.fn()} />);
         const input = screen.getByPlaceholderText('RESET');
@@ -90,7 +90,7 @@ describe('ResetWorkspaceModal — open', () => {
         await userEvent.click(screen.getByRole('button', { name: /Reset Everything/i }));
         // After failure the button becomes re-enabled (resetting=false)
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Reset Everything/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /Reset Everything/i })).not.toBeDisabled()
         );
     });
 
@@ -109,10 +109,12 @@ describe('ResetWorkspaceModal — open', () => {
     it('shows toast with String(err) when thrown value is not an Error instance', async () => {
         // api.settings.reset throws a plain string — exercises `String(err)` fallback
         server.use(
-            http.post(`${BASE}/settings/reset`, () =>
-                // Non-Error response body — the api client will throw something
-                new Response('plain error string', { status: 500 }),
-            ),
+            http.post(
+                `${BASE}/settings/reset`,
+                () =>
+                    // Non-Error response body — the api client will throw something
+                    new Response('plain error string', { status: 500 })
+            )
         );
         renderWithProviders(<ResetWorkspaceModal open onClose={vi.fn()} />);
         const input = screen.getByPlaceholderText('RESET');
@@ -120,15 +122,13 @@ describe('ResetWorkspaceModal — open', () => {
         await userEvent.click(screen.getByRole('button', { name: /Reset Everything/i }));
         // After failure the reset button becomes re-enabled
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Reset Everything/i })).not.toBeDisabled(),
+            expect(screen.getByRole('button', { name: /Reset Everything/i })).not.toBeDisabled()
         );
     });
 
     it('handleClose no-op while resetting — Cancel click ignored (line 69 branch)', async () => {
         // Start a reset that never resolves so we stay in the "resetting" state
-        server.use(
-            http.post(`${BASE}/settings/reset`, () => new Promise(() => {})),
-        );
+        server.use(http.post(`${BASE}/settings/reset`, () => new Promise(() => {})));
         const onClose = vi.fn();
         renderWithProviders(<ResetWorkspaceModal open onClose={onClose} />);
         const input = screen.getByPlaceholderText('RESET');
@@ -136,7 +136,7 @@ describe('ResetWorkspaceModal — open', () => {
         await userEvent.click(screen.getByRole('button', { name: /Reset Everything/i }));
         // Wait until in-flight (button shows "Resetting…")
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Resetting/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /Resetting/i })).toBeInTheDocument()
         );
         // Now try to close — handleClose should early-return since resetting=true
         const cancelBtn = screen.queryByRole('button', { name: /^Cancel$/ });

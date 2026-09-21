@@ -25,7 +25,7 @@ describe('DetailsRailCard', () => {
                 ownerAccent="#0A0A0A"
                 createdAt="2026-05-15T00:00:00.000Z"
                 updatedAt="2026-05-16T00:00:00.000Z"
-            />,
+            />
         );
         expect(screen.getByText('Details')).toBeInTheDocument();
     });
@@ -45,7 +45,7 @@ describe('DetailsRailCard', () => {
                 ownerAccent="#0A0A0A"
                 createdAt="2026-05-15T00:00:00.000Z"
                 updatedAt="2026-05-16T00:00:00.000Z"
-            />,
+            />
         );
         // The project name is rendered as a clickable Typography.
         const projectLink = screen.getByText('My Project');
@@ -71,7 +71,7 @@ describe('DetailsRailCard', () => {
                 ownerAccent="#0A0A0A"
                 createdAt="2026-05-15T00:00:00.000Z"
                 updatedAt="2026-05-16T00:00:00.000Z"
-            />,
+            />
         );
         const taskLink = screen.getByText('ATL-7');
         expect(taskLink).toBeInTheDocument();
@@ -96,7 +96,7 @@ describe('DetailsRailCard', () => {
                 updatedAt="2026-05-16T00:00:00.000Z"
                 priority="normal"
                 onPriorityPick={onPriorityPick}
-            />,
+            />
         );
         // The Priority row is clickable because onPriorityPick is provided.
         const priorityRow = screen.getByText('Priority');
@@ -132,7 +132,7 @@ describe('DetailsRailCard', () => {
                 updatedAt="2026-05-16T00:00:00.000Z"
                 worktreeBranch="atlas/wf/task-1"
                 worktreePath="/tmp/atlas/task-1"
-            />,
+            />
         );
         expect(screen.getByText('Branch')).toBeInTheDocument();
         expect(screen.getByText('Path')).toBeInTheDocument();
@@ -150,11 +150,11 @@ describe('DetailsRailCard', () => {
                 HttpResponse.json([
                     makeAgent({ id: 'eng', name: 'EngBot', status: 'active', role_id: 'engineer' }),
                     makeAgent({ id: 'po', name: 'PoBot', status: 'active', role_id: 'po' }),
-                ]),
+                ])
             ),
             http.get('http://localhost:3000/api/settings', () =>
-                HttpResponse.json({ id: 1, owner_name: 'Bob', onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({ id: 1, owner_name: 'Bob', onboarding_complete: 1 })
+            )
         );
         const user = userEvent.setup();
         renderWithProviders(
@@ -170,7 +170,7 @@ describe('DetailsRailCard', () => {
                 ownerAccent="#0A0A0A"
                 createdAt="2026-05-15T00:00:00.000Z"
                 updatedAt="2026-05-16T00:00:00.000Z"
-            />,
+            />
         );
         await user.click(screen.getByText('Assignee'));
         expect(await screen.findByText('Suggested')).toBeInTheDocument();
@@ -179,10 +179,12 @@ describe('DetailsRailCard', () => {
     it('shows the workflow picker on a task but not on a sub-task', async () => {
         server.use(
             http.get('http://localhost:3000/api/tasks/T1/full', () =>
-                HttpResponse.json({ task: { id: 'T1', workflow_id: null } }),
+                HttpResponse.json({ task: { id: 'T1', workflow_id: null } })
             ),
             http.get('http://localhost:3000/api/workflows', () => HttpResponse.json([])),
-            http.get('http://localhost:3000/api/items/T1/workflow-runs', () => HttpResponse.json([])),
+            http.get('http://localhost:3000/api/items/T1/workflow-runs', () =>
+                HttpResponse.json([])
+            )
         );
         const rail = (issueType: 'task' | 'sub_task') => (
             <DetailsRailCard
@@ -221,7 +223,10 @@ describe('DetailsRailCard', () => {
             ...over,
         });
 
-        function renderRail(onStatusPick: (s: string, o: boolean) => void, links: IItemExternalLink[]) {
+        function renderRail(
+            onStatusPick: (s: string, o: boolean) => void,
+            links: IItemExternalLink[]
+        ) {
             return renderWithProviders(
                 <DetailsRailCard
                     issueType="sub_task"
@@ -237,7 +242,7 @@ describe('DetailsRailCard', () => {
                     ownerAccent="#0A0A0A"
                     createdAt="2026-05-15T00:00:00.000Z"
                     updatedAt="2026-05-16T00:00:00.000Z"
-                />,
+                />
             );
         }
 
@@ -248,7 +253,7 @@ describe('DetailsRailCard', () => {
                 http.post(`${BASE}/issues/sub_task/S1/external-links/refresh`, () => {
                     refreshed += 1;
                     return HttpResponse.json([pr({ pr_state: 'open' })]);
-                }),
+                })
             );
             const onStatusPick = vi.fn();
             renderRail(onStatusPick, [pr({ pr_state: 'open' })]);
@@ -267,8 +272,8 @@ describe('DetailsRailCard', () => {
             const user = userEvent.setup();
             server.use(
                 http.post(`${BASE}/issues/sub_task/S1/external-links/refresh`, () =>
-                    HttpResponse.json([pr({ pr_state: 'merged' })]),
-                ),
+                    HttpResponse.json([pr({ pr_state: 'merged' })])
+                )
             );
             const onStatusPick = vi.fn();
             renderRail(onStatusPick, [pr({ pr_state: null })]);
@@ -286,12 +291,12 @@ describe('DetailsRailCard', () => {
         function renderRepos(
             repoIds: string[],
             onRepoIdsChange: (next: string[]) => Promise<unknown>,
-            worktreePath: string | null = null,
+            worktreePath: string | null = null
         ) {
             server.use(
                 http.get(`${BASE}/projects/p1/repos`, () =>
-                    HttpResponse.json([makeProjectRepo(), WEB]),
-                ),
+                    HttpResponse.json([makeProjectRepo(), WEB])
+                )
             );
             renderWithProviders(
                 <>
@@ -313,7 +318,7 @@ describe('DetailsRailCard', () => {
                         onRepoIdsChange={onRepoIdsChange}
                     />
                     <Toast />
-                </>,
+                </>
             );
         }
 

@@ -75,7 +75,7 @@ function StopControlModal({ open, session, onClose, onClosed }: StopControlProps
                         onSuccess: () => onClosed({ pushed: false, committed: false, prUrl: null }),
                         onError: (err: Error) =>
                             toast.show({ message: 'Could not close', detail: err.message }),
-                    },
+                    }
                 )
             }
         />
@@ -106,7 +106,7 @@ interface TerminalSessionControlsProps {
  */
 export function useTerminalStopModal(
     session: ICliSession,
-    onStopped?: () => void,
+    onStopped?: () => void
 ): { stopRequest: () => void; stopModalElement: ReactElement } {
     const [open, setOpen] = useState(false);
     const toast = useToast();

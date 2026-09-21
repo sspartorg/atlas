@@ -129,8 +129,7 @@ export function TerminalSessionsCard({ summary, byCli, topSessions, monthLabel }
     }
 
     const totalCliCost = byCli.reduce((acc, r) => acc + r.total_cost_usd, 0);
-    const totalTokens =
-        summary.input_tokens + summary.output_tokens + summary.cache_read_tokens;
+    const totalTokens = summary.input_tokens + summary.output_tokens + summary.cache_read_tokens;
 
     return (
         <Card>
@@ -160,7 +159,7 @@ export function TerminalSessionsCard({ summary, byCli, topSessions, monthLabel }
                     sub={byCli
                         .map(
                             (r) =>
-                                `${r.session_count.toLocaleString()} ${CLI_LABEL[r.cli].toLowerCase()}`,
+                                `${r.session_count.toLocaleString()} ${CLI_LABEL[r.cli].toLowerCase()}`
                         )
                         .join(' · ')}
                     accent={CHART_COLORS.terminal}
@@ -198,7 +197,8 @@ export function TerminalSessionsCard({ summary, byCli, topSessions, monthLabel }
                     <Eyebrow>Split by CLI</Eyebrow>
                     <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                         {byCli.map((r) => {
-                            const pct = totalCliCost > 0 ? (r.total_cost_usd / totalCliCost) * 100 : 0;
+                            const pct =
+                                totalCliCost > 0 ? (r.total_cost_usd / totalCliCost) * 100 : 0;
                             return (
                                 <Box key={r.cli}>
                                     <Box
@@ -234,7 +234,8 @@ export function TerminalSessionsCard({ summary, byCli, topSessions, monthLabel }
                                                     color: ATLAS_PALETTE.slate40,
                                                 }}
                                             >
-                                                {r.session_count} session{r.session_count === 1 ? '' : 's'}
+                                                {r.session_count} session
+                                                {r.session_count === 1 ? '' : 's'}
                                             </Typography>
                                         </Box>
                                         <Typography
@@ -319,7 +320,8 @@ export function TerminalSessionsCard({ summary, byCli, topSessions, monthLabel }
                                             borderRadius: '10px',
                                             border: `1px solid ${ATLAS_PALETTE.slate10}`,
                                             background: ATLAS_PALETTE.surfaceRaised,
-                                            transition: 'border-color 160ms ease, background 160ms ease',
+                                            transition:
+                                                'border-color 160ms ease, background 160ms ease',
                                             '&:hover': {
                                                 borderColor: CHART_COLORS.terminal,
                                                 background: CHART_COLORS.terminalSoft,
@@ -355,8 +357,16 @@ export function TerminalSessionsCard({ summary, byCli, topSessions, monthLabel }
                                                     mt: 0.25,
                                                 }}
                                             >
-                                                {s.project_name ?? 'Standalone'} · {relativeShort(s.closed_at)} · {formatTokenCount(s.input_tokens + s.output_tokens + s.cache_read_tokens)} tok
-                                                {hasSubagents && ` · ${s.subagents.length} subagent${s.subagents.length === 1 ? '' : 's'}`}
+                                                {s.project_name ?? 'Standalone'} ·{' '}
+                                                {relativeShort(s.closed_at)} ·{' '}
+                                                {formatTokenCount(
+                                                    s.input_tokens +
+                                                        s.output_tokens +
+                                                        s.cache_read_tokens
+                                                )}{' '}
+                                                tok
+                                                {hasSubagents &&
+                                                    ` · ${s.subagents.length} subagent${s.subagents.length === 1 ? '' : 's'}`}
                                             </Typography>
                                         </Box>
                                         <Chip
@@ -386,7 +396,9 @@ export function TerminalSessionsCard({ summary, byCli, topSessions, monthLabel }
                                             {formatCostUsd(s.total_cost_usd)}
                                         </Typography>
                                         <IconButton
-                                            aria-label={isOpen ? 'Collapse subagents' : 'Expand subagents'}
+                                            aria-label={
+                                                isOpen ? 'Collapse subagents' : 'Expand subagents'
+                                            }
                                             onClick={() => toggleExpanded(s.session_id)}
                                             disabled={!hasSubagents}
                                             size="small"
@@ -401,10 +413,13 @@ export function TerminalSessionsCard({ summary, byCli, topSessions, monthLabel }
                                             <Box
                                                 component="span"
                                                 className="material-symbols-rounded"
+                                                aria-hidden="true"
                                                 sx={{
                                                     fontSize: 18,
                                                     transition: 'transform 150ms ease',
-                                                    transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                                                    transform: isOpen
+                                                        ? 'rotate(180deg)'
+                                                        : 'rotate(0deg)',
                                                 }}
                                             >
                                                 expand_more

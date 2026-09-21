@@ -127,9 +127,9 @@ export function ResetWorkspaceModal({ open, onClose }: Props) {
                     }}
                 >
                     <strong>You will lose all content.</strong> Every project, task, sub-task,
-                    comment, agent run, notification, and saved schedule will be
-                    permanently removed from the local database. Git repositories on disk are not
-                    touched. The external notification channel and saved credentials will also be cleared.
+                    comment, agent run, notification, and saved schedule will be permanently removed
+                    from the local database. Git repositories on disk are not touched. The external
+                    notification channel and saved credentials will also be cleared.
                 </Alert>
 
                 <Typography

@@ -15,7 +15,6 @@ interface IAwaitingYouRowProps {
 const MONO_FONT = '"JetBrains Mono", monospace';
 const OVERDUE_STATUSES = new Set(['waiting_for_info', 'in_review']);
 
-
 function shortId(_type: IssueType, id: string): string {
     return id;
 }
@@ -119,6 +118,7 @@ export function AwaitingYouRow({ row }: IAwaitingYouRowProps) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{
                                 fontSize: 14,
                                 color: overdue ? ATLAS_PALETTE.orange : ATLAS_PALETTE.slate60,

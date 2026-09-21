@@ -62,9 +62,7 @@ describe('TaskFiltersBar', () => {
         expect(statusChip).toBeDefined();
         await userEvent.click(statusChip!);
         // Menu should be open — status options appear
-        await waitFor(() =>
-            expect(screen.getByText('Draft')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Draft')).toBeInTheDocument());
     });
 
     it('selecting a status option fires onStatusChange', async () => {
@@ -83,9 +81,7 @@ describe('TaskFiltersBar', () => {
         const statusChip = screen.getByText('Status:').closest('[role="button"]') as HTMLElement;
         // Trigger keyboard Enter on the chip
         fireEvent.keyDown(statusChip!, { key: 'Enter' });
-        await waitFor(() =>
-            expect(screen.getByText('Draft')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('Draft')).toBeInTheDocument());
     });
 
     it('pressing / key focuses the search input (window keydown handler)', () => {
@@ -101,7 +97,13 @@ describe('TaskFiltersBar', () => {
         renderWithProviders(<TaskFiltersBar {...defaultProps} />);
         const searchInput = screen.getByLabelText(/Search tasks/i) as HTMLInputElement;
         // If target is the input itself, the handler should return early
-        fireEvent.keyDown(searchInput, { key: '/', ctrlKey: false, metaKey: false, altKey: false, target: searchInput });
+        fireEvent.keyDown(searchInput, {
+            key: '/',
+            ctrlKey: false,
+            metaKey: false,
+            altKey: false,
+            target: searchInput,
+        });
         // No error thrown; guard works
         expect(document.body).toBeTruthy();
     });
@@ -123,14 +125,16 @@ describe('TaskFiltersBar', () => {
     it('selecting "any" option from status menu fires onStatusChange with null', async () => {
         const onStatusChange = vi.fn();
         renderWithProviders(
-            <TaskFiltersBar {...defaultProps} statusFilter="draft" onStatusChange={onStatusChange} />,
+            <TaskFiltersBar
+                {...defaultProps}
+                statusFilter="draft"
+                onStatusChange={onStatusChange}
+            />
         );
         const statusChip = screen.getByText('Status:').closest('[role="button"]') as HTMLElement;
         await userEvent.click(statusChip!);
         // Menu opens — wait for the 'In Progress' option to appear (unambiguous in menu)
-        await waitFor(() =>
-            expect(screen.getByText('In Progress')).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText('In Progress')).toBeInTheDocument());
         // Click the first menu item (value=null => 'any')
         const menuItems = document.querySelectorAll('[role="menuitem"]');
         if (menuItems.length > 0) {

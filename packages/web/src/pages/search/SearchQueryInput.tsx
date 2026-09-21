@@ -127,6 +127,7 @@ export function SearchQueryInput({
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 16, color: ATLAS_PALETTE.brandBlue }}
                         >
                             code
@@ -138,9 +139,7 @@ export function SearchQueryInput({
                         >
                             JQL-lite
                         </Typography>
-                        <Typography
-                            sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate60, mt: 0.25 }}
-                        >
+                        <Typography sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate60, mt: 0.25 }}>
                             Press{' '}
                             <Box
                                 component="span"
@@ -231,6 +230,7 @@ export function SearchQueryInput({
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 18, color: ATLAS_PALETTE.slate40, flexShrink: 0 }}
                     >
                         search
@@ -451,6 +451,7 @@ export function SearchQueryInput({
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{
                                     fontSize: 14,
                                     color: ATLAS_PALETTE.slate40,
@@ -501,13 +502,12 @@ export function SearchQueryInput({
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 14, color: ATLAS_PALETTE.slate60 }}
                 >
                     visibility
                 </Box>
-                <Typography
-                    sx={{ fontFamily: MONO, fontSize: 11.5, color: ATLAS_PALETTE.slate60 }}
-                >
+                <Typography sx={{ fontFamily: MONO, fontSize: 11.5, color: ATLAS_PALETTE.slate60 }}>
                     Showing{' '}
                     <Box component="b" sx={{ color: ATLAS_PALETTE.slate, fontWeight: 600 }}>
                         {resultCount} result{resultCount === 1 ? '' : 's'}

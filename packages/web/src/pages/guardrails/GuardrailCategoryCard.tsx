@@ -45,6 +45,7 @@ export function GuardrailCategoryCard({ category, rules, onAdd, onEdit }: Props)
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 16, color: ATLAS_PALETTE.brandBlue }}
                     >
                         {meta.icon}
@@ -78,11 +79,7 @@ export function GuardrailCategoryCard({ category, rules, onAdd, onEdit }: Props)
                     </Box>
                 ) : (
                     rules.map((rule) => (
-                        <GuardrailRuleRow
-                            key={rule.id}
-                            rule={rule}
-                            onEdit={() => onEdit(rule)}
-                        />
+                        <GuardrailRuleRow key={rule.id} rule={rule} onEdit={() => onEdit(rule)} />
                     ))
                 )}
             </Box>

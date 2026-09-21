@@ -36,11 +36,7 @@ export function Topbar({ onShortcutsOpen, onMenuClick }: Props) {
               ? ATLAS_PALETTE.warning
               : ATLAS_PALETTE.slate30;
     const sseLabel =
-        sseState === 'open'
-            ? 'Live'
-            : sseState === 'reconnecting'
-              ? 'Reconnecting'
-              : 'Connecting';
+        sseState === 'open' ? 'Live' : sseState === 'reconnecting' ? 'Reconnecting' : 'Connecting';
     const sseTooltip =
         sseState === 'open'
             ? 'Live updates connected'
@@ -76,6 +72,7 @@ export function Topbar({ onShortcutsOpen, onMenuClick }: Props) {
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 24 }}
                 >
                     menu
@@ -181,6 +178,7 @@ export function Topbar({ onShortcutsOpen, onMenuClick }: Props) {
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 14, color: ATLAS_PALETTE.slate60 }}
                 >
                     send

@@ -23,7 +23,8 @@ function lcsTable(a: string[], b: string[]): number[][] {
     const dp: number[][] = Array.from({ length: n + 1 }, () => Array<number>(m + 1).fill(0));
     for (let i = n - 1; i >= 0; i--) {
         for (let j = m - 1; j >= 0; j--) {
-            dp[i]![j] = a[i] === b[j] ? (dp[i + 1]![j + 1]! + 1) : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
+            dp[i]![j] =
+                a[i] === b[j] ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
         }
     }
     return dp;
@@ -47,10 +48,10 @@ function buildDiff(from: string, to: string): DiffRow[] {
         // No line-alignment, but the UI stays responsive.
         const rows: DiffRow[] = [];
         a.forEach((line, idx) =>
-            rows.push({ kind: 'del', fromLine: idx + 1, toLine: null, text: line }),
+            rows.push({ kind: 'del', fromLine: idx + 1, toLine: null, text: line })
         );
         b.forEach((line, idx) =>
-            rows.push({ kind: 'add', fromLine: null, toLine: idx + 1, text: line }),
+            rows.push({ kind: 'add', fromLine: null, toLine: idx + 1, text: line })
         );
         return rows;
     }
@@ -110,7 +111,11 @@ export function DiffViewer({ from, to, maxHeight = 320 }: Props) {
             ) : (
                 rows.map((r, idx) => {
                     const bg =
-                        r.kind === 'add' ? ATLAS_PALETTE.successSoft : r.kind === 'del' ? ATLAS_PALETTE.dangerSoft : 'transparent';
+                        r.kind === 'add'
+                            ? ATLAS_PALETTE.successSoft
+                            : r.kind === 'del'
+                              ? ATLAS_PALETTE.dangerSoft
+                              : 'transparent';
                     const sigil = r.kind === 'add' ? '+' : r.kind === 'del' ? '−' : ' ';
                     const numColor = ATLAS_PALETTE.slate60;
                     return (
@@ -123,10 +128,26 @@ export function DiffViewer({ from, to, maxHeight = 320 }: Props) {
                                 whiteSpace: 'pre',
                             }}
                         >
-                            <Box sx={{ width: 36, color: numColor, textAlign: 'right', pr: 1, flexShrink: 0 }}>
+                            <Box
+                                sx={{
+                                    width: 36,
+                                    color: numColor,
+                                    textAlign: 'right',
+                                    pr: 1,
+                                    flexShrink: 0,
+                                }}
+                            >
                                 {r.fromLine ?? ''}
                             </Box>
-                            <Box sx={{ width: 36, color: numColor, textAlign: 'right', pr: 1, flexShrink: 0 }}>
+                            <Box
+                                sx={{
+                                    width: 36,
+                                    color: numColor,
+                                    textAlign: 'right',
+                                    pr: 1,
+                                    flexShrink: 0,
+                                }}
+                            >
                                 {r.toLine ?? ''}
                             </Box>
                             <Box sx={{ width: 16, flexShrink: 0, color: numColor }}>{sigil}</Box>

@@ -31,7 +31,7 @@ describe('GuardrailsTab', () => {
     it('renders the lazy Suspense wrapper (Skeleton or guardrails body)', async () => {
         server.use(
             http.get(`${BASE}/projects/proj-1/guardrails`, () => HttpResponse.json([])),
-            http.get(`${BASE}/guardrails`, () => HttpResponse.json([])),
+            http.get(`${BASE}/guardrails`, () => HttpResponse.json([]))
         );
         const { container } = renderWithProviders(<GuardrailsTab project={stubProject} />);
         // Either a skeleton or the guardrails content renders

@@ -68,12 +68,7 @@ function loadFromStorage(): LayoutState | null {
         const raw = window.localStorage.getItem(STORAGE_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw) as unknown;
-        if (
-            !parsed ||
-            typeof parsed !== 'object' ||
-            !('kind' in parsed) ||
-            !('panes' in parsed)
-        ) {
+        if (!parsed || typeof parsed !== 'object' || !('kind' in parsed) || !('panes' in parsed)) {
             return null;
         }
         const kind = (parsed as { kind: unknown }).kind;
@@ -102,7 +97,10 @@ function parseUrl(params: URLSearchParams): LayoutState | null {
         return normalize(k, []);
     }
     const ids = s.split(',').map((x) => (x.length === 0 ? null : x));
-    return normalize(k, ids.map((id) => ({ sessionId: id })));
+    return normalize(
+        k,
+        ids.map((id) => ({ sessionId: id }))
+    );
 }
 
 /**
@@ -459,10 +457,9 @@ export function TerminalLayout() {
                         </IconButton>
                     </Tooltip>
                     <LayoutPickerMenu value={state.kind} onChange={changeKind} />
-                    <Typography
-                        sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}
-                    >
-                        {state.panes.filter((p) => p.sessionId).length} / {state.panes.length} attached
+                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
+                        {state.panes.filter((p) => p.sessionId).length} / {state.panes.length}{' '}
+                        attached
                     </Typography>
                     <Box sx={{ flex: 1 }} />
                     <Tooltip title="Hide chrome (more terminal area)">
@@ -599,10 +596,7 @@ function EmptyPane({ sessions, attachedSet, onAttach, onNew }: EmptyPaneProps) {
                     </Typography>
                     {attachable.length === 0 ? (
                         <MenuItem disabled>
-                            <ListItemText
-                                primary="No live sessions"
-                                secondary="Start one above"
-                            />
+                            <ListItemText primary="No live sessions" secondary="Start one above" />
                         </MenuItem>
                     ) : (
                         attachable.map((s) => {

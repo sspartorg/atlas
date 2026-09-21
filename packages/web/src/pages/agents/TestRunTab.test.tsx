@@ -35,9 +35,7 @@ describe('TestRunTab', () => {
         mockedHook.mockReturnValueOnce(false);
         server.use(...defaultHandlers);
         HTMLElement.prototype.scrollTo = vi.fn();
-        const { container } = renderWithProviders(
-            <TestRunTab agent={makeAgent()} view={view} />,
-        );
+        const { container } = renderWithProviders(<TestRunTab agent={makeAgent()} view={view} />);
         // TestRunTabSkeleton renders MUI Skeleton elements
         expect(container.querySelector('.MuiSkeleton-root')).toBeInTheDocument();
     });
@@ -45,9 +43,7 @@ describe('TestRunTab', () => {
     it('renders TestRunTabContent since useDeferredMount always returns true', async () => {
         server.use(...defaultHandlers);
         HTMLElement.prototype.scrollTo = vi.fn();
-        renderWithProviders(
-            <TestRunTab agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTab agent={makeAgent()} view={view} />);
         // TestRunTabContent renders the "Live CLI test run" heading
         expect(await screen.findByText(/Live CLI test run/i)).toBeInTheDocument();
     });
@@ -55,9 +51,7 @@ describe('TestRunTab', () => {
     it('renders Run test button from TestRunTabContent', async () => {
         server.use(...defaultHandlers);
         HTMLElement.prototype.scrollTo = vi.fn();
-        renderWithProviders(
-            <TestRunTab agent={makeAgent()} view={view} />
-        );
+        renderWithProviders(<TestRunTab agent={makeAgent()} view={view} />);
         expect(await screen.findByRole('button', { name: /Run test/i })).toBeInTheDocument();
     });
 });

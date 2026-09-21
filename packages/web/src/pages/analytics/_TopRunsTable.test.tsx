@@ -48,7 +48,7 @@ describe('TopRunsTable', () => {
 
     it('skips the issue line when issue_id is null', () => {
         renderWithProviders(
-            <TopRunsTable topRuns={[runs[1]!]} topRunsMaxCost={runs[1]!.total_cost_usd} />,
+            <TopRunsTable topRuns={[runs[1]!]} topRunsMaxCost={runs[1]!.total_cost_usd} />
         );
         // Should not show "Sub-task · ATL-..." line when issue_id is null
         expect(screen.queryByText(/ATL-/)).not.toBeInTheDocument();
@@ -56,7 +56,7 @@ describe('TopRunsTable', () => {
 
     it('shows the issue line when issue_id is present', () => {
         renderWithProviders(
-            <TopRunsTable topRuns={[runs[0]!]} topRunsMaxCost={runs[0]!.total_cost_usd} />,
+            <TopRunsTable topRuns={[runs[0]!]} topRunsMaxCost={runs[0]!.total_cost_usd} />
         );
         expect(screen.getByText('Sub-task · ATL-1')).toBeInTheDocument();
     });
@@ -64,7 +64,7 @@ describe('TopRunsTable', () => {
     it('handles a zero topRunsMaxCost without dividing by zero', () => {
         const empty = [{ ...runs[0]!, total_cost_usd: 0 }];
         expect(() =>
-            renderWithProviders(<TopRunsTable topRuns={empty} topRunsMaxCost={0} />),
+            renderWithProviders(<TopRunsTable topRuns={empty} topRunsMaxCost={0} />)
         ).not.toThrow();
     });
 

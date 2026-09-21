@@ -6,7 +6,12 @@ import { Route, Routes } from 'react-router-dom';
 import { server } from '../test-setup.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { makeAgent, makeProject } from '../test-utils/factories.js';
-import { makePublishedWorkflow, makeTemplates, makeWorkflow, stubReactFlowDom } from '../test-utils/workflowFixtures.js';
+import {
+    makePublishedWorkflow,
+    makeTemplates,
+    makeWorkflow,
+    stubReactFlowDom,
+} from '../test-utils/workflowFixtures.js';
 import { MarketplaceWorkflowDetail } from './MarketplaceWorkflowDetail.js';
 
 const BASE = 'http://localhost:3000/api';
@@ -16,16 +21,23 @@ beforeAll(stubReactFlowDom);
 function mount(templateId: string) {
     server.use(
         http.get(`${BASE}/workflows/templates`, () => HttpResponse.json(makeTemplates())),
-        http.get(`${BASE}/agents`, () => HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'Coder' })])),
+        http.get(`${BASE}/agents`, () =>
+            HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'Coder' })])
+        ),
         http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([])),
-        http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])),
+        http.get(`${BASE}/projects`, () =>
+            HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])
+        )
     );
     renderWithProviders(
         <Routes>
-            <Route path="/agents/marketplace/workflows/:templateId" element={<MarketplaceWorkflowDetail />} />
+            <Route
+                path="/agents/marketplace/workflows/:templateId"
+                element={<MarketplaceWorkflowDetail />}
+            />
             <Route path="/workflows/:id" element={<p>Builder page</p>} />
         </Routes>,
-        { initialEntries: [`/agents/marketplace/workflows/${templateId}`] },
+        { initialEntries: [`/agents/marketplace/workflows/${templateId}`] }
     );
 }
 
@@ -33,7 +45,10 @@ describe('MarketplaceWorkflowDetail', () => {
     it('previews the graph and lists the agents it installs', async () => {
         mount('delivery');
         expect(await screen.findByRole('heading', { name: 'Delivery' })).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: /export/i })).toHaveAttribute('href', '/api/workflows/templates/delivery/export');
+        expect(screen.getByRole('link', { name: /export/i })).toHaveAttribute(
+            'href',
+            '/api/workflows/templates/delivery/export'
+        );
 
         const agents = screen.getByRole('list', { name: 'Agents' });
         const po = within(agents).getByText('Po Writer').closest('li') as HTMLElement;
@@ -53,12 +68,15 @@ describe('MarketplaceWorkflowDetail', () => {
             http.post(`${BASE}/workflows/from-template`, async ({ request }) => {
                 body = await request.json();
                 return HttpResponse.json(makeWorkflow({ id: 'wf-new' }), { status: 201 });
-            }),
+            })
         );
         mount('delivery');
         await userEvent.click(await screen.findByRole('button', { name: 'Use in a project' }));
         const dialog = await screen.findByRole('dialog');
-        expect(within(dialog).getByRole('radio', { name: 'Delivery' })).toHaveAttribute('aria-checked', 'true');
+        expect(within(dialog).getByRole('radio', { name: 'Delivery' })).toHaveAttribute(
+            'aria-checked',
+            'true'
+        );
         await userEvent.click(within(dialog).getByRole('combobox', { name: 'Project' }));
         await userEvent.click(await screen.findByRole('option', { name: 'Atlas' }));
         await userEvent.click(within(dialog).getByRole('button', { name: 'Create workflow' }));
@@ -77,19 +95,28 @@ describe('MarketplaceWorkflowDetail — published by you', () => {
     function mountPublished(found = true) {
         server.use(
             http.get(`${BASE}/marketplace/workflows/pw-1`, () =>
-                found ? HttpResponse.json(makePublishedWorkflow()) : HttpResponse.json({ error: 'Published workflow not found' }, { status: 404 }),
+                found
+                    ? HttpResponse.json(makePublishedWorkflow())
+                    : HttpResponse.json({ error: 'Published workflow not found' }, { status: 404 })
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'My Coder' })])),
+            http.get(`${BASE}/agents`, () =>
+                HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'My Coder' })])
+            ),
             http.get(`${BASE}/marketplace/agents`, () => HttpResponse.json([])),
-            http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])),
+            http.get(`${BASE}/projects`, () =>
+                HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])
+            )
         );
         renderWithProviders(
             <Routes>
-                <Route path="/agents/marketplace/workflows/published/:publishedId" element={<MarketplaceWorkflowDetail />} />
+                <Route
+                    path="/agents/marketplace/workflows/published/:publishedId"
+                    element={<MarketplaceWorkflowDetail />}
+                />
                 <Route path="/agents/marketplace" element={<p>Marketplace page</p>} />
                 <Route path="/workflows/:id" element={<p>Builder page</p>} />
             </Routes>,
-            { initialEntries: ['/agents/marketplace/workflows/published/pw-1'] },
+            { initialEntries: ['/agents/marketplace/workflows/published/pw-1'] }
         );
     }
 
@@ -97,7 +124,10 @@ describe('MarketplaceWorkflowDetail — published by you', () => {
         mountPublished();
         expect(await screen.findByRole('heading', { name: 'My delivery' })).toBeInTheDocument();
         expect(screen.getByText('Published Sep 14', { exact: false })).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: /export/i })).toHaveAttribute('href', '/api/marketplace/workflows/pw-1/export');
+        expect(screen.getByRole('link', { name: /export/i })).toHaveAttribute(
+            'href',
+            '/api/marketplace/workflows/pw-1/export'
+        );
 
         const agents = screen.getByRole('list', { name: 'Agents' });
         const coder = (await within(agents).findByText('My Coder')).closest('li') as HTMLElement;
@@ -116,10 +146,15 @@ describe('MarketplaceWorkflowDetail — published by you', () => {
             http.post(`${BASE}/marketplace/workflows/pw-1/use`, async ({ request }) => {
                 body = await request.json();
                 return HttpResponse.json(
-                    { workflow: makeWorkflow({ id: 'wf-new' }), sub_workflows: [], installed_agents: [], reused_agents: [] },
-                    { status: 201 },
+                    {
+                        workflow: makeWorkflow({ id: 'wf-new' }),
+                        sub_workflows: [],
+                        installed_agents: [],
+                        reused_agents: [],
+                    },
+                    { status: 201 }
                 );
-            }),
+            })
         );
         mountPublished();
         await userEvent.click(await screen.findByRole('button', { name: 'Use in a project' }));
@@ -138,7 +173,7 @@ describe('MarketplaceWorkflowDetail — published by you', () => {
             http.delete(`${BASE}/marketplace/workflows/pw-1`, () => {
                 deleted = true;
                 return new HttpResponse(null, { status: 204 });
-            }),
+            })
         );
         mountPublished();
         await userEvent.click(await screen.findByRole('button', { name: 'Unpublish' }));

@@ -15,9 +15,7 @@ describe('GuardrailScriptsTab', () => {
         await waitFor(() => {
             expect(screen.getByText('No scripts yet')).toBeInTheDocument();
         });
-        expect(
-            screen.getByRole('button', { name: /add first script/i }),
-        ).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /add first script/i })).toBeInTheDocument();
     });
 
     it('renders one script card per row when scripts exist', async () => {
@@ -44,8 +42,8 @@ describe('GuardrailScriptsTab', () => {
                         created_at: ISO,
                         updated_at: ISO,
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<GuardrailScriptsTab />);
         await waitFor(() => {
@@ -83,8 +81,8 @@ describe('GuardrailScriptsTab', () => {
                         created_at: ISO,
                         updated_at: ISO,
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<GuardrailScriptsTab />);
         await waitFor(() => expect(screen.getByText('Edit Me')).toBeInTheDocument());
@@ -109,8 +107,8 @@ describe('GuardrailScriptsTab', () => {
                     sort_order: 0,
                     created_at: ISO,
                     updated_at: ISO,
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<GuardrailScriptsTab />);
         await waitFor(() => expect(screen.getByText('No scripts yet')).toBeInTheDocument());
@@ -142,12 +140,12 @@ describe('GuardrailScriptsTab', () => {
                         created_at: ISO,
                         updated_at: ISO,
                     },
-                ]),
+                ])
             ),
             http.delete(`${BASE}/guardrail-scripts/del-script`, () => {
                 deleted = true;
                 return new HttpResponse(null, { status: 204 });
-            }),
+            })
         );
         renderWithProviders(<GuardrailScriptsTab />);
         await waitFor(() => expect(screen.getByText('Delete Me')).toBeInTheDocument());
@@ -177,8 +175,8 @@ describe('GuardrailScriptsTab', () => {
                         created_at: ISO,
                         updated_at: ISO,
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<GuardrailScriptsTab />);
         await waitFor(() => {
@@ -203,7 +201,7 @@ describe('GuardrailScriptsTab', () => {
                         created_at: ISO,
                         updated_at: ISO,
                     },
-                ]),
+                ])
             ),
             http.patch(`${BASE}/guardrail-scripts/upd-script`, () => {
                 updateCalled = true;
@@ -217,7 +215,7 @@ describe('GuardrailScriptsTab', () => {
                     created_at: ISO,
                     updated_at: ISO,
                 });
-            }),
+            })
         );
         renderWithProviders(<GuardrailScriptsTab />);
         await waitFor(() => expect(screen.getByText('Update Me')).toBeInTheDocument());

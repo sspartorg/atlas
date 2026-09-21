@@ -180,6 +180,7 @@ export function Tasks() {
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 18 }}
                             >
                                 add
@@ -234,6 +235,7 @@ export function Tasks() {
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{
                             fontSize: 48,
                             color: ATLAS_PALETTE.slate40,

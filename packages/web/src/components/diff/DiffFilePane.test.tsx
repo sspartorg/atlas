@@ -44,9 +44,9 @@ function stubPatch(body?: unknown, capture?: (url: URL) => void) {
                     binary: false,
                     truncated: false,
                     byte_size: 140,
-                },
+                }
             );
-        }),
+        })
     );
 }
 
@@ -92,8 +92,8 @@ describe('DiffFilePane', () => {
     it('shows an error alert when the request fails', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions/sess-1/diff/file`, () =>
-                HttpResponse.json({ error: 'gone' }, { status: 409 }),
-            ),
+                HttpResponse.json({ error: 'gone' }, { status: 409 })
+            )
         );
         renderPane();
         expect(await screen.findByText(/could not load this diff/i)).toBeInTheDocument();
@@ -107,7 +107,7 @@ describe('DiffFilePane', () => {
             http.get(`${BASE}/cli/sessions/sess-1/diff/file`, () => {
                 called = true;
                 return HttpResponse.json({});
-            }),
+            })
         );
         renderPane({ file: file({ binary: true }) });
         expect(await screen.findByText(/binary file/i)).toBeInTheDocument();
@@ -120,7 +120,7 @@ describe('DiffFilePane', () => {
             http.get(`${BASE}/cli/sessions/sess-1/diff/file`, () => {
                 called = true;
                 return HttpResponse.json({});
-            }),
+            })
         );
         renderPane({ file: file({ too_large: true }) });
         expect(await screen.findByText(/too large to diff/i)).toBeInTheDocument();
@@ -141,7 +141,7 @@ describe('DiffFilePane', () => {
                     truncated: false,
                     byte_size: 140,
                 });
-            }),
+            })
         );
         renderPane({ file: file({ additions: 9_000, deletions: 1_000 }) });
         expect(await screen.findByText(/large diff — 10000 changed lines/i)).toBeInTheDocument();
@@ -211,7 +211,7 @@ describe('DiffFilePane', () => {
                 truncated: false,
                 byte_size: 200,
             },
-            (u) => seen.push(u.searchParams.get('context') ?? ''),
+            (u) => seen.push(u.searchParams.get('context') ?? '')
         );
         renderPane();
         const sep = await screen.findByText(/17 unchanged lines/);
@@ -232,7 +232,9 @@ describe('DiffFilePane', () => {
         stubPatch();
         renderPane();
         await screen.findByText('src/foo.ts');
-        expect(screen.queryByRole('button', { name: /back to file list/i })).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole('button', { name: /back to file list/i })
+        ).not.toBeInTheDocument();
     });
 
     it('renders split mode when asked', async () => {

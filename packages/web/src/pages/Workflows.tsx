@@ -70,7 +70,15 @@ function Meta({ label, value }: { label: string; value: string }) {
     );
 }
 
-function WorkflowCard({ wf, projectName, onOpen }: { wf: IWorkflow; projectName: string; onOpen: () => void }) {
+function WorkflowCard({
+    wf,
+    projectName,
+    onOpen,
+}: {
+    wf: IWorkflow;
+    projectName: string;
+    onOpen: () => void;
+}) {
     const steps = graphAgentIds(wf.graph).length;
     const trigger =
         wf.trigger === 'schedule' && wf.next_run_at
@@ -96,13 +104,17 @@ function WorkflowCard({ wf, projectName, onOpen }: { wf: IWorkflow; projectName:
                 minWidth: 0,
                 transition: 'box-shadow 150ms ease, transform 150ms ease',
                 '&:hover': { boxShadow: ELEVATION.mid, transform: 'translateY(-1px)' },
-                '&:focus-visible': { outline: `2px solid ${ATLAS_PALETTE.brandBlue}`, outlineOffset: '-2px' },
+                '&:focus-visible': {
+                    outline: `2px solid ${ATLAS_PALETTE.brandBlue}`,
+                    outlineOffset: '-2px',
+                },
             }}
         >
             <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2.5 }}>
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{
                         fontSize: 20,
                         p: 1.5,
@@ -214,11 +226,22 @@ export function Workflows() {
                         variant="outlined"
                         onClick={() => setImportOpen(true)}
                         startIcon={
-                            <Box component="span" className="material-symbols-rounded" sx={{ fontSize: 18 }}>
+                            <Box
+                                component="span"
+                                className="material-symbols-rounded"
+                                aria-hidden="true"
+                                sx={{ fontSize: 18 }}
+                            >
                                 upload
                             </Box>
                         }
-                        sx={{ textTransform: 'none', fontWeight: 600, fontSize: 13.5, px: 3, py: 1.25 }}
+                        sx={{
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            fontSize: 13.5,
+                            px: 3,
+                            py: 1.25,
+                        }}
                     >
                         Import
                     </Button>
@@ -226,7 +249,12 @@ export function Workflows() {
                         variant="contained"
                         onClick={() => setNewOpen(true)}
                         startIcon={
-                            <Box component="span" className="material-symbols-rounded" sx={{ fontSize: 18 }}>
+                            <Box
+                                component="span"
+                                className="material-symbols-rounded"
+                                aria-hidden="true"
+                                sx={{ fontSize: 18 }}
+                            >
                                 add
                             </Box>
                         }
@@ -252,14 +280,24 @@ export function Workflows() {
             ) : isLoading ? (
                 <Box sx={GRID_SX}>
                     {Array.from({ length: 3 }).map((_, i) => (
-                        <Skeleton key={i} variant="rounded" height={168} sx={{ borderRadius: '12px' }} />
+                        <Skeleton
+                            key={i}
+                            variant="rounded"
+                            height={168}
+                            sx={{ borderRadius: '12px' }}
+                        />
                     ))}
                 </Box>
             ) : !workflows || workflows.length === 0 ? (
                 <EmptyState
                     variant="dashed"
                     icon={
-                        <Box component="span" className="material-symbols-rounded" sx={{ fontSize: 32 }}>
+                        <Box
+                            component="span"
+                            className="material-symbols-rounded"
+                            aria-hidden="true"
+                            sx={{ fontSize: 32 }}
+                        >
                             account_tree
                         </Box>
                     }

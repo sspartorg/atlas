@@ -172,8 +172,8 @@ export function EnvironmentTab() {
                 >
                     RESTART
                 </Box>{' '}
-                only take effect after the API process restarts. Stop the dev server
-                (Ctrl + C in the terminal running{' '}
+                only take effect after the API process restarts. Stop the dev server (Ctrl + C in
+                the terminal running{' '}
                 <Box component="span" sx={{ fontFamily: MONO }}>
                     pnpm dev
                 </Box>

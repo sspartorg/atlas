@@ -74,8 +74,8 @@ export function CredentialsEmptyState({ onAdd }: Props) {
                                 Add your first credential
                             </Typography>
                             <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                                Personal Access Token — encrypted at rest with AES-256-GCM,
-                                scoped per project.
+                                Personal Access Token — encrypted at rest with AES-256-GCM, scoped
+                                per project.
                             </Typography>
                         </Box>
                         <Button
@@ -121,7 +121,9 @@ export function CredentialsEmptyState({ onAdd }: Props) {
                 >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
                         <LockOutlined sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 18 }} />
-                        <Typography sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate }}>
+                        <Typography
+                            sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate }}
+                        >
                             How we store credentials
                         </Typography>
                     </Box>

@@ -58,7 +58,9 @@ describe('CopyLinkButton', () => {
         // writeText was called
         expect(writeText).toHaveBeenCalledWith('https://x.test');
         // Advance past the 1500ms reset timer to cover the cleanup
-        act(() => { vi.advanceTimersByTime(2000); });
+        act(() => {
+            vi.advanceTimersByTime(2000);
+        });
         vi.useRealTimers();
     });
 });

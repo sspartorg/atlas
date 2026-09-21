@@ -73,9 +73,9 @@ without a new ruling recorded here.
 
 | # | Ruling |
 |---|---|
-| D-1 | The wipe is **Atlas-scoped only**. `dhequest1-*`, `dhequest2-*`, `dhequest-backup-*`, `shopping-site_*` and `neel-postgres` are untouchable. `docker system prune` is forbidden in every form. |
+| D-1 | The wipe is **Atlas-scoped only**. the other stacks on this host, `another project's resources` and `another-project-postgres` are untouchable. `docker system prune` is forbidden in every form. |
 | D-2 | ~~Two throwaway repos are created under `sspartorg`~~ - **amended 2026-09-20**: the org already holds `atlas-sdlc-sandbox` and `atlas-sdlc-sandbox-web`, both real Node projects whose tests pass (43 and 10). The pair is reused and **no repos are created**, avoiding permanent artifacts in the org and the risk of an App installation scoped to selected repositories. |
-| D-3 | `CER`, `DHEQ` and `JDA` all become `ATL`. "Linoes" and "insightsoftware" do not exist in this repo — searched across the working tree, every gitignored directory, all commit messages and every blob in `git rev-list --all`. |
+| D-3 | `CER`, `DHEQ` and `JDA` all become `ATL`. The other two swept-for names do not exist in this repo — searched across the working tree, every gitignored directory, all commit messages and every blob in `git rev-list --all`. |
 | D-4 | The campaign lives in git under `docs/campaigns/`, not in `.agents/` (barred by `.agents/conventions.md`) and not in `.claude/plans/` (untracked). |
 | D-5 | ADR 0009's coverage tiers stand. `shared`/`api`/`mcp` hold at 95%+; `web` rises 70 → 80 lines with the real gap closed by e2e. ADR 0009 is amended, not overturned. |
 | D-6 | `~/.config/Atlas/workspace.key` is deleted. On macOS this is irreversible — `crypto.ts` has no machine-ID fallback and falls through to random bytes. Acceptable only because the database holding every ciphertext dies in the same step. |

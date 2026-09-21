@@ -33,7 +33,9 @@ describe('HelpAboutTab', () => {
         // Use getAllByText and assert on the count instead of getByText which
         // throws on multiple matches.
         expect(screen.getAllByText(/v1\.0/).length).toBeGreaterThan(0);
-        expect(screen.getByRole('link', { name: /github\.com\/sspartorg\/atlas/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole('link', { name: /github\.com\/sspartorg\/atlas/i })
+        ).toBeInTheDocument();
     });
 
     it('shows the current feedback URL from useEnv', async () => {
@@ -47,9 +49,7 @@ describe('HelpAboutTab', () => {
     it('renders a placeholder + fallback URL when ATLAS_FEEDBACK_URL is blank', async () => {
         mountEnv([feedbackVar('')]);
         renderWithProviders(<HelpAboutTab />);
-        await waitFor(() =>
-            expect(screen.getByText(/unset — falls back to/)).toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.getByText(/unset — falls back to/)).toBeInTheDocument());
     });
 
     it('Open GitHub Issues button has target=_blank and points at the effective URL', async () => {
@@ -82,14 +82,12 @@ describe('HelpAboutTab', () => {
             http.patch(`${apiBase}/settings/env`, async ({ request }) => {
                 captured = (await request.json()) as typeof captured;
                 return HttpResponse.json({ vars: [feedbackVar(DEFAULT_URL)] });
-            }),
+            })
         );
         renderWithProviders(<HelpAboutTab />);
         const restore = await screen.findByRole('button', { name: /Restore recommended URL/i });
         await userEvent.click(restore);
         await waitFor(() => expect(captured).not.toBeNull());
-        expect(captured!.updates).toEqual([
-            { key: 'ATLAS_FEEDBACK_URL', value: DEFAULT_URL },
-        ]);
+        expect(captured!.updates).toEqual([{ key: 'ATLAS_FEEDBACK_URL', value: DEFAULT_URL }]);
     });
 });

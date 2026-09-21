@@ -93,7 +93,13 @@ describe('historyPruneService.pruneBefore', () => {
             .where('item_id', '=', 'ATL-1')
             .orderBy('created_at', 'asc')
             .execute();
-        expect(remaining.map((r) => r.created_at)).toEqual([T_CUTOFF, T_NEW]);
+        // pg returns timestamptz as a Date, not the ISO string it was seeded
+        // with — normalise before comparing. The sibling assertions on
+        // `from_value` compare raw because that column is text.
+        expect(remaining.map((r) => new Date(r.created_at).toISOString())).toEqual([
+            T_CUTOFF,
+            T_NEW,
+        ]);
     });
 
     it('deletes only issue_events with created_at strictly < before_time', async () => {

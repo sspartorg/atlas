@@ -33,7 +33,7 @@ describe('Sidenav', () => {
             <DraftGuardProvider>
                 <DirtyDraft />
                 <Sidenav onNavigate={onNavigate} />
-            </DraftGuardProvider>,
+            </DraftGuardProvider>
         );
         fireEvent.click(screen.getByTestId('nav-item-tasks'));
         expect(await screen.findByText('Discard draft?')).toBeInTheDocument();

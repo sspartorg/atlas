@@ -38,10 +38,7 @@ export function GenerateAiScaffoldDialog({ project, open, onClose }: Props) {
     const [pending, setPending] = useState(false);
     const { data: repos = [] } = useProjectRepos(project.id);
 
-    const readyRepos = useMemo(
-        () => repos.filter((r) => r.clone_status === 'ready'),
-        [repos],
-    );
+    const readyRepos = useMemo(() => repos.filter((r) => r.clone_status === 'ready'), [repos]);
     const [repoId, setRepoId] = useState('');
     // Default to the first ready repo as soon as the list lands, and drop a
     // selection that a removed repo left behind.
@@ -56,7 +53,7 @@ export function GenerateAiScaffoldDialog({ project, open, onClose }: Props) {
         try {
             const { run_id, workflow_id } = await api.projects.generateAiScaffold(
                 project.id,
-                selected?.id,
+                selected?.id
             );
             onClose();
             navigate(`/workflows/${workflow_id}/runs/${run_id}`);
@@ -106,8 +103,8 @@ export function GenerateAiScaffoldDialog({ project, open, onClose }: Props) {
                     )}
                 </DialogContentText>
                 <DialogContentText>
-                    Files that already exist on <code>main</code> will be skipped.
-                    The agent never overwrites existing files and never force-pushes.
+                    Files that already exist on <code>main</code> will be skipped. The agent never
+                    overwrites existing files and never force-pushes.
                 </DialogContentText>
             </DialogContent>
             <DialogActions>

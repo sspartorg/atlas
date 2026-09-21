@@ -177,7 +177,10 @@ export function Guardrails() {
                     <Box
                         sx={{
                             display: 'grid',
-                            gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) 280px' },
+                            gridTemplateColumns: {
+                                xs: 'minmax(0, 1fr)',
+                                md: 'minmax(0, 1fr) 280px',
+                            },
                             gap: { xs: 4, md: 5 },
                             alignItems: 'flex-start',
                         }}

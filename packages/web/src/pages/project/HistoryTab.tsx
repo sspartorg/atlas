@@ -15,9 +15,24 @@ function HistoryTabSkeleton() {
             }}
         >
             <Box sx={{ display: 'flex', gap: 1.5, mb: 4 }}>
-                <Skeleton variant="rectangular" width={120} height={28} sx={{ borderRadius: '6px' }} />
-                <Skeleton variant="rectangular" width={100} height={28} sx={{ borderRadius: '6px' }} />
-                <Skeleton variant="rectangular" width={100} height={28} sx={{ borderRadius: '6px' }} />
+                <Skeleton
+                    variant="rectangular"
+                    width={120}
+                    height={28}
+                    sx={{ borderRadius: '6px' }}
+                />
+                <Skeleton
+                    variant="rectangular"
+                    width={100}
+                    height={28}
+                    sx={{ borderRadius: '6px' }}
+                />
+                <Skeleton
+                    variant="rectangular"
+                    width={100}
+                    height={28}
+                    sx={{ borderRadius: '6px' }}
+                />
             </Box>
             <Skeleton variant="rectangular" height={200} sx={{ borderRadius: '10px' }} />
         </Box>

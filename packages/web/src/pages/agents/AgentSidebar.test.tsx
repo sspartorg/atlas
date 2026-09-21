@@ -16,12 +16,7 @@ describe('AgentSidebar', () => {
     it('renders agent name and accent color in the Identity panel', async () => {
         server.use(...defaultHandlers);
         const agent = makeAgent({ name: 'Coder', accent_color: '#31AB46' });
-        renderWithProviders(
-            <AgentSidebar
-                agent={agent}
-                stats={makeStats()}
-            />,
-        );
+        renderWithProviders(<AgentSidebar agent={agent} stats={makeStats()} />);
         expect(await screen.findByText('Coder')).toBeInTheDocument();
         expect(screen.getByText('#31AB46')).toBeInTheDocument();
     });
@@ -30,10 +25,7 @@ describe('AgentSidebar', () => {
         server.use(...defaultHandlers);
         const agent = makeAgent();
         renderWithProviders(
-            <AgentSidebar
-                agent={agent}
-                stats={makeStats({ totalRunsThisMonth: 7 })}
-            />,
+            <AgentSidebar agent={agent} stats={makeStats({ totalRunsThisMonth: 7 })} />
         );
         expect(await screen.findByText('Total runs')).toBeInTheDocument();
         expect(screen.getByText('7')).toBeInTheDocument();
@@ -44,11 +36,7 @@ describe('AgentSidebar', () => {
         const onEditColor = vi.fn();
         const agent = makeAgent({ accent_color: '#FF0000' });
         renderWithProviders(
-            <AgentSidebar
-                agent={agent}
-                stats={makeStats()}
-                onEditColor={onEditColor}
-            />,
+            <AgentSidebar agent={agent} stats={makeStats()} onEditColor={onEditColor} />
         );
         await userEvent.click(await screen.findByText('#FF0000'));
         expect(onEditColor).toHaveBeenCalledOnce();
@@ -68,7 +56,7 @@ describe('AgentSidebar', () => {
                     totalOutputTokens: 5000,
                     totalCacheReadTokens: 3000,
                 })}
-            />,
+            />
         );
         expect(await screen.findByText('AI Cost')).toBeInTheDocument();
         expect(screen.getByText('Input tok.')).toBeInTheDocument();
@@ -79,12 +67,7 @@ describe('AgentSidebar', () => {
     it('renders designation when set', async () => {
         server.use(...defaultHandlers);
         const agent = makeAgent({ designation: 'Senior Engineer' });
-        renderWithProviders(
-            <AgentSidebar
-                agent={agent}
-                stats={makeStats()}
-            />,
-        );
+        renderWithProviders(<AgentSidebar agent={agent} stats={makeStats()} />);
         expect(await screen.findByText('Senior Engineer')).toBeInTheDocument();
     });
 
@@ -92,12 +75,7 @@ describe('AgentSidebar', () => {
         server.use(...defaultHandlers);
         // designation defaults to '' in makeAgent — empty string is falsy, exercises the false branch of `agent.designation &&`
         const agent = makeAgent({ designation: '' });
-        renderWithProviders(
-            <AgentSidebar
-                agent={agent}
-                stats={makeStats()}
-            />,
-        );
+        renderWithProviders(<AgentSidebar agent={agent} stats={makeStats()} />);
         // Name still renders; no designation Typography should appear
         expect(await screen.findByText(agent.name)).toBeInTheDocument();
         expect(screen.queryByText('Senior Engineer')).not.toBeInTheDocument();
@@ -107,12 +85,7 @@ describe('AgentSidebar', () => {
         server.use(...defaultHandlers);
         // Without onEditColor, cursor is 'default' (the falsy branch of onEditColor ternary)
         const agent = makeAgent({ accent_color: '#AABBCC' });
-        renderWithProviders(
-            <AgentSidebar
-                agent={agent}
-                stats={makeStats()}
-            />,
-        );
+        renderWithProviders(<AgentSidebar agent={agent} stats={makeStats()} />);
         // Color still renders; clicking it does nothing (no handler)
         expect(await screen.findByText('#AABBCC')).toBeInTheDocument();
         await userEvent.click(screen.getByText('#AABBCC'));
@@ -124,11 +97,7 @@ describe('AgentSidebar', () => {
         const onReplaceGlyph = vi.fn();
         const agent = makeAgent();
         renderWithProviders(
-            <AgentSidebar
-                agent={agent}
-                stats={makeStats()}
-                onReplaceGlyph={onReplaceGlyph}
-            />,
+            <AgentSidebar agent={agent} stats={makeStats()} onReplaceGlyph={onReplaceGlyph} />
         );
         const replaceLink = await screen.findByText('Replace…');
         await userEvent.click(replaceLink);
@@ -148,7 +117,7 @@ describe('AgentSidebar', () => {
                     totalOutputTokens: null,
                     totalCacheReadTokens: null,
                 })}
-            />,
+            />
         );
         await screen.findByText('Total runs');
         // None of the optional rows should appear when values are null

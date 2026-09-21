@@ -260,8 +260,11 @@ async function main(): Promise<void> {
     // the env file the server actually loads.
     //
     // The browser UI is unaffected either way: it passes the gate on
-    // `Sec-Fetch-Site: same-origin`, a forbidden header no non-browser client
-    // can set, and never sends the token at all.
+    // `Sec-Fetch-Site: same-origin` and never sends the token at all.
+    // G-023 — that header is NOT proof of a browser; any local client can
+    // set it, so this gate is defence-in-depth, not a boundary. The full
+    // reasoning, and what closing it properly would take, is in
+    // `plugins/mcp-auth.ts`.
     //
     // ATLAS_MCP_TOKEN_OPEN=1 keeps the gate open deliberately. The e2e suite
     // and the Lighthouse workflow set it because they drive writes over plain

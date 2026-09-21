@@ -39,6 +39,7 @@ import { externalLinks, parseGithubPrUrl, fetchGithubPrTitle } from './external-
 import { commentsService } from './comments.js';
 import { assertDepsAllDoneForDispatch } from './dependency-guard.js';
 import { decideRunRouting } from './agent-runner-outcome-routing.js';
+import { runVerificationGate } from './verification-gate.js';
 import {
     WORKTREE_BRANCH_RE,
     ensureWorktree,
@@ -799,6 +800,30 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
                 log.push(`${tag}no changes`);
                 continue;
             }
+            // ADR 0020 — the verification gate. Every reviewer up to this point
+            // reported green by asserting it; this is the one place Atlas finds
+            // out for itself, and it runs in the repo that is about to be
+            // pushed so a red sibling cannot block a clean one. `unavailable`
+            // means the gate could not run at all, which is not evidence of a
+            // red suite and must not be treated as one — it parks with the
+            // Owner through the same failure path as a push error.
+            const gate = await runVerificationGate({
+                repoPath: path,
+                projectId: repo.project_id,
+                itemId: item?.id ?? run.id,
+            });
+            if (gate.kind === 'fail') {
+                log.push(`${tag}verification gate FAILED\n${gate.output}`);
+                result.failure ??= `${tag}The verification gate failed — the project's own typecheck, lint or test script did not pass, whatever the reviewer reported. Fix it on the branch, then resume the run.\n\n${gate.output}`;
+                continue;
+            }
+            if (gate.kind === 'unavailable') {
+                log.push(`${tag}verification gate unavailable: ${gate.reason}`);
+                result.failure ??= `${tag}The verification gate could not run (${gate.reason}), so nothing was pushed. This is not a test failure — Atlas simply could not confirm the suite. Resume the run to retry.`;
+                continue;
+            }
+            log.push(`${tag}verification gate passed`);
+
             // push_to_default publishes straight onto the default branch; on a
             // non-fast-forward pushWorktree rebases onto it and retries once.
             const target = workflow.push_to_default ? base : branch;

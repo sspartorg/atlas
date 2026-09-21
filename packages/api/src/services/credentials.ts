@@ -221,10 +221,22 @@ function readBotInfoFolder(botInfoPath: string): {
     // Slug is optional here — the App-manifest flow saves it, but old
     // exports may not. Backfilled from `GET /app` on the first refresh
     // if missing (see `github-app-tokens.refreshCredential`).
-    const appSlug =
-        typeof config['slug'] === 'string' && config['slug'].length > 0
-            ? (config['slug'] as string)
-            : null;
+    // G-025 — a GitHub App slug is `[a-z0-9-]`, and this value is written
+    // verbatim into the file that becomes GIT_CONFIG_GLOBAL
+    // (`git-credentials.ts` builds `\tname = <slug>[bot]`). A newline there
+    // injects config directives, and `[core] sshCommand` / `pager` /
+    // `fsmonitor` is command execution as the API user. `human_name`, two
+    // fields away, is already guarded with NO_CONTROL_CHARS in
+    // `packages/shared/src/schemas/index.ts` — this one was simply missed.
+    // Anchored to the real slug charset rather than only stripping controls,
+    // because there is no legitimate slug outside it.
+    const rawSlug = typeof config['slug'] === 'string' ? config['slug'] : '';
+    if (rawSlug.length > 0 && !/^[a-z0-9][a-z0-9-]{0,38}$/i.test(rawSlug)) {
+        throw new CredentialValidationError(
+            `app-config.json "slug" must be a GitHub App slug (letters, digits and hyphens); got ${JSON.stringify(rawSlug.slice(0, 40))}`
+        );
+    }
+    const appSlug = rawSlug.length > 0 ? rawSlug : null;
 
     const pemFiles = readdirSync(absPath).filter((f) => f.toLowerCase().endsWith('.pem'));
     if (pemFiles.length === 0) {

@@ -249,6 +249,7 @@ export function DetailsRailCard({
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 16, color: ATLAS_PALETTE.slate40 }}
                     >
                         arrow_drop_down
@@ -280,6 +281,7 @@ export function DetailsRailCard({
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 16, color: ATLAS_PALETTE.slate40 }}
                     >
                         arrow_drop_down
@@ -320,6 +322,7 @@ export function DetailsRailCard({
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 16, color: ATLAS_PALETTE.slate40 }}
                         >
                             arrow_drop_down
@@ -351,17 +354,13 @@ export function DetailsRailCard({
             )}
 
             <InfoRow label="Created">
-                <Typography
-                    sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate, fontFamily: MONO }}
-                >
+                <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate, fontFamily: MONO }}>
                     {relativeTime(createdAt)} · {formatDate(createdAt)}
                 </Typography>
             </InfoRow>
 
             <InfoRow label="Last updated">
-                <Typography
-                    sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate, fontFamily: MONO }}
-                >
+                <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate, fontFamily: MONO }}>
                     {relativeTime(updatedAt)}
                 </Typography>
             </InfoRow>
@@ -494,7 +493,7 @@ export function DetailsRailCard({
                     "These pull requests aren't merged yet:",
                     ...(doneGuard?.prs ?? []).map(
                         (l) =>
-                            `${l.external_ref ? `#${l.external_ref}` : 'PR'} ${l.title ?? l.url} (${l.pr_state ?? 'state unknown'})`,
+                            `${l.external_ref ? `#${l.external_ref}` : 'PR'} ${l.title ?? l.url} (${l.pr_state ?? 'state unknown'})`
                     ),
                 ].join('\n')}
                 confirmLabel="Mark done"

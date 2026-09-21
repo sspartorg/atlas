@@ -38,7 +38,7 @@ export function DraftGuardProvider({ children }: { children: ReactNode }) {
                 else setPending(() => proceed);
             },
         }),
-        [dirtyIds],
+        [dirtyIds]
     );
     return (
         <DraftGuardContext.Provider value={value}>

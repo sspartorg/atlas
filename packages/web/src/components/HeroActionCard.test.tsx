@@ -13,7 +13,7 @@ describe('HeroActionCard', () => {
                 title="Connect a project"
                 description="Hook up your first repo"
                 cta={{ label: 'Connect', onClick }}
-            />,
+            />
         );
         expect(screen.getByText('Connect a project')).toBeInTheDocument();
         expect(screen.getByText('Hook up your first repo')).toBeInTheDocument();

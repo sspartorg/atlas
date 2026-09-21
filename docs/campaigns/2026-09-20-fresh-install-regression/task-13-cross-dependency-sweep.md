@@ -118,7 +118,7 @@ something the Owner never offered.
 
 A disposable project was connected against `/tmp/outside-workspace-repo`, a git
 repo deliberately **outside** `settings.workspace_path`
-(`/Users/sunnysabhanam/Work/workspace`), then purged with
+(`<workspace>`), then purged with
 `{mode:'purge', confirm_name:…}`.
 
 **Result: the project row was deleted and the folder was not touched.**

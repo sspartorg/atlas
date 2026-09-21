@@ -46,7 +46,7 @@ function renderHistory(id: string) {
         <Routes>
             <Route path="/terminal/:id/history" element={<TerminalHistory />} />
         </Routes>,
-        { initialEntries: [`/terminal/${id}/history`] },
+        { initialEntries: [`/terminal/${id}/history`] }
     );
 }
 
@@ -65,9 +65,7 @@ describe('TerminalHistory — missing id param', () => {
 
 describe('TerminalHistory — loading', () => {
     it('shows loading spinner while session loads', () => {
-        server.use(
-            http.get(`${BASE}/cli/sessions/sess-hist`, () => new Promise(() => {})),
-        );
+        server.use(http.get(`${BASE}/cli/sessions/sess-hist`, () => new Promise(() => {})));
         renderHistory('sess-hist');
         expect(document.querySelector('[role="progressbar"]')).toBeInTheDocument();
     });
@@ -77,14 +75,14 @@ describe('TerminalHistory — error state', () => {
     it('shows error when session fetch fails', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions/sess-bad`, () =>
-                HttpResponse.json({ error: 'Not found' }, { status: 404 }),
-            ),
+                HttpResponse.json({ error: 'Not found' }, { status: 404 })
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/terminal/:id/history" element={<TerminalHistory />} />
             </Routes>,
-            { initialEntries: ['/terminal/sess-bad/history'] },
+            { initialEntries: ['/terminal/sess-bad/history'] }
         );
         await screen.findByText(/session not found/i);
     });
@@ -93,16 +91,14 @@ describe('TerminalHistory — error state', () => {
 describe('TerminalHistory — closed session with transcript', () => {
     beforeEach(() => {
         server.use(
-            http.get(`${BASE}/cli/sessions/sess-hist`, () =>
-                HttpResponse.json(makeSession()),
-            ),
+            http.get(`${BASE}/cli/sessions/sess-hist`, () => HttpResponse.json(makeSession())),
             http.get(`${BASE}/cli/sessions/sess-hist/transcript`, () =>
                 HttpResponse.json({
                     jsonl_content: '{"type":"user","message":{"content":"hello"}}',
                     ingested_at: '2026-01-02T01:00:00.000Z',
                     source: 'claude',
-                }),
-            ),
+                })
+            )
         );
     });
 
@@ -144,21 +140,21 @@ describe('TerminalHistory — closed session with PR url', () => {
         server.use(
             http.get(`${BASE}/cli/sessions/sess-hist`, () =>
                 HttpResponse.json(
-                    makeSession({ finalize_pr_url: 'https://github.com/owner/repo/pull/42' }),
-                ),
+                    makeSession({ finalize_pr_url: 'https://github.com/owner/repo/pull/42' })
+                )
             ),
             http.get(`${BASE}/cli/sessions/sess-hist/transcript`, () =>
                 HttpResponse.json({
                     jsonl_content: null,
                     ingested_at: null,
                     source: 'claude',
-                }),
-            ),
+                })
+            )
         );
         renderHistory('sess-hist');
         await screen.findByText(/session closed/i);
         expect(
-            screen.getByRole('link', { name: 'https://github.com/owner/repo/pull/42' }),
+            screen.getByRole('link', { name: 'https://github.com/owner/repo/pull/42' })
         ).toBeInTheDocument();
     });
 });
@@ -166,10 +162,8 @@ describe('TerminalHistory — closed session with PR url', () => {
 describe('TerminalHistory — transcript loading/error', () => {
     it('shows spinner while transcript loads', async () => {
         server.use(
-            http.get(`${BASE}/cli/sessions/sess-hist`, () =>
-                HttpResponse.json(makeSession()),
-            ),
-            http.get(`${BASE}/cli/sessions/sess-hist/transcript`, () => new Promise(() => {})),
+            http.get(`${BASE}/cli/sessions/sess-hist`, () => HttpResponse.json(makeSession())),
+            http.get(`${BASE}/cli/sessions/sess-hist/transcript`, () => new Promise(() => {}))
         );
         renderHistory('sess-hist');
         await screen.findByText('Closed Session');
@@ -178,12 +172,10 @@ describe('TerminalHistory — transcript loading/error', () => {
 
     it('shows error when transcript fetch fails', async () => {
         server.use(
-            http.get(`${BASE}/cli/sessions/sess-hist`, () =>
-                HttpResponse.json(makeSession()),
-            ),
+            http.get(`${BASE}/cli/sessions/sess-hist`, () => HttpResponse.json(makeSession())),
             http.get(`${BASE}/cli/sessions/sess-hist/transcript`, () =>
-                HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Server error' }, { status: 500 })
+            )
         );
         renderHistory('sess-hist');
         await screen.findByText(/could not load transcript/i);
@@ -191,16 +183,14 @@ describe('TerminalHistory — transcript loading/error', () => {
 
     it('shows unavailable message when transcript content is null', async () => {
         server.use(
-            http.get(`${BASE}/cli/sessions/sess-hist`, () =>
-                HttpResponse.json(makeSession()),
-            ),
+            http.get(`${BASE}/cli/sessions/sess-hist`, () => HttpResponse.json(makeSession())),
             http.get(`${BASE}/cli/sessions/sess-hist/transcript`, () =>
                 HttpResponse.json({
                     jsonl_content: null,
                     ingested_at: null,
                     source: 'claude',
-                }),
-            ),
+                })
+            )
         );
         renderHistory('sess-hist');
         await screen.findByText(/transcript unavailable/i);
@@ -211,21 +201,21 @@ describe('TerminalHistory — errored session', () => {
     it('renders errored session history page', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions/sess-err`, () =>
-                HttpResponse.json(makeSession({ id: 'sess-err', status: 'errored' })),
+                HttpResponse.json(makeSession({ id: 'sess-err', status: 'errored' }))
             ),
             http.get(`${BASE}/cli/sessions/sess-err/transcript`, () =>
                 HttpResponse.json({
                     jsonl_content: '{"type":"system"}',
                     ingested_at: null,
                     source: 'claude',
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/terminal/:id/history" element={<TerminalHistory />} />
             </Routes>,
-            { initialEntries: ['/terminal/sess-err/history'] },
+            { initialEntries: ['/terminal/sess-err/history'] }
         );
         await screen.findByText('Closed Session');
     });
@@ -235,15 +225,15 @@ describe('TerminalHistory — non-terminal session redirect', () => {
     it('redirects active session to live view', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions/sess-live`, () =>
-                HttpResponse.json(makeSession({ id: 'sess-live', status: 'active' })),
-            ),
+                HttpResponse.json(makeSession({ id: 'sess-live', status: 'active' }))
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/terminal/:id" element={<div data-testid="live-page">Live</div>} />
                 <Route path="/terminal/:id/history" element={<TerminalHistory />} />
             </Routes>,
-            { initialEntries: ['/terminal/sess-live/history'] },
+            { initialEntries: ['/terminal/sess-live/history'] }
         );
         // Effect triggers redirect to live view
         await screen.findByTestId('live-page');
@@ -259,18 +249,18 @@ describe('TerminalHistory — null worktree_branch and closed_at render dashes',
                         id: 'sess-null',
                         worktree_branch: null,
                         closed_at: null,
-                    }),
-                ),
+                    })
+                )
             ),
             http.get(`${BASE}/cli/sessions/sess-null/transcript`, () =>
-                HttpResponse.json({ jsonl_content: '{}', ingested_at: null, source: 'claude' }),
-            ),
+                HttpResponse.json({ jsonl_content: '{}', ingested_at: null, source: 'claude' })
+            )
         );
         renderWithProviders(
             <Routes>
                 <Route path="/terminal/:id/history" element={<TerminalHistory />} />
             </Routes>,
-            { initialEntries: ['/terminal/sess-null/history'] },
+            { initialEntries: ['/terminal/sess-null/history'] }
         );
         await screen.findByText('Closed Session');
         // Both null fields should render as the "—" fallback
@@ -282,15 +272,13 @@ describe('TerminalHistory — null worktree_branch and closed_at render dashes',
 describe('TerminalHistory — transcript error without message property', () => {
     it('shows "unknown error" fallback when transcript error has no message', async () => {
         server.use(
-            http.get(`${BASE}/cli/sessions/sess-hist`, () =>
-                HttpResponse.json(makeSession()),
-            ),
+            http.get(`${BASE}/cli/sessions/sess-hist`, () => HttpResponse.json(makeSession())),
             http.get(`${BASE}/cli/sessions/sess-hist/transcript`, () =>
                 // Return a non-Error object — TanStack Query wraps this in an
                 // Error, but the cast `(error as Error)?.message` exercises the
                 // null-coalescing '?? "unknown error"' branch.
-                HttpResponse.json({ error: 'boom' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'boom' }, { status: 500 })
+            )
         );
         renderHistory('sess-hist');
         await screen.findByText('Closed Session');
@@ -302,19 +290,20 @@ describe('TerminalHistory — transcript error without message property', () => 
 describe('TerminalHistory — back button navigates to /terminal', () => {
     it('clicks back button and navigates to /terminal list', async () => {
         server.use(
-            http.get(`${BASE}/cli/sessions/sess-hist`, () =>
-                HttpResponse.json(makeSession()),
-            ),
+            http.get(`${BASE}/cli/sessions/sess-hist`, () => HttpResponse.json(makeSession())),
             http.get(`${BASE}/cli/sessions/sess-hist/transcript`, () =>
-                HttpResponse.json({ jsonl_content: '{}', ingested_at: null, source: 'claude' }),
-            ),
+                HttpResponse.json({ jsonl_content: '{}', ingested_at: null, source: 'claude' })
+            )
         );
         renderWithProviders(
             <Routes>
-                <Route path="/terminal" element={<div data-testid="terminal-list">Terminal List</div>} />
+                <Route
+                    path="/terminal"
+                    element={<div data-testid="terminal-list">Terminal List</div>}
+                />
                 <Route path="/terminal/:id/history" element={<TerminalHistory />} />
             </Routes>,
-            { initialEntries: ['/terminal/sess-hist/history'] },
+            { initialEntries: ['/terminal/sess-hist/history'] }
         );
         // Wait for the session to load
         await screen.findByText('Closed Session');

@@ -312,9 +312,9 @@ describe('credentialsService — github_app kind', () => {
             .where('id', '=', cred.id)
             .execute();
         const updated = await credentialsService.update(cred.id, {
-            app_installation_owner: 'isw-CDM-Next',
+            app_installation_owner: 'acme-org',
         });
-        expect(updated.app_installation_owner).toBe('isw-CDM-Next');
+        expect(updated.app_installation_owner).toBe('acme-org');
         expect(updated.app_installation_id).toBeNull();
         expect(updated.token_encrypted).toBeNull();
         expect(updated.token_fingerprint).toBeNull();
@@ -454,5 +454,37 @@ describe('credentialsService — github_app kind', () => {
         expect(app.has_app_private_key).toBe(true);
         expect(pat.has_app_private_key).toBe(false);
         expect(pat.app_id).toBeNull();
+    });
+});
+
+// G-025 — the slug is written verbatim into the file that becomes
+// GIT_CONFIG_GLOBAL, so a newline injects git config directives and
+// `[core] sshCommand` is command execution as the API user.
+describe('readBotInfoFolder — app_slug injection guard (G-025)', () => {
+    it('rejects a slug carrying a newline and a git config directive', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'atlas-bot-slug-'));
+        writeFileSync(
+            join(dir, 'app-config.json'),
+            JSON.stringify({ id: 123456, slug: 'ok\n[core]\n\tsshCommand = touch /tmp/pwned' }),
+            'utf8',
+        );
+        writeFileSync(
+            join(dir, 'k.pem'),
+            '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----\n',
+            'utf8',
+        );
+        await expect(
+            credentialsService.create({
+                label: 'App',
+                host: 'github',
+                kind: 'github_app',
+                bot_info_path: dir,
+                app_installation_owner: 'acme-org',
+                scope: '',
+                human_name: null,
+                human_email: null,
+                human_gh_login: null,
+            } as never),
+        ).rejects.toThrow(/"slug" must be a GitHub App slug/);
     });
 });

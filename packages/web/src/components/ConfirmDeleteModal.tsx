@@ -122,24 +122,15 @@ export function ConfirmDeleteModal({ open, entityKind, entityTitle, onConfirm, o
                             flexShrink: 0,
                         }}
                     >
-                        <DeleteOutlineRounded
-                            sx={{ color: ATLAS_PALETTE.error, fontSize: 20 }}
-                        />
+                        <DeleteOutlineRounded sx={{ color: ATLAS_PALETTE.error, fontSize: 20 }} />
                     </Box>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         <FormHeading>Delete this {labels.lower}?</FormHeading>
-                        <Typography
-                            sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 0.5 }}
-                        >
+                        <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
                             {labels.singular} <strong>{entityTitle}</strong> {labels.describeImpact}
                         </Typography>
                     </Box>
-                    <IconButton
-                        size="small"
-                        onClick={onClose}
-                        disabled={busy}
-                        aria-label="Close"
-                    >
+                    <IconButton size="small" onClick={onClose} disabled={busy} aria-label="Close">
                         <CloseRounded fontSize="small" />
                     </IconButton>
                 </Box>

@@ -23,7 +23,7 @@ describe('TasksTabContent', () => {
                 agents={[stubAgent]}
                 ownerName="owner"
                 ownerAccent="#3b82f6"
-            />,
+            />
         );
         expect(screen.getByText('1')).toBeInTheDocument();
         expect(screen.getByText(/\btask\b in this project/i)).toBeInTheDocument();
@@ -41,7 +41,7 @@ describe('TasksTabContent', () => {
                 agents={[stubAgent]}
                 ownerName="owner"
                 ownerAccent="#3b82f6"
-            />,
+            />
         );
         expect(screen.getByText('2')).toBeInTheDocument();
         expect(screen.getByText(/tasks in this project/i)).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe('TasksTabContent', () => {
                 agents={[stubAgent]}
                 ownerName="owner"
                 ownerAccent="#3b82f6"
-            />,
+            />
         );
         expect(screen.getByText('0')).toBeInTheDocument();
         expect(screen.getByText(/tasks in this project/i)).toBeInTheDocument();
@@ -71,11 +71,11 @@ describe('TasksTabContent', () => {
                 agents={[stubAgent]}
                 ownerName="owner"
                 ownerAccent="#3b82f6"
-            />,
+            />
         );
         expect(screen.getByText('Open in Tasks').closest('a')).toHaveAttribute(
             'href',
-            '/tasks?project=Test%20Project',
+            '/tasks?project=Test%20Project'
         );
     });
 });

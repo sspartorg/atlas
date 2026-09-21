@@ -15,8 +15,18 @@ import { formatAbsolute, relativeTime } from '../../utils/time.js';
 import { WorkflowRunStatusChip } from './WorkflowRunStatusChip.js';
 import { durationLabel } from './labels.js';
 
-const HEAD_SX = { fontSize: 11, fontWeight: 600, color: ATLAS_PALETTE.slate60, textTransform: 'uppercase', letterSpacing: '0.05em' } as const;
-const MONO_SX = { fontFamily: TYPOGRAPHY.fontFamilyMono, fontSize: 12, color: ATLAS_PALETTE.slate70 } as const;
+const HEAD_SX = {
+    fontSize: 11,
+    fontWeight: 600,
+    color: ATLAS_PALETTE.slate60,
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+} as const;
+const MONO_SX = {
+    fontFamily: TYPOGRAPHY.fontFamilyMono,
+    fontSize: 12,
+    color: ATLAS_PALETTE.slate70,
+} as const;
 
 export function WorkflowRunsTab({ workflowId }: { workflowId: string }) {
     const navigate = useNavigate();
@@ -26,7 +36,14 @@ export function WorkflowRunsTab({ workflowId }: { workflowId: string }) {
     if (isLoading) return <Skeleton variant="rounded" height={160} />;
     if (!runs || runs.length === 0) {
         return (
-            <Box sx={{ p: 6, textAlign: 'center', border: `1.5px dashed ${ATLAS_PALETTE.slate12}`, borderRadius: '12px' }}>
+            <Box
+                sx={{
+                    p: 6,
+                    textAlign: 'center',
+                    border: `1.5px dashed ${ATLAS_PALETTE.slate12}`,
+                    borderRadius: '12px',
+                }}
+            >
                 <Typography sx={{ fontSize: 14, color: ATLAS_PALETTE.slate60 }}>
                     No runs yet. Use Run now, or queue ready items for this workflow.
                 </Typography>
@@ -35,7 +52,14 @@ export function WorkflowRunsTab({ workflowId }: { workflowId: string }) {
     }
 
     return (
-        <Box sx={{ overflowX: 'auto', border: `1px solid ${ATLAS_PALETTE.slate10}`, borderRadius: '12px', background: ATLAS_PALETTE.white }}>
+        <Box
+            sx={{
+                overflowX: 'auto',
+                border: `1px solid ${ATLAS_PALETTE.slate10}`,
+                borderRadius: '12px',
+                background: ATLAS_PALETTE.white,
+            }}
+        >
             <Table size="small" sx={{ minWidth: 640 }}>
                 <TableHead>
                     <TableRow>
@@ -55,10 +79,18 @@ export function WorkflowRunsTab({ workflowId }: { workflowId: string }) {
                             sx={{ cursor: 'pointer' }}
                         >
                             <TableCell>
-                                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate, fontWeight: 500 }}>
+                                <Typography
+                                    sx={{
+                                        fontSize: 13,
+                                        color: ATLAS_PALETTE.slate,
+                                        fontWeight: 500,
+                                    }}
+                                >
                                     {run.item_title ?? 'Project run'}
                                 </Typography>
-                                <Typography sx={MONO_SX}>{run.item_id ?? run.id.slice(0, 8)}</Typography>
+                                <Typography sx={MONO_SX}>
+                                    {run.item_id ?? run.id.slice(0, 8)}
+                                </Typography>
                             </TableCell>
                             <TableCell>
                                 <WorkflowRunStatusChip status={run.status} />
@@ -66,28 +98,37 @@ export function WorkflowRunsTab({ workflowId }: { workflowId: string }) {
                             <TableCell title={formatAbsolute(run.started_at)} sx={MONO_SX}>
                                 {relativeTime(run.started_at)}
                             </TableCell>
-                            <TableCell sx={MONO_SX}>{durationLabel(run.started_at, run.finished_at)}</TableCell>
+                            <TableCell sx={MONO_SX}>
+                                {durationLabel(run.started_at, run.finished_at)}
+                            </TableCell>
                             <TableCell>
                                 {/* F-018 — a multi-repo run opens one PR per repo it
                                     changed (ADR 0017/0018). `pr_url` is only the
                                     first; rendering it alone silently dropped the
                                     rest. Fall back to `pr_url` so runs recorded
                                     before `pr_urls` existed still link. */}
-                                {(run.pr_urls?.length ? run.pr_urls : run.pr_url ? [run.pr_url] : []).map(
-                                    (url, i, all) => (
-                                        <Link
-                                            key={url}
-                                            href={url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            onClick={(e) => e.stopPropagation()}
-                                            sx={{ fontSize: 12.5, display: 'block' }}
-                                        >
-                                            {all.length > 1 ? `PR ${i + 1} of ${all.length}` : 'Open PR'}
-                                        </Link>
-                                    ),
+                                {(run.pr_urls?.length
+                                    ? run.pr_urls
+                                    : run.pr_url
+                                      ? [run.pr_url]
+                                      : []
+                                ).map((url, i, all) => (
+                                    <Link
+                                        key={url}
+                                        href={url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        sx={{ fontSize: 12.5, display: 'block' }}
+                                    >
+                                        {all.length > 1
+                                            ? `PR ${i + 1} of ${all.length}`
+                                            : 'Open PR'}
+                                    </Link>
+                                ))}
+                                {!run.pr_urls?.length && !run.pr_url && (
+                                    <Typography sx={MONO_SX}>—</Typography>
                                 )}
-                                {!run.pr_urls?.length && !run.pr_url && <Typography sx={MONO_SX}>—</Typography>}
                             </TableCell>
                         </TableRow>
                     ))}

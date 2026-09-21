@@ -80,11 +80,7 @@ export function AgentCard({
         // Popover overlay. The backdrop closes the menu, but the underlying
         // click event still reaches the card unless we filter it here.
         const target = e.target as HTMLElement | null;
-        if (
-            target?.closest(
-                '.MuiMenu-root, .MuiPopover-root, .MuiModal-root, .MuiBackdrop-root'
-            )
-        ) {
+        if (target?.closest('.MuiMenu-root, .MuiPopover-root, .MuiModal-root, .MuiBackdrop-root')) {
             return;
         }
         onClick?.();
@@ -142,6 +138,7 @@ export function AgentCard({
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 20, color: agent.accent_color }}
                     >
                         {view.glyph}
@@ -233,9 +230,7 @@ export function AgentCard({
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     cursor: 'pointer',
-                                    color: isFavorite
-                                        ? ATLAS_PALETTE.gold
-                                        : ATLAS_PALETTE.slate40,
+                                    color: isFavorite ? ATLAS_PALETTE.gold : ATLAS_PALETTE.slate40,
                                     transition: 'color 150ms ease, background 150ms ease',
                                     '&:hover': {
                                         background: ATLAS_PALETTE.slate08,
@@ -248,6 +243,7 @@ export function AgentCard({
                                 <Box
                                     component="span"
                                     className="material-symbols-rounded"
+                                    aria-hidden="true"
                                     sx={{
                                         fontSize: 18,
                                         fontVariationSettings: isFavorite ? '"FILL" 1' : '"FILL" 0',
@@ -359,9 +355,12 @@ export function AgentCard({
                 </Typography>
                 {stats.totalCostThisMonthUsd != null && (
                     <>
-                        <Typography sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate40 }}>·</Typography>
+                        <Typography sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate40 }}>
+                            ·
+                        </Typography>
                         <Typography sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate60 }}>
-                            {formatCostUsd(stats.totalCostThisMonthUsd)} ({new Date().toLocaleString('default', { month: 'short' })})
+                            {formatCostUsd(stats.totalCostThisMonthUsd)} (
+                            {new Date().toLocaleString('default', { month: 'short' })})
                         </Typography>
                     </>
                 )}

@@ -170,9 +170,9 @@ export function TaskDetail() {
     // tested_by is in the union to satisfy the RelatedItemsCard onOpenPicker
     // type, but allowAddTestLink is omitted on TaskDetail so the picker
     // never actually opens in tested_by mode from this page.
-    const [pickerMode, setPickerMode] = useState<
-        'relates_to' | 'depends_on' | 'tested_by' | null
-    >(null);
+    const [pickerMode, setPickerMode] = useState<'relates_to' | 'depends_on' | 'tested_by' | null>(
+        null
+    );
 
     const task = full?.task;
     const project = full?.project ?? null;
@@ -188,7 +188,10 @@ export function TaskDetail() {
         let sum = 0;
         let hasAny = false;
         for (const r of itemRuns) {
-            if (r.total_cost_usd != null) { sum += r.total_cost_usd; hasAny = true; }
+            if (r.total_cost_usd != null) {
+                sum += r.total_cost_usd;
+                hasAny = true;
+            }
         }
         return hasAny ? sum : null;
     }, [itemRuns]);
@@ -200,9 +203,7 @@ export function TaskDetail() {
     if (!task) {
         return (
             <Box sx={{ px: { xs: 3, md: 8 }, py: 4, textAlign: 'center' }}>
-                <Typography sx={{ color: ATLAS_PALETTE.slate40, mb: 3 }}>
-                    Task not found
-                </Typography>
+                <Typography sx={{ color: ATLAS_PALETTE.slate40, mb: 3 }}>Task not found</Typography>
                 <Button onClick={() => navigate('/tasks')}>Back to Tasks</Button>
             </Box>
         );
@@ -238,190 +239,214 @@ export function TaskDetail() {
 
     return (
         <>
-        <IssueDetailShell
-            breadcrumbs={[
-                { label: 'Tasks', href: '/tasks' },
-                { label: task.id, mono: true },
-            ]}
-            title={task.title}
-            onTitleSave={(next) =>
-                updateTask.mutateAsync({ id: task.id, data: { title: next } })
-            }
-            titleSaving={updateTask.isPending}
-            issueType="task"
-            headerExtras={<AddRelatedMenu options={addOptions} label="Add related item" />}
-            actions={
-                <IssueDeleteAction
-                    entityKind="task"
-                    entityTitle={task.title}
-                    onDelete={async () => {
-                        await deleteTask.mutateAsync(task.id);
-                    }}
-                    redirectTo="/tasks"
+            <IssueDetailShell
+                breadcrumbs={[
+                    { label: 'Tasks', href: '/tasks' },
+                    { label: task.id, mono: true },
+                ]}
+                title={task.title}
+                onTitleSave={(next) =>
+                    updateTask.mutateAsync({ id: task.id, data: { title: next } })
+                }
+                titleSaving={updateTask.isPending}
+                issueType="task"
+                headerExtras={<AddRelatedMenu options={addOptions} label="Add related item" />}
+                actions={
+                    <IssueDeleteAction
+                        entityKind="task"
+                        entityTitle={task.title}
+                        onDelete={async () => {
+                            await deleteTask.mutateAsync(task.id);
+                        }}
+                        redirectTo="/tasks"
+                    />
+                }
+                rightRail={
+                    <>
+                        <DetailsRailCard
+                            issueType="task"
+                            issueId={task.id}
+                            externalLinks={full?.external_links}
+                            status={task.status}
+                            onStatusPick={(next, override) =>
+                                void transitionTask.mutateAsync({
+                                    id: task.id,
+                                    status: next,
+                                    override,
+                                })
+                            }
+                            assigneeAgentId={task.assignee_agent_id}
+                            onAssign={(agentId) =>
+                                void assignTask.mutateAsync({ id: task.id, agentId })
+                            }
+                            assignee={assignee}
+                            reassignLocked={reassignLocked}
+                            project={project}
+                            reporter={reporter}
+                            ownerName={ownerName}
+                            ownerAccent={ownerAccent}
+                            priority={task.priority}
+                            onPriorityPick={(next) =>
+                                void updateTask.mutateAsync({
+                                    id: task.id,
+                                    data: { priority: next },
+                                })
+                            }
+                            labels={task.labels ?? []}
+                            labelSuggestions={labelSuggestions}
+                            onLabelsChange={(next) =>
+                                updateTask.mutateAsync({ id: task.id, data: { labels: next } })
+                            }
+                            repoIds={task.repo_ids ?? []}
+                            onRepoIdsChange={(next) =>
+                                updateTask.mutateAsync({ id: task.id, data: { repo_ids: next } })
+                            }
+                            createdAt={task.created_at}
+                            updatedAt={task.updated_at}
+                            totalCostUsd={totalCostUsd}
+                            worktreeBranch={task.worktree_branch}
+                            worktreePath={task.worktree_path}
+                        />
+                        <ActivityLogCard
+                            issueType="task"
+                            issueId={task.id}
+                            activity={full?.activity}
+                            agents={agents}
+                        />
+                    </>
+                }
+            >
+                <EditableMarkdownCard
+                    title="Description"
+                    value={task.description}
+                    placeholder="Describe what this task is for…"
+                    emptyHint="No description yet — click to add one."
+                    saving={updateTask.isPending}
+                    onSave={(next) =>
+                        updateTask.mutateAsync({ id: task.id, data: { description: next } })
+                    }
                 />
-            }
-            rightRail={
-                <>
-                    <DetailsRailCard
-                        issueType="task"
-                        issueId={task.id}
-                        externalLinks={full?.external_links}
-                        status={task.status}
-                        onStatusPick={(next, override) =>
-                            void transitionTask.mutateAsync({
-                                id: task.id,
-                                status: next,
-                                override,
-                            })
-                        }
-                        assigneeAgentId={task.assignee_agent_id}
-                        onAssign={(agentId) => void assignTask.mutateAsync({ id: task.id, agentId })}
-                        assignee={assignee}
-                        reassignLocked={reassignLocked}
-                        project={project}
-                        reporter={reporter}
-                        ownerName={ownerName}
-                        ownerAccent={ownerAccent}
-                        priority={task.priority}
-                        onPriorityPick={(next) =>
-                            void updateTask.mutateAsync({ id: task.id, data: { priority: next } })
-                        }
-                        labels={task.labels ?? []}
-                        labelSuggestions={labelSuggestions}
-                        onLabelsChange={(next) =>
-                            updateTask.mutateAsync({ id: task.id, data: { labels: next } })
-                        }
-                        repoIds={task.repo_ids ?? []}
-                        onRepoIdsChange={(next) =>
-                            updateTask.mutateAsync({ id: task.id, data: { repo_ids: next } })
-                        }
-                        createdAt={task.created_at}
-                        updatedAt={task.updated_at}
-                        totalCostUsd={totalCostUsd}
-                        worktreeBranch={task.worktree_branch}
-                        worktreePath={task.worktree_path}
-                    />
-                    <ActivityLogCard
-                        issueType="task"
-                        issueId={task.id}
-                        activity={full?.activity}
-                        agents={agents}
-                    />
-                </>
-            }
-        >
-            <EditableMarkdownCard
-                title="Description"
-                value={task.description}
-                placeholder="Describe what this task is for…"
-                emptyHint="No description yet — click to add one."
-                saving={updateTask.isPending}
-                onSave={(next) =>
-                    updateTask.mutateAsync({ id: task.id, data: { description: next } })
-                }
-            />
 
-            <EditableMarkdownCard
-                title="Acceptance criteria"
-                value={task.acceptance_criteria}
-                placeholder={'- User can…\n- System ensures…'}
-                emptyHint="Click to add acceptance criteria, one per line…"
-                saving={updateTask.isPending}
-                onSave={(next) =>
-                    updateTask.mutateAsync({ id: task.id, data: { acceptance_criteria: next } })
-                }
-            />
+                <EditableMarkdownCard
+                    title="Acceptance criteria"
+                    value={task.acceptance_criteria}
+                    placeholder={'- User can…\n- System ensures…'}
+                    emptyHint="Click to add acceptance criteria, one per line…"
+                    saving={updateTask.isPending}
+                    onSave={(next) =>
+                        updateTask.mutateAsync({ id: task.id, data: { acceptance_criteria: next } })
+                    }
+                />
 
-            {task.spec_md?.trim() && (
-                <ReadOnlyCard title="Spec">
-                    <MarkdownPreview source={task.spec_md} />
-                </ReadOnlyCard>
-            )}
+                {task.spec_md?.trim() && (
+                    <ReadOnlyCard title="Spec">
+                        <MarkdownPreview source={task.spec_md} />
+                    </ReadOnlyCard>
+                )}
 
-            {task.pr_url && (
-                <ReadOnlyCard title="Pull request">
-                    <Link href={task.pr_url} target="_blank" rel="noreferrer" sx={{ fontSize: 13 }}>
-                        {task.pr_url}
-                    </Link>
-                </ReadOnlyCard>
-            )}
+                {task.pr_url && (
+                    <ReadOnlyCard title="Pull request">
+                        <Link
+                            href={task.pr_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            sx={{ fontSize: 13 }}
+                        >
+                            {task.pr_url}
+                        </Link>
+                    </ReadOnlyCard>
+                )}
 
-            <WorkItemTable
-                title="Sub-tasks"
-                rows={subTasks.map((s) => ({
-                    id: s.id,
-                    kind: 'sub_task',
-                    shortId: s.id,
-                    title: s.title,
-                    status: s.status,
-                    labels: s.labels,
-                    assignee_agent_id: s.assignee_agent_id,
-                    reporter_agent_id: s.reporter_agent_id,
-                    updated_at: s.updated_at,
-                })) satisfies WorkItemTableRow[]}
-                agentsById={agentsById}
-                ownerName={ownerName}
-                ownerAccent={ownerAccent}
-                formatRelative={relativeTime}
-                onRowClick={(row) => navigate(`/sub-tasks/${row.id}`)}
-                headerRight={
-                    adding ? null : (
-                        <Stack direction="row" spacing={1}>
-                            {subTasks.length > 1 && (
-                                <Button size="small" variant="text" onClick={() => setReordering(true)}>
-                                    Reorder
+                <WorkItemTable
+                    title="Sub-tasks"
+                    rows={
+                        subTasks.map((s) => ({
+                            id: s.id,
+                            kind: 'sub_task',
+                            shortId: s.id,
+                            title: s.title,
+                            status: s.status,
+                            labels: s.labels,
+                            assignee_agent_id: s.assignee_agent_id,
+                            reporter_agent_id: s.reporter_agent_id,
+                            updated_at: s.updated_at,
+                        })) satisfies WorkItemTableRow[]
+                    }
+                    agentsById={agentsById}
+                    ownerName={ownerName}
+                    ownerAccent={ownerAccent}
+                    formatRelative={relativeTime}
+                    onRowClick={(row) => navigate(`/sub-tasks/${row.id}`)}
+                    headerRight={
+                        adding ? null : (
+                            <Stack direction="row" spacing={1}>
+                                {subTasks.length > 1 && (
+                                    <Button
+                                        size="small"
+                                        variant="text"
+                                        onClick={() => setReordering(true)}
+                                    >
+                                        Reorder
+                                    </Button>
+                                )}
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() => setAdding(true)}
+                                >
+                                    Add sub-task
                                 </Button>
-                            )}
-                            <Button size="small" variant="outlined" onClick={() => setAdding(true)}>
-                                Add sub-task
-                            </Button>
-                        </Stack>
-                    )
-                }
-            />
+                            </Stack>
+                        )
+                    }
+                />
 
-            {reordering && (
-                <ReorderSubTasksDialog taskId={task.id} subTasks={subTasks} onClose={() => setReordering(false)} />
-            )}
+                {reordering && (
+                    <ReorderSubTasksDialog
+                        taskId={task.id}
+                        subTasks={subTasks}
+                        onClose={() => setReordering(false)}
+                    />
+                )}
 
-            {adding && (
-                <AddSubTaskForm
-                    taskId={task.id}
-                    labelSuggestions={labelSuggestions}
-                    onDone={() => setAdding(false)}
+                {adding && (
+                    <AddSubTaskForm
+                        taskId={task.id}
+                        labelSuggestions={labelSuggestions}
+                        onDone={() => setAdding(false)}
+                    />
+                )}
+
+                <RelatedItemsCard
+                    issueType="task"
+                    issueId={task.id}
+                    relatedLinks={full?.related_links}
+                    externalLinks={full?.external_links}
+                    agents={agents}
+                    onOpenPicker={setPickerMode}
+                />
+
+                <ConversationCard
+                    issueType="task"
+                    issueId={task.id}
+                    activity={full?.activity}
+                    agents={agents}
+                    status={task.status}
+                    assigneeAgentId={task.assignee_agent_id}
+                    runs={itemRuns}
+                />
+            </IssueDetailShell>
+
+            {pickerMode !== null && (
+                <LinkPickerDialog
+                    open
+                    mode={pickerMode}
+                    fromIssueType="task"
+                    fromIssueId={task.id}
+                    links={full?.related_links}
+                    onClose={() => setPickerMode(null)}
                 />
             )}
-
-            <RelatedItemsCard
-                issueType="task"
-                issueId={task.id}
-                relatedLinks={full?.related_links}
-                externalLinks={full?.external_links}
-                agents={agents}
-                onOpenPicker={setPickerMode}
-            />
-
-            <ConversationCard
-                issueType="task"
-                issueId={task.id}
-                activity={full?.activity}
-                agents={agents}
-                status={task.status}
-                assigneeAgentId={task.assignee_agent_id}
-                runs={itemRuns}
-            />
-        </IssueDetailShell>
-
-        {pickerMode !== null && (
-            <LinkPickerDialog
-                open
-                mode={pickerMode}
-                fromIssueType="task"
-                fromIssueId={task.id}
-                links={full?.related_links}
-                onClose={() => setPickerMode(null)}
-            />
-        )}
         </>
     );
 }

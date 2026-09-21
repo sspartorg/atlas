@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    UpdateExternalNotificationSchema,
     UpdateJiraConfigSchema,
     AgentCategorySchema,
     AgentCliSchema,
@@ -430,9 +431,9 @@ describe('credential schemas', () => {
 
     it('UpdateCredentialSchema accepts app_installation_owner', () => {
         expect(
-            UpdateCredentialSchema.parse({ app_installation_owner: 'isw-CDM-Next' })
+            UpdateCredentialSchema.parse({ app_installation_owner: 'acme-org' })
                 .app_installation_owner,
-        ).toBe('isw-CDM-Next');
+        ).toBe('acme-org');
     });
 
     it('UpdateCredentialSchema strips unknown keys (back-compat for round-tripped rows)', () => {
@@ -971,5 +972,35 @@ describe('UpdateJiraConfigSchema — site_url origin rule', () => {
 
     it('allows null — the bridge is simply not configured', () => {
         expect(parse(null).success).toBe(true);
+    });
+});
+
+describe('UpdateExternalNotificationSchema — G-007 strictness', () => {
+    it('rejects the un-prefixed names an MCP caller would guess', () => {
+        // Every field is optional, so without `.strict()` Zod strips these
+        // and the object parses to `{}` — which the route then applied as an
+        // empty patch, answering 200 having written nothing.
+        const res = UpdateExternalNotificationSchema.safeParse({
+            provider: 'telegram',
+            token: 'abc',
+            chat_id: '123',
+        });
+        expect(res.success).toBe(false);
+    });
+
+    it('still accepts the correctly-prefixed names', () => {
+        const res = UpdateExternalNotificationSchema.safeParse({
+            external_notification_provider: 'telegram',
+            external_notification_token: 'abc',
+            external_notification_chat_id: '123',
+        });
+        expect(res.success).toBe(true);
+    });
+
+    it('accepts {} — strictness is about unknown keys, not emptiness', () => {
+        // The route, not the schema, rejects an empty patch. Asserting it here
+        // keeps the division of labour explicit: move the empty check into the
+        // schema and this test tells you that you did.
+        expect(UpdateExternalNotificationSchema.safeParse({}).success).toBe(true);
     });
 });

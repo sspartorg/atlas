@@ -21,9 +21,7 @@ vi.mock('./HistoryTabContent.js', () => ({
 }));
 vi.mock('./TasksTabContent.js', () => ({
     TasksTabContent: ({ tasks }: { tasks: unknown }) => (
-        <div data-testid="tasks-content">
-            count={Array.isArray(tasks) ? tasks.length : '?'}
-        </div>
+        <div data-testid="tasks-content">count={Array.isArray(tasks) ? tasks.length : '?'}</div>
     ),
 }));
 

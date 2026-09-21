@@ -33,7 +33,7 @@ describe('MarketplaceAgentCard', () => {
                 agent={makeSummary()}
                 onOpen={() => {}}
                 onAfterInstall={() => {}}
-            />,
+            />
         );
         expect(screen.getByText('Coder')).toBeInTheDocument();
         expect(screen.getByText('A coding agent')).toBeInTheDocument();
@@ -54,7 +54,7 @@ describe('MarketplaceAgentCard', () => {
                 })}
                 onOpen={() => {}}
                 onAfterInstall={() => {}}
-            />,
+            />
         );
         expect(screen.getByText('Installed')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
@@ -72,7 +72,7 @@ describe('MarketplaceAgentCard', () => {
                 })}
                 onOpen={() => {}}
                 onAfterInstall={() => {}}
-            />,
+            />
         );
         expect(screen.getByText(/v2.*v3/)).toBeInTheDocument();
     });
@@ -80,11 +80,7 @@ describe('MarketplaceAgentCard', () => {
     it('clicking the card body fires onOpen', () => {
         const onOpen = vi.fn();
         renderWithProviders(
-            <MarketplaceAgentCard
-                agent={makeSummary()}
-                onOpen={onOpen}
-                onAfterInstall={() => {}}
-            />,
+            <MarketplaceAgentCard agent={makeSummary()} onOpen={onOpen} onAfterInstall={() => {}} />
         );
         fireEvent.click(screen.getByText('Coder'));
         expect(onOpen).toHaveBeenCalled();
@@ -93,11 +89,7 @@ describe('MarketplaceAgentCard', () => {
     it('clicking Add opens the modal without firing onOpen', () => {
         const onOpen = vi.fn();
         renderWithProviders(
-            <MarketplaceAgentCard
-                agent={makeSummary()}
-                onOpen={onOpen}
-                onAfterInstall={() => {}}
-            />,
+            <MarketplaceAgentCard agent={makeSummary()} onOpen={onOpen} onAfterInstall={() => {}} />
         );
         fireEvent.click(screen.getByRole('button', { name: 'Add' }));
         expect(screen.getByText(/add coder to your agents/i)).toBeInTheDocument();
@@ -110,7 +102,7 @@ describe('MarketplaceAgentCard', () => {
                 agent={makeSummary({ summary: '' })}
                 onOpen={() => {}}
                 onAfterInstall={() => {}}
-            />,
+            />
         );
         expect(screen.getByText('No summary available.')).toBeInTheDocument();
     });
@@ -124,7 +116,7 @@ describe('MarketplaceAgentCard', () => {
                 selectable
                 selected={false}
                 onToggleSelect={() => {}}
-            />,
+            />
         );
         expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });
@@ -139,7 +131,7 @@ describe('MarketplaceAgentCard', () => {
                 })}
                 onOpen={() => {}}
                 onAfterInstall={() => {}}
-            />,
+            />
         );
         expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     });
@@ -155,7 +147,7 @@ describe('MarketplaceAgentCard', () => {
                 selectable
                 selected={false}
                 onToggleSelect={onToggleSelect}
-            />,
+            />
         );
         fireEvent.click(screen.getByRole('checkbox'));
         expect(onToggleSelect).toHaveBeenCalledTimes(1);
@@ -171,7 +163,7 @@ describe('MarketplaceAgentCard', () => {
                 selectable
                 selected
                 onToggleSelect={() => {}}
-            />,
+            />
         );
         expect(screen.getByRole('checkbox')).toBeChecked();
     });
@@ -181,20 +173,20 @@ describe('MarketplaceAgentCard', () => {
         const onAfterInstall = vi.fn();
         server.use(
             http.post(`${BASE}/marketplace/agents/agent-coder/install`, () =>
-                HttpResponse.json({ id: 'agent-coder' }),
-            ),
+                HttpResponse.json({ id: 'agent-coder' })
+            )
         );
         renderWithProviders(
             <MarketplaceAgentCard
                 agent={makeSummary()}
                 onOpen={() => {}}
                 onAfterInstall={onAfterInstall}
-            />,
+            />
         );
         // Open modal
         fireEvent.click(screen.getByRole('button', { name: 'Add' }));
         await waitFor(() =>
-            expect(screen.getByText(/add coder to your agents/i)).toBeInTheDocument(),
+            expect(screen.getByText(/add coder to your agents/i)).toBeInTheDocument()
         );
         // Click the "Add to my agents" button in the modal
         const addBtn = screen.getByRole('button', { name: /add to my agents/i });
@@ -213,7 +205,7 @@ describe('MarketplaceAgentCard', () => {
                 selectable
                 selected={false}
                 onToggleSelect={onToggleSelect}
-            />,
+            />
         );
         const checkbox = screen.getByRole('checkbox');
         fireEvent.keyDown(checkbox, { key: ' ' });
@@ -232,7 +224,7 @@ describe('MarketplaceAgentCard', () => {
                 selectable
                 selected={false}
                 onToggleSelect={onToggleSelect}
-            />,
+            />
         );
         const checkbox = screen.getByRole('checkbox');
         fireEvent.keyDown(checkbox, { key: 'Enter' });
@@ -250,7 +242,7 @@ describe('MarketplaceAgentCard', () => {
                 selectable
                 selected={false}
                 onToggleSelect={onToggleSelect}
-            />,
+            />
         );
         const checkbox = screen.getByRole('checkbox');
         fireEvent.keyDown(checkbox, { key: 'Tab' });
@@ -260,27 +252,35 @@ describe('MarketplaceAgentCard', () => {
     it('closeAdd guard: close is ignored while installing is in-flight', async () => {
         const BASE = 'http://localhost:3000/api';
         let resolveInstall!: () => void;
-        const installPromise = new Promise<void>((res) => { resolveInstall = res; });
+        const installPromise = new Promise<void>((res) => {
+            resolveInstall = res;
+        });
         server.use(
             http.post(`${BASE}/marketplace/agents/agent-coder/install`, async () => {
                 await installPromise;
                 return HttpResponse.json({ id: 'agent-coder' });
-            }),
+            })
         );
         const onAfterInstall = vi.fn();
         renderWithProviders(
-            <MarketplaceAgentCard agent={makeSummary()} onOpen={() => {}} onAfterInstall={onAfterInstall} />,
+            <MarketplaceAgentCard
+                agent={makeSummary()}
+                onOpen={() => {}}
+                onAfterInstall={onAfterInstall}
+            />
         );
         // Open the AddFromMarketplaceModal
         fireEvent.click(screen.getByRole('button', { name: 'Add' }));
-        await waitFor(() => expect(screen.getByText(/add coder to your agents/i)).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByText(/add coder to your agents/i)).toBeInTheDocument()
+        );
         // Start install — the button text changes to show installing state
         const addBtn = screen.getByRole('button', { name: /add to my agents/i });
         fireEvent.click(addBtn);
         // While in-flight, installing=true → button is disabled
         await waitFor(() => {
             const btns = screen.getAllByRole('button');
-            const confirmBtns = btns.filter(b => b.hasAttribute('disabled'));
+            const confirmBtns = btns.filter((b) => b.hasAttribute('disabled'));
             expect(confirmBtns.length).toBeGreaterThan(0);
         });
         resolveInstall();
@@ -293,17 +293,26 @@ describe('MarketplaceAgentCard', () => {
         server.use(
             http.post(`${BASE}/marketplace/agents/agent-coder/install`, () =>
                 HttpResponse.json(
-                    { error: 'SLUG_TAKEN', details: { conflicting_id: 'agent-coder', suggested_id: 'agent-coder-2' } },
-                    { status: 409 },
-                ),
-            ),
+                    {
+                        error: 'SLUG_TAKEN',
+                        details: { conflicting_id: 'agent-coder', suggested_id: 'agent-coder-2' },
+                    },
+                    { status: 409 }
+                )
+            )
         );
         const onAfterInstall = vi.fn();
         renderWithProviders(
-            <MarketplaceAgentCard agent={makeSummary()} onOpen={() => {}} onAfterInstall={onAfterInstall} />,
+            <MarketplaceAgentCard
+                agent={makeSummary()}
+                onOpen={() => {}}
+                onAfterInstall={onAfterInstall}
+            />
         );
         fireEvent.click(screen.getByRole('button', { name: 'Add' }));
-        await waitFor(() => expect(screen.getByText(/add coder to your agents/i)).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByText(/add coder to your agents/i)).toBeInTheDocument()
+        );
         const addBtn = screen.getByRole('button', { name: /add to my agents/i });
         fireEvent.click(addBtn);
         // The error is handled (not re-thrown), installing goes back to false,
@@ -319,16 +328,22 @@ describe('MarketplaceAgentCard', () => {
             http.post(`${BASE}/marketplace/agents/agent-coder/install`, () =>
                 HttpResponse.json(
                     { details: { conflicting_id: 'agent-coder', suggested_id: 'agent-coder-2' } },
-                    { status: 409 },
-                ),
-            ),
+                    { status: 409 }
+                )
+            )
         );
         const onAfterInstall = vi.fn();
         renderWithProviders(
-            <MarketplaceAgentCard agent={makeSummary()} onOpen={() => {}} onAfterInstall={onAfterInstall} />,
+            <MarketplaceAgentCard
+                agent={makeSummary()}
+                onOpen={() => {}}
+                onAfterInstall={onAfterInstall}
+            />
         );
         fireEvent.click(screen.getByRole('button', { name: 'Add' }));
-        await waitFor(() => expect(screen.getByText(/add coder to your agents/i)).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByText(/add coder to your agents/i)).toBeInTheDocument()
+        );
         fireEvent.click(screen.getByRole('button', { name: /add to my agents/i }));
         // After slug-taken response the modal should still be open and onAfterInstall not fired
         await waitFor(() => expect(onAfterInstall).not.toHaveBeenCalled(), { timeout: 3000 });
@@ -337,7 +352,7 @@ describe('MarketplaceAgentCard', () => {
     it('handleCardClick ignores clicks that originate inside a MuiDialog-root', () => {
         const onOpen = vi.fn();
         const { container } = renderWithProviders(
-            <MarketplaceAgentCard agent={makeSummary()} onOpen={onOpen} onAfterInstall={() => {}} />,
+            <MarketplaceAgentCard agent={makeSummary()} onOpen={onOpen} onAfterInstall={() => {}} />
         );
         // Simulate a click whose target is inside .MuiDialog-root by dispatching
         // a synthetic event from within a mocked modal descendant. We test the
@@ -354,7 +369,7 @@ describe('MarketplaceAgentCard', () => {
                 agent={makeSummary({ glyph: '' })}
                 onOpen={() => {}}
                 onAfterInstall={() => {}}
-            />,
+            />
         );
         // The material-icon span should contain the fallback "smart_toy"
         const glyphSpan = document.querySelector('.material-symbols-rounded');

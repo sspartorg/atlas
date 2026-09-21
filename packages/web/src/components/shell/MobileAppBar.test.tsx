@@ -30,7 +30,7 @@ describe('MobileAppBar', () => {
             <PageTitleProvider>
                 <Setter />
                 <MobileAppBar />
-            </PageTitleProvider>,
+            </PageTitleProvider>
         );
         expect(screen.getAllByText('Hello').length).toBeGreaterThan(0);
     });
@@ -45,7 +45,7 @@ describe('MobileAppBar', () => {
             <PageTitleProvider>
                 <SetterWithSubtitle />
                 <MobileAppBar />
-            </PageTitleProvider>,
+            </PageTitleProvider>
         );
         expect(screen.getByText('My Subtitle')).toBeInTheDocument();
         expect(screen.getByText('Main Title')).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe('MobileAppBar', () => {
             <PageTitleProvider>
                 <SetterWithTrailing />
                 <MobileAppBar />
-            </PageTitleProvider>,
+            </PageTitleProvider>
         );
         expect(screen.getByTestId('trail-content')).toBeInTheDocument();
     });

@@ -21,14 +21,25 @@ interface Props {
     onNodeData: (patch: IWfNodeData) => void;
 }
 
-const TITLES = { start: 'Workflow settings', agent: 'Agent step', owner: 'Owner', subtasks: 'Sub-tasks step', end: 'End' } as const;
+const TITLES = {
+    start: 'Workflow settings',
+    agent: 'Agent step',
+    owner: 'Owner',
+    subtasks: 'Sub-tasks step',
+    end: 'End',
+} as const;
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, py: 1.5 }}>
             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>{label}</Typography>
             <Typography
-                sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate, fontFamily: TYPOGRAPHY.fontFamilyMono, textAlign: 'right' }}
+                sx={{
+                    fontSize: 12.5,
+                    color: ATLAS_PALETTE.slate,
+                    fontFamily: TYPOGRAPHY.fontFamilyMono,
+                    textAlign: 'right',
+                }}
             >
                 {children}
             </Typography>
@@ -36,26 +47,63 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     );
 }
 
-function ToggleRow({ label, sub, checked, onChange }: { label: string; sub: string; checked: boolean; onChange: (v: boolean) => void }) {
+function ToggleRow({
+    label,
+    sub,
+    checked,
+    onChange,
+}: {
+    label: string;
+    sub: string;
+    checked: boolean;
+    onChange: (v: boolean) => void;
+}) {
     return (
         <Box
             component="label"
-            sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5, cursor: 'pointer', borderBottom: `1px solid ${ATLAS_PALETTE.slate06}` }}
+            sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                py: 1.5,
+                cursor: 'pointer',
+                borderBottom: `1px solid ${ATLAS_PALETTE.slate06}`,
+            }}
         >
             <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate }}>{label}</Typography>
+                <Typography sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate }}>
+                    {label}
+                </Typography>
                 <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>{sub}</Typography>
             </Box>
-            <Switch checked={checked} onChange={(_, v) => onChange(v)} inputProps={{ 'aria-label': label }} />
+            {/* G-010 — MUI 7 dropped `inputProps` on Switch; it is silently
+                ignored and the aria-label never reaches the input. Without
+                `slotProps.input` the accessible name falls through to the
+                wrapping label, so a screen reader reads the heading AND the
+                sub-text as one string. TextField still honours `inputProps`
+                in v7, which is why this was the only Switch affected. */}
+            <Switch
+                checked={checked}
+                onChange={(_, v) => onChange(v)}
+                slotProps={{ input: { 'aria-label': label } }}
+            />
         </Box>
     );
 }
 
 function Explain({ children }: { children: React.ReactNode }) {
-    return <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate70, lineHeight: 1.6 }}>{children}</Typography>;
+    return (
+        <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate70, lineHeight: 1.6 }}>
+            {children}
+        </Typography>
+    );
 }
 
-function AgentPanel({ node, agents, onNodeData }: Pick<Props, 'agents' | 'onNodeData'> & { node: WfNode }) {
+function AgentPanel({
+    node,
+    agents,
+    onNodeData,
+}: Pick<Props, 'agents' | 'onNodeData'> & { node: WfNode }) {
     const agent = agents.find((a) => a.id === node.data.agent_id);
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -90,16 +138,24 @@ function AgentPanel({ node, agents, onNodeData }: Pick<Props, 'agents' | 'onNode
                 </Explain>
             )}
             <Explain>
-                The step follows its green <Box component="strong">pass</Box> connection when the agent reports done, and its red{' '}
-                <Box component="strong">fail</Box> connection when a reviewer rejects the work. With no fail connection, a failure sends
-                the item back to you.
+                The step follows its green <Box component="strong">pass</Box> connection when the
+                agent reports done, and its red <Box component="strong">fail</Box> connection when a
+                reviewer rejects the work. With no fail connection, a failure sends the item back to
+                you.
             </Explain>
         </Box>
     );
 }
 
-function SubtasksPanel({ workflow, node, workflows, onNodeData }: Pick<Props, 'workflow' | 'workflows' | 'onNodeData'> & { node: WfNode }) {
-    const subs = workflows.filter((w) => w.input_kind === 'sub_task' && w.project_id === workflow.project_id);
+function SubtasksPanel({
+    workflow,
+    node,
+    workflows,
+    onNodeData,
+}: Pick<Props, 'workflow' | 'workflows' | 'onNodeData'> & { node: WfNode }) {
+    const subs = workflows.filter(
+        (w) => w.input_kind === 'sub_task' && w.project_id === workflow.project_id
+    );
     const picked = subs.find((w) => w.id === node.data.sub_workflow_id);
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -109,7 +165,11 @@ function SubtasksPanel({ workflow, node, workflows, onNodeData }: Pick<Props, 'w
                 size="small"
                 value={picked ? picked.id : ''}
                 onChange={(e) => onNodeData({ sub_workflow_id: e.target.value || undefined })}
-                helperText={subs.length === 0 ? 'Create a workflow with the Sub-task workflow input first' : 'Runs once per sub-task'}
+                helperText={
+                    subs.length === 0
+                        ? 'Create a workflow with the Sub-task workflow input first'
+                        : 'Runs once per sub-task'
+                }
                 fullWidth
             >
                 {subs.map((w) => (
@@ -133,9 +193,10 @@ function SubtasksPanel({ workflow, node, workflows, onNodeData }: Pick<Props, 'w
                 </Link>
             )}
             <Explain>
-                The run works this Task&apos;s open sub-tasks one at a time, oldest first, on the Task&apos;s own branch — each
-                through the sub-workflow — then follows the pass connection. A sub-task that needs you pauses the whole Task
-                until you reply on either one.
+                The run works this Task&apos;s open sub-tasks one at a time, oldest first, on the
+                Task&apos;s own branch — each through the sub-workflow — then follows the pass
+                connection. A sub-task that needs you pauses the whole Task until you reply on
+                either one.
             </Explain>
         </Box>
     );
@@ -144,9 +205,17 @@ function SubtasksPanel({ workflow, node, workflows, onNodeData }: Pick<Props, 'w
 type DeliveryMode = 'none' | 'push' | 'pr' | 'default';
 
 const DELIVERY_MODES: Array<{ mode: DeliveryMode; title: string; sub: string }> = [
-    { mode: 'pr', title: 'Push + pull request', sub: 'One branch and one PR per run for you to review' },
+    {
+        mode: 'pr',
+        title: 'Push + pull request',
+        sub: 'One branch and one PR per run for you to review',
+    },
     { mode: 'push', title: 'Push branch', sub: 'Push the run’s branch, no PR' },
-    { mode: 'default', title: 'Push to the default branch', sub: 'Publish straight to the default branch, no review' },
+    {
+        mode: 'default',
+        title: 'Push to the default branch',
+        sub: 'Publish straight to the default branch, no review',
+    },
     { mode: 'none', title: 'Keep local', sub: 'Leave the work in the worktree' },
 ];
 
@@ -156,7 +225,10 @@ function deliveryMode(w: IWorkflow): DeliveryMode {
     return w.raises_pr ? 'pr' : 'push';
 }
 
-const DELIVERY_PATCH: Record<DeliveryMode, Pick<IWorkflow, 'push_code' | 'raises_pr' | 'push_to_default'>> = {
+const DELIVERY_PATCH: Record<
+    DeliveryMode,
+    Pick<IWorkflow, 'push_code' | 'raises_pr' | 'push_to_default'>
+> = {
     none: { push_code: false, raises_pr: false, push_to_default: false },
     push: { push_code: true, raises_pr: false, push_to_default: false },
     pr: { push_code: true, raises_pr: true, push_to_default: false },
@@ -167,8 +239,9 @@ function EndPanel({ workflow, onChange }: Pick<Props, 'workflow' | 'onChange'>) 
     if (workflow.input_kind === 'sub_task') {
         return (
             <Explain>
-                The sub-task is done: its work stays on the Task&apos;s branch and it goes to review. The Task workflow pushes and
-                opens the pull request once every sub-task is done.
+                The sub-task is done: its work stays on the Task&apos;s branch and it goes to
+                review. The Task workflow pushes and opens the pull request once every sub-task is
+                done.
             </Explain>
         );
     }
@@ -216,23 +289,36 @@ export function WorkflowInspector(props: Props) {
                 flex: 1,
             }}
         >
-            <Typography variant="h4" sx={{ fontSize: 14, fontWeight: 600, color: ATLAS_PALETTE.slate, mb: 3 }}>
+            <Typography
+                variant="h4"
+                sx={{ fontSize: 14, fontWeight: 600, color: ATLAS_PALETTE.slate, mb: 3 }}
+            >
                 {TITLES[type]}
             </Typography>
             {type === 'start' && (
-                <StartInspector workflow={props.workflow} projects={props.projects} onChange={props.onChange} />
+                <StartInspector
+                    workflow={props.workflow}
+                    projects={props.projects}
+                    onChange={props.onChange}
+                />
             )}
             {type === 'agent' && props.node && (
                 <AgentPanel node={props.node} agents={props.agents} onNodeData={props.onNodeData} />
             )}
             {type === 'owner' && (
                 <Explain>
-                    When a step connects here, the run pauses and the item comes back to you as Waiting for info.
-                    Reply on the item and the run continues along this node&apos;s pass connection.
+                    When a step connects here, the run pauses and the item comes back to you as
+                    Waiting for info. Reply on the item and the run continues along this node&apos;s
+                    pass connection.
                 </Explain>
             )}
             {type === 'subtasks' && props.node && (
-                <SubtasksPanel workflow={props.workflow} workflows={props.workflows} node={props.node} onNodeData={props.onNodeData} />
+                <SubtasksPanel
+                    workflow={props.workflow}
+                    workflows={props.workflows}
+                    node={props.node}
+                    onNodeData={props.onNodeData}
+                />
             )}
             {type === 'end' && <EndPanel workflow={props.workflow} onChange={props.onChange} />}
         </Box>

@@ -20,8 +20,20 @@ const populatedSummary = {
 };
 
 const byCli = [
-    { cli: 'claude' as const, total_cost_usd: 0.30, session_count: 2, input_tokens: 9_000, output_tokens: 600 },
-    { cli: 'copilot' as const, total_cost_usd: 0.12, session_count: 1, input_tokens: 3_000, output_tokens: 200 },
+    {
+        cli: 'claude' as const,
+        total_cost_usd: 0.3,
+        session_count: 2,
+        input_tokens: 9_000,
+        output_tokens: 600,
+    },
+    {
+        cli: 'copilot' as const,
+        total_cost_usd: 0.12,
+        session_count: 1,
+        input_tokens: 3_000,
+        output_tokens: 200,
+    },
 ];
 
 const topSessions = [
@@ -30,7 +42,7 @@ const topSessions = [
         project_name: 'Atlas',
         title: 'Refactor cache layer',
         cli: 'claude' as const,
-        total_cost_usd: 0.20,
+        total_cost_usd: 0.2,
         input_tokens: 6_000,
         output_tokens: 400,
         cache_read_tokens: 3_000,
@@ -59,7 +71,7 @@ describe('TerminalSessionsCard', () => {
                 byCli={[]}
                 topSessions={[]}
                 monthLabel="June"
-            />,
+            />
         );
         // Empty-state copy explicitly mentions /terminal and the month.
         expect(screen.getByText(/No closed sessions this month/i)).toBeInTheDocument();
@@ -76,7 +88,7 @@ describe('TerminalSessionsCard', () => {
                 byCli={byCli}
                 topSessions={topSessions}
                 monthLabel="June"
-            />,
+            />
         );
         // Eyebrow + title for the populated state.
         expect(screen.getByText(/Manual terminal sessions/i)).toBeInTheDocument();
@@ -104,7 +116,7 @@ describe('TerminalSessionsCard', () => {
                 byCli={byCli}
                 topSessions={topSessions}
                 monthLabel="June"
-            />,
+            />
         );
         // Every visible top-session row is an <a> linking to /terminal/<id>/history.
         const aaa = screen.getByText('Refactor cache layer').closest('a');
@@ -133,7 +145,7 @@ describe('TerminalSessionsCard', () => {
                 byCli={byCli}
                 topSessions={many}
                 monthLabel="June"
-            />,
+            />
         );
         // First 5 rendered; rows 6-8 (titles #5, #6, #7) suppressed.
         expect(screen.getByText('Session #0')).toBeInTheDocument();
@@ -149,7 +161,7 @@ describe('TerminalSessionsCard', () => {
                 byCli={byCli}
                 topSessions={topSessions}
                 monthLabel="June"
-            />,
+            />
         );
         // Per-CLI percentages: claude = 0.30 / 0.42 ≈ 71.4%, copilot = 0.12 / 0.42 ≈ 28.6%.
         // Assert presence via partial regex so toFixed rounding doesn't break the test.

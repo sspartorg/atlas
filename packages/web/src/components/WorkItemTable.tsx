@@ -23,12 +23,12 @@ const MONO = '"JetBrains Mono", monospace';
 function buildGridTemplate(showLiveDot: boolean, hasAction: boolean): string {
     const cols: string[] = [];
     if (showLiveDot) cols.push('24px');
-    cols.push('88px');   // ID
-    cols.push('1fr');    // Title
-    cols.push('140px');  // Reporter — bumped from 110px; longer agent
-    cols.push('140px');  // Assignee — labels (e.g. "Architect Reviewer ·
-    cols.push('100px');  // Status   — Software Architect") were overflowing
-    cols.push('80px');   // Updated  — into the Status column.
+    cols.push('88px'); // ID
+    cols.push('1fr'); // Title
+    cols.push('140px'); // Reporter — bumped from 110px; longer agent
+    cols.push('140px'); // Assignee — labels (e.g. "Architect Reviewer ·
+    cols.push('100px'); // Status   — Software Architect") were overflowing
+    cols.push('80px'); // Updated  — into the Status column.
     if (hasAction) cols.push('32px');
     return cols.join(' ');
 }
@@ -185,7 +185,13 @@ const WorkItemRow = memo(function WorkItemRow({
                     {row.title}
                 </Typography>
                 {row.labels?.map((l) => (
-                    <Chip key={l} label={l} size="small" variant="outlined" sx={{ flexShrink: 0 }} />
+                    <Chip
+                        key={l}
+                        label={l}
+                        size="small"
+                        variant="outlined"
+                        sx={{ flexShrink: 0 }}
+                    />
                 ))}
             </Box>
 
@@ -347,10 +353,7 @@ export function WorkItemTable({
     // Hooks must run before any early return, otherwise the hook count
     // changes when `hideWhenEmpty` flips from "empty → null" to "non-empty →
     // table" (e.g. after a link is added) and React aborts the page.
-    const handleRowClick = useCallback(
-        (row: WorkItemTableRow) => onRowClick(row),
-        [onRowClick],
-    );
+    const handleRowClick = useCallback((row: WorkItemTableRow) => onRowClick(row), [onRowClick]);
 
     if (hideWhenEmpty === true && rows.length === 0) return null;
 
@@ -418,7 +421,9 @@ export function WorkItemTable({
                     >
                         {title}
                     </Typography>
-                    <Typography sx={{ fontSize: 12, fontFamily: MONO, color: ATLAS_PALETTE.slate40 }}>
+                    <Typography
+                        sx={{ fontSize: 12, fontFamily: MONO, color: ATLAS_PALETTE.slate40 }}
+                    >
                         · {rows.length}
                     </Typography>
                     {headerRight ? <Box sx={{ ml: 'auto' }}>{headerRight}</Box> : null}
@@ -453,7 +458,8 @@ export function WorkItemTable({
                     {rows.length === 0 ? (
                         <Box sx={{ py: 14, textAlign: 'center' }}>
                             <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                                {emptyMessage ?? (title ? `No ${title.toLowerCase()} yet.` : 'No items.')}
+                                {emptyMessage ??
+                                    (title ? `No ${title.toLowerCase()} yet.` : 'No items.')}
                             </Typography>
                         </Box>
                     ) : shouldVirtualize ? (

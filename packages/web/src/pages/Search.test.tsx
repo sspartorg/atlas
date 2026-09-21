@@ -12,7 +12,7 @@ describe('Search page', () => {
     it('renders without crashing', () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/search`, () => HttpResponse.json([])),
+            http.get(`${BASE}/search`, () => HttpResponse.json([]))
         );
         const { container } = renderWithProviders(<Search />, {
             initialEntries: ['/search'],
@@ -24,7 +24,7 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() => {
@@ -39,16 +39,14 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, {
             initialEntries: ['/search?q=login'],
         });
         await waitFor(() => {
             const inputs = document.querySelectorAll('input');
-            const has = Array.from(inputs).some(
-                (i) => (i as HTMLInputElement).value === 'login',
-            );
+            const has = Array.from(inputs).some((i) => (i as HTMLInputElement).value === 'login');
             expect(has).toBe(true);
         });
     });
@@ -57,13 +55,11 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() => {
-            expect(
-                screen.getByRole('heading', { name: /^Search$/i }),
-            ).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument();
         });
         const inputs = document.querySelectorAll('input');
         const textInput = inputs[0] as HTMLInputElement;
@@ -75,15 +71,13 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() => {
             // SearchEmptyState surface — verify heading or no-results
             // indicator is rendered.
-            expect(
-                screen.getByRole('heading', { name: /^Search$/i }),
-            ).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument();
         });
     });
 
@@ -91,18 +85,23 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
-        await waitFor(() => expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
+        );
         // Find JQL mode toggle button
         const jqlBtn = screen.queryByRole('button', { name: /JQL|query|advanced/i });
         if (jqlBtn) {
             fireEvent.click(jqlBtn);
             // After switching to JQL mode, SearchQueryInput should appear
-            await waitFor(() => {
-                expect(screen.queryByText(/JQL-lite/) ?? document.body).toBeTruthy();
-            }, { timeout: 2000 });
+            await waitFor(
+                () => {
+                    expect(screen.queryByText(/JQL-lite/) ?? document.body).toBeTruthy();
+                },
+                { timeout: 2000 }
+            );
         }
     });
 
@@ -121,18 +120,23 @@ describe('Search page', () => {
                         updated_at: '2026-05-16T00:00:00.000Z',
                         rank: 1,
                     },
-                ]),
+                ])
             ),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
-        await waitFor(() => expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument());
-        // Find status filter close button (×) if a status chip is rendered
-        const closeButtons = screen.queryAllByRole('button').filter(
-            (b) => b.getAttribute('aria-label')?.includes('status') ||
-                   b.textContent?.includes('×') ||
-                   b.closest('[data-testid*="status"]') !== null,
+        await waitFor(() =>
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
+        // Find status filter close button (×) if a status chip is rendered
+        const closeButtons = screen
+            .queryAllByRole('button')
+            .filter(
+                (b) =>
+                    b.getAttribute('aria-label')?.includes('status') ||
+                    b.textContent?.includes('×') ||
+                    b.closest('[data-testid*="status"]') !== null
+            );
         if (closeButtons.length > 0) {
             fireEvent.click(closeButtons[0]!);
         }
@@ -155,22 +159,25 @@ describe('Search page', () => {
                         updated_at: '2026-05-16T00:00:00.000Z',
                         rank: 1,
                     },
-                ]),
+                ])
             ),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
-        await waitFor(() => expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
+        );
         // Find any create-type button
         const createBtn = screen.queryByRole('button', { name: /create|new.*task/i });
         if (createBtn) {
             fireEvent.click(createBtn);
             // Toast "Create from search is not wired up yet." should appear
-            await waitFor(() => {
-                expect(
-                    screen.queryByText(/not wired up/i) ?? document.body,
-                ).toBeTruthy();
-            }, { timeout: 2000 });
+            await waitFor(
+                () => {
+                    expect(screen.queryByText(/not wired up/i) ?? document.body).toBeTruthy();
+                },
+                { timeout: 2000 }
+            );
         }
     });
 
@@ -189,20 +196,23 @@ describe('Search page', () => {
                         updated_at: '2026-05-16T00:00:00.000Z',
                         rank: 1,
                     },
-                ]),
+                ])
             ),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search?q=task'] });
         // Wait for SearchResults to render (debounce + server response)
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         // Wait for "Task Result" hit to appear in SearchResults
-        await waitFor(() => {
-            const hitTitle = screen.queryByText('Task Result');
-            if (!hitTitle) throw new Error('SearchResults not rendered yet');
-        }, { timeout: 3000 }).catch(() => {});
+        await waitFor(
+            () => {
+                const hitTitle = screen.queryByText('Task Result');
+                if (!hitTitle) throw new Error('SearchResults not rendered yet');
+            },
+            { timeout: 3000 }
+        ).catch(() => {});
         // SearchResults rendered (or at least Search page didn't crash)
         expect(document.body).toBeTruthy();
     });
@@ -211,21 +221,26 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         // Switch to Query mode — SearchModeToggle "Query" has role="button"
         const queryToggle = screen.getByText('Query');
         fireEvent.click(queryToggle);
         // SearchQueryInput should now be rendered with a specific placeholder
-        await waitFor(() => {
-            const queryInput = document.querySelector('input[placeholder*="type ="]');
-            if (!queryInput) throw new Error('SearchQueryInput input not found');
-        }, { timeout: 2000 });
-        const queryInput = document.querySelector('input[placeholder*="type ="]') as HTMLInputElement;
+        await waitFor(
+            () => {
+                const queryInput = document.querySelector('input[placeholder*="type ="]');
+                if (!queryInput) throw new Error('SearchQueryInput input not found');
+            },
+            { timeout: 2000 }
+        );
+        const queryInput = document.querySelector(
+            'input[placeholder*="type ="]'
+        ) as HTMLInputElement;
         // Fire a change event to exercise the setQuery arrow at line 230-233
         fireEvent.change(queryInput, { target: { value: 'status = "ready"' } });
         expect(queryInput.value).toBe('status = "ready"');
@@ -235,20 +250,23 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         // SearchEmptyState always renders a "Create a Task" button
         const createBtn = screen.queryByRole('button', { name: /Create a/i });
         if (createBtn) {
             fireEvent.click(createBtn);
             // Toast "Create from search is not wired up yet." should appear
-            await waitFor(() => {
-                expect(document.body).toBeTruthy();
-            }, { timeout: 1000 });
+            await waitFor(
+                () => {
+                    expect(document.body).toBeTruthy();
+                },
+                { timeout: 1000 }
+            );
         }
         expect(document.body).toBeTruthy();
     });
@@ -257,11 +275,11 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         // Use getByText which the SearchFilterBuilder tests use (matches text node directly)
         // Step 1: Click "Add Filter" to open the add-filter menu
@@ -309,13 +327,13 @@ describe('Search page', () => {
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
             http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: 'Owner', onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({ id: 1, owner_name: 'Owner', onboarding_complete: 1 })
+            )
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         // Wait for the Search heading to render
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         // Step 1: Click "Add Filter"
         const addFilterTrigger = screen.getByText('Add Filter');
@@ -325,14 +343,17 @@ describe('Search page', () => {
         fireEvent.click(projectMenuItem);
         // Step 3: The project submenu opens; wait for Atlas to appear
         // (projects are fetched async; waitFor handles the timing)
-        await waitFor(() => {
-            // Both "(any project)" and actual projects should be listed
-            const items = screen.queryAllByRole('menuitem');
-            // After clicking Project, the project submenu is open
-            // It shows "(any project)" + project names
-            const hasAtlas = items.some((i) => i.textContent?.includes('Atlas'));
-            if (!hasAtlas) throw new Error('Atlas not in menu yet');
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                // Both "(any project)" and actual projects should be listed
+                const items = screen.queryAllByRole('menuitem');
+                // After clicking Project, the project submenu is open
+                // It shows "(any project)" + project names
+                const hasAtlas = items.some((i) => i.textContent?.includes('Atlas'));
+                if (!hasAtlas) throw new Error('Atlas not in menu yet');
+            },
+            { timeout: 3000 }
+        );
         fireEvent.click(screen.getByRole('menuitem', { name: /Atlas/i }));
         // Step 4: "Try a Different Project" should now appear in SearchEmptyState
         const dropBtn = screen.getByRole('button', { name: /Try a Different Project/i });
@@ -362,15 +383,15 @@ describe('Search page', () => {
                         updated_at: '2026-05-16T00:00:00.000Z',
                         last_activity_at: '2026-05-16T00:00:00.000Z',
                     },
-                ]),
+                ])
             ),
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         // Wait for projects to load
         await waitFor(() => {}, { timeout: 500 });
@@ -378,18 +399,26 @@ describe('Search page', () => {
         const queryToggle = screen.getByText('Query');
         fireEvent.click(queryToggle);
         // Wait for SearchQueryInput
-        await waitFor(() => {
-            if (!document.querySelector('input[placeholder*="type ="]'))
-                throw new Error('not found');
-        }, { timeout: 2000 });
-        const queryInput = document.querySelector('input[placeholder*="type ="]') as HTMLInputElement;
+        await waitFor(
+            () => {
+                if (!document.querySelector('input[placeholder*="type ="]'))
+                    throw new Error('not found');
+            },
+            { timeout: 2000 }
+        );
+        const queryInput = document.querySelector(
+            'input[placeholder*="type ="]'
+        ) as HTMLInputElement;
         // Type a project query — use "p1" as the project id (matches what parseQuery expects)
         fireEvent.change(queryInput, { target: { value: 'project = Atlas' } });
         // Check if "Try a Different Project" appears (depends on parseQuery recognizing the project)
-        await waitFor(() => {
-            const dropBtn = screen.queryByRole('button', { name: /Try a Different Project/i });
-            if (!dropBtn) throw new Error('drop project button not found');
-        }, { timeout: 2000 }).catch(() => {});
+        await waitFor(
+            () => {
+                const dropBtn = screen.queryByRole('button', { name: /Try a Different Project/i });
+                if (!dropBtn) throw new Error('drop project button not found');
+            },
+            { timeout: 2000 }
+        ).catch(() => {});
         const dropBtn = screen.queryByRole('button', { name: /Try a Different Project/i });
         if (dropBtn) fireEvent.click(dropBtn);
         expect(document.body).toBeTruthy();
@@ -399,28 +428,36 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         // Switch to Query mode
         const queryToggle = screen.getByText('Query');
         fireEvent.click(queryToggle);
         // Find the SearchQueryInput input
-        await waitFor(() => {
-            const queryInput = document.querySelector('input[placeholder*="type ="]');
-            if (!queryInput) throw new Error('SearchQueryInput not found');
-        }, { timeout: 2000 });
-        const queryInput = document.querySelector('input[placeholder*="type ="]') as HTMLInputElement;
+        await waitFor(
+            () => {
+                const queryInput = document.querySelector('input[placeholder*="type ="]');
+                if (!queryInput) throw new Error('SearchQueryInput not found');
+            },
+            { timeout: 2000 }
+        );
+        const queryInput = document.querySelector(
+            'input[placeholder*="type ="]'
+        ) as HTMLInputElement;
         // Type a status query to set committedQuery
         fireEvent.change(queryInput, { target: { value: 'status = "ready"' } });
         // Now the activeFilters should show status=ready, making "Drop the Status Filter" appear
-        await waitFor(() => {
-            const dropBtn = screen.queryByRole('button', { name: /Drop the Status Filter/i });
-            if (!dropBtn) throw new Error('Drop Status Filter button not found');
-        }, { timeout: 2000 }).catch(() => {});
+        await waitFor(
+            () => {
+                const dropBtn = screen.queryByRole('button', { name: /Drop the Status Filter/i });
+                if (!dropBtn) throw new Error('Drop Status Filter button not found');
+            },
+            { timeout: 2000 }
+        ).catch(() => {});
         const dropBtn = screen.queryByRole('button', { name: /Drop the Status Filter/i });
         if (dropBtn) fireEvent.click(dropBtn);
         expect(document.body).toBeTruthy();
@@ -431,19 +468,28 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
-            http.get(`${BASE}/search`, () => new Promise(() => { /* never resolves */ })),
+            http.get(
+                `${BASE}/search`,
+                () =>
+                    new Promise(() => {
+                        /* never resolves */
+                    })
+            )
         );
         renderWithProviders(<Search />, {
             initialEntries: ['/search?q=loading'],
         });
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         // isFetching branch renders "· searching…"
-        await waitFor(() => {
-            const el = screen.queryByText(/·\s*searching…/);
-            if (!el) throw new Error('searching spinner text not found');
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                const el = screen.queryByText(/·\s*searching…/);
+                if (!el) throw new Error('searching spinner text not found');
+            },
+            { timeout: 3000 }
+        );
         expect(screen.getByText(/·\s*searching…/)).toBeInTheDocument();
     });
 
@@ -451,22 +497,25 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         const inputs = document.querySelectorAll('input');
         const textInput = inputs[0] as HTMLInputElement;
         fireEvent.change(textInput, { target: { value: 'myquery' } });
         // Wait for the 250ms debounce + URL update
-        await waitFor(() => {
-            const _hasQ = window.location.search.includes('q=') ||
-                document.title.includes('Search');
-            // We can't directly check setUrlParams, but the input value must be set
-            expect(textInput.value).toBe('myquery');
-        }, { timeout: 1500 });
+        await waitFor(
+            () => {
+                const _hasQ =
+                    window.location.search.includes('q=') || document.title.includes('Search');
+                // We can't directly check setUrlParams, but the input value must be set
+                expect(textInput.value).toBe('myquery');
+            },
+            { timeout: 1500 }
+        );
         expect(textInput.value).toBe('myquery');
     });
 
@@ -474,25 +523,30 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         // Switch to Query mode
         const queryToggle = screen.getByText('Query');
         fireEvent.click(queryToggle);
-        await waitFor(() => {
-            const queryInput = document.querySelector('input[placeholder*="type ="]');
-            if (!queryInput) throw new Error('SearchQueryInput not found');
-        }, { timeout: 2000 });
-        const queryInput = document.querySelector('input[placeholder*="type ="]') as HTMLInputElement;
+        await waitFor(
+            () => {
+                const queryInput = document.querySelector('input[placeholder*="type ="]');
+                if (!queryInput) throw new Error('SearchQueryInput not found');
+            },
+            { timeout: 2000 }
+        );
+        const queryInput = document.querySelector(
+            'input[placeholder*="type ="]'
+        ) as HTMLInputElement;
         // Type invalid query so parseQuery returns ok=false → activeFilters = EMPTY_FILTERS
         fireEvent.change(queryInput, { target: { value: '!!! invalid syntax ###' } });
         // Component doesn't crash; still renders the page
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         expect(document.body).toBeTruthy();
     });
@@ -501,33 +555,44 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         // Switch to Query mode
         fireEvent.click(screen.getByText('Query'));
-        await waitFor(() => {
-            if (!document.querySelector('input[placeholder*="type ="]'))
-                throw new Error('not found');
-        }, { timeout: 2000 });
-        const queryInput = document.querySelector('input[placeholder*="type ="]') as HTMLInputElement;
+        await waitFor(
+            () => {
+                if (!document.querySelector('input[placeholder*="type ="]'))
+                    throw new Error('not found');
+            },
+            { timeout: 2000 }
+        );
+        const queryInput = document.querySelector(
+            'input[placeholder*="type ="]'
+        ) as HTMLInputElement;
         // Simulate a leading "status = …  AND …" pattern — the else-branch regex
         // on line 121 handles "…AND status=…" and line 122 handles "^status=… AND …"
         fireEvent.change(queryInput, { target: { value: 'status = "ready" AND type = "task"' } });
         // Wait for the drop-status button
-        await waitFor(() => {
-            const dropBtn = screen.queryByRole('button', { name: /Drop the Status Filter/i });
-            if (!dropBtn) throw new Error('Drop Status Filter not found');
-        }, { timeout: 2000 }).catch(() => {});
+        await waitFor(
+            () => {
+                const dropBtn = screen.queryByRole('button', { name: /Drop the Status Filter/i });
+                if (!dropBtn) throw new Error('Drop Status Filter not found');
+            },
+            { timeout: 2000 }
+        ).catch(() => {});
         const dropBtn = screen.queryByRole('button', { name: /Drop the Status Filter/i });
         if (dropBtn) fireEvent.click(dropBtn);
         // After clicking the query input should not contain "status"
-        await waitFor(() => {
-            expect(queryInput.value).not.toMatch(/status/i);
-        }, { timeout: 1500 }).catch(() => {});
+        await waitFor(
+            () => {
+                expect(queryInput.value).not.toMatch(/status/i);
+            },
+            { timeout: 1500 }
+        ).catch(() => {});
         expect(document.body).toBeTruthy();
     });
 
@@ -553,36 +618,47 @@ describe('Search page', () => {
                         updated_at: '2026-05-16T00:00:00.000Z',
                         last_activity_at: '2026-05-16T00:00:00.000Z',
                     },
-                ]),
+                ])
             ),
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         // Switch to Query mode
         fireEvent.click(screen.getByText('Query'));
-        await waitFor(() => {
-            if (!document.querySelector('input[placeholder*="type ="]'))
-                throw new Error('not found');
-        }, { timeout: 2000 });
-        const queryInput = document.querySelector('input[placeholder*="type ="]') as HTMLInputElement;
+        await waitFor(
+            () => {
+                if (!document.querySelector('input[placeholder*="type ="]'))
+                    throw new Error('not found');
+            },
+            { timeout: 2000 }
+        );
+        const queryInput = document.querySelector(
+            'input[placeholder*="type ="]'
+        ) as HTMLInputElement;
         // Simulate a leading "project = Atlas AND …" pattern — line 131 handles
         // "… AND project=…" and line 132 handles "^project=… AND …"
         fireEvent.change(queryInput, { target: { value: 'project = Atlas AND type = "task"' } });
-        await waitFor(() => {
-            const dropBtn = screen.queryByRole('button', { name: /Try a Different Project/i });
-            if (!dropBtn) throw new Error('Try a Different Project not found');
-        }, { timeout: 2000 }).catch(() => {});
+        await waitFor(
+            () => {
+                const dropBtn = screen.queryByRole('button', { name: /Try a Different Project/i });
+                if (!dropBtn) throw new Error('Try a Different Project not found');
+            },
+            { timeout: 2000 }
+        ).catch(() => {});
         const dropBtn = screen.queryByRole('button', { name: /Try a Different Project/i });
         if (dropBtn) fireEvent.click(dropBtn);
         // After clicking the query should not contain "project"
-        await waitFor(() => {
-            expect(queryInput.value).not.toMatch(/project/i);
-        }, { timeout: 1500 }).catch(() => {});
+        await waitFor(
+            () => {
+                expect(queryInput.value).not.toMatch(/project/i);
+            },
+            { timeout: 1500 }
+        ).catch(() => {});
         expect(document.body).toBeTruthy();
     });
 
@@ -593,12 +669,17 @@ describe('Search page', () => {
             http.get(`${BASE}/projects`, () => HttpResponse.json([])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: null, accent_color: null, onboarding_complete: 1 }),
-            ),
+                HttpResponse.json({
+                    id: 1,
+                    owner_name: null,
+                    accent_color: null,
+                    onboarding_complete: 1,
+                })
+            )
         );
         renderWithProviders(<Search />, { initialEntries: ['/search'] });
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         // ownerName = 'Owner' (fallback) — component renders without crash
         expect(document.body).toBeTruthy();
@@ -608,11 +689,11 @@ describe('Search page', () => {
         server.use(
             ...defaultHandlers,
             http.get(`${BASE}/search`, () => HttpResponse.json([])),
-            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] })),
+            http.get(`${BASE}/labels`, () => HttpResponse.json({ labels: [] }))
         );
         renderWithProviders(<Search />, { initialEntries: ['/search?q=hello'] });
         await waitFor(() =>
-            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument(),
+            expect(screen.getByRole('heading', { name: /^Search$/i })).toBeInTheDocument()
         );
         // Clear the text input — sets filters.text = '' → triggers else branch of URL sync
         const inputs = document.querySelectorAll('input');

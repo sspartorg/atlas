@@ -12,9 +12,7 @@ import { KindIcon } from '../../components/KindIcon.js';
 export function IssueDetailLoading({ withBreadcrumb = false }: { withBreadcrumb?: boolean }) {
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            {withBreadcrumb && (
-                <Skeleton variant="text" width={200} height={20} sx={{ mb: 3 }} />
-            )}
+            {withBreadcrumb && <Skeleton variant="text" width={200} height={20} sx={{ mb: 3 }} />}
             <Skeleton variant="rectangular" height={120} sx={{ borderRadius: '12px', mb: 4 }} />
             <Skeleton variant="rectangular" height={400} sx={{ borderRadius: '12px' }} />
         </Box>
@@ -88,9 +86,7 @@ export function IssueDetailShell({
                                 fontSize: 12,
                                 fontFamily: step.mono ? MONO : undefined,
                                 color:
-                                    i === lastIndex
-                                        ? ATLAS_PALETTE.slate60
-                                        : ATLAS_PALETTE.slate40,
+                                    i === lastIndex ? ATLAS_PALETTE.slate60 : ATLAS_PALETTE.slate40,
                                 cursor: step.href ? 'pointer' : 'default',
                                 '&:hover': step.href ? { color: ATLAS_PALETTE.slate } : undefined,
                             }}
@@ -136,9 +132,7 @@ export function IssueDetailShell({
             {/* `+` add-menu row — sits below the title row so the title +
              *  3-dots actions group reads cleanly on its own line. Only
              *  rendered when the consumer supplies headerExtras. */}
-            {headerExtras ? (
-                <Box sx={{ mb: 6 }}>{headerExtras}</Box>
-            ) : null}
+            {headerExtras ? <Box sx={{ mb: 6 }}>{headerExtras}</Box> : null}
 
             {/* Body: 2-column grid (rail stacks below content on mobile) */}
             <Box
@@ -165,4 +159,3 @@ export function IssueDetailShell({
         </Box>
     );
 }
-

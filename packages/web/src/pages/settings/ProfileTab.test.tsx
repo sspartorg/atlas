@@ -19,7 +19,7 @@ function settingsHandlers(over: Record<string, unknown> = {}) {
                 workspace_path: 'C:/work',
                 accent_color: '#0A0A0A',
                 ...over,
-            }),
+            })
         ),
         http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
         http.get(`${BASE}/projects`, () => HttpResponse.json([])),
@@ -35,9 +35,7 @@ function settingsHandlers(over: Record<string, unknown> = {}) {
             });
         }),
         // FolderPicker stats the workspace path on mount.
-        http.get(`${BASE}/fs/stat`, () =>
-            HttpResponse.json({ exists: true, is_directory: true }),
-        ),
+        http.get(`${BASE}/fs/stat`, () => HttpResponse.json({ exists: true, is_directory: true })),
     ];
 }
 
@@ -45,7 +43,7 @@ describe('ProfileTab', () => {
     it('mounts without crashing', () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
+            http.get(`${BASE}/credentials`, () => HttpResponse.json([]))
         );
         const { container } = renderWithProviders(<ProfileTab />);
         expect(container.firstChild).toBeInTheDocument();
@@ -79,11 +77,11 @@ describe('ProfileTab', () => {
                     onboarding_complete: 1,
                     workspace_path: 'C:/work',
                     accent_color: '#0A0A0A',
-                }),
+                })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([])),
             http.get(`${BASE}/fs/stat`, () =>
-                HttpResponse.json({ exists: true, is_directory: true }),
+                HttpResponse.json({ exists: true, is_directory: true })
             ),
             http.get(`${BASE}/credentials`, () =>
                 HttpResponse.json([
@@ -101,16 +99,15 @@ describe('ProfileTab', () => {
                         username: 'me',
                         created_at: '2026-01-01',
                     },
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<ProfileTab />);
         await waitFor(() => {
             // Text contains a "2 tokens stored" prefix joined with bullets.
             expect(
-                screen.getAllByText((_c, el) =>
-                    (el?.textContent ?? '').includes('2 tokens stored'),
-                ).length,
+                screen.getAllByText((_c, el) => (el?.textContent ?? '').includes('2 tokens stored'))
+                    .length
             ).toBeGreaterThan(0);
         });
     });
@@ -125,7 +122,7 @@ describe('ProfileTab', () => {
                     onboarding_complete: 1,
                     workspace_path: 'C:/work',
                     accent_color: '#0A0A0A',
-                }),
+                })
             ),
             http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
             http.get(`${BASE}/projects`, () => HttpResponse.json([])),
@@ -138,7 +135,7 @@ describe('ProfileTab', () => {
                     workspace_path: 'C:/work',
                     accent_color: '#0A0A0A',
                 });
-            }),
+            })
         );
         renderWithProviders(<ProfileTab />);
         // Wait for settings to load and form to populate.
@@ -187,22 +184,22 @@ describe('ProfileTab', () => {
                     onboarding_complete: 1,
                     workspace_path: 'C:/work',
                     accent_color: '#0A0A0A',
-                }),
+                })
             ),
             http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
             http.get(`${BASE}/fs/stat`, () =>
-                HttpResponse.json({ exists: true, is_directory: true }),
+                HttpResponse.json({ exists: true, is_directory: true })
             ),
             http.get(`${BASE}/projects`, () =>
-                HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })]),
-            ),
+                HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])
+            )
         );
         renderWithProviders(<ProfileTab />);
         await waitFor(() => {
             expect(
                 screen.getAllByText((_c, el) =>
-                    (el?.textContent ?? '').includes("Existing projects won"),
-                ).length,
+                    (el?.textContent ?? '').includes('Existing projects won')
+                ).length
             ).toBeGreaterThan(0);
         });
     });
@@ -217,18 +214,20 @@ describe('ProfileTab', () => {
                     onboarding_complete: 1,
                     workspace_path: 'C:/work',
                     accent_color: '#0A0A0A',
-                }),
+                })
             ),
             http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
             http.get(`${BASE}/projects`, () => HttpResponse.json([])),
             http.get(`${BASE}/fs/stat`, () =>
-                HttpResponse.json({ exists: true, is_directory: true }),
+                HttpResponse.json({ exists: true, is_directory: true })
             ),
-            http.get(`${BASE}/fs/home`, () =>
-                HttpResponse.json({ path: 'C:/Users/test' }),
-            ),
+            http.get(`${BASE}/fs/home`, () => HttpResponse.json({ path: 'C:/Users/test' })),
             http.get(`${BASE}/fs/list`, () =>
-                HttpResponse.json({ path: 'C:/Users/test', parent: 'C:/', entries: [{ name: 'projects', is_dir: true }] }),
+                HttpResponse.json({
+                    path: 'C:/Users/test',
+                    parent: 'C:/',
+                    entries: [{ name: 'projects', is_dir: true }],
+                })
             ),
             http.patch(`${BASE}/settings/profile`, async ({ request }) => {
                 const body = (await request.json()) as Record<string, unknown>;
@@ -240,7 +239,7 @@ describe('ProfileTab', () => {
                     workspace_path: patchedPath,
                     accent_color: '#0A0A0A',
                 });
-            }),
+            })
         );
         renderWithProviders(<ProfileTab />);
         // Wait for settings to load
@@ -262,34 +261,58 @@ describe('ProfileTab', () => {
                     onboarding_complete: 1,
                     workspace_path: 'C:/work',
                     accent_color: '#0A0A0A',
-                }),
+                })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([])),
             http.get(`${BASE}/fs/stat`, () =>
-                HttpResponse.json({ exists: true, is_directory: true }),
+                HttpResponse.json({ exists: true, is_directory: true })
             ),
             http.get(`${BASE}/credentials`, () =>
                 HttpResponse.json([
-                    { id: 'c1', host: 'github', label: 'token1', username: 'me', created_at: '2026-01-01' },
-                    { id: 'c2', host: 'github', label: 'token2', username: 'me', created_at: '2026-01-01' },
-                    { id: 'c3', host: 'gitlab', label: 'token3', username: 'me', created_at: '2026-01-01' },
-                    { id: 'c4', host: 'bitbucket', label: 'token4', username: 'me', created_at: '2026-01-01' },
-                ]),
-            ),
+                    {
+                        id: 'c1',
+                        host: 'github',
+                        label: 'token1',
+                        username: 'me',
+                        created_at: '2026-01-01',
+                    },
+                    {
+                        id: 'c2',
+                        host: 'github',
+                        label: 'token2',
+                        username: 'me',
+                        created_at: '2026-01-01',
+                    },
+                    {
+                        id: 'c3',
+                        host: 'gitlab',
+                        label: 'token3',
+                        username: 'me',
+                        created_at: '2026-01-01',
+                    },
+                    {
+                        id: 'c4',
+                        host: 'bitbucket',
+                        label: 'token4',
+                        username: 'me',
+                        created_at: '2026-01-01',
+                    },
+                ])
+            )
         );
         renderWithProviders(<ProfileTab />);
         await waitFor(() => {
             expect(
-                screen.getAllByText((_c, el) =>
-                    (el?.textContent ?? '').includes('+1 more'),
-                ).length,
+                screen.getAllByText((_c, el) => (el?.textContent ?? '').includes('+1 more')).length
             ).toBeGreaterThan(0);
         });
     });
 
     it('useEffect syncs state when settings changes (owner_name reflected in input)', async () => {
         let resolveSettings: (v: unknown) => void;
-        const settingsPromise = new Promise((res) => { resolveSettings = res; });
+        const settingsPromise = new Promise((res) => {
+            resolveSettings = res;
+        });
         server.use(
             http.get(`${BASE}/settings`, async () => {
                 await settingsPromise;
@@ -304,8 +327,8 @@ describe('ProfileTab', () => {
             http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
             http.get(`${BASE}/projects`, () => HttpResponse.json([])),
             http.get(`${BASE}/fs/stat`, () =>
-                HttpResponse.json({ exists: true, is_directory: true }),
-            ),
+                HttpResponse.json({ exists: true, is_directory: true })
+            )
         );
         renderWithProviders(<ProfileTab />);
         // Release the settings response
@@ -320,26 +343,34 @@ describe('ProfileTab', () => {
         server.use(
             http.get(`${BASE}/settings`, () =>
                 HttpResponse.json({
-                    id: 1, owner_name: 'Owner', onboarding_complete: 1,
-                    workspace_path: 'C:/work', accent_color: '#0A0A0A',
-                }),
+                    id: 1,
+                    owner_name: 'Owner',
+                    onboarding_complete: 1,
+                    workspace_path: 'C:/work',
+                    accent_color: '#0A0A0A',
+                })
             ),
             http.get(`${BASE}/projects`, () => HttpResponse.json([])),
             http.get(`${BASE}/fs/stat`, () =>
-                HttpResponse.json({ exists: true, is_directory: true }),
+                HttpResponse.json({ exists: true, is_directory: true })
             ),
             http.get(`${BASE}/credentials`, () =>
                 HttpResponse.json([
-                    { id: 'c1', host: 'github', label: 'only-token', username: 'me', created_at: '2026-01-01' },
-                ]),
-            ),
+                    {
+                        id: 'c1',
+                        host: 'github',
+                        label: 'only-token',
+                        username: 'me',
+                        created_at: '2026-01-01',
+                    },
+                ])
+            )
         );
         renderWithProviders(<ProfileTab />);
         await waitFor(() => {
             expect(
-                screen.getAllByText((_c, el) =>
-                    (el?.textContent ?? '').includes('1 token stored'),
-                ).length,
+                screen.getAllByText((_c, el) => (el?.textContent ?? '').includes('1 token stored'))
+                    .length
             ).toBeGreaterThan(0);
         });
     });
@@ -354,12 +385,12 @@ describe('ProfileTab', () => {
                     onboarding_complete: 1,
                     workspace_path: 'C:/work',
                     accent_color: '#0A0A0A',
-                }),
+                })
             ),
             http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
             http.get(`${BASE}/projects`, () => HttpResponse.json([])),
             http.get(`${BASE}/fs/stat`, () =>
-                HttpResponse.json({ exists: true, is_directory: true }),
+                HttpResponse.json({ exists: true, is_directory: true })
             ),
             http.patch(`${BASE}/settings/profile`, async ({ request }) => {
                 const body = (await request.json()) as Record<string, unknown>;
@@ -371,14 +402,14 @@ describe('ProfileTab', () => {
                     workspace_path: 'C:/work',
                     accent_color: patchedAccent,
                 });
-            }),
+            })
         );
         renderWithProviders(<ProfileTab />);
         await waitFor(() => screen.getByText('Accent Color'));
         // AccentColorPicker uses aria-label="Accent {name}" (e.g. "Accent Azure")
         const accentButtons = document.querySelectorAll('[aria-label]');
-        const colorButton = Array.from(accentButtons).find(
-            (el) => el.getAttribute('aria-label')?.startsWith('Accent '),
+        const colorButton = Array.from(accentButtons).find((el) =>
+            el.getAttribute('aria-label')?.startsWith('Accent ')
         ) as HTMLElement | undefined;
         expect(colorButton).toBeTruthy();
         fireEvent.click(colorButton!);

@@ -8,15 +8,17 @@ import { MemoryTab } from './MemoryTab.js';
 
 const BASE = 'http://localhost:3000/api';
 
-function makeMemory(over: Partial<{
-    agent_id: string;
-    body_md: string;
-    version: number;
-    source: 'ai-generated' | 'manual-edit';
-    last_run_id: string | null;
-    runs_since_regen: number;
-    updated_at: string;
-}> = {}) {
+function makeMemory(
+    over: Partial<{
+        agent_id: string;
+        body_md: string;
+        version: number;
+        source: 'ai-generated' | 'manual-edit';
+        last_run_id: string | null;
+        runs_since_regen: number;
+        updated_at: string;
+    }> = {}
+) {
     return {
         agent_id: 'agent-coder',
         body_md: '# Procedural Memory\n\nFirst note.',
@@ -33,12 +35,14 @@ describe('MemoryTab', () => {
     it('renders the memory body once loaded', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder/memory`, () =>
-                HttpResponse.json(makeMemory())
-            )
+            http.get(`${BASE}/agents/agent-coder/memory`, () => HttpResponse.json(makeMemory()))
         );
-        const { findByText } = renderWithProviders(<MemoryTab agent={makeAgent()} memory={makeMemory()} />);
-        expect(await findByText(/Procedural memory — course corrections only./i)).toBeInTheDocument();
+        const { findByText } = renderWithProviders(
+            <MemoryTab agent={makeAgent()} memory={makeMemory()} />
+        );
+        expect(
+            await findByText(/Procedural memory — course corrections only./i)
+        ).toBeInTheDocument();
         expect(await findByText(/First note\./)).toBeInTheDocument();
         expect(await findByText('AI-GEN')).toBeInTheDocument();
     });
@@ -51,7 +55,7 @@ describe('MemoryTab', () => {
             )
         );
         const { findByText } = renderWithProviders(
-            <MemoryTab agent={makeAgent()} memory={makeMemory({ source: 'manual-edit' })} />,
+            <MemoryTab agent={makeAgent()} memory={makeMemory({ source: 'manual-edit' })} />
         );
         expect(await findByText('MANUAL')).toBeInTheDocument();
     });
@@ -59,11 +63,11 @@ describe('MemoryTab', () => {
     it('renders the regenerate button', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder/memory`, () =>
-                HttpResponse.json(makeMemory())
-            )
+            http.get(`${BASE}/agents/agent-coder/memory`, () => HttpResponse.json(makeMemory()))
         );
-        const { findByRole } = renderWithProviders(<MemoryTab agent={makeAgent()} memory={makeMemory()} />);
+        const { findByRole } = renderWithProviders(
+            <MemoryTab agent={makeAgent()} memory={makeMemory()} />
+        );
         const button = await findByRole('button', { name: /Regenerate from runs/i });
         expect(button).toBeInTheDocument();
     });
@@ -73,9 +77,7 @@ describe('MemoryTab', () => {
     it('renders the BOUNDARY chip on rows with boundary_flags', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder/memory`, () =>
-                HttpResponse.json(makeMemory()),
-            ),
+            http.get(`${BASE}/agents/agent-coder/memory`, () => HttpResponse.json(makeMemory())),
             http.get(`${BASE}/agents/agent-coder/memory/history`, () =>
                 HttpResponse.json([
                     {
@@ -92,11 +94,11 @@ describe('MemoryTab', () => {
                         boundary_flags: ['item_id'],
                         created_at: '2026-05-26T12:00:00.000Z',
                     },
-                ]),
-            ),
+                ])
+            )
         );
         const { findByText } = renderWithProviders(
-            <MemoryTab agent={makeAgent()} memory={makeMemory()} />,
+            <MemoryTab agent={makeAgent()} memory={makeMemory()} />
         );
         expect(await findByText(/boundary/i)).toBeInTheDocument();
     });
@@ -105,7 +107,9 @@ describe('MemoryTab', () => {
         // When memory prop is undefined, MemoryTab returns <MemoryTabSkeleton />
         // This exercises lines 12-18 (MemoryTabSkeleton fn) and the `if (!ready || memory === undefined)` branch
         server.use(...defaultHandlers);
-        const { container } = renderWithProviders(<MemoryTab agent={makeAgent()} memory={undefined} />);
+        const { container } = renderWithProviders(
+            <MemoryTab agent={makeAgent()} memory={undefined} />
+        );
         // MemoryTabSkeleton renders MUI Skeletons
         expect(container.querySelector('.MuiSkeleton-root')).toBeInTheDocument();
     });
@@ -113,9 +117,7 @@ describe('MemoryTab', () => {
     it('omits the BOUNDARY chip when flags are empty', async () => {
         server.use(
             ...defaultHandlers,
-            http.get(`${BASE}/agents/agent-coder/memory`, () =>
-                HttpResponse.json(makeMemory()),
-            ),
+            http.get(`${BASE}/agents/agent-coder/memory`, () => HttpResponse.json(makeMemory())),
             http.get(`${BASE}/agents/agent-coder/memory/history`, () =>
                 HttpResponse.json([
                     {
@@ -132,11 +134,11 @@ describe('MemoryTab', () => {
                         boundary_flags: [],
                         created_at: '2026-05-26T12:00:00.000Z',
                     },
-                ]),
-            ),
+                ])
+            )
         );
         const { findByText, queryByText } = renderWithProviders(
-            <MemoryTab agent={makeAgent()} memory={makeMemory()} />,
+            <MemoryTab agent={makeAgent()} memory={makeMemory()} />
         );
         // Wait for history to load so we know the chip's absence is meaningful.
         expect(await findByText(/cadence/i)).toBeInTheDocument();

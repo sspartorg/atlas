@@ -17,15 +17,18 @@ describe('ReorderSubTasksDialog', () => {
             http.put(`${BASE}/tasks/ATL-1/sub-tasks/order`, async ({ request }) => {
                 sent = await request.json();
                 return new HttpResponse(null, { status: 204 });
-            }),
+            })
         );
         const onClose = vi.fn();
         renderWithProviders(
             <ReorderSubTasksDialog
                 taskId="ATL-1"
-                subTasks={[makeSubTask({ id: 'ATL-2', title: 'First' }), makeSubTask({ id: 'ATL-3', title: 'Second' })]}
+                subTasks={[
+                    makeSubTask({ id: 'ATL-2', title: 'First' }),
+                    makeSubTask({ id: 'ATL-3', title: 'Second' }),
+                ]}
                 onClose={onClose}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: 'Move ATL-2 up' })).toBeDisabled();
         await user.click(screen.getByRole('button', { name: 'Move ATL-3 up' }));

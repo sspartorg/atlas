@@ -23,7 +23,7 @@ describe('InitialAvatar', () => {
                 size={32}
                 fontSize={20}
                 fontWeight={500}
-            />,
+            />
         );
         expect(screen.getByText('B')).toBeInTheDocument();
     });

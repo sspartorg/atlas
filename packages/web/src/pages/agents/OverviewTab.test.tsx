@@ -26,9 +26,7 @@ describe('OverviewTab', () => {
     it('renders the skeleton when useDeferredMount returns false', () => {
         server.use(...defaultHandlers);
         mockMount.mockReturnValue(false);
-        renderWithProviders(
-            <OverviewTab agent={makeAgent()} view={{} as never} />,
-        );
+        renderWithProviders(<OverviewTab agent={makeAgent()} view={{} as never} />);
         expect(document.querySelectorAll('.MuiSkeleton-root').length).toBeGreaterThan(0);
         expect(screen.queryByTestId('overview-content')).not.toBeInTheDocument();
     });
@@ -37,7 +35,7 @@ describe('OverviewTab', () => {
         server.use(...defaultHandlers);
         mockMount.mockReturnValue(true);
         renderWithProviders(
-            <OverviewTab agent={makeAgent({ name: 'Coder' })} view={{} as never} />,
+            <OverviewTab agent={makeAgent({ name: 'Coder' })} view={{} as never} />
         );
         expect(screen.getByTestId('overview-content')).toHaveTextContent('Coder');
     });

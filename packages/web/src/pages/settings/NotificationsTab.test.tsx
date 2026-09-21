@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { act, screen, fireEvent, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../test-setup.js';
 import { defaultHandlers } from '../../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
+import { Toast } from '../../components/Toast.js';
 import { NotificationsTab } from './NotificationsTab.js';
 
 const BASE = 'http://localhost:3000/api';
@@ -50,7 +51,7 @@ describe('NotificationsTab', () => {
     it('mounts without crashing', () => {
         server.use(
             http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         const { container } = renderWithProviders(<NotificationsTab />);
         expect(container.firstChild).toBeInTheDocument();
@@ -59,7 +60,7 @@ describe('NotificationsTab', () => {
     it('renders the connection pill as "Untested" when last_test_ok is null', async () => {
         server.use(
             http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -72,10 +73,10 @@ describe('NotificationsTab', () => {
                     settings({
                         external_notification_last_test_ok: 1,
                         external_notification_endpoint_label: '@my_bot',
-                    }),
-                ),
+                    })
+                )
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         const { container } = renderWithProviders(<NotificationsTab />);
         await waitFor(() => {
@@ -86,9 +87,9 @@ describe('NotificationsTab', () => {
     it('renders the connection pill as "Not connected" when last_test_ok=0', async () => {
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(settings({ external_notification_last_test_ok: 0 })),
+                HttpResponse.json(settings({ external_notification_last_test_ok: 0 }))
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         const { container } = renderWithProviders(<NotificationsTab />);
         await waitFor(() => {
@@ -99,7 +100,7 @@ describe('NotificationsTab', () => {
     it('toggles the show-token visibility button (setShowToken branch)', async () => {
         server.use(
             http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -123,14 +124,14 @@ describe('NotificationsTab', () => {
                     settings({
                         external_notification_token_set: false,
                         external_notification_chat_id: null,
-                    }),
-                ),
+                    })
+                )
             ),
             http.patch(`${BASE}/settings/external-notification`, async ({ request }) => {
                 patched = await request.json();
                 return HttpResponse.json(settings());
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -151,7 +152,7 @@ describe('NotificationsTab', () => {
                 tested = true;
                 return HttpResponse.json({ ok: true });
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -171,11 +172,13 @@ describe('NotificationsTab', () => {
     it('clicks Send Test → error branch (r.ok=false)', async () => {
         server.use(
             http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
-            http.patch(`${BASE}/settings/external-notification`, () => HttpResponse.json(settings())),
-            http.post(`${BASE}/settings/external-notification/test`, () =>
-                HttpResponse.json({ ok: false, error: 'bad token' }),
+            http.patch(`${BASE}/settings/external-notification`, () =>
+                HttpResponse.json(settings())
             ),
-            ...defaultHandlers,
+            http.post(`${BASE}/settings/external-notification/test`, () =>
+                HttpResponse.json({ ok: false, error: 'bad token' })
+            ),
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -194,7 +197,7 @@ describe('NotificationsTab', () => {
         server.use(
             http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
             http.patch(`${BASE}/settings/notifications`, () => HttpResponse.json(settings())),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         const { container } = renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -212,7 +215,7 @@ describe('NotificationsTab', () => {
                 patched = await request.json();
                 return HttpResponse.json(settings());
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -231,7 +234,7 @@ describe('NotificationsTab', () => {
         server.use(
             http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
             http.patch(`${BASE}/settings/notifications`, () => HttpResponse.json(settings())),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -244,9 +247,9 @@ describe('NotificationsTab', () => {
     it('disables From/To inputs when quiet_hours_enabled is 0', async () => {
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(settings({ quiet_hours_enabled: 0 })),
+                HttpResponse.json(settings({ quiet_hours_enabled: 0 }))
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -262,13 +265,13 @@ describe('NotificationsTab', () => {
         let patched = false;
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(settings({ quiet_hours_enabled: 0 })),
+                HttpResponse.json(settings({ quiet_hours_enabled: 0 }))
             ),
             http.patch(`${BASE}/settings/notifications`, () => {
                 patched = true;
                 return HttpResponse.json(settings());
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -282,13 +285,13 @@ describe('NotificationsTab', () => {
         let patched: { quiet_hours_enabled?: number } | null = null;
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(settings({ quiet_hours_enabled: 0 })),
+                HttpResponse.json(settings({ quiet_hours_enabled: 0 }))
             ),
             http.patch(`${BASE}/settings/notifications`, async ({ request }) => {
                 patched = (await request.json()) as { quiet_hours_enabled?: number };
                 return HttpResponse.json(settings({ quiet_hours_enabled: 1 }));
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         const { container } = renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -316,7 +319,7 @@ describe('NotificationsTab', () => {
                 commitCount += 1;
                 return HttpResponse.json(settings());
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -329,7 +332,7 @@ describe('NotificationsTab', () => {
     it('renders the Browser Push section (web push migrated into Notifications tab)', async () => {
         server.use(
             http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Browser Push/i);
@@ -338,9 +341,9 @@ describe('NotificationsTab', () => {
     it('renders Telegram fields when provider=telegram and hides Webhook URL field', async () => {
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(settings({ external_notification_provider: 'telegram' })),
+                HttpResponse.json(settings({ external_notification_provider: 'telegram' }))
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         // Wait for the Bot Token field — placeholder depends on whether a
@@ -359,10 +362,10 @@ describe('NotificationsTab', () => {
                     settings({
                         external_notification_provider: 'teams',
                         external_notification_webhook_url: 'https://example/webhook',
-                    }),
-                ),
+                    })
+                )
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         // Wait for the Webhook URL field — useEffect promotes provider='teams'
@@ -378,15 +381,13 @@ describe('NotificationsTab', () => {
         let patched: { external_notification_provider?: string } | null = null;
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(settings({ external_notification_provider: 'telegram' })),
+                HttpResponse.json(settings({ external_notification_provider: 'telegram' }))
             ),
             http.patch(`${BASE}/settings/external-notification`, async ({ request }) => {
                 patched = (await request.json()) as { external_notification_provider?: string };
-                return HttpResponse.json(
-                    settings({ external_notification_provider: 'teams' }),
-                );
+                return HttpResponse.json(settings({ external_notification_provider: 'teams' }));
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -410,8 +411,8 @@ describe('NotificationsTab', () => {
                     settings({
                         external_notification_provider: 'teams',
                         external_notification_webhook_url: 'https://old.example/hook',
-                    }),
-                ),
+                    })
+                )
             ),
             http.patch(`${BASE}/settings/external-notification`, async ({ request }) => {
                 patched = (await request.json()) as {
@@ -421,14 +422,16 @@ describe('NotificationsTab', () => {
                     settings({
                         external_notification_provider: 'teams',
                         external_notification_webhook_url: 'https://new.example/hook',
-                    }),
+                    })
                 );
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         // Wait for the Teams webhook field to appear.
-        const webhookInput = await screen.findByPlaceholderText(/powerautomate/i) as HTMLInputElement;
+        const webhookInput = (await screen.findByPlaceholderText(
+            /powerautomate/i
+        )) as HTMLInputElement;
         fireEvent.change(webhookInput, { target: { value: 'https://new.example/hook' } });
         fireEvent.blur(webhookInput);
         await waitFor(() => {
@@ -450,17 +453,19 @@ describe('NotificationsTab', () => {
                     settings({
                         external_notification_provider: 'teams',
                         external_notification_webhook_url: null,
-                    }),
-                ),
+                    })
+                )
             ),
             http.patch(`${BASE}/settings/external-notification`, () => {
                 patchCount += 1;
                 return HttpResponse.json(settings({ external_notification_provider: 'teams' }));
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
-        const webhookInput = await screen.findByPlaceholderText(/powerautomate/i) as HTMLInputElement;
+        const webhookInput = (await screen.findByPlaceholderText(
+            /powerautomate/i
+        )) as HTMLInputElement;
         await waitFor(() => expect(webhookInput.value).toBe(''));
         fireEvent.blur(webhookInput);
         await new Promise((r) => setTimeout(r, 50));
@@ -474,10 +479,10 @@ describe('NotificationsTab', () => {
                     settings({
                         external_notification_provider: 'teams',
                         external_notification_webhook_url: 'https://example/hook',
-                    }),
-                ),
+                    })
+                )
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByPlaceholderText(/powerautomate/i);
@@ -492,13 +497,13 @@ describe('NotificationsTab', () => {
         let patched: { terminal_idle_notify_seconds?: number } | null = null;
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(settings({ terminal_idle_notify_seconds: 300 })),
+                HttpResponse.json(settings({ terminal_idle_notify_seconds: 300 }))
             ),
             http.patch(`${BASE}/settings/notifications`, async ({ request }) => {
                 patched = (await request.json()) as { terminal_idle_notify_seconds?: number };
                 return HttpResponse.json(settings({ terminal_idle_notify_seconds: 600 }));
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -515,13 +520,13 @@ describe('NotificationsTab', () => {
         let patchCount = 0;
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(settings({ terminal_idle_notify_seconds: 300 })),
+                HttpResponse.json(settings({ terminal_idle_notify_seconds: 300 }))
             ),
             http.patch(`${BASE}/settings/notifications`, () => {
                 patchCount += 1;
                 return HttpResponse.json(settings());
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -537,13 +542,13 @@ describe('NotificationsTab', () => {
         let patchCount = 0;
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(settings({ terminal_idle_notify_seconds: 300 })),
+                HttpResponse.json(settings({ terminal_idle_notify_seconds: 300 }))
             ),
             http.patch(`${BASE}/settings/notifications`, () => {
                 patchCount += 1;
                 return HttpResponse.json(settings());
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -562,11 +567,9 @@ describe('NotificationsTab', () => {
         // Verify the switch for that event row is unchecked when toggles = '{}'.
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(
-                    settings({ external_notification_event_toggles: '{}' }),
-                ),
+                HttpResponse.json(settings({ external_notification_event_toggles: '{}' }))
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         // Wait for the event list to render.
@@ -580,7 +583,9 @@ describe('NotificationsTab', () => {
         const terminalTitle = screen.getByText(/Terminal: Waiting for Input/i);
         // Walk up to the flex row that wraps title + switch (3 levels: p → Box → row-Box).
         const rowBox = terminalTitle.parentElement?.parentElement;
-        const switchInput = rowBox?.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+        const switchInput = rowBox?.querySelector(
+            'input[type="checkbox"]'
+        ) as HTMLInputElement | null;
         expect(switchInput).toBeTruthy();
         expect(switchInput?.checked).toBe(false);
     });
@@ -593,10 +598,10 @@ describe('NotificationsTab', () => {
                         external_notification_event_toggles: JSON.stringify({
                             'terminal.waiting_for_input': true,
                         }),
-                    }),
-                ),
+                    })
+                )
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Terminal: Waiting for Input/i);
@@ -604,7 +609,9 @@ describe('NotificationsTab', () => {
         await waitFor(() => {
             const terminalTitle = screen.getByText(/Terminal: Waiting for Input/i);
             const rowBox = terminalTitle.parentElement?.parentElement;
-            const switchInput = rowBox?.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+            const switchInput = rowBox?.querySelector(
+                'input[type="checkbox"]'
+            ) as HTMLInputElement | null;
             expect(switchInput).toBeTruthy();
             expect(switchInput?.checked).toBe(true);
         });
@@ -613,28 +620,35 @@ describe('NotificationsTab', () => {
     it('handleTest: shows "Sending…" while in-flight then restores button label', async () => {
         // Use a delayed response to catch the "Sending…" interim state.
         let resolveTest!: () => void;
-        const testPromise = new Promise<void>((res) => { resolveTest = res; });
+        const testPromise = new Promise<void>((res) => {
+            resolveTest = res;
+        });
         server.use(
             http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
             http.post(`${BASE}/settings/external-notification/test`, async () => {
                 await testPromise;
                 return HttpResponse.json({ ok: true });
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         // Wait for settings to hydrate (token + chatId) so canTest=true and the button is enabled.
-        await waitFor(() => {
-            const btn = screen.getByRole('button', { name: /Send Test Message/i });
-            expect(btn).not.toBeDisabled();
-        }, { timeout: 10000 });
+        await waitFor(
+            () => {
+                const btn = screen.getByRole('button', { name: /Send Test Message/i });
+                expect(btn).not.toBeDisabled();
+            },
+            { timeout: 10000 }
+        );
         const sendBtn = screen.getByRole('button', { name: /Send Test Message/i });
         fireEvent.click(sendBtn);
         // While the promise is unresolved the button should say "Sending…"
         await waitFor(() => expect(screen.getByText(/Sending…/i)).toBeInTheDocument());
         resolveTest();
         // After the promise resolves the button label should revert.
-        await waitFor(() => expect(screen.getByRole('button', { name: /Send Test Message/i })).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: /Send Test Message/i })).toBeInTheDocument()
+        );
     });
 
     // Regression for the Batch-9 read-model interaction with `canTest`.
@@ -653,16 +667,19 @@ describe('NotificationsTab', () => {
                         external_notification_token: null,
                         external_notification_token_set: true,
                         external_notification_chat_id: 'chat-1',
-                    }),
-                ),
+                    })
+                )
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
-        await waitFor(() => {
-            const btn = screen.getByRole('button', { name: /Send Test Message/i });
-            expect(btn).not.toBeDisabled();
-        }, { timeout: 10000 });
+        await waitFor(
+            () => {
+                const btn = screen.getByRole('button', { name: /Send Test Message/i });
+                expect(btn).not.toBeDisabled();
+            },
+            { timeout: 10000 }
+        );
     });
 
     it('regression: enables Send Test when teams webhook is stored but redacted on GET', async () => {
@@ -673,16 +690,19 @@ describe('NotificationsTab', () => {
                         external_notification_provider: 'teams',
                         external_notification_webhook_url: null,
                         external_notification_webhook_url_set: true,
-                    }),
-                ),
+                    })
+                )
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
-        await waitFor(() => {
-            const btn = screen.getByRole('button', { name: /Send Test Message/i });
-            expect(btn).not.toBeDisabled();
-        }, { timeout: 10000 });
+        await waitFor(
+            () => {
+                const btn = screen.getByRole('button', { name: /Send Test Message/i });
+                expect(btn).not.toBeDisabled();
+            },
+            { timeout: 10000 }
+        );
     });
 
     it('regression: keeps Send Test disabled when nothing is stored and nothing typed (teams)', async () => {
@@ -693,33 +713,38 @@ describe('NotificationsTab', () => {
                         external_notification_provider: 'teams',
                         external_notification_webhook_url: null,
                         external_notification_webhook_url_set: false,
-                    }),
-                ),
+                    })
+                )
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         // Wait for the provider select to reflect "teams" so we know the
         // settings hydrated before we assert the button state.
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /Send Test Message/i })).toBeDisabled();
-        }, { timeout: 10000 });
+        await waitFor(
+            () => {
+                expect(screen.getByRole('button', { name: /Send Test Message/i })).toBeDisabled();
+            },
+            { timeout: 10000 }
+        );
     });
 
     it('handleTest: error branch without detail message (r.ok=false, no r.error)', async () => {
         server.use(
             http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
             http.post(`${BASE}/settings/external-notification/test`, () =>
-                HttpResponse.json({ ok: false }),
+                HttpResponse.json({ ok: false })
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
         const sendBtn = screen.getByRole('button', { name: /Send Test Message/i });
         fireEvent.click(sendBtn);
         // Should not throw; button should return to normal state.
-        await waitFor(() => expect(screen.getByRole('button', { name: /Send Test Message/i })).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: /Send Test Message/i })).toBeInTheDocument()
+        );
     });
 
     it('connectionDetail shows "Connected · message delivered" when last_test_ok=1 and no endpoint label', async () => {
@@ -729,10 +754,10 @@ describe('NotificationsTab', () => {
                     settings({
                         external_notification_last_test_ok: 1,
                         external_notification_endpoint_label: null,
-                    }),
-                ),
+                    })
+                )
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await waitFor(() => {
@@ -744,10 +769,10 @@ describe('NotificationsTab', () => {
         server.use(
             http.get(`${BASE}/settings`, () =>
                 HttpResponse.json(
-                    settings({ external_notification_event_toggles: 'not-valid-json{{{' }),
-                ),
+                    settings({ external_notification_event_toggles: 'not-valid-json{{{' })
+                )
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         const { container } = renderWithProviders(<NotificationsTab />);
         // parseToggles('{{{') throws, returns {} — tab still renders normally without crashing
@@ -760,15 +785,13 @@ describe('NotificationsTab', () => {
         let autoSaveCalled = false;
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(
-                    settings({ quiet_hours_timezone: null }),
-                ),
+                HttpResponse.json(settings({ quiet_hours_timezone: null }))
             ),
             http.patch(`${BASE}/settings/notifications`, () => {
                 autoSaveCalled = true;
                 return HttpResponse.json({ ok: true });
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         // Wait for the auto-save effect to fire (PATCH /settings/notifications)
@@ -792,14 +815,14 @@ describe('NotificationsTab', () => {
                         external_notification_token: null,
                         external_notification_token_set: true,
                         external_notification_chat_id: 'chat-1',
-                    }),
-                ),
+                    })
+                )
             ),
             http.patch(`${BASE}/settings/external-notification`, () => {
                 patchCalled = true;
                 return HttpResponse.json({ ok: true });
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         // Wait for the chat-id input to hydrate — the token input's value
@@ -821,18 +844,21 @@ describe('NotificationsTab', () => {
         let patchCalled = false;
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(settings({ external_notification_provider: 'telegram' })),
+                HttpResponse.json(settings({ external_notification_provider: 'telegram' }))
             ),
             http.patch(`${BASE}/settings/external-notification`, () => {
                 patchCalled = true;
                 return HttpResponse.json({ ok: true });
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
-        await waitFor(() => {
-            expect(document.body).toBeTruthy();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(document.body).toBeTruthy();
+            },
+            { timeout: 5000 }
+        );
         // Select the same provider — commitProvider returns early
         const select = screen.queryByRole('combobox');
         if (select) {
@@ -849,10 +875,10 @@ describe('NotificationsTab', () => {
             http.get(`${BASE}/settings`, () =>
                 HttpResponse.json(
                     // toggles empty → terminal.waiting_for_input is false (default OFF)
-                    settings({ external_notification_event_toggles: '{}' }),
-                ),
+                    settings({ external_notification_event_toggles: '{}' })
+                )
             ),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await waitFor(() => screen.getByText(/Waiting for input/i));
@@ -878,19 +904,24 @@ describe('NotificationsTab', () => {
                     settings({
                         external_notification_provider: 'teams',
                         external_notification_webhook_url: null,
-                    }),
-                ),
+                    })
+                )
             ),
             http.patch(`${BASE}/settings/external-notification`, () => {
                 patchCount += 1;
                 return HttpResponse.json(
-                    settings({ external_notification_provider: 'teams', external_notification_webhook_url: null }),
+                    settings({
+                        external_notification_provider: 'teams',
+                        external_notification_webhook_url: null,
+                    })
                 );
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
-        const webhookInput = await screen.findByPlaceholderText(/powerautomate/i) as HTMLInputElement;
+        const webhookInput = (await screen.findByPlaceholderText(
+            /powerautomate/i
+        )) as HTMLInputElement;
         fireEvent.change(webhookInput, { target: { value: '' } });
         fireEvent.blur(webhookInput);
         await new Promise((r) => setTimeout(r, 100));
@@ -906,21 +937,27 @@ describe('NotificationsTab', () => {
         // Owner has actually typed a new value. This test also asserts
         // chat_id CAN still be updated on the same blur without touching
         // the token field.
-        let patched: { external_notification_token?: string | null; external_notification_chat_id?: string | null } | null = null;
+        let patched: {
+            external_notification_token?: string | null;
+            external_notification_chat_id?: string | null;
+        } | null = null;
         server.use(
             http.get(`${BASE}/settings`, () =>
                 HttpResponse.json(
                     settings({
                         external_notification_token: null,
                         external_notification_chat_id: 'chat-1',
-                    }),
-                ),
+                    })
+                )
             ),
             http.patch(`${BASE}/settings/external-notification`, async ({ request }) => {
-                patched = (await request.json()) as { external_notification_token?: string | null; external_notification_chat_id?: string | null };
+                patched = (await request.json()) as {
+                    external_notification_token?: string | null;
+                    external_notification_chat_id?: string | null;
+                };
                 return HttpResponse.json(settings({ external_notification_token: null }));
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -949,13 +986,13 @@ describe('NotificationsTab', () => {
         server.use(
             http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
             http.post(`${BASE}/settings/external-notification/test`, () =>
-                HttpResponse.json({ ok: false, error: 'invalid token' }),
+                HttpResponse.json({ ok: false, error: 'invalid token' })
             ),
             http.patch(`${BASE}/settings`, () => {
                 _patchCount += 1;
                 return HttpResponse.json(settings());
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await waitFor(() => {
@@ -966,7 +1003,7 @@ describe('NotificationsTab', () => {
         fireEvent.click(sendBtn);
         // Wait for the button to return to "Send Test Message" — handleTest completed
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /Send Test Message/i })).toBeInTheDocument(),
+            expect(screen.getByRole('button', { name: /Send Test Message/i })).toBeInTheDocument()
         );
     });
 
@@ -974,11 +1011,13 @@ describe('NotificationsTab', () => {
         // This test exercises the uncovered arm of `!fromOk || !toOk` where fromOk=true
         // but toOk=false causes the right-side of || to be evaluated and the function returns.
         server.use(
-            http.get(`${BASE}/settings`, () => HttpResponse.json(settings({ quiet_hours_enabled: 1 }))),
+            http.get(`${BASE}/settings`, () =>
+                HttpResponse.json(settings({ quiet_hours_enabled: 1 }))
+            ),
             // Handler is required to prevent MSW "unhandled request" if something
             // unexpectedly fires — but we don't assert patched here.
             http.patch(`${BASE}/settings/notifications`, () => HttpResponse.json(settings())),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -995,13 +1034,13 @@ describe('NotificationsTab', () => {
         let patched: { quiet_hours_timezone?: string } | null = null;
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(settings({ quiet_hours_enabled: 1, quiet_hours_timezone: null })),
+                HttpResponse.json(settings({ quiet_hours_enabled: 1, quiet_hours_timezone: null }))
             ),
             http.patch(`${BASE}/settings/notifications`, async ({ request }) => {
                 patched = (await request.json()) as { quiet_hours_timezone?: string };
                 return HttpResponse.json(settings());
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -1020,18 +1059,18 @@ describe('NotificationsTab', () => {
         let patched: { quiet_hours_enabled?: number } | null = null;
         server.use(
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json(settings({ quiet_hours_enabled: 1 })),
+                HttpResponse.json(settings({ quiet_hours_enabled: 1 }))
             ),
             http.patch(`${BASE}/settings/notifications`, async ({ request }) => {
                 patched = (await request.json()) as { quiet_hours_enabled?: number };
                 return HttpResponse.json(settings({ quiet_hours_enabled: 0 }));
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         // Wait for quiet hours to be enabled (text confirms quiet_hours_enabled=1)
         await waitFor(() =>
-            expect(screen.getByText(/External notifications are muted/i)).toBeInTheDocument(),
+            expect(screen.getByText(/External notifications are muted/i)).toBeInTheDocument()
         );
         // The quiet-hours Enable row has a MuiSwitch. Walk up from the label text to find
         // the nearest ancestor that directly contains an input[type=checkbox].
@@ -1049,7 +1088,7 @@ describe('NotificationsTab', () => {
             const allChecked = document.querySelectorAll('input[type="checkbox"]:checked');
             // quiet_hours_enabled=1 → the Enable switch is checked; pick the last checked one
             // before the per-event section (per-events default OFF, so enabled switch stands out)
-            switchInput = (allChecked[allChecked.length - 1] as HTMLInputElement | null);
+            switchInput = allChecked[allChecked.length - 1] as HTMLInputElement | null;
         }
         expect(switchInput).not.toBeNull();
         if (switchInput) fireEvent.click(switchInput);
@@ -1067,14 +1106,14 @@ describe('NotificationsTab', () => {
                     settings({
                         external_notification_provider: 'teams',
                         external_notification_webhook_url: 'https://example/hook',
-                    }),
-                ),
+                    })
+                )
             ),
             http.patch(`${BASE}/settings/external-notification`, async ({ request }) => {
                 patched = (await request.json()) as { external_notification_provider?: string };
                 return HttpResponse.json(settings({ external_notification_provider: 'telegram' }));
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         // Wait for the teams webhook field to confirm provider=teams loaded
@@ -1100,14 +1139,14 @@ describe('NotificationsTab', () => {
                         quiet_hours_from: '22:00',
                         quiet_hours_to: '08:00',
                         quiet_hours_timezone: 'America/New_York',
-                    }),
-                ),
+                    })
+                )
             ),
             http.patch(`${BASE}/settings/notifications`, async ({ request }) => {
                 patched = (await request.json()) as Record<string, unknown>;
                 return HttpResponse.json(settings({ quiet_hours_enabled: 1 }));
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -1143,14 +1182,14 @@ describe('NotificationsTab', () => {
                         quiet_hours_from: null,
                         quiet_hours_to: null,
                         quiet_hours_timezone: 'America/Chicago',
-                    }),
-                ),
+                    })
+                )
             ),
             http.patch(`${BASE}/settings/notifications`, async ({ request }) => {
                 patched = (await request.json()) as Record<string, unknown>;
                 return HttpResponse.json(settings({ quiet_hours_enabled: 1 }));
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -1194,8 +1233,8 @@ describe('NotificationsTab', () => {
                         quiet_hours_from: '22:00',
                         quiet_hours_to: '08:00',
                         quiet_hours_timezone: null,
-                    }),
-                ),
+                    })
+                )
             ),
             http.patch(`${BASE}/settings/notifications`, async ({ request }) => {
                 const body = (await request.json()) as Record<string, unknown>;
@@ -1211,7 +1250,7 @@ describe('NotificationsTab', () => {
                             quiet_hours_from: '22:00',
                             quiet_hours_to: '08:00',
                             quiet_hours_timezone: null,
-                        }),
+                        })
                     );
                 }
                 return HttpResponse.json(
@@ -1220,10 +1259,10 @@ describe('NotificationsTab', () => {
                         quiet_hours_from: '22:00',
                         quiet_hours_to: '08:00',
                         quiet_hours_timezone: null,
-                    }),
+                    })
                 );
             }),
-            ...defaultHandlers,
+            ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
         await screen.findByText(/Untested/i);
@@ -1240,12 +1279,152 @@ describe('NotificationsTab', () => {
         expect(switchInput).not.toBeNull();
         if (switchInput) fireEvent.click(switchInput);
         // Verify the toggle PATCH includes quiet_hours_timezone (seeded from detectedTimezone)
-        await waitFor(() => {
-            const togglePatch = patches.find((b) => b['quiet_hours_enabled'] === 1);
-            expect(togglePatch).toBeTruthy();
-            // quiet_hours_timezone was null at call time → line 231 seeds detectedTimezone
-            expect((togglePatch as Record<string, unknown>)['quiet_hours_timezone']).toBeTruthy();
-        }, { timeout: 8000 });
+        await waitFor(
+            () => {
+                const togglePatch = patches.find((b) => b['quiet_hours_enabled'] === 1);
+                expect(togglePatch).toBeTruthy();
+                // quiet_hours_timezone was null at call time → line 231 seeds detectedTimezone
+                expect(
+                    (togglePatch as Record<string, unknown>)['quiet_hours_timezone']
+                ).toBeTruthy();
+            },
+            { timeout: 8000 }
+        );
     });
 
+    // ─── On-demand secret reveal (Batch-9 enterprise read model) ────────────
+    //
+    // GET /api/settings never returns the plaintext token or webhook URL.
+    // The Owner has to ask for it, and what comes back must disappear again
+    // on its own — a revealed bot token left in the DOM on an unattended
+    // screen is exactly the leak the read model was introduced to stop.
+
+    it('reveals the stored Telegram token, then hides it again after 30s', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        try {
+            server.use(
+                http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
+                http.post(`${BASE}/settings/external-notification/reveal-token`, () =>
+                    HttpResponse.json({ value: '123456789:ABC-real-token' })
+                ),
+                ...defaultHandlers
+            );
+            renderWithProviders(<NotificationsTab />);
+            await screen.findByText(/Untested/i);
+
+            fireEvent.click(screen.getByLabelText(/reveal token/i));
+            const revealed = await screen.findByDisplayValue('123456789:ABC-real-token');
+            // G-BUG: this `readOnly` used to be passed via the deprecated
+            // `InputProps`, which MUI v7 discards outright when `slotProps.input`
+            // is also set — so the guard was dead and a stray keystroke on a
+            // revealed token rewrote it, then `commitConnection` PATCHed the
+            // mangled value on blur. Keep this assertion.
+            expect(revealed).toHaveAttribute('readonly');
+
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(30_000);
+            });
+            expect(screen.queryByDisplayValue('123456789:ABC-real-token')).not.toBeInTheDocument();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('reveals the stored Teams webhook URL, then hides it again after 30s', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        try {
+            server.use(
+                http.get(`${BASE}/settings`, () =>
+                    HttpResponse.json(
+                        settings({
+                            external_notification_provider: 'teams',
+                            external_notification_webhook_url_set: true,
+                        })
+                    )
+                ),
+                http.post(`${BASE}/settings/external-notification/reveal-webhook-url`, () =>
+                    HttpResponse.json({
+                        value: 'https://acme.powerautomate.com/triggers/manual/paths/invoke?sig=secret',
+                    })
+                ),
+                ...defaultHandlers
+            );
+            renderWithProviders(<NotificationsTab />);
+            await screen.findByText(/Untested/i);
+
+            fireEvent.click(await screen.findByLabelText(/reveal webhook url/i));
+            const revealed = await screen.findByDisplayValue(
+                'https://acme.powerautomate.com/triggers/manual/paths/invoke?sig=secret'
+            );
+            // A revealed URL is read-only: editing it would send the masked
+            // placeholder text back as the new secret.
+            expect(revealed).toHaveAttribute('readonly');
+
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(30_000);
+            });
+            expect(
+                screen.queryByDisplayValue(
+                    'https://acme.powerautomate.com/triggers/manual/paths/invoke?sig=secret'
+                )
+            ).not.toBeInTheDocument();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('says so when a webhook reveal is refused rather than showing nothing', async () => {
+        // A silent no-op here reads as "there is no webhook stored", which
+        // would send the Owner off to re-enter a secret they already have.
+        server.use(
+            http.get(`${BASE}/settings`, () =>
+                HttpResponse.json(
+                    settings({
+                        external_notification_provider: 'teams',
+                        external_notification_webhook_url_set: true,
+                    })
+                )
+            ),
+            http.post(`${BASE}/settings/external-notification/reveal-webhook-url`, () =>
+                HttpResponse.json({ error: 'Secret store is locked' }, { status: 500 })
+            ),
+            ...defaultHandlers
+        );
+        renderWithProviders(
+            <>
+                <NotificationsTab />
+                <Toast />
+            </>
+        );
+        await screen.findByText(/Untested/i);
+        fireEvent.click(await screen.findByLabelText(/reveal webhook url/i));
+        expect(await screen.findByText('Could not reveal webhook URL')).toBeInTheDocument();
+        expect(await screen.findByText('Secret store is locked')).toBeInTheDocument();
+    });
+
+    it('confirms a per-event notification toggle was saved', async () => {
+        // The switch flips optimistically from local state; without the
+        // success toast the Owner has no way to tell a saved preference
+        // from one the API rejected.
+        let patched: Record<string, unknown> | null = null;
+        server.use(
+            http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
+            http.patch(`${BASE}/settings/notifications`, async ({ request }) => {
+                patched = (await request.json()) as Record<string, unknown>;
+                return HttpResponse.json(settings());
+            }),
+            ...defaultHandlers
+        );
+        const { container } = renderWithProviders(
+            <>
+                <NotificationsTab />
+                <Toast />
+            </>
+        );
+        await screen.findByText(/Untested/i);
+        const first = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+        fireEvent.click(first);
+        expect(await screen.findByText('Notification preferences saved')).toBeInTheDocument();
+        expect(patched).not.toBeNull();
+    });
 }, 15000);

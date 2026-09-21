@@ -18,7 +18,12 @@ interface SetupOpts {
     error?: string | null;
     enable?: () => Promise<void>;
     disable?: () => Promise<void>;
-    sendTest?: () => Promise<{ ok: boolean; delivered?: number; subscriptions?: number; error?: string }>;
+    sendTest?: () => Promise<{
+        ok: boolean;
+        delivered?: number;
+        subscriptions?: number;
+        error?: string;
+    }>;
 }
 
 function setup(opts: SetupOpts) {
@@ -28,7 +33,9 @@ function setup(opts: SetupOpts) {
         error: opts.error ?? null,
         enable: opts.enable ?? vi.fn().mockResolvedValue(undefined),
         disable: opts.disable ?? vi.fn().mockResolvedValue(undefined),
-        sendTest: opts.sendTest ?? vi.fn().mockResolvedValue({ ok: true, delivered: 1, subscriptions: 1 }),
+        sendTest:
+            opts.sendTest ??
+            vi.fn().mockResolvedValue({ ok: true, delivered: 1, subscriptions: 1 }),
     } as unknown as ReturnType<typeof usePushSubscription>);
     return renderWithProviders(<WebPushRow />);
 }
@@ -144,7 +151,9 @@ describe('WebPushRow', () => {
 
     it('sendTest ok=false with explicit error message uses that error in toast', async () => {
         // Exercises the `result.error ?? 'no devices reached'` with a non-null error
-        const sendTest = vi.fn().mockResolvedValue({ ok: false, error: 'Push service unavailable' });
+        const sendTest = vi
+            .fn()
+            .mockResolvedValue({ ok: false, error: 'Push service unavailable' });
         const user = userEvent.setup();
         setup({ state: 'granted-subscribed', sendTest });
         await user.click(screen.getByRole('button', { name: /send test/i }));

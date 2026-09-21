@@ -97,6 +97,7 @@ function DropdownChip({
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 16, color: ATLAS_PALETTE.slate40 }}
                 >
                     arrow_drop_down
@@ -130,6 +131,7 @@ function DropdownChip({
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 16, color: ATLAS_PALETTE.brandBlue, ml: 'auto' }}
                             >
                                 check
@@ -205,29 +207,29 @@ export function TaskFiltersBar(props: Props) {
                     '& > *': { flexShrink: 0 },
                 }}
             >
-            {PRIMARY_CHIPS.map(({ key, label }) => (
-                <FilterPill
-                    key={key}
-                    label={label}
-                    count={counts[key]}
-                    selected={filterKey === key}
-                    onClick={() => onFilterChange(key)}
+                {PRIMARY_CHIPS.map(({ key, label }) => (
+                    <FilterPill
+                        key={key}
+                        label={label}
+                        count={counts[key]}
+                        selected={filterKey === key}
+                        onClick={() => onFilterChange(key)}
+                    />
+                ))}
+
+                <DropdownChip
+                    label="By project"
+                    value={projectFilter}
+                    options={projectOptions}
+                    onChange={onProjectChange}
                 />
-            ))}
 
-            <DropdownChip
-                label="By project"
-                value={projectFilter}
-                options={projectOptions}
-                onChange={onProjectChange}
-            />
-
-            <DropdownChip
-                label="Status"
-                value={statusFilter}
-                options={STATUS_OPTIONS}
-                onChange={onStatusChange}
-            />
+                <DropdownChip
+                    label="Status"
+                    value={statusFilter}
+                    options={STATUS_OPTIONS}
+                    onChange={onStatusChange}
+                />
             </Box>
 
             <TextField
@@ -246,6 +248,7 @@ export function TaskFiltersBar(props: Props) {
                                 <Box
                                     component="span"
                                     className="material-symbols-rounded"
+                                    aria-hidden="true"
                                     sx={{ fontSize: 18, color: ATLAS_PALETTE.slate40 }}
                                 >
                                     search

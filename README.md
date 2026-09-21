@@ -459,9 +459,8 @@ to preview / tweak.
   / webhook URL and confirm no whitespace was pasted (leading space is the
   most common cause).
 
-The Confluence page [Setting up the external notification
-workflow](https://github.com/sspartorg/atlas/tree/main/docs)
-carries the same content with screenshots.
+The [user guide](docs/guide/README.md) covers the same ground with
+screenshots.
 
 ---
 

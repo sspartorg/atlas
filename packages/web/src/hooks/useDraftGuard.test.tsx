@@ -31,7 +31,7 @@ describe('useDraftGuard', () => {
             <DraftGuardProvider>
                 <Draft dirty={false} />
                 <Leave onLeave={onLeave} />
-            </DraftGuardProvider>,
+            </DraftGuardProvider>
         );
         fireEvent.click(screen.getByText('leave'));
         expect(onLeave).toHaveBeenCalledTimes(1);
@@ -44,7 +44,7 @@ describe('useDraftGuard', () => {
             <DraftGuardProvider>
                 <Draft dirty />
                 <Leave onLeave={onLeave} />
-            </DraftGuardProvider>,
+            </DraftGuardProvider>
         );
         fireEvent.click(screen.getByText('leave'));
         expect(await screen.findByText('Discard draft?')).toBeInTheDocument();
@@ -65,12 +65,12 @@ describe('useDraftGuard', () => {
             <DraftGuardProvider>
                 <Draft dirty />
                 <Leave onLeave={onLeave} />
-            </DraftGuardProvider>,
+            </DraftGuardProvider>
         );
         rerender(
             <DraftGuardProvider>
                 <Leave onLeave={onLeave} />
-            </DraftGuardProvider>,
+            </DraftGuardProvider>
         );
         fireEvent.click(screen.getByText('leave'));
         expect(onLeave).toHaveBeenCalledTimes(1);
@@ -102,7 +102,7 @@ describe('useDraftGuard', () => {
                 <Shortcuts />
                 <Where />
             </DraftGuardProvider>,
-            { initialEntries: ['/tasks/new'] },
+            { initialEntries: ['/tasks/new'] }
         );
         fireEvent.keyDown(window, { key: 'g' });
         fireEvent.keyDown(window, { key: 't' });

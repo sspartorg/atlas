@@ -8,10 +8,7 @@ import Dialog from '@mui/material/Dialog';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import LinkRounded from '@mui/icons-material/LinkRounded';
 import type { IIssueLinkRow, IssueType } from '@atlas/shared';
-import {
-    useIssueLinks,
-    useCreateIssueLink,
-} from '../hooks/useIssueLinks.js';
+import { useIssueLinks, useCreateIssueLink } from '../hooks/useIssueLinks.js';
 import { useTasks } from '../hooks/useTasks.js';
 import { useAllSubTasks } from '../hooks/useSubTasks.js';
 import { useToast } from '../hooks/useToast.js';
@@ -100,13 +97,17 @@ export function LinkPickerDialog({
     }, [links]);
 
     const candidates = useMemo<PickerCandidate[]>(() => {
-        const sub = (restrictToTaskId
-            ? subTasks.filter((t) => t.task_id === restrictToTaskId)
-            : subTasks
+        const sub = (
+            restrictToTaskId ? subTasks.filter((t) => t.task_id === restrictToTaskId) : subTasks
         ).map((t) => ({ type: 'sub_task' as const, id: t.id, shortId: t.id, title: t.title }));
         if (restrictToTaskId) return sub;
         return [
-            ...tasks.map((t) => ({ type: 'task' as const, id: t.id, shortId: t.id, title: t.title })),
+            ...tasks.map((t) => ({
+                type: 'task' as const,
+                id: t.id,
+                shortId: t.id,
+                title: t.title,
+            })),
             ...sub,
         ];
     }, [tasks, subTasks, restrictToTaskId]);

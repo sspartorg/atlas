@@ -7,11 +7,7 @@ import { StatusTransitionBar } from './StatusTransitionBar.js';
 describe('StatusTransitionBar', () => {
     it('renders terminal label for done', () => {
         renderWithProviders(
-            <StatusTransitionBar
-                issueType="task"
-                currentStatus="done"
-                onTransition={vi.fn()}
-            />,
+            <StatusTransitionBar issueType="task" currentStatus="done" onTransition={vi.fn()} />
         );
         expect(screen.getByText(/Terminal/)).toBeInTheDocument();
     });
@@ -23,7 +19,7 @@ describe('StatusTransitionBar', () => {
                 issueType="task"
                 currentStatus="ready"
                 onTransition={onTransition}
-            />,
+            />
         );
         const buttons = screen.getAllByRole('button');
         expect(buttons.length).toBeGreaterThan(0);
@@ -38,7 +34,7 @@ describe('StatusTransitionBar', () => {
                 currentStatus="draft"
                 onTransition={vi.fn()}
                 loading
-            />,
+            />
         );
         const buttons = screen.getAllByRole('button');
         expect(buttons[0]).toBeDisabled();
@@ -46,22 +42,14 @@ describe('StatusTransitionBar', () => {
 
     it('renders terminal label for task done status', () => {
         renderWithProviders(
-            <StatusTransitionBar
-                issueType="task"
-                currentStatus="done"
-                onTransition={vi.fn()}
-            />,
+            <StatusTransitionBar issueType="task" currentStatus="done" onTransition={vi.fn()} />
         );
         expect(screen.getByText(/Terminal/)).toBeInTheDocument();
     });
 
     it('shows "Transition to" label when transitions exist', () => {
         renderWithProviders(
-            <StatusTransitionBar
-                issueType="task"
-                currentStatus="draft"
-                onTransition={vi.fn()}
-            />,
+            <StatusTransitionBar issueType="task" currentStatus="draft" onTransition={vi.fn()} />
         );
         expect(screen.getByText(/Transition to/i)).toBeInTheDocument();
     });
@@ -73,7 +61,7 @@ describe('StatusTransitionBar', () => {
                 issueType="task"
                 currentStatus="draft"
                 onTransition={onTransition}
-            />,
+            />
         );
         const buttons = screen.getAllByRole('button');
         await userEvent.click(buttons[0]!);

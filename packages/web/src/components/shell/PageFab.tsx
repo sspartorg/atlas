@@ -45,6 +45,7 @@ export function PageFab({ onClick, label, icon = 'add' }: Props) {
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 22 }}
                 >
                     {icon}

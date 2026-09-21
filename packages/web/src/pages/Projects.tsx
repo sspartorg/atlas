@@ -24,13 +24,10 @@ import { ProjectCard, shortRemote } from './projects/ProjectCard.js';
 import { ProjectsTable, type ProjectRow } from './projects/ProjectsTable.js';
 import { useEnabledSchedules } from '../hooks/useProjectSchedule.js';
 import { ProjectsEmptyState } from './projects/ProjectsEmptyState.js';
-const NewProjectModal = lazyNamed(
-    () => import('./projects/NewProjectModal.js'),
-    'NewProjectModal',
-);
+const NewProjectModal = lazyNamed(() => import('./projects/NewProjectModal.js'), 'NewProjectModal');
 const DeleteProjectModal = lazyNamed(
     () => import('./projects/DeleteProjectModal.js'),
-    'DeleteProjectModal',
+    'DeleteProjectModal'
 );
 import type { IProject, IProjectRepo, AgentCategory } from '@atlas/shared';
 import { relativeTime } from '../utils/time.js';
@@ -137,7 +134,7 @@ export function Projects() {
     const subTaskCountByProject = useMemo(() => {
         const map = new Map<string, number>();
         allTasks.forEach((t) =>
-            map.set(t.project_id, (map.get(t.project_id) ?? 0) + t.sub_task_count),
+            map.set(t.project_id, (map.get(t.project_id) ?? 0) + t.sub_task_count)
         );
         return map;
     }, [allTasks]);
@@ -202,13 +199,7 @@ export function Projects() {
                     updatedAt: p.updated_at,
                 };
             }),
-        [
-            filteredProjects,
-            displayIdById,
-            reposByProject,
-            taskCountByProject,
-            subTaskCountByProject,
-        ],
+        [filteredProjects, displayIdById, reposByProject, taskCountByProject, subTaskCountByProject]
     );
 
     // Loading: don't fall through to the empty state while data is undefined.
@@ -303,8 +294,8 @@ export function Projects() {
                                 }}
                             >
                                 {totalProjects} {totalProjects === 1 ? 'project' : 'projects'} ·{' '}
-                                {totalTasks} {totalTasks === 1 ? 'task' : 'tasks'} ·{' '}
-                                {totalSubTasks} {totalSubTasks === 1 ? 'sub-task' : 'sub-tasks'}
+                                {totalTasks} {totalTasks === 1 ? 'task' : 'tasks'} · {totalSubTasks}{' '}
+                                {totalSubTasks === 1 ? 'sub-task' : 'sub-tasks'}
                             </Typography>
                         </Box>
                         <Box

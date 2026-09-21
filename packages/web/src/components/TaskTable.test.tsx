@@ -27,7 +27,7 @@ describe('TaskTable', () => {
                 agents={[makeAgent({ id: 'agent-coder' })]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.getByText('Alpha')).toBeInTheDocument();
         expect(screen.getByText('Beta')).toBeInTheDocument();
@@ -45,7 +45,7 @@ describe('TaskTable', () => {
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
                 onCreate={onCreate}
-            />,
+            />
         );
         expect(screen.getByText(/No tasks match this view/)).toBeInTheDocument();
         const btn = screen.getByRole('button', { name: /New Task/i });
@@ -64,7 +64,7 @@ describe('TaskTable', () => {
                 agents={[]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         // Default sort key is 'updated' DESC. Click ID — switches to id ASC.
         await userEvent.click(screen.getByText('ID'));
@@ -82,14 +82,22 @@ describe('TaskTable', () => {
         renderWithProviders(
             <TaskTable
                 rows={[
-                    makeTaskListItem({ id: 'ATL-2', title: 'Bravo', updated_at: '2026-01-01T00:00:00Z' }),
-                    makeTaskListItem({ id: 'ATL-1', title: 'Alpha', updated_at: '2026-02-01T00:00:00Z' }),
+                    makeTaskListItem({
+                        id: 'ATL-2',
+                        title: 'Bravo',
+                        updated_at: '2026-01-01T00:00:00Z',
+                    }),
+                    makeTaskListItem({
+                        id: 'ATL-1',
+                        title: 'Alpha',
+                        updated_at: '2026-02-01T00:00:00Z',
+                    }),
                 ]}
                 projects={[]}
                 agents={[]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         const titlesInOrder = () =>
             screen.getAllByText(/^(Bravo|Alpha)$/).map((el) => el.textContent);
@@ -114,7 +122,7 @@ describe('TaskTable', () => {
                 agents={[]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         fireEvent.click(screen.getByText('Alpha'));
         // Navigation happens via useNavigate; no observable side effect
@@ -126,7 +134,7 @@ describe('TaskTable', () => {
         renderWithProviders(
             <TaskTable
                 rows={Array.from({ length: 30 }, (_, i) =>
-                    makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` }),
+                    makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` })
                 )}
                 projects={[]}
                 agents={[]}
@@ -136,7 +144,7 @@ describe('TaskTable', () => {
                 onPageSizeChange={onPageSizeChange}
                 page={1}
                 onPageChange={vi.fn()}
-            />,
+            />
         );
         // The footer renders a native <select> with values 20/50/100/all.
         const select = screen.getByRole('combobox');
@@ -151,7 +159,7 @@ describe('TaskTable', () => {
         renderWithProviders(
             <TaskTable
                 rows={Array.from({ length: 30 }, (_, i) =>
-                    makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` }),
+                    makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` })
                 )}
                 projects={[]}
                 agents={[]}
@@ -161,7 +169,7 @@ describe('TaskTable', () => {
                 page={2}
                 onPageChange={onPageChange}
                 onPageSizeChange={vi.fn()}
-            />,
+            />
         );
         // Pagination footer has « ‹ › » buttons. On the last page (2 of 2),
         // « and ‹ are enabled while › and » are disabled.
@@ -177,7 +185,7 @@ describe('TaskTable', () => {
         renderWithProviders(
             <TaskTable
                 rows={Array.from({ length: 60 }, (_, i) =>
-                    makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` }),
+                    makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` })
                 )}
                 projects={[]}
                 agents={[]}
@@ -187,7 +195,7 @@ describe('TaskTable', () => {
                 page={1}
                 onPageChange={onPageChange}
                 onPageSizeChange={vi.fn()}
-            />,
+            />
         );
         const nextBtn = screen.getByRole('button', { name: '›' });
         const lastBtn = screen.getByRole('button', { name: '»' });
@@ -201,13 +209,13 @@ describe('TaskTable', () => {
         renderWithProviders(
             <TaskTable
                 rows={Array.from({ length: 60 }, (_, i) =>
-                    makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` }),
+                    makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` })
                 )}
                 projects={[]}
                 agents={[]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         // The internal page state defaults to 1. Clicking the next button
         // exercises the internal setPage path.
@@ -236,7 +244,7 @@ describe('TaskTable', () => {
                 ]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.getByText('Coder')).toBeInTheDocument();
         expect(screen.getByText('Reviewer')).toBeInTheDocument();
@@ -257,7 +265,7 @@ describe('TaskTable', () => {
                 agents={[]}
                 ownerName="OwnerName"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         // The fallback AgentChip uses ownerName.
         expect(screen.getAllByText('OwnerName').length).toBeGreaterThan(0);
@@ -282,7 +290,7 @@ describe('TaskTable', () => {
                 agents={[]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(document.body.textContent).toContain('Mobile Task');
         window.matchMedia = origMatchMedia;
@@ -290,7 +298,7 @@ describe('TaskTable', () => {
 
     it('renders the virtualised body branch when totalRows >= 60 and pageSize="all"', () => {
         const rows = Array.from({ length: 80 }, (_, i) =>
-            makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` }),
+            makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` })
         );
         renderWithProviders(
             <TaskTable
@@ -303,7 +311,7 @@ describe('TaskTable', () => {
                 onPageSizeChange={vi.fn()}
                 page={1}
                 onPageChange={vi.fn()}
-            />,
+            />
         );
         // Virtualised path renders some subset of the 80 rows.
         expect(screen.getAllByText(/Task /i).length).toBeGreaterThan(0);
@@ -316,7 +324,7 @@ describe('TaskTable', () => {
                 title: `Task ${i}`,
                 reporter_agent_id: 'agent-v1',
                 assignee_agent_id: 'agent-v1',
-            }),
+            })
         );
         renderWithProviders(
             <TaskTable
@@ -329,7 +337,7 @@ describe('TaskTable', () => {
                 onPageSizeChange={vi.fn()}
                 page={1}
                 onPageChange={vi.fn()}
-            />,
+            />
         );
         expect(screen.getAllByText('Virtual Agent').length).toBeGreaterThan(0);
     });
@@ -341,7 +349,7 @@ describe('TaskTable', () => {
                 title: `Task ${i}`,
                 reporter_agent_id: 'missing-agent',
                 assignee_agent_id: 'missing-agent',
-            }),
+            })
         );
         renderWithProviders(
             <TaskTable
@@ -354,7 +362,7 @@ describe('TaskTable', () => {
                 onPageSizeChange={vi.fn()}
                 page={1}
                 onPageChange={vi.fn()}
-            />,
+            />
         );
         expect(screen.getAllByText('FallbackOwner').length).toBeGreaterThan(0);
     });
@@ -363,17 +371,19 @@ describe('TaskTable', () => {
         // reporter_agent_id is set but no matching agent — agentsById.get returns undefined → null
         renderWithProviders(
             <TaskTable
-                rows={[makeTaskListItem({
-                    id: 'ATL-rep',
-                    title: 'Task with unknown reporter',
-                    reporter_agent_id: 'nonexistent-agent',
-                    assignee_agent_id: 'nonexistent-assignee',
-                })]}
+                rows={[
+                    makeTaskListItem({
+                        id: 'ATL-rep',
+                        title: 'Task with unknown reporter',
+                        reporter_agent_id: 'nonexistent-agent',
+                        assignee_agent_id: 'nonexistent-assignee',
+                    }),
+                ]}
                 projects={[]}
-                agents={[]}  // empty — no agents in map
+                agents={[]} // empty — no agents in map
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         // Renders without crashing; agents not found → null branch taken
         expect(screen.getByText('Task with unknown reporter')).toBeInTheDocument();
@@ -386,13 +396,17 @@ describe('TaskTable', () => {
             <TaskTable
                 rows={[
                     makeTaskListItem({ id: 'ATL-A', title: 'Zeta task', updated_at: '2026-01-02' }),
-                    makeTaskListItem({ id: 'ATL-B', title: 'Alpha task', updated_at: '2026-01-01' }),
+                    makeTaskListItem({
+                        id: 'ATL-B',
+                        title: 'Alpha task',
+                        updated_at: '2026-01-01',
+                    }),
                 ]}
                 projects={[]}
                 agents={[]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         // Both rows render in their original order (no sort applied)
         expect(screen.getByText('Zeta task')).toBeInTheDocument();
@@ -410,7 +424,7 @@ describe('TaskTable', () => {
                 agents={[]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         // Click the Title header once to set sortKey → then click again to toggle direction
         const titleHeaders = screen.queryAllByText('Title');
@@ -429,7 +443,7 @@ describe('TaskTable', () => {
                 agents={[]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.getByText(/No tasks match this view/)).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /New Task/i })).not.toBeInTheDocument();
@@ -443,7 +457,7 @@ describe('TaskTable', () => {
                 agents={[]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
         expect(screen.queryByText(/page \d+ of \d+/)).not.toBeInTheDocument();
@@ -463,7 +477,7 @@ describe('TaskTable', () => {
                 agents={[]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.getByText('Orphan project task')).toBeInTheDocument();
         expect(screen.queryByText('Real Project')).not.toBeInTheDocument();
@@ -477,7 +491,7 @@ describe('TaskTable', () => {
                 agents={[]}
                 ownerName="Owner"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         expect(screen.getByText(/^1 task ·/)).toBeInTheDocument();
     });
@@ -486,7 +500,7 @@ describe('TaskTable', () => {
         renderWithProviders(
             <TaskTable
                 rows={Array.from({ length: 30 }, (_, i) =>
-                    makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` }),
+                    makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` })
                 )}
                 projects={[]}
                 agents={[]}
@@ -496,7 +510,7 @@ describe('TaskTable', () => {
                 page={0}
                 onPageChange={vi.fn()}
                 onPageSizeChange={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText(/page 1 of 2/)).toBeInTheDocument();
         // At the clamped-low boundary, first/prev should be disabled.
@@ -508,7 +522,7 @@ describe('TaskTable', () => {
         renderWithProviders(
             <TaskTable
                 rows={Array.from({ length: 30 }, (_, i) =>
-                    makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` }),
+                    makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` })
                 )}
                 projects={[]}
                 agents={[]}
@@ -518,7 +532,7 @@ describe('TaskTable', () => {
                 page={99}
                 onPageChange={vi.fn()}
                 onPageSizeChange={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText(/page 2 of 2/)).toBeInTheDocument();
         // At the clamped-high boundary, next/last should be disabled.

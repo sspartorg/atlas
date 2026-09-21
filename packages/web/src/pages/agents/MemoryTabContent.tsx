@@ -82,6 +82,7 @@ export function MemoryTabContent({ agent, memory }: Props) {
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{
                         fontSize: 18,
                         color: ATLAS_PALETTE.brandBlue,
@@ -154,9 +155,12 @@ export function MemoryTabContent({ agent, memory }: Props) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{
                                 fontSize: 18,
-                                animation: regenerate.isPending ? 'mem-spin 1s linear infinite' : 'none',
+                                animation: regenerate.isPending
+                                    ? 'mem-spin 1s linear infinite'
+                                    : 'none',
                                 '@keyframes mem-spin': {
                                     from: { transform: 'rotate(0deg)' },
                                     to: { transform: 'rotate(360deg)' },
@@ -214,7 +218,9 @@ export function MemoryTabContent({ agent, memory }: Props) {
                         >
                             version {memory.version}.0
                         </Typography>
-                        <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate40 }}>·</Typography>
+                        <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate40 }}>
+                            ·
+                        </Typography>
                         <Box
                             sx={{
                                 px: 1,
@@ -339,6 +345,7 @@ function RegenerationHistory({ agentId }: { agentId: string }) {
                                     <Box
                                         component="span"
                                         className="material-symbols-rounded"
+                                        aria-hidden="true"
                                         sx={{ fontSize: 14, fontVariationSettings: "'FILL' 1" }}
                                     >
                                         warning

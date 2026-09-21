@@ -22,18 +22,28 @@ interface Props {
     starting: boolean;
 }
 
-const NODE_LABEL = { start: 'Starting', owner: 'Owner', subtasks: 'Sub-tasks', end: 'Delivering' } as const;
+const NODE_LABEL = {
+    start: 'Starting',
+    owner: 'Owner',
+    subtasks: 'Sub-tasks',
+    end: 'Delivering',
+} as const;
 
 function stepName(run: IWorkflowRunSummary, agentsById: Map<string, IAgent>): string {
     const node = run.graph_snapshot.nodes.find((n) => n.id === run.current_node_id);
     if (!node) return NODE_LABEL.start;
-    if (node.type === 'agent') return node.agent_id ? agentLabel(node.agent_id, agentsById) : 'Agent';
+    if (node.type === 'agent')
+        return node.agent_id ? agentLabel(node.agent_id, agentsById) : 'Agent';
     return NODE_LABEL[node.type];
 }
 
 function TaskRef({ id, title }: { id: string | null; title: string | null }) {
     if (!id) {
-        return <Typography sx={{ flex: 1, fontSize: 13, color: ATLAS_PALETTE.slate60 }}>Project run</Typography>;
+        return (
+            <Typography sx={{ flex: 1, fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
+                Project run
+            </Typography>
+        );
     }
     return (
         <Link
@@ -42,10 +52,26 @@ function TaskRef({ id, title }: { id: string | null; title: string | null }) {
             underline="hover"
             sx={{ display: 'flex', gap: 1.5, minWidth: 0, flex: 1, color: ATLAS_PALETTE.slate }}
         >
-            <Box component="span" sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono, fontSize: 12, color: ATLAS_PALETTE.slate60, flexShrink: 0 }}>
+            <Box
+                component="span"
+                sx={{
+                    fontFamily: TYPOGRAPHY.fontFamilyMono,
+                    fontSize: 12,
+                    color: ATLAS_PALETTE.slate60,
+                    flexShrink: 0,
+                }}
+            >
                 {id}
             </Box>
-            <Box component="span" sx={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <Box
+                component="span"
+                sx={{
+                    fontSize: 13,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                }}
+            >
                 {title}
             </Box>
         </Link>
@@ -83,7 +109,15 @@ function Row({ children }: { children: ReactNode }) {
     );
 }
 
-function Section({ label, count, children }: { label: string; count: number; children: ReactNode }) {
+function Section({
+    label,
+    count,
+    children,
+}: {
+    label: string;
+    count: number;
+    children: ReactNode;
+}) {
     if (count === 0) return null;
     return (
         <Box>
@@ -100,7 +134,14 @@ function Section({ label, count, children }: { label: string; count: number; chi
     );
 }
 
-export function WorkflowQueueCard({ entry, projectName, agentsById, onToggleActive, onStart, starting }: Props) {
+export function WorkflowQueueCard({
+    entry,
+    projectName,
+    agentsById,
+    onToggleActive,
+    onStart,
+    starting,
+}: Props) {
     const { workflow: wf, running, waiting, queued } = entry;
     const active = wf.status === 'active';
     const free = wf.max_parallel_runs - running.length;
@@ -109,7 +150,11 @@ export function WorkflowQueueCard({ entry, projectName, agentsById, onToggleActi
             ? `${TRIGGER_LABEL.schedule} · next ${formatAbsolute(wf.next_run_at)}`
             : TRIGGER_LABEL[wf.trigger];
     // Dispatch only picks up Tasks for active, non-manual workflows.
-    const waitsOnYou = !active ? 'Paused: these wait until you turn it back on.' : wf.trigger === 'manual' ? 'Manual: these wait until you start them.' : null;
+    const waitsOnYou = !active
+        ? 'Paused: these wait until you turn it back on.'
+        : wf.trigger === 'manual'
+          ? 'Manual: these wait until you start them.'
+          : null;
 
     return (
         <Box
@@ -141,7 +186,12 @@ export function WorkflowQueueCard({ entry, projectName, agentsById, onToggleActi
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
-                    <Typography sx={{ fontSize: 12, color: active ? ATLAS_PALETTE.successFg : ATLAS_PALETTE.slate60 }}>
+                    <Typography
+                        sx={{
+                            fontSize: 12,
+                            color: active ? ATLAS_PALETTE.successFg : ATLAS_PALETTE.slate60,
+                        }}
+                    >
                         {active ? 'Active' : 'Paused'}
                     </Typography>
                     <Switch
@@ -155,8 +205,16 @@ export function WorkflowQueueCard({ entry, projectName, agentsById, onToggleActi
 
             <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>Running</Typography>
-                    <Typography sx={{ fontSize: 12, fontFamily: TYPOGRAPHY.fontFamilyMono, color: ATLAS_PALETTE.slate }}>
+                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
+                        Running
+                    </Typography>
+                    <Typography
+                        sx={{
+                            fontSize: 12,
+                            fontFamily: TYPOGRAPHY.fontFamilyMono,
+                            color: ATLAS_PALETTE.slate,
+                        }}
+                    >
                         {running.length} / {wf.max_parallel_runs}
                     </Typography>
                 </Box>
@@ -174,7 +232,15 @@ export function WorkflowQueueCard({ entry, projectName, agentsById, onToggleActi
                         <TaskRef id={r.item_id} title={r.item_title} />
                         <Box
                             component="span"
-                            sx={{ fontSize: 11.5, px: 1.5, py: 0.25, borderRadius: '6px', background: ATLAS_PALETTE.accentSoft, color: ATLAS_PALETTE.accentFg, flexShrink: 0 }}
+                            sx={{
+                                fontSize: 11.5,
+                                px: 1.5,
+                                py: 0.25,
+                                borderRadius: '6px',
+                                background: ATLAS_PALETTE.accentSoft,
+                                color: ATLAS_PALETTE.accentFg,
+                                flexShrink: 0,
+                            }}
                         >
                             {stepName(r, agentsById)}
                         </Box>
@@ -190,7 +256,13 @@ export function WorkflowQueueCard({ entry, projectName, agentsById, onToggleActi
                         <WorkflowRunStatusChip status={r.status} />
                         <RunLink run={r} />
                         {r.park_reason && (
-                            <Typography sx={{ flexBasis: '100%', fontSize: 12, color: ATLAS_PALETTE.slate70 }}>
+                            <Typography
+                                sx={{
+                                    flexBasis: '100%',
+                                    fontSize: 12,
+                                    color: ATLAS_PALETTE.slate70,
+                                }}
+                            >
                                 {r.park_reason}
                             </Typography>
                         )}
@@ -200,13 +272,23 @@ export function WorkflowQueueCard({ entry, projectName, agentsById, onToggleActi
 
             <Section label="Queued" count={queued.length}>
                 {waitsOnYou && (
-                    <Typography component="li" sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, pb: 1 }}>
+                    <Typography
+                        component="li"
+                        sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, pb: 1 }}
+                    >
                         {waitsOnYou}
                     </Typography>
                 )}
                 {queued.map((t, i) => (
                     <Row key={t.id}>
-                        <Box component="span" sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono, fontSize: 12, color: ATLAS_PALETTE.slate30 }}>
+                        <Box
+                            component="span"
+                            sx={{
+                                fontFamily: TYPOGRAPHY.fontFamilyMono,
+                                fontSize: 12,
+                                color: ATLAS_PALETTE.slate30,
+                            }}
+                        >
                             {i + 1}
                         </Box>
                         <TaskRef id={t.id} title={t.title} />
@@ -216,7 +298,13 @@ export function WorkflowQueueCard({ entry, projectName, agentsById, onToggleActi
                                 variant="outlined"
                                 disabled={starting}
                                 onClick={() => onStart(t.id)}
-                                sx={{ textTransform: 'none', fontSize: 12, py: 0, minWidth: 0, flexShrink: 0 }}
+                                sx={{
+                                    textTransform: 'none',
+                                    fontSize: 12,
+                                    py: 0,
+                                    minWidth: 0,
+                                    flexShrink: 0,
+                                }}
                             >
                                 Start now
                             </Button>

@@ -16,7 +16,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         expect(container.firstChild).toBeInTheDocument();
     });
@@ -33,7 +33,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const inputs = screen.getAllByRole('textbox');
         expect(inputs.length).toBeGreaterThan(0);
@@ -53,7 +53,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={onSubmit}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.keyDown(input, { key: 'Enter' });
@@ -71,7 +71,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={3}
                 resultTypeCount={2}
-            />,
+            />
         );
         expect(screen.getAllByRole('textbox').length).toBeGreaterThan(0);
     });
@@ -87,7 +87,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
@@ -108,13 +108,13 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         // Example query buttons are role="button" elements with example query text
         const exampleBtns = screen.queryAllByRole('button');
         // Filter to ones that look like query strings (contain = or AND)
         const queryBtn = exampleBtns.find(
-            (b) => b.textContent?.includes(' = ') || b.textContent?.includes(' AND '),
+            (b) => b.textContent?.includes(' = ') || b.textContent?.includes(' AND ')
         );
         if (queryBtn) {
             fireEvent.click(queryBtn);
@@ -134,7 +134,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.keyDown(input, { key: 'Tab' });
@@ -154,7 +154,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
@@ -176,7 +176,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         // The component renders an error indicator when parsed.ok is false and query is non-empty
         // Just verify it renders without crash
@@ -195,11 +195,11 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const exampleBtns = screen.queryAllByRole('button');
         const queryBtn = exampleBtns.find(
-            (b) => b.textContent?.includes(' = ') || b.textContent?.includes(' AND '),
+            (b) => b.textContent?.includes(' = ') || b.textContent?.includes(' AND ')
         );
         if (queryBtn) {
             fireEvent.keyDown(queryBtn, { key: 'Enter' });
@@ -220,16 +220,19 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
         // After focus, autocomplete suggestions should appear
-        await waitFor(() => {
-            const suggBtns = document.querySelectorAll('[role="button"]');
-            // suggestions may or may not appear depending on autocompleteSuggestions logic
-            expect(suggBtns.length).toBeGreaterThanOrEqual(0);
-        }, { timeout: 500 }).catch(() => {});
+        await waitFor(
+            () => {
+                const suggBtns = document.querySelectorAll('[role="button"]');
+                // suggestions may or may not appear depending on autocompleteSuggestions logic
+                expect(suggBtns.length).toBeGreaterThanOrEqual(0);
+            },
+            { timeout: 500 }
+        ).catch(() => {});
         // Find any visible suggestion button and click it
         const suggBtns = document.querySelectorAll('[role="button"]');
         const autocompleteSugg = Array.from(suggBtns).find((b) => {
@@ -257,7 +260,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
@@ -288,7 +291,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         // Focus so suggestions are computed
@@ -312,7 +315,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={1}
                 resultTypeCount={1}
-            />,
+            />
         );
         // The count summary renders "1 result" and "1 type" (singular branch)
         expect(document.body.textContent).toContain('1 result');
@@ -330,7 +333,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={5}
                 resultTypeCount={3}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('5 results');
         expect(document.body.textContent).toContain('3 types');
@@ -349,18 +352,21 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
         // After focus, autocompleteSuggestions runs with query='owner = '
         // The 'me' suggestion should have note: 'the owner'
-        await waitFor(() => {
-            // The suggestion note should be rendered when s.note is truthy
-            const bodyText = document.body.textContent ?? '';
-            // 'the owner' note or 'me' suggestion should appear
-            expect(bodyText).toContain('me');
-        }, { timeout: 1000 }).catch(() => {
+        await waitFor(
+            () => {
+                // The suggestion note should be rendered when s.note is truthy
+                const bodyText = document.body.textContent ?? '';
+                // 'the owner' note or 'me' suggestion should appear
+                expect(bodyText).toContain('me');
+            },
+            { timeout: 1000 }
+        ).catch(() => {
             // If suggestions don't render in jsdom, just verify no crash
             expect(document.body).toBeTruthy();
         });
@@ -379,7 +385,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
@@ -400,7 +406,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
@@ -408,7 +414,7 @@ describe('SearchQueryInput', () => {
         const suggBtns = document.querySelectorAll('[role="button"]');
         // Find one that looks like an autocomplete suggestion (not an example query)
         const autocompleteSugg = Array.from(suggBtns).find(
-            (b) => b.textContent?.includes('type') || b.textContent?.includes('field'),
+            (b) => b.textContent?.includes('type') || b.textContent?.includes('field')
         );
         if (autocompleteSugg) {
             fireEvent.mouseDown(autocompleteSugg);
@@ -431,7 +437,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         // Focus triggers suggestions computation (focused=true)
@@ -450,7 +456,7 @@ describe('SearchQueryInput', () => {
         const setQuery = vi.fn();
         renderWithProviders(
             <SearchQueryInput
-                query='type AND '
+                query="type AND "
                 setQuery={setQuery}
                 projects={[]}
                 agents={[]}
@@ -458,7 +464,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         // Focus triggers suggestions computation
@@ -483,14 +489,14 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
         await waitFor(() => true, { timeout: 300 }).catch(() => {});
         const suggBtns = document.querySelectorAll('[role="button"]');
         const autocompleteSugg = Array.from(suggBtns).find(
-            (b) => b.textContent?.includes('type') || b.textContent?.includes('status'),
+            (b) => b.textContent?.includes('type') || b.textContent?.includes('status')
         );
         if (autocompleteSugg) {
             fireEvent.click(autocompleteSugg);
@@ -515,7 +521,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         // Focus the input so suggestions are computed (focused=true)
@@ -541,7 +547,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
@@ -570,7 +576,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
@@ -611,7 +617,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
@@ -635,7 +641,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
@@ -659,7 +665,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
@@ -682,16 +688,19 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
         // After focus, suggestions for 'status = "Dr' appear: status values containing 'dr'
-        await waitFor(() => {
-            const suggBtns = document.querySelectorAll('[role="button"]');
-            const draftBtn = Array.from(suggBtns).find((b) => b.textContent?.includes('Draft'));
-            expect(draftBtn).toBeDefined();
-        }, { timeout: 500 }).catch(() => {});
+        await waitFor(
+            () => {
+                const suggBtns = document.querySelectorAll('[role="button"]');
+                const draftBtn = Array.from(suggBtns).find((b) => b.textContent?.includes('Draft'));
+                expect(draftBtn).toBeDefined();
+            },
+            { timeout: 500 }
+        ).catch(() => {});
         const suggBtns = document.querySelectorAll('[role="button"]');
         const draftBtn = Array.from(suggBtns).find((b) => b.textContent?.includes('Draft'));
         if (draftBtn) {
@@ -717,19 +726,25 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
-        await waitFor(() => {
-            const suggBtns = document.querySelectorAll('[role="button"]');
-            const statusBtn = Array.from(suggBtns).find((b) => b.textContent?.includes('status'));
-            expect(statusBtn).toBeDefined();
-        }, { timeout: 500 }).catch(() => {});
+        await waitFor(
+            () => {
+                const suggBtns = document.querySelectorAll('[role="button"]');
+                const statusBtn = Array.from(suggBtns).find((b) =>
+                    b.textContent?.includes('status')
+                );
+                expect(statusBtn).toBeDefined();
+            },
+            { timeout: 500 }
+        ).catch(() => {});
         const suggBtns = document.querySelectorAll('[role="button"]');
-        const statusBtn = Array.from(suggBtns).find((b) =>
-            // Find suggestion button with 'status' text (not example query buttons)
-            b.textContent === 'fieldstatus' || b.textContent?.match(/^field\s*status/),
+        const statusBtn = Array.from(suggBtns).find(
+            (b) =>
+                // Find suggestion button with 'status' text (not example query buttons)
+                b.textContent === 'fieldstatus' || b.textContent?.match(/^field\s*status/)
         );
         if (statusBtn) {
             fireEvent.click(statusBtn);
@@ -754,15 +769,15 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
         await waitFor(() => true, { timeout: 300 }).catch(() => {});
         const suggBtns = document.querySelectorAll('[role="button"]');
         // Field suggestions show 'field' as the kind label + the field name
-        const typeBtn = Array.from(suggBtns).find((b) =>
-            b.textContent?.includes('type') && !b.textContent?.includes('AND'),
+        const typeBtn = Array.from(suggBtns).find(
+            (b) => b.textContent?.includes('type') && !b.textContent?.includes('AND')
         );
         if (typeBtn) {
             fireEvent.click(typeBtn);
@@ -785,7 +800,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         // Syntax overlay renders null (no token spans inside overlay div)
         // The overlay box has aria-hidden; find it and verify no coloured spans inside
@@ -808,13 +823,16 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
-        await waitFor(() => {
-            expect(document.body.textContent).toMatch(/1 match(?!es)/);
-        }, { timeout: 500 }).catch(() => {
+        await waitFor(
+            () => {
+                expect(document.body.textContent).toMatch(/1 match(?!es)/);
+            },
+            { timeout: 500 }
+        ).catch(() => {
             // If suggestions not shown, just verify component renders
             expect(input).toBeInTheDocument();
         });
@@ -833,21 +851,24 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
-        await waitFor(() => {
-            // With empty query, all 5 QUERY_FIELDS should appear as suggestions
-            const allBtns = document.querySelectorAll('[role="button"]');
-            // At least 2 suggestion buttons (index 0 and 1 = both branches covered)
-            const suggBtns = Array.from(allBtns).filter((b) =>
-                ['type', 'project', 'status', 'owner', 'updated'].some((f) =>
-                    b.textContent?.includes(f),
-                ),
-            );
-            expect(suggBtns.length).toBeGreaterThanOrEqual(2);
-        }, { timeout: 500 }).catch(() => {
+        await waitFor(
+            () => {
+                // With empty query, all 5 QUERY_FIELDS should appear as suggestions
+                const allBtns = document.querySelectorAll('[role="button"]');
+                // At least 2 suggestion buttons (index 0 and 1 = both branches covered)
+                const suggBtns = Array.from(allBtns).filter((b) =>
+                    ['type', 'project', 'status', 'owner', 'updated'].some((f) =>
+                        b.textContent?.includes(f)
+                    )
+                );
+                expect(suggBtns.length).toBeGreaterThanOrEqual(2);
+            },
+            { timeout: 500 }
+        ).catch(() => {
             expect(input).toBeInTheDocument();
         });
     });
@@ -865,7 +886,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         const input = screen.getAllByRole('textbox')[0]!;
         fireEvent.focus(input);
@@ -882,7 +903,7 @@ describe('SearchQueryInput', () => {
         // This test covers the error display path (L175-203 rendered when !parsed.ok && query.trim())
         renderWithProviders(
             <SearchQueryInput
-                query='type ='
+                query="type ="
                 setQuery={vi.fn()}
                 projects={[]}
                 agents={[]}
@@ -890,7 +911,7 @@ describe('SearchQueryInput', () => {
                 onSubmit={vi.fn()}
                 resultCount={0}
                 resultTypeCount={0}
-            />,
+            />
         );
         // The error badge should appear with the error message
         const body = document.body.textContent ?? '';

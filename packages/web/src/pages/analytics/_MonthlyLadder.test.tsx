@@ -13,9 +13,7 @@ describe('MonthlyLadder', () => {
 
     it('renders the empty-state when momData is empty', () => {
         renderWithProviders(<MonthlyLadder momData={[]} />);
-        expect(
-            screen.getByText(/No spend in the trailing 12 months/i),
-        ).toBeInTheDocument();
+        expect(screen.getByText(/No spend in the trailing 12 months/i)).toBeInTheDocument();
     });
 
     it('renders without crashing with sample monthly rows', () => {
@@ -43,8 +41,6 @@ describe('MonthlyLadder', () => {
                 cached: 8000,
             },
         ];
-        expect(() =>
-            renderWithProviders(<MonthlyLadder momData={months} />),
-        ).not.toThrow();
+        expect(() => renderWithProviders(<MonthlyLadder momData={months} />)).not.toThrow();
     });
 });

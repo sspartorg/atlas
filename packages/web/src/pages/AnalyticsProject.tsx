@@ -7,14 +7,7 @@ import Skeleton from '@mui/material/Skeleton';
 import Pagination from '@mui/material/Pagination';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
-import {
-    PieChart,
-    Pie,
-    Cell,
-    ResponsiveContainer,
-    Tooltip,
-    Legend,
-} from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { api } from '../api/api.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
@@ -97,7 +90,8 @@ export function AnalyticsProject() {
         return (
             <Box sx={{ px: { xs: 3, md: 8 }, py: { xs: 6, md: 12 } }}>
                 <Typography sx={{ color: ATLAS_PALETTE.error }}>
-                    Failed to load project analytics: {(summary.error as Error)?.message ?? 'unknown error'}
+                    Failed to load project analytics:{' '}
+                    {(summary.error as Error)?.message ?? 'unknown error'}
                 </Typography>
             </Box>
         );
@@ -236,7 +230,7 @@ export function AnalyticsProject() {
                                         formatter={(
                                             value: unknown,
                                             _name: unknown,
-                                            p: { payload?: { type?: string } },
+                                            p: { payload?: { type?: string } }
                                         ): [string, string] => [
                                             formatCostUsd(Number(value ?? 0)),
                                             (p.payload?.type &&
@@ -250,9 +244,7 @@ export function AnalyticsProject() {
                                     <Legend
                                         verticalAlign="bottom"
                                         formatter={(t) =>
-                                            ITEM_TYPE_LABEL[
-                                                t as keyof typeof ITEM_TYPE_LABEL
-                                            ] ?? t
+                                            ITEM_TYPE_LABEL[t as keyof typeof ITEM_TYPE_LABEL] ?? t
                                         }
                                     />
                                 </PieChart>
@@ -303,9 +295,8 @@ export function AnalyticsProject() {
                                             whiteSpace: 'nowrap',
                                         }}
                                     >
-                                        {ITEM_TYPE_LABEL[
-                                            k.type as keyof typeof ITEM_TYPE_LABEL
-                                        ] ?? k.type}
+                                        {ITEM_TYPE_LABEL[k.type as keyof typeof ITEM_TYPE_LABEL] ??
+                                            k.type}
                                     </Typography>
                                     <Typography
                                         sx={{
@@ -366,8 +357,7 @@ export function AnalyticsProject() {
                 />
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                     {data.topTasks.map((task) => {
-                        const pct =
-                            topMax > 0 ? (task.totals.total_cost_usd / topMax) * 100 : 0;
+                        const pct = topMax > 0 ? (task.totals.total_cost_usd / topMax) * 100 : 0;
                         return (
                             <Box
                                 key={task.id}
@@ -525,112 +515,121 @@ export function AnalyticsProject() {
                         sub={`Sorted by cost. ${paged.data?.total ?? data.task_count} total — showing page ${page} of ${Math.max(1, Math.ceil((paged.data?.total ?? data.task_count) / limit))}.`}
                     />
                     <Box sx={{ overflowX: 'auto' }}>
-                    <Box
-                        sx={{
-                            display: 'grid',
-                            gridTemplateColumns: '1.5fr 100px 100px 110px 100px',
-                            gap: 2,
-                            py: 1,
-                            borderBottom: `1px solid ${ATLAS_PALETTE.slate10}`,
-                            mb: 1,
-                            minWidth: { xs: 580, sm: 'auto' },
-                        }}
-                    >
-                        {['Title', 'Descendants', 'Runs', 'Total cost', 'Last run'].map((h, i) => (
-                            <Eyebrow key={i}>{h}</Eyebrow>
-                        ))}
-                    </Box>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: { xs: 580, sm: 'auto' } }}>
-                        {paged.data?.rows.map((row) => (
-                            <Box
-                                key={row.id}
-                                component={RouterLink}
-                                to={`/analytics/task/${row.id}`}
-                                sx={{
-                                    display: 'grid',
-                                    gridTemplateColumns: '1.5fr 100px 100px 110px 100px',
-                                    gap: 2,
-                                    py: 1.25,
-                                    px: 1.5,
-                                    alignItems: 'center',
-                                    borderRadius: '8px',
-                                    textDecoration: 'none',
-                                    color: 'inherit',
-                                    '&:hover': { background: ATLAS_PALETTE.cloud },
-                                }}
-                            >
-                                <Box sx={{ minWidth: 0 }}>
+                        <Box
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: '1.5fr 100px 100px 110px 100px',
+                                gap: 2,
+                                py: 1,
+                                borderBottom: `1px solid ${ATLAS_PALETTE.slate10}`,
+                                mb: 1,
+                                minWidth: { xs: 580, sm: 'auto' },
+                            }}
+                        >
+                            {['Title', 'Descendants', 'Runs', 'Total cost', 'Last run'].map(
+                                (h, i) => (
+                                    <Eyebrow key={i}>{h}</Eyebrow>
+                                )
+                            )}
+                        </Box>
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 0.5,
+                                minWidth: { xs: 580, sm: 'auto' },
+                            }}
+                        >
+                            {paged.data?.rows.map((row) => (
+                                <Box
+                                    key={row.id}
+                                    component={RouterLink}
+                                    to={`/analytics/task/${row.id}`}
+                                    sx={{
+                                        display: 'grid',
+                                        gridTemplateColumns: '1.5fr 100px 100px 110px 100px',
+                                        gap: 2,
+                                        py: 1.25,
+                                        px: 1.5,
+                                        alignItems: 'center',
+                                        borderRadius: '8px',
+                                        textDecoration: 'none',
+                                        color: 'inherit',
+                                        '&:hover': { background: ATLAS_PALETTE.cloud },
+                                    }}
+                                >
+                                    <Box sx={{ minWidth: 0 }}>
+                                        <Typography
+                                            sx={{
+                                                fontSize: 13,
+                                                fontWeight: 600,
+                                                color: ATLAS_PALETTE.slate,
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                            title={row.title}
+                                        >
+                                            {row.title}
+                                        </Typography>
+                                        <Typography
+                                            sx={{
+                                                fontFamily: MONO,
+                                                fontSize: 10.5,
+                                                color: ATLAS_PALETTE.slate60,
+                                            }}
+                                        >
+                                            {row.id}
+                                        </Typography>
+                                    </Box>
                                     <Typography
                                         sx={{
-                                            fontSize: 13,
-                                            fontWeight: 600,
-                                            color: ATLAS_PALETTE.slate,
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap',
+                                            fontFamily: MONO,
+                                            fontSize: 12,
+                                            color: ATLAS_PALETTE.slate60,
+                                            textAlign: 'right',
                                         }}
-                                        title={row.title}
                                     >
-                                        {row.title}
+                                        {row.descendant_count}
                                     </Typography>
                                     <Typography
                                         sx={{
                                             fontFamily: MONO,
-                                            fontSize: 10.5,
+                                            fontSize: 12,
                                             color: ATLAS_PALETTE.slate60,
+                                            textAlign: 'right',
                                         }}
                                     >
-                                        {row.id}
+                                        {row.totals.run_count}
+                                    </Typography>
+                                    <Typography
+                                        sx={{
+                                            fontFamily: MONO,
+                                            fontSize: 13,
+                                            fontWeight: 700,
+                                            textAlign: 'right',
+                                            color: ATLAS_PALETTE.slate,
+                                            fontVariantNumeric: 'tabular-nums',
+                                        }}
+                                    >
+                                        {formatCostUsd(row.totals.total_cost_usd)}
+                                    </Typography>
+                                    <Typography
+                                        sx={{
+                                            fontFamily: MONO,
+                                            fontSize: 11,
+                                            color: ATLAS_PALETTE.slate60,
+                                            textAlign: 'right',
+                                        }}
+                                    >
+                                        {fmtRelativeOrDash(row.last_run_at)}
                                     </Typography>
                                 </Box>
-                                <Typography
-                                    sx={{
-                                        fontFamily: MONO,
-                                        fontSize: 12,
-                                        color: ATLAS_PALETTE.slate60,
-                                        textAlign: 'right',
-                                    }}
-                                >
-                                    {row.descendant_count}
-                                </Typography>
-                                <Typography
-                                    sx={{
-                                        fontFamily: MONO,
-                                        fontSize: 12,
-                                        color: ATLAS_PALETTE.slate60,
-                                        textAlign: 'right',
-                                    }}
-                                >
-                                    {row.totals.run_count}
-                                </Typography>
-                                <Typography
-                                    sx={{
-                                        fontFamily: MONO,
-                                        fontSize: 13,
-                                        fontWeight: 700,
-                                        textAlign: 'right',
-                                        color: ATLAS_PALETTE.slate,
-                                        fontVariantNumeric: 'tabular-nums',
-                                    }}
-                                >
-                                    {formatCostUsd(row.totals.total_cost_usd)}
-                                </Typography>
-                                <Typography
-                                    sx={{
-                                        fontFamily: MONO,
-                                        fontSize: 11,
-                                        color: ATLAS_PALETTE.slate60,
-                                        textAlign: 'right',
-                                    }}
-                                >
-                                    {fmtRelativeOrDash(row.last_run_at)}
-                                </Typography>
-                            </Box>
-                        ))}
-                        {paged.isPending && (
-                            <Skeleton variant="rounded" height={48} sx={{ my: 0.5 }} />
-                        )}
-                    </Box>
+                            ))}
+                            {paged.isPending && (
+                                <Skeleton variant="rounded" height={48} sx={{ my: 0.5 }} />
+                            )}
+                        </Box>
                     </Box>
                     <Box
                         sx={{
@@ -661,7 +660,10 @@ export function AnalyticsProject() {
                             </Select>
                         </Box>
                         <Pagination
-                            count={Math.max(1, Math.ceil((paged.data?.total ?? data.task_count) / limit))}
+                            count={Math.max(
+                                1,
+                                Math.ceil((paged.data?.total ?? data.task_count) / limit)
+                            )}
                             page={page}
                             onChange={(_e, p) => setPage(p)}
                             size="small"

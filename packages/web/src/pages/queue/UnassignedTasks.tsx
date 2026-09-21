@@ -60,16 +60,40 @@ export function UnassignedTasks({ tasks, workflows, projectName, onPick }: Props
                                 component={RouterLink}
                                 to={itemPath('task', t.id)}
                                 underline="hover"
-                                sx={{ display: 'flex', gap: 1.5, minWidth: 0, flex: 1, color: ATLAS_PALETTE.slate }}
+                                sx={{
+                                    display: 'flex',
+                                    gap: 1.5,
+                                    minWidth: 0,
+                                    flex: 1,
+                                    color: ATLAS_PALETTE.slate,
+                                }}
                             >
-                                <Box component="span" sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono, fontSize: 12, color: ATLAS_PALETTE.slate60, flexShrink: 0 }}>
+                                <Box
+                                    component="span"
+                                    sx={{
+                                        fontFamily: TYPOGRAPHY.fontFamilyMono,
+                                        fontSize: 12,
+                                        color: ATLAS_PALETTE.slate60,
+                                        flexShrink: 0,
+                                    }}
+                                >
                                     {t.id}
                                 </Box>
-                                <Box component="span" sx={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <Box
+                                    component="span"
+                                    sx={{
+                                        fontSize: 13,
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                    }}
+                                >
                                     {t.title}
                                 </Box>
                             </Link>
-                            <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>{projectName(t.project_id)}</Typography>
+                            <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
+                                {projectName(t.project_id)}
+                            </Typography>
                             {options.length === 0 ? (
                                 <Link component={RouterLink} to="/workflows" sx={{ fontSize: 12 }}>
                                     Create a workflow

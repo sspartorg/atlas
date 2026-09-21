@@ -28,108 +28,77 @@ beforeEach(() => {
     server.use(
         ...defaultHandlers,
         http.get(`${BASE}/projects/p1/guardrails`, () => HttpResponse.json([])),
-        http.get(`${BASE}/projects/p1/guardrail-scripts`, () => HttpResponse.json([])),
+        http.get(`${BASE}/projects/p1/guardrail-scripts`, () => HttpResponse.json([]))
     );
 });
 
 describe('ProjectGuardrails page', () => {
     it('redirects to project guardrails tab', () => {
         server.use(
-            http.get(`${BASE}/projects/p1`, () =>
-                HttpResponse.json(makeProject({ id: 'p1' })),
-            ),
+            http.get(`${BASE}/projects/p1`, () => HttpResponse.json(makeProject({ id: 'p1' })))
         );
         expect(() =>
             renderWithProviders(
                 <Routes>
-                    <Route
-                        path="/projects/:id/guardrails"
-                        element={<ProjectGuardrails />}
-                    />
+                    <Route path="/projects/:id/guardrails" element={<ProjectGuardrails />} />
                     <Route path="/projects/:id" element={<div>redirected</div>} />
                 </Routes>,
-                { initialEntries: ['/projects/p1/guardrails'] },
-            ),
+                { initialEntries: ['/projects/p1/guardrails'] }
+            )
         ).not.toThrow();
     });
 });
 
 describe('ProjectGuardrailsBody — empty state', () => {
     it('renders the Rules tab with empty state when no rules exist', async () => {
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Acme" />,
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
         await waitFor(() =>
-            expect(
-                screen.getByText('No guard-rails yet for this project'),
-            ).toBeInTheDocument(),
+            expect(screen.getByText('No guard-rails yet for this project')).toBeInTheDocument()
         );
     });
 
     it('shows the Add rule button', async () => {
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Acme" />,
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
         await waitFor(() =>
-            expect(screen.getAllByRole('button', { name: /Add rule/i }).length).toBeGreaterThan(0),
+            expect(screen.getAllByRole('button', { name: /Add rule/i }).length).toBeGreaterThan(0)
         );
     });
 });
 
 describe('ProjectGuardrailsBody — with rules', () => {
     beforeEach(() => {
-        server.use(
-            http.get(`${BASE}/projects/p1/guardrails`, () => HttpResponse.json([rule1])),
-        );
+        server.use(http.get(`${BASE}/projects/p1/guardrails`, () => HttpResponse.json([rule1])));
     });
 
     it('renders rule cards when rules are returned', async () => {
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Acme" />,
-        );
-        await waitFor(() =>
-            expect(screen.getByText('No direct DB writes')).toBeInTheDocument(),
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
+        await waitFor(() => expect(screen.getByText('No direct DB writes')).toBeInTheDocument());
         expect(screen.getByText('Never write SQL directly.')).toBeInTheDocument();
     });
 
     it('shows Active badge on enabled rule', async () => {
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Acme" />,
-        );
-        await waitFor(() =>
-            expect(screen.getByText('Active')).toBeInTheDocument(),
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
+        await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
     });
 });
 
 describe('ProjectGuardrailsBody — Add rule dialog', () => {
     it('opens and closes Add rule dialog', async () => {
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Acme" />,
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
         await waitFor(() =>
-            expect(
-                screen.getAllByRole('button', { name: /Add rule/i }).length,
-            ).toBeGreaterThan(0),
+            expect(screen.getAllByRole('button', { name: /Add rule/i }).length).toBeGreaterThan(0)
         );
         const addBtn = screen.getAllByRole('button', { name: /Add rule/i })[0]!;
         await userEvent.click(addBtn);
         expect(screen.getByText('Add guard-rail')).toBeInTheDocument();
         await userEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
-        await waitFor(() =>
-            expect(screen.queryByText('Add guard-rail')).not.toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.queryByText('Add guard-rail')).not.toBeInTheDocument());
     });
 
     it('Add rule dialog submit button is disabled when title or body empty', async () => {
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Acme" />,
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
         await waitFor(() =>
-            expect(
-                screen.getAllByRole('button', { name: /Add rule/i }).length,
-            ).toBeGreaterThan(0),
+            expect(screen.getAllByRole('button', { name: /Add rule/i }).length).toBeGreaterThan(0)
         );
         const addBtn = screen.getAllByRole('button', { name: /Add rule/i })[0]!;
         await userEvent.click(addBtn);
@@ -143,16 +112,12 @@ describe('ProjectGuardrailsBody — Add rule dialog', () => {
         const onClose = vi.fn();
         server.use(
             http.post(`${BASE}/projects/p1/guardrails`, () =>
-                HttpResponse.json({ ...rule1, id: 'r2', title: 'New rule' }),
-            ),
+                HttpResponse.json({ ...rule1, id: 'r2', title: 'New rule' })
+            )
         );
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Acme" />,
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
         await waitFor(() =>
-            expect(
-                screen.getAllByRole('button', { name: /Add rule/i }).length,
-            ).toBeGreaterThan(0),
+            expect(screen.getAllByRole('button', { name: /Add rule/i }).length).toBeGreaterThan(0)
         );
         const addBtn = screen.getAllByRole('button', { name: /Add rule/i })[0]!;
         await userEvent.click(addBtn);
@@ -161,23 +126,19 @@ describe('ProjectGuardrailsBody — Add rule dialog', () => {
         const buttons = screen.getAllByRole('button', { name: /Add rule/i });
         const submitBtn = buttons[buttons.length - 1]!;
         await userEvent.click(submitBtn);
-        await waitFor(() =>
-            expect(screen.queryByText('Add guard-rail')).not.toBeInTheDocument(),
-        );
+        await waitFor(() => expect(screen.queryByText('Add guard-rail')).not.toBeInTheDocument());
         void onClose; // suppress unused warning
     });
 });
 
 describe('ProjectGuardrailsBody — Scripts tab', () => {
     it('switches to Scripts tab', async () => {
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Acme" />,
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
         const scriptsTab = await screen.findByRole('tab', { name: /Scripts/i });
         await userEvent.click(scriptsTab);
         expect(screen.getByRole('tab', { name: /Scripts/i })).toHaveAttribute(
             'aria-selected',
-            'true',
+            'true'
         );
     });
 });
@@ -186,30 +147,22 @@ describe('ProjectGuardrailsBody — additional branches', () => {
     it('renders Paused badge on disabled rule (enabled=0 branch)', async () => {
         server.use(
             http.get(`${BASE}/projects/p1/guardrails`, () =>
-                HttpResponse.json([{ ...rule1, id: 'r-disabled', enabled: 0 }]),
-            ),
+                HttpResponse.json([{ ...rule1, id: 'r-disabled', enabled: 0 }])
+            )
         );
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Acme" />,
-        );
-        await waitFor(() =>
-            expect(screen.getByText('Paused')).toBeInTheDocument(),
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
+        await waitFor(() => expect(screen.getByText('Paused')).toBeInTheDocument());
     });
 
     it('Add rule dialog submit handles API failure via toast (catch branch)', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/guardrails`, () =>
-                HttpResponse.json({ error: 'Validation failed' }, { status: 400 }),
-            ),
+                HttpResponse.json({ error: 'Validation failed' }, { status: 400 })
+            )
         );
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Acme" />,
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
         await waitFor(() =>
-            expect(
-                screen.getAllByRole('button', { name: /Add rule/i }).length,
-            ).toBeGreaterThan(0),
+            expect(screen.getAllByRole('button', { name: /Add rule/i }).length).toBeGreaterThan(0)
         );
         const addBtn = screen.getAllByRole('button', { name: /Add rule/i })[0]!;
         await userEvent.click(addBtn);
@@ -225,13 +178,9 @@ describe('ProjectGuardrailsBody — additional branches', () => {
     }, 30_000);
 
     it('Add rule dialog has appliesTo field that accepts input', async () => {
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Acme" />,
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
         await waitFor(() =>
-            expect(
-                screen.getAllByRole('button', { name: /Add rule/i }).length,
-            ).toBeGreaterThan(0),
+            expect(screen.getAllByRole('button', { name: /Add rule/i }).length).toBeGreaterThan(0)
         );
         const addBtn = screen.getAllByRole('button', { name: /Add rule/i })[0]!;
         await userEvent.click(addBtn);
@@ -241,16 +190,14 @@ describe('ProjectGuardrailsBody — additional branches', () => {
     });
 
     it('switches back to Rules tab from Scripts tab (setTab branch)', async () => {
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Acme" />,
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
         const scriptsTab = await screen.findByRole('tab', { name: /Scripts/i });
         await userEvent.click(scriptsTab);
         const rulesTab = await screen.findByRole('tab', { name: /Rules/i });
         await userEvent.click(rulesTab);
         expect(screen.getByRole('tab', { name: /Rules/i })).toHaveAttribute(
             'aria-selected',
-            'true',
+            'true'
         );
     });
 
@@ -259,15 +206,11 @@ describe('ProjectGuardrailsBody — additional branches', () => {
         server.use(
             http.get(`${BASE}/projects/p1/guardrails`, () => HttpResponse.json([rule1])),
             http.patch(`${BASE}/projects/p1/guardrails/r1`, () =>
-                HttpResponse.json({ ...rule1, enabled: 0 }),
-            ),
+                HttpResponse.json({ ...rule1, enabled: 0 })
+            )
         );
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Acme" />,
-        );
-        await waitFor(() =>
-            expect(screen.getByText('No direct DB writes')).toBeInTheDocument(),
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
+        await waitFor(() => expect(screen.getByText('No direct DB writes')).toBeInTheDocument());
         // MUI Switch renders a hidden <input type="checkbox"> — grab by selector
         const switchInputs = document.querySelectorAll('input[type="checkbox"]');
         // The RuleCard has the last switch; fire change directly (not click on the element)
@@ -281,22 +224,18 @@ describe('ProjectGuardrailsBody — additional branches', () => {
 
     it('ProjectGuardrailsBody without projectName prop falls back to "this project"', async () => {
         // exercises the `projectName ?? 'this project'` false branch
-        renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" />,
-        );
-        await waitFor(() =>
-            expect(screen.getAllByText(/this project/i).length).toBeGreaterThan(0),
-        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" />);
+        await waitFor(() => expect(screen.getAllByText(/this project/i).length).toBeGreaterThan(0));
     });
 
     it('isLoading skeleton renders while guardrails query is pending', () => {
         // Never-resolving handler keeps isLoading=true so the skeleton branch fires
         server.use(
             http.get(`${BASE}/projects/p1/guardrails`, () => new Promise(() => {})),
-            http.get(`${BASE}/projects/p1/guardrail-scripts`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects/p1/guardrail-scripts`, () => HttpResponse.json([]))
         );
         const { container } = renderWithProviders(
-            <ProjectGuardrailsBody projectId="p1" projectName="Loading" />,
+            <ProjectGuardrailsBody projectId="p1" projectName="Loading" />
         );
         // Skeleton renders — container should have child elements
         expect(container.firstChild).toBeTruthy();

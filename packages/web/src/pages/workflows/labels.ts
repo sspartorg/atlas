@@ -39,7 +39,15 @@ export function deliveryLabel(
     if (d.push_code && d.push_to_default) return 'Push to default branch';
     if (d.push_code && d.raises_pr) return 'Push + PR';
     if (d.push_code) return 'Push branch';
-    if (d.raises_pr) return 'Pull request';
+    // G-016 — `raises_pr` without `push_code` used to read "Pull request",
+    // which is a promise the engine does not keep: `deliver()` opens one only
+    // when `raises_pr && push_code && !push_to_default` (workflow-engine.ts),
+    // so this combination delivers nothing at all. The inspector's own
+    // `deliveryMode()` has always called it "Keep local"; the two disagreed
+    // and this one was wrong. Unreachable through the delivery cards, which
+    // write all three flags together — but import, PATCH and MCP can all set
+    // it, and a list that says "Pull request" for a workflow that never opens
+    // one is worse than one that says nothing.
     return 'No delivery';
 }
 

@@ -62,24 +62,27 @@ export function TopRunsTable({
                             borderBottom: `1px solid ${ATLAS_PALETTE.slate10}`,
                         }}
                     >
-                        {['#', 'Agent / Item', 'Cost', 'Input', 'Output', 'Cached', 'Time'].map((h) => (
-                            <Typography
-                                key={h}
-                                sx={{
-                                    fontFamily: MONO,
-                                    fontSize: 10.5,
-                                    fontWeight: 600,
-                                    color: ATLAS_PALETTE.slate60,
-                                    letterSpacing: '0.14em',
-                                    textTransform: 'uppercase',
-                                }}
-                            >
-                                {h}
-                            </Typography>
-                        ))}
+                        {['#', 'Agent / Item', 'Cost', 'Input', 'Output', 'Cached', 'Time'].map(
+                            (h) => (
+                                <Typography
+                                    key={h}
+                                    sx={{
+                                        fontFamily: MONO,
+                                        fontSize: 10.5,
+                                        fontWeight: 600,
+                                        color: ATLAS_PALETTE.slate60,
+                                        letterSpacing: '0.14em',
+                                        textTransform: 'uppercase',
+                                    }}
+                                >
+                                    {h}
+                                </Typography>
+                            )
+                        )}
                     </Box>
                     {topRuns.map((run, idx) => {
-                        const intensity = topRunsMaxCost > 0 ? run.total_cost_usd / topRunsMaxCost : 0;
+                        const intensity =
+                            topRunsMaxCost > 0 ? run.total_cost_usd / topRunsMaxCost : 0;
                         const rank = idx + 1;
                         const isPodium = rank <= 3;
                         return (
@@ -152,7 +155,9 @@ export function TopRunsTable({
                                                 mt: 0.25,
                                             }}
                                         >
-                                            {ITEM_TYPE_LABEL[run.issue_type as IssueType] ?? run.issue_type} · {run.issue_id}
+                                            {ITEM_TYPE_LABEL[run.issue_type as IssueType] ??
+                                                run.issue_type}{' '}
+                                            · {run.issue_id}
                                         </Typography>
                                     )}
                                 </Box>
@@ -197,7 +202,13 @@ export function TopRunsTable({
                                 >
                                     {formatTokenCount(run.cache_read_tokens)}
                                 </Typography>
-                                <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate40, fontFamily: MONO }}>
+                                <Typography
+                                    sx={{
+                                        fontSize: 11,
+                                        color: ATLAS_PALETTE.slate40,
+                                        fontFamily: MONO,
+                                    }}
+                                >
                                     {formatAbsolute(run.created_at)}
                                 </Typography>
                             </Box>

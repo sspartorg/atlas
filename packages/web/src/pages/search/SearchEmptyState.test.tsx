@@ -15,7 +15,7 @@ describe('SearchEmptyState', () => {
                 onDropStatus={vi.fn()}
                 onDropProject={vi.fn()}
                 onCreateType={onCreateType}
-            />,
+            />
         );
         expect(screen.getByText(/No Items Match/)).toBeInTheDocument();
         await userEvent.click(screen.getByRole('button', { name: /Create/ }));
@@ -30,7 +30,7 @@ describe('SearchEmptyState', () => {
                 onDropStatus={vi.fn()}
                 onDropProject={vi.fn()}
                 onCreateType={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: /Drop the Status/ })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Different Project/ })).toBeInTheDocument();
@@ -44,7 +44,7 @@ describe('SearchEmptyState', () => {
                 onDropStatus={vi.fn()}
                 onDropProject={vi.fn()}
                 onCreateType={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByText('type = task')).toBeInTheDocument();
     });
@@ -57,7 +57,7 @@ describe('SearchEmptyState', () => {
                 onDropStatus={vi.fn()}
                 onDropProject={vi.fn()}
                 onCreateType={vi.fn()}
-            />,
+            />
         );
         // Button label uses createLabel which is "Sub-task" when type=sub_task
         expect(screen.getByRole('button', { name: /Create a Sub-task/ })).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe('SearchEmptyState', () => {
                 onDropStatus={vi.fn()}
                 onDropProject={vi.fn()}
                 onCreateType={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByRole('button', { name: /Create a Task/ })).toBeInTheDocument();
     });
@@ -85,7 +85,7 @@ describe('SearchEmptyState', () => {
                 onDropStatus={onDropStatus}
                 onDropProject={vi.fn()}
                 onCreateType={vi.fn()}
-            />,
+            />
         );
         fireEvent.click(screen.getByRole('button', { name: /Drop the Status/ }));
         expect(onDropStatus).toHaveBeenCalledOnce();
@@ -100,7 +100,7 @@ describe('SearchEmptyState', () => {
                 onDropStatus={vi.fn()}
                 onDropProject={onDropProject}
                 onCreateType={vi.fn()}
-            />,
+            />
         );
         fireEvent.click(screen.getByRole('button', { name: /Different Project/ }));
         expect(onDropProject).toHaveBeenCalledOnce();
@@ -117,7 +117,7 @@ describe('SearchEmptyState', () => {
                 onDropStatus={vi.fn()}
                 onDropProject={vi.fn()}
                 onCreateType={vi.fn()}
-            />,
+            />
         );
         // createLabel = (''[0]?.toUpperCase() ?? '') + ''.slice(1) = '' + '' = ''
         // Button text becomes "Create a " — verify it renders without crashing
@@ -133,7 +133,7 @@ describe('SearchEmptyState', () => {
                 onDropStatus={vi.fn()}
                 onDropProject={vi.fn()}
                 onCreateType={vi.fn()}
-            />,
+            />
         );
         // The queryText code block should NOT be present
         expect(screen.queryByRole('code')).toBeNull();

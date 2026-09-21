@@ -71,7 +71,7 @@ beforeEach(() => {
     server.use(
         ...defaultHandlers,
         http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-        http.get(`${BASE}/cli/models`, () => HttpResponse.json([])),
+        http.get(`${BASE}/cli/models`, () => HttpResponse.json([]))
     );
 });
 
@@ -142,25 +142,26 @@ describe('TerminalStandalone', () => {
                 makeStandaloneSession({ id: 'b', status: 'paused', total_cost_usd: 2 }),
                 // Null spend must contribute 0, not NaN.
                 makeStandaloneSession({ id: 'c', status: 'closed', total_cost_usd: null }),
-            ]),
+            ])
         );
         renderWithProviders(<TerminalStandalone />);
 
-        expect(
-            await screen.findByText(/3 sessions · 1 active · 1 paused/),
-        ).toBeInTheDocument();
+        expect(await screen.findByText(/3 sessions · 1 active · 1 paused/)).toBeInTheDocument();
         // 1 + 2 + 0 — a NaN here would mean the null branch was skipped.
         expect(screen.getByText(/\$3\.00 spent/)).toBeInTheDocument();
     });
 
     it('renders each relative-time bucket and omits spend when it is null', async () => {
-        const minutesAgo = (n: number) =>
-            new Date(Date.now() - n * 60_000).toISOString();
+        const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000).toISOString();
         server.use(
             stubSessions([
                 makeStandaloneSession({ id: 'a', title: 'mins', last_active_at: minutesAgo(5) }),
                 makeStandaloneSession({ id: 'b', title: 'hours', last_active_at: minutesAgo(120) }),
-                makeStandaloneSession({ id: 'c', title: 'days', last_active_at: minutesAgo(60 * 24 * 3) }),
+                makeStandaloneSession({
+                    id: 'c',
+                    title: 'days',
+                    last_active_at: minutesAgo(60 * 24 * 3),
+                }),
                 // A future timestamp yields '' rather than a negative age.
                 makeStandaloneSession({
                     id: 'd',
@@ -168,7 +169,7 @@ describe('TerminalStandalone', () => {
                     last_active_at: new Date(Date.now() + 60_000).toISOString(),
                     total_cost_usd: null,
                 }),
-            ]),
+            ])
         );
         renderWithProviders(<TerminalStandalone />);
 
@@ -195,22 +196,22 @@ describe('TerminalStandalone', () => {
                 return HttpResponse.json({ path, exists: true, is_directory: true });
             }),
             http.post(`${BASE}/cli/sessions/standalone`, () =>
-                HttpResponse.json({ id: 'sess-new', title: 'atlas' }, { status: 201 }),
-            ),
+                HttpResponse.json({ id: 'sess-new', title: 'atlas' }, { status: 201 })
+            )
         );
         renderWithProviders(
             <>
                 <TerminalStandalone />
                 <Toast />
             </>,
-            { initialEntries: ['/terminal/standalone'] },
+            { initialEntries: ['/terminal/standalone'] }
         );
 
         const buttons = await screen.findAllByRole('button', { name: /open folder/i });
         await userEvent.click(buttons[0]!);
         await userEvent.type(
             await screen.findByPlaceholderText('Pick any folder on this machine'),
-            '/tmp/x',
+            '/tmp/x'
         );
         await userEvent.click(screen.getByRole('button', { name: /open terminal/i }));
 

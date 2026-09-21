@@ -46,212 +46,16 @@ export default defineConfig({
             // crashed early in coverage runs.
             execArgv: ['--max-old-space-size=12288'],
         },
-        // Migrated tests use the PG fixture in `tests/_pg-db.ts`. Pure-logic
-        // tests are listed too; they don't touch the DB but cost nothing to run.
-        include: [
-            'src/services/agent-defaults-sync.test.ts',
-            'src/services/agent-runner-completion-comment.test.ts',
-            'src/services/agent-runner-result-detector.test.ts',
-            'src/services/agent-runner-spawn.test.ts',
-            'src/services/commands-assembler.test.ts',
-            'src/services/current-task-writer.test.ts',
-            // Task 12 — unified run-outcome contract (replaces performer/reviewer split).
-            'src/services/run-outcome-parser.test.ts',
-            'src/services/agent-runner-outcome-routing.test.ts',
-            'src/services/agent-schedule-registry.test.ts',
-            'src/services/agent-schedule-registry-tick.test.ts',
-            'src/services/cron-materializer.test.ts',
-            'src/services/cron-materializer-str.test.ts',
-            'src/services/crypto.test.ts',
-            'src/services/secret-substitution.test.ts',
-            'src/services/environment-secrets.test.ts',
-            'src/services/project-setup-runner.test.ts',
-            'src/services/env-file.test.ts',
-            'src/services/git-head.test.ts',
-            'src/services/guards.test.ts',
-            'src/services/schedule-registry.test.ts',
-            'src/services/notifications.test.ts',
-            'src/services/_keys.test.ts',
-            'src/services/credentials.test.ts',
-            // Migration 023 — GitHub App installation-token minting.
-            'src/services/github-app-tokens.test.ts',
-            // Migration 024 — buildGitConfig injects [user] section so
-            // commits under github_app credentials attribute to the bot.
-            'src/services/git-credentials.test.ts',
-            'src/services/settings.test.ts',
-            'src/services/cli-models.test.ts',
-            'src/services/cli-model-naming.test.ts',
-            'src/services/ollama-env.test.ts',
-            'src/services/parse-cost.test.ts',
-            'src/services/claude-cost-parser.test.ts',
-            'src/routes/cli-sessions.test.ts',
-            'src/services/guardrails.test.ts',
-            'src/services/guardrailScripts.test.ts',
-            'src/services/schedules.test.ts',
-            'src/services/projectGuardrails.test.ts',
-            'src/services/projectGuardrailScripts.test.ts',
-            'src/services/project-env-file.test.ts',
-            'src/services/tasks.test.ts',
-            'src/services/sub-tasks.test.ts',
-            'src/services/comments.test.ts',
-            // W2 — service-layer coverage for agentsService.
-            'src/services/agents.test.ts',
-            // Workstream #4 — composite FK + Zod superRefine on agent routes.
-            'src/routes/agents.test.ts',
-            'src/routes/comments.test.ts',
-            'src/routes/scratchPad.test.ts',
-            'src/services/scratch-pad.test.ts',
-            'src/services/counts.test.ts',
-            'src/services/events-log.test.ts',
-            'src/services/items.test.ts',
-            'src/services/item-links.test.ts',
-            'src/services/external-links.test.ts',
-            'src/services/issue-full.test.ts',
-            'src/services/issue-tree.test.ts',
-            // A12 — Reply-to-item with linked context.
-            'src/services/context-budget.test.ts',
-            'src/services/reply-context.test.ts',
-            'src/services/agent-activity.test.ts',
-            'src/services/agent-memory.test.ts',
-            'src/services/commit-discipline.test.ts',
-            'src/services/commit-verifier.test.ts',
-            'src/services/constitution-assembler.test.ts',
-            'src/services/preamble-assembler.test.ts',
-            'src/services/templates-assembler.test.ts',
-            'src/services/prompt-builder.test.ts',
-            'src/services/projects.test.ts',
-            // T2 — worktree orchestrator (non-AI helper for spawnCli).
-            'src/services/worktree-orchestrator.test.ts',
-            // W2 — stageCliWorktree coordination logic (branch coverage).
-            'src/services/worktree-stage.test.ts',
-            // Per-worktree gitignore injection — exercised against real
-            // tmp dirs with a real `git init`; this file does NOT mock
-            // node:fs (the sibling worktree-orchestrator.test.ts does).
-            'src/services/worktree-gitignore.test.ts',
-            // Workstream #3 — per-project mutex for git operations.
-            'src/services/project-git-lock.test.ts',
-            'src/services/transports/telegram.test.ts',
-            'src/services/transports/teams.test.ts',
-            'src/services/external-notifications.test.ts',
-            // Web push notifications (2026-06-12).
-            'src/services/web-push.test.ts',
-            'src/routes/push-subscriptions.test.ts',
-            'src/services/tool-catalog-sync.test.ts',
-            // terminal-v2 — cli-transcript-ingest branch coverage (no PTY).
-            'src/services/cli-transcript-ingest.test.ts',
-            // terminal-v3 — token + cost capture for PTY-mode Claude sessions
-            // (pricing table + per-event usage parser, see plan + migration 019).
-            'src/services/claude-model-pricing.test.ts',
-            'src/services/pty-transcript-usage.test.ts',
-            // terminal-v3 — copilot cost via events.jsonl session.shutdown.
-            'src/services/copilot-events-usage.test.ts',
-            'src/services/auto-fetch.test.ts',
-            'src/services/compile-prompt.test.ts',
-            'src/scripts/check-prereqs.test.ts',
-            'src/scripts/recover-architect-stranded.test.ts',
-            'src/db/migrations.test.ts',
-            // W13 — migration rollback safety static check.
-            'src/db/migrations-rollback.test.ts',
-            'src/db/seed.test.ts',
-            'src/services/auto-fetch-runner.integration.test.ts',
-            // B04 — depends_on hard-gate coverage.
-            'src/services/dependency-guard.test.ts',
-            // W2 chunk 6 — dry-run CLI connection test service.
-            'src/services/dry-run.test.ts',
-            'src/services/agent-runner-run-config.integration.test.ts',
-            // ADR 0014 — workflow engine against the real DB.
-            'src/services/workflow-engine.integration.test.ts',
-            'src/routes/workflows.test.ts',
-            'src/routes/workflow-queue.test.ts',
-            'src/routes/workflow-bundle.test.ts',
-            'src/routes/run.test.ts',
-            // W2 — Analytics per-project / per-task cost drill-down.
-            'src/routes/analytics.test.ts',
-            // P6 — POST /api/settings/log-level + isValidLogLevel guard.
-            'src/routes/settings.test.ts',
-            'src/utils/normalize-timestamps.test.ts',
-            'src/utils/lan-origins.test.ts',
-            // Marketplace + agent bundle.
-            'src/services/marketplace.test.ts',
-            'src/services/agent-bundle.test.ts',
-            // A5 coverage backfill — services missing from include.
-            'src/services/item-cost-tree.test.ts',
-            'src/services/jira-sync.test.ts',
-            'src/services/run-repos.test.ts',
-            'src/routes/jira.test.ts',
-            'src/marketplace/catalog-loader.test.ts',
-            // F-012 - reviewer agents must ship a required checklist.
-            'src/marketplace/reviewer-checklists.test.ts',
-            'src/utils/errors.test.ts',
-            'tests/e2e-lifecycle.test.ts',
-            'tests/pg-db-truncate.test.ts',
-            // ADR 0014 — workflows schema constraints, asserted against the
-            // live schema rather than by importing a migration module.
-            'src/db/workflows-migration.test.ts',
-            // The 2026-09-20 re-squash (ADR 0019) deleted six sibling specs —
-            // catalog-sync (034), tasks (037), graphs-vertical (039),
-            // published-workflows (041), jira-sources (044) and
-            // repos-without-primary (045). Each imported `up`/`down` from the
-            // migration file it named, so they tested transitions that no
-            // longer exist as discrete steps; the baseline is their end state.
-            // `workflows-migration.test.ts` and `hot-path-indexes.test.ts`
-            // survive because they assert the schema, not the migration.
-            'src/services/project-repos.test.ts',
-            // W2 chunk N — subprocess wrappers + boot files.
-            'src/services/git-status.test.ts',
-            'src/services/git-verify.test.ts',
-            'src/services/clone-runner.test.ts',
-            'src/services/delete-runner.test.ts',
-            'src/services/reclone-runner.test.ts',
-            'src/plugins/mcp-auth.test.ts',
-            // W12 — security audit: global MCP-token gate integration.
-            'src/plugins/mcp-auth-coverage.test.ts',
-            // W12 — security audit: SQL injection + path traversal guards.
-            'src/services/input-sanitization.test.ts',
-            // W12 — security audit: secrets encrypted at rest.
-            'src/services/secrets-at-rest.test.ts',
-            // W12 — security audit: subprocess spawn args are array-form.
-            'src/services/subprocess-args.test.ts',
-            'src/load-env.test.ts',
-            'src/config.test.ts',
-            'src/utils/boot-errors.test.ts',
-            // W6 — API route integration tests
-            'src/routes/tasks.test.ts',
-            'src/routes/sub-tasks.test.ts',
-            'src/routes/projects.test.ts',
-            'src/routes/credentials.test.ts',
-            'src/routes/marketplace.test.ts',
-            'src/routes/guardrails.test.ts',
-            'src/routes/roles.test.ts',
-            'src/routes/search.test.ts',
-            'src/routes/labels.test.ts',
-            'src/routes/counts.test.ts',
-            'src/routes/fs.test.ts',
-            'src/routes/notifications.test.ts',
-            'src/routes/reminders.test.ts',
-            'src/services/reminders.test.ts',
-            'src/routes/schedules.test.ts',
-            'src/routes/project-guardrails.test.ts',
-            'src/routes/guardrail-scripts.test.ts',
-            'src/routes/project-guardrail-scripts.test.ts',
-            'src/routes/environment-secrets.test.ts',
-            'src/routes/tool-catalog.test.ts',
-            'src/routes/issues.test.ts',
-            'src/routes/cli-models.test.ts',
-            'src/routes/cli-availability.test.ts',
-            // W3 — hot-path index verification (migration 021)
-            'src/db/hot-path-indexes.test.ts',
-            // W4 — per-route perf stats
-            'src/services/perf-stats.test.ts',
-            'src/routes/perf.test.ts',
-            // overnight-quality-push — cli-session-host + git-env branch lift
-            'src/services/cli-session-host.test.ts',
-            'src/services/git-env.test.ts',
-            // terminal zombie-chars fix — headless mirror snapshot replay.
-            'src/services/terminal-screen-state.test.ts',
-            // Terminal finalize diff — real git fixtures, no child_process mock.
-            'src/services/worktree-diff.test.ts',
-        ],
+        // G-009 — this was a 155-entry explicit allowlist, added file by file
+        // as tests migrated to the Postgres fixture in `tests/_pg-db.ts`. That
+        // migration finished, and the list then matched the glob below exactly
+        // — 155 listed, 155 on disk, no difference either way. What it still
+        // did was fail silently: `history-prune.test.ts` was committed but
+        // never listed, so its 7 tests never ran and the service it covers sat
+        // at 0% branches. One entry also pointed at a file that no longer
+        // existed. `web`, `mcp` and `shared` have always used a glob, which is
+        // why only `api` could have this bug. Now none of them can.
+        include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
         globals: false,
         testTimeout: 15_000,
         // The DB-truncate beforeEach + per-test inserts run noticeably slower
@@ -433,11 +237,28 @@ export default defineConfig({
             //   lines 94.81 / stmts 93.77 / funcs 94.55 / branches 86.63
             // Raise these whenever coverage genuinely improves — that is the
             // ratchet. Do not raise them ahead of a measurement again.
+            // 2026-09-21 (confidence-close, G-003). Measured on a clean run of
+            // 155 files / 2709 tests:
+            //   lines 96.11 / stmts 95.11 / funcs 96.69 / branches 87.85
+            //
+            // `statements` is pinned at exactly 95 rather than measured-minus-
+            // jitter: 95 is the Owner's stated bar and it is now met, so the
+            // gate should fail the moment it slips back under rather than
+            // tolerate a slow slide. The other three sit ~0.5 below measured so
+            // ordinary jitter does not trip the build.
+            //
+            // `branches` at 87.3 is a documented ceiling, not a target. Reaching
+            // 95 would need ~450 more covered branches, and the ones left are
+            // defensive guards — `if (!row) return`, `?? null`, catch arms that
+            // are unreachable in practice. Tests for those assert that nothing
+            // happens, cost maintenance forever, and catch nothing; `pnpm e2e`
+            // already walks the real paths. See
+            // docs/campaigns/2026-09-21-confidence-close/task-05-api-coverage-95.md.
             thresholds: {
-                lines: 94.3,
-                statements: 93.2,
-                functions: 94,
-                branches: 86.1,
+                lines: 95.5,
+                statements: 95,
+                functions: 96,
+                branches: 87.3,
             },
         },
     },

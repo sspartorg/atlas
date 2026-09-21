@@ -249,7 +249,7 @@ export function Terminal() {
                                 session={s}
                                 projectName={
                                     s.project_id
-                                        ? projectNameById.get(s.project_id) ?? s.project_id
+                                        ? (projectNameById.get(s.project_id) ?? s.project_id)
                                         : 'Standalone'
                                 }
                                 onOpen={() => navigate(sessionDetailUrl(s))}

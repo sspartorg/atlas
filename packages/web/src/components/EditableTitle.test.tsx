@@ -57,7 +57,9 @@ describe('EditableTitle', () => {
         // Click the cancel (close) icon button
         const buttons = screen.getAllByRole('button');
         // In edit mode: [check, close] buttons
-        const cancelBtn = buttons.find((b) => b.querySelector('svg[data-testid="CloseRoundedIcon"]') !== null) ?? buttons[buttons.length - 1]!;
+        const cancelBtn =
+            buttons.find((b) => b.querySelector('svg[data-testid="CloseRoundedIcon"]') !== null) ??
+            buttons[buttons.length - 1]!;
         fireEvent.click(cancelBtn);
         expect(screen.getByText('Title')).toBeInTheDocument();
         expect(onSave).not.toHaveBeenCalled();
@@ -104,7 +106,9 @@ describe('EditableTitle', () => {
         // Click the check icon button (first button in edit mode)
         const checkBtn = screen.getAllByRole('button')[0]!;
         fireEvent.click(checkBtn);
-        await act(async () => { await Promise.resolve(); });
+        await act(async () => {
+            await Promise.resolve();
+        });
         expect(onSave).toHaveBeenCalledWith('After');
     });
 });

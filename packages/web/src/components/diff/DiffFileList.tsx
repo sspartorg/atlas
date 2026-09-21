@@ -76,7 +76,11 @@ export function DiffFileList({
                     <Typography variant="caption" sx={{ color: ATLAS_PALETTE.slate60 }}>
                         {files.filter((f) => selected[f.path]).length} of {files.length} selected
                     </Typography>
-                    <Button size="small" onClick={() => onToggleAll(!allChecked)} sx={{ textTransform: 'none' }}>
+                    <Button
+                        size="small"
+                        onClick={() => onToggleAll(!allChecked)}
+                        sx={{ textTransform: 'none' }}
+                    >
                         {allChecked ? 'Uncheck all' : 'Check all'}
                     </Button>
                 </Stack>
@@ -101,7 +105,11 @@ export function DiffFileList({
                                 bgcolor: isActive ? ATLAS_PALETTE.accentSoft : 'transparent',
                                 borderLeft: `2px solid ${isActive ? ATLAS_PALETTE.accentFg : 'transparent'}`,
                                 transition: `background ${MOTION.hover}ms ease`,
-                                '&:hover': { bgcolor: isActive ? ATLAS_PALETTE.accentSoft : ATLAS_PALETTE.slate06 },
+                                '&:hover': {
+                                    bgcolor: isActive
+                                        ? ATLAS_PALETTE.accentSoft
+                                        : ATLAS_PALETTE.slate06,
+                                },
                             }}
                         >
                             {selectable && (
@@ -183,10 +191,16 @@ export function DiffFileList({
                                     'bin'
                                 ) : (
                                     <>
-                                        <Box component="span" sx={{ color: ATLAS_PALETTE.successFg }}>
+                                        <Box
+                                            component="span"
+                                            sx={{ color: ATLAS_PALETTE.successFg }}
+                                        >
                                             +{f.additions}
                                         </Box>{' '}
-                                        <Box component="span" sx={{ color: ATLAS_PALETTE.dangerFg }}>
+                                        <Box
+                                            component="span"
+                                            sx={{ color: ATLAS_PALETTE.dangerFg }}
+                                        >
                                             −{f.deletions}
                                         </Box>
                                     </>

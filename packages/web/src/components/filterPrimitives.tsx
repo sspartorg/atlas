@@ -148,6 +148,7 @@ export function DropdownChip<T extends string | null>({
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{ fontSize: 16, color: ATLAS_PALETTE.slate40 }}
                 >
                     arrow_drop_down
@@ -181,6 +182,7 @@ export function DropdownChip<T extends string | null>({
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 16, color: ATLAS_PALETTE.brandBlue, ml: 'auto' }}
                             >
                                 check
@@ -244,6 +246,7 @@ export function SearchPillTextField({
                             <Box
                                 component="span"
                                 className="material-symbols-rounded"
+                                aria-hidden="true"
                                 sx={{ fontSize: 18, color: ATLAS_PALETTE.slate40 }}
                             >
                                 search
@@ -325,6 +328,7 @@ export function SortableHeader<K extends string>({
                 <Box
                     component="span"
                     className="material-symbols-rounded"
+                    aria-hidden="true"
                     sx={{
                         fontSize: 14,
                         color: active ? ATLAS_PALETTE.slate60 : ATLAS_PALETTE.slate30,

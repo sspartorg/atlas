@@ -128,6 +128,7 @@ export function InMotionPanel({ rows, agents, isLoading }: IInMotionPanelProps) 
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{
                             fontSize: 48,
                             color: ATLAS_PALETTE.slate40,

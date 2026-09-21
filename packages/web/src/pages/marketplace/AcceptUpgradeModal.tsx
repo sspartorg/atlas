@@ -9,10 +9,7 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
 import Box from '@mui/material/Box';
 import { useQueryClient } from '@tanstack/react-query';
-import type {
-    IMarketplaceUpgradeDiff,
-    MarketplaceUpgradeField,
-} from '@atlas/shared';
+import type { IMarketplaceUpgradeDiff, MarketplaceUpgradeField } from '@atlas/shared';
 import { api } from '../../api/api.js';
 import { DiffViewer, JsonDiff } from '../../components/DiffViewer.js';
 import { ConfirmActionModal } from '../../components/ConfirmActionModal.js';
@@ -142,11 +139,7 @@ export function AcceptUpgradeModal({
                                         sx={{ mb: 1 }}
                                     />
                                     {isJson ? (
-                                        <JsonDiff
-                                            from={field.from}
-                                            to={field.to}
-                                            maxHeight={240}
-                                        />
+                                        <JsonDiff from={field.from} to={field.to} maxHeight={240} />
                                     ) : (
                                         <DiffViewer
                                             from={String(field.from)}
@@ -159,8 +152,8 @@ export function AcceptUpgradeModal({
                         })}
                         {FIELDS.every((f) => !diff.fields[f.key].changed) && (
                             <Typography sx={{ color: ATLAS_PALETTE.slate60, fontSize: 13 }}>
-                                The catalog version is identical to your local agent. You can dismiss
-                                to clear the upgrade indicator.
+                                The catalog version is identical to your local agent. You can
+                                dismiss to clear the upgrade indicator.
                             </Typography>
                         )}
                     </Box>

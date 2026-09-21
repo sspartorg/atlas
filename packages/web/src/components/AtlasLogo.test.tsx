@@ -39,7 +39,7 @@ describe('AtlasLogo', () => {
         render(
             <ThemeModeContext.Provider value={darkCtx}>
                 <AtlasLogo />
-            </ThemeModeContext.Provider>,
+            </ThemeModeContext.Provider>
         );
         const img = screen.getByRole('img') as HTMLImageElement;
         // In dark mode the component picks /atlas.png (light mark on dark bg)

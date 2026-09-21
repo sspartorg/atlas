@@ -20,7 +20,9 @@ const makeRow = (overrides: Partial<QueueItem> = {}): QueueItem => ({
 describe('InMotionPanel', () => {
     it('names its type filter for screen readers', () => {
         renderWithProviders(<InMotionPanel rows={[]} agents={[]} isLoading={false} />);
-        expect(screen.getByRole('combobox', { name: 'Filter In Motion by type' })).toBeInTheDocument();
+        expect(
+            screen.getByRole('combobox', { name: 'Filter In Motion by type' })
+        ).toBeInTheDocument();
     });
 
     it('renders loading state', () => {
@@ -34,7 +36,7 @@ describe('InMotionPanel', () => {
                 rows={[makeRow()]}
                 agents={[makeAgent({ id: 'agent-coder', name: 'Coder' })]}
                 isLoading={false}
-            />,
+            />
         );
         expect(screen.getByText('Going')).toBeInTheDocument();
     });
@@ -50,16 +52,20 @@ describe('InMotionPanel', () => {
                 rows={[makeRow({ assignee_agent_id: null })]}
                 agents={[]}
                 isLoading={false}
-            />,
+            />
         );
         expect(screen.getByText('Going')).toBeInTheDocument();
     });
 
     it('filter Select: selecting Tasks filters to only task rows (covers filter !== all branch)', async () => {
         const taskRow = makeRow({ id: 'ATL-T1', issue_type: 'task', title: 'Task Work' });
-        const subTaskRow = makeRow({ id: 'ATL-S1', issue_type: 'sub_task', title: 'Sub-task Work' });
+        const subTaskRow = makeRow({
+            id: 'ATL-S1',
+            issue_type: 'sub_task',
+            title: 'Sub-task Work',
+        });
         renderWithProviders(
-            <InMotionPanel rows={[taskRow, subTaskRow]} agents={[]} isLoading={false} />,
+            <InMotionPanel rows={[taskRow, subTaskRow]} agents={[]} isLoading={false} />
         );
         // Both visible initially
         expect(screen.getByText('Task Work')).toBeInTheDocument();

@@ -202,6 +202,7 @@ export function MarketplaceAgentCard({
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 22, fontVariationSettings: "'FILL' 1" }}
                     >
                         {agent.glyph || 'smart_toy'}

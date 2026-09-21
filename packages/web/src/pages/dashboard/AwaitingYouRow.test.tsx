@@ -14,7 +14,7 @@ describe('AwaitingYouRow', () => {
                     status: 'waiting_for_info',
                     updated_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
                 }}
-            />,
+            />
         );
         expect(screen.getByText('Add a login form')).toBeInTheDocument();
         expect(screen.getByText(/ATL-7/)).toBeInTheDocument();
@@ -32,7 +32,7 @@ describe('AwaitingYouRow', () => {
                         status: 'in_review',
                         updated_at: new Date(Date.now() - 60_000).toISOString(),
                     }}
-                />,
+                />
             );
             const titleEl = screen.getByText(`Title for ${t}`);
             // Click the title (parent row).
@@ -51,7 +51,7 @@ describe('AwaitingYouRow', () => {
                     status: 'in_review',
                     updated_at: new Date(Date.now() - 10 * 60_000).toISOString(),
                 }}
-            />,
+            />
         );
         expect(screen.getByText(/10 m/)).toBeInTheDocument();
     });
@@ -66,7 +66,7 @@ describe('AwaitingYouRow', () => {
                     status: 'in_review',
                     updated_at: new Date(Date.now() - 5 * 60 * 60_000).toISOString(),
                 }}
-            />,
+            />
         );
         expect(screen.getByText(/5 h waiting on you/)).toBeInTheDocument();
     });
@@ -81,7 +81,7 @@ describe('AwaitingYouRow', () => {
                     status: 'in_review',
                     updated_at: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(),
                 }}
-            />,
+            />
         );
         expect(screen.getByText(/3 d waiting on you/)).toBeInTheDocument();
     });
@@ -96,7 +96,7 @@ describe('AwaitingYouRow', () => {
                     status: 'in_review',
                     updated_at: 'not-a-date',
                 }}
-            />,
+            />
         );
         expect(screen.getByText('Broken date')).toBeInTheDocument();
     });
@@ -111,7 +111,7 @@ describe('AwaitingYouRow', () => {
                     status: 'draft',
                     updated_at: new Date(Date.now() - 60_000).toISOString(),
                 }}
-            />,
+            />
         );
         expect(screen.getByText('Not overdue')).toBeInTheDocument();
     });

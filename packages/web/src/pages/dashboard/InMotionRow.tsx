@@ -86,6 +86,7 @@ export function InMotionRow({ row, agent }: IInMotionRowProps) {
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 16, lineHeight: 1 }}
                     >
                         {glyph}
@@ -165,6 +166,7 @@ export function InMotionRow({ row, agent }: IInMotionRowProps) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ fontSize: 14, color: ATLAS_PALETTE.green }}
                         >
                             schedule

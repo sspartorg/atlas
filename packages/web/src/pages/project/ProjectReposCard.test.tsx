@@ -371,4 +371,175 @@ describe('ProjectReposCard', () => {
         // The branch it pulls is the repo's, not the project's.
         expect(await screen.findByText(/origin\/develop/)).toBeInTheDocument();
     });
+
+    // ─── Backing out of a row action ────────────────────────────────────────
+    //
+    // Every one of these dialogs is opened from the kebab of a specific row.
+    // Dismissing one must leave that repo exactly as it was — a Cancel that
+    // silently acts, or a dialog that won't close, is worse than no dialog.
+
+    it('keeps the repo when the Remove confirmation is cancelled', async () => {
+        mockRepos([API, WEB]);
+        let deleted = false;
+        server.use(
+            http.delete(`${BASE}/projects/p1/repos/r-web`, () => {
+                deleted = true;
+                return new HttpResponse(null, { status: 204 });
+            })
+        );
+        renderCard();
+
+        await clickRowAction('web', 'Remove');
+        const confirm = await screen.findByRole('dialog');
+        fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }));
+
+        await waitFor(() => expect(screen.queryByText('Remove web?')).toBeNull());
+        expect(deleted).toBe(false);
+        expect(screen.getByTestId('repo-row-web')).toBeInTheDocument();
+    });
+
+    it('closes the re-clone dialog without re-cloning', async () => {
+        mockRepos([API, WEB]);
+        let recloned = false;
+        server.use(
+            http.get(`${BASE}/projects/p1/repos/r-web/status`, () =>
+                HttpResponse.json({
+                    local_head: 'abc123',
+                    remote_head: 'def456',
+                    behind: 1,
+                    uncommitted: 0,
+                })
+            ),
+            http.post(`${BASE}/projects/p1/repos/r-web/reclone`, () => {
+                recloned = true;
+                return HttpResponse.json({ clone_id: 'c1' });
+            })
+        );
+        renderCard();
+
+        await clickRowAction('web', 'Re-clone from remote');
+        await screen.findByText('Re-clone from remote?');
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        await waitFor(() => expect(screen.queryByText('Re-clone from remote?')).toBeNull());
+        expect(recloned).toBe(false);
+    });
+
+    it('closes the auto-fetch schedule dialog without saving', async () => {
+        mockRepos([API, WEB]);
+        let saved = false;
+        server.use(
+            http.get(`${BASE}/projects/p1/repos/r-web/schedule`, () =>
+                HttpResponse.json({
+                    repo_id: 'r-web',
+                    project_id: 'p1',
+                    enabled: false,
+                    preset: 'daily',
+                    cron_expression: '0 6 * * *',
+                    time_of_day: '06:00',
+                    weekday: 1,
+                    skip_if_dirty: true,
+                    pause_while_agents_active: true,
+                    conflict_policy: 'skip',
+                    last_run_at: null,
+                    last_run_status: null,
+                    last_run_detail: null,
+                    next_run_at: null,
+                    auth_failure_count: 0,
+                    created_at: '2026-01-01T00:00:00.000Z',
+                    updated_at: '2026-01-01T00:00:00.000Z',
+                })
+            ),
+            http.put(`${BASE}/projects/p1/repos/r-web/schedule`, () => {
+                saved = true;
+                return HttpResponse.json({});
+            })
+        );
+        renderCard();
+
+        await clickRowAction('web', 'Auto-fetch schedule…');
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        expect(saved).toBe(false);
+    });
+
+    it('keeps the edit dialog open and names the error when the branch save fails', async () => {
+        // Closing on failure would look like it saved. The Owner would walk
+        // away believing the default branch changed when it did not.
+        mockRepos([API, WEB]);
+        server.use(
+            http.patch(`${BASE}/projects/p1/repos/r-web`, () =>
+                HttpResponse.json(
+                    { error: 'branch "main" does not exist on the remote' },
+                    { status: 400 }
+                )
+            )
+        );
+        renderCard();
+
+        await clickRowAction('web', 'Edit');
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.change(within(dialog).getByLabelText(/default branch/i), {
+            target: { value: 'main' },
+        });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+        expect(
+            await screen.findByText('branch "main" does not exist on the remote')
+        ).toBeInTheDocument();
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    // ─── Add-repo dialog form fields (AddRepoDialog) ────────────────────────
+
+    it('lets the Owner type over the name the repo URL filled in', async () => {
+        // The name is the repo's folder inside every Task workspace, so it is
+        // a deliberate choice, not a derived value. If typing stopped taking,
+        // two repos from the same URL would collide on one folder.
+        mockRepos([API]);
+        renderCard();
+        const dialog = await fillConnectForm();
+
+        fireEvent.change(within(dialog).getByLabelText(/^name/i), {
+            target: { value: 'web-ui' },
+        });
+        await waitFor(() => expect(within(dialog).getByLabelText(/^name/i)).toHaveValue('web-ui'));
+    });
+
+    it('offers a default branch only when cloning, and takes an edit to it', async () => {
+        // A connected folder already has whatever branch is checked out; only
+        // a fresh clone needs to be told which to take.
+        mockRepos([API]);
+        renderCard();
+        fireEvent.click(await screen.findByRole('button', { name: /add repo/i }));
+        const dialog = await screen.findByRole('dialog');
+
+        fireEvent.change(within(dialog).getByLabelText(/repository url/i), {
+            target: { value: 'https://github.com/acme/web.git' },
+        });
+        await waitFor(() => expect(within(dialog).getByLabelText(/^name/i)).toHaveValue('web'));
+
+        const branch = within(dialog).getByLabelText(/default branch/i);
+        fireEvent.change(branch, { target: { value: 'develop' } });
+        expect(branch).toHaveValue('develop');
+
+        // Switching to "use existing folder" retires the field entirely.
+        fireEvent.click(within(dialog).getByRole('button', { name: /use existing folder/i }));
+        await waitFor(() => expect(within(dialog).queryByLabelText(/default branch/i)).toBeNull());
+    });
+
+    it('leaves the dialog for Settings → Credentials when asked to manage them', async () => {
+        // The Owner hits this when the repo needs a credential they have not
+        // created yet; leaving the dialog open behind the navigation would
+        // strand a modal over the settings page.
+        mockRepos([API]);
+        renderCard();
+        fireEvent.click(await screen.findByRole('button', { name: /add repo/i }));
+        const dialog = await screen.findByRole('dialog');
+
+        fireEvent.click(within(dialog).getByText('manage in Settings'));
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
 });

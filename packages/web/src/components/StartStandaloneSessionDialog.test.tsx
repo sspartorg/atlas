@@ -41,17 +41,14 @@ beforeEach(() => {
         }),
         http.post(`${BASE}/cli/sessions/standalone`, async ({ request }) => {
             lastPayload = (await request.json()) as Record<string, unknown>;
-            return HttpResponse.json(
-                { id: 'sess-new', title: 'atlas' },
-                { status: 201 },
-            );
-        }),
+            return HttpResponse.json({ id: 'sess-new', title: 'atlas' }, { status: 201 });
+        })
     );
 });
 
 function renderDialog(onCreated = vi.fn()) {
     renderWithProviders(
-        <StartStandaloneSessionDialog open onClose={vi.fn()} onCreated={onCreated} />,
+        <StartStandaloneSessionDialog open onClose={vi.fn()} onCreated={onCreated} />
     );
     return { onCreated };
 }
@@ -70,9 +67,7 @@ describe('StartStandaloneSessionDialog', () => {
 
     it('posts folder_path and omits every untouched optional', async () => {
         renderDialog();
-        const folderInput = await screen.findByPlaceholderText(
-            'Pick any folder on this machine',
-        );
+        const folderInput = await screen.findByPlaceholderText('Pick any folder on this machine');
         await userEvent.type(folderInput, '/Users/owner/code/atlas');
         await userEvent.click(screen.getByRole('button', { name: /open terminal/i }));
 
@@ -91,9 +86,7 @@ describe('StartStandaloneSessionDialog', () => {
 
     it('includes the picked credential and trims the title', async () => {
         renderDialog();
-        const folderInput = await screen.findByPlaceholderText(
-            'Pick any folder on this machine',
-        );
+        const folderInput = await screen.findByPlaceholderText('Pick any folder on this machine');
         await userEvent.type(folderInput, '/Users/owner/code/atlas');
 
         await userEvent.click(screen.getByRole('combobox', { name: /git credentials/i }));
@@ -111,14 +104,12 @@ describe('StartStandaloneSessionDialog', () => {
 
     it('hands the created session back to the caller', async () => {
         const { onCreated } = renderDialog();
-        const folderInput = await screen.findByPlaceholderText(
-            'Pick any folder on this machine',
-        );
+        const folderInput = await screen.findByPlaceholderText('Pick any folder on this machine');
         await userEvent.type(folderInput, '/tmp/x');
         await userEvent.click(screen.getByRole('button', { name: /open terminal/i }));
 
         await waitFor(() =>
-            expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'sess-new' })),
+            expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'sess-new' }))
         );
     });
 
@@ -126,7 +117,7 @@ describe('StartStandaloneSessionDialog', () => {
         renderDialog();
         await userEvent.type(
             await screen.findByPlaceholderText('Pick any folder on this machine'),
-            '/tmp/x',
+            '/tmp/x'
         );
         await userEvent.type(screen.getByLabelText(/initial prompt/i), 'list the files');
         await userEvent.click(screen.getByRole('button', { name: /open terminal/i }));
@@ -138,16 +129,14 @@ describe('StartStandaloneSessionDialog', () => {
     it('switching CLI resets the model to that CLI default', async () => {
         server.use(
             http.get(`${BASE}/cli/models`, () =>
-                HttpResponse.json([
-                    { id: 'm1', cli: 'copilot', model_name: 'gpt-5', note: 'fast' },
-                ]),
-            ),
+                HttpResponse.json([{ id: 'm1', cli: 'copilot', model_name: 'gpt-5', note: 'fast' }])
+            )
         );
         renderDialog();
         await userEvent.click(await screen.findByRole('button', { name: /copilot/i }));
         await userEvent.type(
             screen.getByPlaceholderText('Pick any folder on this machine'),
-            '/tmp/x',
+            '/tmp/x'
         );
         await userEvent.click(screen.getByRole('button', { name: /open terminal/i }));
 
@@ -162,7 +151,7 @@ describe('StartStandaloneSessionDialog', () => {
         await userEvent.click(await screen.findByRole('button', { name: /claude/i }));
         await userEvent.type(
             screen.getByPlaceholderText('Pick any folder on this machine'),
-            '/tmp/x',
+            '/tmp/x'
         );
         await userEvent.click(screen.getByRole('button', { name: /open terminal/i }));
 
@@ -173,11 +162,11 @@ describe('StartStandaloneSessionDialog', () => {
     it('Cancel resets the form and closes', async () => {
         const onClose = vi.fn();
         renderWithProviders(
-            <StartStandaloneSessionDialog open onClose={onClose} onCreated={vi.fn()} />,
+            <StartStandaloneSessionDialog open onClose={onClose} onCreated={vi.fn()} />
         );
         await userEvent.type(
             await screen.findByPlaceholderText('Pick any folder on this machine'),
-            '/tmp/x',
+            '/tmp/x'
         );
         await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
@@ -189,20 +178,20 @@ describe('StartStandaloneSessionDialog', () => {
             http.post(`${BASE}/cli/sessions/standalone`, () =>
                 HttpResponse.json(
                     { error: 'folder not found: /tmp/x', kind: 'validation_error' },
-                    { status: 400 },
-                ),
-            ),
+                    { status: 400 }
+                )
+            )
         );
         const onCreated = vi.fn();
         renderWithProviders(
             <>
                 <StartStandaloneSessionDialog open onClose={vi.fn()} onCreated={onCreated} />
                 <Toast />
-            </>,
+            </>
         );
         await userEvent.type(
             await screen.findByPlaceholderText('Pick any folder on this machine'),
-            '/tmp/x',
+            '/tmp/x'
         );
         await userEvent.click(screen.getByRole('button', { name: /open terminal/i }));
 

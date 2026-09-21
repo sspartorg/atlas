@@ -131,8 +131,8 @@ Executed 2026-09-20. Project id `c4cf4b2b-7c2a-4761-a90c-c4818b3eb2a8`.
 **Clones.** Repo 1 in 1s, 126 objects, 42.63 KiB. Both `ready`:
 
 ```
-atlas-sdlc-sandbox      /Users/sunnysabhanam/Work/workspace/atlas-sdlc-sandbox                        main  ready  pos 0
-atlas-sdlc-sandbox-web  /Users/sunnysabhanam/Work/workspace/atlas-sdlc-sandbox-atlas-sdlc-sandbox-web  main  ready  pos 1
+atlas-sdlc-sandbox      <workspace>/atlas-sdlc-sandbox                        main  ready  pos 0
+atlas-sdlc-sandbox-web  <workspace>/atlas-sdlc-sandbox-atlas-sdlc-sandbox-web  main  ready  pos 1
 ```
 
 The second path is F-009. It is cosmetic: `dirname(git_path)` is the same for

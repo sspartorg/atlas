@@ -10,7 +10,7 @@ The Owner asked for leftover references to be replaced with neutral examples.
 Two of the three named strings do not exist in this repo:
 
 - **"Linoes"** — 0 hits.
-- **"insightsoftware"** (and "insight software", "insight-software") — 0 hits.
+- **The third company name** (spelled out, spaced and hyphenated) — 0 hits.
 
 Both were searched across the working tree, every gitignored directory
 (`e2e-logs/`, `logs/`, `.atlas-dump/`, `.playwright-mcp/`, `test-results/`,
@@ -91,7 +91,7 @@ Also rename the lowercase agent-slug examples: `cer-weekly-automation` →
       findings and task files, which quote the old names as evidence
 - [x] Same for `\bDHEQ\b` (51 -> 0) and `\bJDA\b` (6 -> 0)
 - [x] `cer-weekly-automation` -> `atl-weekly-automation`; `CER_Stories` -> `ATL_Stories` (neither matched `\bCER\b`, both done by hand)
-- [x] `linoes` and `insightsoftware` still 0, as they were at the start
+- [x] the other two swept-for names still 0, as they were at the start
 - [x] **`sspartorg` untouched** — `git diff` over `packages`, `.agents`,
       `AGENTS.md` and `README.md` contains no `sspart` line either way
 - [x] `schemas.test.ts` rejects `'atl'`, paired with the `'ATL'` accept case

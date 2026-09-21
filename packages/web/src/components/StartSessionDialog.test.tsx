@@ -59,7 +59,7 @@ function renderDialog(overrides: DialogProps = {}) {
         <>
             <StartSessionDialog {...props} />
             <Toast />
-        </>,
+        </>
     );
     return props;
 }
@@ -72,13 +72,13 @@ beforeEach(() => {
         http.get(`${BASE}/projects/:id/repos`, () => HttpResponse.json([makeProjectRepo()])),
         http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
         http.get(`${BASE}/issues/tree`, () =>
-            HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] }),
+            HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] })
         ),
         http.get(`${BASE}/settings`, () =>
-            HttpResponse.json({ id: 1, owner_name: 'Owner', onboarding_complete: 1 }),
+            HttpResponse.json({ id: 1, owner_name: 'Owner', onboarding_complete: 1 })
         ),
         http.get(`${BASE}/notifications`, () => HttpResponse.json([])),
-        http.get(`${BASE}/counts`, () => HttpResponse.json({})),
+        http.get(`${BASE}/counts`, () => HttpResponse.json({}))
     );
 });
 
@@ -243,7 +243,7 @@ describe('StartSessionDialog — submission', () => {
             http.post(`${BASE}/cli/sessions`, async ({ request }) => {
                 capturedBody = await request.json();
                 return HttpResponse.json(makeCreatedSession());
-            }),
+            })
         );
         renderDialog({ onCreated });
         const projectSelect = screen.getByLabelText(/project/i);
@@ -267,7 +267,7 @@ describe('StartSessionDialog — submission', () => {
             http.post(`${BASE}/cli/sessions`, async ({ request }) => {
                 capturedBody = (await request.json()) as { repo_id?: string };
                 return HttpResponse.json(makeCreatedSession());
-            }),
+            })
         );
         renderDialog();
         fireEvent.mouseDown(screen.getByLabelText(/project/i));
@@ -277,9 +277,7 @@ describe('StartSessionDialog — submission', () => {
             expect(screen.getByRole('button', { name: /start session/i })).not.toBeDisabled();
         });
         // One repo: nothing to pick, and the session still names it.
-        await waitFor(() =>
-            expect(screen.queryByRole('combobox', { name: /^repo$/i })).toBeNull()
-        );
+        await waitFor(() => expect(screen.queryByRole('combobox', { name: /^repo$/i })).toBeNull());
         await waitFor(() => {
             fireEvent.click(screen.getByRole('button', { name: /start session/i }));
             expect(capturedBody.repo_id).toBe('p1');
@@ -290,12 +288,15 @@ describe('StartSessionDialog — submission', () => {
         let capturedBody: { repo_id?: string } = {};
         server.use(
             http.get(`${BASE}/projects/p1/repos`, () =>
-                HttpResponse.json([makeProjectRepo(), makeProjectRepo({ id: 'r-web', name: 'web' })]),
+                HttpResponse.json([
+                    makeProjectRepo(),
+                    makeProjectRepo({ id: 'r-web', name: 'web' }),
+                ])
             ),
             http.post(`${BASE}/cli/sessions`, async ({ request }) => {
                 capturedBody = (await request.json()) as { repo_id?: string };
                 return HttpResponse.json(makeCreatedSession());
-            }),
+            })
         );
         renderDialog();
         fireEvent.mouseDown(screen.getByLabelText(/project/i));
@@ -311,9 +312,7 @@ describe('StartSessionDialog — submission', () => {
     it('calls onCreated with the created session on success', async () => {
         const onCreated = vi.fn();
         server.use(
-            http.post(`${BASE}/cli/sessions`, () =>
-                HttpResponse.json(makeCreatedSession()),
-            ),
+            http.post(`${BASE}/cli/sessions`, () => HttpResponse.json(makeCreatedSession()))
         );
         renderDialog({ defaultProjectId: 'p1', onCreated });
         await waitFor(() => {
@@ -328,8 +327,8 @@ describe('StartSessionDialog — submission', () => {
     it('shows error toast when create fails', async () => {
         server.use(
             http.post(`${BASE}/cli/sessions`, () =>
-                HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Server error' }, { status: 500 })
+            )
         );
         renderDialog({ defaultProjectId: 'p1' });
         await waitFor(() => {
@@ -340,9 +339,7 @@ describe('StartSessionDialog — submission', () => {
     });
 
     it('shows Starting… text when mutation is pending', async () => {
-        server.use(
-            http.post(`${BASE}/cli/sessions`, () => new Promise(() => {})),
-        );
+        server.use(http.post(`${BASE}/cli/sessions`, () => new Promise(() => {})));
         renderDialog({ defaultProjectId: 'p1' });
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /start session/i })).not.toBeDisabled();
@@ -357,9 +354,9 @@ describe('StartSessionDialog — submission', () => {
         let capturedBody: Record<string, unknown> | null = null;
         server.use(
             http.post(`${BASE}/cli/sessions`, async ({ request }) => {
-                capturedBody = await request.json() as Record<string, unknown>;
+                capturedBody = (await request.json()) as Record<string, unknown>;
                 return HttpResponse.json(makeCreatedSession());
-            }),
+            })
         );
         renderDialog({ defaultProjectId: 'p1' });
         await waitFor(() => {
@@ -384,9 +381,7 @@ describe('StartSessionDialog — close and cancel', () => {
     });
 
     it('disables Cancel while mutation is pending', async () => {
-        server.use(
-            http.post(`${BASE}/cli/sessions`, () => new Promise(() => {})),
-        );
+        server.use(http.post(`${BASE}/cli/sessions`, () => new Promise(() => {})));
         renderDialog({ defaultProjectId: 'p1' });
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /start session/i })).not.toBeDisabled();
@@ -399,9 +394,7 @@ describe('StartSessionDialog — close and cancel', () => {
 
     it('does not call onClose when cancel is clicked while pending', async () => {
         const onClose = vi.fn();
-        server.use(
-            http.post(`${BASE}/cli/sessions`, () => new Promise(() => {})),
-        );
+        server.use(http.post(`${BASE}/cli/sessions`, () => new Promise(() => {})));
         renderDialog({ defaultProjectId: 'p1', onClose });
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /start session/i })).not.toBeDisabled();
@@ -418,9 +411,9 @@ describe('StartSessionDialog — optional fields in request body', () => {
         let capturedBody: Record<string, unknown> | null = null;
         server.use(
             http.post(`${BASE}/cli/sessions`, async ({ request }) => {
-                capturedBody = await request.json() as Record<string, unknown>;
+                capturedBody = (await request.json()) as Record<string, unknown>;
                 return HttpResponse.json(makeCreatedSession());
-            }),
+            })
         );
         renderDialog({ defaultProjectId: 'p1' });
         await waitFor(() => {
@@ -437,9 +430,9 @@ describe('StartSessionDialog — optional fields in request body', () => {
         let capturedBody: Record<string, unknown> | null = null;
         server.use(
             http.post(`${BASE}/cli/sessions`, async ({ request }) => {
-                capturedBody = await request.json() as Record<string, unknown>;
+                capturedBody = (await request.json()) as Record<string, unknown>;
                 return HttpResponse.json(makeCreatedSession());
-            }),
+            })
         );
         renderDialog({ defaultProjectId: 'p1' });
         await waitFor(() => {
@@ -454,7 +447,7 @@ describe('StartSessionDialog — optional fields in request body', () => {
 
     it('resets form fields after successful submission', async () => {
         server.use(
-            http.post(`${BASE}/cli/sessions`, async () => HttpResponse.json(makeCreatedSession())),
+            http.post(`${BASE}/cli/sessions`, async () => HttpResponse.json(makeCreatedSession()))
         );
         const onCreated = vi.fn();
         renderDialog({ defaultProjectId: 'p1', onCreated });
@@ -480,8 +473,10 @@ describe('StartSessionDialog — optional fields in request body', () => {
 });
 
 describe('StartSessionDialog — buildItemOptions via Autocomplete', () => {
-    it('offers the project\'s tasks and sub-tasks, grouped', async () => {
-        server.use(http.get(`${BASE}/issues/tree`, () => HttpResponse.json({
+    it("offers the project's tasks and sub-tasks, grouped", async () => {
+        server.use(
+            http.get(`${BASE}/issues/tree`, () =>
+                HttpResponse.json({
                     tree: [
                         {
                             id: 'T1',
@@ -489,14 +484,31 @@ describe('StartSessionDialog — buildItemOptions via Autocomplete', () => {
                             title: 'Big Task',
                             task_id: null,
                             children: [
-                                { id: 'ST-1', kind: 'sub_task', title: 'Small Sub-task', task_id: 'T1', children: [] },
+                                {
+                                    id: 'ST-1',
+                                    kind: 'sub_task',
+                                    title: 'Small Sub-task',
+                                    task_id: 'T1',
+                                    children: [],
+                                },
                             ],
                         },
                     ],
                     projects: [{ id: 'p1', name: 'Alpha' }],
                     agents: [],
-                    tasks: [{ id: 'T1', title: 'Big Task', project_id: 'p1', status: 'ready', created_at: '', updated_at: '' }],
-                })));
+                    tasks: [
+                        {
+                            id: 'T1',
+                            title: 'Big Task',
+                            project_id: 'p1',
+                            status: 'ready',
+                            created_at: '',
+                            updated_at: '',
+                        },
+                    ],
+                })
+            )
+        );
         renderDialog({ defaultProjectId: 'p1' });
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /start session/i })).not.toBeDisabled();
@@ -534,10 +546,22 @@ describe('StartSessionDialog — model select', () => {
         server.use(
             http.get(`${BASE}/cli-models`, () =>
                 HttpResponse.json([
-                    { id: 'm1', cli: 'claude', model_name: 'claude-opus-4-5', note: null, sort_order: 1 },
-                    { id: 'm2', cli: 'claude', model_name: 'claude-sonnet-4', note: 'fast', sort_order: 2 },
-                ]),
-            ),
+                    {
+                        id: 'm1',
+                        cli: 'claude',
+                        model_name: 'claude-opus-4-5',
+                        note: null,
+                        sort_order: 1,
+                    },
+                    {
+                        id: 'm2',
+                        cli: 'claude',
+                        model_name: 'claude-sonnet-4',
+                        note: 'fast',
+                        sort_order: 2,
+                    },
+                ])
+            )
         );
         renderDialog();
         const modelSelect = screen.getByLabelText(/model/i);
@@ -550,10 +574,22 @@ describe('StartSessionDialog — model select', () => {
         server.use(
             http.get(`${BASE}/cli-models`, () =>
                 HttpResponse.json([
-                    { id: 'm1', cli: 'claude', model_name: 'claude-only-model', note: null, sort_order: 1 },
-                    { id: 'm2', cli: 'copilot', model_name: 'copilot-only-model', note: null, sort_order: 1 },
-                ]),
-            ),
+                    {
+                        id: 'm1',
+                        cli: 'claude',
+                        model_name: 'claude-only-model',
+                        note: null,
+                        sort_order: 1,
+                    },
+                    {
+                        id: 'm2',
+                        cli: 'copilot',
+                        model_name: 'copilot-only-model',
+                        note: null,
+                        sort_order: 1,
+                    },
+                ])
+            )
         );
         renderDialog();
         // Default CLI is claude; open model select
@@ -567,9 +603,15 @@ describe('StartSessionDialog — model select', () => {
         server.use(
             http.get(`${BASE}/cli-models`, () =>
                 HttpResponse.json([
-                    { id: 'm1', cli: 'claude', model_name: 'claude-sonnet-4', note: 'fast', sort_order: 1 },
-                ]),
-            ),
+                    {
+                        id: 'm1',
+                        cli: 'claude',
+                        model_name: 'claude-sonnet-4',
+                        note: 'fast',
+                        sort_order: 1,
+                    },
+                ])
+            )
         );
         renderDialog();
         const modelSelect = screen.getByLabelText(/model/i);
@@ -582,10 +624,22 @@ describe('StartSessionDialog — model select', () => {
         server.use(
             http.get(`${BASE}/cli-models`, () =>
                 HttpResponse.json([
-                    { id: 'm1', cli: 'claude', model_name: 'claude-opus-4-5', note: null, sort_order: 1 },
-                    { id: 'm2', cli: 'claude', model_name: 'claude-sonnet-4', note: null, sort_order: 2 },
-                ]),
-            ),
+                    {
+                        id: 'm1',
+                        cli: 'claude',
+                        model_name: 'claude-opus-4-5',
+                        note: null,
+                        sort_order: 1,
+                    },
+                    {
+                        id: 'm2',
+                        cli: 'claude',
+                        model_name: 'claude-sonnet-4',
+                        note: null,
+                        sort_order: 2,
+                    },
+                ])
+            )
         );
         renderDialog();
         const modelSelect = screen.getByLabelText(/model/i);
@@ -609,11 +663,20 @@ describe('StartSessionDialog — Autocomplete item selection', () => {
                     tree: [],
                     projects: [{ id: 'p1', name: 'Alpha' }],
                     agents: [],
-                    tasks: [{ id: 'E-42', title: 'Mega Task', project_id: 'p1', status: 'ready', created_at: '', updated_at: '' }],
-                }),
+                    tasks: [
+                        {
+                            id: 'E-42',
+                            title: 'Mega Task',
+                            project_id: 'p1',
+                            status: 'ready',
+                            created_at: '',
+                            updated_at: '',
+                        },
+                    ],
+                })
             ),
             http.post(`${BASE}/cli/sessions`, async ({ request }) => {
-                _capturedBody = await request.json() as Record<string, unknown>;
+                _capturedBody = (await request.json()) as Record<string, unknown>;
                 return HttpResponse.json({
                     id: 'sess-new',
                     project_id: 'p1',
@@ -632,7 +695,7 @@ describe('StartSessionDialog — Autocomplete item selection', () => {
                     finalize_pr_url: null,
                     item_id: 'E-42',
                 });
-            }),
+            })
         );
         const onCreated = vi.fn();
         renderDialog({ defaultProjectId: 'p1', onCreated });
@@ -677,7 +740,7 @@ describe('StartSessionDialog — useEffect defaultProjectId sync', () => {
                     onCreated={vi.fn()}
                     defaultProjectId={undefined}
                 />
-            </>,
+            </>
         );
         // Re-render with defaultProjectId set while dialog is still closed
         rerender(
@@ -688,7 +751,7 @@ describe('StartSessionDialog — useEffect defaultProjectId sync', () => {
                     onCreated={vi.fn()}
                     defaultProjectId="p1"
                 />
-            </>,
+            </>
         );
         // The useEffect fires: !open (true) && defaultProjectId !== undefined (true)
         // → setProjectId('p1') — no visible DOM change since dialog is closed,

@@ -36,9 +36,7 @@ const CREDENTIAL = {
 async function _renderReadyModal(onClose = vi.fn()) {
     server.use(
         http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-        http.get(`${BASE}/projects/prefix-available`, () =>
-            HttpResponse.json({ available: true }),
-        ),
+        http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true }))
     );
     renderWithProviders(<NewProjectModal open onClose={onClose} />);
 
@@ -53,7 +51,7 @@ async function _renderReadyModal(onClose = vi.fn()) {
         () => {
             expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled();
         },
-        { timeout: 5000 },
+        { timeout: 5000 }
     );
 
     return { onClose };
@@ -65,7 +63,7 @@ describe('NewProjectModal', () => {
             ...defaultHandlers,
             // credentials and settings are already in defaultHandlers for GET /api/settings
             // Add credentials endpoint
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
+            http.get(`${BASE}/credentials`, () => HttpResponse.json([]))
         );
     });
 
@@ -126,9 +124,7 @@ describe('NewProjectModal', () => {
     it('shows "No credentials saved yet" alert when no credentials', async () => {
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         await waitFor(() => {
-            expect(
-                screen.getByText(/no credentials saved yet/i),
-            ).toBeInTheDocument();
+            expect(screen.getByText(/no credentials saved yet/i)).toBeInTheDocument();
         });
     });
 
@@ -159,12 +155,15 @@ describe('NewProjectModal', () => {
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
         fireEvent.change(prefixInput, { target: { value: 'AB' } });
         // Should render "Exactly 3 uppercase letters." helper text
-        await waitFor(() => {
-            expect(
-                document.body.textContent?.includes('Exactly 3 uppercase letters') ||
-                document.body,
-            ).toBeTruthy();
-        }, { timeout: 3000 }).catch(() => {});
+        await waitFor(
+            () => {
+                expect(
+                    document.body.textContent?.includes('Exactly 3 uppercase letters') ||
+                        document.body
+                ).toBeTruthy();
+            },
+            { timeout: 3000 }
+        ).catch(() => {});
         expect(document.body).toBeTruthy();
     });
 
@@ -179,18 +178,19 @@ describe('NewProjectModal', () => {
     it('prefix collision response renders collision state', async () => {
         server.use(
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: false, reason: 'in_use', conflict: 'EXISTING' }),
-            ),
+                HttpResponse.json({ available: false, reason: 'in_use', conflict: 'EXISTING' })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
         fireEvent.change(prefixInput, { target: { value: 'XYZ' } });
         // Waits for debounce + API response showing collision state
-        await waitFor(() => {
-            expect(
-                screen.queryByText(/Already used by/i) ?? document.body,
-            ).toBeTruthy();
-        }, { timeout: 5000 }).catch(() => {});
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/Already used by/i) ?? document.body).toBeTruthy();
+            },
+            { timeout: 5000 }
+        ).catch(() => {});
         expect(document.body).toBeTruthy();
     }, 30000);
 
@@ -223,11 +223,11 @@ describe('NewProjectModal', () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([credential])),
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: true }),
+                HttpResponse.json({ available: true })
             ),
             http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json({ error: 'Clone failed: remote unreachable' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Clone failed: remote unreachable' }, { status: 500 })
+            )
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -241,32 +241,38 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
 
         // Wait for prefix validation to resolve
-        await waitFor(() => {
-            expect(screen.queryByText(/checking availability/i)).not.toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.queryByText(/checking availability/i)).not.toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
 
         // Wait for available state
         await waitFor(
             () => {
-                expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled();
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled();
             },
-            { timeout: 5000 },
+            { timeout: 5000 }
         );
 
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
 
-        await waitFor(() => {
-            expect(screen.getByText(/clone failed: remote unreachable/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/clone failed: remote unreachable/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
     // renderCredentialSelect — credential rendered in Select
     // -------------------------------------------------------------------------
     it('renders credential label in select when credentials are present', async () => {
-        server.use(
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-        );
+        server.use(http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])));
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         await waitFor(() => {
             expect(screen.getByText(/GitHub · My PAT/i)).toBeInTheDocument();
@@ -280,8 +286,8 @@ describe('NewProjectModal', () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: true }),
-            ),
+                HttpResponse.json({ available: true })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
@@ -290,7 +296,7 @@ describe('NewProjectModal', () => {
             () => {
                 expect(screen.getByText(/Available\./i)).toBeInTheDocument();
             },
-            { timeout: 5000 },
+            { timeout: 5000 }
         );
     });
 
@@ -300,8 +306,12 @@ describe('NewProjectModal', () => {
     it('prefix field shows conflict project name on collision', async () => {
         server.use(
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: false, reason: 'in_use', conflict: 'my-other-project' }),
-            ),
+                HttpResponse.json({
+                    available: false,
+                    reason: 'in_use',
+                    conflict: 'my-other-project',
+                })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
@@ -310,7 +320,7 @@ describe('NewProjectModal', () => {
             () => {
                 expect(screen.getByText(/Already used by "my-other-project"/i)).toBeInTheDocument();
             },
-            { timeout: 5000 },
+            { timeout: 5000 }
         );
     });
 
@@ -326,16 +336,19 @@ describe('NewProjectModal', () => {
                     owner_name: 'Owner',
                     onboarding_complete: 1,
                     workspace_path: '/home/user/projects',
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const urlInput = await screen.findByLabelText(/repository url/i);
         fireEvent.change(urlInput, { target: { value: 'https://github.com/acme/orion.git' } });
-        await waitFor(() => {
-            // The project name auto-fills from the URL; then the dest path shows workspace/name
-            expect(screen.getByText(/\/home\/user\/projects.*orion/)).toBeInTheDocument();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                // The project name auto-fills from the URL; then the dest path shows workspace/name
+                expect(screen.getByText(/\/home\/user\/projects.*orion/)).toBeInTheDocument();
+            },
+            { timeout: 3000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -344,7 +357,9 @@ describe('NewProjectModal', () => {
     it('auto-fills project name from repository URL', async () => {
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const urlInput = await screen.findByLabelText(/repository url/i);
-        fireEvent.change(urlInput, { target: { value: 'https://github.com/acme/my-cool-repo.git' } });
+        fireEvent.change(urlInput, {
+            target: { value: 'https://github.com/acme/my-cool-repo.git' },
+        });
         await waitFor(() => {
             const nameInput = screen.getByLabelText(/project name/i) as HTMLInputElement;
             expect(nameInput.value).toBe('my-cool-repo');
@@ -374,8 +389,8 @@ describe('NewProjectModal', () => {
     it('labels a GitHub App credential "App", not "PAT"', async () => {
         server.use(
             http.get(`${BASE}/credentials`, () =>
-                HttpResponse.json([{ ...CREDENTIAL, label: 'Atlas App', kind: 'github_app' }]),
-            ),
+                HttpResponse.json([{ ...CREDENTIAL, label: 'Atlas App', kind: 'github_app' }])
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         expect(await screen.findByText(/GitHub · Atlas App/i)).toBeInTheDocument();
@@ -390,14 +405,11 @@ describe('NewProjectModal', () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: true }),
+                HttpResponse.json({ available: true })
             ),
             http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json(
-                    { error: 'prefix already in use' },
-                    { status: 409 },
-                ),
-            ),
+                HttpResponse.json({ error: 'prefix already in use' }, { status: 409 })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
 
@@ -408,16 +420,22 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
 
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
 
-        await waitFor(() => {
-            // Submit error should appear with the prefix message
-            expect(screen.getByText(/prefix already in use/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                // Submit error should appear with the prefix message
+                expect(screen.getByText(/prefix already in use/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -459,15 +477,15 @@ describe('NewProjectModal', () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: true }),
+                HttpResponse.json({ available: true })
             ),
             // ADR 0018 — connect answers with { project, repo }.
             http.post(`${BASE}/projects/connect`, () =>
                 HttpResponse.json(
                     { project: { id: 'proj-1', name: 'orion' }, repo: repoOf('proj-1') },
-                    { status: 200 },
-                ),
-            ),
+                    { status: 200 }
+                )
+            )
         );
 
         renderWithProviders(<NewProjectModal open onClose={onClose} />);
@@ -489,15 +507,21 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ORI' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /connect repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /connect repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
 
         fireEvent.click(screen.getByRole('button', { name: /connect repository/i }));
 
-        await waitFor(() => {
-            expect(onClose).toHaveBeenCalled();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(onClose).toHaveBeenCalled();
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -507,14 +531,14 @@ describe('NewProjectModal', () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: true }),
+                HttpResponse.json({ available: true })
             ),
             http.post(`${BASE}/projects/connect`, () =>
                 HttpResponse.json(
                     { error_kind: 'prefix_collision', reason: 'in_use', conflict: 'other-proj' },
-                    { status: 422 },
-                ),
-            ),
+                    { status: 422 }
+                )
+            )
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -532,16 +556,22 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ORI' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /connect repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /connect repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
 
         fireEvent.click(screen.getByRole('button', { name: /connect repository/i }));
 
-        await waitFor(() => {
-            // Collision is shown in prefix field
-            expect(screen.getByText(/Already used by/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                // Collision is shown in prefix field
+                expect(screen.getByText(/Already used by/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -552,7 +582,12 @@ describe('NewProjectModal', () => {
         // connect_error view can render without crashing on undefined `checks`.
         const connectErrorBody = {
             error_kind: 'auth_failed',
-            checks: { folder_exists: true, has_git: true, ls_remote_ok: false, origin_matches: true },
+            checks: {
+                folder_exists: true,
+                has_git: true,
+                ls_remote_ok: false,
+                origin_matches: true,
+            },
             folder_origin: 'https://github.com/acme/orion.git',
             head_branch: null,
             head_sha: null,
@@ -560,18 +595,14 @@ describe('NewProjectModal', () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: true }),
+                HttpResponse.json({ available: true })
             ),
             // Non-ok (422) non-prefix-collision response — exercises the connect_error view
             http.post(`${BASE}/projects/connect`, () =>
-                HttpResponse.json(connectErrorBody, { status: 422 }),
+                HttpResponse.json(connectErrorBody, { status: 422 })
             ),
-            http.get(`${BASE}/projects/folder-origin`, () =>
-                HttpResponse.json({ origin: null }),
-            ),
-            http.get(`${BASE}/fs/stat`, () =>
-                HttpResponse.json({ exists: true }),
-            ),
+            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null })),
+            http.get(`${BASE}/fs/stat`, () => HttpResponse.json({ exists: true }))
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -589,17 +620,23 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ORI' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /connect repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /connect repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
 
         fireEvent.click(screen.getByRole('button', { name: /connect repository/i }));
 
         // Non-ok non-prefix-collision response transitions to connect_error view.
         // Verify the error view renders with the auth_failed details.
-        await waitFor(() => {
-            expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -608,8 +645,8 @@ describe('NewProjectModal', () => {
     it('handleExistingFolderChange: auto-fills repo URL from folder origin', async () => {
         server.use(
             http.get(`${BASE}/projects/folder-origin`, () =>
-                HttpResponse.json({ origin: 'https://github.com/acme/auto-filled.git' }),
-            ),
+                HttpResponse.json({ origin: 'https://github.com/acme/auto-filled.git' })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         await waitFor(() => screen.getByRole('dialog'));
@@ -619,10 +656,13 @@ describe('NewProjectModal', () => {
         const folderInput = await screen.findByPlaceholderText(/C:\\Users/i);
         fireEvent.change(folderInput, { target: { value: '/home/user/projects/auto-filled' } });
 
-        await waitFor(() => {
-            const urlInput = screen.getByLabelText(/repository url/i) as HTMLInputElement;
-            expect(urlInput.value).toBe('https://github.com/acme/auto-filled.git');
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                const urlInput = screen.getByLabelText(/repository url/i) as HTMLInputElement;
+                expect(urlInput.value).toBe('https://github.com/acme/auto-filled.git');
+            },
+            { timeout: 3000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -643,14 +683,18 @@ describe('NewProjectModal', () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: true }),
+                HttpResponse.json({ available: true })
             ),
             http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json({ clone_id: 'clone-xyz', destination: '/workspace/myrepo' }),
+                HttpResponse.json({ clone_id: 'clone-xyz', destination: '/workspace/myrepo' })
             ),
             http.get(`${BASE}/projects/proj-abc-1234/repos/proj-abc-1234-repo/head`, () =>
-                HttpResponse.json({ short_sha: 'abc1234', subject: 'init', relative_time: '1 minute ago' }),
-            ),
+                HttpResponse.json({
+                    short_sha: 'abc1234',
+                    subject: 'init',
+                    relative_time: '1 minute ago',
+                })
+            )
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -662,8 +706,11 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
 
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
@@ -671,9 +718,12 @@ describe('NewProjectModal', () => {
         // After clone starts, view transitions to cloning. Simulate SSE project completion via
         // dispatching the SSE event. Since EventSource is hard to mock in jsdom, we instead
         // verify the cloning view appears after the POST succeeds.
-        await waitFor(() => {
-            expect(screen.getByText(/Cloning repository/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Cloning repository/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
 
         // Now manually simulate successful clone by triggering an SSE event
         // The clone view should show "Closing disabled" text
@@ -687,11 +737,11 @@ describe('NewProjectModal', () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: true }),
+                HttpResponse.json({ available: true })
             ),
             http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json({ clone_id: 'clone-err', destination: '/workspace/myrepo' }),
-            ),
+                HttpResponse.json({ clone_id: 'clone-err', destination: '/workspace/myrepo' })
+            )
             // SSE events are handled by EventSource; simulate error by having the clone job
             // emit an error event via the test EventSource mock. Since we can't easily mock SSE,
             // we instead render the error view directly by checking the error headline logic
@@ -712,16 +762,22 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
 
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
 
         // Verify cloning view shown
-        await waitFor(() => {
-            expect(screen.getByText(/Cloning repository/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Cloning repository/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -731,11 +787,11 @@ describe('NewProjectModal', () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: true }),
+                HttpResponse.json({ available: true })
             ),
             http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json({ clone_id: 'clone-live', destination: '/workspace/myrepo' }),
-            ),
+                HttpResponse.json({ clone_id: 'clone-live', destination: '/workspace/myrepo' })
+            )
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -747,18 +803,24 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
 
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
 
-        await waitFor(() => {
-            // Step checklist items should appear
-            expect(screen.getByText('Resolve credential')).toBeInTheDocument();
-            expect(screen.getByText('Clone repository')).toBeInTheDocument();
-            expect(screen.getByText('Register with Atlas')).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                // Step checklist items should appear
+                expect(screen.getByText('Resolve credential')).toBeInTheDocument();
+                expect(screen.getByText('Clone repository')).toBeInTheDocument();
+                expect(screen.getByText('Register with Atlas')).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
 
         // Terminal shows waiting message
         expect(screen.getByText(/Waiting for output/i)).toBeInTheDocument();
@@ -774,11 +836,11 @@ describe('NewProjectModal', () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: true }),
+                HttpResponse.json({ available: true })
             ),
             http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json({ clone_id: 'clone-cred', destination: '/workspace/myrepo' }),
-            ),
+                HttpResponse.json({ clone_id: 'clone-cred', destination: '/workspace/myrepo' })
+            )
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -790,15 +852,21 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
 
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
 
-        await waitFor(() => {
-            expect(screen.getByText('https://github.com/acme/myrepo.git')).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText('https://github.com/acme/myrepo.git')).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
 
         // Credential label shown in cloning card
         expect(screen.getByText(/using GitHub · My PAT/i)).toBeInTheDocument();
@@ -868,9 +936,7 @@ describe('NewProjectModal', () => {
 
         // After clearing, the default helper text should show
         await waitFor(() => {
-            expect(
-                screen.getByText(/Issue ids in this project become/i),
-            ).toBeInTheDocument();
+            expect(screen.getByText(/Issue ids in this project become/i)).toBeInTheDocument();
         });
     });
 
@@ -892,7 +958,9 @@ describe('NewProjectModal', () => {
         await waitFor(() => screen.getByRole('dialog'));
         fireEvent.click(screen.getByText('Use existing folder'));
         await waitFor(() => {
-            expect(screen.getByText(/Folder exists and contains a \.git directory/i)).toBeInTheDocument();
+            expect(
+                screen.getByText(/Folder exists and contains a \.git directory/i)
+            ).toBeInTheDocument();
         });
         expect(screen.getByText(/Remote origin matches the URL above/i)).toBeInTheDocument();
     });
@@ -925,11 +993,11 @@ describe('NewProjectModal', () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: true }),
+                HttpResponse.json({ available: true })
             ),
             http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json({ clone_id: cloneId, destination: '/workspace/myrepo' }),
-            ),
+                HttpResponse.json({ clone_id: cloneId, destination: '/workspace/myrepo' })
+            )
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -941,16 +1009,22 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
 
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
 
         // Wait for the cloning view (ensures clone POST was made and setCloneId was called)
-        await waitFor(() => {
-            expect(screen.getByText(/Cloning repository/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Cloning repository/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     }
 
     describe('SSE-driven clone paths', () => {
@@ -961,7 +1035,11 @@ describe('NewProjectModal', () => {
             await startCloningAndAwaitView('clone-step2');
 
             act(() => {
-                pushSse({ type: 'clone_output', cloneId: 'clone-step2', output: 'Cloning into /workspace/myrepo...' });
+                pushSse({
+                    type: 'clone_output',
+                    cloneId: 'clone-step2',
+                    output: 'Cloning into /workspace/myrepo...',
+                });
             });
 
             // "Clone repository" step is in the checklist regardless of step state
@@ -977,15 +1055,22 @@ describe('NewProjectModal', () => {
             await startCloningAndAwaitView('clone-recv');
 
             act(() => {
-                pushSse({ type: 'clone_output', cloneId: 'clone-recv', output: 'Receiving objects: 45% (450/1000), 128 KiB | 1.20 MiB/s' });
+                pushSse({
+                    type: 'clone_output',
+                    cloneId: 'clone-recv',
+                    output: 'Receiving objects: 45% (450/1000), 128 KiB | 1.20 MiB/s',
+                });
             });
 
             // The live-phase label in the step header shows "RECEIVING OBJECTS"
             // (there may be multiple matches: the header label + raw terminal output)
-            await waitFor(() => {
-                const matches = screen.getAllByText(/RECEIVING OBJECTS/i);
-                expect(matches.length).toBeGreaterThanOrEqual(1);
-            }, { timeout: 3000 });
+            await waitFor(
+                () => {
+                    const matches = screen.getAllByText(/RECEIVING OBJECTS/i);
+                    expect(matches.length).toBeGreaterThanOrEqual(1);
+                },
+                { timeout: 3000 }
+            );
         });
 
         // -------------------------------------------------------------------------
@@ -995,7 +1080,11 @@ describe('NewProjectModal', () => {
             await startCloningAndAwaitView('clone-exit0');
 
             act(() => {
-                pushSse({ type: 'clone_output', cloneId: 'clone-exit0', output: 'Process exited with code 0' });
+                pushSse({
+                    type: 'clone_output',
+                    cloneId: 'clone-exit0',
+                    output: 'Process exited with code 0',
+                });
             });
 
             await waitFor(() => {
@@ -1019,19 +1108,27 @@ describe('NewProjectModal', () => {
             };
             server.use(
                 http.get(`${BASE}/projects/proj-add-another/repos/proj-add-another-repo/head`, () =>
-                    HttpResponse.json({ short_sha: null, subject: null, relative_time: null }),
-                ),
+                    HttpResponse.json({ short_sha: null, subject: null, relative_time: null })
+                )
             );
 
             await startCloningAndAwaitView('clone-addanother');
 
             act(() => {
-                pushSse({ type: 'clone_completed', cloneId: 'clone-addanother', project: PROJECT, repo: repoOf(PROJECT.id) });
+                pushSse({
+                    type: 'clone_completed',
+                    cloneId: 'clone-addanother',
+                    project: PROJECT,
+                    repo: repoOf(PROJECT.id),
+                });
             });
 
-            await waitFor(() => {
-                expect(screen.getByText('Project ready')).toBeInTheDocument();
-            }, { timeout: 15000 });
+            await waitFor(
+                () => {
+                    expect(screen.getByText('Project ready')).toBeInTheDocument();
+                },
+                { timeout: 15000 }
+            );
 
             fireEvent.click(screen.getByRole('button', { name: /add another/i }));
 
@@ -1054,13 +1151,21 @@ describe('NewProjectModal', () => {
                 });
             });
 
-            await waitFor(() => {
-                expect(screen.getByText('Clone failed')).toBeInTheDocument();
-            }, { timeout: 5000 });
+            await waitFor(
+                () => {
+                    expect(screen.getByText('Clone failed')).toBeInTheDocument();
+                },
+                { timeout: 5000 }
+            );
 
-            await waitFor(() => {
-                expect(screen.getByText('Authentication failed (exit 128)')).toBeInTheDocument();
-            }, { timeout: 3000 });
+            await waitFor(
+                () => {
+                    expect(
+                        screen.getByText('Authentication failed (exit 128)')
+                    ).toBeInTheDocument();
+                },
+                { timeout: 3000 }
+            );
         });
 
         // -------------------------------------------------------------------------
@@ -1077,9 +1182,12 @@ describe('NewProjectModal', () => {
                 });
             });
 
-            await waitFor(() => {
-                expect(screen.getByText('Repository not found')).toBeInTheDocument();
-            }, { timeout: 5000 });
+            await waitFor(
+                () => {
+                    expect(screen.getByText('Repository not found')).toBeInTheDocument();
+                },
+                { timeout: 5000 }
+            );
         });
 
         // -------------------------------------------------------------------------
@@ -1096,9 +1204,12 @@ describe('NewProjectModal', () => {
                 });
             });
 
-            await waitFor(() => {
-                expect(screen.getByText('Destination already exists')).toBeInTheDocument();
-            }, { timeout: 5000 });
+            await waitFor(
+                () => {
+                    expect(screen.getByText('Destination already exists')).toBeInTheDocument();
+                },
+                { timeout: 5000 }
+            );
         });
 
         // -------------------------------------------------------------------------
@@ -1118,16 +1229,24 @@ describe('NewProjectModal', () => {
             // "Clone failed" appears in both the view heading and the alert headline.
             // The suggestion text also appears in both the subtitle and the alert body.
             // Use getAllByText to confirm they're present.
-            await waitFor(() => {
-                const cloneFailedEls = screen.getAllByText('Clone failed');
-                expect(cloneFailedEls.length).toBeGreaterThanOrEqual(1);
-            }, { timeout: 5000 });
+            await waitFor(
+                () => {
+                    const cloneFailedEls = screen.getAllByText('Clone failed');
+                    expect(cloneFailedEls.length).toBeGreaterThanOrEqual(1);
+                },
+                { timeout: 5000 }
+            );
 
             // Default suggestion text — may appear in both subtitle and alert body
-            await waitFor(() => {
-                const psEls = screen.getAllByText(/PowerShell script returned a non-zero exit code/i);
-                expect(psEls.length).toBeGreaterThanOrEqual(1);
-            }, { timeout: 3000 });
+            await waitFor(
+                () => {
+                    const psEls = screen.getAllByText(
+                        /PowerShell script returned a non-zero exit code/i
+                    );
+                    expect(psEls.length).toBeGreaterThanOrEqual(1);
+                },
+                { timeout: 3000 }
+            );
         });
 
         // -------------------------------------------------------------------------
@@ -1145,10 +1264,13 @@ describe('NewProjectModal', () => {
             });
 
             // Wait for error view — "Clone failed" heading (errors in the view title)
-            await waitFor(() => {
-                // The view heading "Clone failed" appears in the page title area
-                expect(screen.queryAllByText('Clone failed').length).toBeGreaterThanOrEqual(1);
-            }, { timeout: 10000 });
+            await waitFor(
+                () => {
+                    // The view heading "Clone failed" appears in the page title area
+                    expect(screen.queryAllByText('Clone failed').length).toBeGreaterThanOrEqual(1);
+                },
+                { timeout: 10000 }
+            );
 
             fireEvent.click(screen.getByRole('button', { name: /edit details/i }));
 
@@ -1167,15 +1289,18 @@ describe('NewProjectModal', () => {
                 // Delay response so we can observe the checking state
                 await new Promise((r) => setTimeout(r, 2000));
                 return HttpResponse.json({ available: true });
-            }),
+            })
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
         fireEvent.change(prefixInput, { target: { value: 'CHK' } });
 
-        await waitFor(() => {
-            expect(screen.getByText(/Checking availability/i)).toBeInTheDocument();
-        }, { timeout: 2000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Checking availability/i)).toBeInTheDocument();
+            },
+            { timeout: 2000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -1184,16 +1309,19 @@ describe('NewProjectModal', () => {
     it('prefix collision with null conflict shows "another project" fallback', async () => {
         server.use(
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: false, reason: 'in_use', conflict: null }),
-            ),
+                HttpResponse.json({ available: false, reason: 'in_use', conflict: null })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
         fireEvent.change(prefixInput, { target: { value: 'NUL' } });
 
-        await waitFor(() => {
-            expect(screen.getByText(/Already used by "another project"/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Already used by "another project"/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -1201,9 +1329,7 @@ describe('NewProjectModal', () => {
     // -------------------------------------------------------------------------
     it('handleExistingFolderChange: null origin does not change repo URL', async () => {
         server.use(
-            http.get(`${BASE}/projects/folder-origin`, () =>
-                HttpResponse.json({ origin: null }),
-            ),
+            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null }))
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         await waitFor(() => screen.getByRole('dialog'));
@@ -1214,10 +1340,13 @@ describe('NewProjectModal', () => {
         fireEvent.change(folderInput, { target: { value: '/home/user/projects/no-origin' } });
 
         // URL should remain empty since origin is null
-        await waitFor(() => {
-            const urlInput = screen.getByLabelText(/repository url/i) as HTMLInputElement;
-            expect(urlInput.value).toBe('');
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                const urlInput = screen.getByLabelText(/repository url/i) as HTMLInputElement;
+                expect(urlInput.value).toBe('');
+            },
+            { timeout: 3000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -1231,14 +1360,19 @@ describe('NewProjectModal', () => {
                     owner_name: 'Owner',
                     onboarding_complete: 1,
                     workspace_path: '',
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
 
-        await waitFor(() => {
-            expect(screen.getByText(/Set a workspace path in Settings first/i)).toBeInTheDocument();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(
+                    screen.getByText(/Set a workspace path in Settings first/i)
+                ).toBeInTheDocument();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('does not claim the workspace path is missing before a URL is typed when it IS set', async () => {
@@ -1249,12 +1383,14 @@ describe('NewProjectModal', () => {
                     owner_name: 'Owner',
                     onboarding_complete: 1,
                     workspace_path: '/home/user/projects',
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         expect(await screen.findByText('/home/user/projects/…')).toBeInTheDocument();
-        expect(screen.queryByText(/Set a workspace path in Settings first/i)).not.toBeInTheDocument();
+        expect(
+            screen.queryByText(/Set a workspace path in Settings first/i)
+        ).not.toBeInTheDocument();
     });
 
     // -------------------------------------------------------------------------
@@ -1263,16 +1399,25 @@ describe('NewProjectModal', () => {
     it('connect_error view renders "origin_mismatch" error kind heading + detail table', async () => {
         const connectErrorBody = {
             error_kind: 'origin_mismatch',
-            checks: { folder_exists: true, has_git: true, ls_remote_ok: true, origin_matches: false },
+            checks: {
+                folder_exists: true,
+                has_git: true,
+                ls_remote_ok: true,
+                origin_matches: false,
+            },
             folder_origin: 'https://github.com/other/repo.git',
             head_branch: 'main',
             head_sha: 'abc123',
         };
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
-            http.post(`${BASE}/projects/connect`, () => HttpResponse.json(connectErrorBody, { status: 422 })),
-            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            ),
+            http.post(`${BASE}/projects/connect`, () =>
+                HttpResponse.json(connectErrorBody, { status: 422 })
+            ),
+            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null }))
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -1289,14 +1434,20 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ORI' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /connect repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /connect repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /connect repository/i }));
 
-        await waitFor(() => {
-            expect(screen.getByText(/Folder doesn't match repository/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Folder doesn't match repository/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -1305,16 +1456,25 @@ describe('NewProjectModal', () => {
     it('connect_error view renders "not_git" error kind heading', async () => {
         const connectErrorBody = {
             error_kind: 'not_git',
-            checks: { folder_exists: true, has_git: false, ls_remote_ok: false, origin_matches: false },
+            checks: {
+                folder_exists: true,
+                has_git: false,
+                ls_remote_ok: false,
+                origin_matches: false,
+            },
             folder_origin: null,
             head_branch: null,
             head_sha: null,
         };
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
-            http.post(`${BASE}/projects/connect`, () => HttpResponse.json(connectErrorBody, { status: 422 })),
-            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            ),
+            http.post(`${BASE}/projects/connect`, () =>
+                HttpResponse.json(connectErrorBody, { status: 422 })
+            ),
+            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null }))
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -1331,14 +1491,22 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ORI' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /connect repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /connect repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /connect repository/i }));
 
-        await waitFor(() => {
-            expect(screen.getAllByText(/Folder is not a git repository/i).length).toBeGreaterThanOrEqual(1);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(
+                    screen.getAllByText(/Folder is not a git repository/i).length
+                ).toBeGreaterThanOrEqual(1);
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -1347,16 +1515,25 @@ describe('NewProjectModal', () => {
     it('connect_error view renders "missing_folder" error kind heading', async () => {
         const connectErrorBody = {
             error_kind: 'missing_folder',
-            checks: { folder_exists: false, has_git: false, ls_remote_ok: false, origin_matches: false },
+            checks: {
+                folder_exists: false,
+                has_git: false,
+                ls_remote_ok: false,
+                origin_matches: false,
+            },
             folder_origin: null,
             head_branch: null,
             head_sha: null,
         };
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
-            http.post(`${BASE}/projects/connect`, () => HttpResponse.json(connectErrorBody, { status: 422 })),
-            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            ),
+            http.post(`${BASE}/projects/connect`, () =>
+                HttpResponse.json(connectErrorBody, { status: 422 })
+            ),
+            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null }))
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -1373,14 +1550,20 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ORI' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /connect repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /connect repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /connect repository/i }));
 
-        await waitFor(() => {
-            expect(screen.getByText(/Folder not found/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Folder not found/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -1389,7 +1572,12 @@ describe('NewProjectModal', () => {
     it('connect_error view renders "already_registered" error kind heading', async () => {
         const connectErrorBody = {
             error_kind: 'already_registered',
-            checks: { folder_exists: true, has_git: true, ls_remote_ok: true, origin_matches: true },
+            checks: {
+                folder_exists: true,
+                has_git: true,
+                ls_remote_ok: true,
+                origin_matches: true,
+            },
             folder_origin: 'https://github.com/acme/orion.git',
             head_branch: 'main',
             head_sha: 'abc123',
@@ -1397,9 +1585,13 @@ describe('NewProjectModal', () => {
         };
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
-            http.post(`${BASE}/projects/connect`, () => HttpResponse.json(connectErrorBody, { status: 422 })),
-            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            ),
+            http.post(`${BASE}/projects/connect`, () =>
+                HttpResponse.json(connectErrorBody, { status: 422 })
+            ),
+            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null }))
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -1416,14 +1608,22 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ORI' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /connect repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /connect repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /connect repository/i }));
 
-        await waitFor(() => {
-            expect(screen.getAllByText(/Folder already registered/i).length).toBeGreaterThanOrEqual(1);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(
+                    screen.getAllByText(/Folder already registered/i).length
+                ).toBeGreaterThanOrEqual(1);
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -1432,16 +1632,25 @@ describe('NewProjectModal', () => {
     it('connect_error view renders "credential_missing" error kind heading', async () => {
         const connectErrorBody = {
             error_kind: 'credential_missing',
-            checks: { folder_exists: true, has_git: true, ls_remote_ok: false, origin_matches: true },
+            checks: {
+                folder_exists: true,
+                has_git: true,
+                ls_remote_ok: false,
+                origin_matches: true,
+            },
             folder_origin: 'https://github.com/acme/orion.git',
             head_branch: null,
             head_sha: null,
         };
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
-            http.post(`${BASE}/projects/connect`, () => HttpResponse.json(connectErrorBody, { status: 422 })),
-            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            ),
+            http.post(`${BASE}/projects/connect`, () =>
+                HttpResponse.json(connectErrorBody, { status: 422 })
+            ),
+            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null }))
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -1458,14 +1667,20 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ORI' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /connect repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /connect repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /connect repository/i }));
 
-        await waitFor(() => {
-            expect(screen.getByText(/Credential not found/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Credential not found/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -1474,16 +1689,25 @@ describe('NewProjectModal', () => {
     it('connect_error view "Pick different folder" button returns to form', async () => {
         const connectErrorBody = {
             error_kind: 'auth_failed',
-            checks: { folder_exists: true, has_git: true, ls_remote_ok: false, origin_matches: true },
+            checks: {
+                folder_exists: true,
+                has_git: true,
+                ls_remote_ok: false,
+                origin_matches: true,
+            },
             folder_origin: 'https://github.com/acme/orion.git',
             head_branch: null,
             head_sha: null,
         };
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
-            http.post(`${BASE}/projects/connect`, () => HttpResponse.json(connectErrorBody, { status: 422 })),
-            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            ),
+            http.post(`${BASE}/projects/connect`, () =>
+                HttpResponse.json(connectErrorBody, { status: 422 })
+            ),
+            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null }))
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -1500,14 +1724,20 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ORI' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /connect repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /connect repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /connect repository/i }));
 
-        await waitFor(() => {
-            expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
 
         // Click "Pick different folder" to go back to form
         const pickDiffBtn = screen.getByRole('button', { name: /Pick different folder/i });
@@ -1525,19 +1755,26 @@ describe('NewProjectModal', () => {
         let callCount = 0;
         const connectErrorBody = {
             error_kind: 'auth_failed',
-            checks: { folder_exists: true, has_git: true, ls_remote_ok: false, origin_matches: true },
+            checks: {
+                folder_exists: true,
+                has_git: true,
+                ls_remote_ok: false,
+                origin_matches: true,
+            },
             folder_origin: 'https://github.com/acme/orion.git',
             head_branch: null,
             head_sha: null,
         };
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            ),
             http.post(`${BASE}/projects/connect`, () => {
                 callCount++;
                 return HttpResponse.json(connectErrorBody, { status: 422 });
             }),
-            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null })),
+            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null }))
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -1554,23 +1791,32 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ORI' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /connect repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /connect repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /connect repository/i }));
 
-        await waitFor(() => {
-            expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
 
         // Click Re-verify to call startConnect again
         const reVerifyBtn = screen.getByRole('button', { name: /Re-verify/i });
         fireEvent.click(reVerifyBtn);
 
-        await waitFor(() => {
-            // Should have been called twice (initial + re-verify)
-            expect(callCount).toBeGreaterThanOrEqual(2);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                // Should have been called twice (initial + re-verify)
+                expect(callCount).toBeGreaterThanOrEqual(2);
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -1592,10 +1838,12 @@ describe('NewProjectModal', () => {
 
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
-            http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json({ clone_id: 'clone-copy', destination: '/workspace/myrepo' }),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
             ),
+            http.post(`${BASE}/projects/clone`, () =>
+                HttpResponse.json({ clone_id: 'clone-copy', destination: '/workspace/myrepo' })
+            )
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -1605,22 +1853,35 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
 
-        await waitFor(() => {
-            expect(screen.getByText(/Cloning repository/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Cloning repository/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
 
         act(() => {
-            pushSse({ type: 'clone_error', cloneId: 'clone-copy', errorDetail: 'Authentication failed' });
+            pushSse({
+                type: 'clone_error',
+                cloneId: 'clone-copy',
+                errorDetail: 'Authentication failed',
+            });
         });
 
-        await waitFor(() => {
-            expect(screen.getAllByText('Clone failed').length).toBeGreaterThanOrEqual(1);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getAllByText('Clone failed').length).toBeGreaterThanOrEqual(1);
+            },
+            { timeout: 5000 }
+        );
 
         // Click Copy to exercise copyStderr
         const copyBtn = screen.getByRole('button', { name: /Copy/i });
@@ -1645,8 +1906,8 @@ describe('NewProjectModal', () => {
         };
         server.use(
             http.get(`${BASE}/projects/proj-open/repos/proj-open-repo/head`, () =>
-                HttpResponse.json({ short_sha: 'abc1', subject: 'init', relative_time: '1m ago' }),
-            ),
+                HttpResponse.json({ short_sha: 'abc1', subject: 'init', relative_time: '1m ago' })
+            )
         );
 
         // Use startCloningAndAwaitView (sets up credentials + prefix + POST clone)
@@ -1656,12 +1917,20 @@ describe('NewProjectModal', () => {
             (window as Window & { __pushSse?: (e: object) => void }).__pushSse!(e);
 
         act(() => {
-            pushSse({ type: 'clone_completed', cloneId: 'clone-open', project: PROJECT, repo: repoOf(PROJECT.id) });
+            pushSse({
+                type: 'clone_completed',
+                cloneId: 'clone-open',
+                project: PROJECT,
+                repo: repoOf(PROJECT.id),
+            });
         });
 
-        await waitFor(() => {
-            expect(screen.getByText('Project ready')).toBeInTheDocument();
-        }, { timeout: 15000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText('Project ready')).toBeInTheDocument();
+            },
+            { timeout: 15000 }
+        );
 
         // The summary describes the repo the clone created, not the project.
         expect(screen.getByText('/workspace/myrepo')).toBeInTheDocument();
@@ -1689,17 +1958,20 @@ describe('NewProjectModal', () => {
                     owner_name: 'Owner',
                     onboarding_complete: 1,
                     workspace_path: 'C:\\Users\\user\\projects',
-                }),
-            ),
+                })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const urlInput = await screen.findByLabelText(/repository url/i);
         fireEvent.change(urlInput, { target: { value: 'https://github.com/acme/win-test.git' } });
-        await waitFor(() => {
-            // Should compute with backslash separator
-            const text = document.body.textContent ?? '';
-            expect(text.includes('win-test')).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                // Should compute with backslash separator
+                const text = document.body.textContent ?? '';
+                expect(text.includes('win-test')).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -1709,16 +1981,19 @@ describe('NewProjectModal', () => {
         server.use(
             http.get(`${BASE}/projects/prefix-available`, () => {
                 return new HttpResponse(null, { status: 500 });
-            }),
+            })
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
         fireEvent.change(prefixInput, { target: { value: 'NET' } });
         // Should show "Checking availability" momentarily then stay
-        await waitFor(() => {
-            // Either still checking or resolved — either way no crash
-            expect(document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                // Either still checking or resolved — either way no crash
+                expect(document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -1736,7 +2011,9 @@ describe('NewProjectModal', () => {
         };
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL, CRED2])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         // Wait for first credential label to appear (Select renders)
@@ -1747,9 +2024,12 @@ describe('NewProjectModal', () => {
         const combobox = screen.getByRole('combobox');
         fireEvent.mouseDown(combobox);
         // Wait for the dropdown listbox to appear
-        await waitFor(() => {
-            expect(screen.getByRole('listbox')).toBeInTheDocument();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.getByRole('listbox')).toBeInTheDocument();
+            },
+            { timeout: 3000 }
+        );
         // Click the second option in the listbox to trigger onChange (L538)
         const options = screen.getAllByRole('option');
         // options[1] is "Work PAT"; click it to fire the Select onChange handler
@@ -1794,9 +2074,7 @@ describe('NewProjectModal', () => {
     // -------------------------------------------------------------------------
     it('"manage in Settings" link in connect mode calls onClose (L961)', async () => {
         const onClose = vi.fn();
-        server.use(
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-        );
+        server.use(http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])));
         renderWithProviders(<NewProjectModal open onClose={onClose} />);
         await waitFor(() => screen.getByRole('dialog'));
         // Switch to connect mode so the L961 link renders
@@ -1816,17 +2094,20 @@ describe('NewProjectModal', () => {
     it('prefix field shows invalid state when API returns unknown reason (L249-251)', async () => {
         server.use(
             http.get(`${BASE}/projects/prefix-available`, () =>
-                HttpResponse.json({ available: false, reason: 'reserved' }),
-            ),
+                HttpResponse.json({ available: false, reason: 'reserved' })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
         fireEvent.change(prefixInput, { target: { value: 'BAD' } });
-        await waitFor(() => {
-            expect(
-                screen.getByText(/Exactly 3 uppercase letters \(A.Z\), no digits or symbols/i),
-            ).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(
+                    screen.getByText(/Exactly 3 uppercase letters \(A.Z\), no digits or symbols/i)
+                ).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -1856,10 +2137,12 @@ describe('NewProjectModal', () => {
         const onClose = vi.fn();
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
-            http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json({ clone_id: 'clone-lock', destination: '/workspace/myrepo' }),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
             ),
+            http.post(`${BASE}/projects/clone`, () =>
+                HttpResponse.json({ clone_id: 'clone-lock', destination: '/workspace/myrepo' })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={onClose} />);
         const urlInput = await screen.findByLabelText(/repository url/i);
@@ -1867,13 +2150,19 @@ describe('NewProjectModal', () => {
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
-        await waitFor(() => {
-            expect(screen.getByText(/Cloning repository/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Cloning repository/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
         // While cloning, clicking the X (close button) must be a no-op
         const closeBtn = screen.queryByRole('button', { name: /close/i });
         if (closeBtn) {
@@ -1894,7 +2183,7 @@ describe('NewProjectModal', () => {
             http.get(`${BASE}/projects/folder-origin`, () => {
                 _folderOriginCalled = true;
                 return HttpResponse.json({ origin: null });
-            }),
+            })
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         await waitFor(() => screen.getByRole('dialog'));
@@ -1916,9 +2205,11 @@ describe('NewProjectModal', () => {
     it('startConnect: network error sets submit error (L422)', async () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            ),
             http.post(`${BASE}/projects/connect`, () => HttpResponse.error()),
-            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null })),
+            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null }))
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         await waitFor(() => screen.getByRole('dialog'));
@@ -1930,14 +2221,22 @@ describe('NewProjectModal', () => {
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
         fireEvent.change(prefixInput, { target: { value: 'ORI' } });
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /connect repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /connect repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /connect repository/i }));
         // catch branch fires — submitError is set and shown in the Alert
-        await waitFor(() => {
-            expect(document.body.textContent).toMatch(/Failed to fetch|Could not connect|network|error/i);
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(document.body.textContent).toMatch(
+                    /Failed to fetch|Could not connect|network|error/i
+                );
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -1961,13 +2260,15 @@ describe('NewProjectModal', () => {
         };
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            ),
             http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json({ clone_id: 'clone-l434', destination: '/workspace/myrepo' }),
+                HttpResponse.json({ clone_id: 'clone-l434', destination: '/workspace/myrepo' })
             ),
             http.get(`${BASE}/projects/proj-l434/repos/proj-l434-repo/head`, () =>
-                HttpResponse.json({ short_sha: null, subject: null, relative_time: null }),
-            ),
+                HttpResponse.json({ short_sha: null, subject: null, relative_time: null })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const urlInput = await screen.findByLabelText(/repository url/i);
@@ -1975,8 +2276,11 @@ describe('NewProjectModal', () => {
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
         await waitFor(() => screen.getByText(/Cloning repository/i), { timeout: 5000 });
@@ -1984,11 +2288,19 @@ describe('NewProjectModal', () => {
         const pushSse = (e: object) =>
             (window as Window & { __pushSse?: (e: object) => void }).__pushSse!(e);
         act(() => {
-            pushSse({ type: 'clone_completed', cloneId: 'clone-l434', project: PROJECT, repo: repoOf(PROJECT.id) });
+            pushSse({
+                type: 'clone_completed',
+                cloneId: 'clone-l434',
+                project: PROJECT,
+                repo: repoOf(PROJECT.id),
+            });
         });
-        await waitFor(() => {
-            expect(screen.getByText('Project ready')).toBeInTheDocument();
-        }, { timeout: 15000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText('Project ready')).toBeInTheDocument();
+            },
+            { timeout: 15000 }
+        );
         // "Open project" button present — confirms openProject is wired up
         expect(screen.getByRole('button', { name: /Open project/i })).toBeInTheDocument();
     });
@@ -1999,9 +2311,7 @@ describe('NewProjectModal', () => {
     // -------------------------------------------------------------------------
     it('credential select renderValue shows "Pick a credential" when value not found (L542)', async () => {
         // Provide credentials so the Select renders, but start with an unknown id
-        server.use(
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-        );
+        server.use(http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])));
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         await waitFor(() => screen.getByRole('dialog'));
         // Force the select to display an unmatched value by opening it and checking renderValue
@@ -2010,9 +2320,12 @@ describe('NewProjectModal', () => {
         const select = screen.queryByRole('combobox');
         if (select) {
             fireEvent.change(select, { target: { value: 'nonexistent-id' } });
-            await waitFor(() => {
-                expect(screen.getByText(/Pick a credential/i)).toBeInTheDocument();
-            }, { timeout: 3000 }).catch(() => {
+            await waitFor(
+                () => {
+                    expect(screen.getByText(/Pick a credential/i)).toBeInTheDocument();
+                },
+                { timeout: 3000 }
+            ).catch(() => {
                 // renderValue may not render as visible text; just ensure no crash
                 expect(document.body).toBeTruthy();
             });
@@ -2033,19 +2346,20 @@ describe('NewProjectModal', () => {
             created_at: '2026-01-01T00:00:00.000Z',
             updated_at: '2026-01-01T00:00:00.000Z',
         };
-        server.use(
-            http.get(`${BASE}/credentials`, () => HttpResponse.json([CRED_NO_SCOPE])),
-        );
+        server.use(http.get(`${BASE}/credentials`, () => HttpResponse.json([CRED_NO_SCOPE])));
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         await waitFor(() => screen.getByRole('dialog'));
         // Open the select to render menu items (which contain the scope text)
         const select = screen.queryByRole('combobox');
         if (select) {
             fireEvent.mouseDown(select);
-            await waitFor(() => {
-                // scope || 'repo' should render 'github.com · repo'
-                expect(screen.getByText(/github\.com · repo/i)).toBeInTheDocument();
-            }, { timeout: 3000 }).catch(() => {
+            await waitFor(
+                () => {
+                    // scope || 'repo' should render 'github.com · repo'
+                    expect(screen.getByText(/github\.com · repo/i)).toBeInTheDocument();
+                },
+                { timeout: 3000 }
+            ).catch(() => {
                 expect(document.body).toBeTruthy();
             });
         }
@@ -2059,7 +2373,9 @@ describe('NewProjectModal', () => {
         // Override so the clone starts but credentials list is empty (selectedCred will be null)
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: false, reason: 'in_use', conflict: null })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: false, reason: 'in_use', conflict: null })
+            )
         );
         // We can't easily reach the cloning view without a credential,
         // so verify the selectedCred??'—' expression is exercised via the cloning view helper.
@@ -2072,10 +2388,12 @@ describe('NewProjectModal', () => {
         // is set but credentials array is empty after data refetch.)
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
-            http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json({ clone_id: 'clone-nocred', destination: '/workspace/myrepo' }),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
             ),
+            http.post(`${BASE}/projects/clone`, () =>
+                HttpResponse.json({ clone_id: 'clone-nocred', destination: '/workspace/myrepo' })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const urlInput = await screen.findByLabelText(/repository url/i);
@@ -2083,8 +2401,11 @@ describe('NewProjectModal', () => {
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
         await waitFor(() => screen.getByText(/Cloning repository/i), { timeout: 5000 });
@@ -2099,10 +2420,12 @@ describe('NewProjectModal', () => {
     it('cloning step header falls back to "Working" when step index is out of bounds (L1154)', async () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
-            http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json({ clone_id: 'clone-oob', destination: '/workspace/myrepo' }),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
             ),
+            http.post(`${BASE}/projects/clone`, () =>
+                HttpResponse.json({ clone_id: 'clone-oob', destination: '/workspace/myrepo' })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const urlInput = await screen.findByLabelText(/repository url/i);
@@ -2110,8 +2433,11 @@ describe('NewProjectModal', () => {
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
         await waitFor(() => screen.getByText(/Cloning repository/i), { timeout: 5000 });
@@ -2121,14 +2447,21 @@ describe('NewProjectModal', () => {
         // Push multiple "exited with code 0" lines to drive stepIndex to 4 (>= STEPS.length=4)
         // deriveStepIndex returns max(idx, 4) which is index 4, out of bounds for STEPS[4]
         act(() => {
-            pushSse({ type: 'clone_output', cloneId: 'clone-oob', output: 'Process exited with code 0' });
+            pushSse({
+                type: 'clone_output',
+                cloneId: 'clone-oob',
+                output: 'Process exited with code 0',
+            });
         });
         // The step display uses Math.min(stepIndex, STEPS.length - 1) for array access,
         // so STEPS.length-1 = 3 is still valid — the ?? 'Working' fires only when STEPS[...] is undefined.
         // The test exercises the branch guard regardless.
-        await waitFor(() => {
-            expect(screen.getByText('Register with Atlas')).toBeInTheDocument();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText('Register with Atlas')).toBeInTheDocument();
+            },
+            { timeout: 3000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -2147,13 +2480,22 @@ describe('NewProjectModal', () => {
         };
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            ),
             http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json({ clone_id: 'clone-head-notime', destination: '/workspace/myrepo' }),
+                HttpResponse.json({
+                    clone_id: 'clone-head-notime',
+                    destination: '/workspace/myrepo',
+                })
             ),
             http.get(`${BASE}/projects/proj-head-notime/repos/proj-head-notime-repo/head`, () =>
-                HttpResponse.json({ short_sha: 'def5678', subject: 'second commit', relative_time: null }),
-            ),
+                HttpResponse.json({
+                    short_sha: 'def5678',
+                    subject: 'second commit',
+                    relative_time: null,
+                })
+            )
         );
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
         const urlInput = await screen.findByLabelText(/repository url/i);
@@ -2161,8 +2503,11 @@ describe('NewProjectModal', () => {
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
         await waitFor(() => screen.getByText(/Cloning repository/i), { timeout: 5000 });
@@ -2170,15 +2515,26 @@ describe('NewProjectModal', () => {
         const pushSse = (e: object) =>
             (window as Window & { __pushSse?: (e: object) => void }).__pushSse!(e);
         act(() => {
-            pushSse({ type: 'clone_completed', cloneId: 'clone-head-notime', project: PROJECT, repo: repoOf(PROJECT.id) });
+            pushSse({
+                type: 'clone_completed',
+                cloneId: 'clone-head-notime',
+                project: PROJECT,
+                repo: repoOf(PROJECT.id),
+            });
         });
-        await waitFor(() => {
-            expect(screen.getByText('Project ready')).toBeInTheDocument();
-        }, { timeout: 15000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText('Project ready')).toBeInTheDocument();
+            },
+            { timeout: 15000 }
+        );
         // headInfo without relative_time renders "def5678 · second commit" (no parens suffix)
-        await waitFor(() => {
-            expect(screen.getByText(/def5678.*second commit/i)).toBeInTheDocument();
-        }, { timeout: 10000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/def5678.*second commit/i)).toBeInTheDocument();
+            },
+            { timeout: 10000 }
+        );
         // No " (null)" or " ()" should appear
         expect(screen.queryByText(/def5678.*\(.*\)/i)).not.toBeInTheDocument();
     });
@@ -2197,14 +2553,16 @@ describe('NewProjectModal', () => {
         const onClose = vi.fn();
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            ),
             http.post(`${BASE}/projects/clone`, () =>
-                HttpResponse.json({ clone_id: 'clone-agents', destination: '/workspace/myrepo' }),
+                HttpResponse.json({ clone_id: 'clone-agents', destination: '/workspace/myrepo' })
             ),
             http.get(`${BASE}/projects/proj-agents/repos/proj-agents-repo/head`, () =>
-                HttpResponse.json({ short_sha: null, subject: null, relative_time: null }),
+                HttpResponse.json({ short_sha: null, subject: null, relative_time: null })
             ),
-            http.get(`${BASE}/agents`, () => HttpResponse.json([])),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
         );
         renderWithProviders(<NewProjectModal open onClose={onClose} />);
         const urlInput = await screen.findByLabelText(/repository url/i);
@@ -2212,8 +2570,11 @@ describe('NewProjectModal', () => {
         const prefixInput = await screen.findByLabelText(/issue key prefix/i);
         fireEvent.change(prefixInput, { target: { value: 'ACM' } });
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /clone repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /clone repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /clone repository/i }));
         await waitFor(() => screen.getByText(/Cloning repository/i), { timeout: 5000 });
@@ -2238,7 +2599,12 @@ describe('NewProjectModal', () => {
     it('connect_error view already_registered without existing_project shows "—" (L1563)', async () => {
         const connectErrorBody = {
             error_kind: 'already_registered',
-            checks: { folder_exists: true, has_git: true, ls_remote_ok: true, origin_matches: true },
+            checks: {
+                folder_exists: true,
+                has_git: true,
+                ls_remote_ok: true,
+                origin_matches: true,
+            },
             folder_origin: 'https://github.com/acme/orion.git',
             head_branch: 'main',
             head_sha: 'abc123',
@@ -2246,9 +2612,13 @@ describe('NewProjectModal', () => {
         };
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
-            http.post(`${BASE}/projects/connect`, () => HttpResponse.json(connectErrorBody, { status: 422 })),
-            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            ),
+            http.post(`${BASE}/projects/connect`, () =>
+                HttpResponse.json(connectErrorBody, { status: 422 })
+            ),
+            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null }))
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -2265,15 +2635,23 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ORI' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /connect repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /connect repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /connect repository/i }));
 
-        await waitFor(() => {
-            // The already_registered text with '—' fallback should show
-            expect(screen.getByText(/This folder is already registered as "—"/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                // The already_registered text with '—' fallback should show
+                expect(
+                    screen.getByText(/This folder is already registered as "—"/i)
+                ).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 
     // -------------------------------------------------------------------------
@@ -2284,14 +2662,16 @@ describe('NewProjectModal', () => {
     it('startConnect prefix_collision sets prefix collision state (L415)', async () => {
         server.use(
             http.get(`${BASE}/credentials`, () => HttpResponse.json([CREDENTIAL])),
-            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.json({ available: true })),
+            http.get(`${BASE}/projects/prefix-available`, () =>
+                HttpResponse.json({ available: true })
+            ),
             http.post(`${BASE}/projects/connect`, () =>
                 HttpResponse.json(
                     { error_kind: 'prefix_collision', reason: 'in_use', conflict: 'taken-proj' },
-                    { status: 422 },
-                ),
+                    { status: 422 }
+                )
             ),
-            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null })),
+            http.get(`${BASE}/projects/folder-origin`, () => HttpResponse.json({ origin: null }))
         );
 
         renderWithProviders(<NewProjectModal open onClose={vi.fn()} />);
@@ -2308,13 +2688,19 @@ describe('NewProjectModal', () => {
         fireEvent.change(prefixInput, { target: { value: 'ORI' } });
 
         await waitFor(
-            () => expect(screen.getByRole('button', { name: /connect repository/i })).not.toBeDisabled(),
-            { timeout: 5000 },
+            () =>
+                expect(
+                    screen.getByRole('button', { name: /connect repository/i })
+                ).not.toBeDisabled(),
+            { timeout: 5000 }
         );
         fireEvent.click(screen.getByRole('button', { name: /connect repository/i }));
 
-        await waitFor(() => {
-            expect(screen.getByText(/Already used by "taken-proj"/i)).toBeInTheDocument();
-        }, { timeout: 5000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Already used by "taken-proj"/i)).toBeInTheDocument();
+            },
+            { timeout: 5000 }
+        );
     });
 });

@@ -20,7 +20,10 @@ function file(overrides: Partial<CliSessionDiffFile> = {}): CliSessionDiffFile {
 
 function renderList(overrides: Partial<React.ComponentProps<typeof DiffFileList>> = {}) {
     const props: React.ComponentProps<typeof DiffFileList> = {
-        files: [file(), file({ path: 'src/bar.ts', status: 'untracked', additions: 5, deletions: 0 })],
+        files: [
+            file(),
+            file({ path: 'src/bar.ts', status: 'untracked', additions: 5, deletions: 0 }),
+        ],
         selectable: true,
         selected: { 'src/foo.ts': true, 'src/bar.ts': true },
         onToggle: vi.fn(),

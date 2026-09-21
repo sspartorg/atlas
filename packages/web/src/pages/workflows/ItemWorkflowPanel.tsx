@@ -37,7 +37,9 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
         select: (full) => ({
             workflowId: full.task.workflow_id,
             // Same rule as the engine: open = not yet in review or done.
-            openSubtasks: full.sub_tasks.filter((s) => s.status !== 'in_review' && s.status !== 'done').length,
+            openSubtasks: full.sub_tasks.filter(
+                (s) => s.status !== 'in_review' && s.status !== 'done'
+            ).length,
         }),
     });
     const workflowId = task?.workflowId ?? null;
@@ -54,8 +56,12 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
     // After a finished run, new or reopened sub-tasks go through the Sub-tasks
     // steps on the same branch and into the same PR — no re-planning.
     const canContinue =
-        !live && latest?.status === 'completed' && openSubtasks > 0 && Boolean(assigned?.graph.nodes.some((n) => n.type === 'subtasks'));
-    const onError = (message: string) => (err: Error) => toast.show({ message, detail: err.message });
+        !live &&
+        latest?.status === 'completed' &&
+        openSubtasks > 0 &&
+        Boolean(assigned?.graph.nodes.some((n) => n.type === 'subtasks'));
+    const onError = (message: string) => (err: Error) =>
+        toast.show({ message, detail: err.message });
 
     return (
         <>
@@ -75,7 +81,7 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
                         onChange={(e) =>
                             setWorkflow.mutate(
                                 { itemId, workflowId: e.target.value || null },
-                                { onError: onError('Could not change workflow') },
+                                { onError: onError('Could not change workflow') }
                             )
                         }
                         sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate, maxWidth: 180 }}
@@ -102,7 +108,10 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
                             sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.5 }}
                         >
                             <WorkflowRunStatusChip status={latest.status} />
-                            <Typography component="span" sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate60 }}>
+                            <Typography
+                                component="span"
+                                sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate60 }}
+                            >
                                 {relativeTime(latest.started_at)}
                             </Typography>
                         </Link>
@@ -115,7 +124,7 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
                             onClick={() =>
                                 start.mutate(
                                     { workflowId, itemId },
-                                    { onError: onError('Could not start workflow') },
+                                    { onError: onError('Could not start workflow') }
                                 )
                             }
                             sx={{ textTransform: 'none', fontSize: 12, py: 0, minWidth: 0 }}
@@ -124,7 +133,10 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
                         </Button>
                     )}
                     {workflowId && canContinue && (
-                        <Tooltip describeChild title="Runs the open sub-tasks on the same branch and updates the pull request">
+                        <Tooltip
+                            describeChild
+                            title="Runs the open sub-tasks on the same branch and updates the pull request"
+                        >
                             <Button
                                 size="small"
                                 variant="contained"
@@ -132,10 +144,16 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
                                 onClick={() =>
                                     start.mutate(
                                         { workflowId, itemId, fromSubtasks: true },
-                                        { onError: onError('Could not continue the workflow') },
+                                        { onError: onError('Could not continue the workflow') }
                                     )
                                 }
-                                sx={{ textTransform: 'none', fontSize: 12, py: 0, minWidth: 0, boxShadow: 'none' }}
+                                sx={{
+                                    textTransform: 'none',
+                                    fontSize: 12,
+                                    py: 0,
+                                    minWidth: 0,
+                                    boxShadow: 'none',
+                                }}
                             >
                                 Continue · {openSubtasks} open
                             </Button>

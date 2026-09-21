@@ -12,7 +12,7 @@ describe('KpiTile', () => {
                 value={42}
                 caption="last 24h"
                 captionTitle="Total runs in last 24 hours"
-            />,
+            />
         );
         expect(screen.getByText('Throughput')).toBeInTheDocument();
         expect(screen.getByText('42')).toBeInTheDocument();

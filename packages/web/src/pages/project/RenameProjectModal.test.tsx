@@ -17,14 +17,14 @@ describe('RenameProjectModal', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 displayId="ACM"
                 onClose={vi.fn()}
-            />,
+            />
         );
         expect(screen.getByDisplayValue('Acme')).toBeInTheDocument();
     });
 
     it('renders nothing when project is null', () => {
         const { container } = renderWithProviders(
-            <RenameProjectModal open project={null} displayId="" onClose={vi.fn()} />,
+            <RenameProjectModal open project={null} displayId="" onClose={vi.fn()} />
         );
         expect(container.firstChild).toBeNull();
     });
@@ -36,7 +36,7 @@ describe('RenameProjectModal', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 displayId="ACM"
                 onClose={vi.fn()}
-            />,
+            />
         );
         const input = screen.getByDisplayValue('Acme');
         await userEvent.clear(input);
@@ -50,7 +50,7 @@ describe('RenameProjectModal', () => {
             http.patch(`${BASE}/projects/p1`, () => {
                 patched = true;
                 return HttpResponse.json({ id: 'p1', name: 'Acme Renamed' });
-            }),
+            })
         );
         const onClose = vi.fn();
         renderWithProviders(
@@ -59,7 +59,7 @@ describe('RenameProjectModal', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 displayId="ACM"
                 onClose={onClose}
-            />,
+            />
         );
         const input = screen.getByDisplayValue('Acme');
         await userEvent.clear(input);
@@ -75,7 +75,7 @@ describe('RenameProjectModal', () => {
             http.patch(`${BASE}/projects/p1`, () => {
                 patched = true;
                 return HttpResponse.json({ id: 'p1', name: 'Via Enter' });
-            }),
+            })
         );
         renderWithProviders(
             <RenameProjectModal
@@ -83,7 +83,7 @@ describe('RenameProjectModal', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 displayId="ACM"
                 onClose={vi.fn()}
-            />,
+            />
         );
         const input = screen.getByDisplayValue('Acme');
         await userEvent.clear(input);
@@ -94,9 +94,10 @@ describe('RenameProjectModal', () => {
 
     it('shows error when save fails', async () => {
         server.use(
-            http.patch(`${BASE}/projects/p1`, () =>
-                new HttpResponse(JSON.stringify({ error: 'Conflict' }), { status: 409 }),
-            ),
+            http.patch(
+                `${BASE}/projects/p1`,
+                () => new HttpResponse(JSON.stringify({ error: 'Conflict' }), { status: 409 })
+            )
         );
         renderWithProviders(
             <RenameProjectModal
@@ -104,7 +105,7 @@ describe('RenameProjectModal', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 displayId="ACM"
                 onClose={vi.fn()}
-            />,
+            />
         );
         const input = screen.getByDisplayValue('Acme');
         await userEvent.clear(input);
@@ -112,10 +113,13 @@ describe('RenameProjectModal', () => {
         const saveBtn = screen.getByRole('button', { name: /Save/i });
         fireEvent.click(saveBtn);
         // error state shows in Alert
-        await waitFor(() => {
-            const alert = screen.queryByRole('alert');
-            expect(alert ?? document.body).toBeTruthy();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                const alert = screen.queryByRole('alert');
+                expect(alert ?? document.body).toBeTruthy();
+            },
+            { timeout: 3000 }
+        );
     });
 
     it('Save button is disabled when name is unchanged (isUnchanged = true → canSave = false)', async () => {
@@ -127,7 +131,7 @@ describe('RenameProjectModal', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 displayId="ACM"
                 onClose={vi.fn()}
-            />,
+            />
         );
         // Name is "Acme" by default; Save should be disabled
         const saveBtn = screen.getByRole('button', { name: /^Save$/ });
@@ -141,7 +145,7 @@ describe('RenameProjectModal', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 displayId="ACM"
                 onClose={vi.fn()}
-            />,
+            />
         );
         const input = screen.getByDisplayValue('Acme');
         await userEvent.clear(input);
@@ -157,7 +161,7 @@ describe('RenameProjectModal', () => {
             http.patch(`${BASE}/projects/p1`, () => {
                 patched = true;
                 return HttpResponse.json({ id: 'p1', name: 'Acme' });
-            }),
+            })
         );
         renderWithProviders(
             <RenameProjectModal
@@ -165,7 +169,7 @@ describe('RenameProjectModal', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 displayId="ACM"
                 onClose={vi.fn()}
-            />,
+            />
         );
         const input = screen.getByDisplayValue('Acme');
         // Name is unchanged → canSave=false; pressing Enter should not trigger PATCH
@@ -181,7 +185,7 @@ describe('RenameProjectModal', () => {
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 displayId="ACM"
                 onClose={onClose}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
         expect(onClose).toHaveBeenCalled();

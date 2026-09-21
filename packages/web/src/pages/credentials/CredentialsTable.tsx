@@ -98,77 +98,164 @@ export function CredentialsTable({ rows, onEdit, onDelete }: Props) {
         >
             <Box sx={{ overflowX: 'auto' }}>
                 <Box sx={{ minWidth: 1100 }}>
-            {/* Header row */}
-            <Box
-                sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '1.4fr 1fr 0.7fr 1.2fr 1.4fr 0.9fr 0.9fr 80px',
-                    alignItems: 'center',
-                    gap: 4,
-                    px: 4,
-                    py: 3,
-                    bgcolor: ATLAS_PALETTE.slate08,
-                    borderBottom: `1px solid ${ATLAS_PALETTE.slate10}`,
-                }}
-            >
-                <Typography sx={HEADER_SX}>Label</Typography>
-                <Typography sx={HEADER_SX}>Host</Typography>
-                <Typography sx={HEADER_SX}>Kind</Typography>
-                <Typography sx={HEADER_SX}>Scope</Typography>
-                <Typography sx={HEADER_SX}>Fingerprint</Typography>
-                <Typography sx={HEADER_SX}>Status</Typography>
-                <Typography sx={HEADER_SX}>Last used</Typography>
-                <Box />
-            </Box>
-
-            {rows.map((c) => {
-                const status = deriveStatus(c);
-                return (
+                    {/* Header row */}
                     <Box
-                        key={c.id}
                         sx={{
                             display: 'grid',
                             gridTemplateColumns: '1.4fr 1fr 0.7fr 1.2fr 1.4fr 0.9fr 0.9fr 80px',
                             alignItems: 'center',
                             gap: 4,
                             px: 4,
-                            py: 4,
-                            borderBottom: `1px solid ${ATLAS_PALETTE.slate06}`,
-                            '&:last-of-type': { borderBottom: 'none' },
-                            '&:hover': { bgcolor: ATLAS_PALETTE.cloud },
-                            transition: 'background 120ms ease',
+                            py: 3,
+                            bgcolor: ATLAS_PALETTE.slate08,
+                            borderBottom: `1px solid ${ATLAS_PALETTE.slate10}`,
                         }}
                     >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
+                        <Typography sx={HEADER_SX}>Label</Typography>
+                        <Typography sx={HEADER_SX}>Host</Typography>
+                        <Typography sx={HEADER_SX}>Kind</Typography>
+                        <Typography sx={HEADER_SX}>Scope</Typography>
+                        <Typography sx={HEADER_SX}>Fingerprint</Typography>
+                        <Typography sx={HEADER_SX}>Status</Typography>
+                        <Typography sx={HEADER_SX}>Last used</Typography>
+                        <Box />
+                    </Box>
+
+                    {rows.map((c) => {
+                        const status = deriveStatus(c);
+                        return (
                             <Box
+                                key={c.id}
                                 sx={{
-                                    width: 28,
-                                    height: 28,
-                                    borderRadius: '8px',
-                                    bgcolor: ATLAS_PALETTE.cloud,
-                                    display: 'flex',
+                                    display: 'grid',
+                                    gridTemplateColumns:
+                                        '1.4fr 1fr 0.7fr 1.2fr 1.4fr 0.9fr 0.9fr 80px',
                                     alignItems: 'center',
-                                    justifyContent: 'center',
-                                    flexShrink: 0,
+                                    gap: 4,
+                                    px: 4,
+                                    py: 4,
+                                    borderBottom: `1px solid ${ATLAS_PALETTE.slate06}`,
+                                    '&:last-of-type': { borderBottom: 'none' },
+                                    '&:hover': { bgcolor: ATLAS_PALETTE.cloud },
+                                    transition: 'background 120ms ease',
                                 }}
                             >
-                                <VpnKeyOutlined
-                                    sx={{ fontSize: 14, color: ATLAS_PALETTE.brandBlue }}
-                                />
-                            </Box>
-                            <Box sx={{ minWidth: 0 }}>
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 2,
+                                        minWidth: 0,
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            width: 28,
+                                            height: 28,
+                                            borderRadius: '8px',
+                                            bgcolor: ATLAS_PALETTE.cloud,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        <VpnKeyOutlined
+                                            sx={{ fontSize: 14, color: ATLAS_PALETTE.brandBlue }}
+                                        />
+                                    </Box>
+                                    <Box sx={{ minWidth: 0 }}>
+                                        <Typography
+                                            sx={{
+                                                fontSize: 13,
+                                                fontWeight: 500,
+                                                color: ATLAS_PALETTE.slate,
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            {c.label}
+                                        </Typography>
+                                        <Typography
+                                            sx={{
+                                                fontFamily: MONO,
+                                                fontSize: 11,
+                                                color: ATLAS_PALETTE.slate60,
+                                            }}
+                                        >
+                                            cred-{c.id.slice(0, 4)}
+                                        </Typography>
+                                    </Box>
+                                </Box>
+
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                    <GitHubIcon
+                                        sx={{ fontSize: 14, color: ATLAS_PALETTE.slate70 }}
+                                    />
+                                    <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate }}>
+                                        GitHub
+                                    </Typography>
+                                </Box>
+
+                                <Box
+                                    sx={{
+                                        display: 'inline-flex',
+                                        px: 1.5,
+                                        py: 0.5,
+                                        bgcolor: ATLAS_PALETTE.slate08,
+                                        borderRadius: '4px',
+                                        fontFamily: MONO,
+                                        fontSize: 10,
+                                        fontWeight: 600,
+                                        color: ATLAS_PALETTE.slate70,
+                                        letterSpacing: '0.04em',
+                                        justifySelf: 'start',
+                                    }}
+                                >
+                                    {c.kind === 'github_app' ? 'GitHub App' : 'PAT'}
+                                </Box>
+
+                                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                    {(c.scope || 'repo')
+                                        .split(',')
+                                        .map((s) => s.trim())
+                                        .filter(Boolean)
+                                        .map((s) => (
+                                            <Box
+                                                key={s}
+                                                sx={{
+                                                    px: 1.5,
+                                                    py: 0.25,
+                                                    bgcolor: ATLAS_PALETTE.cloud,
+                                                    color: ATLAS_PALETTE.slate70,
+                                                    fontFamily: MONO,
+                                                    fontSize: 11,
+                                                    borderRadius: '4px',
+                                                }}
+                                            >
+                                                {s}
+                                            </Box>
+                                        ))}
+                                </Box>
+
                                 <Typography
                                     sx={{
-                                        fontSize: 13,
-                                        fontWeight: 500,
-                                        color: ATLAS_PALETTE.slate,
+                                        fontFamily: MONO,
+                                        fontSize: 12,
+                                        color: ATLAS_PALETTE.slate70,
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis',
                                         whiteSpace: 'nowrap',
                                     }}
                                 >
-                                    {c.label}
+                                    {c.token_fingerprint}
                                 </Typography>
+
+                                <Box>
+                                    <StatusChip status={status} />
+                                </Box>
+
                                 <Typography
                                     sx={{
                                         fontFamily: MONO,
@@ -176,98 +263,25 @@ export function CredentialsTable({ rows, onEdit, onDelete }: Props) {
                                         color: ATLAS_PALETTE.slate60,
                                     }}
                                 >
-                                    cred-{c.id.slice(0, 4)}
+                                    {relativeTime(c.last_used_at)}
                                 </Typography>
-                            </Box>
-                        </Box>
 
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                            <GitHubIcon sx={{ fontSize: 14, color: ATLAS_PALETTE.slate70 }} />
-                            <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate }}>
-                                GitHub
-                            </Typography>
-                        </Box>
-
-                        <Box
-                            sx={{
-                                display: 'inline-flex',
-                                px: 1.5,
-                                py: 0.5,
-                                bgcolor: ATLAS_PALETTE.slate08,
-                                borderRadius: '4px',
-                                fontFamily: MONO,
-                                fontSize: 10,
-                                fontWeight: 600,
-                                color: ATLAS_PALETTE.slate70,
-                                letterSpacing: '0.04em',
-                                justifySelf: 'start',
-                            }}
-                        >
-                            {c.kind === 'github_app' ? 'GitHub App' : 'PAT'}
-                        </Box>
-
-                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                            {(c.scope || 'repo')
-                                .split(',')
-                                .map((s) => s.trim())
-                                .filter(Boolean)
-                                .map((s) => (
-                                    <Box
-                                        key={s}
-                                        sx={{
-                                            px: 1.5,
-                                            py: 0.25,
-                                            bgcolor: ATLAS_PALETTE.cloud,
-                                            color: ATLAS_PALETTE.slate70,
-                                            fontFamily: MONO,
-                                            fontSize: 11,
-                                            borderRadius: '4px',
-                                        }}
-                                    >
-                                        {s}
-                                    </Box>
-                                ))}
-                        </Box>
-
-                        <Typography
-                            sx={{
-                                fontFamily: MONO,
-                                fontSize: 12,
-                                color: ATLAS_PALETTE.slate70,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                            }}
-                        >
-                            {c.token_fingerprint}
-                        </Typography>
-
-                        <Box>
-                            <StatusChip status={status} />
-                        </Box>
-
-                        <Typography
-                            sx={{ fontFamily: MONO, fontSize: 11, color: ATLAS_PALETTE.slate60 }}
-                        >
-                            {relativeTime(c.last_used_at)}
-                        </Typography>
-
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                            <Tooltip title="Edit">
-                                <IconButton size="small" onClick={() => onEdit(c.id)}>
-                                    <EditOutlined
-                                        sx={{ fontSize: 16, color: ATLAS_PALETTE.slate60 }}
+                                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                                    <Tooltip title="Edit">
+                                        <IconButton size="small" onClick={() => onEdit(c.id)}>
+                                            <EditOutlined
+                                                sx={{ fontSize: 16, color: ATLAS_PALETTE.slate60 }}
+                                            />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <CredentialRowMenu
+                                        onEdit={() => onEdit(c.id)}
+                                        onDelete={() => onDelete(c.id)}
                                     />
-                                </IconButton>
-                            </Tooltip>
-                            <CredentialRowMenu
-                                onEdit={() => onEdit(c.id)}
-                                onDelete={() => onDelete(c.id)}
-                            />
-                        </Box>
-                    </Box>
-                );
-            })}
+                                </Box>
+                            </Box>
+                        );
+                    })}
                 </Box>
             </Box>
         </Box>

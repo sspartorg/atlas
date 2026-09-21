@@ -41,7 +41,7 @@ describe('TodaysPassCard', () => {
                 color={COLOR}
                 icon="code"
                 items={[makeItem({ issue_type, issue_id })]}
-            />,
+            />
         );
         expect(screen.getByText(/Coder/)).toBeInTheDocument();
         expect(screen.getByText(issue_id)).toBeInTheDocument();

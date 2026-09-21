@@ -20,33 +20,33 @@ import { ModelEditModal } from './ModelEditModal.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
-const CLI_META: Record<AgentCli, { title: string; sub: string; dotColor: string; chip: string }> =
-    {
-        claude: {
-            title: 'Claude CLI',
-            sub: "Anthropic Claude SDK / claude-ck. Auth comes from your machine's `claude` install.",
-            dotColor: ATLAS_PALETTE.error,
-            chip: 'cli · claude',
-        },
-        copilot: {
-            title: 'GitHub Copilot CLI',
-            sub: 'GitHub Copilot CLI. Auth comes from `gh auth login` on this machine.',
-            dotColor: ATLAS_PALETTE.slate,
-            chip: 'cli · copilot',
-        },
-        ollama: {
-            title: 'Ollama',
-            sub: 'Claude Code pointed at your local Ollama server — free, no account. Models must be pulled with `ollama pull` first.',
-            dotColor: ATLAS_PALETTE.amber,
-            chip: 'cli · ollama',
-        },
-    };
+const CLI_META: Record<AgentCli, { title: string; sub: string; dotColor: string; chip: string }> = {
+    claude: {
+        title: 'Claude CLI',
+        sub: "Anthropic Claude SDK / claude-ck. Auth comes from your machine's `claude` install.",
+        dotColor: ATLAS_PALETTE.error,
+        chip: 'cli · claude',
+    },
+    copilot: {
+        title: 'GitHub Copilot CLI',
+        sub: 'GitHub Copilot CLI. Auth comes from `gh auth login` on this machine.',
+        dotColor: ATLAS_PALETTE.slate,
+        chip: 'cli · copilot',
+    },
+    ollama: {
+        title: 'Ollama',
+        sub: 'Claude Code pointed at your local Ollama server — free, no account. Models must be pulled with `ollama pull` first.',
+        dotColor: ATLAS_PALETTE.amber,
+        chip: 'cli · ollama',
+    },
+};
 
 export function ModelRegistryTab() {
     const { data: models = [], isLoading } = useCliModels();
     const modelsByCli = useMemo(() => {
-        const grouped = Object.fromEntries(AGENT_CLIS.map((cli) => [cli, [] as ICliModel[]])) as
-            Record<AgentCli, ICliModel[]>;
+        const grouped = Object.fromEntries(
+            AGENT_CLIS.map((cli) => [cli, [] as ICliModel[]])
+        ) as Record<AgentCli, ICliModel[]>;
         for (const m of models) grouped[m.cli]?.push(m);
         return grouped;
     }, [models]);
@@ -72,8 +72,8 @@ export function ModelRegistryTab() {
                 }}
             >
                 List every model you want available to your agents, scoped to the CLI that exposes
-                it. The <strong>Add Agent</strong> dialog and per-agent model pickers only show
-                what you&apos;ve added here.
+                it. The <strong>Add Agent</strong> dialog and per-agent model pickers only show what
+                you&apos;ve added here.
             </Alert>
 
             {AGENT_CLIS.map((cli) => (
@@ -300,27 +300,18 @@ function ConfirmRemoveModelDialog({
                             flexShrink: 0,
                         }}
                     >
-                        <DeleteOutlineRounded
-                            sx={{ color: ATLAS_PALETTE.error, fontSize: 20 }}
-                        />
+                        <DeleteOutlineRounded sx={{ color: ATLAS_PALETTE.error, fontSize: 20 }} />
                     </Box>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         <FormHeading>Remove this model?</FormHeading>
-                        <Typography
-                            sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 0.5 }}
-                        >
+                        <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
                             <strong>{model?.model_name ?? ''}</strong> will be removed from{' '}
-                            {cliLabel}. Only models nothing depends on can be removed — if any
-                            agent or marketplace entry still names this model, the removal is
-                            refused and the reason names what to fix first.
+                            {cliLabel}. Only models nothing depends on can be removed — if any agent
+                            or marketplace entry still names this model, the removal is refused and
+                            the reason names what to fix first.
                         </Typography>
                     </Box>
-                    <IconButton
-                        size="small"
-                        onClick={onCancel}
-                        disabled={busy}
-                        aria-label="Close"
-                    >
+                    <IconButton size="small" onClick={onCancel} disabled={busy} aria-label="Close">
                         <CloseRounded fontSize="small" />
                     </IconButton>
                 </Box>

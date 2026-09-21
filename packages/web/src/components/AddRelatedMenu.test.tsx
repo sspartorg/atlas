@@ -11,9 +11,7 @@ describe('AddRelatedMenu', () => {
 
     it('renders the trigger button and opens the menu on click', () => {
         const onClick = vi.fn();
-        renderWithProviders(
-            <AddRelatedMenu options={[{ label: 'Add relates-to', onClick }]} />,
-        );
+        renderWithProviders(<AddRelatedMenu options={[{ label: 'Add relates-to', onClick }]} />);
         const trigger = screen.getByRole('button', { name: /add related item/i });
         fireEvent.click(trigger);
         expect(screen.getByRole('menuitem', { name: 'Add relates-to' })).toBeInTheDocument();
@@ -21,9 +19,7 @@ describe('AddRelatedMenu', () => {
 
     it('fires the option onClick and closes the menu', () => {
         const onClick = vi.fn();
-        renderWithProviders(
-            <AddRelatedMenu options={[{ label: 'Add relates-to', onClick }]} />,
-        );
+        renderWithProviders(<AddRelatedMenu options={[{ label: 'Add relates-to', onClick }]} />);
         fireEvent.click(screen.getByRole('button', { name: /add related item/i }));
         fireEvent.click(screen.getByRole('menuitem', { name: 'Add relates-to' }));
         expect(onClick).toHaveBeenCalledTimes(1);
@@ -32,9 +28,7 @@ describe('AddRelatedMenu', () => {
     it('respects disabled option flag (aria-disabled is set)', () => {
         const onClick = vi.fn();
         renderWithProviders(
-            <AddRelatedMenu
-                options={[{ label: 'Add relates-to', onClick, disabled: true }]}
-            />,
+            <AddRelatedMenu options={[{ label: 'Add relates-to', onClick, disabled: true }]} />
         );
         fireEvent.click(screen.getByRole('button', { name: /add related item/i }));
         const item = screen.getByRole('menuitem', { name: 'Add relates-to' });
@@ -54,7 +48,7 @@ describe('AddRelatedMenu', () => {
                         icon: <span data-testid="my-icon">@</span>,
                     },
                 ]}
-            />,
+            />
         );
         fireEvent.click(screen.getByRole('button', { name: /add related item/i }));
         expect(screen.getByTestId('my-icon')).toBeInTheDocument();
@@ -62,10 +56,7 @@ describe('AddRelatedMenu', () => {
 
     it('accepts a custom label', () => {
         renderWithProviders(
-            <AddRelatedMenu
-                options={[{ label: 'X', onClick: () => {} }]}
-                label="My label"
-            />,
+            <AddRelatedMenu options={[{ label: 'X', onClick: () => {} }]} label="My label" />
         );
         expect(screen.getByRole('button', { name: 'My label' })).toBeInTheDocument();
     });

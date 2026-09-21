@@ -25,9 +25,7 @@ function makeScript(over: Record<string, unknown> = {}) {
 
 describe('ProjectGuardrailScriptsTab', () => {
     it('renders the empty state when no project-scoped scripts exist', async () => {
-        server.use(
-            http.get(`${BASE}/projects/p1/guardrail-scripts`, () => HttpResponse.json([])),
-        );
+        server.use(http.get(`${BASE}/projects/p1/guardrail-scripts`, () => HttpResponse.json([])));
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
         await waitFor(() => {
             expect(screen.getByText(/No project scripts yet/i)).toBeInTheDocument();
@@ -37,8 +35,8 @@ describe('ProjectGuardrailScriptsTab', () => {
     it('renders one card per script when scripts exist', async () => {
         server.use(
             http.get(`${BASE}/projects/p1/guardrail-scripts`, () =>
-                HttpResponse.json([makeScript()]),
-            ),
+                HttpResponse.json([makeScript()])
+            )
         );
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
         await waitFor(() => {
@@ -53,8 +51,8 @@ describe('ProjectGuardrailScriptsTab', () => {
                 HttpResponse.json([
                     makeScript({ id: 's1', name: 'A' }),
                     makeScript({ id: 's2', name: 'B' }),
-                ]),
-            ),
+                ])
+            )
         );
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
         await waitFor(() => {
@@ -65,8 +63,8 @@ describe('ProjectGuardrailScriptsTab', () => {
     it('clicks the "Add script" header button to open the modal', async () => {
         server.use(
             http.get(`${BASE}/projects/p1/guardrail-scripts`, () =>
-                HttpResponse.json([makeScript()]),
-            ),
+                HttpResponse.json([makeScript()])
+            )
         );
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
         const btn = await screen.findByRole('button', { name: /Add script/i });
@@ -79,9 +77,7 @@ describe('ProjectGuardrailScriptsTab', () => {
     });
 
     it('clicks the "Add first script" button in the empty state to open the modal', async () => {
-        server.use(
-            http.get(`${BASE}/projects/p1/guardrail-scripts`, () => HttpResponse.json([])),
-        );
+        server.use(http.get(`${BASE}/projects/p1/guardrail-scripts`, () => HttpResponse.json([])));
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
         const btn = await screen.findByRole('button', { name: /Add first script/i });
         fireEvent.click(btn);
@@ -93,8 +89,8 @@ describe('ProjectGuardrailScriptsTab', () => {
     it('opens the edit modal when a script card is clicked', async () => {
         server.use(
             http.get(`${BASE}/projects/p1/guardrail-scripts`, () =>
-                HttpResponse.json([makeScript({ name: 'Click me' })]),
-            ),
+                HttpResponse.json([makeScript({ name: 'Click me' })])
+            )
         );
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
         const card = await screen.findByText('Click me');
@@ -108,12 +104,12 @@ describe('ProjectGuardrailScriptsTab', () => {
         let patched = false;
         server.use(
             http.get(`${BASE}/projects/p1/guardrail-scripts`, () =>
-                HttpResponse.json([makeScript({ id: 'edit-s', name: 'Edit Me' })]),
+                HttpResponse.json([makeScript({ id: 'edit-s', name: 'Edit Me' })])
             ),
             http.patch(`${BASE}/projects/p1/guardrail-scripts/edit-s`, async () => {
                 patched = true;
                 return HttpResponse.json(makeScript({ id: 'edit-s', name: 'Edited' }));
-            }),
+            })
         );
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
         // Open edit modal by clicking card
@@ -135,10 +131,8 @@ describe('ProjectGuardrailScriptsTab', () => {
             http.get(`${BASE}/projects/p1/guardrail-scripts`, () => HttpResponse.json([])),
             http.post(`${BASE}/projects/p1/guardrail-scripts`, async () => {
                 created = true;
-                return HttpResponse.json(
-                    makeScript({ id: 'new-script', name: 'New Script' }),
-                );
-            }),
+                return HttpResponse.json(makeScript({ id: 'new-script', name: 'New Script' }));
+            })
         );
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
         // Open add modal
@@ -167,12 +161,12 @@ describe('ProjectGuardrailScriptsTab', () => {
         let deleted = false;
         server.use(
             http.get(`${BASE}/projects/p1/guardrail-scripts`, () =>
-                HttpResponse.json([makeScript({ id: 'del-s', name: 'Delete Me' })]),
+                HttpResponse.json([makeScript({ id: 'del-s', name: 'Delete Me' })])
             ),
             http.delete(`${BASE}/projects/p1/guardrail-scripts/del-s`, () => {
                 deleted = true;
                 return new HttpResponse(null, { status: 204 });
-            }),
+            })
         );
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
         await waitFor(() => expect(screen.getByText('Delete Me')).toBeInTheDocument());
@@ -191,23 +185,29 @@ describe('ProjectGuardrailScriptsTab', () => {
         let created: Record<string, unknown> | null = null;
         server.use(
             http.get(`${BASE}/projects/p1/guardrail-scripts`, () =>
-                HttpResponse.json([makeScript({ id: 'lint', name: 'Project lint' })]),
+                HttpResponse.json([makeScript({ id: 'lint', name: 'Project lint' })])
             ),
             http.get(`${BASE}/guardrail-scripts`, () =>
                 HttpResponse.json([
-                    { ...makeScript({ id: 'lint', name: 'Workspace lint' }), project_id: undefined },
-                    { ...makeScript({ id: 'no-secrets', name: 'No secrets' }), project_id: undefined },
-                ]),
+                    {
+                        ...makeScript({ id: 'lint', name: 'Workspace lint' }),
+                        project_id: undefined,
+                    },
+                    {
+                        ...makeScript({ id: 'no-secrets', name: 'No secrets' }),
+                        project_id: undefined,
+                    },
+                ])
             ),
             http.post(`${BASE}/projects/p1/guardrail-scripts`, async ({ request }) => {
                 created = (await request.json()) as Record<string, unknown>;
                 return HttpResponse.json(makeScript({ id: 'no-secrets', name: 'No secrets' }));
-            }),
+            })
         );
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
         fireEvent.click(await screen.findByRole('button', { name: /Add script/i }));
         expect(
-            await screen.findByText(/same slug overrides the workspace script/i),
+            await screen.findByText(/same slug overrides the workspace script/i)
         ).toBeInTheDocument();
         const chip = await screen.findByRole('button', { name: 'no-secrets' });
         expect(screen.queryByRole('button', { name: 'lint' })).not.toBeInTheDocument();
@@ -223,9 +223,7 @@ describe('ProjectGuardrailScriptsTab', () => {
 
     it('renders loading state while scripts query is pending (isLoading branch)', () => {
         // Never-resolving promise keeps isLoading=true
-        server.use(
-            http.get(`${BASE}/projects/p1/guardrail-scripts`, () => new Promise(() => {})),
-        );
+        server.use(http.get(`${BASE}/projects/p1/guardrail-scripts`, () => new Promise(() => {})));
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
         // Loading text is rendered while the query is in flight
         expect(screen.queryByText(/Loading/)).toBeInTheDocument();
@@ -234,8 +232,8 @@ describe('ProjectGuardrailScriptsTab', () => {
     it('renders singular "script" count text when exactly 1 script exists', async () => {
         server.use(
             http.get(`${BASE}/projects/p1/guardrail-scripts`, () =>
-                HttpResponse.json([makeScript({ id: 's1', name: 'Solo Script' })]),
-            ),
+                HttpResponse.json([makeScript({ id: 's1', name: 'Solo Script' })])
+            )
         );
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
         await waitFor(() => {
@@ -246,8 +244,8 @@ describe('ProjectGuardrailScriptsTab', () => {
     it('ScriptCard renders without description when script.description is empty (falsy branch)', async () => {
         server.use(
             http.get(`${BASE}/projects/p1/guardrail-scripts`, () =>
-                HttpResponse.json([makeScript({ id: 'nd', name: 'No Desc', description: '' })]),
-            ),
+                HttpResponse.json([makeScript({ id: 'nd', name: 'No Desc', description: '' })])
+            )
         );
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
         await waitFor(() => {

@@ -39,7 +39,7 @@ interface Combined {
 // widths.
 function mergeByProject(
     byProject: ProjectRow[],
-    terminalByProject: TerminalProjectRow[],
+    terminalByProject: TerminalProjectRow[]
 ): Combined[] {
     const m = new Map<string, Combined>();
     for (const p of byProject) {
@@ -92,7 +92,8 @@ export function ProjectCostBars({
     // Recompute the normaliser against the COMBINED total so terminal
     // contribution doesn't make any bar overflow. Falls back to the
     // page-level `topProjectMax` if every row is zero (defensive).
-    const maxCombined = rows.length > 0 ? Math.max(...rows.map((r) => r.total_cost)) : topProjectMax;
+    const maxCombined =
+        rows.length > 0 ? Math.max(...rows.map((r) => r.total_cost)) : topProjectMax;
     if (rows.length === 0) {
         return (
             <Card>
@@ -152,7 +153,9 @@ export function ProjectCostBars({
                                 transition: 'background 160ms ease, border-color 160ms ease',
                                 '&:hover': {
                                     background: ATLAS_PALETTE.cloud,
-                                    borderColor: isClickable ? 'rgba(0,122,201,.18)' : 'transparent',
+                                    borderColor: isClickable
+                                        ? 'rgba(0,122,201,.18)'
+                                        : 'transparent',
                                 },
                             }}
                         >
@@ -188,7 +191,8 @@ export function ProjectCostBars({
                                             height: '100%',
                                             width: `${Math.max(2, agentPct)}%`,
                                             background: CHART_COLORS.cost,
-                                            animation: 'atlas-anal-fade 700ms cubic-bezier(.18,.7,.2,1) both',
+                                            animation:
+                                                'atlas-anal-fade 700ms cubic-bezier(.18,.7,.2,1) both',
                                         }}
                                         title={`Agentic ${formatCostUsd(p.agent_cost)}`}
                                     />
@@ -199,7 +203,8 @@ export function ProjectCostBars({
                                             height: '100%',
                                             width: `${Math.max(2, terminalPct)}%`,
                                             background: CHART_COLORS.terminal,
-                                            animation: 'atlas-anal-fade 700ms cubic-bezier(.18,.7,.2,1) both',
+                                            animation:
+                                                'atlas-anal-fade 700ms cubic-bezier(.18,.7,.2,1) both',
                                         }}
                                         title={`Terminal ${formatCostUsd(p.terminal_cost)}`}
                                     />
@@ -228,11 +233,7 @@ export function ProjectCostBars({
                                 }}
                             >
                                 {p.run_count} run{p.run_count === 1 ? '' : 's'}
-                                {p.session_count > 0 && (
-                                    <>
-                                        {' '}· {p.session_count} term
-                                    </>
-                                )}
+                                {p.session_count > 0 && <> · {p.session_count} term</>}
                             </Typography>
                         </Box>
                     );

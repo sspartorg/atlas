@@ -4,7 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { ToastProvider, useToast } from '../hooks/useToast.js';
 import { Toast } from './Toast.js';
 
-function Trigger({ message, action }: { message: string; action?: { label: string; onClick: () => void } }) {
+function Trigger({
+    message,
+    action,
+}: {
+    message: string;
+    action?: { label: string; onClick: () => void };
+}) {
     const { show } = useToast();
     return (
         <button
@@ -23,7 +29,7 @@ describe('Toast', () => {
         const { container } = render(
             <ToastProvider>
                 <Toast />
-            </ToastProvider>,
+            </ToastProvider>
         );
         expect(container.querySelector('[role]')).toBeNull();
     });
@@ -34,7 +40,7 @@ describe('Toast', () => {
             <ToastProvider>
                 <Trigger message="Copied" action={{ label: 'Undo', onClick }} />
                 <Toast />
-            </ToastProvider>,
+            </ToastProvider>
         );
         await userEvent.click(screen.getByRole('button', { name: 'fire' }));
         expect(await screen.findByText('Copied')).toBeInTheDocument();
@@ -46,7 +52,7 @@ describe('Toast', () => {
             <ToastProvider>
                 <Trigger message="Saved" />
                 <Toast />
-            </ToastProvider>,
+            </ToastProvider>
         );
         await act(async () => {
             await userEvent.click(screen.getByRole('button', { name: 'fire' }));

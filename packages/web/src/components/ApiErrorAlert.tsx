@@ -40,8 +40,7 @@ function copyForKind(kind: ApiErrorKind, message: string, details: unknown): Cop
         case 'credentials_missing':
             return {
                 title: 'Credentials not configured',
-                detail:
-                    "This integration doesn't have credentials yet. Open Settings → Credentials to add them.",
+                detail: "This integration doesn't have credentials yet. Open Settings → Credentials to add them.",
                 cta: (
                     <Button
                         component={RouterLink}
@@ -57,8 +56,7 @@ function copyForKind(kind: ApiErrorKind, message: string, details: unknown): Cop
         case 'credentials_invalid':
             return {
                 title: "Credentials aren't working",
-                detail:
-                    'The token Atlas has on file was rejected by the upstream service. Re-enter it in Settings → Credentials.',
+                detail: 'The token Atlas has on file was rejected by the upstream service. Re-enter it in Settings → Credentials.',
                 cta: (
                     <Button
                         component={RouterLink}
@@ -79,8 +77,7 @@ function copyForKind(kind: ApiErrorKind, message: string, details: unknown): Cop
         case 'upstream_unavailable':
             return {
                 title: "Can't reach upstream service",
-                detail:
-                    'If this run uses MCP, make sure the local MCP server is running. Otherwise the remote service is probably down — try again in a moment.',
+                detail: 'If this run uses MCP, make sure the local MCP server is running. Otherwise the remote service is probably down — try again in a moment.',
             };
         case 'cli_not_installed': {
             const bin = detailsBinary(details);
@@ -90,8 +87,8 @@ function copyForKind(kind: ApiErrorKind, message: string, details: unknown): Cop
                 detail: (
                     <>
                         Install {binText} and restart the API. See README →{' '}
-                        <Box component="strong">Prerequisites</Box> for the install command for
-                        your OS.
+                        <Box component="strong">Prerequisites</Box> for the install command for your
+                        OS.
                     </>
                 ),
             };
@@ -99,15 +96,17 @@ function copyForKind(kind: ApiErrorKind, message: string, details: unknown): Cop
         case 'unauthorized':
             return {
                 title: 'MCP token mismatch',
-                detail:
-                    'The X-Atlas-Token header didn\'t match ATLAS_MCP_TOKEN. Check the value in your `.env` and restart the API.',
+                detail: "The X-Atlas-Token header didn't match ATLAS_MCP_TOKEN. Check the value in your `.env` and restart the API.",
             };
         case 'not_found':
             return { title: 'Not found', detail: message || 'The resource is gone.' };
         case 'conflict':
-            return { title: 'Conflict', detail: message || 'The request conflicts with current state.' };
+            return {
+                title: 'Conflict',
+                detail: message || 'The request conflicts with current state.',
+            };
         case 'validation_error':
-            return { title: 'Invalid input', detail: message || 'The request didn\'t parse.' };
+            return { title: 'Invalid input', detail: message || "The request didn't parse." };
         case 'internal_error':
         default:
             return {

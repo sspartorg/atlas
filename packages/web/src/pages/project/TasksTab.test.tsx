@@ -14,7 +14,7 @@ describe('TasksTab', () => {
                 agents={[]}
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         // After useDeferredMount flips ready the summary line interpolates
         // the actual row count (1).
@@ -31,7 +31,7 @@ describe('TasksTab', () => {
                 agents={[]}
                 ownerName="Bob"
                 ownerAccent="#0A0A0A"
-            />,
+            />
         );
         const skeletons = container.querySelectorAll('.MuiSkeleton-root');
         expect(skeletons.length).toBeGreaterThan(0);

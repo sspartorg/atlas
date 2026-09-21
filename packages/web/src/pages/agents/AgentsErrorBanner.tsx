@@ -25,6 +25,7 @@ export function AgentsErrorBanner({ onRetry }: Props) {
             <Box
                 component="span"
                 className="material-symbols-rounded"
+                aria-hidden="true"
                 sx={{ fontSize: 20, color: ATLAS_PALETTE.warning, mt: '2px' }}
             >
                 warning
@@ -35,9 +36,7 @@ export function AgentsErrorBanner({ onRetry }: Props) {
                 >
                     Couldn&apos;t load agent statuses
                 </Typography>
-                <Typography
-                    sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate70, lineHeight: 1.55 }}
-                >
+                <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate70, lineHeight: 1.55 }}>
                     The runtime queue is unreachable. Cards below show config from disk, but live
                     status, queue depth, and last-run times are stale.
                 </Typography>
@@ -49,6 +48,7 @@ export function AgentsErrorBanner({ onRetry }: Props) {
                     <Box
                         component="span"
                         className="material-symbols-rounded"
+                        aria-hidden="true"
                         sx={{ fontSize: 16 }}
                     >
                         refresh

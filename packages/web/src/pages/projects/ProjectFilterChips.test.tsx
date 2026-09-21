@@ -19,7 +19,7 @@ describe('ProjectFilterChips', () => {
                     content: 0,
                     design: 0,
                 }}
-            />,
+            />
         );
         expect(screen.getByText('All')).toBeInTheDocument();
         await userEvent.click(screen.getByText('My queue'));

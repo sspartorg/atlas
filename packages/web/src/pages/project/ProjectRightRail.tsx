@@ -149,7 +149,10 @@ export const ProjectRightRail = memo(function ProjectRightRail({
                             cursor: 'pointer',
                             fontFamily: 'inherit',
                             '&:hover': { textDecoration: 'underline' },
-                            '&:focus-visible': { outline: `2px solid ${ATLAS_PALETTE.brandBlue}`, outlineOffset: 2 },
+                            '&:focus-visible': {
+                                outline: `2px solid ${ATLAS_PALETTE.brandBlue}`,
+                                outlineOffset: 2,
+                            },
                         }}
                     >
                         Edit →

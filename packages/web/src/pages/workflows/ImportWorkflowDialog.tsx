@@ -21,7 +21,9 @@ export function importDetail(r: IWorkflowImportResult): string {
     return [
         r.installed_agents.length > 0 ? `Installed ${r.installed_agents.join(', ')}` : '',
         r.reused_agents.length > 0 ? `Reused ${r.reused_agents.join(', ')}` : '',
-        r.sub_workflows.length > 0 ? `Sub-workflows ${r.sub_workflows.map((w) => w.name).join(', ')}` : '',
+        r.sub_workflows.length > 0
+            ? `Sub-workflows ${r.sub_workflows.map((w) => w.name).join(', ')}`
+            : '',
     ]
         .filter((part) => part !== '')
         .join(' · ');
@@ -49,10 +51,13 @@ export function ImportWorkflowDialog({ open, onClose }: { open: boolean; onClose
     return (
         <Dialog open={open} onClose={pending ? undefined : onClose} maxWidth="sm" fullWidth>
             <DialogTitle sx={{ fontSize: 18, fontWeight: 600, pb: 2 }}>Import workflow</DialogTitle>
-            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 4, pt: '8px !important' }}>
+            <DialogContent
+                sx={{ display: 'flex', flexDirection: 'column', gap: 4, pt: '8px !important' }}
+            >
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate70 }}>
-                    Upload a workflow bundle exported from Atlas. Its sub-workflows are created with it, and any agent it
-                    uses that you don&apos;t have is installed from the bundle. Agents you already have are used as they are.
+                    Upload a workflow bundle exported from Atlas. Its sub-workflows are created with
+                    it, and any agent it uses that you don&apos;t have is installed from the bundle.
+                    Agents you already have are used as they are.
                 </Typography>
                 <TextField
                     select
@@ -97,7 +102,9 @@ export function ImportWorkflowDialog({ open, onClose }: { open: boolean; onClose
                     data-testid="workflow-zip-input"
                     onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
-                {importWorkflow.error && <Alert severity="error">{importWorkflow.error.message}</Alert>}
+                {importWorkflow.error && (
+                    <Alert severity="error">{importWorkflow.error.message}</Alert>
+                )}
             </DialogContent>
             <DialogActions sx={{ px: 6, pb: 4, gap: 2 }}>
                 <Button variant="outlined" onClick={onClose} disabled={pending}>

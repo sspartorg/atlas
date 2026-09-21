@@ -18,12 +18,12 @@ export const MONO = TYPOGRAPHY.fontFamilyMono;
 // the strokes/fills are theme-independent visual cues. Picked from
 // Tailwind's 500/400 family — modern, recognisable as analytics-grade.
 export const CHART_COLORS = {
-    cost: '#3B82F6',        // blue-500 — primary (agentic) cost line
+    cost: '#3B82F6', // blue-500 — primary (agentic) cost line
     costSoft: 'rgba(59,130,246,.18)',
-    input: '#A855F7',       // purple-500 — input tokens
-    output: '#06B6D4',      // cyan-500  — output tokens
-    cached: '#10B981',      // emerald-500 — cached / efficient
-    runs: '#F59E0B',        // amber-500 — completed-run volume
+    input: '#A855F7', // purple-500 — input tokens
+    output: '#06B6D4', // cyan-500  — output tokens
+    cached: '#10B981', // emerald-500 — cached / efficient
+    runs: '#F59E0B', // amber-500 — completed-run volume
     // Manual terminal sessions accent. Chosen orange-500 to contrast
     // sharply with the agentic blue while staying inside the Tailwind
     // 500/400 family the rest of CHART_COLORS lives in. Used in stacked
@@ -33,7 +33,7 @@ export const CHART_COLORS = {
     // cool palette around it.
     terminal: '#F97316',
     terminalSoft: 'rgba(249,115,22,.18)',
-    grid: 'rgba(127,127,127,.16)',  // mid-gray, visible on both modes
+    grid: 'rgba(127,127,127,.16)', // mid-gray, visible on both modes
     rail: 'rgba(127,127,127,.28)',
 };
 
@@ -41,8 +41,8 @@ export const CHART_COLORS = {
 // colours that read in both modes without relying on the now-collapsed
 // brand-hue palette.
 export const ITEM_TYPE_COLORS: Record<IssueType, string> = {
-    task: '#3B82F6',        // blue
-    sub_task: '#10B981',    // emerald
+    task: '#3B82F6', // blue
+    sub_task: '#10B981', // emerald
 };
 
 export const ITEM_TYPE_LABEL: Record<IssueType, string> = {
@@ -50,13 +50,7 @@ export const ITEM_TYPE_LABEL: Record<IssueType, string> = {
     sub_task: 'Sub-task',
 };
 
-export function Eyebrow({
-    children,
-    light,
-}: {
-    children: ReactNode;
-    light?: boolean;
-}) {
+export function Eyebrow({ children, light }: { children: ReactNode; light?: boolean }) {
     return (
         <Typography
             sx={{
@@ -87,8 +81,7 @@ export function Card({
                 border: `1px solid ${ATLAS_PALETTE.slate10}`,
                 borderRadius: '14px',
                 p: 4,
-                transition:
-                    'border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease',
+                transition: 'border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease',
                 '&:hover': {
                     borderColor: ATLAS_PALETTE.slate30,
                     boxShadow: 'var(--atlas-elevation-mid)',
@@ -229,9 +222,7 @@ export function ChartTitle({
                 {title}
             </Typography>
             {sub && (
-                <Typography
-                    sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 0.5 }}
-                >
+                <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
                     {sub}
                 </Typography>
             )}

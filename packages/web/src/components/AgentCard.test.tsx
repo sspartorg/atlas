@@ -45,7 +45,9 @@ describe('AgentCard', () => {
     });
 
     it('renders agent name and category', () => {
-        renderWithProviders(<AgentCard agent={makeAgent({ name: 'Coder', category: 'software-dev' })} />);
+        renderWithProviders(
+            <AgentCard agent={makeAgent({ name: 'Coder', category: 'software-dev' })} />
+        );
         expect(screen.getByText('Coder')).toBeInTheDocument();
         expect(screen.getByText('Software dev')).toBeInTheDocument();
     });
@@ -58,7 +60,7 @@ describe('AgentCard', () => {
                     category: 'software-dev',
                     designation: 'Product Owner',
                 })}
-            />,
+            />
         );
         expect(screen.getByText('Product Owner · Software dev')).toBeInTheDocument();
     });
@@ -71,7 +73,7 @@ describe('AgentCard', () => {
                     category: 'software-dev',
                     designation: '',
                 })}
-            />,
+            />
         );
         // getByText is exact-match by default — if a designation had leaked
         // into the subtitle, the element text would be "Foo · Software dev"
@@ -81,11 +83,7 @@ describe('AgentCard', () => {
 
     it('shows the favorite affordance when handler provided', () => {
         renderWithProviders(
-            <AgentCard
-                agent={makeAgent({ name: 'Coder' })}
-                isFavorite
-                onToggleFavorite={vi.fn()}
-            />,
+            <AgentCard agent={makeAgent({ name: 'Coder' })} isFavorite onToggleFavorite={vi.fn()} />
         );
         expect(document.body.textContent).toContain('Coder');
     });
@@ -110,14 +108,14 @@ describe('AgentCard', () => {
                         completed_at: null,
                     } as never,
                 ]}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('Queued');
     });
 
     it('renders Queued (not Idle) when items are queued but no run exists yet', () => {
         renderWithProviders(
-            <AgentCard agent={makeAgent({ status: 'active' })} runs={[]} queueDepth={1} />,
+            <AgentCard agent={makeAgent({ status: 'active' })} runs={[]} queueDepth={1} />
         );
         expect(screen.getByText('Queued')).toBeInTheDocument();
         expect(screen.queryByText('Idle')).not.toBeInTheDocument();
@@ -128,7 +126,7 @@ describe('AgentCard', () => {
             <AgentCard
                 agent={makeAgent({ status: 'active' })}
                 runs={[makeRun({ status: 'error' })]}
-            />,
+            />
         );
         expect(screen.getByText('Failed')).toHaveStyle({ color: ATLAS_PALETTE.error });
     });
@@ -142,7 +140,7 @@ describe('AgentCard', () => {
             <AgentCard
                 agent={makeAgent({ status: 'active', name: 'Runner' })}
                 runs={[makeRun({ status: 'completed' })]}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('Idle');
     });
@@ -152,7 +150,7 @@ describe('AgentCard', () => {
             <AgentCard
                 agent={makeAgent({ status: 'active', name: 'Runner' })}
                 runs={[makeRun({ status: 'in_progress' })]}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('Running');
     });
@@ -162,22 +160,20 @@ describe('AgentCard', () => {
             <AgentCard
                 agent={makeAgent({ status: 'active', name: 'Runner' })}
                 runs={[makeRun({ status: 'error' })]}
-            />,
+            />
         );
         expect(document.body.textContent).toContain('Failed');
     });
 
     it('renders upgradeAvailable pill', () => {
         renderWithProviders(
-            <AgentCard agent={makeAgent({ name: 'Upgradeable' })} upgradeAvailable />,
+            <AgentCard agent={makeAgent({ name: 'Upgradeable' })} upgradeAvailable />
         );
         expect(screen.getByText('Upgrade')).toBeInTheDocument();
     });
 
     it('renders runtimeError label "last run —" (runtimeError branch)', () => {
-        renderWithProviders(
-            <AgentCard agent={makeAgent({ name: 'Broken' })} runtimeError />,
-        );
+        renderWithProviders(<AgentCard agent={makeAgent({ name: 'Broken' })} runtimeError />);
         expect(document.body.textContent).toContain('last run —');
     });
 
@@ -187,7 +183,7 @@ describe('AgentCard', () => {
             <AgentCard
                 agent={makeAgent({ name: 'Timed' })}
                 runs={[makeRun({ status: 'completed', created_at: pastDate })]}
-            />,
+            />
         );
         // The label should say "last run X ago" (not "last run —")
         expect(document.body.textContent).toMatch(/last run .+/);
@@ -198,7 +194,7 @@ describe('AgentCard', () => {
             <AgentCard
                 agent={makeAgent({ name: 'Costly' })}
                 runs={[makeRun({ status: 'completed', total_cost_usd: 0.05 })]}
-            />,
+            />
         );
         // formatCostUsd(0.05) renders something like "$0.05"
         expect(document.body.textContent).toMatch(/\$0\.05/);
@@ -207,10 +203,7 @@ describe('AgentCard', () => {
     it('renders menuActions (AgentCardMenu) when menuActions prop is provided', () => {
         const onPause = vi.fn();
         renderWithProviders(
-            <AgentCard
-                agent={makeAgent({ name: 'Menuable' })}
-                menuActions={{ onPause }}
-            />,
+            <AgentCard agent={makeAgent({ name: 'Menuable' })} menuActions={{ onPause }} />
         );
         // AgentCardMenu renders a "more_vert" icon button trigger
         expect(document.body.textContent).toContain('Menuable');
@@ -222,7 +215,7 @@ describe('AgentCard', () => {
     it('renders focused state — card shows brandBlue outline styling', () => {
         // focused=true exercises the ternary branches in sx props for border/outline
         const { container } = renderWithProviders(
-            <AgentCard agent={makeAgent({ name: 'Focused' })} focused />,
+            <AgentCard agent={makeAgent({ name: 'Focused' })} focused />
         );
         expect(container.firstChild).toBeInTheDocument();
         expect(document.body.textContent).toContain('Focused');
@@ -232,9 +225,7 @@ describe('AgentCard', () => {
         // Passing a non-hex accent_color will trigger hexToRgba's "!m" branch.
         // We just verify the component renders without crashing.
         renderWithProviders(
-            <AgentCard
-                agent={makeAgent({ name: 'NonHex', accent_color: 'not-a-hex-color' })}
-            />,
+            <AgentCard agent={makeAgent({ name: 'NonHex', accent_color: 'not-a-hex-color' })} />
         );
         expect(screen.getByText('NonHex')).toBeInTheDocument();
     });
@@ -242,7 +233,7 @@ describe('AgentCard', () => {
     it('handleCardClick: click is swallowed when originating inside a MUI Menu overlay', () => {
         const onClickSpy = vi.fn();
         const { container } = renderWithProviders(
-            <AgentCard agent={makeAgent({ name: 'CardClick' })} onClick={onClickSpy} />,
+            <AgentCard agent={makeAgent({ name: 'CardClick' })} onClick={onClickSpy} />
         );
         // Create a fake MUI Menu root element, click it — onClick should NOT fire
         const fakeMenu = document.createElement('div');
@@ -257,7 +248,7 @@ describe('AgentCard', () => {
     it('handleCardClick: click reaches onClick handler when no MUI overlay ancestor', () => {
         const onClickSpy = vi.fn();
         const { container } = renderWithProviders(
-            <AgentCard agent={makeAgent({ name: 'DirectClick' })} onClick={onClickSpy} />,
+            <AgentCard agent={makeAgent({ name: 'DirectClick' })} onClick={onClickSpy} />
         );
         fireEvent.click(container.firstElementChild!);
         expect(onClickSpy).toHaveBeenCalledTimes(1);
@@ -268,7 +259,7 @@ describe('AgentCard', () => {
             <AgentCard
                 agent={makeAgent({ cli: 'copilot' })}
                 cliWarning="copilot is not installed on this machine — runs will fail until it is."
-            />,
+            />
         );
         expect(screen.getByText('CLI missing')).toBeInTheDocument();
     });

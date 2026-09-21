@@ -29,17 +29,16 @@ describe('EventTypeIcon', () => {
         ['waiting_for_info', 'help_outline'],
         ['subtask_blocked', 'block'],
         ['guardrails_updated', 'shield'],
-    ] as const)(
-        'getEventMeta(%s) returns icon %s',
-        (eventType, expectedIcon) => {
-            const meta = getEventMeta(eventType);
-            expect(meta.icon).toBe(expectedIcon);
-            expect(meta.label).toBeTruthy();
-        },
-    );
+    ] as const)('getEventMeta(%s) returns icon %s', (eventType, expectedIcon) => {
+        const meta = getEventMeta(eventType);
+        expect(meta.icon).toBe(expectedIcon);
+        expect(meta.label).toBeTruthy();
+    });
 
     it('renders with custom size prop', () => {
-        const { container } = renderWithProviders(<EventTypeIcon eventType="agent_error" size={36} />);
+        const { container } = renderWithProviders(
+            <EventTypeIcon eventType="agent_error" size={36} />
+        );
         expect(container.firstChild).toBeInTheDocument();
     });
 });

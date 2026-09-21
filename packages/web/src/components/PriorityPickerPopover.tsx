@@ -50,6 +50,7 @@ export function PriorityPickerPopover({ anchorEl, open, onClose, current, onPick
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{ ml: 'auto', fontSize: 18, color: ATLAS_PALETTE.brandBlue }}
                         >
                             check

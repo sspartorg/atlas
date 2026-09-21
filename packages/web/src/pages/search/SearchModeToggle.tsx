@@ -52,6 +52,7 @@ export function SearchModeToggle({ mode, onChange }: Props) {
                         <Box
                             component="span"
                             className="material-symbols-rounded"
+                            aria-hidden="true"
                             sx={{
                                 fontSize: 16,
                                 color: active ? ATLAS_PALETTE.slate : ATLAS_PALETTE.slate60,

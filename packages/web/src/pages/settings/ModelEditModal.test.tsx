@@ -32,7 +32,7 @@ describe('ModelEditModal — closed', () => {
                 cli="claude"
                 cliLabel="Claude"
                 model={null}
-            />,
+            />
         );
         expect(screen.queryByText('Add model')).not.toBeInTheDocument();
     });
@@ -41,7 +41,7 @@ describe('ModelEditModal — closed', () => {
 describe('ModelEditModal — add mode (model=null)', () => {
     it('renders Add model heading', () => {
         renderWithProviders(
-            <ModelEditModal open onClose={vi.fn()} cli="claude" cliLabel="Claude" model={null} />,
+            <ModelEditModal open onClose={vi.fn()} cli="claude" cliLabel="Claude" model={null} />
         );
         // "Add model" appears twice: as heading and as button label
         expect(screen.getAllByText('Add model').length).toBeGreaterThanOrEqual(1);
@@ -50,14 +50,14 @@ describe('ModelEditModal — add mode (model=null)', () => {
 
     it('Add model button is disabled when name is empty', () => {
         renderWithProviders(
-            <ModelEditModal open onClose={vi.fn()} cli="claude" cliLabel="Claude" model={null} />,
+            <ModelEditModal open onClose={vi.fn()} cli="claude" cliLabel="Claude" model={null} />
         );
         expect(screen.getByRole('button', { name: /Add model/i })).toBeDisabled();
     });
 
     it('Add model button becomes enabled when a name is typed', async () => {
         renderWithProviders(
-            <ModelEditModal open onClose={vi.fn()} cli="claude" cliLabel="Claude" model={null} />,
+            <ModelEditModal open onClose={vi.fn()} cli="claude" cliLabel="Claude" model={null} />
         );
         const nameInput = screen.getAllByRole('textbox')[0]!;
         await userEvent.type(nameInput, 'claude-opus-5');
@@ -67,7 +67,7 @@ describe('ModelEditModal — add mode (model=null)', () => {
     it('Cancel button calls onClose', async () => {
         const onClose = vi.fn();
         renderWithProviders(
-            <ModelEditModal open onClose={onClose} cli="claude" cliLabel="Claude" model={null} />,
+            <ModelEditModal open onClose={onClose} cli="claude" cliLabel="Claude" model={null} />
         );
         await userEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
         expect(onClose).toHaveBeenCalled();
@@ -75,11 +75,9 @@ describe('ModelEditModal — add mode (model=null)', () => {
 
     it('submits create mutation and closes on success', async () => {
         const onClose = vi.fn();
-        server.use(
-            http.post(`${BASE}/cli-models`, () => HttpResponse.json({ ...existingModel })),
-        );
+        server.use(http.post(`${BASE}/cli-models`, () => HttpResponse.json({ ...existingModel })));
         renderWithProviders(
-            <ModelEditModal open onClose={onClose} cli="claude" cliLabel="Claude" model={null} />,
+            <ModelEditModal open onClose={onClose} cli="claude" cliLabel="Claude" model={null} />
         );
         const nameInput = screen.getAllByRole('textbox')[0]!;
         await userEvent.type(nameInput, 'claude-opus-5');
@@ -90,11 +88,13 @@ describe('ModelEditModal — add mode (model=null)', () => {
     it('shows error toast when create mutation fails — covers onError branch (lines 69-73)', async () => {
         // Trigger the onError path by returning a 500 from POST /cli-models
         server.use(
-            http.post(`${BASE}/cli-models`, () => HttpResponse.json({ error: 'Server error' }, { status: 500 })),
+            http.post(`${BASE}/cli-models`, () =>
+                HttpResponse.json({ error: 'Server error' }, { status: 500 })
+            )
         );
         const onClose = vi.fn();
         renderWithProviders(
-            <ModelEditModal open onClose={onClose} cli="claude" cliLabel="Claude" model={null} />,
+            <ModelEditModal open onClose={onClose} cli="claude" cliLabel="Claude" model={null} />
         );
         const nameInput = screen.getAllByRole('textbox')[0]!;
         await userEvent.type(nameInput, 'claude-opus-5');
@@ -113,7 +113,7 @@ describe('ModelEditModal — edit mode (model provided)', () => {
                 cli="claude"
                 cliLabel="Claude"
                 model={existingModel}
-            />,
+            />
         );
         expect(screen.getByText('Edit model')).toBeInTheDocument();
         // Model name should be prefilled and disabled
@@ -126,8 +126,8 @@ describe('ModelEditModal — edit mode (model provided)', () => {
         const onClose = vi.fn();
         server.use(
             http.patch(`${BASE}/cli-models/cm-1`, () =>
-                HttpResponse.json({ ...existingModel, note: 'updated' }),
-            ),
+                HttpResponse.json({ ...existingModel, note: 'updated' })
+            )
         );
         renderWithProviders(
             <ModelEditModal
@@ -136,7 +136,7 @@ describe('ModelEditModal — edit mode (model provided)', () => {
                 cli="claude"
                 cliLabel="Claude"
                 model={existingModel}
-            />,
+            />
         );
         // Clear note and type new one
         const noteInput = screen.getAllByRole('textbox')[1]!;
@@ -154,19 +154,17 @@ describe('ModelEditModal — edit mode (model provided)', () => {
                 cli="claude"
                 cliLabel="Claude"
                 model={existingModel}
-            />,
+            />
         );
-        expect(
-            screen.getByText(/Model name is locked/i),
-        ).toBeInTheDocument();
+        expect(screen.getByText(/Model name is locked/i)).toBeInTheDocument();
     });
 
     it('shows error toast when update mutation fails — covers onError branch (lines 52-57)', async () => {
         // Trigger the onError path by returning a 500 from PATCH /cli-models/:id
         server.use(
             http.patch(`${BASE}/cli-models/cm-1`, () =>
-                HttpResponse.json({ error: 'Server error' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'Server error' }, { status: 500 })
+            )
         );
         const onClose = vi.fn();
         renderWithProviders(
@@ -176,7 +174,7 @@ describe('ModelEditModal — edit mode (model provided)', () => {
                 cli="claude"
                 cliLabel="Claude"
                 model={existingModel}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /^Save$/ }));
         // onClose is NOT called when the mutation fails
@@ -185,12 +183,14 @@ describe('ModelEditModal — edit mode (model provided)', () => {
 
     it('shows Saving... label while PATCH is in-flight (line 168 pending branch)', async () => {
         let resolvePatch!: () => void;
-        const patchPromise = new Promise<void>((res) => { resolvePatch = res; });
+        const patchPromise = new Promise<void>((res) => {
+            resolvePatch = res;
+        });
         server.use(
             http.patch(`${BASE}/cli-models/cm-1`, async () => {
                 await patchPromise;
                 return HttpResponse.json({ ...existingModel, note: 'updated' });
-            }),
+            })
         );
         renderWithProviders(
             <ModelEditModal
@@ -199,12 +199,15 @@ describe('ModelEditModal — edit mode (model provided)', () => {
                 cli="claude"
                 cliLabel="Claude"
                 model={existingModel}
-            />,
+            />
         );
         await userEvent.click(screen.getByRole('button', { name: /^Save$/ }));
-        await waitFor(() => {
-            expect(screen.getByText(/Saving/i)).toBeInTheDocument();
-        }, { timeout: 3000 });
+        await waitFor(
+            () => {
+                expect(screen.getByText(/Saving/i)).toBeInTheDocument();
+            },
+            { timeout: 3000 }
+        );
         resolvePatch();
     });
 });

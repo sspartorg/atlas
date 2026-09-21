@@ -46,6 +46,7 @@ export function ProjectTag({ projectId, name, size = 'sm', clickable = false }: 
             <Box
                 component="span"
                 className="material-symbols-rounded"
+                aria-hidden="true"
                 sx={{ fontSize: iconSize, color: ATLAS_PALETTE.slate60 }}
             >
                 folder

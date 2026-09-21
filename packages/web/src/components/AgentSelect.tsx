@@ -77,7 +77,8 @@ export function AgentSelect({
                 designation: a.designation || 'AI',
                 accent_color: a.accent_color,
             };
-            if (suggestedRole && a.role_id === suggestedRole) suggested.push({ ...opt, suggested: true });
+            if (suggestedRole && a.role_id === suggestedRole)
+                suggested.push({ ...opt, suggested: true });
             else opts.push(opt);
         }
         return [...suggested, ...opts];
@@ -95,7 +96,10 @@ export function AgentSelect({
             isOptionEqualToValue={(a, b) => a.id === b.id}
             filterOptions={filterOptions}
             {...(hasSuggested
-                ? { groupBy: (o: AgentSelectOption) => (o.suggested ? 'Suggested' : 'Everyone else') }
+                ? {
+                      groupBy: (o: AgentSelectOption) =>
+                          o.suggested ? 'Suggested' : 'Everyone else',
+                  }
                 : {})}
             // When Owner is in the list, clearing has no useful meaning — Owner is
             // the neutral fallback. Without an Owner option, allow clearing (the
