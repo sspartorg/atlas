@@ -10,8 +10,7 @@ When a stub is shipped (or removed), delete its row here AND update the page doc
 
 | Feature | Location (file:line) | Page doc | Trigger UI | What it should do | Blocking on |
 |---|---|---|---|---|---|
-| **SSH key credential** | `CredentialModal.tsx:278-306` | [`20-credentials`](pages/20-credentials.md) | Kind picker radio (disabled) | Add an SSH key as a credential kind | Backend support for ssh kind |
-| **App password credential** | `CredentialModal.tsx:307-335` | [`20-credentials`](pages/20-credentials.md) | Kind picker radio (disabled) | Add Bitbucket-style app password | Backend support for app_password kind |
+| **SSH key credential** | `CredentialModal.tsx:415-432` | [`20-credentials`](pages/20-credentials.md) | Kind picker radio (disabled) | Add an SSH key as a credential kind | Backend support for ssh kind |
 | **Prompt formatting toolbar** | `PromptTab.tsx:157-183` | [`16-agent-detail`](pages/16-agent-detail.md) | Toolbar icons not wired | Markdown formatting actions in the prompt editor | Editor library decision |
 | **Save as run (Test Run tab)** | `TestRunTab.tsx:438-439` | [`16-agent-detail`](pages/16-agent-detail.md) | "Save as run" link â†’ toast "Save as run coming soon" | Persist a test run output as a real `agent_runs` row | Run-from-test API |
 | **Test Run â€” full sandboxed prompt** | `TestRunTab.tsx` + `services/dry-run.ts` | [`16-agent-detail`](pages/16-agent-detail.md) | Currently sends only the workspace constitution + a 3-line verification ask via `POST /api/agents/:id/dry-run`. Real CLI launches; output streams; no DB write. | Also ship `agent.prompt_md`, handoff checklist, and a fixture issue context in a sandboxed mode that still skips `agent_runs` insert / status auto-advance / external notification. | Decide sandboxing semantics (separate code path vs. `test` flag on `agent-runner`); fixture-issue picker |
