@@ -88,6 +88,29 @@ describe('Sidenav', () => {
         expect(dashboardItem).toBeInTheDocument();
     });
 
+    // A sub-task has no nav row of its own and used to fall through to the
+    // `?? 'dashboard'` default, lighting Dashboard while the Owner was three
+    // levels inside Tasks (breadcrumb: Tasks / ATL-1 / ATL-2). These assert the
+    // active row via aria-current, not mere presence — every row is always in
+    // the document, so a presence check cannot fail.
+    it('marks Tasks active on a sub-task route, not Dashboard', () => {
+        countsMock.mockReturnValue({});
+        server.use(...defaultHandlers);
+        renderWithProviders(<Sidenav />, { initialEntries: ['/sub-tasks/ATL-2'] });
+        expect(screen.getByTestId('nav-item-tasks')).toHaveAttribute('aria-current', 'page');
+        expect(screen.getByTestId('nav-item-dashboard')).not.toHaveAttribute('aria-current');
+    });
+
+    it('marks exactly one nav row active on a normal route', () => {
+        countsMock.mockReturnValue({});
+        server.use(...defaultHandlers);
+        const { container } = renderWithProviders(<Sidenav />, {
+            initialEntries: ['/projects/abc'],
+        });
+        expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+        expect(screen.getByTestId('nav-item-projects')).toHaveAttribute('aria-current', 'page');
+    });
+
     it('falls back to dashboard as activeKey when path matches no nav item', () => {
         countsMock.mockReturnValue({});
         server.use(...defaultHandlers);

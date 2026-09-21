@@ -74,6 +74,12 @@ describe('agentLabel', () => {
     it('title-cases an id that carries no agent- prefix', () => {
         expect(agentLabel('release-captain', new Map())).toBe('Release Captain');
     });
+
+    it('keeps catalog acronyms uppercase when the agent is not installed', () => {
+        expect(agentLabel('agent-po-writer', new Map())).toBe('PO Writer');
+        expect(agentLabel('agent-qa-reviewer', new Map())).toBe('QA Reviewer');
+        expect(agentLabel('agent-ai-readiness', new Map())).toBe('AI Readiness');
+    });
 });
 
 describe('subtasksLabel', () => {

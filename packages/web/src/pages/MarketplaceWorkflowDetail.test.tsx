@@ -51,7 +51,7 @@ describe('MarketplaceWorkflowDetail', () => {
         );
 
         const agents = screen.getByRole('list', { name: 'Agents' });
-        const po = within(agents).getByText('Po Writer').closest('li') as HTMLElement;
+        const po = within(agents).getByText('PO Writer').closest('li') as HTMLElement;
         expect(within(po).getByText('Installs from the marketplace')).toBeInTheDocument();
         const coder = within(agents).getByText('Coder').closest('li') as HTMLElement;
         expect(await within(coder).findByText('Installed')).toBeInTheDocument();
@@ -132,7 +132,7 @@ describe('MarketplaceWorkflowDetail — published by you', () => {
         const agents = screen.getByRole('list', { name: 'Agents' });
         const coder = (await within(agents).findByText('My Coder')).closest('li') as HTMLElement;
         expect(within(coder).getByText('Installed')).toBeInTheDocument();
-        const po = within(agents).getByText('Po Writer').closest('li') as HTMLElement;
+        const po = within(agents).getByText('PO Writer').closest('li') as HTMLElement;
         expect(within(po).getByText('Installs with this workflow')).toBeInTheDocument();
         expect(screen.getByText('Created with this workflow.')).toBeInTheDocument();
 

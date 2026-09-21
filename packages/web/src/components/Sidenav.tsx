@@ -127,6 +127,12 @@ export function Sidenav({ onNavigate }: SidenavProps = {}) {
     const activeKey = (() => {
         const path = location.pathname;
         if (path === '/') return 'dashboard';
+        // `/sub-tasks/:id` is the one in-shell route with no nav row of its own
+        // — a sub-task lives under its Task, and its breadcrumb already reads
+        // Tasks / ATL-1 / ATL-2. Without this it fell through to the
+        // `?? 'dashboard'` default below and lit Dashboard while the Owner was
+        // three levels inside Tasks.
+        if (path === '/sub-tasks' || path.startsWith('/sub-tasks/')) return 'tasks';
         let bestKey: string | null = null;
         let bestLen = -1;
         for (const group of NAV_GROUPS) {
@@ -220,6 +226,10 @@ export function Sidenav({ onNavigate }: SidenavProps = {}) {
                                 <Box
                                     key={item.key}
                                     data-testid={`nav-item-${item.key}`}
+                                    // The active row was signalled only by colour and a
+                                    // decorative accent bar, so a screen reader had no way to
+                                    // announce which section the Owner is in.
+                                    aria-current={isActive ? 'page' : undefined}
                                     onClick={() => go(item.path)}
                                     onPointerEnter={() => prefetchRoute(item.key)}
                                     sx={{

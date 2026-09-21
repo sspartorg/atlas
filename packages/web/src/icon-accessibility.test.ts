@@ -119,3 +119,24 @@ describe('Material-Symbols icon accessibility (G-015)', () => {
         expect(offenders, `icon-only IconButtons with no name:\n${offenders.join('\n')}`).toEqual([]);
     });
 });
+
+// 3. The Material-Symbols stylesheet must request `display=block`.
+//
+// Same root cause as (1), rendered instead of announced: the ligature text IS
+// the glyph, so any `font-display` that shows fallback text during loading
+// paints icon names on screen. Without the parameter the face resolves to
+// `font-display: auto`, and a cold load showed the sidenav as "dashboard",
+// "sticky_note_2", "smart_toy" overlapping the real labels. `block` holds the
+// glyph box blank until the font arrives.
+//
+// `swap` is right for the Inter / JetBrains Mono text faces in index.html and
+// wrong here — which is precisely why this is easy to "tidy" into consistency.
+describe('Material Symbols font loading', () => {
+    it('requests display=block so icons never paint as ligature text', () => {
+        const main = readFileSync(join(SRC, 'main.tsx'), 'utf8');
+        const href = /fonts\.googleapis\.com\/css2\?family=Material\+Symbols[^'"]*/.exec(main)?.[0];
+        expect(href, 'Material Symbols stylesheet link not found in main.tsx').toBeTruthy();
+        expect(href).toContain('display=block');
+        expect(href).not.toContain('display=swap');
+    });
+});

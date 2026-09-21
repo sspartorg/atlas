@@ -51,12 +51,19 @@ export function deliveryLabel(
     return 'No delivery';
 }
 
+// Word-initial capitalisation mangles the acronyms the catalog uses as names:
+// `agent-po-writer` rendered "Po Writer" next to a detail page saying "PO
+// Writer". Only these three appear in catalog ids; anything else title-cases.
+const ACRONYMS = new Set(['po', 'qa', 'ai']);
+
 /** Catalog ids (`agent-code-reviewer`) read as names when the agent isn't installed yet. */
 export function agentLabel(agentId: string, agentsById: Map<string, Pick<IAgent, 'name'>>): string {
     const agent = agentsById.get(agentId);
     if (agent) return agent.name;
     const words = agentId.replace(/^agent-/, '').split('-');
-    return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    return words
+        .map((w) => (ACRONYMS.has(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+        .join(' ');
 }
 
 /** A Sub-tasks step with no label takes whatever the graph's labelled steps don't. */
