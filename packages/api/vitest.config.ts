@@ -237,11 +237,28 @@ export default defineConfig({
             //   lines 94.81 / stmts 93.77 / funcs 94.55 / branches 86.63
             // Raise these whenever coverage genuinely improves — that is the
             // ratchet. Do not raise them ahead of a measurement again.
+            // 2026-09-21 (confidence-close, G-003). Measured on a clean run of
+            // 155 files / 2709 tests:
+            //   lines 96.11 / stmts 95.11 / funcs 96.69 / branches 87.85
+            //
+            // `statements` is pinned at exactly 95 rather than measured-minus-
+            // jitter: 95 is the Owner's stated bar and it is now met, so the
+            // gate should fail the moment it slips back under rather than
+            // tolerate a slow slide. The other three sit ~0.5 below measured so
+            // ordinary jitter does not trip the build.
+            //
+            // `branches` at 87.3 is a documented ceiling, not a target. Reaching
+            // 95 would need ~450 more covered branches, and the ones left are
+            // defensive guards — `if (!row) return`, `?? null`, catch arms that
+            // are unreachable in practice. Tests for those assert that nothing
+            // happens, cost maintenance forever, and catch nothing; `pnpm e2e`
+            // already walks the real paths. See
+            // docs/campaigns/2026-09-21-confidence-close/task-05-api-coverage-95.md.
             thresholds: {
-                lines: 94.3,
-                statements: 93.2,
-                functions: 94,
-                branches: 86.1,
+                lines: 95.5,
+                statements: 95,
+                functions: 96,
+                branches: 87.3,
             },
         },
     },

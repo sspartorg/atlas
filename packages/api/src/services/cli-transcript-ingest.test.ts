@@ -776,11 +776,17 @@ describe('ingestTranscript — claude subagents', () => {
         );
     });
 
-    it('persists the transcript even when the subagent insert fails (CTI-SUB-ISOLATED)', async () => {
-        // A subagent event carrying a non-date `timestamp` makes the batch
-        // INSERT blow up on the `timestamp with time zone` column. That must
-        // cost the Owner the breakdown ONLY — the transcript itself is the
-        // thing the history page can't be rendered without.
+    it('a non-date timestamp costs that subagent its lifetime, not the breakdown (CTI-SUB-ISOLATED)', async () => {
+        // G-012. This test was written to pin the OLD behaviour: a subagent
+        // event carrying a non-date `timestamp` blew up the whole batch INSERT
+        // on the `timestamp with time zone` column, `ingestTranscript`
+        // swallowed it with a warn, and the Owner silently lost every subagent
+        // row for the session. The guard in `pty-transcript-usage.ts` now
+        // nulls an unparseable timestamp at the parse site, so the insert
+        // succeeds and only that one subagent's start/end are lost.
+        //
+        // Kept rather than deleted because it is the regression test for the
+        // fix: revert the guard and this fails on the row count.
         const sessionId = `${SESSION_PREFIX}-sub-bad-ts`;
         const claudeSid = 'a3333333-0000-0000-0000-00000000cl03';
         const worktreePath = '/home/test/projects/sub-bad-ts';
@@ -811,8 +817,15 @@ describe('ingestTranscript — claude subagents', () => {
         warnSpy.mockRestore();
 
         expect(result!.jsonl_content).toBe(parentContent);
-        expect(warnings.some((w) => w.includes('subagent ingest failed'))).toBe(true);
-        expect(await subagentRows(sessionId)).toHaveLength(0);
+        // No longer a failure, so no warning.
+        expect(warnings.some((w) => w.includes('subagent ingest failed'))).toBe(false);
+        // The row survives — this is the whole point of the fix.
+        const subs = await subagentRows(sessionId);
+        expect(subs).toHaveLength(1);
+        expect(subs[0]!.output_tokens).toBe(1000);
+        // …minus the lifetime the malformed value could not supply.
+        expect(subs[0]!.started_at).toBeNull();
+        expect(subs[0]!.ended_at).toBeNull();
         const row = await testDb
             .selectFrom('cli_sessions')
             .select(['transcript_jsonl'])
