@@ -79,7 +79,8 @@ Coverage reports land at `packages/<pkg>/coverage/`. Open `coverage/index.html` 
 
 ## File layout
 
-- **Co-locate tests next to source**: `src/services/foo.ts` â†” `src/services/foo.test.ts`. Vitest picks them up via `include: ['src/**/*.test.{ts,tsx}']`.
+- **Co-locate tests next to source**: `src/services/foo.ts` â†” `src/services/foo.test.ts`. Vitest picks them up via a glob — `include: ['src/**/*.test.{ts,tsx}']` in `web`, `['src/**/*.test.ts', 'tests/**/*.test.ts']` in `api`, equivalents in `mcp` and `shared`.
+  **This line used to be true of three packages out of four.** Until 2026-09-21 `api` gated on an explicit 155-entry allowlist instead — a leftover from the migration to the Postgres fixture — and a new test file that was not added to it simply never ran: no error, no warning, and this document said otherwise. `history-prune.test.ts` sat committed and unexecuted long enough for one of its assertions to rot (G-009). If you ever find yourself adding a filename to a config to make a test run, that is the bug.
 - **`tests/` top-level folder is for shared test helpers + E2E.** In api: `tests/_pg-db.ts` (template-DB PG fixture), `tests/_items.ts` (unified-items hand-rolled factories), `tests/e2e-lifecycle.test.ts`, `tests/_global-setup.ts` (Knex migration runner that runs once before any test). The `_*.ts` files are excluded from coverage; they're test infrastructure, not source.
 - **One concern per test file.** Don't bundle service unit tests and route integration tests in the same file.
 
