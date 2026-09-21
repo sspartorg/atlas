@@ -265,6 +265,60 @@ describe('parseClaudePtyUsage', () => {
     });
 });
 
+// G-012 — `startedAt` / `endedAt` land in `started_at` / `ended_at`, which are
+// `timestamp with time zone`. An unparseable string there fails the WHOLE
+// subagent batch INSERT, and ingestTranscript swallows that error with a warn —
+// so one malformed row silently costs the Owner every subagent row for the
+// session. The sibling `spawnDepth` guard documents exactly this hazard; the
+// timestamps had no equivalent until now.
+describe('parseClaudeSubagentUsage — timestamp validity (G-012)', () => {
+    let dir: string;
+    beforeEach(async () => {
+        dir = await fs.mkdtemp(path.join(tmpdir(), 'claude-ts-guard-'));
+    });
+    afterEach(async () => {
+        await fs.rm(dir, { recursive: true, force: true });
+    });
+
+    async function rowsForTimestamp(ts: unknown) {
+        const subagentsDir = path.join(dir, 'subagents');
+        await fs.mkdir(subagentsDir, { recursive: true });
+        await fs.writeFile(
+            path.join(subagentsDir, 'agent-ts.jsonl'),
+            JSON.stringify({
+                type: 'assistant',
+                timestamp: ts,
+                message: { id: 'msg_ts_1', model: 'claude-opus-4-7', usage: { input_tokens: 5 } },
+            }),
+            'utf8',
+        );
+        return parseClaudeSubagentUsage(dir, 'claude-haiku-4-5');
+    }
+
+    it('keeps a parseable ISO timestamp', async () => {
+        const rows = await rowsForTimestamp('2026-09-21T10:00:00.000Z');
+        expect(rows[0]?.startedAt).toBe('2026-09-21T10:00:00.000Z');
+        expect(rows[0]?.endedAt).toBe('2026-09-21T10:00:00.000Z');
+    });
+
+    it('drops a string that is not a date, instead of handing it to the DB', async () => {
+        // The row itself must survive — losing one subagent's lifetime is
+        // recoverable, losing the whole session's breakdown is not.
+        const rows = await rowsForTimestamp('not-a-date');
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.startedAt).toBeNull();
+        expect(rows[0]?.endedAt).toBeNull();
+    });
+
+    it('drops an empty timestamp', async () => {
+        expect((await rowsForTimestamp(''))[0]?.startedAt).toBeNull();
+    });
+
+    it('still ignores a non-string timestamp', async () => {
+        expect((await rowsForTimestamp(1758441600000))[0]?.startedAt).toBeNull();
+    });
+});
+
 describe('parseClaudeSubagentUsage', () => {
     let sessionDir: string;
 

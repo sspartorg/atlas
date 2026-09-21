@@ -136,7 +136,19 @@ function sumClaudeJsonl(jsonl: string, fallbackModel: string): SumResult | null 
             seenMessageIds.add(msgId);
         }
         assistantEventCount += 1;
-        const timestamp = typeof obj['timestamp'] === 'string' ? (obj['timestamp'] as string) : null;
+        // G-012 — the same hazard the `spawnDepth` guard below documents, and
+        // it was left unguarded here. `firstEventAt` / `lastEventAt` become
+        // `started_at` / `ended_at`, which are `timestamp with time zone`
+        // columns; a string that is not a parseable date fails the whole
+        // subagent batch INSERT, and `ingestTranscript` swallows that error
+        // with a warn — so one malformed row costs the Owner the entire
+        // session's subagent breakdown, silently. Validate here rather than at
+        // the insert, so every consumer of these fields gets a real date.
+        const rawTimestamp = obj['timestamp'];
+        const timestamp =
+            typeof rawTimestamp === 'string' && !Number.isNaN(Date.parse(rawTimestamp))
+                ? rawTimestamp
+                : null;
         if (timestamp) {
             if (!firstEventAt) firstEventAt = timestamp;
             lastEventAt = timestamp;
