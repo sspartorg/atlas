@@ -22,7 +22,7 @@ Its findings are `F-001`…`F-022`; this board's are `G-001`…, a fresh series.
 
 | # | Task | Scope | Status |
 |---|---|---|---|
-| 1 | [Baseline — re-run every gate, record the numbers](task-01-baseline.md) | infra | todo |
+| 1 | [Baseline — re-run every gate, record the numbers](task-01-baseline.md) | infra | done — gate is **green** |
 | 2 | [Leftover-name sweep round 2](task-02-name-sweep-round-2.md) | api · shared · web · docs | todo |
 | 3 | [`.strict()` on `UpdateExternalNotificationSchema`](task-03-strict-external-notification.md) | shared | todo |
 | 4 | [Machine-verify the reviewer checklist gates](task-04-machine-verify-checklists.md) | api | todo |
@@ -72,6 +72,7 @@ This board's law. Each was ruled before authoring began.
 | E-5 | Disclosure cleanup is **working tree plus doc redaction. No history rewrite.** Old commits stay publicly readable; `main` is not force-pushed. The residue is named in the verdict, not silently accepted. |
 | E-6 | `sspart.org@gmail.com` is the real support contact. It stays in `HelpAboutTab.tsx` and as the credential-modal placeholder. |
 | E-7 | X-8 runs against a **scratch project on the Owner's own Jira**, scoped by one dedicated label. The site and key are confirmed with the Owner before any write. |
+| E-8 | **Atlas runs the verification gate itself.** Ruled 2026-09-21 after task-01 found that G-004's stated fix does not exist — nothing ever executes the guardrail scripts, so there is no exit code to consult. After an agent step reports `done`, Atlas runs the project's own typecheck/lint/test gate in the worktree and routes on **that** exit code; the agent's self-report becomes advisory. No schema change and no parsing of checklist labels. The gate runs on **steps whose flags are `push_code` or `raises_pr`** — where a wrong "green" has consequences — and not on steps that never touched code. |
 
 ## Standing constraints
 
