@@ -175,6 +175,40 @@ describe('StartInspector', () => {
         expect(onChange).toHaveBeenCalledWith({ schedule_time_of_day: '06:45' });
     });
 
+    it('clears an emptied time of day to null rather than an empty string', () => {
+        const onChange = mount({ trigger: 'schedule', schedule_preset: 'daily', schedule_time_of_day: '09:00' });
+        fireEvent.change(screen.getByLabelText('Time of day'), { target: { value: '' } });
+        expect(onChange).toHaveBeenCalledWith({ schedule_time_of_day: null });
+    });
+
+    // ─── Schedule patch mapping ─────────────────────────────────────────────
+    //
+    // SchedulePresetFields speaks its own shape (preset / weekday /
+    // cronExpression) and this component translates it into workflow columns.
+    // Each key is forwarded only when the patch carries it, so a translation
+    // slip drops the field the Owner just changed.
+
+    // Sunday is weekday 0, so the forward has to test `!== undefined` and not
+    // truthiness — a truthiness check silently refuses to schedule on Sundays.
+    it('forwards Sunday, whose weekday number is falsy', async () => {
+        const onChange = mount({ trigger: 'schedule', schedule_preset: 'weekly', schedule_weekday: 3 });
+        openSelect('Weekday');
+        await userEvent.click(screen.getByRole('option', { name: 'Sun' }));
+        expect(onChange).toHaveBeenCalledWith({ schedule_weekday: 0 });
+    });
+
+    it('forwards a custom cron expression', async () => {
+        const onChange = mount({ trigger: 'schedule', schedule_preset: 'custom', cron_expr: '' });
+        await userEvent.type(screen.getByLabelText('Cron expression'), '0');
+        expect(onChange).toHaveBeenCalledWith({ cron_expr: '0' });
+    });
+
+    it('clears an emptied cron expression to null rather than an empty string', async () => {
+        const onChange = mount({ trigger: 'schedule', schedule_preset: 'custom', cron_expr: '*/5 * * * *' });
+        await userEvent.clear(screen.getByLabelText('Cron expression'));
+        expect(onChange).toHaveBeenCalledWith({ cron_expr: null });
+    });
+
     it('passes a preset change through to the workflow', async () => {
         const onChange = mount({ trigger: 'schedule', schedule_preset: 'daily' });
         await userEvent.click(screen.getByRole('button', { name: /Every 4 hours/ }));

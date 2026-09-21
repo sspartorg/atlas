@@ -46,7 +46,17 @@ function ToggleRow({ label, sub, checked, onChange }: { label: string; sub: stri
                 <Typography sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate }}>{label}</Typography>
                 <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>{sub}</Typography>
             </Box>
-            <Switch checked={checked} onChange={(_, v) => onChange(v)} inputProps={{ 'aria-label': label }} />
+            {/* G-010 — MUI 7 dropped `inputProps` on Switch; it is silently
+                ignored and the aria-label never reaches the input. Without
+                `slotProps.input` the accessible name falls through to the
+                wrapping label, so a screen reader reads the heading AND the
+                sub-text as one string. TextField still honours `inputProps`
+                in v7, which is why this was the only Switch affected. */}
+            <Switch
+                checked={checked}
+                onChange={(_, v) => onChange(v)}
+                slotProps={{ input: { 'aria-label': label } }}
+            />
         </Box>
     );
 }

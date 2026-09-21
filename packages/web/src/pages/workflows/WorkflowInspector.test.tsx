@@ -93,9 +93,9 @@ describe('WorkflowInspector', () => {
     it('shows the picked agent‘s CLI, model and effort, and links to it', () => {
         mount({
             node: node('agent', { agent_id: 'agent-coder' }),
-            agents: [makeAgent({ id: 'agent-coder', name: 'Coder', cli: 'codex', model: 'gpt-5', effort: 'high' })],
+            agents: [makeAgent({ id: 'agent-coder', name: 'Coder', cli: 'copilot', model: 'gpt-5', effort: 'high' })],
         });
-        expect(screen.getByText('codex')).toBeInTheDocument();
+        expect(screen.getByText('copilot')).toBeInTheDocument();
         expect(screen.getByText('gpt-5')).toBeInTheDocument();
         expect(screen.getByText('high')).toBeInTheDocument();
         expect(screen.getByRole('link', { name: /Open agent/ })).toHaveAttribute('href', '/agents/agent-coder');
@@ -286,16 +286,24 @@ describe('WorkflowInspector', () => {
         expect(onChange).toHaveBeenCalledWith({ push_code: false, raises_pr: false, push_to_default: false });
     });
 
-    // Matched loosely on purpose: ToggleRow passes its aria-label through
-    // `inputProps`, which MUI 7 drops on Switch (it wants `slotProps.input`),
-    // so the accessible name currently falls through to the wrapping <label>
-    // — "Use a worktreeAll steps share one checkout and branch". This still
-    // passes once that is fixed to the intended bare label.
     it('toggles the shared worktree', async () => {
         const { onChange } = mount({ node: node('end'), workflow: { use_worktree: true } });
         const toggle = screen.getByRole('switch', { name: /Use a worktree/ });
         expect(toggle).toBeChecked();
         await userEvent.click(toggle);
         expect(onChange).toHaveBeenCalledWith({ use_worktree: false });
+    });
+
+    // G-010 — the accessible name must be the bare label. This was written
+    // because `inputProps` was used to set it, and MUI 7 silently drops that
+    // prop on Switch (it wants `slotProps.input`): the name fell through to
+    // the wrapping <label> and a screen reader read the heading and its help
+    // text as one string. Reverting to `inputProps` fails this exactly.
+    it('gives the toggle the bare label as its accessible name, not the help text too', () => {
+        mount({ node: node('end'), workflow: { use_worktree: true } });
+        expect(screen.getByRole('switch', { name: 'Use a worktree' })).toBeInTheDocument();
+        expect(
+            screen.queryByRole('switch', { name: /All steps share one checkout/ }),
+        ).toBeNull();
     });
 });
