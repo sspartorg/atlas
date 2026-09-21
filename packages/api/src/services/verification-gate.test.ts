@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { environmentSecretsService } from './environment-secrets.js';
 import { runVerificationGate, gateScriptPath } from './verification-gate.js';
 
 // ADR 0020. These tests spawn real bash against real scripts on disk rather
@@ -106,6 +107,38 @@ describe.skipIf(!posix)('runVerificationGate', () => {
         // the wrong cwd would test a sibling and report on the wrong code.
         writeFileSync(join(repoPath, 'marker-file'), 'x');
         stageScript('#!/usr/bin/env bash\n[ -f marker-file ] || exit 4\nexit 0\n');
+        expect((await run()).kind).toBe('pass');
+    });
+
+    it('withholds output entirely when the secret set cannot be loaded', async () => {
+        // Masking is the only thing standing between a failing test that
+        // echoes an env var and that value landing in the persisted run log.
+        // If the secret set is unavailable we cannot mask, so we do not
+        // publish — a withheld message is recoverable, a leaked token is not.
+        stageScript('#!/usr/bin/env bash\necho "ghp_realtokenvalue"\nexit 1\n');
+        const spy = vi
+            .spyOn(environmentSecretsService, 'decryptAll')
+            .mockRejectedValueOnce(new Error('workspace key unreadable'));
+        try {
+            const res = await run();
+            expect(res.kind).toBe('fail');
+            if (res.kind !== 'fail') throw new Error('unreachable');
+            expect(res.output).toContain('output withheld');
+            expect(res.output).not.toContain('ghp_realtokenvalue');
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('does not depend on the script carrying the execute bit', async () => {
+        // Written while trying to force the spawn-failure branch by dropping
+        // +x, which does not work and is worth recording: the gate invokes
+        // `bash <path>`, so bash reads the file and the mode is irrelevant.
+        // constitution-assembler writes 0755, but the gate does not rely on
+        // it — a umask that strips +x cannot silently disable verification.
+        const dir = join(repoPath, '.atlas', 'scripts', 'bash');
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, 'check-coder-tests-green.sh'), 'exit 0\n', { mode: 0o644 });
         expect((await run()).kind).toBe('pass');
     });
 
