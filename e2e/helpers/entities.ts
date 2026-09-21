@@ -57,3 +57,10 @@ export async function firstAgentRunId(page: Page): Promise<string | null> {
     const rows = await apiList<{ id: string }>(page, '/api/run');
     return rows[0]?.id ?? null;
 }
+
+/** A marketplace catalog entry. The catalog is seeded from disk, so never empty. */
+export async function firstMarketplaceAgentId(page: Page): Promise<string> {
+    const rows = await apiList<{ id: string }>(page, '/api/marketplace/agents');
+    expect(rows.length, 'marketplace catalog is empty — the seed did not sync it').toBeGreaterThan(0);
+    return rows[0]!.id;
+}

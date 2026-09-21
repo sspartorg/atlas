@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { gotoWithPerfCold, gotoWithPerfWarm } from '../helpers/perf-cold-warm.js';
 import { gotoWithPerf } from '../helpers/perf.js';
+import { firstAgentId, firstMarketplaceAgentId, firstProjectId } from '../helpers/entities.js';
 
 // W7 chunk 1 — cold + warm TTI baseline for all 26+ routes.
 //
@@ -90,57 +91,32 @@ test.describe('cold/warm TTI baseline', () => {
     test.describe('dynamic routes cold', () => {
         test('cold /projects/:id (first seeded project)', async ({ page, context }) => {
             // Warm-up the list to find the first project link.
-            await gotoWithPerf(page, '/projects');
-            const projectLink = page.locator('a[href^="/projects/"]').first();
-            if ((await projectLink.count()) === 0) {
-                test.skip(true, 'no seeded project');
-                return;
-            }
-            const href = await projectLink.getAttribute('href');
-            if (!href) return;
+            // G-018 — id from the API. The cards navigate via onClick, so the
+            // old anchor locator matched nothing even with a seeded DB and
+            // every one of these walks silently never ran.
+            const href = `/projects/${await firstProjectId(page)}`;
             const record = await gotoWithPerfCold(page, context, href);
             expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
         });
 
         test('cold /projects/:id/guardrails (first seeded project)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/projects');
-            const projectLink = page.locator('a[href^="/projects/"]').first();
-            if ((await projectLink.count()) === 0) {
-                test.skip(true, 'no seeded project');
-                return;
-            }
-            const href = await projectLink.getAttribute('href');
-            if (!href) return;
+            // G-018 — id from the API. The cards navigate via onClick, so the
+            // old anchor locator matched nothing even with a seeded DB and
+            // every one of these walks silently never ran.
+            const href = `/projects/${await firstProjectId(page)}`;
             const projectId = href.replace('/projects/', '').split('/')[0];
             const record = await gotoWithPerfCold(page, context, `/projects/${projectId}/guardrails`);
             expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
         });
 
         test('cold /agents/:id (first seeded agent)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/agents');
-            const agentLink = page.locator('a[href^="/agents/"]')
-                .filter({ hasNot: page.locator('[href="/agents/mcp-tools"]') })
-                .filter({ hasNot: page.locator('[href="/agents/marketplace"]') })
-                .first();
-            if ((await agentLink.count()) === 0) {
-                test.skip(true, 'no seeded agent');
-                return;
-            }
-            const href = await agentLink.getAttribute('href');
-            if (!href) return;
+            const href = `/agents/${await firstAgentId(page)}`;
             const record = await gotoWithPerfCold(page, context, href);
             expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
         });
 
         test('cold /agents/marketplace/:id (first marketplace agent)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/agents/marketplace');
-            const mktLink = page.locator('a[href^="/agents/marketplace/"]').first();
-            if ((await mktLink.count()) === 0) {
-                test.skip(true, 'no marketplace agents visible');
-                return;
-            }
-            const href = await mktLink.getAttribute('href');
-            if (!href) return;
+            const href = `/agents/marketplace/${await firstMarketplaceAgentId(page)}`;
             const record = await gotoWithPerfCold(page, context, href);
             expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
         });
@@ -149,7 +125,9 @@ test.describe('cold/warm TTI baseline', () => {
             await gotoWithPerf(page, '/analytics');
             const projLink = page.locator('a[href^="/analytics/project/"]').first();
             if ((await projLink.count()) === 0) {
-                test.skip(true, 'no analytics project links');
+                // Honest: a project only appears here once it has cost rows, and
+                // the seed creates no agent runs. Genuinely absent.
+                test.skip(true, 'no project has cost rows yet — genuinely absent');
                 return;
             }
             const href = await projLink.getAttribute('href');
@@ -164,57 +142,32 @@ test.describe('cold/warm TTI baseline', () => {
     // ------------------------------------------------------------------
     test.describe('dynamic routes warm', () => {
         test('warm /projects/:id (first seeded project)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/projects');
-            const projectLink = page.locator('a[href^="/projects/"]').first();
-            if ((await projectLink.count()) === 0) {
-                test.skip(true, 'no seeded project');
-                return;
-            }
-            const href = await projectLink.getAttribute('href');
-            if (!href) return;
+            // G-018 — id from the API. The cards navigate via onClick, so the
+            // old anchor locator matched nothing even with a seeded DB and
+            // every one of these walks silently never ran.
+            const href = `/projects/${await firstProjectId(page)}`;
             const record = await gotoWithPerfWarm(page, context, href);
             expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
         });
 
         test('warm /projects/:id/guardrails (first seeded project)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/projects');
-            const projectLink = page.locator('a[href^="/projects/"]').first();
-            if ((await projectLink.count()) === 0) {
-                test.skip(true, 'no seeded project');
-                return;
-            }
-            const href = await projectLink.getAttribute('href');
-            if (!href) return;
+            // G-018 — id from the API. The cards navigate via onClick, so the
+            // old anchor locator matched nothing even with a seeded DB and
+            // every one of these walks silently never ran.
+            const href = `/projects/${await firstProjectId(page)}`;
             const projectId = href.replace('/projects/', '').split('/')[0];
             const record = await gotoWithPerfWarm(page, context, `/projects/${projectId}/guardrails`);
             expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
         });
 
         test('warm /agents/:id (first seeded agent)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/agents');
-            const agentLink = page.locator('a[href^="/agents/"]')
-                .filter({ hasNot: page.locator('[href="/agents/mcp-tools"]') })
-                .filter({ hasNot: page.locator('[href="/agents/marketplace"]') })
-                .first();
-            if ((await agentLink.count()) === 0) {
-                test.skip(true, 'no seeded agent');
-                return;
-            }
-            const href = await agentLink.getAttribute('href');
-            if (!href) return;
+            const href = `/agents/${await firstAgentId(page)}`;
             const record = await gotoWithPerfWarm(page, context, href);
             expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
         });
 
         test('warm /agents/marketplace/:id (first marketplace agent)', async ({ page, context }) => {
-            await gotoWithPerf(page, '/agents/marketplace');
-            const mktLink = page.locator('a[href^="/agents/marketplace/"]').first();
-            if ((await mktLink.count()) === 0) {
-                test.skip(true, 'no marketplace agents visible');
-                return;
-            }
-            const href = await mktLink.getAttribute('href');
-            if (!href) return;
+            const href = `/agents/marketplace/${await firstMarketplaceAgentId(page)}`;
             const record = await gotoWithPerfWarm(page, context, href);
             expect(record.tti_proxy_ms).toBeGreaterThanOrEqual(0);
         });
@@ -223,7 +176,9 @@ test.describe('cold/warm TTI baseline', () => {
             await gotoWithPerf(page, '/analytics');
             const projLink = page.locator('a[href^="/analytics/project/"]').first();
             if ((await projLink.count()) === 0) {
-                test.skip(true, 'no analytics project links');
+                // Honest: a project only appears here once it has cost rows, and
+                // the seed creates no agent runs. Genuinely absent.
+                test.skip(true, 'no project has cost rows yet — genuinely absent');
                 return;
             }
             const href = await projLink.getAttribute('href');
