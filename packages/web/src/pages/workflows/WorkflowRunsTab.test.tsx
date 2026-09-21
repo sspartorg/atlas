@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
+import type * as ReactRouter from 'react-router-dom';
 import type { IWorkflowRunSummary } from '@atlas/shared';
 import { server } from '../../test-setup.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
@@ -13,7 +14,7 @@ const WF = 'wf-1';
 
 const navigate = vi.fn();
 vi.mock('react-router-dom', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('react-router-dom')>()),
+    ...(await importOriginal<typeof ReactRouter>()),
     useNavigate: () => navigate,
 }));
 

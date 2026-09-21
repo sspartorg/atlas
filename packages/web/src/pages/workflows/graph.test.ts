@@ -82,7 +82,7 @@ describe('workflow graph helpers', () => {
 });
 
 describe('toGraph', () => {
-    function flowNode(overrides: Partial<WfNode> & Pick<WfNode, 'id' | 'position'>): WfNode {
+    function flowNode(overrides: Partial<WfNode> & Pick<WfNode, 'id' | 'position' | 'type'>): WfNode {
         return { data: {}, ...overrides };
     }
 
@@ -94,11 +94,14 @@ describe('toGraph', () => {
         expect(graph.nodes[0]?.position).toEqual({ x: 12, y: -8 });
     });
 
-    // ReactFlow leaves `type` off a node it did not get one for; agent is the
-    // only type a bare node can safely become, and the validator then asks for
-    // an agent rather than rejecting an unknown type.
+    // `WfNode.type` is required, so only runtime data can reach the fallback —
+    // ReactFlow's own state is not typed at the boundary. Agent is the type a
+    // bare node becomes, which the validator then asks for an agent for rather
+    // than rejecting as unknown.
     it('defaults a node with no type to an agent', () => {
-        expect(toGraph([flowNode({ id: 'a', position: { x: 0, y: 0 } })], [])).toEqual({
+        // Deliberately untyped: TypeScript cannot express a WfNode with no type.
+        const untyped = { id: 'a', position: { x: 0, y: 0 }, data: {} } as unknown as WfNode;
+        expect(toGraph([untyped], [])).toEqual({
             nodes: [{ id: 'a', type: 'agent', position: { x: 0, y: 0 } }],
             edges: [],
         });
@@ -135,6 +138,19 @@ describe('connectEdges', () => {
         const next = connectEdges([], { source: 'review', sourceHandle: 'fail', target: 'coder', targetHandle: 'loop' });
         expect(next[0]).toMatchObject({ targetHandle: 'loop', sourceHandle: 'fail' });
         expect(next[0]?.markerEnd).toMatchObject({ color: expect.any(String) });
+    });
+
+    // An edge ReactFlow synthesised carries no kind data. It counts as a pass
+    // connection, so drawing a new pass from the same node must replace it —
+    // otherwise the node ends up with two pass edges and fails validation.
+    it('replaces an existing edge that carries no kind data', () => {
+        const next = connectEdges(
+            [{ id: 'bare', source: 'coder', target: 'review' }],
+            { source: 'coder', sourceHandle: null, target: 'end', targetHandle: null },
+        );
+        expect(toGraph([], next).edges).toEqual([
+            { id: expect.any(String), source: 'coder', target: 'end', kind: 'pass' },
+        ]);
     });
 
     it('leaves the other handle’s connection alone', () => {
@@ -229,15 +245,26 @@ describe('nodeRunStates', () => {
         });
     });
 
-    // KNOWN DEFECT (reported, not fixed here): a sub-task run that errored is
-    // neither counted as done nor reflected in the step's state — only
-    // `cancelled` children change it — so the step renders green. Asserting
-    // the counter only, so this test does not cement the wrong state.
-    it('reports a failed sub-task run as not done in the progress badge', () => {
-        expect(nodeRunStates(subtasksRun([{ id: 'c1', status: 'completed' }, { id: 'c2', status: 'error' }])).get('build')?.subtasks).toEqual({
-            done: 1,
-            started: 2,
-        });
+    // G-011 — this used to render green. Only `cancelled` children changed
+    // the step's state, so an errored sub-task fell through to `done` and the
+    // canvas drew a success check over a failure. The progress counter reading
+    // 1/2 was the only hint.
+    it('reports a failed sub-task run as failed, not done', () => {
+        const info = nodeRunStates(
+            subtasksRun([{ id: 'c1', status: 'completed' }, { id: 'c2', status: 'error' }]),
+        ).get('build');
+        expect(info?.state).toBe('failed');
+        expect(info?.subtasks).toEqual({ done: 1, started: 2 });
+    });
+
+    // A failure outranks a cancellation: if one sub-task errored and another
+    // was cancelled, the error is the thing the Owner needs to act on.
+    it('prefers failed over cancelled when a run has both', () => {
+        expect(
+            nodeRunStates(
+                subtasksRun([{ id: 'c1', status: 'cancelled' }, { id: 'c2', status: 'error' }]),
+            ).get('build')?.state,
+        ).toBe('failed');
     });
 
     it('marks the node a finished run ended on as done', () => {

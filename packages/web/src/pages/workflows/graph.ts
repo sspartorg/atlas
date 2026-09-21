@@ -144,8 +144,19 @@ export function nodeRunStates(run: IWorkflowRunDetail): Map<string, INodeRunInfo
         const kids = run.children.filter((c) => c.parent_node_id === n.id);
         if (kids.length === 0) continue;
         const done = kids.filter((c) => c.status === 'completed').length;
+        // G-011 — a failed child used to fall through to `done`, so a
+        // Sub-tasks step whose sub-task errored drew a green check. `error`
+        // is checked before `cancelled` because a failure is the more
+        // actionable signal when a run has both, and the step branch above
+        // already maps error → 'failed' via STEP_STATE; this arm was simply
+        // inconsistent with it.
+        const state: NodeRunState = kids.some((c) => c.status === 'error')
+            ? 'failed'
+            : kids.some((c) => c.status === 'cancelled')
+              ? 'cancelled'
+              : 'done';
         out.set(n.id, {
-            state: kids.some((c) => c.status === 'cancelled') ? 'cancelled' : 'done',
+            state,
             visits: 1,
             subtasks: { done, started: kids.length },
         });
