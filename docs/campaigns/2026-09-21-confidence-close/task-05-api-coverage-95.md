@@ -26,6 +26,38 @@ coverage.
 4. Raise the thresholds in `packages/api/vitest.config.ts` to the new measured
    values and amend ADR 0009 in the same commit.
 
+## Measured 2026-09-21 (task-01 baseline)
+
+| metric | measured | to 95 |
+|---|---|---|
+| statements | 93.77% (7406/7898) | +1.23 |
+| branches | **86.63%** (4615/5327) | **+8.37** |
+| functions | 94.55% (1371/1450) | +0.45 |
+| lines | 94.81% (6692/7058) | +0.19 |
+
+Branches is the whole job: **712 uncovered branches**. The other three are
+rounding.
+
+### Worst-first by branch coverage
+
+| file | % branch | % stmts | note |
+|---|---|---|---|
+| `services/history-prune.ts` | **0** | 11.11 | entirely untested, lines 29-77. The single biggest win on the list. |
+| `routes/credentials.ts` | 26.31 | 57.81 | lines 94-97, 116-162 |
+| `services/github-app-tokens.ts` | 40 | 61.44 | the GitHub App token path — and this is the module task-02 also touches |
+| `services/project-env-file.ts` | 50 | 91.3 | lines 52-58 |
+| `services/sse-hub.ts` | 54.16 | 84 | lines 102, 118, 180-185 |
+| `services/schedule-registry.ts` | 62.5 | 86.56 | |
+| `routes/workflows.ts` | 67.5 | 89.65 | |
+| `routes/settings.ts` | 68.18 | 83.72 | |
+| `services/workflow-engine.ts` | 76.48 | 88.79 | **largest absolute count** — 76% of a ~1300-line file leaves more uncovered branches than anything above it |
+| `services/jira-sync.ts` | 76.38 | 90.83 | task-08 will exercise this live; sequence the two |
+
+Rank by **absolute uncovered branches**, not by the percentage column — that is
+why `workflow-engine.ts` outranks `history-prune.ts` on value even though
+`history-prune.ts` looks worse. Start with `history-prune.ts` anyway: it is 48
+lines with no test at all, so it is the cheapest real coverage in the package.
+
 ## The honest caveat
 
 Branches needs roughly **+8.4 percentage points**, which is by far the largest
