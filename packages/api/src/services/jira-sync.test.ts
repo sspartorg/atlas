@@ -316,8 +316,12 @@ describe('jira bridge pull', () => {
             external_ref: 'ATL-1',
         });
 
-        // The first push announces the pickup on each Jira issue.
-        expect(posted.map((p) => p.key).sort()).toEqual(['ATL-1', 'ATL-2']);
+        // The first push announces the pickup — but only on the issue Atlas
+        // actually picked up. ATL-2 matched a source with no workflow, so it
+        // is `draft` and Atlas has nothing to report about it yet (G-013).
+        // It used to receive "imported. No workflow is set for it yet",
+        // which is a write to someone's board saying nothing happened.
+        expect(posted.map((p) => p.key).sort()).toEqual(['ATL-1']);
         expect(posted.find((p) => p.key === 'ATL-1')?.body).toContain(
             'queued on the WF wf-dev workflow'
         );
@@ -485,6 +489,41 @@ describe('jira bridge pull', () => {
 });
 
 describe('jira bridge push', () => {
+    // G-013 — the bridge used to write to Jira the moment it was switched on.
+    // An imported Task starts `draft`, which counted as a milestone, so every
+    // matched issue got "imported. No workflow is set for it yet" within one
+    // tick — before the Owner approved anything. Someone pointing Atlas at a
+    // real board to evaluate it found it had already commented on their work.
+    it('says nothing to Jira on import alone', async () => {
+        // `design` maps to a source with no workflow, so the Task stays draft.
+        issues = [issue('ATL-1', ['design'])];
+        await configure();
+        posted = [];
+        await jiraSync.syncNow();
+
+        // The Task exists and is linked...
+        const t1 = await taskFor('ATL-1');
+        expect(t1.status).toBe('draft');
+        // ...and Jira has heard nothing about it.
+        expect(posted).toEqual([]);
+    });
+
+    it('posts once Atlas actually starts work, not before', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        posted = [];
+
+        const t1 = await taskFor('ATL-1');
+        await setStatus(t1.id, 'in_progress');
+        await jiraSync.syncNow();
+
+        expect(posted).toHaveLength(1);
+        expect(posted[0]?.body).toContain('work in progress');
+        // The suppressed draft notice is not replayed as a backlog.
+        expect(posted[0]?.body).not.toContain('No workflow is set');
+    });
+
     it('posts a milestone with a digest of Atlas comments, leaving out Jira-sourced ones', async () => {
         issues = [issue('ATL-1', ['development'])];
         await configure();
