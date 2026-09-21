@@ -96,6 +96,40 @@ enforced:
 | `@atlas/api` | 94.81 / 93.77 / 94.55 / 86.63 | 94.3 / 93.2 / 94 / 86.1 |
 | `@atlas/web` | 95.40 / 94.14 / 91.58 / 90.53 | 94.9 / 93.6 / 91 / 90 |
 
+### Amended 2026-09-21 — the ratchet turned
+
+The confidence-close campaign raised the measurement rather than lowering the
+bar again. Measured on a clean run (shared 246, mcp 167, **api 2709**,
+**web 4358**):
+
+| Package | Measured (lines / stmts / funcs / branches) | Enforced |
+|---|---|---|
+| `@atlas/shared` | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 |
+| `@atlas/mcp` | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 |
+| `@atlas/api` | **96.11 / 95.11 / 96.69** / 87.85 | 95.5 / **95** / 96 / 87.3 |
+| `@atlas/web` | **97.31 / 96.19 / 95.08** / 92.51 | 96.8 / 95.7 / **95** / 92 |
+
+Six of the eight non-branch metrics across `api` and `web` are now at or above
+95; before this campaign, one was. Where a metric crosses the Owner's stated
+95% bar it is enforced at **exactly 95**, not measured-minus-jitter, so a slide
+back under the bar fails the gate instead of being absorbed.
+
+**Branches are a ceiling, and this ADR should say so rather than imply a
+target.** `api` sits at 87.85 and `web` at 92.51. Reaching 95 on `api` would
+mean covering ~450 further branches, and what remains is overwhelmingly
+defensive: `if (!row) return`, `?? null`, catch arms unreachable in practice.
+On `web` it is concentrated in `App.tsx`'s `lazyNamed(() => import(...))` route
+closures — e2e's job — and react-flow canvas internals that jsdom's no-op
+`ResizeObserver` never lets render.
+
+Tests written to execute those assert that nothing happens. They cost
+maintenance forever, catch nothing, and `pnpm e2e` already walks the real paths.
+The campaign's own precedent is task-16 of its predecessor: seven "obvious"
+index gaps, exactly one real, the other six permanent write cost bought with
+nothing. Excluding those files from coverage to flatter the number would be the
+same mistake as lowering a floor to meet it, and was rejected for the same
+reason.
+
 `mcp` moved **up**: it measured 100 while gating at 95, so five points of real
 coverage were unprotected. A ratchet locks gains in as well as catching losses.
 
