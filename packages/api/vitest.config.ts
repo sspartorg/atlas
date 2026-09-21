@@ -94,6 +94,9 @@ export default defineConfig({
             'src/services/tasks.test.ts',
             'src/services/sub-tasks.test.ts',
             'src/services/comments.test.ts',
+            // G-009 — this file was committed but never listed here, so its 7
+            // tests had never run and history-prune.ts sat at 0% branches.
+            'src/services/history-prune.test.ts',
             // W2 — service-layer coverage for agentsService.
             'src/services/agents.test.ts',
             // Workstream #4 — composite FK + Zod superRefine on agent routes.
@@ -169,7 +172,6 @@ export default defineConfig({
             'src/routes/analytics.test.ts',
             // P6 — POST /api/settings/log-level + isValidLogLevel guard.
             'src/routes/settings.test.ts',
-            'src/utils/normalize-timestamps.test.ts',
             'src/utils/lan-origins.test.ts',
             // Marketplace + agent bundle.
             'src/services/marketplace.test.ts',

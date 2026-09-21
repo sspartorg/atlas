@@ -214,7 +214,7 @@ describe('AssigneePickerPopover', () => {
                 ]),
             ),
             http.get(`${BASE}/settings`, () =>
-                HttpResponse.json({ id: 1, owner_name: 'Sunny', onboarding_complete: 1 }),
+                HttpResponse.json({ id: 1, owner_name: 'Alex', onboarding_complete: 1 }),
             ),
         );
         renderWithProviders(
@@ -231,7 +231,7 @@ describe('AssigneePickerPopover', () => {
         await waitFor(() => {
             const names = screen.getAllByRole('menuitem').map((el) => el.textContent ?? '');
             expect(names[0]).toContain('PoBot');
-            expect(names[1]).toContain('Sunny');
+            expect(names[1]).toContain('Alex');
             expect(names[2]).toContain('EngBot');
         });
     });

@@ -41,12 +41,12 @@ describe('AgentSelect', () => {
             <AgentSelect
                 agents={[]}
                 value="OWNER"
-                ownerName="Sunny"
+                ownerName="Alex"
                 onChange={() => {}}
             />,
         );
         const input = screen.getByRole('combobox') as HTMLInputElement;
-        expect(input.value).toBe('Sunny');
+        expect(input.value).toBe('Alex');
     });
 
     it('fires onChange when a new option is picked', () => {
@@ -115,7 +115,7 @@ describe('AgentSelect', () => {
             <AgentSelect
                 agents={agents}
                 value="OWNER"
-                ownerName="Sunny"
+                ownerName="Alex"
                 suggestedRole="po"
                 onChange={() => {}}
             />,
@@ -124,8 +124,8 @@ describe('AgentSelect', () => {
         const listbox = screen.getByRole('listbox');
         const text = listbox.textContent ?? '';
         expect(text.indexOf('Suggested')).toBeGreaterThanOrEqual(0);
-        expect(text.indexOf('Product Owner')).toBeLessThan(text.indexOf('Sunny'));
-        expect(text.indexOf('Sunny')).toBeLessThan(text.indexOf('Engineer'));
+        expect(text.indexOf('Product Owner')).toBeLessThan(text.indexOf('Alex'));
+        expect(text.indexOf('Alex')).toBeLessThan(text.indexOf('Engineer'));
     });
 
     it('no "Suggested" group when no agent has the suggested role', () => {

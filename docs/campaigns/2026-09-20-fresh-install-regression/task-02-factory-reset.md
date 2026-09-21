@@ -127,8 +127,8 @@ images:
 
 Exactly three resources removed, each by explicit name. 10 containers and 10
 volumes remain, all non-Atlas:
-`dhequest1-*` (4), `dhequest2-*` (4), `dhequest-backup-clickhouse`,
-`neel-postgres`, and their volumes plus `shopping-site_neel-pgdata`.
+`third-party-stack-1-*` (4), `third-party-stack-2-*` (4), `third-party-backup-clickhouse`,
+`another-project-postgres`, and their volumes plus `another project's volume`.
 
 `atlas-postgres-prod` and `atlas-pg-prod` did not exist, so the conditional
 branches were no-ops.

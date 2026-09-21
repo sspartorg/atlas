@@ -120,10 +120,10 @@ describe('mintInstallationToken', () => {
     it('falls back to /orgs endpoint when /users returns 404', async () => {
         const { pem } = makeKeyPair();
         installFetchStub((url) => {
-            if (url.endsWith('/users/isw-CDM-Next/installation')) {
+            if (url.endsWith('/users/acme-org/installation')) {
                 return new Response('not found', { status: 404 });
             }
-            if (url.endsWith('/orgs/isw-CDM-Next/installation')) {
+            if (url.endsWith('/orgs/acme-org/installation')) {
                 return jsonResponse({ id: 77 });
             }
             if (url.endsWith('/app/installations/77/access_tokens')) {
@@ -138,7 +138,7 @@ describe('mintInstallationToken', () => {
         const result = await mintInstallationToken({
             app_id: 999,
             app_private_key_encrypted: `enc(${pem})`,
-            app_installation_owner: 'isw-CDM-Next',
+            app_installation_owner: 'acme-org',
             app_installation_id: null,
         });
         expect(result.installation_id).toBe(77);

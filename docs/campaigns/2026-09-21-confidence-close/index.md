@@ -23,7 +23,7 @@ Its findings are `F-001`…`F-022`; this board's are `G-001`…, a fresh series.
 | # | Task | Scope | Status |
 |---|---|---|---|
 | 1 | [Baseline — re-run every gate, record the numbers](task-01-baseline.md) | infra | done — gate is **green** |
-| 2 | [Leftover-name sweep round 2](task-02-name-sweep-round-2.md) | api · shared · web · docs | todo |
+| 2 | [Leftover-name sweep round 2](task-02-name-sweep-round-2.md) | api · shared · web · docs | done |
 | 3 | [`.strict()` on `UpdateExternalNotificationSchema`](task-03-strict-external-notification.md) | shared | todo |
 | 4 | [Machine-verify the reviewer checklist gates](task-04-machine-verify-checklists.md) | api | todo |
 | 5 | [`@atlas/api` coverage to 95 on all four metrics](task-05-api-coverage-95.md) | api | todo |
@@ -42,12 +42,13 @@ The predecessor's own closing section is unusually honest about what it did not
 finish, and this board exists because of that honesty rather than in spite of
 it. Seven gaps survived it:
 
-- **A leftover the ruling missed.** D-3 declared `insightsoftware` absent after
-  searching the spelled-out name. The abbreviation `isw-CDM-Next` — the org
-  prefix, paired with `cdmnext-claude-bot` — appears nine times across four
-  files, two of them comments in shipping API source that name another
-  company's internal bot playbook as Atlas's design rationale. `sspartorg/atlas`
-  is a **public** repository.
+- **A leftover the ruling missed.** D-3 declared a former employer's name
+  absent after searching for it spelled out. What was actually in the tree was
+  its abbreviated GitHub org slug paired with the name of its internal commit
+  bot — nine hits across four files, two of them comments in shipping API
+  source naming that company's internal playbook as Atlas's design rationale.
+  `sspartorg/atlas` is a **public** repository, which is why the strings
+  themselves are not reproduced anywhere on this board.
 - **The coverage bar moved instead of the coverage.** ADR 0009's floors were
   rebaselined down to measured values, so the gate goes green at
   `api 94.81 / 93.77 / 94.55 / 86.63` and `web 95.40 / 94.14 / 91.58 / 90.53`.

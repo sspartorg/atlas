@@ -299,7 +299,7 @@ describe('ensureWorktree — provisioning paths', () => {
 
     // F-009 — Path 1 must `reset --hard HEAD` + `clean -fd` before any
     // rebase / ff-only-pull because the project setup-script
-    // regenerates files (e.g. mono-repo's SUNNY.md) every provision,
+    // regenerates a tracked file on every provision,
     // leaving the worktree dirty. `rebase` then refuses with "cannot
     // rebase: You have unstaged changes". This test asserts the reset
     // happens BEFORE the rebase.

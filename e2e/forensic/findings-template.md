@@ -5,7 +5,6 @@
 
 **Run timestamp**: <ISO-8601>
 **Atlas SHA**: <git rev-parse HEAD>
-**mono-repo SHA**: <gh api repos/sspartorg/mono-repo/commits/main --jq .sha>
 **Theme(s)**: <light | dark | both>
 **Walker**: `e2e/forensic/walkthrough.spec.ts` (Plan 1)
 **Findings file**: `e2e-logs/forensic-<ts>/forensic.ndjson`

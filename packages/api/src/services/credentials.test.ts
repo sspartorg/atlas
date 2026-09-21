@@ -312,9 +312,9 @@ describe('credentialsService — github_app kind', () => {
             .where('id', '=', cred.id)
             .execute();
         const updated = await credentialsService.update(cred.id, {
-            app_installation_owner: 'isw-CDM-Next',
+            app_installation_owner: 'acme-org',
         });
-        expect(updated.app_installation_owner).toBe('isw-CDM-Next');
+        expect(updated.app_installation_owner).toBe('acme-org');
         expect(updated.app_installation_id).toBeNull();
         expect(updated.token_encrypted).toBeNull();
         expect(updated.token_fingerprint).toBeNull();

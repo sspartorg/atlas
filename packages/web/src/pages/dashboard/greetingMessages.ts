@@ -1,9 +1,9 @@
 // Time-bucketed greeting bank for the Dashboard kicker.
 //
 // The kicker pairs with the owner name to form lines like:
-//   "BURNING THE MIDNIGHT OIL, SUNNY"
-//   "RISE AND SHINE, SUNNY"
-//   "POST-LUNCH SCRUM, SUNNY"
+//   "BURNING THE MIDNIGHT OIL, OWNER"
+//   "RISE AND SHINE, OWNER"
+//   "POST-LUNCH SCRUM, OWNER"
 //
 // 30 variants total, split across four time-of-day buckets so the kicker
 // always matches the wall clock — no "Good morning" at 11 pm, no "Burning

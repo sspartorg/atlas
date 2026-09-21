@@ -430,9 +430,9 @@ describe('credential schemas', () => {
 
     it('UpdateCredentialSchema accepts app_installation_owner', () => {
         expect(
-            UpdateCredentialSchema.parse({ app_installation_owner: 'isw-CDM-Next' })
+            UpdateCredentialSchema.parse({ app_installation_owner: 'acme-org' })
                 .app_installation_owner,
-        ).toBe('isw-CDM-Next');
+        ).toBe('acme-org');
     });
 
     it('UpdateCredentialSchema strips unknown keys (back-compat for round-tripped rows)', () => {

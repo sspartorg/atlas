@@ -7,7 +7,7 @@
 
 The Atlas Playwright stack ran two browser projects: `chromium` (Desktop Chrome via `devices['Desktop Chrome']` ≈ 1280×720) and `mobile-chrome` (Pixel 7 412×915). Visual regression snapshots covered only the desktop project (`e2e/visual/snapshots.spec.ts`), captured 16 routes × 2 themes = 32 baselines, and the mobile/iPad surfaces were entirely uncovered.
 
-The coverage-push-v2 master plan (`C:\Users\sspart\.claude\plans\i-have-a-very-jolly-marshmallow.md` T7) called for a three-viewport matrix to catch tablet-only regressions: sidenav adaption, table fit, modal overflow, and touch-target sizing. The agreed viewports were 1920×1080 desktop / 390×844 mobile (iPhone 14/15 portrait) / 834×1194 iPad portrait.
+The coverage-push-v2 master plan called for a three-viewport matrix to catch tablet-only regressions: sidenav adaption, table fit, modal overflow, and touch-target sizing. The agreed viewports were 1920×1080 desktop / 390×844 mobile (iPhone 14/15 portrait) / 834×1194 iPad portrait.
 
 Alternatives considered:
 - **Webkit for iPad** — most authentic Safari emulation, but introduces a second browser engine, doubling artifact size on every CI run and surfacing engine-level rendering differences that are not the design target.

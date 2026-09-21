@@ -103,22 +103,38 @@ matters: volume first, key second.
 
 ## KEEP — do not touch
 
-### Docker — every one of these belongs to another project
+### Docker — the allowlist is what Atlas owns; everything else is untouchable
 
-| Resource | Kind |
-|---|---|
-| `dhequest1-postgres`, `dhequest1-redis`, `dhequest1-clickhouse`, `dhequest1-activemq` | containers |
-| `dhequest2-postgres`, `dhequest2-redis`, `dhequest2-clickhouse`, `dhequest2-activemq` | containers |
-| `dhequest-backup-clickhouse` | container (exited 7 weeks) |
-| `neel-postgres` | container (exited 10 days) |
-| `dhequest1_dhequest-postgres-data`, `dhequest1_dhequest-redis-data`, `dhequest1_dhequest-clickhouse-data`, `dhequest1_dhequest-activemq-data` | volumes |
-| `dhequest2_dhequest-postgres-data`, `dhequest2_dhequest-redis-data`, `dhequest2_dhequest-clickhouse-data`, `dhequest2_dhequest-activemq-data` | volumes |
-| `dhequest-backup_ch-backup-data`, `shopping-site_neel-pgdata` | volumes |
-| `dhequest1_default`, `dhequest2_default`, `dhequest-backup_default`, `shopping-site_default`, `bridge`, `host`, `none` | networks |
-| `postgres:16-alpine`, `redis:7-alpine`, `clickhouse/clickhouse-server:24-alpine`, `apache/activemq-classic:6.1.5`, `mcr.microsoft.com/powershell:lts-alpine-3.20`, `pgvector/pgvector:pg16` | images |
+This list was an enumeration of the other stacks on this host. It is now
+stated the other way round, for two reasons: naming another project's
+containers in a public repository publishes an inventory of someone else's
+estate (G-002), and an allowlist is the safer shape anyway — a stack added
+to this host tomorrow is protected automatically, whereas a denylist would
+silently fail to cover it.
 
-An exited container is not abandoned. `neel-postgres` and
-`dhequest-backup-clickhouse` still own their volumes.
+**Atlas owns exactly these, by name. Nothing else on this host is Atlas's.**
+
+| Resource | Kind | Note |
+|---|---|---|
+| `atlas-postgres` | container | dev, host port 5500 |
+| `atlas-postgres-prod` | container | prod, host port 5510 — **often absent**; guard every removal with `docker inspect … >/dev/null 2>&1 &&` |
+| `atlas-pg` | volume | explicit `name:`, so not compose-prefixed |
+| `atlas-pg-prod` | volume | often absent, same guard |
+| `atlas_default` | network | implicit compose default; recreated on next `up` |
+
+Everything else — every container, volume, network and image not in that
+table — belongs to another project and is **never** removed, stopped or
+pruned, whatever its state. **An exited container is not abandoned:** several
+on this host are stopped and still own their volumes, and removing one
+destroys data that is not ours.
+
+`pgvector/pgvector:pg16` is the image Atlas uses, and it is **not** on the
+drop list — images are shared and re-pulling one proves nothing about a
+fresh install of Atlas.
+
+`docker system prune` is forbidden in every form, as are
+`docker volume|container|network prune`. Remove Atlas resources **by name**
+or not at all (D-1).
 
 ### Disk
 

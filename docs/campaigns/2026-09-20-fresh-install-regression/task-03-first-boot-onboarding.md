@@ -154,11 +154,11 @@ verified against a scratch DB in task-01, and here it produces a working install
 from nothing.
 
 **Onboarding.** Wizard reached via the `RouteGuard` redirect from `/`. Entered
-`Sairam`, selected the **third** accent swatch, workspace
-`/Users/sunnysabhanam/Work/workspace`. Result:
+`Alex`, selected the **third** accent swatch, workspace
+`<workspace>`. Result:
 
 ```
-Sairam|/Users/sunnysabhanam/Work/workspace|1|#2E2E2E
+Alex|<workspace>|1|#2E2E2E
 ```
 
 **F-001 confirmed empirically.** The third swatch was selected; `accent_color`
@@ -182,7 +182,7 @@ connected.` per load, and the React DevTools info notice.
    really is `randomBytes(32)` and its deletion really was irreversible.
 
 2. **Port collision with an unrelated stack.** Four `vite` processes from
-   `main-dhequest2/dhequest-platform` (PIDs 45827, 45931, 45973, 46015, up
+   `main-third-party-stack-2/a third-party stack` (PIDs 45827, 45931, 45973, 46015, up
    since 00:55) hold `*:4000`–`*:4003` on IPv6. Atlas's API still bound
    `127.0.0.1:4001` on IPv4, so the two coexisted — but `localhost:4001` became
    ambiguous depending on IPv4/IPv6 resolution, and the web dev server drifted
@@ -192,5 +192,5 @@ connected.` per load, and the React DevTools info notice.
 
    ⚠️ `API_PROXY_TARGET` in `.env` is a **separate** variable and still read
    `http://127.0.0.1:4001`. Changing only `WEB_PORT`/`API_PORT` would have left
-   Atlas's UI proxying its API calls to the dhequest stack. It was updated to
+   Atlas's UI proxying its API calls to the third-party-stack stack. It was updated to
    `:4101` in the same edit. Anyone repeating this move must change all three.
