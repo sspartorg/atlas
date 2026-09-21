@@ -1,6 +1,6 @@
 # 03 — `.strict()` on `UpdateExternalNotificationSchema`
 
-**Status:** todo
+**Status:** done — 2026-09-21
 **Depends on:** task-01
 **Scope:** shared
 
@@ -42,12 +42,55 @@ E-4 is that waiver.
 
 ## Done when
 
-- [ ] `.strict()` added, error shape matches the repos route exactly
-- [ ] Regression test passes; reverting `.strict()` fails it
-- [ ] `pnpm -F @atlas/shared test:coverage` still 100/100/100/100
-- [ ] `.agents/api-surface.md` updated in the same commit
-- [ ] G-007 flipped to `fixed` in `findings.md`, board row flipped
+- [x] `.strict()` added, error shape matches the repos route exactly
+- [x] Regression test passes; reverting `.strict()` fails it
+- [x] `pnpm -F @atlas/shared test:coverage` still 100/100/100/100
+- [x] `.agents/api-surface.md` updated in the same commit
+- [x] G-007 flipped to `fixed` in `findings.md`, board row flipped
 
 ## Evidence
 
-_Written after execution._
+**Done. `shared` holds 100/100/100/100 (291 stmts, 121 branches, 34 funcs,
+255 lines); `settings.test.ts` 40 passed; `schemas.test.ts` 132 passed.**
+
+### The finding was half-wrong, and the half it got right mattered
+
+G-007 said the route "still answers 200". **It does not, and has not since the
+predecessor's task-15.** F-019 *was* fixed — at the route, not the schema, and
+the code said so out loud at `routes/settings.ts:88`:
+
+> `.strict()` on the schema would be the cleaner fix, but it lives in
+> packages/shared (AGENTS.md hard rule 1), so the route rejects the empty
+> patch instead.
+
+So the predecessor hit the wall hard rule 1 puts there, chose the legal fix,
+and documented the illegal one it wanted. That is the rule working, not a
+lapse — and this board's G-007 row overstated it by reading the schema without
+reading the route. Corrected in `findings.md`.
+
+What ruling E-4 actually bought is therefore **not** a 200→400 fix. It is a
+better 400:
+
+| body | before | after |
+|---|---|---|
+| `{provider, token, chat_id}` | 400 `"No recognised fields in the request body…"` | 400 `"Unrecognized keys: \"provider\", \"token\", \"chat_id\""` |
+
+The caller is now told *which* key is wrong instead of only that nothing
+matched — which is the difference between an agent fixing its payload and an
+agent guessing again. It also makes this route agree with
+`PATCH /api/projects/:id/repos/:repoId`, and two write routes disagreeing about
+whether an unrecognised body is an error was the part of F-019 worth closing.
+
+### The inherited test caught the change, which is the point
+
+`settings.test.ts`'s F-019 case asserted `/no recognised fields/i` — the
+route-level wording. `.strict()` moved the rejection a layer earlier and the
+message changed, so **that test failed immediately**. It was updated to assert
+the key is named, rather than deleted, and the block is now headed
+`F-019 / G-007` with both histories in the comment.
+
+The route's empty-patch guard is **kept and still load-bearing**: `{}` is valid
+against a schema whose every field is optional, so strictness cannot catch it.
+A test in each package now pins that division — one in `shared` asserting `{}`
+parses, one in `api` asserting the route still 400s it. Move the empty check
+into the schema and both tell you.

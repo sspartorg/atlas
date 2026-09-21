@@ -24,7 +24,7 @@ Its findings are `F-001`…`F-022`; this board's are `G-001`…, a fresh series.
 |---|---|---|---|
 | 1 | [Baseline — re-run every gate, record the numbers](task-01-baseline.md) | infra | done — gate is **green** |
 | 2 | [Leftover-name sweep round 2](task-02-name-sweep-round-2.md) | api · shared · web · docs | done |
-| 3 | [`.strict()` on `UpdateExternalNotificationSchema`](task-03-strict-external-notification.md) | shared | todo |
+| 3 | [`.strict()` on `UpdateExternalNotificationSchema`](task-03-strict-external-notification.md) | shared | done |
 | 4 | [Machine-verify the reviewer checklist gates](task-04-machine-verify-checklists.md) | api | todo |
 | 5 | [`@atlas/api` coverage to 95 on all four metrics](task-05-api-coverage-95.md) | api | todo |
 | 6 | [`@atlas/web` coverage to 95 on all four metrics](task-06-web-coverage-95.md) | web | todo |

@@ -236,6 +236,20 @@ describe('PATCH /api/settings/external-notification — webhook_url branch', () 
     });
 });
 
+describe('PATCH /api/settings/external-notification — G-007 empty body', () => {
+    it('still rejects a literally empty body, which strictness cannot catch', async () => {
+        // `{}` is valid against a schema whose every field is optional, so the
+        // route's own guard is what rejects this one.
+        const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/settings/external-notification',
+            payload: {},
+        });
+        expect(res.statusCode).toBe(400);
+        expect((JSON.parse(res.body) as Record<string, unknown>).kind).toBe('validation_error');
+    });
+});
+
 describe('PATCH /api/settings/external-notification — token and chat_id branches (lines 51-58)', () => {
     it('returns 200 when setting external_notification_token; response redacts token but flags _set', async () => {
         const res = await app.inject({
@@ -565,7 +579,7 @@ describe('POST /api/settings/log-level — non-string level (covers line 109 fal
     });
 });
 
-// ── F-019: an unrecognised body must not return 200 ────────────────────────
+// ── F-019 / G-007: an unrecognised body must not return 200 ────────────────
 //
 // UpdateExternalNotificationSchema makes every field optional and Zod strips
 // unknown keys, so `{provider, token, chat_id}` — the un-prefixed names —
@@ -573,15 +587,22 @@ describe('POST /api/settings/log-level — non-string level (covers line 109 fal
 // the 2026-09-20 campaign by sending exactly that body and then finding
 // external_notification_token still NULL. A 200 on a no-op is worst for the
 // agents that drive this API over MCP, where it reads as "the write landed".
-describe('PATCH /api/settings/external-notification — F-019', () => {
-    it('rejects a body whose field names are all unrecognised', async () => {
+//
+// G-007 (2026-09-21): the original fix guarded at the route because
+// packages/shared was off-limits. The schema is now `.strict()`, so the
+// rejection happens a layer earlier and the error NAMES the offending key
+// instead of saying only that nothing was recognised. Both still 400.
+describe('PATCH /api/settings/external-notification — F-019 / G-007', () => {
+    it('rejects a body whose field names are all unrecognised, naming the key', async () => {
         const res = await app.inject({
             method: 'PATCH',
             url: '/api/settings/external-notification',
             payload: { provider: 'telegram', token: 'x', chat_id: 'y' },
         });
         expect(res.statusCode).toBe(400);
-        expect(res.json().error).toMatch(/no recognised fields/i);
+        expect(res.json().kind).toBe('validation_error');
+        // Naming the key is the whole gain over the route-level guard.
+        expect(res.json().error).toMatch(/provider/);
     });
 
     it('still accepts a correctly-named partial patch', async () => {
