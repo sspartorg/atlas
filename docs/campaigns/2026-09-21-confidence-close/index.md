@@ -1,7 +1,7 @@
 # confidence-close — the board
 
-> **CLOSED — 2026-09-21. All 10 rows done.** 15 findings, **all 15 fixed**. `pnpm -w run gate` green, `pnpm e2e` 224/0, `pnpm audit` clean.
-> **Five real defects were found, one of them P1.**
+> **CLOSED — 2026-09-21. All 10 rows done.** 16 findings, **all 16 fixed**. `pnpm -w run gate` green, `pnpm e2e` 224/0, `pnpm audit` clean.
+> **Six real defects were found, one of them P1.**
 > Read *Closing* at the foot of this file first.
 
 The Owner asked of the 2026-09-20 campaign: *"is it all completed, are you 100%
@@ -133,11 +133,25 @@ campaign that closed 22/22 the day before.**
 | **G-011** | A Sub-tasks step whose sub-task **failed** drew a green success check. | P2 |
 | **G-009** | A committed test file that **had never run**; enabling it surfaced an assertion that had rotted meanwhile. | P2 |
 | **G-010** | Every workflow-inspector toggle had the **wrong accessible name**. | P3 |
+| **G-016** | A workflow set `raises_pr` without `push_code` was listed as **"Pull request"** but delivers nothing — the engine needs both. Two functions describing one state disagreed, and the one users read was wrong. | P3 |
 
 None would have been caught by the existing suite, by lint, or by looking at
 the running app. G-010 and G-014 are the same MUI 7 trap in two places; both
 were verified by rendering each prop form and reading the DOM rather than
-trusting documentation or a subagent's report.
+trusting documentation or a subagent's report. G-016 arrived as a subagent's
+low-confidence aside and was checked against `workflow-engine.ts` before
+anything was touched — "these two functions disagree" is only a bug once you
+know which one the engine agrees with.
+
+**Two more were escalated rather than fixed, then ruled on and fixed.** G-013
+(the Jira bridge wrote to matched issues the moment it was enabled) and G-015
+(152 icon spans leaking their glyph into accessible names) both changed
+behaviour a document called intentional, so they were filed for the Owner
+instead of decided unilaterally. The ruling was: fix them. G-013 became a rule
+— *Atlas writes to Jira when it acts, not when it merely looks* — with no
+migration and no new toggle. G-015 needed three buttons given real labels as a
+direct consequence, because hiding a glyph turns an icon-only button from
+badly-named into **unnamed**.
 
 ### What is now proven
 

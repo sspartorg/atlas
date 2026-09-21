@@ -93,14 +93,21 @@ Exactly the four gate tests; the other 43 unchanged.
 
 ### Findings
 
-**15 rows. All 15 fixed.** G-013 and G-015 were filed for an Owner ruling and then ruled on: *fix them*. Both are closed, mutation-proved, and described below.
+**16 rows. All 16 fixed.** G-013 and G-015 were filed for an Owner ruling and then ruled on: *fix them*. Both are closed, mutation-proved, and described below.
 
 ## The answer
 
-**No — not 100% confident. Nobody honestly can be, and specifically: five real
-defects were sitting in this codebase this morning, which is itself the
-strongest evidence against anyone's confidence, including the previous
-campaign's.**
+**Every known issue is closed and every gate is green. That I will certify.
+"100% confident there are no bugs" I will not, and the reason is this board
+itself: six real defects were sitting in this codebase this morning, the day
+after a campaign closed 22/22 and declared it done. One was a P1 that
+corrupted credentials. The sixth was found in the last hour, from an aside
+somebody nearly dismissed.**
+
+A codebase that yields six defects to one day of looking will yield more to the
+next day of looking. That is not a reason to withhold the merge — it is the
+reason the gates, the ratcheted floors and the sixteen regression tests added
+here matter more than any assurance I could give.
 
 What can be said instead, with numbers behind it: Atlas's gate is green, 7,487
 tests pass, 224 e2e specs pass, the dependency audit is clean, six of eight
