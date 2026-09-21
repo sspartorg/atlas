@@ -372,6 +372,15 @@ export async function runRoutes(app: FastifyInstance) {
                 'r.credits as credits',
                 'r.workflow_run_id as workflow_run_id',
                 'r.node_id as node_id',
+                // 2026-09-22 — same omission the detail route above carried until
+                // 2026-09-12: `asAgentRun` maps these, so `IAgentRun` promises
+                // them, but list mode never SELECTed them and every row came back
+                // with a null outcome. A run that ended `asked_question` or
+                // `failed` was indistinguishable from one with no outcome at all.
+                // `outcome_reason` can be long, so it stays out of list mode — the
+                // kind and the one-line summary are what a list renders.
+                'r.outcome_kind as outcome_kind',
+                'r.outcome_summary as outcome_summary',
             ]);
         if (issue_id) q = q.where('r.item_id', '=', issue_id);
         // 2026-09-12: `agent_id` and `issue_type` were in the accepted query
