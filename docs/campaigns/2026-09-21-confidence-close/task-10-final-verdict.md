@@ -33,28 +33,29 @@ made the remaining work findable. Repeat it.
 ### The gates
 
 **`pnpm -w run gate` — GREEN, exit 0.** Typecheck, knip, per-package coverage
-against the newly ratcheted thresholds, build, bundle budget.
+against the ratcheted thresholds, build, bundle budget. Re-run after the final
+three fixes (G-013, G-015, G-016), not before them.
 
 ```
-@atlas/shared   6 files    249 tests   100 / 100 / 100 / 100
-@atlas/mcp     12 files    167 tests   100 / 100 / 100 / 100
-@atlas/web    335 files  4,358 tests   96.19 / 92.51 / 95.08 / 97.31
-@atlas/api    155 files  2,713 tests   95.10 / 87.84 / 96.69 / 96.09
+@atlas/shared   6 files    249 tests   100   / 100   / 100   / 100
+@atlas/mcp     12 files    167 tests   100   / 100   / 100   / 100
+@atlas/web    336 files  4,361 tests   96.18 / 92.50 / 95.05 / 97.29
+@atlas/api    155 files  2,715 tests   95.08 / 87.82 / 96.69 / 96.08
                         ─────────────
-                         7,487 tests, all passing
+                         7,492 tests, all passing
 
 Initial chunk total: 256.4 KB gz (budget 264.0 KB)
-Total app size:      856.0 KB gz (budget 880.0 KB)
+Total app size:      856.5 KB gz (budget 880.0 KB)
 Bundle budget OK.
 ```
 
 **`pnpm e2e` — 224 passed, 323 skipped, 0 failed, exit 0**, 6.0m.
 
 The skip count moved 315 → 323 because task-07 added eight `GUIDE=1` captures
-to the same gated family as `PERF` / `FORENSIC` / `FUNCTIONAL`. Passing count is
-unchanged at 224, which is the number that matters.
+to the same gated family as `PERF` / `FORENSIC` / `FUNCTIONAL`. Passing count
+is unchanged at 224, which is the number that matters.
 
-**`pnpm audit` — `No known vulnerabilities found`.** Peer resolution clean.
+**`pnpm audit` — `No known vulnerabilities found`, exit 0.**
 
 ### Coverage — measured, not asserted
 
@@ -62,10 +63,10 @@ unchanged at 224, which is the number that matters.
 |---|---|---|---|---|
 | `@atlas/shared` | 100% | 100% | 100% | 100% |
 | `@atlas/mcp` | 100% | 100% | 100% | 100% |
-| `@atlas/api` | **95.10%** ✅ | 87.84% | **96.69%** ✅ | **96.09%** ✅ |
-| `@atlas/web` | **96.19%** ✅ | 92.51% | **95.08%** ✅ | **97.31%** ✅ |
+| `@atlas/api` | **95.08%** ✅ | 87.82% | **96.69%** ✅ | **96.08%** ✅ |
+| `@atlas/web` | **96.18%** ✅ | 92.50% | **95.05%** ✅ | **97.29%** ✅ |
 
-**7,210 → 7,487 tests.** Six of the eight non-branch metrics on `api` and `web`
+**7,210 → 7,492 tests.** Six of the eight non-branch metrics on `api` and `web`
 are at or above the Owner's 95% bar; at the start of this board, one was.
 
 ### The name sweep
