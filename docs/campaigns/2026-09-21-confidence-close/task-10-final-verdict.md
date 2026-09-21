@@ -102,7 +102,7 @@ defects were sitting in this codebase this morning, which is itself the
 strongest evidence against anyone's confidence, including the previous
 campaign's.**
 
-What can be said instead, with numbers behind it: Atlas's gate is green, 7,538
+What can be said instead, with numbers behind it: Atlas's gate is green, 7,487
 tests pass, 224 e2e specs pass, the dependency audit is clean, six of eight
 non-branch coverage metrics are at or above 95%, the Jira bridge has now
 actually been run against a live site, and the one path that could ship a red
