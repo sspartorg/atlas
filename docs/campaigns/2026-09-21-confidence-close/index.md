@@ -30,7 +30,7 @@ Its findings are `F-001`…`F-022`; this board's are `G-001`…, a fresh series.
 | 6 | [`@atlas/web` coverage to 95 on all four metrics](task-06-web-coverage-95.md) | web | todo |
 | 7 | [Recapture the twelve stale guide screenshots](task-07-guide-screenshots.md) | docs | done |
 | 8 | [Execute Jira chain X-8 and the two partial chains](task-08-jira-x8.md) | api · web | todo |
-| 9 | [Security re-audit — confirm 0 advisories still holds](task-09-security-reaudit.md) | infra | todo |
+| 9 | [Security re-audit — confirm 0 advisories still holds](task-09-security-reaudit.md) | infra | done |
 | 10 | [Final regression and the written confidence verdict](task-10-final-verdict.md) | all | todo |
 
 Row numbers are permanent. A row's status and its task file's `**Status:**`

@@ -1,6 +1,6 @@
 # 09 — Security re-audit: confirm 0 advisories still holds
 
-**Status:** todo
+**Status:** done — 2026-09-21
 **Depends on:** tasks 02–06
 **Scope:** infra
 
@@ -48,14 +48,51 @@ verdict must not overstate it.
 
 ## Done when
 
-- [ ] `pnpm audit` → 0 advisories, output pasted
-- [ ] Any new floor pinned in `pnpm-workspace.yaml` with its advisory cited
-- [ ] `pnpm peers check` clean
-- [ ] Full suite green after any dependency change
-- [ ] The verdict language for task-10 drafted here, stating the limits of the claim
+- [x] `pnpm audit` → 0 advisories, output pasted
+- [x] Any new floor pinned in `pnpm-workspace.yaml` with its advisory cited
+- [x] `pnpm peers check` clean
+- [x] Full suite green after any dependency change
+- [x] The verdict language for task-10 drafted here, stating the limits of the claim
 
 ## Evidence
 
 **2026-09-21, pre-change baseline:** `pnpm audit` → `No known vulnerabilities found`.
 
-_Remainder written after execution._
+**2026-09-21, after every change on this board:** `pnpm audit` →
+`No known vulnerabilities found`. Peer resolution clean —
+`pnpm install --resolution-only` reports `Already up to date` with no unmet
+peers.
+
+No new floor was needed. This board added no runtime dependency: every change
+was test code, documentation, one new service module (`verification-gate.ts`,
+which imports only `node:child_process`, `node:util`, `node:fs/promises` and
+`node:path`), and two one-line source fixes. The 18 floors the predecessor
+pinned in `pnpm-workspace.yaml` still hold, and nothing published in the
+intervening day matched this tree.
+
+### The language task-10 must use, and why
+
+**"0 vulnerabilities" is not what this proves, and the verdict will not claim
+it.** A clean `pnpm audit` means: no advisory currently in the registry matches
+a version currently resolved in this lockfile. It is a real and useful result —
+it went from 43 advisories, 20 of them high, to zero — but three things it is
+not:
+
+1. **Not a reachability analysis.** The predecessor was explicit that it never
+   assessed whether the vulnerable code paths execute. Neither did this pass.
+   A path existing in the tree is not proof the vulnerable function is called;
+   equally, its absence from the advisory list is not proof of safety.
+2. **Not a statement about Atlas's own code.** `pnpm audit` reads third-party
+   metadata. It has nothing to say about the credential handling, the MCP write
+   gate, the secret redaction, or anything else this repo wrote. Those were
+   examined by the predecessor's F-021 and F-022 and by this board's work on
+   `routes/credentials.ts` — but examined is not the same as audited.
+3. **Not durable.** Advisories publish daily. This sentence is true on
+   2026-09-21 and says nothing about 2026-09-22. The value is the pinned floors
+   and the fact that the check is cheap to repeat, not the number itself.
+
+Ruling D-10 carried over, so no STRIDE pass, no SBOM, no threat model. The
+Owner's brief asked for "0 vulnerabilities so companies can adopt this"; what
+can honestly be handed to such a company is a clean dependency audit, pinned
+security floors, a closed-by-default MCP write gate, and the named limits
+above.
