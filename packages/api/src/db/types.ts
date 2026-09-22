@@ -95,6 +95,7 @@ export interface AgentsTable {
     // explicitly Detaches to opt out of upgrade-available indicators.
     marketplace_source_id: StrN;
     marketplace_pulled_version: IntN;
+    marketplace_upgradable_hash: StrN;
     created_at: CreatedAt;
     updated_at: UpdatedAt;
 }

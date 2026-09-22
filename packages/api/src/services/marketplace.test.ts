@@ -158,6 +158,78 @@ describe('marketplaceService', () => {
         expect((await agentsService.get('cat-paused'))!.status).toBe('inactive');
     });
 
+    // The Owner-edit gate used to ask only "did they edit the PROMPT?", but an
+    // upgrade overwrites the prompt, the settings AND the checklists — and a
+    // checklist edit writes no `agent_prompt_versions` row and does not even
+    // bump `agents.updated_at`. So an Owner who tuned a checklist and never
+    // touched the prompt looked untouched, and the next import silently
+    // DELETED their checklist. That is the exact data loss `skipped_edited`
+    // exists to prevent.
+    it('protects a checklist-only edit from an automatic upgrade', async () => {
+        await insertCatalogAgent({ id: 'cat-cl', version: 1 });
+        await testDb.insertInto('marketplace_agent_checklists').values({ marketplace_agent_id: 'cat-cl', label: 'catalog step', sort_order: 0, required: true }).execute();
+        await marketplaceService.install('cat-cl');
+        // Only the checklist. The prompt is left exactly as the catalog shipped it.
+        await agentsService.update('cat-cl', { checklists: [{ label: 'MY OWN STEP', sort_order: 0, required: true }] });
+        await testDb.updateTable('marketplace_agents').set({ version: 2 }).where('id', '=', 'cat-cl').execute();
+
+        const report = await marketplaceService.resolveAgentDependencies(['cat-cl'], { link: true });
+
+        expect(report.skipped_edited).toEqual(['cat-cl']);
+        expect(report.upgraded).toEqual([]);
+        const items = await testDb.selectFrom('agent_checklists').select('label').where('agent_id', '=', 'cat-cl').execute();
+        expect(items.map((i) => i.label)).toEqual(['MY OWN STEP']);
+    });
+
+    // Same blind spot, other field: `settings_json` is overwritten wholesale.
+    it('protects a settings-only edit from an automatic upgrade', async () => {
+        await insertCatalogAgent({ id: 'cat-set', version: 1, settings_json: { tone: 'catalog' } });
+        await marketplaceService.install('cat-set');
+        await agentsService.update('cat-set', { settings_json: { tone: 'mine' } });
+        await testDb.updateTable('marketplace_agents').set({ version: 2 }).where('id', '=', 'cat-set').execute();
+
+        const report = await marketplaceService.resolveAgentDependencies(['cat-set'], { link: true });
+
+        expect(report.skipped_edited).toEqual(['cat-set']);
+        expect((await agentsService.get('cat-set'))!.settings_json).toEqual({ tone: 'mine' });
+    });
+
+    // An agent installed before migration 009 has no hash, so there is no
+    // honest way to tell whether the Owner changed anything. The automatic
+    // path declines rather than guess — one visible click in the Marketplace
+    // beats one silent deletion. See the migration header.
+    it('declines to auto-upgrade an agent whose pull predates the hash', async () => {
+        await insertCatalogAgent({ id: 'cat-legacy', version: 1 });
+        await marketplaceService.install('cat-legacy');
+        // Exactly the state a pre-009 row is left in by the migration.
+        await testDb.updateTable('agents').set({ marketplace_upgradable_hash: null }).where('id', '=', 'cat-legacy').execute();
+        await testDb.updateTable('marketplace_agents').set({ version: 2, prompt_md: 'v2' }).where('id', '=', 'cat-legacy').execute();
+
+        const report = await marketplaceService.resolveAgentDependencies(['cat-legacy'], { link: true });
+
+        expect(report.skipped_edited).toEqual(['cat-legacy']);
+        // Pointer left behind on purpose, so the Marketplace still offers it.
+        expect((await agentsService.get('cat-legacy'))!.marketplace_pulled_version).toBe(1);
+    });
+
+    // Accepting an upgrade resets the baseline, so the SAME agent is not
+    // reported as edited on the next resolve. Without this the hash would go
+    // stale at the first upgrade and freeze the agent exactly as the old
+    // prompt-version check did.
+    it('an accepted upgrade resets the hash so the next one still applies', async () => {
+        await insertCatalogAgent({ id: 'cat-rehash', version: 1, prompt_md: 'v1' });
+        await marketplaceService.install('cat-rehash');
+        await testDb.updateTable('marketplace_agents').set({ version: 2, prompt_md: 'v2' }).where('id', '=', 'cat-rehash').execute();
+        expect((await marketplaceService.resolveAgentDependencies(['cat-rehash'], { link: true })).upgraded).toEqual(['cat-rehash']);
+
+        await testDb.updateTable('marketplace_agents').set({ version: 3, prompt_md: 'v3' }).where('id', '=', 'cat-rehash').execute();
+        const second = await marketplaceService.resolveAgentDependencies(['cat-rehash'], { link: true });
+
+        expect(second.upgraded).toEqual(['cat-rehash']);
+        expect(second.skipped_edited).toEqual([]);
+        expect((await agentsService.get('cat-rehash'))!.prompt_md).toBe('v3');
+    });
+
     // A marketplace upgrade writes `edited_by: 'Marketplace'`, so it must not
     // make the agent look Owner-edited to the NEXT resolve.
     it('an upgrade does not make an agent look Owner-edited afterwards', async () => {
