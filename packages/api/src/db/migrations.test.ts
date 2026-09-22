@@ -49,7 +49,7 @@ describe('migrations (Knex, via globalSetup)', () => {
             .execute();
     });
 
-    it('created the canonical 33 public tables (no orphan retired_prefixes)', async () => {
+    it('created the canonical 34 public tables (no orphan retired_prefixes)', async () => {
         const rows = await sql<{ tablename: string }>`
             SELECT tablename FROM pg_tables
             WHERE schemaname = 'public'
@@ -57,10 +57,11 @@ describe('migrations (Knex, via globalSetup)', () => {
             ORDER BY tablename
         `.execute(testDb);
         const names = rows.rows.map((r) => r.tablename);
-        // Sanity floor — the live schema has 33 application tables. If
+        // Sanity floor — the live schema has 34 application tables. If
         // this assertion fails after a future migration, update the
         // count + add a one-liner above naming what landed.
-        expect(names.length).toBeGreaterThanOrEqual(33);
+        // 010 added `jira_sources` (Jira sources moved off jira_config.sources).
+        expect(names.length).toBeGreaterThanOrEqual(34);
         // 074 dropped this orphan; the rebased baseline must NOT carry it.
         expect(names).not.toContain('retired_prefixes');
         // Critical tables a /commands runtime depends on:
@@ -70,6 +71,7 @@ describe('migrations (Knex, via globalSetup)', () => {
         expect(names).toContain('items');
         expect(names).toContain('comments');
         expect(names).toContain('guardrail_scripts');
+        expect(names).toContain('jira_sources');
     });
 
     it('agent_runs.status CHECK allows `cancelled` (formerly delta 073)', async () => {

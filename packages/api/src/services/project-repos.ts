@@ -195,6 +195,15 @@ async function remove(projectId: string, repoId: string): Promise<void> {
         .set({ repo_ids: sql`repo_ids - ${repoId}::text` as never })
         .where('project_id', '=', projectId)
         .execute();
+    // A Jira source names its repos the same way (migration 010), so it needs
+    // the same strip — otherwise the next sync imports Tasks pointing at a repo
+    // that no longer exists, or skips the source entirely once its last repo
+    // goes.
+    await db
+        .updateTable('jira_sources')
+        .set({ repo_ids: sql`repo_ids - ${repoId}::text` as never })
+        .where('project_id', '=', projectId)
+        .execute();
 }
 
 /** The project a repo at this path belongs to, if any. */

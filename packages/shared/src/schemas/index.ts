@@ -668,15 +668,35 @@ export const UpdateJiraConfigSchema = z
         api_token: z.string().max(2_000),
         poll_interval_minutes: z.number().int().min(5).max(10_080),
         extra_fields: z.array(z.string().trim().min(1).max(200)).max(50),
-        sources: z
-            .array(
-                z.object({
-                    repo_id: z.string().min(1),
-                    jql: z.string().trim().min(1).max(5_000),
-                    workflow_id: z.string().min(1).nullable().default(null),
-                })
-            )
-            .max(50),
+    })
+    .partial()
+    .strict();
+
+const JQL = z.string().trim().min(1).max(5_000);
+const REPO_IDS = z.array(z.string().min(1)).min(1).max(20);
+
+/** POST /api/projects/:projectId/jira-sources — one query + workflow + repos combo. */
+export const CreateJiraSourceSchema = z
+    .object({
+        jql: JQL,
+        workflow_id: z.string().min(1).nullable().default(null),
+        repo_ids: REPO_IDS,
+    })
+    .strict();
+
+/**
+ * PATCH /api/projects/:projectId/jira-sources/:id.
+ *
+ * Written out rather than `CreateJiraSourceSchema.partial()`: `.partial()`
+ * wraps `workflow_id`'s `.default(null)` in a `ZodOptional`, which
+ * short-circuits on `undefined` — so clearing a workflow by omitting the key
+ * would parse to a present-but-undefined value instead of being left alone.
+ */
+export const UpdateJiraSourceSchema = z
+    .object({
+        jql: JQL,
+        workflow_id: z.string().min(1).nullable(),
+        repo_ids: REPO_IDS,
     })
     .partial()
     .strict();

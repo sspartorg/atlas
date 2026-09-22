@@ -24,6 +24,7 @@ import type {
     ISubTaskFullResponse,
     IAgentRun,
     IJiraConfig,
+    IJiraSource,
     IJiraSyncResult,
     IJiraTestResult,
     ISettings,
@@ -157,8 +158,11 @@ async function requestRaw<T>(
 
 /** PUT /integrations/jira body: any config field; `api_token` is write-only (omit or '' keeps the stored one). */
 export type JiraConfigUpdate = Partial<
-    Pick<IJiraConfig, 'enabled' | 'site_url' | 'email' | 'poll_interval_minutes' | 'extra_fields' | 'sources'>
+    Pick<IJiraConfig, 'enabled' | 'site_url' | 'email' | 'poll_interval_minutes' | 'extra_fields'>
 > & { api_token?: string };
+
+/** A source's editable fields; it belongs to a project, so `project_id` and `id` are the route. */
+export type JiraSourceInput = Pick<IJiraSource, 'jql' | 'workflow_id' | 'repo_ids'>;
 
 const get = <T>(path: string) => request<T>(path);
 const post = <T>(path: string, body: unknown) =>
@@ -287,6 +291,17 @@ export const api = {
         test: (data: { site_url?: string; email?: string; api_token?: string } = {}) =>
             post<IJiraTestResult>('/integrations/jira/test', data),
         sync: () => post<IJiraSyncResult>('/integrations/jira/sync', {}),
+    },
+    // Migration 010 — sources are a project's query+workflow+repos combos.
+    jiraSources: {
+        list: (projectId: string) =>
+            get<IJiraSource[]>(`/projects/${projectId}/jira-sources`),
+        create: (projectId: string, data: JiraSourceInput) =>
+            post<IJiraSource>(`/projects/${projectId}/jira-sources`, data),
+        update: (projectId: string, id: number, data: Partial<JiraSourceInput>) =>
+            patch<IJiraSource>(`/projects/${projectId}/jira-sources/${id}`, data),
+        remove: (projectId: string, id: number) =>
+            del(`/projects/${projectId}/jira-sources/${id}`),
     },
 
     /** Every repo of every project (ADR 0018). */

@@ -24,6 +24,7 @@ import { TasksTab } from './project/TasksTab.js';
 import { GuardrailsTab } from './project/GuardrailsTab.js';
 import { HistoryTab } from './project/HistoryTab.js';
 import { SetupTab } from './project/SetupTab.js';
+import { ProjectJiraCard } from './project/ProjectJiraCard.js';
 import { ProjectReposCard } from './project/ProjectReposCard.js';
 const DeleteProjectModal = lazyNamed(
     () => import('./projects/DeleteProjectModal.js'),
@@ -40,8 +41,8 @@ import { useSetPageTitle } from '../components/shell/index.js';
 import { relativeTime } from '../utils/time.js';
 import type { IProjectRepo } from '@atlas/shared';
 
-type TabKey = 'overview' | 'tasks' | 'guardrails' | 'repos' | 'setup' | 'history';
-const TAB_KEYS = ['overview', 'tasks', 'guardrails', 'repos', 'setup', 'history'] as const;
+type TabKey = 'overview' | 'tasks' | 'guardrails' | 'repos' | 'jira' | 'setup' | 'history';
+const TAB_KEYS = ['overview', 'tasks', 'guardrails', 'repos', 'jira', 'setup', 'history'] as const;
 
 // Module-scoped so the `repos` prop keeps a stable identity while the query
 // is still pending — `ProjectHeader` is memo'd.
@@ -267,6 +268,21 @@ export function ProjectDetail() {
                     label="Repos"
                 />
                 <Tab
+                    value="jira"
+                    icon={
+                        <Box
+                            component="span"
+                            className="material-symbols-rounded"
+                            aria-hidden="true"
+                            sx={{ fontSize: 16 }}
+                        >
+                            sync_alt
+                        </Box>
+                    }
+                    iconPosition="start"
+                    label="Jira"
+                />
+                <Tab
                     value="setup"
                     icon={
                         <Box
@@ -328,6 +344,7 @@ export function ProjectDetail() {
                     {currentTab === 'repos' && (
                         <ProjectReposCard project={project} displayId={displayId} />
                     )}
+                    {currentTab === 'jira' && <ProjectJiraCard project={project} />}
                     {currentTab === 'setup' && <SetupTab projectId={id} />}
                     {currentTab === 'history' && <HistoryTab projectId={id} />}
                 </Box>

@@ -80,9 +80,7 @@ Configures the Jira bridge. Every field saves on blur (or on change for selects 
   - **Poll every** N minutes (≥ 5; an invalid value reverts), and **Extra fields** (comma-separated Jira field names or ids).
   - A footer line shows "Last sync <time> · <message>" (danger colour when the last sync failed) or "Not synced yet".
   - **Sync now** button → `POST /api/integrations/jira/sync`. It toasts the counts, invalidates every query, and is disabled until a token is stored.
-- **Sources** (one JQL per repo, ADR 0017; replaced the Default project select, the single JQL and the label rules)
-  - One row per source, in order: "<project> / <repo>" as the row label, the JQL (monospace), the workflow name ("No workflow: you pick one" when unset), and a **Remove source N** button (toast "Jira source removed").
-  - An add row: **Source repo** select (every repo from `GET /api/repos`, labelled "<project> / <repo>") + **Source JQL** (multiline, monospace) + **Source workflow** select ("No workflow: I pick" or an `input_kind='item'` workflow that is global or in the chosen repo's project; changing the repo clears it) + **Add source** (needs a repo and a JQL; appends, toast "Jira source added").
+- ~~**Sources**~~ — **moved to the project** (migration 010). A source is one JQL + workflow + repos combo and now lives on Project Detail's **Jira** tab (`ProjectJiraCard`, see [`03-project-detail`](03-project-detail.md)). The Import subtitle points there. Only the connection, the poll interval, the extra fields and **Sync now** remain here, because there is one self-hosted site and one poller. `PUT /api/integrations/jira` no longer accepts `sources` at all — the schema is `.strict()`, so a stale caller gets a 400.
 
 ## Tab 6 — Help & About (`HelpAboutTab`)
 **About Atlas** — app version + repository link. **Report a bug** — surfaces the current `ATLAS_FEEDBACK_URL` (from `useEnv()`), an **Open GitHub Issues** button (falls back to the hardcoded upstream URL if the env var is blank), and a **Restore recommended URL** button that PATCHes `/api/settings/env` with the default `https://github.com/sspartorg/atlas/issues`.

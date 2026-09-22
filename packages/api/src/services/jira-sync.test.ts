@@ -137,6 +137,29 @@ async function insertWorkflow(id: string, inputKind: 'item' | 'none' = 'item', p
         .execute();
 }
 
+/**
+ * Replace every source, in order. Creation order IS the global order
+ * (migration 010: sources are ordered by their serial `id`), so the lowest-id
+ * source wins an issue that several match.
+ */
+async function setSources(
+    ...specs: {
+        project_id?: string;
+        jql: string;
+        workflow_id?: string | null;
+        repo_ids?: string[];
+    }[]
+) {
+    await testDb.deleteFrom('jira_sources').execute();
+    for (const spec of specs) {
+        await jiraSync.createSource(spec.project_id ?? 'p1', {
+            jql: spec.jql,
+            workflow_id: spec.workflow_id ?? null,
+            repo_ids: spec.repo_ids ?? ['p1'],
+        });
+    }
+}
+
 async function configure() {
     await jiraSync.saveConfig({
         enabled: true,
@@ -144,15 +167,11 @@ async function configure() {
         email: 'me@acme.test',
         api_token: 'secret-token',
         extra_fields: ['Acceptance Criteria'],
-        sources: [
-            {
-                repo_id: 'p1',
-                jql: 'project = ATL AND labels = development',
-                workflow_id: 'wf-dev',
-            },
-            { repo_id: 'p1', jql: 'project = ATL', workflow_id: null },
-        ],
     });
+    await setSources(
+        { jql: 'project = ATL AND labels = development', workflow_id: 'wf-dev' },
+        { jql: 'project = ATL', workflow_id: null }
+    );
 }
 
 async function insertRepo(id: string, projectId: string, name: string) {
@@ -224,15 +243,19 @@ describe('jira bridge config', () => {
     it('rejects a source whose repo is unknown or whose workflow does not take Tasks', async () => {
         await insertWorkflow('wf-news', 'none');
         await expect(
-            jiraSync.saveConfig({
-                sources: [{ repo_id: 'p1', jql: 'project = NEWS', workflow_id: 'wf-news' }],
+            jiraSync.createSource('p1', {
+                jql: 'project = NEWS',
+                workflow_id: 'wf-news',
+                repo_ids: ['p1'],
             })
         ).rejects.toThrow(/does not take Tasks/);
         await expect(
-            jiraSync.saveConfig({
-                sources: [{ repo_id: 'nope', jql: 'project = NEWS', workflow_id: null }],
+            jiraSync.createSource('p1', {
+                jql: 'project = NEWS',
+                workflow_id: null,
+                repo_ids: ['nope'],
             })
-        ).rejects.toThrow(/Source 1: repo not found/);
+        ).rejects.toThrow(/Repo nope is not in this project/);
     });
 
     it('drops the stored token when the site or email changes, and never sends it elsewhere', async () => {
@@ -338,13 +361,11 @@ describe('jira bridge pull', () => {
         await insertWorkflow('wf-web', 'item', 'p2');
         issues = [issue('ATL-1', ['web']), issue('ATL-2', ['infra']), issue('ATL-3', ['other'])];
         await configure();
-        await jiraSync.saveConfig({
-            sources: [
-                { repo_id: 'p2', jql: 'labels = web', workflow_id: 'wf-web' },
-                { repo_id: 'p2', jql: 'labels = infra', workflow_id: null },
-                { repo_id: 'p1', jql: 'project = ATL', workflow_id: null },
-            ],
-        });
+        await setSources(
+            { project_id: 'p2', jql: 'labels = web', workflow_id: 'wf-web', repo_ids: ['p2'] },
+            { project_id: 'p2', jql: 'labels = infra', workflow_id: null, repo_ids: ['p2'] },
+            { jql: 'project = ATL', workflow_id: null }
+        );
 
         await jiraSync.syncNow();
 
@@ -369,22 +390,22 @@ describe('jira bridge pull', () => {
     it('rejects a source whose workflow belongs to another project', async () => {
         await insertProject('p2', 'WEB');
         await expect(
-            jiraSync.saveConfig({
-                sources: [{ repo_id: 'p2', jql: 'labels = web', workflow_id: 'wf-dev' }],
+            jiraSync.createSource('p2', {
+                jql: 'labels = web',
+                workflow_id: 'wf-dev',
+                repo_ids: ['p2'],
             })
-        ).rejects.toThrow(/Source 1: WF wf-dev belongs to a different project/);
+        ).rejects.toThrow(/WF wf-dev belongs to a different project/);
     });
 
     it("makes an issue matching two repos' JQL one Task spanning both, and follows later matches", async () => {
         await insertRepo('r-web', 'p1', 'web');
         issues = [issue('ATL-1', ['api'])];
         await configure();
-        await jiraSync.saveConfig({
-            sources: [
-                { repo_id: 'p1', jql: 'labels = api', workflow_id: null },
-                { repo_id: 'r-web', jql: 'labels = web', workflow_id: 'wf-dev' },
-            ],
-        });
+        await setSources(
+            { jql: 'labels = api', workflow_id: null },
+            { jql: 'labels = web', workflow_id: 'wf-dev', repo_ids: ['r-web'] }
+        );
         await jiraSync.syncNow();
         expect(await taskFor('ATL-1')).toMatchObject({ repo_ids: ['p1'], status: 'draft' });
 
@@ -399,12 +420,29 @@ describe('jira bridge pull', () => {
         expect(t1.description).toContain('- **Repos:** repo, web');
         expect(await testDb.selectFrom('items').select('id').execute()).toHaveLength(1);
 
-        // A new issue matching both is queued on the first matched source with a workflow.
+        // A new issue matching both takes the FIRST matched source's own
+        // workflow — a source is one query+workflow combo. It used to borrow a
+        // workflow from whichever later source in the project happened to have
+        // one, so an issue caught by a deliberately workflow-less query could
+        // be queued by a different query's workflow.
         issues.push(issue('ATL-2', ['api', 'web']));
         await jiraSync.syncNow();
         expect(await taskFor('ATL-2')).toMatchObject({
             project_id: 'p1',
             repo_ids: ['p1', 'r-web'],
+            workflow_id: null,
+            status: 'draft',
+        });
+
+        // Reversing the order queues it: now the wf-dev combo matches first.
+        await setSources(
+            { jql: 'labels = web', workflow_id: 'wf-dev', repo_ids: ['r-web'] },
+            { jql: 'labels = api', workflow_id: null }
+        );
+        issues.push(issue('ATL-3', ['api', 'web']));
+        await jiraSync.syncNow();
+        expect(await taskFor('ATL-3')).toMatchObject({
+            project_id: 'p1',
             workflow_id: 'wf-dev',
             status: 'ready',
         });
@@ -415,12 +453,10 @@ describe('jira bridge pull', () => {
         await insertRepo('r-site', 'p2', 'site');
         issues = [issue('ATL-1', ['api', 'site'])];
         await configure();
-        await jiraSync.saveConfig({
-            sources: [
-                { repo_id: 'r-site', jql: 'labels = site', workflow_id: null },
-                { repo_id: 'p1', jql: 'labels = api', workflow_id: 'wf-dev' },
-            ],
-        });
+        await setSources(
+            { project_id: 'p2', jql: 'labels = site', workflow_id: null, repo_ids: ['r-site'] },
+            { jql: 'labels = api', workflow_id: 'wf-dev' }
+        );
 
         await jiraSync.syncNow();
 
@@ -774,17 +810,19 @@ describe('jira bridge source + sync guards', () => {
         // A source saved against a deleted workflow would import Tasks that
         // never get queued — they would sit in the backlog looking imported.
         await expect(
-            jiraSync.saveConfig({
-                sources: [{ repo_id: 'p1', jql: 'project = ATL', workflow_id: 'wf-gone' }],
+            jiraSync.createSource('p1', {
+                jql: 'project = ATL',
+                workflow_id: 'wf-gone',
+                repo_ids: ['p1'],
             })
-        ).rejects.toThrow(/Source 1: workflow not found/);
+        ).rejects.toThrow(/Workflow not found/);
     });
 
     it('refuses to sync until at least one source exists', async () => {
         await configure();
-        await jiraSync.saveConfig({ sources: [] });
+        await setSources();
         await expect(jiraSync.syncNow()).rejects.toMatchObject({ kind: 'validation_error' });
-        expect((await jiraSync.getConfig()).last_sync_message).toContain('Add a source');
+        expect((await jiraSync.getConfig()).last_sync_message).toContain('Add a Jira source');
     });
 
     it('does not call the field catalogue when no extra fields are configured', async () => {
@@ -897,17 +935,17 @@ describe('jira bridge resilience', () => {
             email: 'me@acme.test',
             api_token: 'secret-token',
             extra_fields: [],
-            sources: [
-                { repo_id: 'p1', jql: 'project = ATL', workflow_id: 'wf-dev' },
-                { repo_id: 'r-gone', jql: 'project = OLD', workflow_id: null },
-            ],
         });
+        await setSources(
+            { jql: 'project = ATL', workflow_id: 'wf-dev' },
+            { jql: 'project = OLD', workflow_id: null, repo_ids: ['r-gone'] }
+        );
         await testDb.deleteFrom('project_repos').where('id', '=', 'r-gone').execute();
 
         await jiraSync.syncNow();
 
         const cfg = await jiraSync.getConfig();
-        expect(cfg.last_sync_message).toContain('Source 2 skipped: its repo no longer exists.');
+        expect(cfg.last_sync_message).toContain('Source 2 skipped: none of its repos exist any more.');
         expect(cfg.last_sync_ok).toBe(false);
         // The surviving source still imported.
         expect(await taskFor('ATL-1')).toBeTruthy();
