@@ -201,26 +201,64 @@ catalog prompts hardcode.
    Atlas's per-run config, which is the same file that sets `core.hooksPath`.
    `dev.log` shows no "could not prepare git auth" warning.
 
-**What this leaves.** The hook fires in a faithful reproduction but not in a
-real run, and the reason is not yet identified. Two observations worth carrying
-into the next attempt: both of Atlas's own commit paths deliberately clobber the
-hook with `-c core.hooksPath=.husky/_` and use an explicit `--trailer` instead
-(`workflow-engine.ts:736`, `cli-sessions.ts:1063-1070`) — so the hook installed
-by `buildGitAuth` has no effect on any Atlas-driven commit and exists solely for
-agent commits; and commit `df68133` carries two different Claude trailers, which
-means at least one message was rewritten after its first write.
+**RESOLVED 2026-09-22 (part three).** The investigation above ruled out the
+right answer on invalid reasoning. Evidence item 4 argued: agent commits are
+authored `sspart-bot[bot]`, that identity can only come from the `[user]` block
+in Atlas's per-run config, and that is *the same file* that sets
+`core.hooksPath` — therefore the hook was installed and must have run.
 
-**Why nothing was shipped.** The Owner picked "make the hook authoritative in
-the worktree". The evidence no longer supports that as the cause, and the fix
-carries a real regression: a worktree-local `core.hooksPath` disables the
-project's own hooks, including pre-commit secret scanning. Shipping an
-unverified change to every commit path overnight was the wrong trade.
+Same file, **different conditions**. In `buildGitAuth`:
 
-**Next step.** Instrument `writePrepareCommitMsgHook` to append to a log on
-every invocation, then run one Coder step and read it. That distinguishes "the
-hook never ran" from "it ran and its output was later rewritten" in a single
-run. It was not done here because it writes a second Task into the database the
-Owner asked to have clean for a manual walkthrough.
+| written | condition |
+|---|---|
+| `[user]` bot identity | `kind === 'github_app' && app_slug && app_id` |
+| hook + `core.hooksPath` | `kind === 'github_app' && human_name && human_email` |
+
+A credential with the App fields and blank human fields produces bot-authored
+commits with **no Owner trailer and no hook at all**. Bot-authored proves the
+config was read; it proves nothing about attribution. The existing test
+`omits the hook when only one of human_name / human_email is set` already
+demonstrated this — it sets `app_slug` + `app_id` and asserts no hook — and was
+read past. It now asserts the `[user]` block is present too, so the
+independence cannot be misread again.
+
+Both human fields are optional in the credential dialog and `nullIfBlank`
+turns whitespace into null, so this is a normal way to configure a credential,
+not a corrupt row. `check-commit-discipline.sh` cannot catch the result: it
+greps for any `Co-Authored-By:`, and the catalog prompts hardcode a Claude
+trailer that satisfies the grep.
+
+**The mechanism was never broken.** A new end-to-end test drives real `git
+commit` with the config `buildGitAuth` actually produces — in an ordinary repo
+*and* in a linked worktree, and with a message already carrying a different
+`Co-Authored-By` — and the Owner trailer lands every time. The previous
+reproduction hand-built an "Atlas-shaped" config, which could not have caught a
+config Atlas declines to write.
+
+**Shipped:** a `console.warn` when a `github_app` credential has the App fields
+but no `human_name`/`human_email`, mirroring the `app_slug` warning twenty
+lines above it. The fix is for the *silence*, not the config: an attribution
+gap the operator cannot see is one they cannot fix. Nothing about attribution
+behaviour changes, because the original credential data was destroyed in the
+DB rebuild and guessing at a behavioural change would be unfounded.
+
+**Still open — a second, independent divergence found on the way.** The two
+commit paths resolve credentials differently:
+
+- `workflow-engine.commitPending` runs once per repo with **that repo's own**
+  `credential_id` (`workflow-engine.ts:336,797,1020`).
+- The agent run takes **only the first repo's**:
+  `const [firstRepo] = await projectReposService.forTask(...)`
+  (`agent-runner.ts:1454-1458`), and that single config is the agent's
+  `GIT_CONFIG_GLOBAL` for the whole session.
+
+Under ADR 0017 a multi-repo Task gives the agent one checkout per repo
+(`agent-runner.ts:1489-1512`), so every commit it makes in repo #2 is authored
+with repo #1's bot identity and repo #1's human trailer. In a two-repo project
+— which the walkthrough had — that alone produces the reported 6-vs-1 split.
+Not fixed here: one change at a time, and it deserves its own decision about
+what a multi-repo agent session should do when the repos carry different
+credentials.
 
 ---
 

@@ -160,6 +160,25 @@ export async function buildGitAuth(
             enriched.kind === 'github_app' &&
             !!enriched.human_name &&
             !!enriched.human_email;
+        // 2026-09-22 investigation: the failure mode above has a twin. A
+        // github_app credential with the App fields but BLANK human fields
+        // produces bot-authored commits carrying no Owner trailer at all —
+        // and says nothing, because `[user]` and the hook are written under
+        // independent conditions. Both human fields are optional in the
+        // credential dialog and `nullIfBlank` turns whitespace into null, so
+        // this is a realistic way to configure the credential, not a corrupt
+        // row. `check-commit-discipline.sh` cannot catch it either: it greps
+        // for any `Co-Authored-By:`, and the catalog prompts hardcode a
+        // Claude trailer that satisfies the grep.
+        //
+        // Log it for the same reason as the app_slug branch above: an
+        // attribution gap the operator cannot see is one they cannot fix.
+        if (enriched.kind === 'github_app' && !(enriched.human_name && enriched.human_email)) {
+            // eslint-disable-next-line no-console
+            console.warn(
+                `[git-credentials] github_app credential ${enriched.id} has no human_name/human_email — commits made under it will be authored by the bot with NO Co-Authored-By trailer for the Owner. Set both fields on the credential to restore human attribution.`,
+            );
+        }
         if (wantHumanAttribution) {
             // The hook is a POSIX shell script. Git for Windows bundles
             // bash and runs `.sh`-less hook files via it automatically —
