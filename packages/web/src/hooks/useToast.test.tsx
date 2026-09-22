@@ -36,6 +36,32 @@ describe('useToast', () => {
         expect(result.current.toasts).toEqual([]);
     });
 
+    // A toast shown just before the provider goes away used to leave its 4s
+    // auto-dismiss timer running. It fired into an unmounted tree, and under
+    // jsdom teardown `window` is already gone — so it threw
+    // `ReferenceError: window is not defined` from a bare `Timeout._onTimeout`,
+    // failing whichever test happened to be running 4s later rather than the
+    // one that showed the toast. Every test passed; the run still exited 1.
+    it('cancels a pending auto-dismiss when the provider unmounts', () => {
+        const wrapper = ({ children }: { children: React.ReactNode }) => (
+            <ToastProvider>{children}</ToastProvider>
+        );
+        const { result, unmount } = renderHook(() => useToast(), { wrapper });
+        act(() => result.current.show({ message: 'leaks?' }));
+        expect(vi.getTimerCount()).toBe(1);
+
+        unmount();
+
+        expect(vi.getTimerCount()).toBe(0);
+        // Nothing is left to fire, so advancing past the dismiss window is a
+        // no-op rather than a setState on an unmounted provider.
+        expect(() => {
+            act(() => {
+                vi.advanceTimersByTime(10_000);
+            });
+        }).not.toThrow();
+    });
+
     it('stores detail and action when provided', () => {
         const wrapper = ({ children }: { children: React.ReactNode }) => (
             <ToastProvider>{children}</ToastProvider>
