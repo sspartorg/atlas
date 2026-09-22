@@ -408,7 +408,10 @@ export function Agents() {
                     </Button>
                 </Box>
             ) : !agents || agents.length === 0 ? (
-                <AgentsEmptyState onBrowse={() => navigate('/agents/marketplace')} />
+                <AgentsEmptyState
+                    onBrowse={() => navigate('/agents/marketplace')}
+                    onCreate={() => setAddOpen(true)}
+                />
             ) : filtered.length === 0 ? (
                 <Box
                     sx={{

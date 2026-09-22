@@ -16,6 +16,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Walks the repo end-to-end (every package, public surfaces, key code paths, observed conventions) regardless of stack, then bootstraps an AI-ready scaffold on a fresh branch — 8 always-on docs (AGENTS.md, CLAUDE.md, Co...",
-  "version": 3,
+  "version": 1,
   "published_at": "2026-07-01T00:00:00Z"
 }

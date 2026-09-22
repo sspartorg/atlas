@@ -86,6 +86,17 @@ describe('Workflows page', () => {
         expect(await screen.findByText('No workflows yet')).toBeInTheDocument();
     });
 
+    // Both routes out, matching the Agents empty state. The header actions are
+    // `display: none` below md, so on a phone this is the only surface offering
+    // either one. "Create new" rather than "New workflow" keeps the exact-name
+    // query in the template test below unambiguous.
+    it('offers both Create new and Browse marketplace in the empty state', async () => {
+        mount([]);
+        expect(await screen.findByText('No workflows yet')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /create new/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /browse marketplace/i })).toBeInTheDocument();
+    });
+
     it('creates a workflow from a template and opens the builder', async () => {
         const user = userEvent.setup();
         let sent: unknown = null;

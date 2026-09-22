@@ -2,6 +2,7 @@
     "id": "build",
     "name": "Build sub-task",
     "description": "Runs inside a Task's Delivery workflow, once per dev sub-task: the Coder implements it and the Code Reviewer approves it on the Task's branch.",
+    "version": 1,
     "input_kind": "sub_task",
     "trigger": "manual",
     "use_worktree": true,
