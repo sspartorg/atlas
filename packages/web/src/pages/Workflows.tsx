@@ -11,10 +11,10 @@ import { useProjects } from '../hooks/useProjects.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { ATLAS_PALETTE, ELEVATION, TYPOGRAPHY } from '../theme/tokens.js';
-import { formatAbsolute, relativeTime } from '../utils/time.js';
+import { relativeTime } from '../utils/time.js';
 import { NewWorkflowDialog } from './workflows/NewWorkflowDialog.js';
 import { ImportWorkflowDialog } from './workflows/ImportWorkflowDialog.js';
-import { INPUT_KIND_LABEL, TRIGGER_LABEL, graphAgentIds } from './workflows/labels.js';
+import { INPUT_KIND_LABEL, graphAgentIds, triggerLabel } from './workflows/labels.js';
 
 const GRID_SX = {
     display: 'grid',
@@ -80,10 +80,7 @@ function WorkflowCard({
     onOpen: () => void;
 }) {
     const steps = graphAgentIds(wf.graph).length;
-    const trigger =
-        wf.trigger === 'schedule' && wf.next_run_at
-            ? `${TRIGGER_LABEL.schedule} · next ${formatAbsolute(wf.next_run_at)}`
-            : TRIGGER_LABEL[wf.trigger];
+    const trigger = triggerLabel(wf);
     return (
         <Box
             role="button"

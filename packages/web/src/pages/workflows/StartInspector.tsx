@@ -4,15 +4,11 @@ import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Switch from '@mui/material/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
-import {
-    WORKFLOW_INPUT_KINDS,
-    WORKFLOW_TRIGGERS,
-    type IProject,
-    type IWorkflow,
-} from '@atlas/shared';
-import { SchedulePresetFields, SelectableCard } from '../../components/SchedulePresetFields.js';
+import { WORKFLOW_INPUT_KINDS, type IProject, type IWorkflow } from '@atlas/shared';
+import { SelectableCard } from '../../components/SchedulePresetFields.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
-import { INPUT_KIND_HINT, INPUT_KIND_LABEL, TRIGGER_LABEL } from './labels.js';
+import { INPUT_KIND_HINT, INPUT_KIND_LABEL } from './labels.js';
+import { WorkflowTriggerFields } from './WorkflowTriggerFields.js';
 
 interface Props {
     workflow: IWorkflow;
@@ -32,7 +28,6 @@ export function SectionLabel({ children }: { children: string }) {
 }
 
 export function StartInspector({ workflow: wf, projects, onChange }: Props) {
-    const needsTime = wf.schedule_preset === 'daily' || wf.schedule_preset === 'weekly';
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <TextField
@@ -91,72 +86,7 @@ export function StartInspector({ workflow: wf, projects, onChange }: Props) {
                 </Box>
             </Box>
 
-            {wf.input_kind !== 'sub_task' && (
-                <Box>
-                    <TextField
-                        select
-                        label="Trigger"
-                        size="small"
-                        value={wf.trigger}
-                        onChange={(e) => {
-                            const trigger = e.target.value as IWorkflow['trigger'];
-                            // The API rejects a schedule trigger without a preset.
-                            onChange(
-                                trigger === 'schedule' && !wf.schedule_preset
-                                    ? {
-                                          trigger,
-                                          schedule_preset: 'daily',
-                                          schedule_time_of_day: '09:00',
-                                      }
-                                    : { trigger }
-                            );
-                        }}
-                        fullWidth
-                        sx={{ mb: wf.trigger === 'schedule' ? 3 : 0 }}
-                    >
-                        {WORKFLOW_TRIGGERS.map((t) => (
-                            <MenuItem key={t} value={t}>
-                                {TRIGGER_LABEL[t]}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                    {wf.trigger === 'schedule' && (
-                        <>
-                            <SchedulePresetFields
-                                columns={2}
-                                value={{
-                                    preset: wf.schedule_preset,
-                                    weekday: wf.schedule_weekday,
-                                    cronExpression: wf.cron_expr ?? '',
-                                }}
-                                onChange={(patch) =>
-                                    onChange({
-                                        ...(patch.preset ? { schedule_preset: patch.preset } : {}),
-                                        ...(patch.weekday !== undefined
-                                            ? { schedule_weekday: patch.weekday }
-                                            : {}),
-                                        ...(patch.cronExpression !== undefined
-                                            ? { cron_expr: patch.cronExpression || null }
-                                            : {}),
-                                    })
-                                }
-                            />
-                            {needsTime && (
-                                <TextField
-                                    label="Time of day"
-                                    type="time"
-                                    size="small"
-                                    value={wf.schedule_time_of_day ?? '09:00'}
-                                    onChange={(e) =>
-                                        onChange({ schedule_time_of_day: e.target.value || null })
-                                    }
-                                    fullWidth
-                                />
-                            )}
-                        </>
-                    )}
-                </Box>
-            )}
+            <WorkflowTriggerFields workflow={wf} onChange={onChange} />
 
             {wf.input_kind === 'item' && (
                 <TextField
