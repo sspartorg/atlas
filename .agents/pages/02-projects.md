@@ -3,7 +3,7 @@
 **Route:** `/projects` • **Component:** `packages/web/src/pages/Projects.tsx` • **Slug:** `projects` + `proj-creds`
 
 ## Purpose
-List all projects with cards or table view; create new ones; trigger reclone, delete, schedule auto-fetch, open in OS file manager.
+List all projects with cards or table view; create new ones (name + key + description — repos are added on Project Detail's Repos tab) and delete them.
 
 ## States
 - **Loading**: `paged.isPending` → 60vh flex box with `<BrandedFallback />` (Projects.tsx:195-201)
@@ -21,14 +21,14 @@ List all projects with cards or table view; create new ones; trigger reclone, de
 **Card grid (`ProjectCard`)** — for each project:
 - Folder icon + name + schedule indicator (`ProjectCard:120-133` shows when auto-fetch is configured)
 - Display ID chip (e.g., `ATL`) — taken straight from `p.issue_key_prefix` (Projects.tsx:86-92), the prefix picked at project-create time, NOT derived from creation order. This is what keeps the project tag aligned with the issue ids it produces (ATL-1, ATL-2, …).
-- **Repo URL** link — `git_url`, opens externally (ProjectCard:161-181)
+- **Repos** — every repo the project holds, by name (`repoNames`, ProjectCard). A project holds 0..N equal repos (ADR 0018), so the card names them all instead of printing repos[0]'s remote as if it were the project's one repo. `No repos` when it has none.
 - Counters: tasks, sub-tasks
 - Last activity timestamp
 - **Open →** link → `RouterLink` to `/projects/:id`
 - **Menu** button → opens `ProjectRowMenu`
 
 **Project row menu (`ProjectRowMenu`)** — **ADR 0018:** reveal, re-clone and auto-fetch are per repo and moved to Project Detail's **Repos** tab.
-- **Copy repo URL** → `navigator.clipboard.writeText(<first repo's git_url>)` (`''` when the project has no repos)
+- ~~**Copy repo URL**~~ — **removed.** It copied repos[0]'s `git_url`, which is wrong for every project with more than one repo. Per-repo copy belongs on Project Detail's **Repos** tab, which owns every repo action. The menu now holds only **Delete project…**.
 - **Delete** → opens `DeleteProjectModal` (its chip lists every repo folder, or "No repos")
 
 **Table view (`ProjectsTable`)** — same actions, plus row-click navigates to `/projects/:id`.
@@ -49,7 +49,9 @@ List all projects with cards or table view; create new ones; trigger reclone, de
 - **Schedule fetch** — Background `git fetch` keeps remote refs fresh so the Owner doesn't have to pull manually before each session.
 
 ## Modals / drawers
-- `NewProjectModal` — credential picker + URL + path; calls `POST /api/projects/clone`. The credential chip reads `App` for `github_app` credentials, `PAT` otherwise. **Project name** follows the repo name in the URL on every keystroke until the Owner types a name of their own (`nameTouched`); clearing the field re-enables auto-fill, and closing / **Add another** resets it. **Clone destination** shows `<workspace>/<name>`; before the name resolves it shows `<workspace>/…` (and `…` while settings load) — "Set a workspace path in Settings first" only when settings loaded with an empty `workspace_path`. The success card's **Agents** row says `N installed · shared by all projects` (agents are global, not attached per project); with zero agents it's a **None installed · Browse Marketplace →** button that closes the modal and opens `/agents/marketplace` (`useAgents`, enabled only on the success view).
+- `NewProjectModal` — **Name**, **Issue key prefix**, **Description**. Nothing about repos: a project is a wrapper, and repos are added afterwards from Project Detail's **Repos** tab. Calls `POST /api/projects`, then navigates to `/projects/:id?tab=repos`. The prefix follows the name until the Owner types their own (it can't be changed later — item ids are `{PREFIX}-N`) and is probed against `GET /api/projects/prefix-available` on a 350 ms debounce; **Create project** stays disabled until it comes back available. A 400 mentioning the prefix re-marks it as taken (another tab claimed it mid-flight).
+
+  Previously this modal was 1479 lines: a Clone-fresh / Use-existing-folder toggle, a repo URL, a credential picker, a folder picker, a default branch, a clone-destination preview and a live clone terminal, posting to `POST /api/projects/clone` or `/connect`. Both endpoints are **gone** — `POST /api/projects/:id/repos` (`mode: 'clone' | 'connect'`, driving `AddRepoDialog`) already did exactly that job per repo.
 - `DeleteProjectModal` — confirms `DELETE /api/projects/:id` (delete-runner)
 - `RecloneProjectModal` — confirms `POST /api/projects/:id/reclone`
 - `AutoFetchScheduleModal` — `PUT /api/projects/:id/schedule` (cron + guards)
@@ -60,13 +62,13 @@ These four modals are rendered outside the empty/populated branches (Projects.ts
 - `useProjectsPaged({ page, limit })` (Projects.tsx:58) — paged project fetch; `rows` populates the visible grid/table and `total` drives the footer + empty-vs-populated branch.
 - `useProjects()` (line 65) — full unpaged list, kept as a fallback so the empty-state branch can tell "no projects on this page" from "no projects anywhere".
 - `useTasks`, `useAgents`, `useSettings`, `useToast`
-- `useAllRepos()` — every repo of every project in ONE `GET /api/repos`, grouped by `project_id` (ADR 0018). A per-card fetch would be an N+1 and trips `e2e/no-dup-fetches.spec.ts`. Cards show `No repos` / `1 repo` / `N repos` plus the first repo's remote; the table's Repo URL column adds ` +N`.
+- `useAllRepos()` — every repo of every project in ONE `GET /api/repos`, grouped by `project_id` (ADR 0018). A per-card fetch would be an N+1 and trips `e2e/no-dup-fetches.spec.ts`. Cards show `No repos` / `1 repo` / `N repos` plus every repo's name; the table's Repos column lists the same names.
 - `useEnabledSchedules()` — map of **repoId** → schedule info; the card's calendar indicator lights when any repo of the project is scheduled
 - `useIsMobile()` — flips the layout to single-column cards + the `PageFab`.
 
 ## API endpoints touched
 - `GET /api/projects`, `GET /api/repos`, `GET /api/tasks`, `GET /api/agents`, `GET /api/settings`
-- `POST /api/projects/clone` (via `NewProjectModal`, which also reads `GET /api/projects/:id/repos/:repoId/head` for its summary)
+- `POST /api/projects` (via `NewProjectModal`), `GET /api/projects/prefix-available`
 - `DELETE /api/projects/:id` (via `DeleteProjectModal`)
 
 ## Permissions / guards
@@ -81,7 +83,7 @@ These four modals are rendered outside the empty/populated branches (Projects.ts
 
 ## Connectivity
 - **Pages**: [Project Detail](03-project-detail.md) — card/row click target; [Credentials](20-credentials.md) — empty-state alert deep-links here so first-clone can pick a credential; [Dashboard](01-dashboard.md) — its empty state opens this page's NewProjectModal.
-- **Routes**: `POST /api/projects/clone` — long-running, emits `clone_status`/`clone_output` SSE so the card reflects clone progress instead of hanging; reveal lives on the Repos tab now (ADR 0018) because a project has no folder of its own — its repos do.
+- **Routes**: `POST /api/projects` is a plain create — no clone, no SSE, so it returns immediately. Cloning happens per repo from the Repos tab (`POST /api/projects/:id/repos`), which emits `clone_status` / `clone_output`; reveal lives there too (ADR 0018) because a project has no folder of its own — its repos do.
 - **Entities**: `project`, `credential` (for the picker), `project_schedule` (auto-fetch indicator).
 
 ## Coming soon on this page

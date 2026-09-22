@@ -17,10 +17,9 @@ import { useAllRepos } from '../hooks/useProjectRepos.js';
 import { useTasks } from '../hooks/useTasks.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
-import { useToast } from '../hooks/useToast.js';
 import { ViewToggle, type ProjectsView } from './projects/ViewToggle.js';
 import { ProjectFilterChips, type FilterKey } from './projects/ProjectFilterChips.js';
-import { ProjectCard, shortRemote } from './projects/ProjectCard.js';
+import { ProjectCard, repoNames } from './projects/ProjectCard.js';
 import { ProjectsTable, type ProjectRow } from './projects/ProjectsTable.js';
 import { useEnabledSchedules } from '../hooks/useProjectSchedule.js';
 import { ProjectsEmptyState } from './projects/ProjectsEmptyState.js';
@@ -64,7 +63,6 @@ export function Projects() {
     const [filter, setFilter] = useState<FilterKey>('all');
     const [newProjectOpen, setNewProjectOpen] = useState(false);
     const [activeProject, setActiveProject] = useState<IProject | null>(null);
-    const toast = useToast();
     const { map: scheduleMap } = useEnabledSchedules();
 
     const reposByProject = useMemo(() => {
@@ -184,15 +182,13 @@ export function Projects() {
         () =>
             filteredProjects.map((p) => {
                 const repos = reposByProject.get(p.id) ?? [];
-                const first = repos[0];
-                const extra = repos.length - 1;
                 return {
                     id: p.id,
                     displayId: displayIdById.get(p.id) ?? '',
                     name: p.name,
-                    gitPath: first?.git_url
-                        ? `${shortRemote(first.git_url)}${extra > 0 ? ` +${extra}` : ''}`
-                        : '',
+                    // ADR 0018 — name every repo instead of showing repos[0]'s
+                    // remote as if it were the project's one repo.
+                    gitPath: repos.length > 0 ? repoNames(repos) : '',
                     tasks: taskCountByProject.get(p.id) ?? 0,
                     subTasks: subTaskCountByProject.get(p.id) ?? 0,
                     lastActivity: relativeTime(p.updated_at),
@@ -213,28 +209,11 @@ export function Projects() {
 
     const ownerName = settings?.owner_name ?? 'Owner';
 
-    async function handleCopyUrl(p: IProject) {
-        const url = reposByProject.get(p.id)?.[0]?.git_url ?? '';
-        try {
-            await navigator.clipboard.writeText(url);
-            toast.show({
-                message: 'Repo URL copied',
-                detail: url,
-                action: {
-                    label: 'Undo',
-                    onClick: () => void navigator.clipboard.writeText('').catch(() => {}),
-                },
-            });
-        } catch {
-            toast.show({ message: 'Clipboard blocked', detail: 'Browser denied clipboard access' });
-        }
-    }
-
     function handleDelete(p: IProject) {
         setActiveProject(p);
     }
 
-    function handleRowAction(id: string, kind: 'copy' | 'delete'): void {
+    function handleRowAction(id: string): void {
         const p = projectById.get(id);
         // Defensive guard: `id` always comes from a rendered ProjectsTable row,
         // and every row's id is drawn from `tableRows` (filteredProjects ⊆
@@ -246,8 +225,7 @@ export function Projects() {
         // simulated background-data race.
         /* v8 ignore next */
         if (!p) return;
-        if (kind === 'copy') void handleCopyUrl(p);
-        else handleDelete(p);
+        handleDelete(p);
     }
 
     // The modal must render at a stable JSX position so it survives the
@@ -364,7 +342,6 @@ export function Projects() {
                                                 taskCount={taskCountByProject.get(p.id) ?? 0}
                                                 subTaskCount={subTaskCountByProject.get(p.id) ?? 0}
                                                 scheduleInfo={scheduleByProject.get(p.id)}
-                                                onCopyUrl={() => void handleCopyUrl(p)}
                                                 onDelete={() => handleDelete(p)}
                                             />
                                         </Box>
@@ -377,8 +354,7 @@ export function Projects() {
                                 ownerName={ownerName}
                                 scheduleMap={scheduleByProject}
                                 onRowClick={(id) => navigate(`/projects/${id}`)}
-                                onCopyUrl={(id) => handleRowAction(id, 'copy')}
-                                onDelete={(id) => handleRowAction(id, 'delete')}
+                                onDelete={(id) => handleRowAction(id)}
                             />
                         )}
                     </Box>

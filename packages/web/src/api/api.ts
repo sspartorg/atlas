@@ -499,13 +499,6 @@ export const api = {
         create: (data: Partial<IProject>) => post<IProject>('/projects', data),
         update: (id: string, data: Partial<IProject>) => patch<IProject>(`/projects/${id}`, data),
         delete: (id: string) => del(`/projects/${id}`),
-        clone: (data: {
-            repo_url: string;
-            credential_id: string;
-            project_name: string;
-            issue_key_prefix: string;
-            default_branch: string;
-        }) => post<{ clone_id: string; destination: string }>('/projects/clone', data),
         prefixAvailable: (prefix: string) =>
             get<{
                 available: boolean;
@@ -538,19 +531,11 @@ export const api = {
                 `/projects/${id}/generate-ai-scaffold`,
                 repoId ? { repo_id: repoId } : {}
             ),
-        connect: (data: {
-            folder_path: string;
-            repo_url: string;
-            credential_id: string;
-            issue_key_prefix: string;
-        }) =>
-            requestRaw<{ project: IProject; repo: IProjectRepo } | ConnectError>('/projects/connect', {
-                method: 'POST',
-                body: JSON.stringify(data),
-            }),
         // ADR 0018 — a project's repos, in order; they are all equal. Adding
-        // one clones it (202 + clone_* SSE, like /projects/clone) or registers
-        // a local clone (the /projects/connect checks: 400 carries a ConnectError).
+        // one clones it (202 + clone_* SSE) or registers a local clone
+        // (a 400 carries a ConnectError). This is the ONLY way a repo enters
+        // a project — ADR 0018, and the project-level clone/connect endpoints
+        // that used to duplicate it are gone.
         repos: (id: string) => get<IProjectRepo[]>(`/projects/${id}/repos`),
         cloneRepo: (
             id: string,

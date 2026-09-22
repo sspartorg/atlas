@@ -30,7 +30,6 @@ function renderTable(overrides: Partial<React.ComponentProps<typeof ProjectsTabl
         rows: [sampleRow, secondRow],
         ownerName: 'Bob',
         onRowClick: vi.fn(),
-        onCopyUrl: vi.fn(),
         onDelete: vi.fn(),
     };
     return renderWithProviders(<ProjectsTable {...defaults} {...overrides} />);
@@ -92,10 +91,9 @@ describe('ProjectsTable', () => {
         expect(screen.getByText('github.com/x/y +2')).toBeInTheDocument();
     });
 
-    it('opens the row action menu and clicks the actions (onCopyUrl/onDelete)', () => {
-        const onCopyUrl = vi.fn();
+    it('opens the row action menu and clicks the actions (onDelete)', () => {
         const onDelete = vi.fn();
-        const { container } = renderTable({ onCopyUrl, onDelete });
+        const { container } = renderTable({ onDelete });
         // Each row has a Project-actions trigger button.
         const actionButtons = container.querySelectorAll('button[aria-label="Project actions"]');
         expect(actionButtons.length).toBeGreaterThan(0);
@@ -104,7 +102,6 @@ describe('ProjectsTable', () => {
         const menuItems = document.querySelectorAll('[role="menuitem"]');
         menuItems.forEach((item) => fireEvent.click(item));
         // One of the action handlers should have been invoked.
-        expect(onCopyUrl).toHaveBeenCalledWith('p1');
         expect(onDelete).toHaveBeenCalledWith('p1');
     });
 
@@ -159,7 +156,6 @@ describe('ProjectsTable', () => {
                 rows={[rowA, rowB]}
                 ownerName="Bob"
                 onRowClick={vi.fn()}
-                onCopyUrl={vi.fn()}
                 onDelete={vi.fn()}
             />
         );

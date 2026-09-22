@@ -22,13 +22,16 @@ interface IProjectCardProps {
     taskCount: number;
     subTaskCount: number;
     scheduleInfo?: { preset: string; next_run_at: string | null } | undefined;
-    onCopyUrl: () => void;
     onDelete: () => void;
 }
 
-/** Host + path only — drops the protocol and the .git suffix. */
-export function shortRemote(gitUrl: string): string {
-    return gitUrl.replace(/^https?:\/\//, '').replace(/\.git\/?$/, '');
+/**
+ * A project holds 0..N equal repos (ADR 0018), so naming them beats showing
+ * repos[0]'s URL as if it were "the project's repo" — which is what this card
+ * and the Projects table both used to do.
+ */
+export function repoNames(repos: Pick<IProjectRepo, 'name'>[]): string {
+    return repos.length === 0 ? 'No repos' : repos.map((r) => r.name).join(', ');
 }
 
 function repoCountLabel(n: number): string {
@@ -56,10 +59,8 @@ export function ProjectCard({
     taskCount,
     subTaskCount,
     scheduleInfo,
-    onCopyUrl,
     onDelete,
 }: IProjectCardProps) {
-    const first = repos[0];
     return (
         <Paper
             elevation={0}
@@ -141,12 +142,12 @@ export function ProjectCard({
                             '& .MuiChip-label': { px: 1.5 },
                         }}
                     />
-                    <ProjectRowMenu onCopyUrl={onCopyUrl} onDelete={onDelete} />
+                    <ProjectRowMenu onDelete={onDelete} />
                 </Box>
             </Box>
 
-            {/* First repo's remote + how many repos the project has (ADR 0018) */}
-            <Tooltip title={first?.git_path ?? ''}>
+            {/* Every repo the project holds, none primary (ADR 0018) */}
+            <Tooltip title={repos.map((r) => r.git_url || r.git_path).join('\n')}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 4, minWidth: 0 }}>
                     <LinkRounded
                         sx={{ fontSize: 14, color: ATLAS_PALETTE.slate60, flexShrink: 0 }}
@@ -161,7 +162,7 @@ export function ProjectCard({
                             whiteSpace: 'nowrap',
                         }}
                     >
-                        {first?.git_url ? shortRemote(first.git_url) : '—'}
+                        {repoNames(repos)}
                     </Typography>
                     <Typography
                         sx={{

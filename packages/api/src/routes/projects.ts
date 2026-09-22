@@ -21,15 +21,12 @@ import {
     readHead,
     lsRemote,
     normalizeRepoUrl,
-    deriveProjectName,
 } from '../services/git-verify.js';
 import {
     CreateProjectSchema,
     CreateProjectRepoSchema,
     UpdateProjectRepoSchema,
-    CloneProjectSchema,
     DeleteProjectSchema,
-    ConnectExistingProjectSchema,
     RecloneProjectSchema,
     UpdateProjectSchema,
 } from '@atlas/shared';
@@ -86,58 +83,6 @@ export async function projectsRoutes(app: FastifyInstance) {
             /* v8 ignore next */
             conflict: result.conflict ?? null,
         });
-    });
-
-    app.post('/api/projects/clone', { preHandler: requireMcpToken }, async (req, reply) => {
-        const body = CloneProjectSchema.parse(req.body);
-        const settings = await settingsService.get();
-        if (!settings.workspace_path) {
-            return reply
-                .status(400)
-                .send({ error: 'Workspace path is not set. Finish onboarding first.' });
-        }
-        const prefixCheck = await projectsService.checkPrefix(body.issue_key_prefix);
-        if (!prefixCheck.available) {
-            return reply.status(409).send({
-                error: `Issue key prefix already used by "${prefixCheck.conflict}"`,
-                reason: prefixCheck.reason,
-                /* v8 ignore next */
-                conflict: prefixCheck.conflict ?? null,
-            });
-        }
-        // Reject project_name shapes that would escape the workspace root
-        // via path traversal (`..`), path separators, or Windows drive
-        // letters. CloneProjectSchema only enforces min/max length; without
-        // this guard, `project_name = '..\\..\\..\\Windows\\Temp\\foo'`
-        // would cause `git clone` to write a tree anywhere the process can
-        // write. Zod schema is a shape check, this is the security check.
-        const nameTraversal =
-            /[\\/]/.test(body.project_name) ||
-            body.project_name.split(/[\\/]/).includes('..') ||
-            /^[a-zA-Z]:/.test(body.project_name) ||
-            body.project_name === '.' ||
-            body.project_name === '..';
-        if (nameTraversal) {
-            return reply.status(400).send({
-                error: 'project_name must not contain path separators, "..", or a drive letter',
-                kind: 'validation_error',
-            });
-        }
-        const destination = join(settings.workspace_path, body.project_name);
-        try {
-            const cloneId = await startClone({
-                repo_url: body.repo_url,
-                credential_id: body.credential_id,
-                project_name: body.project_name,
-                issue_key_prefix: body.issue_key_prefix,
-                default_branch: body.default_branch,
-                destination,
-            });
-            return reply.status(202).send({ clone_id: cloneId, destination });
-        } catch (err) {
-            /* v8 ignore next */
-            return reply.status(400).send({ error: err instanceof Error ? err.message : 'Could not start clone' });
-        }
     });
 
     // ADR 0018 — every git action is on a repo of the project, not on the
@@ -337,39 +282,7 @@ export async function projectsRoutes(app: FastifyInstance) {
         return { checks, head: await readHead(body.folder_path) };
     }
 
-    app.post('/api/projects/connect', { preHandler: requireMcpToken }, async (req, reply) => {
-        const body = ConnectExistingProjectSchema.parse(req.body);
-        const verified = await checkLocalClone(body);
-        if ('error' in verified) return reply.status(400).send(verified.error);
-        const { checks, head } = verified;
-        try {
-            const project = await projectsService.createFromClone({
-                name: deriveProjectName(body.folder_path),
-                issue_key_prefix: body.issue_key_prefix,
-                git_url: body.repo_url,
-                git_path: body.folder_path,
-                credential_id: body.credential_id,
-                default_branch: head?.branch ?? 'main',
-            });
-            await credentialsService.markUsed(body.credential_id);
-            return reply.status(201).send(project);
-        } catch (err) {
-            if (err instanceof PrefixCollisionError) {
-                return reply.status(409).send({
-                    ok: false,
-                    checks,
-                    error: err.message,
-                    error_kind: 'prefix_collision',
-                    reason: err.reason,
-                    conflict: err.conflict,
-                });
-            }
-            /* v8 ignore next */
-            throw err;
-        }
-    });
-
-    // ADR 0017 — a project's repos: the primary (its own git fields) + extras.
+    // ADR 0018 — a project's repos, all equal; none is primary.
     app.get('/api/repos', async (_req, reply) => {
         return reply.send(await projectReposService.listAll());
     });
