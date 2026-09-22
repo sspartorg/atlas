@@ -38,6 +38,7 @@ import { buildApp } from '../server.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertItem, insertProject } from '../../tests/_items.js';
 import { workflowsService } from '../services/workflows.js';
+import type { IWorkflow } from '@atlas/shared';
 
 /** Delivery's full agent closure: its own graph's four plus Build's and Test's. */
 const DELIVERY_AGENT_IDS = ['agent-po-writer', 'agent-po-reviewer', 'agent-architect', 'agent-architect-reviewer', 'agent-coder', 'agent-code-reviewer', 'agent-qa-writer', 'agent-qa-reviewer', 'agent-automation', 'agent-automation-reviewer'];
@@ -174,6 +175,10 @@ describe('workflow CRUD', () => {
         ]);
         // The parent graph alone names only four of those ten.
         expect(workflowsService.templateAgentIds('build').sort()).toEqual(['agent-code-reviewer', 'agent-coder']);
+        // An id that names no template resolves to no agents rather than
+        // throwing: callers feed this straight into dependency resolution, and
+        // a throw there would fail an import over a stale reference.
+        expect(workflowsService.templateAgentIds('no-such-template')).toEqual([]);
     });
 
     // Provenance is what makes a template-created workflow upgradable. Without
@@ -190,6 +195,57 @@ describe('workflow CRUD', () => {
         const byName = (n: string) => rows.find((r) => r.name === n);
         expect(byName('Build sub-task')).toMatchObject({ marketplace_source_id: 'build', marketplace_pulled_version: 1 });
         expect(byName('Test sub-task')).toMatchObject({ marketplace_source_id: 'test', marketplace_pulled_version: 1 });
+    });
+
+    // A workflow that never came from the marketplace has no pull to compare
+    // against, so it is never "edited since" — the import path must treat it as
+    // a plain local workflow, not as one it may overwrite.
+    it('treats a workflow with no pull as not edited since one', () => {
+        const hand = { updated_at: '2026-09-22T10:00:00.000Z', marketplace_pulled_at: null } as unknown as IWorkflow;
+        expect(workflowsService.isEditedSincePull(hand)).toBe(false);
+    });
+
+    // The other half of the upgrade route. `upgradeFromPublished` is covered in
+    // workflow-bundle.test.ts; this is the template path, where the source is
+    // a file on disk rather than a stored bundle.
+    //
+    // The explicit upgrade applies OVER local edits on purpose — asking for it
+    // IS the decision, the same contract as accepting an agent upgrade. The
+    // automatic path (import) is the one that checks for edits first, because
+    // there nobody asked.
+    it('re-applies the template over local edits and clears the upgrade flag', async () => {
+        for (const a of DELIVERY_AGENT_IDS.filter((x) => x !== 'agent-coder')) await insertAgent({ id: a, status: 'active' });
+        const made = (await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'delivery', project_id: 'p1' } })).json() as IWorkflow;
+
+        // Drift the pointer behind the shipped template and edit the copy, the
+        // way a real workflow behind an improved upstream looks.
+        await testDb.updateTable('workflows').set({ marketplace_pulled_version: 0, description: 'my own notes' }).where('id', '=', made.id).execute();
+        const before = (await app.inject({ method: 'GET', url: `/api/workflows/${made.id}` })).json() as IWorkflow;
+        expect(before.upgrade_available).toBe(true);
+        expect(before.description).toBe('my own notes');
+
+        const res = await app.inject({ method: 'POST', url: `/api/workflows/${made.id}/upgrade` });
+
+        expect(res.statusCode).toBe(200);
+        const after = res.json() as IWorkflow;
+        expect(after.marketplace_pulled_version).toBe(1);
+        expect(after.upgrade_available).toBe(false);
+        // The Owner asked, so the template's description won.
+        expect(after.description).not.toBe('my own notes');
+        // The name is the Owner's and is never overwritten by an upgrade.
+        expect(after.name).toBe(made.name);
+    });
+
+    // Every early exit of the upgrade route, so a bad id fails loudly instead
+    // of writing a graph from the wrong source onto a workflow.
+    it('refuses to upgrade a workflow with no marketplace source, and 404s an unknown one', async () => {
+        const hand = (await createWorkflow({ name: 'Hand-built' })).json() as IWorkflow;
+        const noSource = await app.inject({ method: 'POST', url: `/api/workflows/${hand.id}/upgrade` });
+        expect(noSource.statusCode).toBe(400);
+        expect(noSource.json().error).toMatch(/did not come from the marketplace/);
+
+        const missing = await app.inject({ method: 'POST', url: `/api/workflows/${randomUUID()}/upgrade` });
+        expect(missing.statusCode).toBe(404);
     });
 
     // Sub-workflows used to be matched by NAME, so renaming one made the next

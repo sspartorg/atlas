@@ -489,6 +489,36 @@ describe('published workflows (Marketplace)', () => {
         expect(upgraded.upgrade_available).toBe(false);
     });
 
+    // An upgrade re-creates a sub-workflow the project no longer has. Reusing
+    // one when it is there is the common case and covered above; this is the
+    // other branch — the Owner deleted it, or the entry grew a sub-workflow
+    // after they imported. Either way the upgraded graph must not be left
+    // pointing at something that is not there.
+    it('re-creates a sub-workflow the project no longer has when upgrading', async () => {
+        const { main } = await seedDelivery();
+        const entry = (await publish(main.id)).json() as IPublishedWorkflow;
+        const used = (await app.inject({ method: 'POST', url: `/api/marketplace/workflows/${entry.id}/use`, payload: { project_id: 'p2' } })).json() as IWorkflowImportResult;
+        expect(used.sub_workflows).toHaveLength(1);
+        const gone = used.sub_workflows[0]!;
+
+        // Delete it behind the route's back: DELETE refuses while a Sub-tasks
+        // step names it, which is exactly the state we need to recover from.
+        await testDb.deleteFrom('workflows').where('id', '=', gone.id).execute();
+        await publish(main.id);
+
+        const upgraded = (await app.inject({ method: 'POST', url: `/api/workflows/${used.workflow.id}/upgrade` })).json() as IWorkflow;
+
+        const subs = await testDb.selectFrom('workflows').select(['id', 'marketplace_source_id']).where('project_id', '=', 'p2').where('input_kind', '=', 'sub_task').execute();
+        expect(subs).toHaveLength(1);
+        // Same provenance as the row it replaces, so the NEXT upgrade reuses it.
+        expect(subs[0]!.marketplace_source_id).toBe(gone.marketplace_source_id);
+        expect(subs[0]!.marketplace_source_id).toBe(`${entry.id}:build`);
+        // The step points at the NEW row, not the deleted id.
+        const step = (upgraded.graph.nodes as Array<{ type: string; sub_workflow_id?: string }>).find((n) => n.type === 'subtasks');
+        expect(step?.sub_workflow_id).toBe(subs[0]!.id);
+        expect(step?.sub_workflow_id).not.toBe(gone.id);
+    });
+
     // Regression: `marketplace_pulled_at` must come from the DB clock, the same
     // one the `workflows_set_updated_at` trigger writes `updated_at` with. A
     // JS-generated timestamp a few ms behind makes `updated_at > pulled_at` on a
