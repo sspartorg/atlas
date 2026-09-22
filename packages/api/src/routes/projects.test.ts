@@ -326,23 +326,6 @@ describe('PUT /api/projects/:id/env', () => {
     });
 });
 
-describe('POST /api/projects/clone', () => {
-    it('returns 400 when workspace_path is not set', async () => {
-        // Settings has no workspace_path set by default in test DB
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/clone',
-            payload: {
-                repo_url: 'https://github.com/org/repo.git',
-                project_name: 'My Repo',
-                issue_key_prefix: 'MYR',
-                default_branch: 'main',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-    });
-});
-
 describe('POST /api/projects/:id/repos/:repoId/reclone', () => {
     it('returns 404 for missing project', async () => {
         const res = await app.inject({
@@ -473,26 +456,6 @@ describe('GET /api/projects/folder-origin', () => {
     });
 });
 
-describe('POST /api/projects/connect', () => {
-    it('returns 400 with missing_folder when folder does not exist', async () => {
-        const { folderExists } = await import('../services/git-verify.js');
-        (folderExists as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
-
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/nonexistent/path',
-                repo_url: 'https://github.com/org/repo',
-                issue_key_prefix: 'XYZ',
-                credential_id: 'cred-1',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-        expect(JSON.parse(res.body).error_kind).toBe('missing_folder');
-    });
-});
-
 describe('POST /api/projects/:id/repos/:repoId/reveal', () => {
     it('returns 200 on win32/darwin/linux (spawns file browser)', async () => {
         await insertProject('p1', 'ATL', { git_path: '/tmp/test-project' });
@@ -575,80 +538,6 @@ describe('POST /api/projects — non-PrefixCollision rethrow', () => {
         spy.mockRestore();
         // Global error handler maps unhandled errors to 500.
         expect(res.statusCode).toBe(500);
-    });
-});
-
-describe('POST /api/projects/clone — success and error paths', () => {
-    it('returns 202 with clone_id when workspace_path is set and prefix is free', async () => {
-        await testDb
-            .updateTable('settings')
-            .set({ workspace_path: '/workspace' })
-            .where('id', '=', 1)
-            .execute();
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/clone',
-            payload: {
-                repo_url: 'https://github.com/org/repo.git',
-                project_name: 'My Repo',
-                issue_key_prefix: 'CLN',
-                credential_id: 'cred-1',
-                default_branch: 'main',
-            },
-        });
-        expect(res.statusCode).toBe(202);
-        const body = JSON.parse(res.body);
-        expect(body).toMatchObject({
-            clone_id: expect.any(String),
-            destination: expect.any(String),
-        });
-    });
-
-    it('returns 409 when prefix is already taken', async () => {
-        await testDb
-            .updateTable('settings')
-            .set({ workspace_path: '/workspace' })
-            .where('id', '=', 1)
-            .execute();
-        await insertProject('p-clash', 'CLO');
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/clone',
-            payload: {
-                repo_url: 'https://github.com/org/repo.git',
-                project_name: 'My Repo',
-                issue_key_prefix: 'CLO',
-                credential_id: 'cred-1',
-                default_branch: 'main',
-            },
-        });
-        expect(res.statusCode).toBe(409);
-        expect(JSON.parse(res.body).reason).toBeDefined();
-    });
-
-    it('returns 400 when startClone throws', async () => {
-        await testDb
-            .updateTable('settings')
-            .set({ workspace_path: '/workspace' })
-            .where('id', '=', 1)
-            .execute();
-        const { startClone } = await import('../services/clone-runner.js');
-        (startClone as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-            new Error('spawn failed'),
-        );
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/clone',
-            payload: {
-                repo_url: 'https://github.com/org/repo.git',
-                project_name: 'My Repo',
-                issue_key_prefix: 'CLE',
-                credential_id: 'cred-1',
-                default_branch: 'main',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-        expect(JSON.parse(res.body).error).toMatch(/spawn failed/);
     });
 });
 
@@ -750,178 +639,6 @@ describe('GET /api/projects/:id/repos/:repoId/head — populated git_path', () =
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body);
         expect(body).toEqual({ short_sha: null, subject: null, relative_time: null });
-    });
-});
-
-describe('POST /api/projects/connect — error_kind branches', () => {
-    it('returns 400 with not_git when folder exists but has no .git dir', async () => {
-        const { hasGitDir } = await import('../services/git-verify.js');
-        (hasGitDir as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/some/folder',
-                repo_url: 'https://github.com/org/repo',
-                issue_key_prefix: 'NGA',
-                credential_id: 'cred-1',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-        expect(JSON.parse(res.body).error_kind).toBe('not_git');
-    });
-
-    it('returns 400 with already_registered when folder_path is already a project', async () => {
-        await insertProject('p-existing', 'EXG', { git_path: '/already/registered' });
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/already/registered',
-                repo_url: 'https://github.com/org/repo',
-                issue_key_prefix: 'ALR',
-                credential_id: 'cred-1',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-        expect(JSON.parse(res.body).error_kind).toBe('already_registered');
-    });
-
-    it('returns 400 with origin_mismatch when folder origin does not match repo_url', async () => {
-        const { normalizeRepoUrl } = await import('../services/git-verify.js');
-        (normalizeRepoUrl as ReturnType<typeof vi.fn>)
-            .mockReturnValueOnce('https://github.com/org/repo')
-            .mockReturnValueOnce('https://github.com/org/different');
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/some/repo',
-                repo_url: 'https://github.com/org/repo',
-                issue_key_prefix: 'ORM',
-                credential_id: 'cred-1',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-        expect(JSON.parse(res.body).error_kind).toBe('origin_mismatch');
-    });
-
-    it('returns 400 with credential_missing when credential does not exist', async () => {
-        const { credentialsService: mockCreds } = await import('../services/credentials.js');
-        (mockCreds.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/some/repo',
-                repo_url: 'https://github.com/org/repo',
-                issue_key_prefix: 'CRM',
-                credential_id: 'missing-cred',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-        expect(JSON.parse(res.body).error_kind).toBe('credential_missing');
-    });
-
-    it('returns 400 with credential_missing when getToken throws', async () => {
-        const { credentialsService: mockCreds } = await import('../services/credentials.js');
-        (mockCreds.getToken as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-            new Error('no token'),
-        );
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/some/repo',
-                repo_url: 'https://github.com/org/repo',
-                issue_key_prefix: 'TKF',
-                credential_id: 'cred-1',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-        expect(JSON.parse(res.body).error_kind).toBe('credential_missing');
-    });
-
-    it('returns 400 with auth_failed when lsRemote returns false', async () => {
-        const { lsRemote } = await import('../services/git-verify.js');
-        (lsRemote as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/some/repo',
-                repo_url: 'https://github.com/org/repo',
-                issue_key_prefix: 'AFA',
-                credential_id: 'cred-1',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-        expect(JSON.parse(res.body).error_kind).toBe('auth_failed');
-    });
-
-    it('returns 201 on successful connect', async () => {
-        const { projectsService } = await import('../services/projects.js');
-        const spy = vi
-            .spyOn(projectsService, 'createFromClone')
-            .mockResolvedValueOnce({
-                id: 'p-connected',
-                name: 'repo',
-                issue_key_prefix: 'CNC',
-            } as Awaited<ReturnType<typeof projectsService.createFromClone>>);
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/some/repo',
-                repo_url: 'https://github.com/org/repo.git',
-                issue_key_prefix: 'CNC',
-                credential_id: 'cred-1',
-            },
-        });
-        spy.mockRestore();
-        expect(res.statusCode).toBe(201);
-    });
-
-    it('returns 409 on prefix collision (createFromClone throws PrefixCollisionError)', async () => {
-        const { projectsService, PrefixCollisionError } = await import(
-            '../services/projects.js'
-        );
-        const spy = vi
-            .spyOn(projectsService, 'createFromClone')
-            .mockRejectedValueOnce(new PrefixCollisionError('in_use', 'existing project'));
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/some/repo',
-                repo_url: 'https://github.com/org/repo.git',
-                issue_key_prefix: 'PCN',
-                credential_id: 'cred-1',
-            },
-        });
-        spy.mockRestore();
-        expect(res.statusCode).toBe(409);
-        expect(JSON.parse(res.body).error_kind).toBe('prefix_collision');
-    });
-
-    it('rethrows non-PrefixCollision errors (500) from createFromClone', async () => {
-        const { projectsService } = await import('../services/projects.js');
-        const spy = vi
-            .spyOn(projectsService, 'createFromClone')
-            .mockRejectedValueOnce(new Error('DB exploded'));
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/some/repo',
-                repo_url: 'https://github.com/org/repo.git',
-                issue_key_prefix: 'CRT',
-                credential_id: 'cred-1',
-            },
-        });
-        spy.mockRestore();
-        // The global error handler maps unhandled errors to 500.
-        expect(res.statusCode).toBe(500);
     });
 });
 
@@ -1057,92 +774,6 @@ describe('POST /api/projects/:id/repos/:repoId/reveal — platform & spawn-error
 // POST /api/projects/connect — readHead returns null (PROJ-CONN)
 // Covers: head?.branch ?? null (line 273) and head?.branch ?? 'main' (line 303)
 // ---------------------------------------------------------------------------
-describe('POST /api/projects/connect — readHead=null branches (PROJ-CONN)', () => {
-    it('returns 400 origin_mismatch with null head_branch/head_sha when readHead returns null (PROJ-CONN-1)', async () => {
-        const { readHead, normalizeRepoUrl } = await import('../services/git-verify.js');
-        // Make origin mismatch happen first (to reach the readHead call at line 268)
-        (normalizeRepoUrl as ReturnType<typeof vi.fn>)
-            .mockReturnValueOnce('https://github.com/org/a')
-            .mockReturnValueOnce('https://github.com/org/b');
-        // readHead returns null → head?.branch ?? null fires
-        (readHead as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/some/folder',
-                repo_url: 'https://github.com/org/repo',
-                issue_key_prefix: 'CHN',
-                credential_id: 'cred-1',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-        const body = JSON.parse(res.body);
-        expect(body.error_kind).toBe('origin_mismatch');
-        expect(body.head_branch).toBeNull();
-        expect(body.head_sha).toBeNull();
-    });
-
-    it('uses "main" as default_branch when readHead returns null on successful connect (PROJ-CONN-2)', async () => {
-        const { readHead } = await import('../services/git-verify.js');
-        // readHead returns null → default_branch: head?.branch ?? 'main' fires
-        (readHead as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-        const { projectsService } = await import('../services/projects.js');
-        const spy = vi
-            .spyOn(projectsService, 'createFromClone')
-            .mockResolvedValueOnce({
-                id: 'p-null-head',
-                name: 'repo',
-                issue_key_prefix: 'NHD',
-            } as Awaited<ReturnType<typeof projectsService.createFromClone>>);
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/some/folder',
-                repo_url: 'https://github.com/org/repo',
-                issue_key_prefix: 'NHD',
-                credential_id: 'cred-1',
-            },
-        });
-        spy.mockRestore();
-        expect(res.statusCode).toBe(201);
-    });
-});
-
-// ---------------------------------------------------------------------------
-// PROJX — non-Error catch fallback branches (the `err instanceof Error ?
-// err.message : 'Could not start …'` false arm) in clone/reclone/delete/status
-// and status with credential_id but null cred object.
-// ---------------------------------------------------------------------------
-describe('POST /api/projects/clone — non-Error fallback (PROJX)', () => {
-    it('returns 400 with fallback message when startClone throws a non-Error (PROJX-1)', async () => {
-        await testDb
-            .updateTable('settings')
-            .set({ workspace_path: '/workspace' })
-            .where('id', '=', 1)
-            .execute();
-        const { startClone } = await import('../services/clone-runner.js');
-        (startClone as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
-            // eslint-disable-next-line @typescript-eslint/only-throw-error
-            throw 'non-error-clone';
-        });
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/clone',
-            payload: {
-                repo_url: 'https://github.com/org/repo.git',
-                project_name: 'My Repo',
-                issue_key_prefix: 'PXA',
-                credential_id: 'cred-1',
-                default_branch: 'main',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-        expect(JSON.parse(res.body).error).toBe('Could not start clone');
-    });
-});
-
 describe('POST /api/projects/:id/repos/:repoId/reclone — non-Error fallback (PROJX)', () => {
     it('returns 400 with fallback message when startReclone throws a non-Error (PROJX-2)', async () => {
         await insertProject('p1', 'ATL', { git_path: '/some/path' });
@@ -1247,52 +878,6 @@ describe('PUT /api/projects/:id/env — dbUpsert non-Error fallback (PROJX)', ()
 // Zod validation rejection paths for routes that parse a body schema
 // ---------------------------------------------------------------------------
 
-describe('POST /api/projects/clone — Zod validation rejections (PROJ-CLONE-ZOD)', () => {
-    it('returns 400 when repo_url is missing (PROJ-CLONE-ZOD-1)', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/clone',
-            payload: {
-                project_name: 'My Repo',
-                issue_key_prefix: 'CLZ',
-                credential_id: 'cred-1',
-                default_branch: 'main',
-                // repo_url intentionally omitted
-            },
-        });
-        expect(res.statusCode).toBe(400);
-    });
-
-    it('returns 400 when repo_url is not a github.com URL (PROJ-CLONE-ZOD-2)', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/clone',
-            payload: {
-                repo_url: 'https://gitlab.com/org/repo.git',
-                project_name: 'My Repo',
-                issue_key_prefix: 'CLZ',
-                credential_id: 'cred-1',
-                default_branch: 'main',
-            },
-        });
-        expect(res.statusCode).toBe(400);
-    });
-
-    it('returns 400 when credential_id is missing (PROJ-CLONE-ZOD-3)', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/clone',
-            payload: {
-                repo_url: 'https://github.com/org/repo.git',
-                project_name: 'My Repo',
-                issue_key_prefix: 'CLZ',
-                // credential_id intentionally omitted
-            },
-        });
-        expect(res.statusCode).toBe(400);
-    });
-});
-
 describe('POST /api/projects/:id/delete — Zod validation rejection (PROJ-DEL-ZOD)', () => {
     it('returns 400 when mode is missing (PROJ-DEL-ZOD-1)', async () => {
         await insertProject('p1', 'ATL');
@@ -1310,36 +895,6 @@ describe('POST /api/projects/:id/delete — Zod validation rejection (PROJ-DEL-Z
             method: 'POST',
             url: '/api/projects/p1/delete',
             payload: { mode: 'obliterate' }, // not in enum
-        });
-        expect(res.statusCode).toBe(400);
-    });
-});
-
-describe('POST /api/projects/connect — Zod validation rejection (PROJ-CONN-ZOD)', () => {
-    it('returns 400 when folder_path is missing (PROJ-CONN-ZOD-1)', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                repo_url: 'https://github.com/org/repo',
-                issue_key_prefix: 'CZD',
-                credential_id: 'cred-1',
-                // folder_path intentionally omitted
-            },
-        });
-        expect(res.statusCode).toBe(400);
-    });
-
-    it('returns 400 when repo_url is not a github.com URL (PROJ-CONN-ZOD-2)', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/some/path',
-                repo_url: 'https://bitbucket.org/org/repo',
-                issue_key_prefix: 'CZD',
-                credential_id: 'cred-1',
-            },
         });
         expect(res.statusCode).toBe(400);
     });
@@ -1489,38 +1044,6 @@ describe('GET /api/projects/paged — custom pagination (PROJ-PAGED)', () => {
 // POST /api/projects/connect — connect happy-path with readHead non-null
 // (exercises the `head?.branch ?? 'main'` true arm when branch is set)
 // ---------------------------------------------------------------------------
-describe('POST /api/projects/connect — readHead non-null branch (PROJ-CONN-HEAD)', () => {
-    it('passes readHead.branch as default_branch to createFromClone when readHead returns non-null (PROJ-CONN-HEAD-1)', async () => {
-        const { readHead } = await import('../services/git-verify.js');
-        (readHead as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ branch: 'develop', sha: 'abc123' });
-        const { projectsService } = await import('../services/projects.js');
-        let capturedArgs: Parameters<typeof projectsService.createFromClone>[0] | undefined;
-        const spy = vi
-            .spyOn(projectsService, 'createFromClone')
-            .mockImplementationOnce(async (args) => {
-                capturedArgs = args;
-                return {
-                    project: { id: 'p-head-branch', name: 'repo', issue_key_prefix: 'HDB' },
-                    repo: { id: 'r-head-branch', project_id: 'p-head-branch', name: 'repo' },
-                } as Awaited<ReturnType<typeof projectsService.createFromClone>>;
-            });
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/projects/connect',
-            payload: {
-                folder_path: '/some/repo',
-                repo_url: 'https://github.com/org/repo.git',
-                issue_key_prefix: 'HDB',
-                credential_id: 'cred-1',
-            },
-        });
-        spy.mockRestore();
-        expect(res.statusCode).toBe(201);
-        expect(capturedArgs?.default_branch).toBe('develop');
-    });
-});
-
-
 describe('project repos (ADR 0018)', () => {
     async function connectRepo(name: string, folder = `/ws/${name}`) {
         return app.inject({
@@ -1535,6 +1058,69 @@ describe('project repos (ADR 0018)', () => {
             },
         });
     }
+
+    // `checkLocalClone`'s error branches. These used to live under
+    // `POST /api/projects/connect`, which is gone — the checks it ran are
+    // shared, and `POST /api/projects/:id/repos {mode:'connect'}` is the one
+    // surviving caller, so the branches moved here rather than going away.
+    describe('connect verification failures', () => {
+        beforeEach(async () => {
+            await insertProject('p1', 'ATL', { git_path: '/ws/core' });
+            await insertTestCredential();
+        });
+
+        it('returns 400 with not_git when the folder has no .git dir', async () => {
+            const { hasGitDir } = await import('../services/git-verify.js');
+            (hasGitDir as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
+            const res = await connectRepo('web', '/some/folder');
+            expect(res.statusCode).toBe(400);
+            expect(JSON.parse(res.body).error_kind).toBe('not_git');
+        });
+
+        it('returns 400 with origin_mismatch when the folder origin differs', async () => {
+            const { normalizeRepoUrl } = await import('../services/git-verify.js');
+            (normalizeRepoUrl as ReturnType<typeof vi.fn>)
+                .mockReturnValueOnce('https://github.com/org/repo')
+                .mockReturnValueOnce('https://github.com/org/different');
+            const res = await connectRepo('web', '/some/repo');
+            expect(res.statusCode).toBe(400);
+            expect(JSON.parse(res.body).error_kind).toBe('origin_mismatch');
+        });
+
+        it('returns 400 with credential_missing when the credential is gone', async () => {
+            const { credentialsService: mockCreds } = await import('../services/credentials.js');
+            (mockCreds.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
+            const res = await connectRepo('web', '/some/repo');
+            expect(res.statusCode).toBe(400);
+            expect(JSON.parse(res.body).error_kind).toBe('credential_missing');
+        });
+
+        it('returns 400 with credential_missing when getToken throws', async () => {
+            const { credentialsService: mockCreds } = await import('../services/credentials.js');
+            (mockCreds.getToken as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+                new Error('no token')
+            );
+            const res = await connectRepo('web', '/some/repo');
+            expect(res.statusCode).toBe(400);
+            expect(JSON.parse(res.body).error_kind).toBe('credential_missing');
+        });
+
+        it('returns 400 with auth_failed when the remote refuses the credential', async () => {
+            const { lsRemote } = await import('../services/git-verify.js');
+            (lsRemote as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
+            const res = await connectRepo('web', '/some/repo');
+            expect(res.statusCode).toBe(400);
+            expect(JSON.parse(res.body).error_kind).toBe('auth_failed');
+        });
+
+        it('falls back to "main" when readHead returns null', async () => {
+            const { readHead } = await import('../services/git-verify.js');
+            (readHead as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+            const res = await connectRepo('web', '/some/repo');
+            expect(res.statusCode).toBe(201);
+            expect(JSON.parse(res.body).default_branch).toBe('main');
+        });
+    });
 
     it('lists a project repos in order, none of them primary', async () => {
         await insertProject('p1', 'ATL', { git_path: '/ws/Atlas Core', git_url: 'https://github.com/org/core' });

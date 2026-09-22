@@ -10,7 +10,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
-import type { IAgent } from '@atlas/shared';
+import { WORKFLOW_TRIGGERS, type IAgent, type WorkflowTrigger } from '@atlas/shared';
 import { useProjects } from '../../hooks/useProjects.js';
 import { useAgents } from '../../hooks/useAgents.js';
 import {
@@ -19,7 +19,13 @@ import {
     useWorkflowTemplates,
 } from '../../hooks/useWorkflows.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
-import { INPUT_KIND_LABEL, agentLabel, deliveryLabel, templateAgentIds } from './labels.js';
+import {
+    INPUT_KIND_LABEL,
+    TRIGGER_LABEL,
+    agentLabel,
+    deliveryLabel,
+    templateAgentIds,
+} from './labels.js';
 
 const BLANK = 'blank';
 
@@ -144,6 +150,11 @@ export function NewWorkflowDialog({
     const createFromTemplate = useCreateWorkflowFromTemplate();
     const [projectId, setProjectId] = useState('');
     const [choice, setChoice] = useState(templateId);
+    // Blank workflows used to be born `manual`, so the only way to run one was
+    // the Run now button and per-workflow scheduling went unnoticed. Templates
+    // carry their own trigger (Delivery ships `item_ready`), so this only
+    // applies to Blank.
+    const [trigger, setTrigger] = useState<WorkflowTrigger>('item_ready');
 
     const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
     const pending = createBlank.isPending || createFromTemplate.isPending;
@@ -163,6 +174,13 @@ export function NewWorkflowDialog({
                 ? await createBlank.mutateAsync({
                       name: 'Untitled workflow',
                       project_id: projectId,
+                      trigger,
+                      // Same seed the Start inspector uses: the API refuses a
+                      // schedule trigger with no preset. The cadence is tuned
+                      // afterwards from the header's schedule chip.
+                      ...(trigger === 'schedule'
+                          ? { schedule_preset: 'daily' as const, schedule_time_of_day: '09:00' }
+                          : {}),
                   })
                 : await createFromTemplate.mutateAsync({ templateId: choice, projectId });
         onClose();
@@ -219,6 +237,23 @@ export function NewWorkflowDialog({
                         </OptionCard>
                     ))}
                 </Box>
+
+                {choice === BLANK && (
+                    <TextField
+                        select
+                        label="Runs when"
+                        value={trigger}
+                        onChange={(e) => setTrigger(e.target.value as WorkflowTrigger)}
+                        fullWidth
+                        helperText="A scheduled or on-ready workflow starts itself; you can change this any time from the workflow's schedule. It stays inactive until you've built its graph."
+                    >
+                        {WORKFLOW_TRIGGERS.map((t) => (
+                            <MenuItem key={t} value={t}>
+                                {TRIGGER_LABEL[t]}
+                            </MenuItem>
+                        ))}
+                    </TextField>
+                )}
 
                 {missing.length > 0 && (
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>

@@ -17,7 +17,7 @@ import FolderOpenRounded from '@mui/icons-material/FolderOpenRounded';
 import RefreshRounded from '@mui/icons-material/RefreshRounded';
 import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
 import SourceRounded from '@mui/icons-material/SourceRounded';
-import type { CloneStatus, IProject, IProjectRepo } from '@atlas/shared';
+import type { IProject, IProjectRepo } from '@atlas/shared';
 import { api } from '../../api/api.js';
 import {
     useProjectRepos,
@@ -26,6 +26,7 @@ import {
 } from '../../hooks/useProjectRepos.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
+import { CloneStatusChip } from '../../components/CloneStatusChip.js';
 import { ConfirmActionModal } from '../../components/ConfirmActionModal.js';
 import { RowActionMenu } from '../../components/RowActionMenu.js';
 import { RecloneProjectModal } from '../projects/RecloneProjectModal.js';
@@ -33,13 +34,6 @@ import { AutoFetchScheduleModal } from '../projects/AutoFetchScheduleModal.js';
 import { AddRepoDialog } from './AddRepoDialog.js';
 
 const MONO = '"JetBrains Mono", monospace';
-
-const STATUS_COLOR: Record<CloneStatus, string> = {
-    ready: ATLAS_PALETTE.green,
-    cloning: ATLAS_PALETTE.brandBlue,
-    pending: ATLAS_PALETTE.slate60,
-    error: ATLAS_PALETTE.error,
-};
 
 function repoLabel(url: string): string {
     return url.replace(/^https?:\/\//, '').replace(/\.git\/?$/, '');
@@ -178,15 +172,7 @@ export function ProjectReposCard({ project, displayId }: Props) {
                                 size="small"
                                 sx={{ fontFamily: MONO, fontSize: 11 }}
                             />
-                            <Typography
-                                sx={{
-                                    fontFamily: MONO,
-                                    fontSize: 11,
-                                    color: STATUS_COLOR[repo.clone_status],
-                                }}
-                            >
-                                {repo.clone_status}
-                            </Typography>
+                            <CloneStatusChip status={repo.clone_status} />
                         </Box>
                         {repo.git_url && (
                             <Box

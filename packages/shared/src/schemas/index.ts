@@ -526,14 +526,6 @@ const GithubRepoUrlSchema = z
         message: 'Only https://github.com URLs are supported',
     });
 
-export const CloneProjectSchema = z.object({
-    repo_url: GithubRepoUrlSchema,
-    credential_id: z.string().min(1),
-    project_name: z.string().min(1).max(200),
-    issue_key_prefix: IssueKeyPrefixSchema,
-    default_branch: z.string().default('main'),
-});
-
 export const DeleteProjectSchema = z.object({
     mode: z.enum(['unregister', 'purge']),
     confirm_name: z.string().optional(),
@@ -548,13 +540,6 @@ export const GenerateAiScaffoldSchema = z
     .strict()
     .optional()
     .default({});
-
-export const ConnectExistingProjectSchema = z.object({
-    folder_path: z.string().min(1),
-    repo_url: GithubRepoUrlSchema,
-    credential_id: z.string().min(1),
-    issue_key_prefix: IssueKeyPrefixSchema,
-});
 
 // ADR 0017 — a repo's folder name in a multi-repo workspace, so it must be
 // a safe path segment.

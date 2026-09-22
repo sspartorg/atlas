@@ -15,6 +15,7 @@ interface Props {
     lastActivity: string;
     onRename: () => void;
     onEditGuardrails: () => void;
+    onViewRepos: () => void;
     onManageSecrets: () => void;
     onDelete: () => void;
     // Theme 09b — AI-Readiness Agent trigger
@@ -37,17 +38,9 @@ const PILL_SX = {
     fontWeight: 500,
 } as const;
 
-function repoLabel(url: string): string {
-    if (!url) return '—';
-    return url.replace(/^https?:\/\//, '').replace(/\.git\/?$/, '');
-}
-
-function NoRepoUrl() {
-    return (
-        <Typography sx={{ fontFamily: MONO, fontSize: 12.5, color: ATLAS_PALETTE.slate40 }}>
-            no repo URL set
-        </Typography>
-    );
+function repoCountLabel(n: number): string {
+    if (n === 0) return 'Add a repo';
+    return n === 1 ? '1 repo' : `${n} repos`;
 }
 
 export const ProjectHeader = memo(function ProjectHeader({
@@ -58,6 +51,7 @@ export const ProjectHeader = memo(function ProjectHeader({
     lastActivity,
     onRename,
     onEditGuardrails,
+    onViewRepos,
     onManageSecrets,
     onDelete,
     onGenerateAiScaffold,
@@ -106,36 +100,21 @@ export const ProjectHeader = memo(function ProjectHeader({
                     </Box>
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, flexWrap: 'wrap' }}>
-                        {/* One repo reads like the old single-repo header; several
-                            collapse to a count — the Repos tab has the detail. */}
-                        {repos.length > 1 ? (
-                            <Box sx={PILL_SX}>{repos.length} repos</Box>
-                        ) : !repos[0] ? (
-                            <NoRepoUrl />
-                        ) : (
-                            <>
-                                {repos[0].git_url ? (
-                                    <Box
-                                        component="a"
-                                        href={repos[0].git_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        sx={{
-                                            fontFamily: MONO,
-                                            fontSize: 12.5,
-                                            color: ATLAS_PALETTE.brandBlue,
-                                            textDecoration: 'none',
-                                            '&:hover': { textDecoration: 'underline' },
-                                        }}
-                                    >
-                                        {repoLabel(repos[0].git_url)}
-                                    </Box>
-                                ) : (
-                                    <NoRepoUrl />
-                                )}
-                                <Box sx={PILL_SX}>{repos[0].default_branch || 'main'}</Box>
-                            </>
-                        )}
+                        {/* ADR 0018 — a project holds 0..N equal repos, so the
+                            header counts them and sends you to the Repos tab.
+                            It used to special-case exactly one repo and print
+                            its URL + branch, which read as "the project's
+                            repo"; with a repo-less project now the normal
+                            first state, the old "no repo URL set" was a dead
+                            end on every new project. */}
+                        <Box
+                            component="button"
+                            type="button"
+                            onClick={onViewRepos}
+                            sx={{ ...PILL_SX, border: 'none', cursor: 'pointer' }}
+                        >
+                            {repoCountLabel(repos.length)}
+                        </Box>
 
                         {guardrailsActive && (
                             <Box

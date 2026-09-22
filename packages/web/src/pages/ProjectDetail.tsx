@@ -63,6 +63,7 @@ export function ProjectDetail() {
     // functions and the memo never gets a chance to skip.
     const handleRename = useCallback(() => setRenameOpen(true), []);
     const handleEditGuardrails = useCallback(() => setTab('guardrails'), [setTab]);
+    const handleViewRepos = useCallback(() => setTab('repos'), [setTab]);
     const handleManageSecrets = useCallback(() => setSecretsOpen(true), []);
     const handleDelete = useCallback(() => setDeleteOpen(true), []);
     const handleJumpToHistory = useCallback(() => setTab('history'), [setTab]);
@@ -177,6 +178,7 @@ export function ProjectDetail() {
                 lastActivity={relativeTime(project.updated_at)}
                 onRename={handleRename}
                 onEditGuardrails={handleEditGuardrails}
+                onViewRepos={handleViewRepos}
                 onManageSecrets={handleManageSecrets}
                 onDelete={handleDelete}
                 onGenerateAiScaffold={handleGenerateAiScaffold}

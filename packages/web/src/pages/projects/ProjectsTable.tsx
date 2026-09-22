@@ -37,7 +37,6 @@ interface IProjectsTableProps {
     ownerName: string;
     scheduleMap?: Map<string, { preset: string; next_run_at: string | null }>;
     onRowClick: (id: string) => void;
-    onCopyUrl: (id: string) => void;
     onDelete: (id: string) => void;
 }
 
@@ -82,7 +81,6 @@ export function ProjectsTable({
     ownerName,
     scheduleMap,
     onRowClick,
-    onCopyUrl,
     onDelete,
 }: IProjectsTableProps) {
     const [sortKey, setSortKey] = useState<SortKey>('lastActivity');
@@ -264,7 +262,6 @@ export function ProjectsTable({
                                     onClick={(e) => e.stopPropagation()}
                                 >
                                     <ProjectRowMenu
-                                        onCopyUrl={() => onCopyUrl(row.id)}
                                         onDelete={() => onDelete(row.id)}
                                     />
                                 </TableCell>

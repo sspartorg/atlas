@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { IItemExternalLink } from '@atlas/shared';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
@@ -141,6 +141,67 @@ describe('DetailsRailCard', () => {
         const copyButtons = screen.getAllByRole('button', { name: /copy/i });
         if (copyButtons[0]) {
             await user.click(copyButtons[0]);
+        }
+    });
+
+    // The copy button arms a 1500ms "Copied" reset. Before the fix nothing
+    // cancelled it, so a copy made just before the rail went away fired into
+    // an unmounted tree — and under jsdom teardown `window` is already gone,
+    // so it threw `ReferenceError: window is not defined` from a bare
+    // `Timeout._onTimeout`, failing whichever test happened to be running
+    // 1.5s later. Every test passed; the run still exited 1. Same leak the
+    // toast auto-dismiss had (e28181b).
+    //
+    // Fake timers are installed AFTER the render on purpose: timers armed
+    // during render (React Query and friends) stay real and uncounted, so the
+    // copy reset is the only fake timer and the assertion is exact.
+    it('cancels the pending "Copied" reset when the rail unmounts', async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, 'clipboard', {
+            value: { writeText },
+            writable: true,
+            configurable: true,
+        });
+        const { unmount } = renderWithProviders(
+            <DetailsRailCard
+                issueType="sub_task"
+                status="ready"
+                onStatusPick={vi.fn()}
+                assigneeAgentId={null}
+                onAssign={vi.fn()}
+                assignee={null}
+                project={null}
+                ownerName="Bob"
+                ownerAccent="#0A0A0A"
+                createdAt="2026-05-15T00:00:00.000Z"
+                updatedAt="2026-05-16T00:00:00.000Z"
+                worktreeBranch="atlas/wf/task-1"
+                worktreePath="/tmp/atlas/task-1"
+            />
+        );
+
+        vi.useFakeTimers();
+        try {
+            const copyButton = screen.getAllByRole('button', { name: /copy/i })[0];
+            expect(copyButton).toBeDefined();
+            await act(async () => {
+                fireEvent.click(copyButton!);
+            });
+            expect(writeText).toHaveBeenCalled();
+            expect(vi.getTimerCount()).toBe(1);
+
+            unmount();
+
+            expect(vi.getTimerCount()).toBe(0);
+            // Nothing is left to fire, so advancing past the reset window is a
+            // no-op rather than a setState on an unmounted rail.
+            expect(() => {
+                act(() => {
+                    vi.advanceTimersByTime(10_000);
+                });
+            }).not.toThrow();
+        } finally {
+            vi.useRealTimers();
         }
     });
 

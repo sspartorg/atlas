@@ -104,6 +104,38 @@ describe('workflow CRUD', () => {
         expect((await app.inject({ method: 'GET', url: `/api/workflows/${wf.id}` })).statusCode).toBe(404);
     });
 
+    // An empty graph on a self-starting trigger would be picked up by the very
+    // next dispatch tick and run every ready Task through nothing.
+    it('creates a self-triggering workflow inactive until its graph has an agent', async () => {
+        const emptyGraph = {
+            nodes: [
+                { id: 'start', type: 'start', position: { x: 0, y: 0 } },
+                { id: 'end', type: 'end', position: { x: 200, y: 0 } },
+            ],
+            edges: [{ id: 'e1', source: 'start', target: 'end', kind: 'pass' }],
+        };
+
+        const blank = await createWorkflow({ graph: emptyGraph, trigger: 'item_ready' });
+        expect(blank.statusCode).toBe(201);
+        expect((blank.json() as IWorkflow).status).toBe('inactive');
+
+        // A real graph self-starts as before…
+        const withAgent = await createWorkflow({ trigger: 'item_ready' });
+        expect((withAgent.json() as IWorkflow).status).toBe('active');
+
+        // …as does an empty one that can only be started by hand.
+        const manual = await createWorkflow({ graph: emptyGraph, trigger: 'manual' });
+        expect((manual.json() as IWorkflow).status).toBe('active');
+
+        // An explicit status still wins.
+        const forced = await createWorkflow({
+            graph: emptyGraph,
+            trigger: 'item_ready',
+            status: 'active',
+        });
+        expect((forced.json() as IWorkflow).status).toBe('active');
+    });
+
     it('rejects an invalid graph with per-node errors', async () => {
         const res = await createWorkflow({
             graph: { nodes: [graph.nodes[0], graph.nodes[1]], edges: [graph.edges[0]] },

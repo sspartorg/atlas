@@ -281,6 +281,16 @@ export const workflowsService = {
             push_to_default: input.push_to_default ?? false,
         };
         assertDeliveryRules({ ...base, ...delivery, trigger: input.trigger ?? 'manual' });
+        // A self-triggering workflow with no agent in its graph would be swept
+        // up by the very next dispatch tick, take every ready Task in the
+        // project, and run each one through nothing — reaching End immediately
+        // and delivering. Harmless while `manual` was the only default; not
+        // once a blank workflow can be born `item_ready`. So it starts
+        // inactive, and the builder's Active switch turns it on once there is
+        // a graph worth running. An explicit `status` still wins.
+        const selfStarting = (input.trigger ?? 'manual') !== 'manual';
+        const hasAgentNode = graph.nodes.some((n) => n.type === 'agent');
+        const status = input.status ?? (selfStarting && !hasAgentNode ? 'inactive' : 'active');
         const schedule = await resolveSchedule({
             trigger: input.trigger ?? 'manual',
             schedule_preset: input.schedule_preset ?? null,
@@ -296,7 +306,7 @@ export const workflowsService = {
                 name: input.name,
                 description: input.description ?? null,
                 ...base,
-                status: input.status ?? 'active',
+                status,
                 graph: JSON.stringify(graph),
                 trigger: input.trigger ?? 'manual',
                 ...delivery,

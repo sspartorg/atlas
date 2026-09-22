@@ -189,15 +189,7 @@ describe('api.projects', () => {
         await api.projects.delete('p1');
     });
 
-    it('clone/reclone/status/reveal/head/folderOrigin/env', async () => {
-        captureMethod('post', '/projects/clone', { clone_id: 'c1', destination: '/x' });
-        await api.projects.clone({
-            repo_url: 'r',
-            credential_id: 'c',
-            project_name: 'n',
-            issue_key_prefix: 'ATL',
-            default_branch: 'main',
-        });
+    it('reclone/status/reveal/head/folderOrigin/env', async () => {
         captureGet('/projects/prefix-available', { available: true });
         await api.projects.prefixAvailable('ATL');
         captureMethod('post', '/projects/p1/delete', { delete_id: 'd' });
@@ -219,16 +211,6 @@ describe('api.projects', () => {
         await api.projects.saveEnv('p1', []);
     });
 
-    it('connect returns the raw response', async () => {
-        captureMethod('post', '/projects/connect', { id: 'p1' });
-        const r = await api.projects.connect({
-            folder_path: '/p',
-            repo_url: 'r',
-            credential_id: 'c',
-            issue_key_prefix: 'ATL',
-        });
-        expect(r.ok).toBe(true);
-    });
 });
 
 describe('api.schedules', () => {
@@ -873,35 +855,6 @@ describe('api.scratchPad.create (default arg)', () => {
     it('creates scratch-pad with no args', async () => {
         captureMethod('post', '/scratch-pad', {});
         await api.scratchPad.create();
-    });
-});
-
-describe('api.projects.connect (ConnectError path)', () => {
-    it('returns ok:false with checks when server returns 400', async () => {
-        server.use(
-            http.post('http://localhost:3000/api/projects/connect', () =>
-                HttpResponse.json(
-                    {
-                        ok: false,
-                        checks: {
-                            folder_exists: true,
-                            has_git: false,
-                            origin_matches: false,
-                            ls_remote_ok: false,
-                        },
-                        error_kind: 'not_git',
-                    },
-                    { status: 400 },
-                ),
-            ),
-        );
-        const r = await api.projects.connect({
-            folder_path: '/x',
-            repo_url: 'r',
-            credential_id: 'c',
-            issue_key_prefix: 'ATL',
-        });
-        expect(r.ok).toBe(false);
     });
 });
 
