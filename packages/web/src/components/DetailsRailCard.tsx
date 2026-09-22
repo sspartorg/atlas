@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
@@ -97,14 +97,35 @@ interface Props {
     onRepoIdsChange?: ((next: string[]) => Promise<unknown>) | undefined;
 }
 
+const COPIED_RESET_MS = 1500;
+
 function CopyValueButton({ value }: { value: string }) {
     const [copied, setCopied] = useState(false);
+    // The handle for the pending "Copied" reset. A copy made just before the
+    // rail unmounts (navigating away, or a test ending) used to leave this
+    // timer running with nothing to cancel it: it fired into an unmounted
+    // tree, and under jsdom teardown `window` is already gone, so it threw
+    // `ReferenceError: window is not defined` from a bare `Timeout._onTimeout`
+    // — attributed to whatever test happened to be running 1.5s later, not to
+    // the one that clicked copy. Same leak as the toast auto-dismiss (e28181b).
+    const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (resetTimer.current !== null) clearTimeout(resetTimer.current);
+        };
+    }, []);
+
     const handleClick = async (e: React.MouseEvent) => {
         e.stopPropagation();
         try {
             await navigator.clipboard.writeText(value);
             setCopied(true);
-            window.setTimeout(() => setCopied(false), 1500);
+            if (resetTimer.current !== null) clearTimeout(resetTimer.current);
+            resetTimer.current = setTimeout(() => {
+                resetTimer.current = null;
+                setCopied(false);
+            }, COPIED_RESET_MS);
         } catch {
             // Clipboard write can fail in non-secure contexts; silently no-op.
         }
