@@ -20,6 +20,15 @@ function shAvailable(): boolean {
     }
 }
 
+function gitAvailable(): boolean {
+    try {
+        execFileSync('git', ['--version'], { stdio: 'pipe', timeout: 5_000 });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 // The service under test is intentionally excluded from coverage
 // aggregation (see vitest.config.ts), but this file adds behavioural
 // checks for the [user]-section branch introduced by migration 024 and
@@ -284,6 +293,123 @@ describe('buildGitAuth', () => {
         },
     );
 
+    // The gap is invisible by construction — bot-authored commits look
+    // correct, and the discipline check greps for any `Co-Authored-By:`,
+    // which the agent's hardcoded Claude trailer satisfies. A warning is the
+    // only signal the operator gets, so assert it exists.
+    it('warns when a github_app credential will produce commits with no Owner trailer', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            svc.get.mockResolvedValue({
+                id: 'nohuman',
+                kind: 'github_app',
+                username: 'x-access-token',
+                app_id: 12345678,
+                app_slug: 'atlas-app-bot',
+                human_name: null,
+                human_email: null,
+                human_gh_login: null,
+            });
+            svc.getToken.mockResolvedValueOnce('ghs_installation_token');
+            const auth = await buildGitAuth('nohuman');
+            cleanupDirs.push(auth!.configDir);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('no human_name/human_email'));
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('NO Co-Authored-By trailer'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    // The converse: a fully configured credential must stay silent, or the
+    // warning becomes noise everyone learns to ignore.
+    it('stays silent when both human fields are set', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            svc.get.mockResolvedValue({
+                id: 'withhuman',
+                kind: 'github_app',
+                username: 'x-access-token',
+                app_id: 12345678,
+                app_slug: 'atlas-app-bot',
+                human_name: 'sspart',
+                human_email: 'owner@example.invalid',
+                human_gh_login: 'sspartorg',
+            });
+            svc.getToken.mockResolvedValueOnce('ghs_installation_token');
+            const auth = await buildGitAuth('withhuman');
+            cleanupDirs.push(auth!.configDir);
+            expect(warn).not.toHaveBeenCalled();
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    // The test above proves the SCRIPT works — it runs it as `sh <hook>`.
+    // That is not the same as proving git ever CALLS it, which is what the
+    // whole Owner-attribution audit trail actually depends on, and which
+    // nothing here covered. `core.hooksPath` has to survive being set in
+    // GIT_CONFIG_GLOBAL (not a repo-local config), and it has to work in a
+    // linked worktree, because that is the only shape a real workflow run
+    // ever commits in.
+    it.skipIf(!gitAvailable())(
+        'git itself invokes the hook via core.hooksPath, in a repo AND a linked worktree',
+        async () => {
+            svc.get.mockResolvedValue({
+                id: 'e2e1',
+                kind: 'github_app',
+                username: 'x-access-token',
+                app_id: 12345678,
+                app_slug: 'atlas-app-bot',
+                human_name: 'sspart',
+                human_email: 'owner@example.invalid',
+                human_gh_login: 'sspartorg',
+            });
+            svc.getToken.mockResolvedValueOnce('ghs_installation_token');
+            const auth = await buildGitAuth('e2e1');
+            cleanupDirs.push(auth!.configDir);
+
+            const root = mkdtempSync(join(tmpdir(), 'atlas-git-e2e-'));
+            cleanupDirs.push(root);
+            const base = join(root, 'base');
+            const env = {
+                ...process.env,
+                GIT_CONFIG_GLOBAL: auth!.configPath,
+                GIT_CONFIG_NOSYSTEM: '1',
+                GIT_TERMINAL_PROMPT: '0',
+            };
+            const git = (cwd: string, ...args: string[]) =>
+                execFileSync('git', args, { cwd, env, stdio: 'pipe', timeout: 30_000 }).toString();
+
+            execFileSync('git', ['init', '-q', '-b', 'probe', base], { env, stdio: 'pipe', timeout: 30_000 });
+            writeFileSync(join(base, 'a.txt'), 'a\n');
+            git(base, 'add', '-A');
+            git(base, 'commit', '-q', '-m', 'first');
+            const inRepo = git(base, 'log', '-1', '--pretty=%B');
+            expect(inRepo).toContain('Co-Authored-By: sspart <owner@example.invalid>');
+            // The bot still authors; the human is a trailer, not the author.
+            expect(git(base, 'log', '-1', '--pretty=%an').trim()).toBe('atlas-app-bot[bot]');
+
+            // A workflow run commits inside a linked worktree, never the clone.
+            const wt = join(root, 'wt');
+            git(base, 'worktree', 'add', '-q', wt, '-b', 'probe-feature');
+            writeFileSync(join(wt, 'b.txt'), 'b\n');
+            git(wt, 'add', '-A');
+            git(wt, 'commit', '-q', '-m', 'from the worktree');
+            const inWorktree = git(wt, 'log', '-1', '--pretty=%B');
+            expect(inWorktree).toContain('Co-Authored-By: sspart <owner@example.invalid>');
+
+            // An agent's own message already carrying a DIFFERENT Co-Authored-By
+            // must not suppress the Owner's — that is the exact shape of every
+            // agent commit, whose prompt hardcodes a Claude trailer.
+            writeFileSync(join(wt, 'c.txt'), 'c\n');
+            git(wt, 'add', '-A');
+            git(wt, 'commit', '-q', '-m', 'agent work\n\nCo-Authored-By: Claude <noreply@anthropic.com>');
+            const both = git(wt, 'log', '-1', '--pretty=%B');
+            expect(both).toContain('Co-Authored-By: Claude <noreply@anthropic.com>');
+            expect(both).toContain('Co-Authored-By: sspart <owner@example.invalid>');
+        },
+    );
+
     it('omits the hook when only one of human_name / human_email is set', async () => {
         svc.get.mockResolvedValue({
             id: 'g4',
@@ -300,6 +426,16 @@ describe('buildGitAuth', () => {
         cleanupDirs.push(auth!.configDir);
         expect(readFile(auth!.configPath)).not.toContain('[core]');
         expect(existsSync(join(auth!.configDir, 'prepare-commit-msg'))).toBe(false);
+        // The point that matters, stated out loud: the bot identity IS still
+        // written. `[user]` needs app_slug + app_id; the hook needs
+        // human_name + human_email. Two INDEPENDENT conditions in one file.
+        //
+        // A 2026-09-22 investigation lost a day to reading these as coupled —
+        // "commits are authored by the bot, so the config was read, so
+        // core.hooksPath was set, so the hook must have run" — and ruled out
+        // the real cause on that reasoning. Bot-authored proves nothing about
+        // the trailer. See `assertHumanAttributionWarning` below.
+        expect(readFile(auth!.configPath)).toContain('name = atlas-app-bot[bot]');
     });
 });
 
