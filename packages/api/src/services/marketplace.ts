@@ -18,6 +18,7 @@ import type {
     AgentCli,
     IAgent,
     IAgentBundleManifest,
+    IAgentDependencyReport,
     IMarketplaceAgent,
     IMarketplaceAgentChecklist,
     IMarketplaceAgentFull,
@@ -614,5 +615,104 @@ export const marketplaceService = {
             .execute();
         const refreshed = await agentsService.get(localAgentId);
         return refreshed!;
+    },
+
+    /**
+     * Has the Owner edited this agent's prompt since it was installed?
+     *
+     * `install` seeds `agent_prompt_versions` v1 with `edited_by: 'Owner'`, and
+     * `acceptUpgrade` writes its rows as `'Marketplace'`, so the question is
+     * exactly "is there an Owner row past v1". No content comparison and no new
+     * column — and it stays correct across any number of upgrades, which a
+     * `prompt_version === 1` check would not.
+     *
+     * Known limit: it sees prompt edits only. An Owner who changed nothing but
+     * a checklist reads as untouched. Closing that would need an edit marker on
+     * `agent_checklists`; the trade is deliberate, and `resolveAgentDependencies`
+     * reports every agent it upgraded so the change is never silent.
+     */
+    async hasOwnerPromptEdit(localAgentId: string): Promise<boolean> {
+        const row = await db
+            .selectFrom('agent_prompt_versions')
+            .select('id')
+            .where('agent_id', '=', localAgentId)
+            .where('edited_by', '=', 'Owner')
+            .where('version', '>', 1)
+            .executeTakeFirst();
+        return row != null;
+    },
+
+    /**
+     * Make every agent in `agentIds` present and current, and say what happened.
+     *
+     * Shared by both dependency-resolving paths — `createFromTemplate` and
+     * `importWorkflowBundle` — because they had drifted apart: both merely
+     * skipped an agent that already existed, whatever version it was, so a
+     * workflow could import "successfully" onto agents that no longer matched
+     * the graph it shipped with.
+     *
+     * Upgrades are applied only to agents the Owner has not edited. A tuned
+     * prompt is work the Owner did deliberately; an import is not permission to
+     * throw it away, so those are left alone and reported instead — the
+     * existing upgrade UI still offers them, because the pointer is untouched.
+     */
+    async resolveAgentDependencies(
+        agentIds: readonly string[],
+        opts: {
+            /**
+             * How to bring in an agent that isn't here yet. Defaults to
+             * installing the catalog entry, which is right for templates
+             * (their agent nodes reference catalog ids by construction). An
+             * uploaded bundle passes its own installer instead: those agents
+             * may not exist in the catalog at all, and `install` would 404.
+             */
+            install?: (agentId: string) => Promise<void>;
+            /**
+             * Whether an already-present agent may be upgraded. Off for
+             * uploaded bundles, which are deliberately not catalog-linked.
+             */
+            link?: boolean;
+        } = {}
+    ): Promise<IAgentDependencyReport> {
+        const report: IAgentDependencyReport = { installed: [], upgraded: [], skipped_edited: [], unchanged: [], paused: [] };
+        for (const agentId of agentIds) {
+            const local = await agentsService.get(agentId);
+            if (!local) {
+                await (opts.install ? opts.install(agentId) : this.install(agentId));
+                // Some catalog manifests still ship `inactive` (a leftover from
+                // per-agent schedules) and `install` copies the manifest's
+                // status, so a workflow made from a template would park on an
+                // agent the Owner never even saw. Nobody paused this one — it
+                // was created a line ago — so activating it overrides no
+                // decision. Contrast the `paused` branch below.
+                await db.updateTable('agents').set({ status: 'active' }).where('id', '=', agentId).where('status', '!=', 'active').execute();
+                report.installed.push(agentId);
+                continue;
+            }
+            // An agent that was already here and is paused stays paused. This
+            // used to be a blanket "activate everything the graph names", which
+            // silently undid a deliberate pause; the builder shows the warning
+            // on the step instead.
+            if (local.status !== 'active') report.paused.push(agentId);
+            // Only a back-linked agent can be upgraded: without a source id
+            // there is nothing to compare against, and `acceptUpgrade` throws.
+            const sourceId = local.marketplace_source_id;
+            if (!opts.link || !sourceId || local.marketplace_pulled_version == null) {
+                report.unchanged.push(agentId);
+                continue;
+            }
+            const catalog = await this.getFull(sourceId);
+            if (!catalog || local.marketplace_pulled_version >= catalog.agent.version) {
+                report.unchanged.push(agentId);
+                continue;
+            }
+            if (await this.hasOwnerPromptEdit(agentId)) {
+                report.skipped_edited.push(agentId);
+                continue;
+            }
+            await this.acceptUpgrade(agentId, ['prompt_md', 'settings_json', 'checklists']);
+            report.upgraded.push(agentId);
+        }
+        return report;
     },
 };

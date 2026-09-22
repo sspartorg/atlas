@@ -1138,6 +1138,9 @@ export const api = {
             return postForm<IWorkflowImportResult>('/workflows/import', fd);
         },
         get: (id: string) => get<IWorkflow>(`/workflows/${id}`),
+        // Re-take the marketplace source. Replaces the graph, so it is always
+        // the Owner's explicit call — never fired automatically from a read.
+        upgrade: (id: string) => post<IWorkflow>(`/workflows/${encodeURIComponent(id)}/upgrade`, {}),
         create: (input: CreateWorkflowInput) => post<IWorkflow>('/workflows', input),
         createFromTemplate: (templateId: string, projectId: string) =>
             post<IWorkflow>('/workflows/from-template', {

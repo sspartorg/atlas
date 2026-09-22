@@ -68,6 +68,32 @@ export interface IWorkflow {
     cron_expr: string | null;
     next_run_at: string | null;
     last_run_at: string | null;
+    /**
+     * The marketplace template id (`"delivery"`) or published-entry id this
+     * workflow came from, and the version that was pulled. Mirrors the pair on
+     * `IAgent`, and works the same way: NULL means "not from a marketplace
+     * source" — a hand-built workflow, which is never stale.
+     *
+     * `marketplace_source_id` is also the lookup key when resolving a
+     * template's sub-workflows. It used to be the workflow's NAME, so renaming
+     * a sub-workflow forked it and an unrelated workflow that happened to share
+     * the name got adopted as a build step.
+     */
+    marketplace_source_id: string | null;
+    marketplace_pulled_version: number | null;
+    /**
+     * When the upstream was last taken. `updated_at <= marketplace_pulled_at`
+     * means nothing has been edited since, which is what makes an automatic
+     * upgrade safe — `updated_at` alone cannot say, because the upgrade
+     * itself moves it.
+     */
+    marketplace_pulled_at: string | null;
+    /**
+     * The source has a newer version than `marketplace_pulled_version`.
+     * Computed per read, mirroring the agent marketplace gate; null when
+     * the workflow has no upstream.
+     */
+    upgrade_available: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -214,6 +240,13 @@ export interface IWorkflowTemplate {
     id: string;
     name: string;
     description: string;
+    /**
+     * Bumped by hand when the template's graph or copy changes, so a workflow
+     * created from it can tell it has fallen behind. The whole catalog was
+     * reset to 1 on 2026-09-22; before that templates carried no version at
+     * all, which is why a workflow made from one could never be upgraded.
+     */
+    version: number;
     input_kind: WorkflowInputKind;
     trigger: WorkflowTrigger;
     use_worktree: boolean;
@@ -241,6 +274,55 @@ export interface IWorkflowQueue {
 }
 
 /** POST /api/workflows/import — a bundle unpacked into one project. */
+/**
+ * What resolving a workflow's agent dependencies actually did.
+ *
+ * Import used to be silent about this: an agent that already existed was
+ * skipped whatever version it was, so a workflow could import "successfully"
+ * onto agents that no longer matched the graph it shipped with, and the Owner
+ * had no way to tell. Every agent an import touches now lands in exactly one
+ * of these buckets.
+ */
+export interface IAgentDependencyReport {
+    /** Not present before; installed from the catalog. */
+    installed: string[];
+    /** Back-linked, behind the catalog, and unedited — brought up to date. */
+    upgraded: string[];
+    /**
+     * Behind the catalog but carrying Owner edits, so left exactly as they are.
+     * The upgrade is still offered in the marketplace UI; nothing was lost.
+     */
+    skipped_edited: string[];
+    /** Already current, or not back-linked to a catalog entry. */
+    unchanged: string[];
+    /**
+     * Already here and NOT active. Resolution leaves their status alone — a
+     * pause is a decision the Owner made — so the run would park on them. They
+     * are reported rather than silently re-activated, which is what used to
+     * happen. Agents installed by this same resolution are not here: they are
+     * activated on the way in, because nobody paused them.
+     */
+    paused: string[];
+}
+
+/**
+ * What an import did to the workflows themselves, as distinct from the agents.
+ *
+ * Importing the same marketplace entry twice used to fork the whole tree and
+ * leave every copy with a NULL source id — unwanted duplicates that were also
+ * unupgradable. Reuse is keyed on provenance now, and this says which happened.
+ */
+export interface IWorkflowDependencyReport {
+    /** Not present before; created from the bundle. */
+    created: string[];
+    /** Already here, behind the entry, and unedited — brought up to date. */
+    upgraded: string[];
+    /** Already here and current. */
+    reused: string[];
+    /** Behind the entry but edited since it was pulled, so left untouched. */
+    skipped_edited: string[];
+}
+
 export interface IWorkflowImportResult {
     workflow: IWorkflow;
     /** The sub-workflows its Sub-tasks steps use, created with it. */
@@ -249,6 +331,10 @@ export interface IWorkflowImportResult {
     installed_agents: string[];
     /** Agent ids already installed here, used as they are. */
     reused_agents: string[];
+    /** Per-agent detail behind the two lists above. */
+    agents: IAgentDependencyReport;
+    /** What happened to the workflow and its sub-workflows. */
+    workflows: IWorkflowDependencyReport;
 }
 
 /**
@@ -269,6 +355,12 @@ export interface IPublishedWorkflow {
     push_to_default: boolean;
     /** Every agent it uses, its sub-workflows' included. */
     agent_ids: string[];
+    /**
+     * Bumped on every republish. Republishing overwrites the stored bundle in
+     * place, so without this a consumer who used the entry yesterday had no way
+     * to tell it changed today.
+     */
+    version: number;
     published_at: string;
     /** Equals `published_at` until it is published again. */
     updated_at: string;

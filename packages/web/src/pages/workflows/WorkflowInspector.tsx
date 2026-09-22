@@ -121,6 +121,16 @@ function AgentPanel({
                     </MenuItem>
                 ))}
             </TextField>
+            {/* A paused agent is not a broken step — it is a step that will
+                park the run with no explanation. Creating a workflow no longer
+                silently re-activates the agents it names (that overrode a
+                decision the Owner made on purpose), so this is where they find
+                out, on every path: template, import, or hand-built. */}
+            {agent && agent.status !== 'active' && (
+                <Explain>
+                    {agent.name} is paused, so a run will wait here until you enable it.
+                </Explain>
+            )}
             {agent ? (
                 <Box>
                     <Row label="CLI">{agent.cli}</Row>
@@ -157,18 +167,26 @@ function SubtasksPanel({
         (w) => w.input_kind === 'sub_task' && w.project_id === workflow.project_id
     );
     const picked = subs.find((w) => w.id === node.data.sub_workflow_id);
+    // A ref that names a workflow this project no longer has is NOT the same as
+    // no ref: rendering it as "nothing selected" hides a broken step and the
+    // next save silently drops the id. Say so, and keep the run-time error
+    // ("Workflow <id> does not exist") in sight of whoever can fix it.
+    const dangling = node.data.sub_workflow_id != null && !picked;
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <TextField
                 select
                 label="Sub-workflow"
                 size="small"
+                error={dangling}
                 value={picked ? picked.id : ''}
                 onChange={(e) => onNodeData({ sub_workflow_id: e.target.value || undefined })}
                 helperText={
-                    subs.length === 0
-                        ? 'Create a workflow with the Sub-task workflow input first'
-                        : 'Runs once per sub-task'
+                    dangling
+                        ? 'This step points at a workflow that is no longer in this project — pick one.'
+                        : subs.length === 0
+                          ? 'Create a workflow with the Sub-task workflow input first'
+                          : 'Runs once per sub-task'
                 }
                 fullWidth
             >

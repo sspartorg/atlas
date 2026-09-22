@@ -151,6 +151,7 @@ describe('MarketplaceWorkflowDetail — published by you', () => {
                         sub_workflows: [],
                         installed_agents: [],
                         reused_agents: [],
+                        agents: { installed: [], upgraded: [], skipped_edited: [], unchanged: [], paused: [] },
                     },
                     { status: 201 }
                 );

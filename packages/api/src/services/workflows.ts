@@ -18,6 +18,7 @@ import {
     type IssueType,
     type UpdateWorkflowInput,
 } from '@atlas/shared';
+import { sql } from 'kysely';
 import { db } from '../db/kysely-client.js';
 import { ApiError } from '../utils/errors.js';
 import { materializeCron } from './cron-materializer.js';
@@ -54,8 +55,19 @@ function asWorkflow(row: Record<string, unknown>): IWorkflow {
         cron_expr: (row['cron_expr'] as string | null) ?? null,
         next_run_at: (row['next_run_at'] as string | null) ?? null,
         last_run_at: (row['last_run_at'] as string | null) ?? null,
+        marketplace_source_id: (row['marketplace_source_id'] as string | null) ?? null,
+        marketplace_pulled_version: (row['marketplace_pulled_version'] as number | null) ?? null,
+        // toISOString, NOT String(): pg hands back a Date, and String(Date)
+        // drops milliseconds. Truncating to the second made `updated_at`
+        // (full precision) look later than the pull on a row nobody had
+        // touched, so untouched workflows read as Owner-edited and quietly
+        // stopped accepting upgrades.
+        marketplace_pulled_at: row['marketplace_pulled_at'] ? new Date(row['marketplace_pulled_at'] as string).toISOString() : null,
+        // Filled in by `withUpgradeFlags`; resolving the source's current
+        // version needs a lookup the row mapper has no business doing.
+        upgrade_available: false,
         created_at: row['created_at'] as string,
-        updated_at: row['updated_at'] as string,
+        updated_at: new Date(row['updated_at'] as string).toISOString(),
     };
 }
 
@@ -193,15 +205,68 @@ export const workflowsService = {
     async list(projectId?: string): Promise<IWorkflow[]> {
         let q = db.selectFrom('workflows').selectAll().orderBy('name', 'asc');
         if (projectId) q = q.where('project_id', '=', projectId);
-        return (await q.execute()).map((r) => asWorkflow(r as never));
+        return this.withUpgradeFlags((await q.execute()).map((r) => asWorkflow(r as never)));
     },
 
     async get(id: string): Promise<IWorkflow | null> {
         const row = await db.selectFrom('workflows').selectAll().where('id', '=', id).executeTakeFirst();
-        return row ? asWorkflow(row as never) : null;
+        if (!row) return null;
+        const [one] = await this.withUpgradeFlags([asWorkflow(row as never)]);
+        return one ?? null;
     },
 
-    async create(input: CreateWorkflowInput): Promise<IWorkflow> {
+    /**
+     * The version a marketplace source is currently at, or null when the id
+     * names nothing we can resolve (a deleted published entry, a template that
+     * shipped out of the catalog). Null means "cannot tell", and the caller
+     * treats that as "no upgrade" — never as "upgrade to nothing".
+     *
+     * Three shapes of id, because a sub-workflow imported from a published
+     * entry belongs to that entry rather than being one itself:
+     *   `delivery`              a shipped template
+     *   `<uuid>`                a published entry
+     *   `<uuid>:<bundle-ref>`   a sub-workflow inside a published entry
+     */
+    async sourceVersion(sourceId: string): Promise<number | null> {
+        const entryId = sourceId.includes(':') ? sourceId.slice(0, sourceId.indexOf(':')) : sourceId;
+        const template = this.listTemplates().find((t) => t.id === entryId);
+        if (template) return template.version;
+        const row = await db
+            .selectFrom('published_workflows')
+            .select('version')
+            .where('id', '=', entryId)
+            .executeTakeFirst();
+        return row?.version ?? null;
+    },
+
+    /** Batch-resolves `upgrade_available` so a list costs one query per source. */
+    async withUpgradeFlags(workflows: IWorkflow[]): Promise<IWorkflow[]> {
+        const sourceIds = [...new Set(workflows.flatMap((w) => (w.marketplace_source_id ? [w.marketplace_source_id] : [])))];
+        if (sourceIds.length === 0) return workflows;
+        const versions = new Map<string, number | null>();
+        for (const id of sourceIds) versions.set(id, await this.sourceVersion(id));
+        return workflows.map((w) => {
+            const current = w.marketplace_source_id ? versions.get(w.marketplace_source_id) : null;
+            return {
+                ...w,
+                upgrade_available:
+                    current != null && w.marketplace_pulled_version != null && w.marketplace_pulled_version < current,
+            };
+        });
+    },
+
+    /**
+     * `provenance` is a service-only argument on purpose. It is deliberately
+     * NOT part of `CreateWorkflowSchema`: that schema is what `POST
+     * /api/workflows` validates, so putting it there would let a client forge
+     * `marketplace_source_id` and claim a workflow came from a template it
+     * never came from — which is exactly the field upgrade resolution trusts.
+     * Only the code that actually pulled from a marketplace source may set it.
+     */
+    async create(
+        input: CreateWorkflowInput,
+        provenance?: { source_id: string; pulled_version: number }
+    ): Promise<IWorkflow> {
         const graph = input.graph ?? emptyGraph();
         const base = {
             project_id: input.project_id ?? null,
@@ -241,6 +306,14 @@ export const workflowsService = {
                 schedule_time_of_day: input.schedule_time_of_day ?? null,
                 schedule_weekday: input.schedule_weekday ?? null,
                 ...schedule,
+                marketplace_source_id: provenance?.source_id ?? null,
+                marketplace_pulled_version: provenance?.pulled_version ?? null,
+                // MUST come from the DB clock, not JS. `updated_at` is written by
+                // the `workflows_set_updated_at` trigger with now(); a JS timestamp a
+                // few ms behind makes `updated_at > marketplace_pulled_at` true on a
+                // row nobody has touched, which reads as "Owner edited" forever and
+                // silently stops every future upgrade.
+                marketplace_pulled_at: provenance ? sql<string>`now()` : null,
             })
             .execute();
         broadcastWorkflowsChanged();
@@ -298,6 +371,36 @@ export const workflowsService = {
             .sort((a, b) => a.name.localeCompare(b.name));
     },
 
+    /**
+     * `template:<id>` → that template's workflow in this project, created from
+     * the template when the project lacks it. Shared by create and upgrade so
+     * the two can never disagree about which workflow a Sub-tasks step means.
+     *
+     * Matched on `marketplace_source_id`, not on name. Name-matching meant
+     * renaming "Build sub-task" made the next Delivery create a second copy
+     * instead of reusing it, and conversely any workflow that happened to carry
+     * the template's name was adopted as a build step whatever its graph
+     * contained. The name fallback stays for rows created before provenance
+     * existed.
+     */
+    async resolveTemplateRef(ref: string | undefined, projectId: string): Promise<string | undefined> {
+        if (!ref?.startsWith(TEMPLATE_REF)) return ref;
+        const childTemplate = this.listTemplates().find((t) => `${TEMPLATE_REF}${t.id}` === ref);
+        if (!childTemplate) return undefined;
+        const existing = await db
+            .selectFrom('workflows')
+            .select('id')
+            .where('project_id', '=', projectId)
+            .where((eb) =>
+                eb.or([
+                    eb('marketplace_source_id', '=', childTemplate.id),
+                    eb.and([eb('marketplace_source_id', 'is', null), eb('name', '=', childTemplate.name)]),
+                ])
+            )
+            .executeTakeFirst();
+        return (existing ?? (await this.createFromTemplate(childTemplate.id, projectId))).id;
+    },
+
     /** Installs any catalog agents the template needs, then creates the workflow. */
     async createFromTemplate(templateId: string, projectId: string): Promise<IWorkflow> {
         const template = this.listTemplates().find((t) => t.id === templateId);
@@ -305,35 +408,39 @@ export const workflowsService = {
         const project = await db.selectFrom('projects').select('id').where('id', '=', projectId).executeTakeFirst();
         if (!project) throw new ApiError('not_found', 'Project not found', 404);
 
-        const agentIds = [...new Set(template.graph.nodes.flatMap((n) => (n.agent_id ? [n.agent_id] : [])))];
-        for (const agentId of agentIds) {
-            const exists = await db.selectFrom('agents').select('id').where('id', '=', agentId).executeTakeFirst();
-            if (!exists) await marketplaceService.install(agentId);
-        }
-        // Some catalog agents ship `inactive` (a leftover from per-agent
-        // schedules); the engine parks on an inactive agent, so a workflow made
-        // from a template would never run.
-        if (agentIds.length > 0) {
-            await db.updateTable('agents').set({ status: 'active' }).where('id', 'in', agentIds).where('status', '!=', 'active').execute();
-        }
+        // Every agent this template needs, ITS SUB-TEMPLATES' INCLUDED.
+        // Scanning only `template.graph` under-reported badly: Delivery's own
+        // graph names four agents, but running it needs ten — the other six
+        // belong to the Build and Test sub-templates. They used to arrive only
+        // as a side effect of the recursive call below, and not at all when the
+        // project already had a sub-workflow, so a stale sub-workflow left its
+        // agents uninstalled and the run parked on a missing agent.
+        const agentIds = [...new Set(this.templateAgentIds(templateId))];
+        // Installs what's missing and brings back-linked, unedited agents up to
+        // the catalog. Previously this only checked existence, so a template
+        // could be applied onto agents several versions behind the graph it
+        // shipped with — silently, and with no way to tell. Agents the Owner
+        // has edited are left exactly as they are.
+        // Activates what it installs (a brand-new agent's `inactive` is a
+        // manifest leftover, not a decision) and leaves an agent the Owner
+        // paused alone, reporting it instead. The blanket "activate every agent
+        // the graph names" that used to sit here silently undid that pause; the
+        // builder now warns on the step itself, which covers the hand-built and
+        // imported paths too.
+        await marketplaceService.resolveAgentDependencies(agentIds, { link: true });
 
-        // `template:<id>` → that template's workflow in this project, by name,
-        // created from the template when the project lacks it.
-        const resolveRef = async (ref: string | undefined): Promise<string | undefined> => {
-            if (!ref?.startsWith(TEMPLATE_REF)) return ref;
-            const childTemplate = this.listTemplates().find((t) => `${TEMPLATE_REF}${t.id}` === ref);
-            if (!childTemplate) return undefined;
-            const existing = await db
-                .selectFrom('workflows')
-                .select('id')
-                .where('project_id', '=', projectId)
-                .where('name', '=', childTemplate.name)
-                .executeTakeFirst();
-            return (existing ?? (await this.createFromTemplate(childTemplate.id, projectId))).id;
-        };
+        // `template:<id>` → that template's workflow in this project, created
+        // from the template when the project lacks it.
+        //
+        // Matched on `marketplace_source_id`, not on name. Name-matching meant
+        // renaming "Build sub-task" made the next Delivery create a second copy
+        // instead of reusing it, and conversely any workflow that happened to
+        // carry the template's name was adopted as a build step whatever its
+        // graph contained. The name fallback stays for rows created before
+        // provenance existed.
         const nodes = [];
         for (const { sub_workflow_id, ...rest } of template.graph.nodes) {
-            const sub = await resolveRef(sub_workflow_id);
+            const sub = await this.resolveTemplateRef(sub_workflow_id, projectId);
             nodes.push({ ...rest, ...(sub ? { sub_workflow_id: sub } : {}) });
         }
 
@@ -348,7 +455,116 @@ export const workflowsService = {
             raises_pr: template.raises_pr,
             push_to_default: template.push_to_default ?? false,
             graph: { nodes, edges: template.graph.edges },
-        });
+        }, { source_id: template.id, pulled_version: template.version });
+    },
+
+    /**
+     * Every agent id a template needs to run, walking its `template:` sub-refs.
+     *
+     * The web has had this rollup for a while (`pages/workflows/labels.ts`
+     * `templateAgentIds`) and used it for display; the API did not, which is
+     * why `createFromTemplate` installed four agents for Delivery when running
+     * it needs ten. One level of recursion is enough: a `sub_task` workflow
+     * cannot itself carry Sub-tasks steps (`validateWorkflowGraph`).
+     */
+    templateAgentIds(templateId: string): string[] {
+        const templates = this.listTemplates();
+        const root = templates.find((t) => t.id === templateId);
+        if (!root) return [];
+        const graphs = [root.graph];
+        for (const node of root.graph.nodes) {
+            const ref = node.sub_workflow_id;
+            if (!ref?.startsWith(TEMPLATE_REF)) continue;
+            const child = templates.find((t) => `${TEMPLATE_REF}${t.id}` === ref);
+            if (child) graphs.push(child.graph);
+        }
+        return [...new Set(graphs.flatMap((g) => g.nodes.flatMap((n) => (n.agent_id ? [n.agent_id] : []))))];
+    },
+
+    /**
+     * Has this workflow been edited since it last took its upstream?
+     *
+     * The `workflows_set_updated_at` trigger moves `updated_at` on every write,
+     * including the upgrade's own, which is why the comparison is against
+     * `marketplace_pulled_at` rather than `created_at`: the upgrade sets both
+     * together, so the baseline resets and an upgraded workflow does not read as
+     * edited forever after.
+     */
+    isEditedSincePull(w: IWorkflow): boolean {
+        if (!w.marketplace_pulled_at) return false;
+        return new Date(w.updated_at).getTime() > new Date(w.marketplace_pulled_at).getTime();
+    },
+
+    /**
+     * Overwrite a workflow's portable fields and graph from its source, and
+     * reset the pull baseline. Shared by both upgrade paths so a template
+     * upgrade and a published-entry upgrade cannot drift apart.
+     */
+    async applySource(
+        id: string,
+        source: { name: string; description?: string | null | undefined },
+        graph: IWorkflowGraph,
+        version: number
+    ): Promise<void> {
+        const wf = await this.get(id);
+        if (!wf) throw new ApiError('not_found', 'Workflow not found', 404);
+        await assertValidGraph(graph, { input_kind: wf.input_kind, project_id: wf.project_id, id });
+        await db
+            .updateTable('workflows')
+            .set({
+                description: source.description ?? null,
+                graph: JSON.stringify(graph),
+                marketplace_pulled_version: version,
+                // Same statement AND the same clock as the trigger's `updated_at`.
+                // now() is fixed for the transaction, so the two are identical and
+                // the row reads as untouched immediately after an upgrade.
+                marketplace_pulled_at: sql<string>`now()`,
+            })
+            .where('id', '=', id)
+            .execute();
+        broadcastWorkflowsChanged();
+    },
+
+    /**
+     * Re-apply a template to the workflow that came from it.
+     *
+     * Explicit, so it applies whatever the Owner has changed — asking for an
+     * upgrade IS the decision. The automatic path (import) is the one that
+     * checks `isEditedSincePull` first, because there nobody asked.
+     */
+    async upgradeFromTemplate(id: string): Promise<IWorkflow> {
+        const wf = await this.get(id);
+        if (!wf) throw new ApiError('not_found', 'Workflow not found', 404);
+        if (!wf.marketplace_source_id) {
+            throw new ApiError('validation_error', 'This workflow did not come from the marketplace', 400);
+        }
+        const template = this.listTemplates().find((t) => t.id === wf.marketplace_source_id);
+        if (!template) throw new ApiError('not_found', 'Template not found', 404);
+        if (!wf.project_id) throw new ApiError('validation_error', 'Workflow has no project', 400);
+
+        // Same closure the initial create resolves, so an upgrade can never
+        // leave the graph pointing at an agent that was added upstream.
+        await marketplaceService.resolveAgentDependencies(this.templateAgentIds(template.id), { link: true });
+
+        const nodes = [];
+        for (const { sub_workflow_id, ...rest } of template.graph.nodes) {
+            const sub = await this.resolveTemplateRef(sub_workflow_id, wf.project_id);
+            nodes.push({ ...rest, ...(sub ? { sub_workflow_id: sub } : {}) });
+        }
+        const graph = { nodes, edges: template.graph.edges };
+        await assertValidGraph(graph, { input_kind: template.input_kind, project_id: wf.project_id, id });
+        await db
+            .updateTable('workflows')
+            .set({
+                description: template.description,
+                graph: JSON.stringify(graph),
+                marketplace_pulled_version: template.version,
+                marketplace_pulled_at: sql<string>`now()`,
+            })
+            .where('id', '=', id)
+            .execute();
+        broadcastWorkflowsChanged();
+        return (await this.get(id)) as IWorkflow;
     },
 
     async listRuns(workflowId: string, limit = 50): Promise<IWorkflowRunSummary[]> {

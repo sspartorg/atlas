@@ -704,6 +704,9 @@ export interface WorkflowsTable {
     cron_expr: StrN;
     next_run_at: TSn;
     last_run_at: TSn;
+    marketplace_source_id: StrN;
+    marketplace_pulled_version: IntN;
+    marketplace_pulled_at: TSn;
     created_at: CreatedAt;
     updated_at: UpdatedAt;
 }
@@ -743,6 +746,7 @@ export interface PublishedWorkflowsTable {
     description: StrN;
     source_workflow_id: StrN;
     bundle: Buffer;
+    version: Int;
     published_at: CreatedAt;
     updated_at: UpdatedAt;
 }

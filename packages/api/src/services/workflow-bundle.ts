@@ -17,6 +17,7 @@ import {
     WorkflowGraphSchema,
     type IPublishedWorkflow,
     type IPublishedWorkflowDetail,
+    type IWorkflow,
     type IWorkflowGraph,
     type IWorkflowImportResult,
 } from '@atlas/shared';
@@ -185,7 +186,18 @@ export async function unpackWorkflowBundle(data: Buffer | Uint8Array): Promise<W
  * are reused untouched; missing ones are imported from the bundle. All or
  * nothing: a failure deletes whatever this import created.
  */
-export async function importWorkflowBundle(bundle: WorkflowBundle, projectId: string): Promise<IWorkflowImportResult> {
+/**
+ * `source` is set when the bundle came from a marketplace entry rather than an
+ * uploaded file, and is what lets the imported workflow be upgraded later. An
+ * uploaded zip passes nothing: it came from "somewhere else" and has no
+ * upstream to track, exactly as `marketplaceService.importBundle` treats the
+ * agents inside it.
+ */
+export async function importWorkflowBundle(
+    bundle: WorkflowBundle,
+    projectId: string,
+    source?: { id: string; version: number }
+): Promise<IWorkflowImportResult> {
     const project = await db.selectFrom('projects').select('id').where('id', '=', projectId).executeTakeFirst();
     if (!project) throw new ApiError('not_found', 'Project not found', 404);
 
@@ -196,7 +208,10 @@ export async function importWorkflowBundle(bundle: WorkflowBundle, projectId: st
     const names = new Set((await db.selectFrom('workflows').select('name').where('project_id', '=', projectId).execute()).map((w) => w.name));
     const installed: string[] = [];
     const created: string[] = [];
-    const create = async (w: PortableWorkflow, graph: IWorkflowGraph) => {
+    const upgradedWorkflows: string[] = [];
+    const skippedWorkflows: string[] = [];
+    const reusedWorkflows: string[] = [];
+    const create = async (w: PortableWorkflow, graph: IWorkflowGraph, provenance?: { source_id: string; pulled_version: number }) => {
         // A scheduled workflow would start firing agents on its own; it
         // arrives paused so the Owner turns it on after a look.
         const wf = await workflowsService.create({
@@ -205,7 +220,7 @@ export async function importWorkflowBundle(bundle: WorkflowBundle, projectId: st
             name: uniqueName(w.name, names),
             project_id: projectId,
             status: w.trigger === 'schedule' ? 'inactive' : 'active',
-        });
+        }, provenance);
         created.push(wf.id);
         return wf;
     };
@@ -213,27 +228,96 @@ export async function importWorkflowBundle(bundle: WorkflowBundle, projectId: st
     // workflowsService.create and marketplaceService.importBundle each commit
     // on their own, so the rollback is explicit.
     try {
-        for (const [id, agent] of bundle.agents) {
-            if (existing.has(id)) continue;
-            await marketplaceService.importBundle(agent, { agent_id: id });
-            installed.push(id);
-        }
+        // Missing agents come from the BUNDLE, not the catalog: an uploaded
+        // zip may reference agents the catalog has never heard of, and those
+        // stay deliberately un-back-linked (`importBundle` nulls provenance).
+        //
+        // Agents that are already here are a different question, and the old
+        // `if (existing.has(id)) continue;` answered it wrongly — it skipped
+        // them whatever version they were, so a workflow could import
+        // "successfully" onto agents that no longer matched the graph it
+        // shipped with. `link` lets a catalog-linked one be brought up to date,
+        // unless the Owner has edited it.
+        const agentReport = await marketplaceService.resolveAgentDependencies([...bundle.agents.keys()], {
+            install: async (id) => {
+                const agent = bundle.agents.get(id);
+                /* v8 ignore next -- id comes from bundle.agents.keys(), so the lookup always hits */
+                if (!agent) return;
+                await marketplaceService.importBundle(agent, { agent_id: id });
+            },
+            link: true,
+        });
+        installed.push(...agentReport.installed);
         // The engine parks on an inactive agent (same as createFromTemplate).
         if (installed.length > 0) await db.updateTable('agents').set({ status: 'active' }).where('id', 'in', installed).execute();
+
+        // Reuse-or-create, keyed on provenance. Importing the same marketplace
+        // entry twice used to fork the whole tree -- "Delivery (imported)",
+        // "Test sub-task (imported 2)" -- and every copy landed with a NULL
+        // source id, so the duplicates were unupgradable as well as unwanted.
+        //
+        // Only marketplace-sourced imports reuse. An uploaded zip keeps the old
+        // suffixing behaviour: it came from somewhere else, has no upstream, and
+        // two uploads of two different files that happen to share a name are
+        // genuinely two workflows.
+        const reuseOrCreate = async (
+            w: PortableWorkflow,
+            graph: IWorkflowGraph,
+            sourceId: string | null
+        ): Promise<IWorkflow> => {
+            if (!source || !sourceId) return create(w, graph);
+            const existing = await db
+                .selectFrom('workflows')
+                .select('id')
+                .where('project_id', '=', projectId)
+                .where('marketplace_source_id', '=', sourceId)
+                .executeTakeFirst();
+            if (!existing) {
+                return create(w, graph, { source_id: sourceId, pulled_version: source.version });
+            }
+            const current = await workflowsService.get(existing.id);
+            /* v8 ignore next -- the row was just selected, so it resolves */
+            if (!current) return create(w, graph, { source_id: sourceId, pulled_version: source.version });
+            // Behind and untouched -> bring it up. Edited since it was pulled ->
+            // leave it exactly as the Owner left it and report it; the explicit
+            // upgrade endpoint is still there when they want it.
+            const stale = (current.marketplace_pulled_version ?? 0) < source.version;
+            if (stale && !workflowsService.isEditedSincePull(current)) {
+                await workflowsService.applySource(existing.id, w, graph, source.version);
+                upgradedWorkflows.push(existing.id);
+                return (await workflowsService.get(existing.id)) as IWorkflow;
+            }
+            if (stale) skippedWorkflows.push(existing.id);
+            reusedWorkflows.push(existing.id);
+            return current;
+        };
 
         const subIds = new Map<string, string>();
         const sub_workflows = [];
         for (const [ref, sub] of bundle.sub_workflows) {
-            const wf = await create(sub, sub.graph);
+            // A sub-workflow belongs to the entry rather than being one, so its
+            // id is scoped to the entry it arrived in.
+            const wf = await reuseOrCreate(sub, sub.graph, source ? `${source.id}:${ref}` : null);
             subIds.set(ref, wf.id);
             sub_workflows.push(wf);
         }
-        const workflow = await create(bundle.workflow, remapSubs(bundle.workflow.graph, subIds));
+        const workflow = await reuseOrCreate(
+            bundle.workflow,
+            remapSubs(bundle.workflow.graph, subIds),
+            source ? source.id : null
+        );
         return {
             workflow,
             sub_workflows,
             installed_agents: installed,
             reused_agents: agentIds.filter((id) => existing.has(id)),
+            agents: agentReport,
+            workflows: {
+                created,
+                upgraded: upgradedWorkflows,
+                reused: reusedWorkflows,
+                skipped_edited: skippedWorkflows,
+            },
         };
     } catch (err) {
         if (created.length > 0) await db.deleteFrom('workflows').where('id', 'in', created).execute();
@@ -257,6 +341,7 @@ function publishedEntry(row: PublishedRow, bundle: WorkflowBundle): IPublishedWo
         name: row.name,
         description: row.description,
         source_workflow_id: row.source_workflow_id,
+        version: row.version,
         input_kind: w.input_kind,
         // Defaults mirror workflowsService.create.
         trigger: w.trigger ?? 'manual',
@@ -283,7 +368,16 @@ export async function publishWorkflow(workflowId: string): Promise<IPublishedWor
     const row = await db
         .insertInto('published_workflows')
         .values({ id: randomUUID(), source_workflow_id: workflowId, ...fields })
-        .onConflict((oc) => oc.column('source_workflow_id').doUpdateSet({ ...fields, updated_at: sql<string>`now()` }))
+        // Republish bumps `version`. The row is overwritten in place, so
+        // without a counter an install that used this entry yesterday had no
+        // way to tell it changed today — the bundle bytes simply differ.
+        .onConflict((oc) =>
+            oc.column('source_workflow_id').doUpdateSet({
+                ...fields,
+                version: sql<number>`published_workflows.version + 1`,
+                updated_at: sql<string>`now()`,
+            })
+        )
         .returningAll()
         .executeTakeFirstOrThrow();
     return publishedEntry(row, bundle);
@@ -313,7 +407,65 @@ export async function publishedWorkflowZip(id: string): Promise<{ filename: stri
 
 export async function importPublishedWorkflow(id: string, projectId: string): Promise<IWorkflowImportResult> {
     const row = await publishedRow(id);
-    return importWorkflowBundle(await unpackWorkflowBundle(row.bundle), projectId);
+    // The imported workflow stays linked to the entry it came from, so a
+    // republish (which bumps `published_workflows.version`) can be detected.
+    return importWorkflowBundle(await unpackWorkflowBundle(row.bundle), projectId, {
+        id: row.id,
+        version: row.version,
+    });
+}
+
+/**
+ * Re-apply a published entry to the workflow that came from it.
+ *
+ * The entry's graph lives in the stored bundle, so this unpacks it, resolves
+ * its sub-refs against the sub-workflows this project already has from the same
+ * entry (creating any the entry has since gained), and writes the result.
+ *
+ * Explicit, like the template counterpart: the Owner asked, so it applies even
+ * over local edits. Resolving dependencies first means an upgrade can never
+ * leave the graph pointing at an agent or sub-workflow that does not exist.
+ */
+export async function upgradeFromPublished(workflowId: string): Promise<IWorkflow> {
+    const wf = await workflowsService.get(workflowId);
+    if (!wf) throw new ApiError('not_found', 'Workflow not found', 404);
+    if (!wf.marketplace_source_id) throw new ApiError('validation_error', 'This workflow did not come from the marketplace', 400);
+    if (!wf.project_id) throw new ApiError('validation_error', 'Workflow has no project', 400);
+    const row = await publishedRow(wf.marketplace_source_id);
+    const bundle = await unpackWorkflowBundle(row.bundle);
+
+    await marketplaceService.resolveAgentDependencies([...bundle.agents.keys()], {
+        install: async (id) => {
+            const agent = bundle.agents.get(id);
+            /* v8 ignore next -- id comes from bundle.agents.keys() */
+            if (!agent) return;
+            await marketplaceService.importBundle(agent, { agent_id: id });
+        },
+        link: true,
+    });
+
+    const subIds = new Map<string, string>();
+    for (const [ref, sub] of bundle.sub_workflows) {
+        const sourceId = `${row.id}:${ref}`;
+        const existing = await db
+            .selectFrom('workflows')
+            .select('id')
+            .where('project_id', '=', wf.project_id)
+            .where('marketplace_source_id', '=', sourceId)
+            .executeTakeFirst();
+        if (existing) {
+            await workflowsService.applySource(existing.id, sub, sub.graph, row.version);
+            subIds.set(ref, existing.id);
+        } else {
+            const made = await workflowsService.create(
+                { ...sub, graph: sub.graph, project_id: wf.project_id, status: sub.trigger === 'schedule' ? 'inactive' : 'active' },
+                { source_id: sourceId, pulled_version: row.version }
+            );
+            subIds.set(ref, made.id);
+        }
+    }
+    await workflowsService.applySource(workflowId, bundle.workflow, remapSubs(bundle.workflow.graph, subIds), row.version);
+    return (await workflowsService.get(workflowId)) as IWorkflow;
 }
 
 export async function unpublishWorkflow(id: string): Promise<void> {

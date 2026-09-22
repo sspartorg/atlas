@@ -2,6 +2,7 @@
     "id": "delivery",
     "name": "Delivery",
     "description": "PO Writer splits a Task into sub-tasks and the Architect specs them. Then every dev sub-task is built and every [QA] sub-task tested, one at a time on the Task's branch, and the Task ends as one pull request. Unclear Tasks come back to you.",
+    "version": 1,
     "input_kind": "item",
     "trigger": "item_ready",
     "use_worktree": true,

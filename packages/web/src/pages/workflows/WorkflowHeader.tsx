@@ -7,7 +7,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Link from '@mui/material/Link';
 import type { IWorkflow } from '@atlas/shared';
 import { api } from '../../api/api.js';
-import { usePublishWorkflow } from '../../hooks/useWorkflows.js';
+import { usePublishWorkflow, useUpgradeWorkflow } from '../../hooks/useWorkflows.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { INPUT_KIND_LABEL, TRIGGER_LABEL, deliveryLabel } from './labels.js';
@@ -51,6 +51,22 @@ export function WorkflowHeader({
     const active = wf.status === 'active';
     const toast = useToast();
     const publish = usePublishWorkflow();
+    const upgrade = useUpgradeWorkflow();
+
+    // Pulling the source again replaces the graph, so it stays an explicit
+    // action with its own confirmation copy. The automatic path (import) only
+    // upgrades a workflow nobody has edited since it was pulled.
+    async function handleUpgrade() {
+        try {
+            await upgrade.mutateAsync(wf.id);
+            toast.show({ message: 'Upgraded from the marketplace' });
+        } catch (err) {
+            toast.show({
+                message: 'Could not upgrade workflow',
+                detail: err instanceof Error ? err.message : String(err),
+            });
+        }
+    }
 
     async function handlePublish() {
         try {
@@ -159,6 +175,21 @@ export function WorkflowHeader({
                         </Button>
                     </Box>
                 </Tooltip>
+                {wf.upgrade_available && (
+                    <Tooltip title="This workflow's marketplace source has a newer version">
+                        <Box component="span">
+                            <Button
+                                variant="contained"
+                                onClick={() => void handleUpgrade()}
+                                disabled={upgrade.isPending}
+                                startIcon={<Icon name="upgrade" />}
+                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                            >
+                                {upgrade.isPending ? 'Upgrading…' : 'Upgrade available'}
+                            </Button>
+                        </Box>
+                    </Tooltip>
+                )}
                 <Tooltip title={dirty ? 'Save your changes before exporting' : ''}>
                     <Box component="span">
                         <Button

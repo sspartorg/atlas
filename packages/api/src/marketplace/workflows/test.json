@@ -2,6 +2,7 @@
     "id": "test",
     "name": "Test sub-task",
     "description": "Runs inside a Task's Delivery workflow, once per [QA] sub-task: QA Writer plans the tests, a reviewer checks the plan, Automation writes them and a reviewer approves — on the Task's branch, after the dev work is built.",
+    "version": 1,
     "input_kind": "sub_task",
     "trigger": "manual",
     "use_worktree": true,

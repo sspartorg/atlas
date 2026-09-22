@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import JSZip from 'jszip';
-import type { IPublishedWorkflow, IPublishedWorkflowDetail, IWorkflow, IWorkflowImportResult } from '@atlas/shared';
+import type { IPublishedWorkflow, IPublishedWorkflowDetail, IWorkflow, IWorkflowGraph, IWorkflowImportResult } from '@atlas/shared';
 
 vi.mock('../routes/events.js', () => ({ eventsRoutes: async () => undefined, broadcastSSE: vi.fn() }));
 
@@ -394,6 +394,42 @@ describe('GET /api/workflows/templates/:id/export', () => {
         for (const s of steps) expect(subIds.has(s.sub_workflow_id ?? '')).toBe(true);
     });
 
+    // The guarantee behind "imports never leave you with something missing":
+    // after an import, nothing in any stored graph may still point at a
+    // bundle-local ref, and every agent a graph names must exist.
+    it('leaves no unresolved reference behind after importing Delivery', async () => {
+        await resetToEmptyInstall();
+        await seedCatalog(DELIVERY_AGENTS);
+        const res = await importZip(await exportZip('/api/workflows/templates/delivery/export'), 'p1');
+        expect(res.statusCode).toBe(201);
+
+        const stored = await testDb.selectFrom('workflows').select(['id', 'graph']).execute();
+        const agentIds = new Set((await testDb.selectFrom('agents').select('id').execute()).map((a) => a.id));
+        const workflowIds = new Set(stored.map((w) => w.id));
+        for (const wf of stored) {
+            const graph = wf.graph as unknown as IWorkflowGraph;
+            for (const node of graph.nodes) {
+                if (node.agent_id) expect(agentIds.has(node.agent_id)).toBe(true);
+                if (node.sub_workflow_id) {
+                    // No `template:` or bundle-local ref may survive the import.
+                    expect(node.sub_workflow_id.includes(':')).toBe(false);
+                    expect(workflowIds.has(node.sub_workflow_id)).toBe(true);
+                }
+            }
+        }
+    });
+
+    // Import used to say nothing about what it did to existing agents.
+    it('reports what it installed, upgraded and left alone', async () => {
+        await resetToEmptyInstall();
+        await seedCatalog(DELIVERY_AGENTS);
+        const zipBuf = await exportZip('/api/workflows/templates/delivery/export');
+        const result = (await importZip(zipBuf, 'p1')).json() as IWorkflowImportResult;
+        expect(result.agents.installed.sort()).toEqual([...DELIVERY_AGENTS].sort());
+        expect(result.agents.upgraded).toEqual([]);
+        expect(result.agents.skipped_edited).toEqual([]);
+    });
+
     it('404s for an unknown template or a catalog agent that is missing', async () => {
         expect((await app.inject({ method: 'GET', url: '/api/workflows/templates/nope/export' })).statusCode).toBe(404);
         const res = await app.inject({ method: 'GET', url: '/api/workflows/templates/ai-readiness/export' });
@@ -406,6 +442,137 @@ describe('published workflows (Marketplace)', () => {
     async function publish(workflowId: string) {
         return app.inject({ method: 'POST', url: `/api/workflows/${workflowId}/publish` });
     }
+
+    // A published entry is overwritten in place on republish, so the version
+    // counter is the only way a consumer can tell the entry moved. And what
+    // gets imported must stay linked to it, or it can never be upgraded.
+    // Using the same entry twice used to fork the whole tree — "Delivery
+    // (imported)", "Test sub-task (imported 2)" — and every copy landed with a
+    // NULL source id, so the duplicates were unupgradable as well as unwanted.
+    it('reuses the same entry on a second use instead of forking duplicates', async () => {
+        const { main } = await seedDelivery();
+        const entry = (await publish(main.id)).json() as IPublishedWorkflow;
+        const use = async () =>
+            app.inject({ method: 'POST', url: `/api/marketplace/workflows/${entry.id}/use`, payload: { project_id: 'p2' } });
+
+        const first = (await use()).json() as IWorkflowImportResult;
+        const second = (await use()).json() as IWorkflowImportResult;
+
+        // Same rows both times, not a second tree.
+        expect(second.workflow.id).toBe(first.workflow.id);
+        expect(second.workflows.created).toEqual([]);
+        expect(second.sub_workflows.map((w) => w.id).sort()).toEqual(first.sub_workflows.map((w) => w.id).sort());
+
+        const inProject = await testDb.selectFrom('workflows').select(['id', 'name', 'marketplace_source_id']).where('project_id', '=', 'p2').execute();
+        expect(inProject).toHaveLength(first.sub_workflows.length + 1);
+        // And every one of them is linked, so every one can be upgraded.
+        expect(inProject.filter((w) => w.marketplace_source_id == null)).toEqual([]);
+        expect(inProject.filter((w) => w.name.includes('(imported'))).toEqual([]);
+    });
+
+    // The explicit upgrade is the Owner's call and applies over local edits;
+    // the automatic one (import) must not.
+    it('flags an upgrade when the entry moves, and applies it on request', async () => {
+        const { main } = await seedDelivery();
+        const entry = (await publish(main.id)).json() as IPublishedWorkflow;
+        const used = (await app.inject({ method: 'POST', url: `/api/marketplace/workflows/${entry.id}/use`, payload: { project_id: 'p2' } })).json() as IWorkflowImportResult;
+        expect(used.workflow.upgrade_available).toBe(false);
+
+        // Republish bumps the entry to v2.
+        await publish(main.id);
+        const before = (await app.inject({ method: 'GET', url: `/api/workflows/${used.workflow.id}` })).json() as IWorkflow;
+        expect(before.upgrade_available).toBe(true);
+        expect(before.marketplace_pulled_version).toBe(1);
+
+        const upgraded = (await app.inject({ method: 'POST', url: `/api/workflows/${used.workflow.id}/upgrade` })).json() as IWorkflow;
+        expect(upgraded.marketplace_pulled_version).toBe(2);
+        expect(upgraded.upgrade_available).toBe(false);
+    });
+
+    // An upgrade re-creates a sub-workflow the project no longer has. Reusing
+    // one when it is there is the common case and covered above; this is the
+    // other branch — the Owner deleted it, or the entry grew a sub-workflow
+    // after they imported. Either way the upgraded graph must not be left
+    // pointing at something that is not there.
+    it('re-creates a sub-workflow the project no longer has when upgrading', async () => {
+        const { main } = await seedDelivery();
+        const entry = (await publish(main.id)).json() as IPublishedWorkflow;
+        const used = (await app.inject({ method: 'POST', url: `/api/marketplace/workflows/${entry.id}/use`, payload: { project_id: 'p2' } })).json() as IWorkflowImportResult;
+        expect(used.sub_workflows).toHaveLength(1);
+        const gone = used.sub_workflows[0]!;
+
+        // Delete it behind the route's back: DELETE refuses while a Sub-tasks
+        // step names it, which is exactly the state we need to recover from.
+        await testDb.deleteFrom('workflows').where('id', '=', gone.id).execute();
+        await publish(main.id);
+
+        const upgraded = (await app.inject({ method: 'POST', url: `/api/workflows/${used.workflow.id}/upgrade` })).json() as IWorkflow;
+
+        const subs = await testDb.selectFrom('workflows').select(['id', 'marketplace_source_id']).where('project_id', '=', 'p2').where('input_kind', '=', 'sub_task').execute();
+        expect(subs).toHaveLength(1);
+        // Same provenance as the row it replaces, so the NEXT upgrade reuses it.
+        expect(subs[0]!.marketplace_source_id).toBe(gone.marketplace_source_id);
+        expect(subs[0]!.marketplace_source_id).toBe(`${entry.id}:build`);
+        // The step points at the NEW row, not the deleted id.
+        const step = (upgraded.graph.nodes as Array<{ type: string; sub_workflow_id?: string }>).find((n) => n.type === 'subtasks');
+        expect(step?.sub_workflow_id).toBe(subs[0]!.id);
+        expect(step?.sub_workflow_id).not.toBe(gone.id);
+    });
+
+    // Regression: `marketplace_pulled_at` must come from the DB clock, the same
+    // one the `workflows_set_updated_at` trigger writes `updated_at` with. A
+    // JS-generated timestamp a few ms behind makes `updated_at > pulled_at` on a
+    // row nobody has touched — it reads as "Owner edited" forever and silently
+    // stops taking upgrades. Caught live: a re-import reported all three
+    // workflows as skipped_edited when only one had been edited.
+    it('treats an untouched workflow as untouched, so it still upgrades', async () => {
+        const { main } = await seedDelivery();
+        const entry = (await publish(main.id)).json() as IPublishedWorkflow;
+        const use = async () =>
+            (await app.inject({ method: 'POST', url: `/api/marketplace/workflows/${entry.id}/use`, payload: { project_id: 'p2' } })).json() as IWorkflowImportResult;
+
+        const first = await use();
+        await publish(main.id); // entry -> v2
+
+        const second = await use();
+        // Nothing was edited, so nothing may be skipped.
+        expect(second.workflows.skipped_edited).toEqual([]);
+        expect(second.workflows.upgraded).toContain(first.workflow.id);
+        for (const sub of first.sub_workflows) expect(second.workflows.upgraded).toContain(sub.id);
+    });
+
+    // A workflow the Owner has edited is left exactly as they left it.
+    it('leaves a locally edited workflow alone when the entry moves', async () => {
+        const { main } = await seedDelivery();
+        const entry = (await publish(main.id)).json() as IPublishedWorkflow;
+        const used = (await app.inject({ method: 'POST', url: `/api/marketplace/workflows/${entry.id}/use`, payload: { project_id: 'p2' } })).json() as IWorkflowImportResult;
+
+        await app.inject({ method: 'PATCH', url: `/api/workflows/${used.workflow.id}`, payload: { description: 'my own notes' } });
+        await publish(main.id);
+
+        const again = (await app.inject({ method: 'POST', url: `/api/marketplace/workflows/${entry.id}/use`, payload: { project_id: 'p2' } })).json() as IWorkflowImportResult;
+        expect(again.workflows.skipped_edited).toContain(used.workflow.id);
+        expect(again.workflows.upgraded).not.toContain(used.workflow.id);
+        const after = (await app.inject({ method: 'GET', url: `/api/workflows/${used.workflow.id}` })).json() as IWorkflow;
+        expect(after.description).toBe('my own notes');
+        // Still offered, so nothing is lost.
+        expect(after.upgrade_available).toBe(true);
+    });
+
+    it('bumps the version on republish, and links what it imports back to the entry', async () => {
+        const { main } = await seedDelivery();
+        const first = (await publish(main.id)).json() as IPublishedWorkflow;
+        expect(first.version).toBe(1);
+        const again = (await publish(main.id)).json() as IPublishedWorkflow;
+        expect(again.version).toBe(2);
+        expect(again.id).toBe(first.id);
+
+        const used = await app.inject({ method: 'POST', url: `/api/marketplace/workflows/${first.id}/use`, payload: { project_id: 'p1' } });
+        expect(used.statusCode).toBe(201);
+        const imported = (used.json() as IWorkflowImportResult).workflow;
+        expect(imported.marketplace_source_id).toBe(first.id);
+        expect(imported.marketplace_pulled_version).toBe(2);
+    });
 
     it('publishes the export bundle and reads the entry back from it', async () => {
         const { main } = await seedDelivery();

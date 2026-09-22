@@ -241,3 +241,132 @@ ATL-1 + ATL-2 + ATL-3 all `in_review` behind PR #17 — ready to walk.
 **Nothing was pushed.** `sspartorg/atlas` is public and `main` is protected, and
 a push could not be approved while the Owner slept. All fixes sit on the local
 branch `walkthrough/2026-09-22-fixes`.
+
+---
+
+# Part two — marketplace import, versioning and dependency resolution
+
+After a second full reset (docker removed by name, workspaces and sandbox
+projects cleared, DB rebuilt), the Owner walked the app and reported four
+problems. All four are fixed on `feat/marketplace-import-and-v1-baseline`.
+
+## 1. A first-ever seed showed agents at v3, v4, v6
+
+Development history had leaked into the shipped catalog. All 16 agent manifests
+and the 4 workflow templates now declare `version: 1`.
+
+Resetting the manifests alone would have been worse than leaving it: the seed
+upserts unconditionally, so an agent already installed at v6 keeps a
+`marketplace_pulled_version` of 6 against a catalog of 1, and the upgrade gate
+`installed_version < catalogVersion` never fires again — silently, permanently.
+Migration `006` clamps those pointers back to 1. It is a no-op on a fresh
+install, which is exactly when it is cheapest to have.
+
+## 2. Each empty state offered only half the way out
+
+Agents offered *Browse marketplace*; Workflows offered *New workflow*. Both now
+offer **Create new** and **Browse marketplace**, through the existing
+`EmptyState.actions` row — no new primitive. The Workflows create action is
+labelled "Create new" rather than "New workflow" deliberately: the page already
+has a header button and a FAB with that accessible name, and a third exact match
+turns an existing test's `getByRole` into "found multiple elements". That is the
+test catching a real ambiguity for a screen-reader user, not a test to work
+around.
+
+## 3. A workflow could be used from the marketplace but never imported
+
+Agents carried `marketplace_source_id` + `marketplace_pulled_version` and got
+upgrades. Workflows carried nothing, so a workflow made from a template was a
+detached copy from the moment it was written. Migration `007` gives workflows
+the same two columns and `published_workflows` a `version`, bumped on every
+republish — without that bump a republish is invisible to every project that
+already imported it.
+
+Upgrading a workflow means replacing its graph, so it needs the same protection
+agent upgrades have: never throw away the Owner's work. Agents answer "has the
+Owner edited this?" from `agent_prompt_versions.edited_by`; workflows had no
+such history, and `updated_at` alone cannot answer it — the
+`workflows_set_updated_at` trigger moves it on the upgrade's own write, which
+would make every upgraded workflow look edited and freeze it permanently.
+Migration `008` adds `marketplace_pulled_at`, so "untouched since pull" is
+`updated_at <= marketplace_pulled_at` and survives any number of upgrades.
+
+This one bit during live testing before it was understood: an import reported
+`skipped_edited: 3` when exactly one workflow had been edited. The row mapper
+used `String(date)`, which drops milliseconds, so `updated_at` read as later
+than the pull on rows nobody had touched — every one of them permanently
+unupgradable. Both timestamps now come from the DB clock in one statement and
+the mapper uses `toISOString()`. The regression test was checked to fail without
+the fix.
+
+The two upgrade paths differ on purpose. An import upgrades only what is
+untouched and reports the rest, because nobody asked for it.
+`POST /api/workflows/:id/upgrade` applies over local edits, because asking IS
+the decision — the same contract as accepting an agent upgrade.
+
+## 4. Imports did not resolve their dependencies
+
+`createFromTemplate` scanned only the parent graph, so Delivery installed 4 of
+its 10 agents; the rest arrived only as a side effect, and not at all when the
+sub-workflow already existed. Sub-workflows were matched by **name**, so
+renaming one forked a second copy and any workflow carrying the template's name
+was adopted as a build step whatever its graph contained.
+
+Resolution is now transitive and provenance-keyed:
+`marketplaceService.resolveAgentDependencies` installs what is missing, upgrades
+back-linked unedited agents, and leaves Owner-edited ones alone with the upgrade
+still offered in the marketplace. Sub-workflows match on `marketplace_source_id`
+(`<entryId>:<ref>` for bundle children), falling back to name only for rows that
+predate provenance, so a second import reuses rather than forks.
+
+## Also: creating a workflow no longer un-pauses the Owner's agents
+
+Found on the way. Creating from a template flipped **every** agent its graph
+named to `active`, so an agent the Owner had deliberately paused came back on
+with nothing to show it had happened. The reasoning was sound — the engine parks
+on an inactive agent — but the cure was worse: it silently overrode a decision.
+
+Resolution now activates only what it *installs* (a brand-new agent's `inactive`
+is a manifest leftover, not a decision), reports the rest as `paused`, and the
+builder warns on the step itself. Warning on the step covers the hand-built and
+imported paths too, not just this one. A workflow that waits is better than one
+that quietly undoes your decision. The pre-existing test asserting the old
+behaviour was rewritten, not deleted — the contract changed deliberately and the
+next reader should see why.
+
+## Live verification (not just tests)
+
+- Import twice: `created=3 reused=0` then `created=0 reused=3`, same workflow
+  id, no fork.
+- Republish → v2: `pulled_v=1 upgrade_available=true` → accept →
+  `pulled_v=2 upgrade_available=false`.
+- Edit protection: `upgraded: 2, skipped_edited: 1, reused: 1`, and the edited
+  workflow's description survived intact.
+- Integrity sweep: 6 workflows / 0 unlinked, 10 agents / 0 unlinked,
+  24 refs checked / 0 dangling.
+- Migration `008` up → down → up on a throwaway DB (`1 → 0 → 1`).
+
+A rollback on the dev DB was attempted first and broke it: on a virgin database
+all 8 migrations are in batch 1, so `rollback` undid everything, and re-applying
+failed because `001_baseline.down()` is a deliberate no-op — the schema survived
+and the baseline SQL could not re-run. The DB was rebuilt from scratch. Migration
+round-trips belong on a scratch database, not the one being walked.
+
+## Verification
+
+- `pnpm -r typecheck` — clean, 4 packages.
+- `pnpm -r lint` — 0 errors (76 pre-existing warnings, none in changed files).
+- API suite — 155 files, **2736 passing**.
+- Web suite — 336 files, **4372 passing**.
+
+## State left behind
+
+Dev stack up: web :4100, API :4101, Postgres :5500 (`atlas-postgres`, healthy).
+Database rebuilt clean — 8 migrations applied, catalog 16/16 at v1, and **0
+projects, 0 agents, 0 workflows**: a genuine first-run state to walk.
+
+The four non-Atlas docker stacks sharing this host were untouched; Atlas
+resources were only ever removed by name.
+
+**Nothing was pushed.** `sspartorg/atlas` is public and `main` is protected. The
+four commits sit on the local branch `feat/marketplace-import-and-v1-baseline`.

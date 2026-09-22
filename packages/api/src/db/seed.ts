@@ -13,19 +13,21 @@ function assertRegulationsMatrixHealthy(): void {
     }
 }
 
-// Two-phase seeding:
-//   1. Sync the on-disk catalog (packages/api/src/marketplace/catalog/) into
-//      the marketplace_agents table. Idempotent — content_hash drives whether
-//      version bumps. Existing local agents are NEVER mutated here, even on
-//      catalog upgrade; the UI surfaces the diff and the Owner accepts.
-//   2. Auto-install (fork) catalog entries into agents for ids that don't
-//      already exist locally. Sets marketplace_source_id +
-//      marketplace_pulled_version on the new local row so the back-link is
-//      ready from day one.
+// Sync the on-disk catalog (packages/api/src/marketplace/catalog/) into the
+// marketplace_agents table. Idempotent: every run overwrites the row from the
+// manifest, so `version` is whatever `manifest.json` declares — it is NOT
+// derived from content_hash. The hash is still computed and stored, but it
+// stopped driving version bumps because a hash that moved on cosmetic edits
+// produced "upgrade available" banners with nothing to apply.
 //
-// Owner edits on a local agent never break the back-link — they simply mean
-// the local row diverges from the catalog. Detach (UI action) is the only
-// way to clear the link.
+// Existing local agents are NEVER mutated here, even on catalog upgrade; the
+// UI surfaces the diff and the Owner accepts. Owner edits on a local agent
+// never break the back-link — they simply mean the local row diverges from the
+// catalog. Detach (UI action) is the only way to clear the link.
+//
+// There is no second phase. Auto-installing catalog entries into `agents` was
+// removed because it resurrected agents the Owner had deleted; see the note on
+// `runSeed` below.
 async function syncMarketplaceCatalog(): Promise<CatalogEntry[]> {
     const catalog = loadCatalog();
     if (catalog.length === 0) return [];
@@ -886,8 +888,9 @@ async function seedAgentTemplates(): Promise<void> {
 
 // `runSeed` is the single entry point for `pnpm db:seed`. It does ONE thing:
 // sync the on-disk catalog (`packages/api/src/marketplace/catalog/`) into the
-// `marketplace_agents` table. Idempotent — content_hash drives whether
-// `version` bumps for each entry.
+// `marketplace_agents` table. Idempotent — each entry's `version` is taken
+// verbatim from its `manifest.json` and overwritten on every run; content_hash
+// is stored but does not drive it.
 //
 // It NEVER creates rows in the `agents` table. Agents exist only when the
 // Owner installs them via `POST /api/marketplace/agents/:id/install`

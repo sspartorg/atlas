@@ -2,6 +2,7 @@
     "id": "ai-readiness",
     "name": "AI Readiness",
     "description": "Audits the repository for AI-agent readiness and opens a pull request with the scaffold it generates.",
+    "version": 1,
     "input_kind": "none",
     "trigger": "manual",
     "use_worktree": true,

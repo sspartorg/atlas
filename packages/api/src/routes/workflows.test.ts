@@ -37,6 +37,11 @@ vi.mock('../services/worktree-orchestrator.js', async (importOriginal) => ({
 import { buildApp } from '../server.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertItem, insertProject } from '../../tests/_items.js';
+import { workflowsService } from '../services/workflows.js';
+import type { IWorkflow } from '@atlas/shared';
+
+/** Delivery's full agent closure: its own graph's four plus Build's and Test's. */
+const DELIVERY_AGENT_IDS = ['agent-po-writer', 'agent-po-reviewer', 'agent-architect', 'agent-architect-reviewer', 'agent-coder', 'agent-code-reviewer', 'agent-qa-writer', 'agent-qa-reviewer', 'agent-automation', 'agent-automation-reviewer'];
 
 let app: FastifyInstance;
 
@@ -149,6 +154,120 @@ describe('workflow CRUD', () => {
         expect(del.statusCode).toBe(409);
     });
 
+    // Every agent Delivery needs to RUN, not just the four its own graph
+    // names — the other six live in the Build and Test sub-templates. Scanning
+    // only the parent graph left them uninstalled whenever the sub-workflow
+    // already existed, and the run then parked on a missing agent. Asserted
+    // against the template files directly: this is a pure rollup, no DB.
+    it('rolls up the sub-templates’ agents for a template', () => {
+        const ids = workflowsService.templateAgentIds('delivery').sort();
+        expect(ids).toEqual([
+            'agent-architect',
+            'agent-architect-reviewer',
+            'agent-automation',
+            'agent-automation-reviewer',
+            'agent-code-reviewer',
+            'agent-coder',
+            'agent-po-reviewer',
+            'agent-po-writer',
+            'agent-qa-reviewer',
+            'agent-qa-writer',
+        ]);
+        // The parent graph alone names only four of those ten.
+        expect(workflowsService.templateAgentIds('build').sort()).toEqual(['agent-code-reviewer', 'agent-coder']);
+        // An id that names no template resolves to no agents rather than
+        // throwing: callers feed this straight into dependency resolution, and
+        // a throw there would fail an import over a stale reference.
+        expect(workflowsService.templateAgentIds('no-such-template')).toEqual([]);
+    });
+
+    // Provenance is what makes a template-created workflow upgradable. Without
+    // it the workflow was a detached copy the moment it was written, and an
+    // improved upstream template could never reach it.
+    it('records the template it came from, on the workflow and its sub-workflows', async () => {
+        // `agent-coder` is already created by beforeEach.
+        for (const a of DELIVERY_AGENT_IDS.filter((x) => x !== 'agent-coder')) await insertAgent({ id: a, status: 'active' });
+        const res = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'delivery', project_id: 'p1' } });
+        expect(res.statusCode).toBe(201);
+        expect(res.json()).toMatchObject({ marketplace_source_id: 'delivery', marketplace_pulled_version: 1 });
+
+        const rows = await testDb.selectFrom('workflows').select(['name', 'marketplace_source_id', 'marketplace_pulled_version']).execute();
+        const byName = (n: string) => rows.find((r) => r.name === n);
+        expect(byName('Build sub-task')).toMatchObject({ marketplace_source_id: 'build', marketplace_pulled_version: 1 });
+        expect(byName('Test sub-task')).toMatchObject({ marketplace_source_id: 'test', marketplace_pulled_version: 1 });
+    });
+
+    // A workflow that never came from the marketplace has no pull to compare
+    // against, so it is never "edited since" — the import path must treat it as
+    // a plain local workflow, not as one it may overwrite.
+    it('treats a workflow with no pull as not edited since one', () => {
+        const hand = { updated_at: '2026-09-22T10:00:00.000Z', marketplace_pulled_at: null } as unknown as IWorkflow;
+        expect(workflowsService.isEditedSincePull(hand)).toBe(false);
+    });
+
+    // The other half of the upgrade route. `upgradeFromPublished` is covered in
+    // workflow-bundle.test.ts; this is the template path, where the source is
+    // a file on disk rather than a stored bundle.
+    //
+    // The explicit upgrade applies OVER local edits on purpose — asking for it
+    // IS the decision, the same contract as accepting an agent upgrade. The
+    // automatic path (import) is the one that checks for edits first, because
+    // there nobody asked.
+    it('re-applies the template over local edits and clears the upgrade flag', async () => {
+        for (const a of DELIVERY_AGENT_IDS.filter((x) => x !== 'agent-coder')) await insertAgent({ id: a, status: 'active' });
+        const made = (await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'delivery', project_id: 'p1' } })).json() as IWorkflow;
+
+        // Drift the pointer behind the shipped template and edit the copy, the
+        // way a real workflow behind an improved upstream looks.
+        await testDb.updateTable('workflows').set({ marketplace_pulled_version: 0, description: 'my own notes' }).where('id', '=', made.id).execute();
+        const before = (await app.inject({ method: 'GET', url: `/api/workflows/${made.id}` })).json() as IWorkflow;
+        expect(before.upgrade_available).toBe(true);
+        expect(before.description).toBe('my own notes');
+
+        const res = await app.inject({ method: 'POST', url: `/api/workflows/${made.id}/upgrade` });
+
+        expect(res.statusCode).toBe(200);
+        const after = res.json() as IWorkflow;
+        expect(after.marketplace_pulled_version).toBe(1);
+        expect(after.upgrade_available).toBe(false);
+        // The Owner asked, so the template's description won.
+        expect(after.description).not.toBe('my own notes');
+        // The name is the Owner's and is never overwritten by an upgrade.
+        expect(after.name).toBe(made.name);
+    });
+
+    // Every early exit of the upgrade route, so a bad id fails loudly instead
+    // of writing a graph from the wrong source onto a workflow.
+    it('refuses to upgrade a workflow with no marketplace source, and 404s an unknown one', async () => {
+        const hand = (await createWorkflow({ name: 'Hand-built' })).json() as IWorkflow;
+        const noSource = await app.inject({ method: 'POST', url: `/api/workflows/${hand.id}/upgrade` });
+        expect(noSource.statusCode).toBe(400);
+        expect(noSource.json().error).toMatch(/did not come from the marketplace/);
+
+        const missing = await app.inject({ method: 'POST', url: `/api/workflows/${randomUUID()}/upgrade` });
+        expect(missing.statusCode).toBe(404);
+    });
+
+    // Sub-workflows used to be matched by NAME, so renaming one made the next
+    // Delivery fork a second copy instead of reusing it — and any workflow that
+    // happened to carry the template's name got adopted as a build step
+    // whatever its graph contained.
+    it('reuses a renamed sub-workflow through its provenance instead of forking', async () => {
+        // `agent-coder` is already created by beforeEach.
+        for (const a of DELIVERY_AGENT_IDS.filter((x) => x !== 'agent-coder')) await insertAgent({ id: a, status: 'active' });
+        const first = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'delivery', project_id: 'p1' } });
+        expect(first.statusCode).toBe(201);
+        const build = await testDb.selectFrom('workflows').select('id').where('marketplace_source_id', '=', 'build').executeTakeFirstOrThrow();
+        await testDb.updateTable('workflows').set({ name: 'Renamed by the Owner' }).where('id', '=', build.id).execute();
+
+        const second = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'delivery', project_id: 'p1' } });
+        expect(second.statusCode).toBe(201);
+        const builds = await testDb.selectFrom('workflows').select('id').where('marketplace_source_id', '=', 'build').execute();
+        expect(builds).toHaveLength(1);
+        const step = (second.json().graph.nodes as Array<{ id: string; sub_workflow_id?: string }>).find((n) => n.id === 'build');
+        expect(step?.sub_workflow_id).toBe(build.id);
+    });
+
     it('rejects a Sub-tasks step that points at a Task workflow, and a scheduled sub-workflow', async () => {
         const task = (await createWorkflow()).json();
         const withStep = {
@@ -176,12 +295,21 @@ describe('workflow CRUD', () => {
         expect((await createWorkflow({ push_to_default: true })).json()).toMatchObject({ push_to_default: true, raises_pr: false });
     });
 
-    it('activates an inactive agent the template uses, so the workflow can run', async () => {
+    // This used to assert the opposite: creating from a template flipped EVERY
+    // agent its graph named to `active`, on the reasoning that an inactive
+    // agent parks the run. But an agent that is already here and paused was
+    // paused BY the Owner, and silently undoing that is worse than a workflow
+    // that waits — they get no say and no notice. The run-parks problem is
+    // handled where it belongs: the builder warns on the step, the import
+    // reports `agents.paused`, and an agent the resolution INSTALLS is
+    // activated on the way in (nobody paused that one — see
+    // `services/marketplace.test.ts`, which has a catalog to install from).
+    it('does not re-activate an agent the Owner paused', async () => {
         await insertAgent({ id: 'agent-ai-readiness', status: 'inactive' });
         const res = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'ai-readiness', project_id: 'p1' } });
         expect(res.statusCode).toBe(201);
         const agent = await testDb.selectFrom('agents').select('status').where('id', '=', 'agent-ai-readiness').executeTakeFirstOrThrow();
-        expect(agent.status).toBe('active');
+        expect(agent.status).toBe('inactive');
     });
 });
 

@@ -303,10 +303,24 @@ export function Workflows() {
                     }
                     title="No workflows yet"
                     description="A workflow decides which agents run on your items, in what order, and what happens when a step passes, fails or needs you. Start blank or from a template."
+                    // Mirrors the Agents empty state: authoring your own and
+                    // taking one from the catalog are both first-class here.
+                    // Labelled "Create new" rather than "New workflow" on
+                    // purpose — the page header and the FAB already expose that
+                    // exact accessible name, and a third would make
+                    // `getByRole('button', { name: 'New workflow' })` ambiguous.
                     actions={
-                        <Button variant="outlined" onClick={() => setNewOpen(true)}>
-                            New workflow
-                        </Button>
+                        <>
+                            <Button variant="outlined" onClick={() => setNewOpen(true)}>
+                                Create new
+                            </Button>
+                            <Button
+                                variant="contained"
+                                onClick={() => navigate('/agents/marketplace?tab=workflows')}
+                            >
+                                Browse marketplace
+                            </Button>
+                        </>
                     }
                 />
             ) : (

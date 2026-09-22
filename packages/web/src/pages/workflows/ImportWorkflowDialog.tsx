@@ -20,7 +20,22 @@ import { ATLAS_PALETTE } from '../../theme/tokens.js';
 export function importDetail(r: IWorkflowImportResult): string {
     return [
         r.installed_agents.length > 0 ? `Installed ${r.installed_agents.join(', ')}` : '',
+        // An import can now bring a stale agent up to date, so say so —
+        // otherwise the Owner's agents changed underneath them silently.
+        r.agents.upgraded.length > 0 ? `Upgraded ${r.agents.upgraded.join(', ')}` : '',
+        // The important one. These are behind the catalog but carry Owner
+        // edits, so the import deliberately left them alone; naming them is
+        // what keeps "we didn't touch your work" from looking like "we forgot".
+        r.agents.skipped_edited.length > 0
+            ? `Kept your edits to ${r.agents.skipped_edited.join(', ')} — upgrade offered in the Marketplace`
+            : '',
         r.reused_agents.length > 0 ? `Reused ${r.reused_agents.join(', ')}` : '',
+        // Import no longer re-activates an agent the Owner paused, so say which
+        // ones will hold the run up. Without this the workflow imports clean
+        // and then parks on its first step with nothing pointing at why.
+        r.agents.paused.length > 0
+            ? `${r.agents.paused.join(', ')} ${r.agents.paused.length === 1 ? 'is' : 'are'} paused — runs will wait there until you enable ${r.agents.paused.length === 1 ? 'it' : 'them'}`
+            : '',
         r.sub_workflows.length > 0
             ? `Sub-workflows ${r.sub_workflows.map((w) => w.name).join(', ')}`
             : '',

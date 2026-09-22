@@ -19,6 +19,7 @@ async function insertCatalogAgent(overrides: Partial<{
     settings_json: Record<string, unknown>;
     version: number;
     sort_order: number;
+    status: 'active' | 'inactive';
 }> = {}) {
     const id = overrides.id ?? 'cat-agent-1';
     await testDb
@@ -37,7 +38,7 @@ async function insertCatalogAgent(overrides: Partial<{
             sort_order: overrides.sort_order ?? 1,
             glyph: 'science',
             role_id: null,
-            status: 'active',
+            status: overrides.status ?? 'active',
             kind_slug: 'custom',
             settings_json: overrides.settings_json ?? {},
             memory_cadence: 1,
@@ -85,6 +86,91 @@ describe('marketplaceService', () => {
         expect(row2!.upgrade_available).toBe(true);
         expect(row2!.installed_version).toBe(3);
         expect(row2!.version).toBe(5);
+    });
+
+    // The whole point of resolveAgentDependencies: an agent that is already
+    // here used to be skipped whatever version it was, so a workflow could be
+    // applied onto agents that no longer matched the graph it shipped with.
+    it('resolveAgentDependencies installs what is missing and upgrades what is stale', async () => {
+        await insertCatalogAgent({ id: 'cat-new', prompt_md: 'fresh prompt' });
+        await insertCatalogAgent({ id: 'cat-old', version: 1, prompt_md: 'v1 prompt' });
+        await marketplaceService.install('cat-old');
+        await testDb.updateTable('marketplace_agents').set({ version: 4, prompt_md: 'v4 prompt' }).where('id', '=', 'cat-old').execute();
+
+        const report = await marketplaceService.resolveAgentDependencies(['cat-new', 'cat-old'], { link: true });
+
+        expect(report.installed).toEqual(['cat-new']);
+        expect(report.upgraded).toEqual(['cat-old']);
+        expect(report.skipped_edited).toEqual([]);
+        const upgraded = await agentsService.get('cat-old');
+        expect(upgraded!.prompt_md).toBe('v4 prompt');
+        expect(upgraded!.marketplace_pulled_version).toBe(4);
+    });
+
+    // An Owner-tuned prompt is work they did deliberately. Resolving a
+    // workflow's dependencies is not permission to throw it away.
+    it('resolveAgentDependencies leaves an Owner-edited agent alone and reports it', async () => {
+        await insertCatalogAgent({ id: 'cat-edited', version: 1, prompt_md: 'v1 prompt' });
+        await marketplaceService.install('cat-edited');
+        await agentsService.update('cat-edited', { prompt_md: 'my own carefully tuned prompt' });
+        await testDb.updateTable('marketplace_agents').set({ version: 9, prompt_md: 'v9 prompt' }).where('id', '=', 'cat-edited').execute();
+
+        const report = await marketplaceService.resolveAgentDependencies(['cat-edited'], { link: true });
+
+        expect(report.skipped_edited).toEqual(['cat-edited']);
+        expect(report.upgraded).toEqual([]);
+        const after = await agentsService.get('cat-edited');
+        expect(after!.prompt_md).toBe('my own carefully tuned prompt');
+        // Pointer left behind on purpose, so the marketplace still offers it.
+        expect(after!.marketplace_pulled_version).toBe(1);
+    });
+
+    // Some catalog manifests still ship `inactive` (a leftover from per-agent
+    // schedules) and `install` copies the manifest's status verbatim, so the
+    // workflow that pulled the agent in would park on it immediately. Nobody
+    // paused this agent — it did not exist a moment ago — so activating it
+    // overrides no decision of the Owner's.
+    it('activates an agent it installs even when the catalog ships it inactive', async () => {
+        await insertCatalogAgent({ id: 'cat-dormant', status: 'inactive' });
+
+        const report = await marketplaceService.resolveAgentDependencies(['cat-dormant'], { link: true });
+
+        expect(report.installed).toEqual(['cat-dormant']);
+        expect(report.paused).toEqual([]);
+        expect((await agentsService.get('cat-dormant'))!.status).toBe('active');
+    });
+
+    // The converse, and the actual bug: creating a workflow used to flip EVERY
+    // agent its graph named to active, so an agent the Owner had deliberately
+    // paused came back on with no trace. A pause is a decision; resolution
+    // reports it and leaves it.
+    it('leaves an agent the Owner paused alone and reports it', async () => {
+        await insertCatalogAgent({ id: 'cat-paused', version: 1 });
+        await marketplaceService.install('cat-paused');
+        await agentsService.update('cat-paused', { status: 'inactive' });
+        // Stale as well, to prove the pause survives an upgrade of the same row.
+        await testDb.updateTable('marketplace_agents').set({ version: 2, prompt_md: 'v2' }).where('id', '=', 'cat-paused').execute();
+
+        const report = await marketplaceService.resolveAgentDependencies(['cat-paused'], { link: true });
+
+        expect(report.paused).toEqual(['cat-paused']);
+        expect(report.upgraded).toEqual(['cat-paused']);
+        expect((await agentsService.get('cat-paused'))!.status).toBe('inactive');
+    });
+
+    // A marketplace upgrade writes `edited_by: 'Marketplace'`, so it must not
+    // make the agent look Owner-edited to the NEXT resolve.
+    it('an upgrade does not make an agent look Owner-edited afterwards', async () => {
+        await insertCatalogAgent({ id: 'cat-seq', version: 1, prompt_md: 'v1' });
+        await marketplaceService.install('cat-seq');
+        await testDb.updateTable('marketplace_agents').set({ version: 2, prompt_md: 'v2' }).where('id', '=', 'cat-seq').execute();
+        expect((await marketplaceService.resolveAgentDependencies(['cat-seq'], { link: true })).upgraded).toEqual(['cat-seq']);
+
+        await testDb.updateTable('marketplace_agents').set({ version: 3, prompt_md: 'v3' }).where('id', '=', 'cat-seq').execute();
+        const second = await marketplaceService.resolveAgentDependencies(['cat-seq'], { link: true });
+        expect(second.upgraded).toEqual(['cat-seq']);
+        expect(second.skipped_edited).toEqual([]);
+        expect((await agentsService.get('cat-seq'))!.prompt_md).toBe('v3');
     });
 
     it('install collides on the default slug and accepts an override', async () => {
