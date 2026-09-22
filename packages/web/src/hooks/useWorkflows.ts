@@ -91,6 +91,14 @@ export function usePublishWorkflow() {
     });
 }
 
+export function useUpgradeWorkflow() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => api.workflows.upgrade(id),
+        onSuccess: () => void qc.invalidateQueries({ queryKey: ['workflows'] }),
+    });
+}
+
 export function useImportPublishedWorkflow() {
     const qc = useQueryClient();
     return useMutation({

@@ -19,6 +19,7 @@ async function insertCatalogAgent(overrides: Partial<{
     settings_json: Record<string, unknown>;
     version: number;
     sort_order: number;
+    status: 'active' | 'inactive';
 }> = {}) {
     const id = overrides.id ?? 'cat-agent-1';
     await testDb
@@ -37,7 +38,7 @@ async function insertCatalogAgent(overrides: Partial<{
             sort_order: overrides.sort_order ?? 1,
             glyph: 'science',
             role_id: null,
-            status: 'active',
+            status: overrides.status ?? 'active',
             kind_slug: 'custom',
             settings_json: overrides.settings_json ?? {},
             memory_cadence: 1,
@@ -122,6 +123,39 @@ describe('marketplaceService', () => {
         expect(after!.prompt_md).toBe('my own carefully tuned prompt');
         // Pointer left behind on purpose, so the marketplace still offers it.
         expect(after!.marketplace_pulled_version).toBe(1);
+    });
+
+    // Some catalog manifests still ship `inactive` (a leftover from per-agent
+    // schedules) and `install` copies the manifest's status verbatim, so the
+    // workflow that pulled the agent in would park on it immediately. Nobody
+    // paused this agent — it did not exist a moment ago — so activating it
+    // overrides no decision of the Owner's.
+    it('activates an agent it installs even when the catalog ships it inactive', async () => {
+        await insertCatalogAgent({ id: 'cat-dormant', status: 'inactive' });
+
+        const report = await marketplaceService.resolveAgentDependencies(['cat-dormant'], { link: true });
+
+        expect(report.installed).toEqual(['cat-dormant']);
+        expect(report.paused).toEqual([]);
+        expect((await agentsService.get('cat-dormant'))!.status).toBe('active');
+    });
+
+    // The converse, and the actual bug: creating a workflow used to flip EVERY
+    // agent its graph named to active, so an agent the Owner had deliberately
+    // paused came back on with no trace. A pause is a decision; resolution
+    // reports it and leaves it.
+    it('leaves an agent the Owner paused alone and reports it', async () => {
+        await insertCatalogAgent({ id: 'cat-paused', version: 1 });
+        await marketplaceService.install('cat-paused');
+        await agentsService.update('cat-paused', { status: 'inactive' });
+        // Stale as well, to prove the pause survives an upgrade of the same row.
+        await testDb.updateTable('marketplace_agents').set({ version: 2, prompt_md: 'v2' }).where('id', '=', 'cat-paused').execute();
+
+        const report = await marketplaceService.resolveAgentDependencies(['cat-paused'], { link: true });
+
+        expect(report.paused).toEqual(['cat-paused']);
+        expect(report.upgraded).toEqual(['cat-paused']);
+        expect((await agentsService.get('cat-paused'))!.status).toBe('inactive');
     });
 
     // A marketplace upgrade writes `edited_by: 'Marketplace'`, so it must not

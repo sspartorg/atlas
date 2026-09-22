@@ -23,6 +23,7 @@ import {
     getPublishedWorkflow,
     importPublishedWorkflow,
     importWorkflowBundle,
+    upgradeFromPublished,
     listPublishedWorkflows,
     publishWorkflow,
     publishedWorkflowZip,
@@ -135,6 +136,26 @@ export async function workflowsRoutes(app: FastifyInstance) {
     app.post('/api/workflows/from-template', { preHandler: requireMcpToken }, async (req, reply) => {
         const { template_id, project_id } = parseBody(CreateWorkflowFromTemplateSchema, req.body);
         return reply.status(201).send(await workflowsService.createFromTemplate(template_id, project_id));
+    });
+
+    // Pull the workflow's upstream again. Explicit on purpose — this replaces
+    // the graph, so it is the Owner's call, exactly as accepting an agent
+    // upgrade is. The automatic path (import) checks for local edits first.
+    app.post('/api/workflows/:id/upgrade', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const wf = await workflowsService.get(id);
+        if (!wf) return reply.status(404).send({ error: 'Workflow not found' });
+        if (!wf.marketplace_source_id) {
+            return reply.status(400).send({ error: 'This workflow did not come from the marketplace' });
+        }
+        // A template id names a shipped template; anything else is a published
+        // entry, whose graph lives in the stored bundle rather than on disk.
+        const isTemplate = workflowsService.listTemplates().some((t) => t.id === wf.marketplace_source_id);
+        return reply.send(
+            isTemplate
+                ? await workflowsService.upgradeFromTemplate(id)
+                : await upgradeFromPublished(id)
+        );
     });
 
     app.get('/api/workflows/:id', async (req, reply) => {

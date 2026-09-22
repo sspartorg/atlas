@@ -706,6 +706,7 @@ export interface WorkflowsTable {
     last_run_at: TSn;
     marketplace_source_id: StrN;
     marketplace_pulled_version: IntN;
+    marketplace_pulled_at: TSn;
     created_at: CreatedAt;
     updated_at: UpdatedAt;
 }

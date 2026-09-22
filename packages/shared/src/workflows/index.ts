@@ -81,6 +81,19 @@ export interface IWorkflow {
      */
     marketplace_source_id: string | null;
     marketplace_pulled_version: number | null;
+    /**
+     * When the upstream was last taken. `updated_at <= marketplace_pulled_at`
+     * means nothing has been edited since, which is what makes an automatic
+     * upgrade safe — `updated_at` alone cannot say, because the upgrade
+     * itself moves it.
+     */
+    marketplace_pulled_at: string | null;
+    /**
+     * The source has a newer version than `marketplace_pulled_version`.
+     * Computed per read, mirroring the agent marketplace gate; null when
+     * the workflow has no upstream.
+     */
+    upgrade_available: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -282,6 +295,32 @@ export interface IAgentDependencyReport {
     skipped_edited: string[];
     /** Already current, or not back-linked to a catalog entry. */
     unchanged: string[];
+    /**
+     * Already here and NOT active. Resolution leaves their status alone — a
+     * pause is a decision the Owner made — so the run would park on them. They
+     * are reported rather than silently re-activated, which is what used to
+     * happen. Agents installed by this same resolution are not here: they are
+     * activated on the way in, because nobody paused them.
+     */
+    paused: string[];
+}
+
+/**
+ * What an import did to the workflows themselves, as distinct from the agents.
+ *
+ * Importing the same marketplace entry twice used to fork the whole tree and
+ * leave every copy with a NULL source id — unwanted duplicates that were also
+ * unupgradable. Reuse is keyed on provenance now, and this says which happened.
+ */
+export interface IWorkflowDependencyReport {
+    /** Not present before; created from the bundle. */
+    created: string[];
+    /** Already here, behind the entry, and unedited — brought up to date. */
+    upgraded: string[];
+    /** Already here and current. */
+    reused: string[];
+    /** Behind the entry but edited since it was pulled, so left untouched. */
+    skipped_edited: string[];
 }
 
 export interface IWorkflowImportResult {
@@ -294,6 +333,8 @@ export interface IWorkflowImportResult {
     reused_agents: string[];
     /** Per-agent detail behind the two lists above. */
     agents: IAgentDependencyReport;
+    /** What happened to the workflow and its sub-workflows. */
+    workflows: IWorkflowDependencyReport;
 }
 
 /**

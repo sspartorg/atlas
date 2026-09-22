@@ -674,14 +674,26 @@ export const marketplaceService = {
             link?: boolean;
         } = {}
     ): Promise<IAgentDependencyReport> {
-        const report: IAgentDependencyReport = { installed: [], upgraded: [], skipped_edited: [], unchanged: [] };
+        const report: IAgentDependencyReport = { installed: [], upgraded: [], skipped_edited: [], unchanged: [], paused: [] };
         for (const agentId of agentIds) {
             const local = await agentsService.get(agentId);
             if (!local) {
                 await (opts.install ? opts.install(agentId) : this.install(agentId));
+                // Some catalog manifests still ship `inactive` (a leftover from
+                // per-agent schedules) and `install` copies the manifest's
+                // status, so a workflow made from a template would park on an
+                // agent the Owner never even saw. Nobody paused this one — it
+                // was created a line ago — so activating it overrides no
+                // decision. Contrast the `paused` branch below.
+                await db.updateTable('agents').set({ status: 'active' }).where('id', '=', agentId).where('status', '!=', 'active').execute();
                 report.installed.push(agentId);
                 continue;
             }
+            // An agent that was already here and is paused stays paused. This
+            // used to be a blanket "activate everything the graph names", which
+            // silently undid a deliberate pause; the builder shows the warning
+            // on the step instead.
+            if (local.status !== 'active') report.paused.push(agentId);
             // Only a back-linked agent can be upgraded: without a source id
             // there is nothing to compare against, and `acceptUpgrade` throws.
             const sourceId = local.marketplace_source_id;

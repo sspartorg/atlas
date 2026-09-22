@@ -446,6 +446,89 @@ describe('published workflows (Marketplace)', () => {
     // A published entry is overwritten in place on republish, so the version
     // counter is the only way a consumer can tell the entry moved. And what
     // gets imported must stay linked to it, or it can never be upgraded.
+    // Using the same entry twice used to fork the whole tree — "Delivery
+    // (imported)", "Test sub-task (imported 2)" — and every copy landed with a
+    // NULL source id, so the duplicates were unupgradable as well as unwanted.
+    it('reuses the same entry on a second use instead of forking duplicates', async () => {
+        const { main } = await seedDelivery();
+        const entry = (await publish(main.id)).json() as IPublishedWorkflow;
+        const use = async () =>
+            app.inject({ method: 'POST', url: `/api/marketplace/workflows/${entry.id}/use`, payload: { project_id: 'p2' } });
+
+        const first = (await use()).json() as IWorkflowImportResult;
+        const second = (await use()).json() as IWorkflowImportResult;
+
+        // Same rows both times, not a second tree.
+        expect(second.workflow.id).toBe(first.workflow.id);
+        expect(second.workflows.created).toEqual([]);
+        expect(second.sub_workflows.map((w) => w.id).sort()).toEqual(first.sub_workflows.map((w) => w.id).sort());
+
+        const inProject = await testDb.selectFrom('workflows').select(['id', 'name', 'marketplace_source_id']).where('project_id', '=', 'p2').execute();
+        expect(inProject).toHaveLength(first.sub_workflows.length + 1);
+        // And every one of them is linked, so every one can be upgraded.
+        expect(inProject.filter((w) => w.marketplace_source_id == null)).toEqual([]);
+        expect(inProject.filter((w) => w.name.includes('(imported'))).toEqual([]);
+    });
+
+    // The explicit upgrade is the Owner's call and applies over local edits;
+    // the automatic one (import) must not.
+    it('flags an upgrade when the entry moves, and applies it on request', async () => {
+        const { main } = await seedDelivery();
+        const entry = (await publish(main.id)).json() as IPublishedWorkflow;
+        const used = (await app.inject({ method: 'POST', url: `/api/marketplace/workflows/${entry.id}/use`, payload: { project_id: 'p2' } })).json() as IWorkflowImportResult;
+        expect(used.workflow.upgrade_available).toBe(false);
+
+        // Republish bumps the entry to v2.
+        await publish(main.id);
+        const before = (await app.inject({ method: 'GET', url: `/api/workflows/${used.workflow.id}` })).json() as IWorkflow;
+        expect(before.upgrade_available).toBe(true);
+        expect(before.marketplace_pulled_version).toBe(1);
+
+        const upgraded = (await app.inject({ method: 'POST', url: `/api/workflows/${used.workflow.id}/upgrade` })).json() as IWorkflow;
+        expect(upgraded.marketplace_pulled_version).toBe(2);
+        expect(upgraded.upgrade_available).toBe(false);
+    });
+
+    // Regression: `marketplace_pulled_at` must come from the DB clock, the same
+    // one the `workflows_set_updated_at` trigger writes `updated_at` with. A
+    // JS-generated timestamp a few ms behind makes `updated_at > pulled_at` on a
+    // row nobody has touched — it reads as "Owner edited" forever and silently
+    // stops taking upgrades. Caught live: a re-import reported all three
+    // workflows as skipped_edited when only one had been edited.
+    it('treats an untouched workflow as untouched, so it still upgrades', async () => {
+        const { main } = await seedDelivery();
+        const entry = (await publish(main.id)).json() as IPublishedWorkflow;
+        const use = async () =>
+            (await app.inject({ method: 'POST', url: `/api/marketplace/workflows/${entry.id}/use`, payload: { project_id: 'p2' } })).json() as IWorkflowImportResult;
+
+        const first = await use();
+        await publish(main.id); // entry -> v2
+
+        const second = await use();
+        // Nothing was edited, so nothing may be skipped.
+        expect(second.workflows.skipped_edited).toEqual([]);
+        expect(second.workflows.upgraded).toContain(first.workflow.id);
+        for (const sub of first.sub_workflows) expect(second.workflows.upgraded).toContain(sub.id);
+    });
+
+    // A workflow the Owner has edited is left exactly as they left it.
+    it('leaves a locally edited workflow alone when the entry moves', async () => {
+        const { main } = await seedDelivery();
+        const entry = (await publish(main.id)).json() as IPublishedWorkflow;
+        const used = (await app.inject({ method: 'POST', url: `/api/marketplace/workflows/${entry.id}/use`, payload: { project_id: 'p2' } })).json() as IWorkflowImportResult;
+
+        await app.inject({ method: 'PATCH', url: `/api/workflows/${used.workflow.id}`, payload: { description: 'my own notes' } });
+        await publish(main.id);
+
+        const again = (await app.inject({ method: 'POST', url: `/api/marketplace/workflows/${entry.id}/use`, payload: { project_id: 'p2' } })).json() as IWorkflowImportResult;
+        expect(again.workflows.skipped_edited).toContain(used.workflow.id);
+        expect(again.workflows.upgraded).not.toContain(used.workflow.id);
+        const after = (await app.inject({ method: 'GET', url: `/api/workflows/${used.workflow.id}` })).json() as IWorkflow;
+        expect(after.description).toBe('my own notes');
+        // Still offered, so nothing is lost.
+        expect(after.upgrade_available).toBe(true);
+    });
+
     it('bumps the version on republish, and links what it imports back to the entry', async () => {
         const { main } = await seedDelivery();
         const first = (await publish(main.id)).json() as IPublishedWorkflow;

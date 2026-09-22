@@ -239,12 +239,21 @@ describe('workflow CRUD', () => {
         expect((await createWorkflow({ push_to_default: true })).json()).toMatchObject({ push_to_default: true, raises_pr: false });
     });
 
-    it('activates an inactive agent the template uses, so the workflow can run', async () => {
+    // This used to assert the opposite: creating from a template flipped EVERY
+    // agent its graph named to `active`, on the reasoning that an inactive
+    // agent parks the run. But an agent that is already here and paused was
+    // paused BY the Owner, and silently undoing that is worse than a workflow
+    // that waits — they get no say and no notice. The run-parks problem is
+    // handled where it belongs: the builder warns on the step, the import
+    // reports `agents.paused`, and an agent the resolution INSTALLS is
+    // activated on the way in (nobody paused that one — see
+    // `services/marketplace.test.ts`, which has a catalog to install from).
+    it('does not re-activate an agent the Owner paused', async () => {
         await insertAgent({ id: 'agent-ai-readiness', status: 'inactive' });
         const res = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'ai-readiness', project_id: 'p1' } });
         expect(res.statusCode).toBe(201);
         const agent = await testDb.selectFrom('agents').select('status').where('id', '=', 'agent-ai-readiness').executeTakeFirstOrThrow();
-        expect(agent.status).toBe('active');
+        expect(agent.status).toBe('inactive');
     });
 });
 

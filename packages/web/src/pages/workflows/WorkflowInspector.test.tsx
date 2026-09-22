@@ -126,6 +126,27 @@ describe('WorkflowInspector', () => {
         expect(screen.getByLabelText('Agent')).not.toHaveTextContent('agent-po-writer');
     });
 
+    // Creating a workflow no longer silently re-activates the agents it names,
+    // so a paused one has to be visible HERE — otherwise the workflow looks
+    // fine and the run just stops on this step with nothing to explain it.
+    it('warns when the step runs a paused agent', () => {
+        mount({
+            node: node('agent', { agent_id: 'agent-coder' }),
+            agents: [makeAgent({ id: 'agent-coder', name: 'Coder', status: 'inactive' })],
+        });
+        expect(
+            screen.getByText('Coder is paused, so a run will wait here until you enable it.')
+        ).toBeInTheDocument();
+    });
+
+    it('says nothing about pausing when the agent is active', () => {
+        mount({
+            node: node('agent', { agent_id: 'agent-coder' }),
+            agents: [makeAgent({ id: 'agent-coder', name: 'Coder', status: 'active' })],
+        });
+        expect(screen.queryByText(/is paused/)).toBeNull();
+    });
+
     it('asks for an agent when the step has none yet', () => {
         mount({ node: node('agent') });
         expect(screen.getByText('Pick the agent this step runs.')).toBeInTheDocument();
@@ -205,6 +226,29 @@ describe('WorkflowInspector', () => {
             ],
         });
         expect(screen.getByText('Runs once per sub-task')).toBeInTheDocument();
+    });
+
+    // A ref to a workflow that was deleted, or that arrived with an import and
+    // never resolved, renders identically to "nothing picked" — so the step
+    // looks fine until the run fails, and the next save drops the id for good.
+    it('flags a sub-workflow ref that no longer resolves', () => {
+        mount({
+            workflow: { project_id: 'p1' },
+            node: node('subtasks', { sub_workflow_id: 'w-gone' }),
+            workflows: [
+                makeWorkflow({
+                    id: 'w-sub',
+                    name: 'Build',
+                    input_kind: 'sub_task',
+                    project_id: 'p1',
+                }),
+            ],
+        });
+        expect(
+            screen.getByText(
+                'This step points at a workflow that is no longer in this project — pick one.'
+            )
+        ).toBeInTheDocument();
     });
 
     it('links to the picked sub-workflow', () => {

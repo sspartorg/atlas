@@ -50,7 +50,9 @@ describe('ImportWorkflowDialog', () => {
                 upgraded: ['agent-coder'],
                 skipped_edited: ['agent-qa-writer'],
                 unchanged: [],
+                paused: [],
             },
+            workflows: { created: [], upgraded: [], reused: [], skipped_edited: [] },
         });
         expect(detail).toContain('Upgraded agent-coder');
         expect(detail).toContain('Kept your edits to agent-qa-writer');
@@ -62,7 +64,8 @@ describe('ImportWorkflowDialog', () => {
             sub_workflows: [],
             installed_agents: ['agent-coder'],
             reused_agents: [],
-            agents: { installed: ['agent-coder'], upgraded: [], skipped_edited: [], unchanged: [] },
+            agents: { installed: ['agent-coder'], upgraded: [], skipped_edited: [], unchanged: [], paused: [] },
+            workflows: { created: ['wf-new'], upgraded: [], reused: [], skipped_edited: [] },
         };
         let hit = false;
         server.use(
