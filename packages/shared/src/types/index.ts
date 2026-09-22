@@ -801,19 +801,36 @@ export interface IItemExternalLink {
 }
 
 /**
- * Jira bridge source (ADR 0017): issues matching `jql` are work for the repo
- * `repo_id`. An issue matching
- * several sources becomes one Task in the first match's project, spanning the
- * matched repos of that project; the first of those sources with a
- * `workflow_id` queues it.
+ * Jira bridge source: one query + workflow + repos combo, belonging to a
+ * project (ADR 0016, amended). Issues matching `jql` become Tasks in
+ * `project_id` spanning `repo_ids`, queued on `workflow_id`.
+ *
+ * Sources used to live as a jsonb array on the singleton `jira_config` row and
+ * name a single `repo_id`; they are their own table now, one row per combo.
+ *
+ * **Order is load-bearing and global.** An issue matching sources in two
+ * different projects still becomes ONE Task (`jira_issues` is keyed by
+ * `jira_key`), and the **lowest `id`** — the first source ever created — wins.
+ * A serial gives that total order for free, and because new rows always sort
+ * last, adding a source to another project can never hijack routing an
+ * existing source already owns.
  */
 export interface IJiraSource {
-    repo_id: string;
+    id: number;
+    project_id: string;
     jql: string;
+    /** Null leaves the Task a draft with a `needs_you` notification. */
     workflow_id: string | null;
+    /** Ordered; the first repo holds the Task-wide files (ADR 0018). */
+    repo_ids: string[];
 }
 
-/** Jira bridge config (singleton). The API token is never returned, only whether one is set. */
+/**
+ * Jira bridge config (singleton): the connection and the poller. One
+ * self-hosted site, one token. The API token is never returned, only whether
+ * one is set. Sources are NOT here — they belong to a project
+ * (`GET /api/projects/:id/jira-sources`).
+ */
 export interface IJiraConfig {
     enabled: boolean;
     site_url: string | null;
@@ -822,8 +839,6 @@ export interface IJiraConfig {
     poll_interval_minutes: number;
     /** Extra Jira fields (names or ids) copied into the Task description. */
     extra_fields: string[];
-    /** In order: the first matching source picks the Task's project. */
-    sources: IJiraSource[];
     last_sync_at: string | null;
     last_sync_ok: boolean | null;
     last_sync_message: string | null;

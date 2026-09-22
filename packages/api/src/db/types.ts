@@ -1,7 +1,6 @@
 import type { ColumnType, Generated } from 'kysely';
 import type {
     AgentCli,
-    IJiraSource,
     IWorkflowGraph,
     SchedulePreset,
     WorkflowInputKind,
@@ -461,6 +460,17 @@ export interface ItemLinksTable {
 // bigint as string; the service normalizes both.
 type TSD = ColumnType<Date | null, string | null | undefined, string | null | undefined>;
 
+// Migration 010 — the bridge's query+workflow+repos combos, one row per
+// combo, ordered globally by `id` (the lowest wins an ambiguous issue).
+export interface JiraSourcesTable {
+    id: Generated<number>;
+    project_id: string;
+    jql: string;
+    workflow_id: StrN;
+    repo_ids: ColumnType<string[], string | undefined, string>;
+    created_at: Generated<string>;
+}
+
 export interface JiraConfigTable {
     id: Generated<number>;
     enabled: ColumnType<boolean, boolean | undefined, boolean>;
@@ -469,8 +479,6 @@ export interface JiraConfigTable {
     api_token_encrypted: StrN;
     poll_interval_minutes: Int;
     extra_fields: ColumnType<string[], string | undefined, string>;
-    // Migration 044 (ADR 0017) — one JQL per repo, replacing jql / project_id / label_workflows.
-    sources: ColumnType<IJiraSource[], string | undefined, string>;
     last_sync_at: TSD;
     last_sync_ok: ColumnType<boolean | null, boolean | null | undefined, boolean | null>;
     last_sync_message: StrN;
@@ -779,6 +787,7 @@ export interface DB {
     item_links: ItemLinksTable;
     item_external_links: ItemExternalLinksTable;
     jira_config: JiraConfigTable;
+    jira_sources: JiraSourcesTable;
     jira_issues: JiraIssuesTable;
     agent_runs: AgentRunsTable;
     comments: CommentsTable;

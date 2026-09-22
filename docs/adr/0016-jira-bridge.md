@@ -1,7 +1,7 @@
 # 0016. Jira Bridge
 
 **Date:** 2026-09-19
-**Status:** Accepted. Routing amended by [ADR 0017](0017-multi-repo-projects.md) (multi-repo projects): **sources** replaced the single JQL, the default project and the label rules. See "Amendment: sources per repo" below.
+**Status:** Accepted. Routing amended twice: by [ADR 0017](0017-multi-repo-projects.md) (multi-repo projects), where **sources** replaced the single JQL, the default project and the label rules; and again below, where sources moved to the project. See "Amendment: sources per repo" and "Amendment: sources per project".
 
 ## Context
 
@@ -62,3 +62,70 @@ A project can hold several repos, and a Task can span several of them. One JQL r
 - Migration 044 converts the old config without changing where issues go. Each label rule becomes `(<jql>) AND labels = "<label>"` for the rule's project, in rule order. The plain JQL for the default project then catches the rest. The first matching source picks the project, as the first matching rule did.
 
 The trust-boundary advice still holds, now per source: keep each JQL to issues your team controls, and leave a source's workflow empty if you want to review each Task before it runs.
+
+
+## Amendment: sources per project (migration 010)
+
+The Owner's model is *"query + workflow is one combo. I can create 10 combos and 10
+different workflows can be attached and synced."* Sources were already that combo, but
+they lived in the wrong place: an ordered jsonb array on the **singleton** `jira_config`
+row, edited globally in Settings → Jira, each entry naming one `repo_id` with the project
+inferred from it.
+
+**Credentials stay a singleton** — one self-hosted site, one email, one token — and so do
+`enabled`, `poll_interval_minutes` and `extra_fields`, because there is one poller. Only
+the sources move.
+
+### Data
+
+`jira_sources`: `id serial PRIMARY KEY`, `project_id` (→ `projects` `ON DELETE CASCADE`),
+`jql`, `workflow_id` (→ `workflows` `ON DELETE SET NULL`), `repo_ids jsonb`, `created_at`.
+`jira_config.sources` is dropped.
+
+A table rather than per-project jsonb, for three reasons:
+
+- **The global order survives.** Matching is order-dependent and an issue is one Task
+  (`jira_issues` is keyed by `jira_key`). A serial gives a total order across every
+  project for free; backfilling `ORDER BY` the old array's ordinality reproduces today's
+  routing exactly.
+- **The DB does the deletes.** The two FK behaviours retire the whole "this source points
+  at something that no longer exists" class. `projectRepos.remove()` strips the repo from
+  `jira_sources.repo_ids` alongside `items.repo_ids`.
+- **Stable ids let the UI edit one source.** The old shape was read-modify-write over a
+  shared array: two tabs stomped each other, and delete-then-re-add silently moved a
+  source to the end of the global order — quietly changing which project won an ambiguous
+  issue.
+
+`repo_id` becomes `repo_ids[]`. That is a deletion: the union logic (`distinctRepos` and
+the two "matched repos of that project" passes) existed only because a source could name
+one repo.
+
+### Routing
+
+- **Lowest source `id` wins globally.** First-created-source-wins, and because new rows
+  always sort last, adding a source to a second project cannot hijack routing an existing
+  source already owns. `jira_issues` keeps `jira_key` as its PK, so one issue is still one
+  Task and nothing in flight moves.
+- *Rejected:* one Task per matching project. It forces the PK to `(jira_key, item_id)`,
+  posts N milestone comments onto one shared Jira issue, and fires `transitionToDone` when
+  the first of N Tasks finishes — real blast radius on someone else's board for an
+  ambiguity the Owner fixes by narrowing a JQL.
+- **Behaviour change:** the queueing workflow is now the matched source's **own**
+  `workflow_id`, not "the first source in the winning project that has one". An issue
+  caught by a deliberately workflow-less query used to be queued by a different query's
+  workflow. It now waits as a draft with a `needs_you` notification, which is what "query
+  + workflow is one combo" means.
+
+### Surface
+
+`GET/PUT /api/integrations/jira` shrinks to connection + import; `UpdateJiraConfigSchema`
+is `.strict()`, so a stale caller sending `sources` gets a 400 — the same hard break the
+retired `jql` / `project_id` / `label_workflows` fields took. Sources get
+`GET/POST /api/projects/:projectId/jira-sources` and
+`PATCH/DELETE /api/projects/:projectId/jira-sources/:id`, surfaced on a new **Jira** tab on
+Project Detail (`ProjectJiraCard`). Settings keeps the connection, the poll interval and
+Sync now.
+
+`packages/shared` changes (Owner-sanctioned): `IJiraSource` reshaped, `IJiraConfig.sources`
+removed, `sources` dropped from `UpdateJiraConfigSchema`, and `CreateJiraSourceSchema` /
+`UpdateJiraSourceSchema` added.

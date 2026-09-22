@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import type { IJiraConfig, IProjectRepo, IWorkflow } from '@atlas/shared';
@@ -18,7 +18,6 @@ const CONFIG: IJiraConfig = {
     api_token_set: true,
     poll_interval_minutes: 60,
     extra_fields: [],
-    sources: [{ repo_id: 'p1', jql: 'project = ATL', workflow_id: 'wf-dev' }],
     last_sync_at: null,
     last_sync_ok: null,
     last_sync_message: null,
@@ -91,48 +90,21 @@ function mount(
 }
 
 describe('JiraTab', () => {
-    it('shows the saved connection without the token, and each source', async () => {
+    it('shows the saved connection without the token', async () => {
         mount();
         expect(await screen.findByDisplayValue('https://acme.atlassian.net')).toBeInTheDocument();
         expect(screen.getByLabelText('Jira API token')).toHaveValue('');
         expect(screen.getByPlaceholderText('Stored. Type to replace.')).toBeInTheDocument();
-        expect(await screen.findByText('Sandbox / core')).toBeInTheDocument();
-        expect(screen.getByText('project = ATL')).toBeInTheDocument();
-        expect(await screen.findByText('Development')).toBeInTheDocument();
     });
 
-    it("adds a source, offering only workflows that take Tasks in the repo's project", async () => {
-        const puts: unknown[] = [];
-        mount((b) => puts.push(b));
-        await screen.findByText('Sandbox / core');
-
-        await userEvent.click(screen.getByLabelText('Source repo'));
-        await userEvent.click(
-            within(await screen.findByRole('listbox')).getByText('Sandbox / web')
-        );
-        await userEvent.type(screen.getByLabelText('Source JQL'), 'labels = web');
-        await userEvent.click(screen.getByLabelText('Source workflow'));
-        const listbox = await screen.findByRole('listbox');
-        expect(within(listbox).queryByText('News')).not.toBeInTheDocument();
-        expect(within(listbox).queryByText('Site delivery')).not.toBeInTheDocument();
-        await userEvent.click(within(listbox).getByText('QA'));
-        await userEvent.click(screen.getByRole('button', { name: 'Add source' }));
-
-        await waitFor(() =>
-            expect(puts).toContainEqual({
-                sources: [
-                    { repo_id: 'p1', jql: 'project = ATL', workflow_id: 'wf-dev' },
-                    { repo_id: 'r-web', jql: 'labels = web', workflow_id: 'wf-qa' },
-                ],
-            })
-        );
-    });
-
-    it('removes a source', async () => {
-        const puts: unknown[] = [];
-        mount((b) => puts.push(b));
-        await userEvent.click(await screen.findByRole('button', { name: 'Remove source 1' }));
-        await waitFor(() => expect(puts).toContainEqual({ sources: [] }));
+    // Sources moved to each project's Jira tab (migration 010); their tests
+    // live in pages/project/ProjectJiraCard.test.tsx.
+    it('points at the project tab instead of listing sources', async () => {
+        mount();
+        expect(await screen.findByDisplayValue('https://acme.atlassian.net')).toBeInTheDocument();
+        expect(screen.queryByLabelText('Source JQL')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Add source' })).not.toBeInTheDocument();
+        expect(screen.getByText(/Sources live on each project/)).toBeInTheDocument();
     });
 
     // ─── Connection fields: commit on blur, not on keystroke ────────────────
@@ -163,7 +135,9 @@ describe('JiraTab', () => {
         const field = await screen.findByPlaceholderText('https://your-site.atlassian.net');
         await userEvent.click(field);
         await userEvent.tab();
-        await waitFor(() => expect(screen.getByText('project = ATL')).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByDisplayValue('https://acme.atlassian.net')).toBeInTheDocument()
+        );
         expect(puts).toEqual([]);
     });
 
@@ -216,7 +190,9 @@ describe('JiraTab', () => {
         mount((b) => puts.push(b));
         await userEvent.click(await screen.findByLabelText('Jira API token'));
         await userEvent.tab();
-        await waitFor(() => expect(screen.getByText('project = ATL')).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByDisplayValue('https://acme.atlassian.net')).toBeInTheDocument()
+        );
         expect(puts).toEqual([]);
     });
 
@@ -301,7 +277,9 @@ describe('JiraTab', () => {
         const field = await screen.findByDisplayValue('Story Points');
         await userEvent.click(field);
         await userEvent.tab();
-        await waitFor(() => expect(screen.getByText('project = ATL')).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByDisplayValue('https://acme.atlassian.net')).toBeInTheDocument()
+        );
         expect(puts).toEqual([]);
     });
 

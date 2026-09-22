@@ -87,9 +87,20 @@ test.beforeAll(async () => {
 
 test.afterAll(async ({ request }) => {
     server.close();
-    // Leave the singleton config clean for other specs.
+    // Leave the singleton config clean for other specs. Sources live on the
+    // project now (migration 010), so they are deleted through their own route.
+    const projects = await apiGet<{ id: string }[]>(request, '/api/projects');
+    for (const p of projects) {
+        const sources = await apiGet<{ id: number }[]>(
+            request,
+            `/api/projects/${p.id}/jira-sources`
+        );
+        for (const s of sources) {
+            await request.delete(`${API}/api/projects/${p.id}/jira-sources/${s.id}`);
+        }
+    }
     await request.put(`${API}/api/integrations/jira`, {
-        data: { enabled: false, site_url: null, email: null, sources: [] },
+        data: { enabled: false, site_url: null, email: null },
     });
 });
 
@@ -128,25 +139,24 @@ test.describe('Jira bridge', () => {
         await page.getByRole('button', { name: 'Test connection' }).click();
         await expect(page.getByText('Connected to Jira as Fake Owner')).toBeVisible();
 
-        // One source: the seeded project's primary repo (listed first for its project).
-        await page.getByLabel('Source repo').click();
-        await page
-            .getByRole('option', { name: new RegExp(`^${PROJECT_NAME} / `) })
-            .first()
-            .click();
-        await page.getByLabel('Source JQL').fill('project = FAKE');
-        await page.getByLabel('Source workflow').click();
-        await page.getByRole('option', { name: 'E2E Jira delivery' }).click();
-        await page.getByRole('button', { name: 'Add source' }).click();
-        await expect(page.getByText('Jira source added')).toBeVisible();
-
         // The token never comes back from the API.
         const cfgRes = await request.get(`${API}/api/integrations/jira`);
         expect(await cfgRes.text()).not.toContain('e2e-token');
 
+        // The source — one query + workflow + repos combo — lives on the
+        // project, not in Settings (migration 010).
+        const projects = await apiGet<{ id: string; name: string }[]>(request, '/api/projects');
+        const projectId = projects.find((p) => p.name === PROJECT_NAME)?.id ?? projects[0]!.id;
+        await goto(page, `/projects/${projectId}?tab=jira`);
+        await page.getByRole('button', { name: 'Add source' }).click();
+        await page.getByLabel('JQL').fill('project = FAKE');
+        await page.getByLabel('Workflow').click();
+        await page.getByRole('option', { name: 'E2E Jira delivery' }).click();
+        await page.getByRole('button', { name: 'Save' }).click();
+        await expect(page.getByText('Source added')).toBeVisible();
+
         await page.getByRole('button', { name: 'Sync now' }).click();
         await expect(page.getByText(/Jira sync: 1 imported/)).toBeVisible();
-        await expect(page.getByText(/Last sync/)).toBeVisible();
 
         const tasks = await apiGet<
             Array<{ id: string; title: string; status: string; workflow_id: string | null }>

@@ -79,6 +79,8 @@ const TRUNCATE_TABLES = [
     'project_issue_counters',
     // Migration 042 — Jira bridge. jira_config is a singleton the service upserts.
     'jira_issues',
+    // Migration 010 — cascades from projects, but truncate runs before them.
+    'jira_sources',
     'jira_config',
     'items',
     // Migration 043 — a project's extra repos (ADR 0017).

@@ -3,7 +3,7 @@
 **Route:** `/projects/:id` • **Component:** `packages/web/src/pages/ProjectDetail.tsx` • **Slug:** `project`
 
 ## Purpose
-Single-project workspace. 6 tabs (Overview, Tasks, Guard-rails, Repos, Setup, History) with shared header + right rail.
+Single-project workspace. 7 tabs (Overview, Tasks, Guard-rails, Repos, Jira, Setup, History) with shared header + right rail.
 
 ## States
 - **Loading**: `projectsLoading` → skeleton (lines 103-111)
@@ -39,6 +39,7 @@ All three **Edit guard-rails** affordances (header badge, actions menu, right-ra
 | Tasks | `tasks` | `TasksTab` → `TasksTabContent` (`pages/project/`) — "Showing N tasks in this project", **Open in Tasks** link (`/tasks?project=<name>`), and the shared `TaskTable` (Sub-tasks column = `sub_task_count`). Data is lifted to the page (below); Skeleton until the tree loads |
 | Guard-rails | `guardrails` | `GuardrailsTab` — full `ProjectGuardrailsBody` (see page 04) |
 | Repos | `repos` | `ProjectReposCard` (`pages/project/`) — every git repo of the project (ADR 0018), in order; **none is primary**. Each row: name (mono), default-branch chip (mono), clone status, `git_url` link, and one **Actions for `<name>`** row menu: **Edit** (`EditRepoDialog`, default branch only), **Auto-fetch schedule…** (`AutoFetchScheduleModal`, per repo), **Re-clone from remote** (`RecloneProjectModal`, per repo), **Open folder** (`POST …/repos/:repoId/reveal`), **Remove** (confirm; allowed on **every** repo including the last — the folder stays on disk). **Add repo** opens `AddRepoDialog`. Empty state: "No repos yet" |
+| Jira | `jira` | `ProjectJiraCard` (`pages/project/`) — this project's Jira **sources** (migration 010), moved off the global Settings list. Each row: the JQL (mono), the workflow name ("No workflow — you pick one" when unset) and a chip per repo, with an **Actions for source N** menu (**Edit**, **Remove**). **Add source** / **Edit** open `JiraSourceDialog`: JQL (multiline, mono), a **Workflow** select restricted to `input_kind='item'` workflows that are global or this project's, and a multi-select **Repos** (pre-filled with every repo — a Task must name at least one). **Sync now** reuses `POST /api/integrations/jira/sync` and is disabled until a token is stored; an info alert links to Settings → Jira when none is. Ordering matters: an issue matching sources in two projects becomes ONE Task under the **lowest-id** (first-created) source, and editing never re-orders. Empty state: "No Jira sources yet" |
 | Setup | `setup` | `SetupTab` — a **Repo** select (ADR 0018) plus the `.sh` + `.ps1` editors for that repo, saved with `PATCH /api/projects/:id/repos/:repoId`. An info alert replaces the editors when the project has no repos. Copy states the real behaviour: the agent runner (`project-setup-runner`) runs the PowerShell body on Windows hosts and the shell body elsewhere in the run's fresh worktree **before the CLI starts**; a failing script ends the run as `setup_failed` and the CLI never spawns. |
 | History | `history` | `HistoryTab` — newest-first list of every agent run that touched any item in this project (Tasks and sub-tasks). Each row: status dot + agent chip + linked item id + run-status pill + relative timestamp. The item id links to `/tasks/:id` or `/sub-tasks/:id`; "in progress / completed / error" link to the run detail page. Empty state when no runs have happened yet. |
 
@@ -63,6 +64,7 @@ All three **Edit guard-rails** affordances (header badge, actions menu, right-ra
 ## Hooks used
 - Page: `useProject(id)`, `useIssues({projectId})` (one `GET /api/issues/tree` — `tasks` + the nested tree; the page derives each Task's `sub_task_count` and the flat sub-task list client-side), `useAgents`, `useSettings`, `useToast`
 - Overview tab: `useProjectCounts(id)` — single consolidated KPI fetch
+- Jira tab: `useProjectJiraSources(id)` (key `['projects', id, 'jira-sources']`), `useCreateJiraSource`, `useUpdateJiraSource`, `useDeleteJiraSource`, `useJiraConfig`, `useSyncJira`, `useWorkflows`
 - Repos tab: `useProjectRepos(id)` (key `['projects', id, 'repos']`, so the page refresh and the SSE `clone_completed` invalidation cover it), `useRemoveProjectRepo`, `useUpdateProjectRepo`; `AddRepoDialog`: `useCloneProjectRepo`, `useConnectProjectRepo`, `useCloneJob`, `useCredentials`
 
 ## API endpoints touched
@@ -71,6 +73,7 @@ All three **Edit guard-rails** affordances (header badge, actions menu, right-ra
 - `GET /api/run?project_id=…&limit=200` — backs the History tab. Server-side join on `items.project_id` so the page doesn't have to enumerate every child item; a single query returns runs across all levels of the project tree.
 - `DELETE /api/projects/:id` (via `DeleteProjectModal`)
 - `GET /api/projects/:id/env`, `PUT /api/projects/:id/env`, `GET /api/projects/:id/env/:key/value` (via `ProjectEnvSecretsModal`)
+- `GET/POST /api/projects/:id/jira-sources`, `PATCH/DELETE /api/projects/:id/jira-sources/:sourceId`, `POST /api/integrations/jira/sync` (Jira tab)
 - `GET/POST /api/projects/:id/repos`, `PATCH/DELETE /api/projects/:id/repos/:repoId`, `GET /api/credentials`, `GET /api/projects/folder-origin`, `GET /api/fs/stat` (Repos tab)
 
 ## Permissions / guards

@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+    CreateJiraSourceSchema,
     UpdateExternalNotificationSchema,
     UpdateJiraConfigSchema,
+    UpdateJiraSourceSchema,
     AgentCategorySchema,
     AgentCliSchema,
     AgentMemoryUpdateSchema,
@@ -936,6 +938,43 @@ describe('refine-callback coverage', () => {
 // lines / 94.11% functions on 2026-09-20), and it guards something real: the
 // Jira bridge sends Basic-auth credentials to this origin, so plain http is
 // allowed only on loopback.
+describe('Jira source schemas', () => {
+    it('defaults a missing workflow to null — a source may wait for the Owner', () => {
+        const out = CreateJiraSourceSchema.parse({ jql: 'project = ATL', repo_ids: ['r1'] });
+        expect(out.workflow_id).toBeNull();
+    });
+
+    it('needs a query and at least one repo — a Task must name a repo', () => {
+        expect(
+            CreateJiraSourceSchema.safeParse({ jql: '   ', repo_ids: ['r1'] }).success
+        ).toBe(false);
+        expect(
+            CreateJiraSourceSchema.safeParse({ jql: 'project = ATL', repo_ids: [] }).success
+        ).toBe(false);
+    });
+
+    it('rejects an unknown key rather than dropping it', () => {
+        expect(
+            CreateJiraSourceSchema.safeParse({
+                jql: 'project = ATL',
+                repo_ids: ['r1'],
+                repo_id: 'r1',
+            }).success
+        ).toBe(false);
+    });
+
+    // Written longhand rather than CreateJiraSourceSchema.partial(): .partial()
+    // wraps workflow_id's .default(null) in a ZodOptional, which short-circuits
+    // on undefined — an omitted key would come back present-but-undefined and
+    // clear a workflow nobody asked to clear.
+    it('leaves an omitted workflow absent instead of defaulting it to null', () => {
+        const out = UpdateJiraSourceSchema.parse({ jql: 'project = ATL' });
+        expect('workflow_id' in out).toBe(false);
+        // …while an explicit null still clears it.
+        expect(UpdateJiraSourceSchema.parse({ workflow_id: null }).workflow_id).toBeNull();
+    });
+});
+
 describe('UpdateJiraConfigSchema — site_url origin rule', () => {
     const base = {
         enabled: true,
@@ -943,7 +982,6 @@ describe('UpdateJiraConfigSchema — site_url origin rule', () => {
         api_token: '',
         poll_interval_minutes: 10,
         extra_fields: [],
-        sources: [],
     };
     const parse = (site_url: string | null) =>
         UpdateJiraConfigSchema.safeParse({ ...base, site_url });

@@ -225,13 +225,30 @@ Fields: `id, item_id, link_kind, url, title, external_ref, created_at, created_b
 - `pr_state` ∈ `'open' | 'merged' | 'closed' | null` (migration 033, CHECK constraint) — last GitHub state observed for a PR link; null until the first successful lookup, and forever on a project with no credential.
 - `pr_state_checked_at` (DB only, not on the wire) — stamped on every lookup attempt, success or failure. Reading the links (`GET …/external-links`, every `/full` envelope) refreshes PR links older than 5 min in the background; `POST /api/issues/:type/:id/external-links/refresh` refreshes synchronously.
 
-### IJiraConfig / jira_issues (ADR 0016, migrations 042 + 044)
+### IJiraConfig / jira_sources / jira_issues (ADR 0016, migrations 042 + 044 + 010)
 `jira_config` is a singleton row holding the Jira bridge config. `IJiraConfig` returns every column except the token, and adds `api_token_set: boolean`:
 - `enabled`, `site_url`, `email`
 - `poll_interval_minutes`
 - `extra_fields` (string[])
-- `sources` (`IJiraSource[]`, ordered, ADR 0017 / migration 044; replaced `jql`, `project_id` and `label_workflows`): `{repo_id, jql, workflow_id | null}`. `repo_id` is a project repo id. An issue matching several sources becomes one Task in the first match's project with `repo_ids` = the matched repos of that project; the first of those sources with a workflow queues it
 - `last_sync_at`, `last_sync_ok`, `last_sync_message`
+
+`sources` is **no longer on this row** (migration 010): the combos belong to a project.
+The singleton keeps only what is genuinely one-per-install — the connection and the poller.
+
+`jira_sources` — one row per **query + workflow + repos** combo:
+- `id serial PRIMARY KEY`. The id IS the routing order, **globally, across every project**.
+- `project_id` → `projects`, `ON DELETE CASCADE`.
+- `jql`, `workflow_id` → `workflows` `ON DELETE SET NULL` (null leaves imported Tasks as drafts with a `needs_you` notification).
+- `repo_ids jsonb`, ordered, the same shape as `items.repo_ids`; `projectRepos.remove()` strips a deleted repo from both.
+
+**Routing.** Every sync runs every source's JQL. An issue matching several sources still
+becomes **one** Task — `jira_issues.jira_key` is the PK — in the project of the
+**lowest-id** (first-created) source, with `repo_ids` = the repos of that project's
+matching sources in source order. The queueing workflow is that matched source's **own**
+`workflow_id`; it used to be "the first source in the winning project that has one", which
+let a workflow-less query be queued by a different query's workflow. Because new rows
+always sort last, adding a source to a second project can never hijack routing an existing
+source already owns.
 
 `jira_issues` is DB-only, one row per imported Jira issue:
 - `jira_key` is the PK.

@@ -128,7 +128,6 @@ function rowToConfig(row: ConfigRow | undefined): IJiraConfig {
         api_token_set: Boolean(row?.api_token_encrypted),
         poll_interval_minutes: row?.poll_interval_minutes ?? 60,
         extra_fields: row?.extra_fields ?? [],
-        sources: row?.sources ?? [],
         last_sync_at: toIso(row?.last_sync_at),
         last_sync_ok: row?.last_sync_ok ?? null,
         last_sync_message: row?.last_sync_message ?? null,
@@ -151,20 +150,123 @@ function credsOf(row: ConfigRow | undefined): Creds {
     };
 }
 
-async function validateSources(sources: IJiraSource[]): Promise<void> {
-    const repos = new Map((await projectReposService.listAll()).map((r) => [r.id, r]));
-    for (const [i, s] of sources.entries()) {
-        const bad = (why: string) =>
-            new ApiError('validation_error', `Source ${i + 1}: ${why}`, 400);
-        const repo = repos.get(s.repo_id);
-        if (!repo) throw bad('repo not found');
-        if (!s.workflow_id) continue;
-        const wf = await workflowsService.get(s.workflow_id);
-        if (!wf) throw bad('workflow not found');
-        if (wf.input_kind !== 'item') throw bad(`${wf.name} does not take Tasks`);
-        if (wf.project_id && wf.project_id !== repo.project_id)
-            throw bad(`${wf.name} belongs to a different project`);
+const MAX_SOURCES_PER_PROJECT = 50;
+
+function sourceRowToSource(r: {
+    id: number;
+    project_id: string;
+    jql: string;
+    workflow_id: string | null;
+    repo_ids: string[];
+}): IJiraSource {
+    return {
+        id: r.id,
+        project_id: r.project_id,
+        jql: r.jql,
+        workflow_id: r.workflow_id,
+        repo_ids: r.repo_ids ?? [],
+    };
+}
+
+/**
+ * Every source, ordered by `id` — creation order across ALL projects. That is
+ * the tie-break for an issue matching sources in two projects: lowest id wins,
+ * so it becomes one Task in that source's project (`jira_issues` is keyed by
+ * `jira_key`, one Task per issue).
+ */
+async function listAllSources(): Promise<IJiraSource[]> {
+    const rows = await db.selectFrom('jira_sources').selectAll().orderBy('id', 'asc').execute();
+    return rows.map(sourceRowToSource);
+}
+
+async function listSources(projectId: string): Promise<IJiraSource[]> {
+    const rows = await db
+        .selectFrom('jira_sources')
+        .selectAll()
+        .where('project_id', '=', projectId)
+        .orderBy('id', 'asc')
+        .execute();
+    return rows.map(sourceRowToSource);
+}
+
+async function validateSource(
+    projectId: string,
+    input: { jql?: string | undefined; workflow_id?: string | null | undefined; repo_ids?: string[] | undefined }
+): Promise<void> {
+    const bad = (why: string) => new ApiError('validation_error', why, 400);
+    if (input.repo_ids !== undefined) {
+        const repos = new Map(
+            (await projectReposService.list(projectId)).map((r) => [r.id, r])
+        );
+        for (const id of input.repo_ids) {
+            if (!repos.has(id)) throw bad(`Repo ${id} is not in this project`);
+        }
     }
+    if (!input.workflow_id) return;
+    const wf = await workflowsService.get(input.workflow_id);
+    if (!wf) throw bad('Workflow not found');
+    if (wf.input_kind !== 'item') throw bad(`${wf.name} does not take Tasks`);
+    if (wf.project_id && wf.project_id !== projectId)
+        throw bad(`${wf.name} belongs to a different project`);
+}
+
+async function createSource(
+    projectId: string,
+    input: { jql: string; workflow_id: string | null; repo_ids: string[] }
+): Promise<IJiraSource> {
+    await validateSource(projectId, input);
+    const existing = await db
+        .selectFrom('jira_sources')
+        .select((eb) => eb.fn.countAll().as('n'))
+        .where('project_id', '=', projectId)
+        .executeTakeFirst();
+    if (Number(existing?.n ?? 0) >= MAX_SOURCES_PER_PROJECT) {
+        throw new ApiError(
+            'conflict',
+            `A project holds at most ${MAX_SOURCES_PER_PROJECT} Jira sources`,
+            409
+        );
+    }
+    const row = await db
+        .insertInto('jira_sources')
+        .values({
+            project_id: projectId,
+            jql: input.jql,
+            workflow_id: input.workflow_id,
+            repo_ids: JSON.stringify(input.repo_ids),
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+    return sourceRowToSource(row);
+}
+
+async function updateSource(
+    projectId: string,
+    id: number,
+    patch: { jql?: string | undefined; workflow_id?: string | null | undefined; repo_ids?: string[] | undefined }
+): Promise<IJiraSource | null> {
+    await validateSource(projectId, patch);
+    const row = await db
+        .updateTable('jira_sources')
+        .set({
+            ...(patch.jql !== undefined ? { jql: patch.jql } : {}),
+            ...(patch.workflow_id !== undefined ? { workflow_id: patch.workflow_id } : {}),
+            ...(patch.repo_ids !== undefined ? { repo_ids: JSON.stringify(patch.repo_ids) } : {}),
+        })
+        .where('id', '=', id)
+        .where('project_id', '=', projectId)
+        .returningAll()
+        .executeTakeFirst();
+    return row ? sourceRowToSource(row) : null;
+}
+
+async function deleteSource(projectId: string, id: number): Promise<boolean> {
+    const res = await db
+        .deleteFrom('jira_sources')
+        .where('id', '=', id)
+        .where('project_id', '=', projectId)
+        .executeTakeFirst();
+    return Number(res.numDeletedRows ?? 0) > 0;
 }
 
 async function getConfig(): Promise<IJiraConfig> {
@@ -173,7 +275,6 @@ async function getConfig(): Promise<IJiraConfig> {
 
 async function saveConfig(patch: ConfigPatch): Promise<IJiraConfig> {
     const current = rowToConfig(await loadRow());
-    if (patch.sources !== undefined) await validateSources(patch.sources);
     const values = {
         ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
         ...(patch.site_url !== undefined ? { site_url: patch.site_url } : {}),
@@ -192,7 +293,6 @@ async function saveConfig(patch: ConfigPatch): Promise<IJiraConfig> {
         ...(patch.extra_fields !== undefined
             ? { extra_fields: JSON.stringify(patch.extra_fields) }
             : {}),
-        ...(patch.sources !== undefined ? { sources: JSON.stringify(patch.sources) } : {}),
         updated_at: new Date().toISOString(),
     };
     await db
@@ -410,15 +510,16 @@ function taskTitle(issue: JiraIssue): string {
 // ── Pull: Jira → Atlas ───────────────────────────────────────────────────────
 
 /** A source that matched an issue, with its repo resolved. */
+/** One source that matched an issue, with its `repo_ids` resolved to rows. */
 interface Match {
-    repo: IProjectRepo;
-    workflow_id: string | null;
+    source: IJiraSource;
+    repos: IProjectRepo[];
 }
 
-/** The distinct repos of `matches` that `keep` accepts, in source order. */
-function distinctRepos(matches: Match[], keep: (r: IProjectRepo) => boolean): IProjectRepo[] {
-    const kept = matches.filter((m) => keep(m.repo));
-    return [...new Map(kept.map((m) => [m.repo.id, m.repo])).values()];
+/** The distinct repos of the matches `keep` accepts, in source order. */
+function distinctRepos(matches: Match[], keep: (m: Match) => boolean): IProjectRepo[] {
+    const kept = matches.filter(keep).flatMap((m) => m.repos);
+    return [...new Map(kept.map((r) => [r.id, r])).values()];
 }
 
 async function importIssue(
@@ -432,10 +533,12 @@ async function importIssue(
     const labels = ((issue.fields['labels'] as string[] | undefined) ?? []).filter(
         (l) => l.length <= 40
     );
-    const projectId = first.repo.project_id;
-    const repos = distinctRepos(matches, (r) => r.project_id === projectId);
-    const workflowId =
-        matches.find((m) => m.repo.project_id === projectId && m.workflow_id)?.workflow_id ?? null;
+    const projectId = first.source.project_id;
+    const repos = distinctRepos(matches, (m) => m.source.project_id === projectId);
+    // The matched source's OWN workflow — a source is one query+workflow combo.
+    // It used to be "the first source in the winning project that HAS a
+    // workflow", which quietly borrowed a workflow from a different query.
+    const workflowId = first.source.workflow_id;
     const url = `${siteUrl}/browse/${issue.key}`;
     const task = await tasksService.create({
         project_id: projectId,
@@ -485,7 +588,7 @@ async function importIssue(
     else result.needs_workflow++;
     // A Task lives in one project: matches elsewhere are named so the Owner can split the work.
     const elsewhereNames = await Promise.all(
-        distinctRepos(matches, (r) => r.project_id !== projectId).map(
+        distinctRepos(matches, (m) => m.source.project_id !== projectId).map(
             async (r) =>
                 `${(await projectsService.get(r.project_id))?.name ?? r.project_id} / ${r.name}`
         )
@@ -539,7 +642,7 @@ async function refreshIssue(
             // Not started yet: the description is still the whole prompt, so refresh it
             // in place, and the repos follow the sources that match now (the Task
             // keeps its repos when none of them are in its project any more).
-            const matched = distinctRepos(matches, (r) => r.project_id === task.project_id);
+            const matched = distinctRepos(matches, (m) => m.source.project_id === task.project_id);
             const repoIds = matched.length > 0 ? matched.map((r) => r.id) : task.repo_ids;
             const title = taskTitle(issue);
             const description = composeTaskDescription(
@@ -586,18 +689,28 @@ async function refreshIssue(
 /** Returns notes for the sync message (sources skipped because their repo is gone). */
 async function pull(row: ConfigRow, creds: Creds, result: IJiraSyncResult): Promise<string[]> {
     const cfg = rowToConfig(row);
-    if (cfg.sources.length === 0)
-        throw new ApiError('validation_error', 'Add a source (a repo and its JQL) first', 400);
+    // Ordered by id across every project: the lowest-id matching source wins an
+    // issue that several match, because one issue is one Task.
+    const sources = await listAllSources();
+    if (sources.length === 0)
+        throw new ApiError(
+            'validation_error',
+            "Add a Jira source on a project's Jira tab first",
+            400
+        );
     const repos = new Map((await projectReposService.listAll()).map((r) => [r.id, r]));
     const notes: string[] = [];
     const found = new Map<string, { issue: JiraIssue; first: Match; matches: Match[] }>();
-    for (const [i, source] of cfg.sources.entries()) {
-        const repo = repos.get(source.repo_id);
-        if (!repo) {
-            notes.push(`Source ${i + 1} skipped: its repo no longer exists.`);
+    for (const [i, source] of sources.entries()) {
+        const resolved = source.repo_ids.flatMap((id) => {
+            const r = repos.get(id);
+            return r ? [r] : [];
+        });
+        if (resolved.length === 0) {
+            notes.push(`Source ${i + 1} skipped: none of its repos exist any more.`);
             continue;
         }
-        const match = { repo, workflow_id: source.workflow_id };
+        const match: Match = { source, repos: resolved };
         for (const issue of await searchAll(creds, source.jql)) {
             // Jira sub-tasks are listed inside their parent's description, not imported on their own.
             if ((issue.fields['issuetype'] as { subtask?: boolean } | undefined)?.subtask) continue;
@@ -947,4 +1060,9 @@ export const jiraSync = {
     testConnection,
     syncNow: () => exclusive(fullSync),
     tick,
+    // Sources belong to a project (migration 010).
+    listSources,
+    createSource,
+    updateSource,
+    deleteSource,
 };
