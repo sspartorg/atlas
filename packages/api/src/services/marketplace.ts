@@ -8,6 +8,7 @@
 // marketplace is a generic catalog; agent-specific behavior lives in
 // each agent's prompt.
 
+import { createHash } from 'node:crypto';
 import { db } from '../db/kysely-client.js';
 import { agentsService, assertModelInRegistry } from './agents.js';
 import { packAgentBundle, type AgentBundle } from './agent-bundle.js';
@@ -149,6 +150,34 @@ export interface MarketplaceSearchInput {
     category?: AgentCategory | undefined;
     kind_slug?: AgentKindSlug | undefined;
     limit?: number | undefined;
+}
+
+/**
+ * Fingerprint of exactly the three fields `acceptUpgrade` overwrites.
+ *
+ * Deliberately narrow. It must not move when the Owner renames, pauses, or
+ * re-models an agent, because an upgrade does not touch any of those — a hash
+ * over the whole row would block upgrades that were never going to overwrite
+ * anything. Checklists are folded in here because they live in their own table
+ * with no timestamps, so nothing else can see them change.
+ *
+ * Checklist order matters to the agent, so sort by `sort_order` rather than
+ * whatever order the rows came back in, or an unchanged list hashes
+ * differently between reads.
+ */
+export function upgradableHash(input: {
+    prompt_md: string;
+    settings_json: unknown;
+    checklists: ReadonlyArray<{ label: string; sort_order: number; required: boolean }>;
+}): string {
+    const canonical = JSON.stringify({
+        prompt_md: input.prompt_md,
+        settings_json: input.settings_json ?? {},
+        checklists: [...input.checklists]
+            .sort((a, b) => a.sort_order - b.sort_order)
+            .map((c) => [c.label, c.sort_order, c.required]),
+    });
+    return createHash('sha256').update(canonical).digest('hex');
 }
 
 export const marketplaceService = {
@@ -347,6 +376,13 @@ export const marketplaceService = {
                     // even after the user installs under a custom slug.
                     marketplace_source_id: m.id,
                     marketplace_pulled_version: m.version,
+                    // What was pulled, so a later import can tell whether the
+                    // Owner has since changed any of it.
+                    marketplace_upgradable_hash: upgradableHash({
+                        prompt_md: m.prompt_md,
+                        settings_json: m.settings_json,
+                        checklists: full.checklists,
+                    }),
                 })
                 .execute();
             await trx
@@ -493,7 +529,21 @@ export const marketplaceService = {
             // means at least one field was applied, so it's safe to advance.
             await trx
                 .updateTable('agents')
-                .set({ marketplace_pulled_version: full.agent.version })
+                .set({
+                    marketplace_pulled_version: full.agent.version,
+                    // Reset the baseline to what this upgrade just wrote, so
+                    // the NEXT one compares against the right thing. An
+                    // upgrade the Owner narrowed to a subset of fields leaves
+                    // the others local, so hash what the row actually holds
+                    // now — not what the catalog says.
+                    marketplace_upgradable_hash: upgradableHash({
+                        prompt_md: fields.includes('prompt_md') ? full.agent.prompt_md : agent.prompt_md,
+                        settings_json: fields.includes('settings_json') ? full.agent.settings_json : agent.settings_json,
+                        checklists: fields.includes('checklists')
+                            ? full.checklists
+                            : await trx.selectFrom('agent_checklists').select(['label', 'sort_order', 'required']).where('agent_id', '=', localAgentId).execute(),
+                    }),
+                })
                 .where('id', '=', localAgentId)
                 .execute();
         });
@@ -631,7 +681,7 @@ export const marketplaceService = {
      * `agent_checklists`; the trade is deliberate, and `resolveAgentDependencies`
      * reports every agent it upgraded so the change is never silent.
      */
-    async hasOwnerPromptEdit(localAgentId: string): Promise<boolean> {
+    async hasOwnerEdit(localAgentId: string): Promise<boolean> {
         const row = await db
             .selectFrom('agent_prompt_versions')
             .select('id')
@@ -639,7 +689,37 @@ export const marketplaceService = {
             .where('edited_by', '=', 'Owner')
             .where('version', '>', 1)
             .executeTakeFirst();
-        return row != null;
+        if (row != null) return true;
+
+        // The prompt is only ONE of the three fields an upgrade overwrites.
+        // `settings_json` and the checklists leave no prompt-version row, and a
+        // checklist does not even live on this table — so both used to read as
+        // untouched and get silently overwritten. The hash (migration 009)
+        // covers all three at once, and nothing else: renaming or pausing an
+        // agent must not block a content upgrade.
+        const agent = await db
+            .selectFrom('agents')
+            .select(['prompt_md', 'settings_json', 'marketplace_upgradable_hash'])
+            .where('id', '=', localAgentId)
+            .executeTakeFirst();
+        if (!agent) return false;
+        // Installed before the column existed, so we cannot prove it is safe to
+        // overwrite. Decline, and let the Owner accept in the Marketplace where
+        // they can see what changes. See migration 009.
+        if (!agent.marketplace_upgradable_hash) return true;
+
+        const checklists = await db
+            .selectFrom('agent_checklists')
+            .select(['label', 'sort_order', 'required'])
+            .where('agent_id', '=', localAgentId)
+            .execute();
+        return (
+            upgradableHash({
+                prompt_md: agent.prompt_md,
+                settings_json: agent.settings_json,
+                checklists,
+            }) !== agent.marketplace_upgradable_hash
+        );
     },
 
     /**
@@ -706,7 +786,7 @@ export const marketplaceService = {
                 report.unchanged.push(agentId);
                 continue;
             }
-            if (await this.hasOwnerPromptEdit(agentId)) {
+            if (await this.hasOwnerEdit(agentId)) {
                 report.skipped_edited.push(agentId);
                 continue;
             }
