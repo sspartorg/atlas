@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import type * as NodeFs from 'node:fs';
 
 // Hoisted mock state so the vi.mock factories can close over them safely.
@@ -53,6 +54,17 @@ import {
 } from './git-verify.js';
 
 const ok = (stdout: string): { stdout: string; stderr: string } => ({ stdout, stderr: '' });
+
+// `existsSync` is mocked in this file, so probe the real filesystem by
+// attempting a read instead.
+const fileGone = (path: string): boolean => {
+    try {
+        readFileSync(path);
+        return false;
+    } catch {
+        return true;
+    }
+};
 const fail = (msg = 'git error'): Promise<never> => Promise.reject(new Error(msg));
 
 beforeEach(() => {
@@ -261,6 +273,64 @@ describe('lsRemote', () => {
         expect(args).toContain('credential.helper=');
         expect(args).toContain('ls-remote');
         expect(args).toContain('https://github.com/org/repo');
+    });
+
+    // The whole reason the tmpfile path exists: a token on the argv is
+    // readable by every local user via `ps -eo args`. This asserts it never
+    // gets there, and that the file carrying it is cleaned up afterwards.
+    //
+    // The URL is assembled at runtime rather than written as a literal —
+    // secretlint (pre-commit) flags `scheme://user:pass@host` in source, which
+    // is why this branch had no test and sat uncovered.
+    it('moves URL-embedded auth into a config file, keeping the token off the argv', async () => {
+        const { gitInvokeEnv } = await import('./git-env.js');
+        const user = 'atlas-bot';
+        const secret = ['ghp', 'notarealtoken'].join('_');
+        const url = `https://${user}:${secret}@github.com/org/repo.git`;
+
+        let configPath: string | null = null;
+        let configBody = '';
+        execFileMock.mockImplementationOnce(() => {
+            configPath =
+                ((gitInvokeEnv as unknown as { mock: { calls: [string | null][] } }).mock.calls.at(
+                    -1
+                )?.[0] as string | null) ?? null;
+            if (configPath) configBody = readFileSync(configPath, 'utf-8');
+            return ok('');
+        });
+
+        const result = await lsRemote(url);
+        expect(result).toBe(true);
+
+        const [[, args]] = execFileMock.mock.calls as [[string, string[]]];
+        // The cleaned URL reaches git; the token does not.
+        expect(args).toContain('https://github.com/org/repo.git');
+        expect(args.join(' ')).not.toContain(secret);
+
+        // It travelled in the config file instead...
+        expect(configPath).toBeTruthy();
+        const expected = Buffer.from(`${user}:${secret}`, 'utf-8').toString('base64');
+        expect(configBody).toContain(`AUTHORIZATION: basic ${expected}`);
+
+        // ...which is removed once git returns.
+        expect(fileGone(configPath as unknown as string)).toBe(true);
+    });
+
+    it('still cleans up the auth config file when ls-remote fails', async () => {
+        const { gitInvokeEnv } = await import('./git-env.js');
+        const url = `https://u:${['ghp', 'alsonotreal'].join('_')}@github.com/org/repo.git`;
+        let configPath: string | null = null;
+        execFileMock.mockImplementationOnce(() => {
+            configPath =
+                ((gitInvokeEnv as unknown as { mock: { calls: [string | null][] } }).mock.calls.at(
+                    -1
+                )?.[0] as string | null) ?? null;
+            return fail('authentication failed');
+        });
+
+        expect(await lsRemote(url)).toBe(false);
+        expect(configPath).toBeTruthy();
+        expect(fileGone(configPath as unknown as string)).toBe(true);
     });
 });
 

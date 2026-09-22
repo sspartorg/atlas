@@ -1059,6 +1059,69 @@ describe('project repos (ADR 0018)', () => {
         });
     }
 
+    // `checkLocalClone`'s error branches. These used to live under
+    // `POST /api/projects/connect`, which is gone — the checks it ran are
+    // shared, and `POST /api/projects/:id/repos {mode:'connect'}` is the one
+    // surviving caller, so the branches moved here rather than going away.
+    describe('connect verification failures', () => {
+        beforeEach(async () => {
+            await insertProject('p1', 'ATL', { git_path: '/ws/core' });
+            await insertTestCredential();
+        });
+
+        it('returns 400 with not_git when the folder has no .git dir', async () => {
+            const { hasGitDir } = await import('../services/git-verify.js');
+            (hasGitDir as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
+            const res = await connectRepo('web', '/some/folder');
+            expect(res.statusCode).toBe(400);
+            expect(JSON.parse(res.body).error_kind).toBe('not_git');
+        });
+
+        it('returns 400 with origin_mismatch when the folder origin differs', async () => {
+            const { normalizeRepoUrl } = await import('../services/git-verify.js');
+            (normalizeRepoUrl as ReturnType<typeof vi.fn>)
+                .mockReturnValueOnce('https://github.com/org/repo')
+                .mockReturnValueOnce('https://github.com/org/different');
+            const res = await connectRepo('web', '/some/repo');
+            expect(res.statusCode).toBe(400);
+            expect(JSON.parse(res.body).error_kind).toBe('origin_mismatch');
+        });
+
+        it('returns 400 with credential_missing when the credential is gone', async () => {
+            const { credentialsService: mockCreds } = await import('../services/credentials.js');
+            (mockCreds.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
+            const res = await connectRepo('web', '/some/repo');
+            expect(res.statusCode).toBe(400);
+            expect(JSON.parse(res.body).error_kind).toBe('credential_missing');
+        });
+
+        it('returns 400 with credential_missing when getToken throws', async () => {
+            const { credentialsService: mockCreds } = await import('../services/credentials.js');
+            (mockCreds.getToken as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+                new Error('no token')
+            );
+            const res = await connectRepo('web', '/some/repo');
+            expect(res.statusCode).toBe(400);
+            expect(JSON.parse(res.body).error_kind).toBe('credential_missing');
+        });
+
+        it('returns 400 with auth_failed when the remote refuses the credential', async () => {
+            const { lsRemote } = await import('../services/git-verify.js');
+            (lsRemote as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
+            const res = await connectRepo('web', '/some/repo');
+            expect(res.statusCode).toBe(400);
+            expect(JSON.parse(res.body).error_kind).toBe('auth_failed');
+        });
+
+        it('falls back to "main" when readHead returns null', async () => {
+            const { readHead } = await import('../services/git-verify.js');
+            (readHead as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+            const res = await connectRepo('web', '/some/repo');
+            expect(res.statusCode).toBe(201);
+            expect(JSON.parse(res.body).default_branch).toBe('main');
+        });
+    });
+
     it('lists a project repos in order, none of them primary', async () => {
         await insertProject('p1', 'ATL', { git_path: '/ws/Atlas Core', git_url: 'https://github.com/org/core' });
         await testDb.updateTable('project_repos').set({ name: 'atlas-core' }).where('id', '=', 'p1').execute();
