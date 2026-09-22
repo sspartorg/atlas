@@ -19,7 +19,7 @@ import {
     useWorkflowTemplates,
 } from '../../hooks/useWorkflows.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
-import { INPUT_KIND_LABEL, agentLabel, deliveryLabel, graphAgentIds } from './labels.js';
+import { INPUT_KIND_LABEL, agentLabel, deliveryLabel, templateAgentIds } from './labels.js';
 
 const BLANK = 'blank';
 
@@ -149,8 +149,12 @@ export function NewWorkflowDialog({
     const pending = createBlank.isPending || createFromTemplate.isPending;
     const error = createBlank.error ?? createFromTemplate.error;
     const selectedTemplate = templates.find((t) => t.id === choice);
+    // The template's FULL agent closure, its sub-templates' included. Using
+    // the parent graph alone under-reported badly: picking Delivery listed
+    // four agents while creating it actually installs ten, the other six
+    // belonging to the Build and Test sub-templates.
     const missing = selectedTemplate
-        ? [...new Set(graphAgentIds(selectedTemplate.graph))].filter((id) => !agentsById.has(id))
+        ? templateAgentIds(selectedTemplate, templates).filter((id) => !agentsById.has(id))
         : [];
 
     async function handleCreate() {
@@ -211,7 +215,7 @@ export function NewWorkflowDialog({
                             selected={choice === t.id}
                             onClick={() => setChoice(t.id)}
                         >
-                            <AgentChips ids={graphAgentIds(t.graph)} agentsById={agentsById} />
+                            <AgentChips ids={templateAgentIds(t, templates)} agentsById={agentsById} />
                         </OptionCard>
                     ))}
                 </Box>

@@ -328,10 +328,12 @@ export const workflowsService = {
         // project already had a sub-workflow, so a stale sub-workflow left its
         // agents uninstalled and the run parked on a missing agent.
         const agentIds = [...new Set(this.templateAgentIds(templateId))];
-        for (const agentId of agentIds) {
-            const exists = await db.selectFrom('agents').select('id').where('id', '=', agentId).executeTakeFirst();
-            if (!exists) await marketplaceService.install(agentId);
-        }
+        // Installs what's missing and brings back-linked, unedited agents up to
+        // the catalog. Previously this only checked existence, so a template
+        // could be applied onto agents several versions behind the graph it
+        // shipped with — silently, and with no way to tell. Agents the Owner
+        // has edited are left exactly as they are.
+        await marketplaceService.resolveAgentDependencies(agentIds, { link: true });
         // Some catalog agents ship `inactive` (a leftover from per-agent
         // schedules); the engine parks on an inactive agent, so a workflow made
         // from a template would never run.

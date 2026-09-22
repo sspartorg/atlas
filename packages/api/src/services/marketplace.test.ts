@@ -87,6 +87,58 @@ describe('marketplaceService', () => {
         expect(row2!.version).toBe(5);
     });
 
+    // The whole point of resolveAgentDependencies: an agent that is already
+    // here used to be skipped whatever version it was, so a workflow could be
+    // applied onto agents that no longer matched the graph it shipped with.
+    it('resolveAgentDependencies installs what is missing and upgrades what is stale', async () => {
+        await insertCatalogAgent({ id: 'cat-new', prompt_md: 'fresh prompt' });
+        await insertCatalogAgent({ id: 'cat-old', version: 1, prompt_md: 'v1 prompt' });
+        await marketplaceService.install('cat-old');
+        await testDb.updateTable('marketplace_agents').set({ version: 4, prompt_md: 'v4 prompt' }).where('id', '=', 'cat-old').execute();
+
+        const report = await marketplaceService.resolveAgentDependencies(['cat-new', 'cat-old'], { link: true });
+
+        expect(report.installed).toEqual(['cat-new']);
+        expect(report.upgraded).toEqual(['cat-old']);
+        expect(report.skipped_edited).toEqual([]);
+        const upgraded = await agentsService.get('cat-old');
+        expect(upgraded!.prompt_md).toBe('v4 prompt');
+        expect(upgraded!.marketplace_pulled_version).toBe(4);
+    });
+
+    // An Owner-tuned prompt is work they did deliberately. Resolving a
+    // workflow's dependencies is not permission to throw it away.
+    it('resolveAgentDependencies leaves an Owner-edited agent alone and reports it', async () => {
+        await insertCatalogAgent({ id: 'cat-edited', version: 1, prompt_md: 'v1 prompt' });
+        await marketplaceService.install('cat-edited');
+        await agentsService.update('cat-edited', { prompt_md: 'my own carefully tuned prompt' });
+        await testDb.updateTable('marketplace_agents').set({ version: 9, prompt_md: 'v9 prompt' }).where('id', '=', 'cat-edited').execute();
+
+        const report = await marketplaceService.resolveAgentDependencies(['cat-edited'], { link: true });
+
+        expect(report.skipped_edited).toEqual(['cat-edited']);
+        expect(report.upgraded).toEqual([]);
+        const after = await agentsService.get('cat-edited');
+        expect(after!.prompt_md).toBe('my own carefully tuned prompt');
+        // Pointer left behind on purpose, so the marketplace still offers it.
+        expect(after!.marketplace_pulled_version).toBe(1);
+    });
+
+    // A marketplace upgrade writes `edited_by: 'Marketplace'`, so it must not
+    // make the agent look Owner-edited to the NEXT resolve.
+    it('an upgrade does not make an agent look Owner-edited afterwards', async () => {
+        await insertCatalogAgent({ id: 'cat-seq', version: 1, prompt_md: 'v1' });
+        await marketplaceService.install('cat-seq');
+        await testDb.updateTable('marketplace_agents').set({ version: 2, prompt_md: 'v2' }).where('id', '=', 'cat-seq').execute();
+        expect((await marketplaceService.resolveAgentDependencies(['cat-seq'], { link: true })).upgraded).toEqual(['cat-seq']);
+
+        await testDb.updateTable('marketplace_agents').set({ version: 3, prompt_md: 'v3' }).where('id', '=', 'cat-seq').execute();
+        const second = await marketplaceService.resolveAgentDependencies(['cat-seq'], { link: true });
+        expect(second.upgraded).toEqual(['cat-seq']);
+        expect(second.skipped_edited).toEqual([]);
+        expect((await agentsService.get('cat-seq'))!.prompt_md).toBe('v3');
+    });
+
     it('install collides on the default slug and accepts an override', async () => {
         await insertCatalogAgent({ id: 'cat-y' });
         const first = await marketplaceService.install('cat-y');

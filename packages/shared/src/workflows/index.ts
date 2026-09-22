@@ -261,6 +261,29 @@ export interface IWorkflowQueue {
 }
 
 /** POST /api/workflows/import — a bundle unpacked into one project. */
+/**
+ * What resolving a workflow's agent dependencies actually did.
+ *
+ * Import used to be silent about this: an agent that already existed was
+ * skipped whatever version it was, so a workflow could import "successfully"
+ * onto agents that no longer matched the graph it shipped with, and the Owner
+ * had no way to tell. Every agent an import touches now lands in exactly one
+ * of these buckets.
+ */
+export interface IAgentDependencyReport {
+    /** Not present before; installed from the catalog. */
+    installed: string[];
+    /** Back-linked, behind the catalog, and unedited — brought up to date. */
+    upgraded: string[];
+    /**
+     * Behind the catalog but carrying Owner edits, so left exactly as they are.
+     * The upgrade is still offered in the marketplace UI; nothing was lost.
+     */
+    skipped_edited: string[];
+    /** Already current, or not back-linked to a catalog entry. */
+    unchanged: string[];
+}
+
 export interface IWorkflowImportResult {
     workflow: IWorkflow;
     /** The sub-workflows its Sub-tasks steps use, created with it. */
@@ -269,6 +292,8 @@ export interface IWorkflowImportResult {
     installed_agents: string[];
     /** Agent ids already installed here, used as they are. */
     reused_agents: string[];
+    /** Per-agent detail behind the two lists above. */
+    agents: IAgentDependencyReport;
 }
 
 /**

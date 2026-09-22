@@ -8,7 +8,7 @@ import { server } from '../../test-setup.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { makeProject } from '../../test-utils/factories.js';
 import { makeWorkflow } from '../../test-utils/workflowFixtures.js';
-import { ImportWorkflowDialog } from './ImportWorkflowDialog.js';
+import { ImportWorkflowDialog, importDetail } from './ImportWorkflowDialog.js';
 
 const BASE = 'http://localhost:3000/api';
 
@@ -36,12 +36,33 @@ async function fill() {
 }
 
 describe('ImportWorkflowDialog', () => {
+    // An import can upgrade a stale agent and can decline to touch an edited
+    // one. Both have to be visible: silently changing the Owner's agents, or
+    // silently not changing them, are each their own kind of surprise.
+    it('names upgraded agents and the edited ones it deliberately left alone', () => {
+        const detail = importDetail({
+            workflow: makeWorkflow({ id: 'wf-1', name: 'Delivery' }),
+            sub_workflows: [],
+            installed_agents: [],
+            reused_agents: [],
+            agents: {
+                installed: [],
+                upgraded: ['agent-coder'],
+                skipped_edited: ['agent-qa-writer'],
+                unchanged: [],
+            },
+        });
+        expect(detail).toContain('Upgraded agent-coder');
+        expect(detail).toContain('Kept your edits to agent-qa-writer');
+    });
+
     it('needs a project and a file, uploads them, then opens the imported workflow', async () => {
         const result: IWorkflowImportResult = {
             workflow: makeWorkflow({ id: 'wf-new', name: 'Delivery' }),
             sub_workflows: [],
             installed_agents: ['agent-coder'],
             reused_agents: [],
+            agents: { installed: ['agent-coder'], upgraded: [], skipped_edited: [], unchanged: [] },
         };
         let hit = false;
         server.use(

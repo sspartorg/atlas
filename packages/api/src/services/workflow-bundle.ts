@@ -185,7 +185,18 @@ export async function unpackWorkflowBundle(data: Buffer | Uint8Array): Promise<W
  * are reused untouched; missing ones are imported from the bundle. All or
  * nothing: a failure deletes whatever this import created.
  */
-export async function importWorkflowBundle(bundle: WorkflowBundle, projectId: string): Promise<IWorkflowImportResult> {
+/**
+ * `source` is set when the bundle came from a marketplace entry rather than an
+ * uploaded file, and is what lets the imported workflow be upgraded later. An
+ * uploaded zip passes nothing: it came from "somewhere else" and has no
+ * upstream to track, exactly as `marketplaceService.importBundle` treats the
+ * agents inside it.
+ */
+export async function importWorkflowBundle(
+    bundle: WorkflowBundle,
+    projectId: string,
+    source?: { id: string; version: number }
+): Promise<IWorkflowImportResult> {
     const project = await db.selectFrom('projects').select('id').where('id', '=', projectId).executeTakeFirst();
     if (!project) throw new ApiError('not_found', 'Project not found', 404);
 
@@ -196,7 +207,7 @@ export async function importWorkflowBundle(bundle: WorkflowBundle, projectId: st
     const names = new Set((await db.selectFrom('workflows').select('name').where('project_id', '=', projectId).execute()).map((w) => w.name));
     const installed: string[] = [];
     const created: string[] = [];
-    const create = async (w: PortableWorkflow, graph: IWorkflowGraph) => {
+    const create = async (w: PortableWorkflow, graph: IWorkflowGraph, provenance?: { source_id: string; pulled_version: number }) => {
         // A scheduled workflow would start firing agents on its own; it
         // arrives paused so the Owner turns it on after a look.
         const wf = await workflowsService.create({
@@ -205,7 +216,7 @@ export async function importWorkflowBundle(bundle: WorkflowBundle, projectId: st
             name: uniqueName(w.name, names),
             project_id: projectId,
             status: w.trigger === 'schedule' ? 'inactive' : 'active',
-        });
+        }, provenance);
         created.push(wf.id);
         return wf;
     };
@@ -213,11 +224,26 @@ export async function importWorkflowBundle(bundle: WorkflowBundle, projectId: st
     // workflowsService.create and marketplaceService.importBundle each commit
     // on their own, so the rollback is explicit.
     try {
-        for (const [id, agent] of bundle.agents) {
-            if (existing.has(id)) continue;
-            await marketplaceService.importBundle(agent, { agent_id: id });
-            installed.push(id);
-        }
+        // Missing agents come from the BUNDLE, not the catalog: an uploaded
+        // zip may reference agents the catalog has never heard of, and those
+        // stay deliberately un-back-linked (`importBundle` nulls provenance).
+        //
+        // Agents that are already here are a different question, and the old
+        // `if (existing.has(id)) continue;` answered it wrongly — it skipped
+        // them whatever version they were, so a workflow could import
+        // "successfully" onto agents that no longer matched the graph it
+        // shipped with. `link` lets a catalog-linked one be brought up to date,
+        // unless the Owner has edited it.
+        const agentReport = await marketplaceService.resolveAgentDependencies([...bundle.agents.keys()], {
+            install: async (id) => {
+                const agent = bundle.agents.get(id);
+                /* v8 ignore next -- id comes from bundle.agents.keys(), so the lookup always hits */
+                if (!agent) return;
+                await marketplaceService.importBundle(agent, { agent_id: id });
+            },
+            link: true,
+        });
+        installed.push(...agentReport.installed);
         // The engine parks on an inactive agent (same as createFromTemplate).
         if (installed.length > 0) await db.updateTable('agents').set({ status: 'active' }).where('id', 'in', installed).execute();
 
@@ -228,12 +254,17 @@ export async function importWorkflowBundle(bundle: WorkflowBundle, projectId: st
             subIds.set(ref, wf.id);
             sub_workflows.push(wf);
         }
-        const workflow = await create(bundle.workflow, remapSubs(bundle.workflow.graph, subIds));
+        const workflow = await create(
+            bundle.workflow,
+            remapSubs(bundle.workflow.graph, subIds),
+            source ? { source_id: source.id, pulled_version: source.version } : undefined
+        );
         return {
             workflow,
             sub_workflows,
             installed_agents: installed,
             reused_agents: agentIds.filter((id) => existing.has(id)),
+            agents: agentReport,
         };
     } catch (err) {
         if (created.length > 0) await db.deleteFrom('workflows').where('id', 'in', created).execute();
@@ -284,7 +315,16 @@ export async function publishWorkflow(workflowId: string): Promise<IPublishedWor
     const row = await db
         .insertInto('published_workflows')
         .values({ id: randomUUID(), source_workflow_id: workflowId, ...fields })
-        .onConflict((oc) => oc.column('source_workflow_id').doUpdateSet({ ...fields, updated_at: sql<string>`now()` }))
+        // Republish bumps `version`. The row is overwritten in place, so
+        // without a counter an install that used this entry yesterday had no
+        // way to tell it changed today — the bundle bytes simply differ.
+        .onConflict((oc) =>
+            oc.column('source_workflow_id').doUpdateSet({
+                ...fields,
+                version: sql<number>`published_workflows.version + 1`,
+                updated_at: sql<string>`now()`,
+            })
+        )
         .returningAll()
         .executeTakeFirstOrThrow();
     return publishedEntry(row, bundle);
@@ -314,7 +354,12 @@ export async function publishedWorkflowZip(id: string): Promise<{ filename: stri
 
 export async function importPublishedWorkflow(id: string, projectId: string): Promise<IWorkflowImportResult> {
     const row = await publishedRow(id);
-    return importWorkflowBundle(await unpackWorkflowBundle(row.bundle), projectId);
+    // The imported workflow stays linked to the entry it came from, so a
+    // republish (which bumps `published_workflows.version`) can be detected.
+    return importWorkflowBundle(await unpackWorkflowBundle(row.bundle), projectId, {
+        id: row.id,
+        version: row.version,
+    });
 }
 
 export async function unpublishWorkflow(id: string): Promise<void> {

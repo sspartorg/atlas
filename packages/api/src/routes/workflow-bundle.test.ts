@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import JSZip from 'jszip';
-import type { IPublishedWorkflow, IPublishedWorkflowDetail, IWorkflow, IWorkflowImportResult } from '@atlas/shared';
+import type { IPublishedWorkflow, IPublishedWorkflowDetail, IWorkflow, IWorkflowGraph, IWorkflowImportResult } from '@atlas/shared';
 
 vi.mock('../routes/events.js', () => ({ eventsRoutes: async () => undefined, broadcastSSE: vi.fn() }));
 
@@ -394,6 +394,42 @@ describe('GET /api/workflows/templates/:id/export', () => {
         for (const s of steps) expect(subIds.has(s.sub_workflow_id ?? '')).toBe(true);
     });
 
+    // The guarantee behind "imports never leave you with something missing":
+    // after an import, nothing in any stored graph may still point at a
+    // bundle-local ref, and every agent a graph names must exist.
+    it('leaves no unresolved reference behind after importing Delivery', async () => {
+        await resetToEmptyInstall();
+        await seedCatalog(DELIVERY_AGENTS);
+        const res = await importZip(await exportZip('/api/workflows/templates/delivery/export'), 'p1');
+        expect(res.statusCode).toBe(201);
+
+        const stored = await testDb.selectFrom('workflows').select(['id', 'graph']).execute();
+        const agentIds = new Set((await testDb.selectFrom('agents').select('id').execute()).map((a) => a.id));
+        const workflowIds = new Set(stored.map((w) => w.id));
+        for (const wf of stored) {
+            const graph = wf.graph as unknown as IWorkflowGraph;
+            for (const node of graph.nodes) {
+                if (node.agent_id) expect(agentIds.has(node.agent_id)).toBe(true);
+                if (node.sub_workflow_id) {
+                    // No `template:` or bundle-local ref may survive the import.
+                    expect(node.sub_workflow_id.includes(':')).toBe(false);
+                    expect(workflowIds.has(node.sub_workflow_id)).toBe(true);
+                }
+            }
+        }
+    });
+
+    // Import used to say nothing about what it did to existing agents.
+    it('reports what it installed, upgraded and left alone', async () => {
+        await resetToEmptyInstall();
+        await seedCatalog(DELIVERY_AGENTS);
+        const zipBuf = await exportZip('/api/workflows/templates/delivery/export');
+        const result = (await importZip(zipBuf, 'p1')).json() as IWorkflowImportResult;
+        expect(result.agents.installed.sort()).toEqual([...DELIVERY_AGENTS].sort());
+        expect(result.agents.upgraded).toEqual([]);
+        expect(result.agents.skipped_edited).toEqual([]);
+    });
+
     it('404s for an unknown template or a catalog agent that is missing', async () => {
         expect((await app.inject({ method: 'GET', url: '/api/workflows/templates/nope/export' })).statusCode).toBe(404);
         const res = await app.inject({ method: 'GET', url: '/api/workflows/templates/ai-readiness/export' });
@@ -406,6 +442,24 @@ describe('published workflows (Marketplace)', () => {
     async function publish(workflowId: string) {
         return app.inject({ method: 'POST', url: `/api/workflows/${workflowId}/publish` });
     }
+
+    // A published entry is overwritten in place on republish, so the version
+    // counter is the only way a consumer can tell the entry moved. And what
+    // gets imported must stay linked to it, or it can never be upgraded.
+    it('bumps the version on republish, and links what it imports back to the entry', async () => {
+        const { main } = await seedDelivery();
+        const first = (await publish(main.id)).json() as IPublishedWorkflow;
+        expect(first.version).toBe(1);
+        const again = (await publish(main.id)).json() as IPublishedWorkflow;
+        expect(again.version).toBe(2);
+        expect(again.id).toBe(first.id);
+
+        const used = await app.inject({ method: 'POST', url: `/api/marketplace/workflows/${first.id}/use`, payload: { project_id: 'p1' } });
+        expect(used.statusCode).toBe(201);
+        const imported = (used.json() as IWorkflowImportResult).workflow;
+        expect(imported.marketplace_source_id).toBe(first.id);
+        expect(imported.marketplace_pulled_version).toBe(2);
+    });
 
     it('publishes the export bundle and reads the entry back from it', async () => {
         const { main } = await seedDelivery();

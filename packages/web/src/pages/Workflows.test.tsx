@@ -7,7 +7,7 @@ import type { IWorkflowTemplate } from '@atlas/shared';
 import { server } from '../test-setup.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { makeAgent, makeProject } from '../test-utils/factories.js';
-import { makeWorkflow } from '../test-utils/workflowFixtures.js';
+import { makeTemplates, makeWorkflow } from '../test-utils/workflowFixtures.js';
 import { Workflows } from './Workflows.js';
 
 const BASE = 'http://localhost:3000/api';
@@ -128,6 +128,35 @@ describe('Workflows page', () => {
         await user.click(create);
         await waitFor(() => expect(sent).toEqual({ template_id: 'dev', project_id: 'p1' }));
         expect(await screen.findByText('builder page')).toBeInTheDocument();
+    });
+
+    // The dialog used to list only the SELECTED template's own graph, so
+    // picking Delivery promised four agents while creating it installed ten —
+    // the rest belong to its sub-templates. `agent-coder` here reaches the list
+    // only through `template:build`.
+    it('lists the sub-templates’ agents too, not just the parent graph’s', async () => {
+        const user = userEvent.setup();
+        server.use(
+            http.get(`${BASE}/workflows`, () => HttpResponse.json([])),
+            http.get(`${BASE}/workflows/templates`, () => HttpResponse.json(makeTemplates())),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])),
+            // Nothing installed, so every referenced agent shows as "installs".
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
+        );
+        renderWithProviders(
+            <Routes>
+                <Route path="/workflows" element={<Workflows />} />
+            </Routes>,
+            { initialEntries: ['/workflows'] }
+        );
+
+        await user.click(await screen.findByRole('button', { name: 'New workflow' }));
+        const dialog = await screen.findByRole('dialog');
+        await user.click(await within(dialog).findByRole('radio', { name: 'Delivery' }));
+
+        const installs = within(dialog).getByText(/Installs from the marketplace:/);
+        expect(installs.textContent).toContain('PO Writer');
+        expect(installs.textContent).toContain('Coder');
     });
 
     it('opens the builder when a card is clicked', async () => {
