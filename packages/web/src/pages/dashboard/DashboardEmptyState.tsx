@@ -2,7 +2,7 @@ import { Suspense, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Alert from '@mui/material/Alert';
-import ImageNotSupportedRounded from '@mui/icons-material/ImageNotSupportedRounded';
+import FolderOpenRounded from '@mui/icons-material/FolderOpenRounded';
 import AddRounded from '@mui/icons-material/AddRounded';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import { HeroEmptyState } from '../../components/HeroEmptyState.js';
@@ -48,7 +48,7 @@ export function DashboardEmptyState({
         <>
             <HeroEmptyState
                 icon={
-                    <ImageNotSupportedRounded
+                    <FolderOpenRounded
                         sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 28 }}
                     />
                 }

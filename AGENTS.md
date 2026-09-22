@@ -120,7 +120,8 @@ For full MUI/data-fetching/status-display patterns, see `packages/web/AGENTS.md`
 - Never hardcode a list of statuses in a component — always derive from the status machine
 
 ### No invented data
-- No fields not in the `@atlas/shared` types (no priority, story points, tracker links). The one exception is the `jira_issue` external link, which only the Jira bridge writes (ADR 0016)
+- No fields not in the `@atlas/shared` types (no story points, no tracker links). The one exception is the `jira_issue` external link, which only the Jira bridge writes (ADR 0016)
+- **`priority` IS a real field — do not remove it.** *(corrected 2026-09-22; this rule previously listed priority as invented data.)* `IssuePriority = 'low' | 'normal' | 'high' | 'urgent'` lives in `@atlas/shared` (`types/index.ts:149`), is validated by the Zod item schemas, and is persisted as `items.priority` behind a CHECK constraint. It is rendered by `PriorityChip` / `PriorityPickerPopover` and set on the create form (which defaults to `low` by design — see `.agents/pages/06-task-new.md`). Deleting it to satisfy the bullet above would destroy a working feature
 - Empty states use spec-compliant copy — do not invent placeholder text
 - Counts, dates, and IDs use `JetBrains Mono` font via `sx={{ fontFamily: 'mono' }}`
 

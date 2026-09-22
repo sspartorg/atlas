@@ -1,7 +1,7 @@
 import Box from '@mui/material/Box';
 import Alert from '@mui/material/Alert';
 import { useNavigate } from 'react-router-dom';
-import ImageNotSupportedRounded from '@mui/icons-material/ImageNotSupportedRounded';
+import FolderOpenRounded from '@mui/icons-material/FolderOpenRounded';
 import AddRounded from '@mui/icons-material/AddRounded';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import { HeroEmptyState } from '../../components/HeroEmptyState.js';
@@ -26,7 +26,7 @@ export function ProjectsEmptyState({ onNewProject }: IProjectsEmptyStateProps) {
     return (
         <HeroEmptyState
             icon={
-                <ImageNotSupportedRounded sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 28 }} />
+                <FolderOpenRounded sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 28 }} />
             }
             title="No projects yet."
             description={
