@@ -15,9 +15,15 @@ interface JiraCall {
     body: unknown;
 }
 
+// The Jira key the fake instance serves, unique per attempt. `jira_issues`
+// has `jira_key` as its PRIMARY KEY and a deleted Task is never re-imported,
+// so a fixed key imports exactly once per e2e database: on a retry the sync
+// reported "0 imported" and the run failed on a stale assertion rather than
+// the original fault.
+let issueKey = 'FAKE-1';
+
 const ISSUE = {
     id: '10001',
-    key: 'FAKE-1',
     fields: {
         summary: 'Add a --version flag',
         description: 'h2. Goal\nPrint the version and exit.',
@@ -67,16 +73,17 @@ test.beforeAll(async () => {
             }
             if (url.pathname === '/rest/api/2/myself')
                 return send(200, { displayName: 'Fake Owner' });
-            if (url.pathname === '/rest/api/2/search/jql') return send(200, { issues: [ISSUE] });
-            if (url.pathname === '/rest/api/3/issue/FAKE-1/comment' && req.method === 'POST') {
+            if (url.pathname === '/rest/api/2/search/jql')
+                return send(200, { issues: [{ ...ISSUE, key: issueKey }] });
+            if (url.pathname === `/rest/api/3/issue/${issueKey}/comment` && req.method === 'POST') {
                 return send(201, { id: `c${calls.length}` });
             }
-            if (url.pathname === '/rest/api/2/issue/FAKE-1/transitions' && req.method === 'GET') {
+            if (url.pathname === `/rest/api/2/issue/${issueKey}/transitions` && req.method === 'GET') {
                 return send(200, {
                     transitions: [{ id: '31', to: { statusCategory: { key: 'done' } } }],
                 });
             }
-            if (url.pathname === '/rest/api/2/issue/FAKE-1/transitions' && req.method === 'POST')
+            if (url.pathname === `/rest/api/2/issue/${issueKey}/transitions` && req.method === 'POST')
                 return send(204, null);
             return send(404, { errorMessages: [`unexpected ${req.method} ${url.pathname}`] });
         });
@@ -100,9 +107,19 @@ test.describe('Jira bridge', () => {
     }) => {
         test.setTimeout(120_000);
         calls = [];
+        // Unique per attempt, the way every other spec names its fixtures
+        // (`E2E queue workflow ${Date.now()}` and friends). With a fixed name
+        // this test could not survive a retry: the previous attempt's workflow
+        // is still in the e2e DB, so the retry created a second one with the
+        // same name and the picker below matched both —
+        // `strict mode violation: ... resolved to 2 elements`. That turned
+        // every flake into a hard red and buried the original failure under a
+        // different error.
+        issueKey = `FAKE-${Date.now()}`;
+        const workflowName = `E2E Jira delivery ${Date.now()}`;
         const wf = await createWorkflow(
             request,
-            'E2E Jira delivery',
+            workflowName,
             chainGraph({ type: 'agent', agent_id: 'agent-po-writer' })
         );
 
@@ -136,7 +153,7 @@ test.describe('Jira bridge', () => {
             .click();
         await page.getByLabel('Source JQL').fill('project = FAKE');
         await page.getByLabel('Source workflow').click();
-        await page.getByRole('option', { name: 'E2E Jira delivery' }).click();
+        await page.getByRole('option', { name: workflowName }).click();
         await page.getByRole('button', { name: 'Add source' }).click();
         await expect(page.getByText('Jira source added')).toBeVisible();
 
@@ -151,22 +168,24 @@ test.describe('Jira bridge', () => {
         const tasks = await apiGet<
             Array<{ id: string; title: string; status: string; workflow_id: string | null }>
         >(request, '/api/tasks');
-        const task = tasks.find((t) => t.title === '[FAKE-1] Add a --version flag');
+        const task = tasks.find((t) => t.title === `[${issueKey}] Add a --version flag`);
         expect(task, 'imported Task').toBeTruthy();
         if (!task) return;
         expect(task.workflow_id).toBe(wf.id);
         expect(task.status).toBe('ready');
         const pickedUp = calls.find((c) => c.method === 'POST' && c.path.endsWith('/comment'));
         expect(JSON.stringify(pickedUp?.body)).toContain(
-            'queued on the E2E Jira delivery workflow'
+            `queued on the ${workflowName} workflow`
         );
 
         // The Task page carries the whole issue and links back to Jira.
         await goto(page, `/tasks/${task.id}`);
         await expect(page.getByText('Print the version and exit.').first()).toBeVisible();
         await expect(page.getByText('Keep the output to one line.').first()).toBeVisible();
-        const jiraLink = page.getByRole('link', { name: /FAKE-1 Add a --version flag/ });
-        await expect(jiraLink).toHaveAttribute('href', `${siteUrl}/browse/FAKE-1`);
+        const jiraLink = page.getByRole('link', {
+            name: new RegExp(`${issueKey} Add a --version flag`),
+        });
+        await expect(jiraLink).toHaveAttribute('href', `${siteUrl}/browse/${issueKey}`);
 
         // The workflow works the Task; no PR in e2e, so the run ends it Done.
         const run = await request.post(`${API}/api/workflows/${wf.id}/runs`, {
