@@ -1,4 +1,4 @@
-import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, basename } from 'node:path';
 import { credentialsService } from './credentials.js';
@@ -217,6 +217,98 @@ export async function buildGitAuth(
         }
         throw err;
     }
+}
+
+/** One repo of a multi-repo run, and the credential it belongs to. */
+export interface RepoAuthInput {
+    /** The repo's CLONE path (`project_repos.git_path`), not the checkout. */
+    gitPath: string;
+    credentialId: string | null;
+}
+
+export interface MultiRepoGitAuth {
+    /** Point GIT_CONFIG_GLOBAL here. */
+    configPath: string;
+    /** Every temp dir this created — the composed one and each repo's.
+     *  All of them must be passed to `cleanupGitConfig`. */
+    configDirs: string[];
+    /** The first repo's token / human fields, for callers that need ONE
+     *  (`GH_TOKEN`, an explicit `--trailer`). Per-repo values live in the
+     *  included configs. */
+    token: string | null;
+    humanName: string | null;
+    humanEmail: string | null;
+}
+
+/**
+ * Per-repo git identity for a multi-repo run, in a single config file.
+ *
+ * ADR 0017 gives a multi-repo Task one checkout per repo and the agent
+ * commits in each with `git -C ./<repo>`. Before this, the agent got
+ * `buildGitAuth(firstRepo.credential_id)` and that ONE identity applied
+ * everywhere — so a commit in repo #2 was authored by repo #1's bot and
+ * carried repo #1's Owner trailer, or none. Atlas's own `commitPending`
+ * has always used each repo's own credential, which is why the two paths
+ * disagreed.
+ *
+ * `includeIf "gitdir:<clone>/"` is git's own answer to "different identity
+ * per repo". Each repo's `buildGitAuth` output is included conditionally, so
+ * `[user]`, `[http] extraheader` and `[core] hooksPath` all resolve per repo,
+ * including inside linked worktrees (a worktree's gitdir is
+ * `<clone>/.git/worktrees/<name>`, which lives under the clone).
+ *
+ * The clone path is `realpath`-resolved because git matches `gitdir:`
+ * against the resolved path. On macOS `/tmp` is a symlink to `/private/tmp`,
+ * so an unresolved path silently fails to match — and the failure mode is
+ * exactly the bug this fixes: the fallback identity, no trailer, no error.
+ *
+ * Returns null when no repo has a usable credential, so callers can fall
+ * back to their existing no-auth path.
+ */
+export async function buildMultiRepoGitAuth(
+    repos: readonly RepoAuthInput[],
+): Promise<MultiRepoGitAuth | null> {
+    const built: Array<{ gitPath: string; auth: GitAuth }> = [];
+    for (const repo of repos) {
+        if (!repo.credentialId) continue;
+        // One repo's credential being unmintable must not sink the whole run:
+        // the others still get their identity, and the caller's existing
+        // best-effort handling covers the gap. Matches how `commitPending`
+        // treats a failed `buildGitAuth`.
+        const auth = await buildGitAuth(repo.credentialId).catch(() => null);
+        if (auth) built.push({ gitPath: repo.gitPath, auth });
+    }
+    const [first] = built;
+    if (!first) return null;
+
+    const configDir = mkdtempSync(join(tmpdir(), TEMP_DIR_PREFIX));
+    const configPath = join(configDir, 'config');
+    const lines: string[] = [];
+    for (const { gitPath, auth } of built) {
+        // An unresolvable path (repo removed from disk mid-run) would throw
+        // and take the run with it; fall back to the literal path, which
+        // matches when nothing is symlinked.
+        let resolved: string;
+        try {
+            resolved = realpathSync(gitPath);
+        } catch {
+            resolved = gitPath;
+        }
+        // Trailing slash makes git treat it as a `**` prefix match, so every
+        // worktree of this clone is covered.
+        const pattern = `${resolved.replace(/\\/g, '/').replace(/\/$/, '')}/`;
+        lines.push(`[includeIf "gitdir:${pattern}"]`);
+        lines.push(`\tpath = ${auth.configPath.replace(/\\/g, '/')}`);
+    }
+    writeFileSync(configPath, lines.join('\n') + '\n', { mode: 0o600 });
+
+    return {
+        configPath,
+        configDirs: [configDir, ...built.map((b) => b.auth.configDir)],
+        token: first.auth.token,
+        humanName: first.auth.humanName,
+        humanEmail: first.auth.humanEmail,
+    };
 }
 
 /**

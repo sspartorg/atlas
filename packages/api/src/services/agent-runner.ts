@@ -40,7 +40,7 @@ import { ollamaEnv } from './ollama-env.js';
 import { gitInvokeEnv } from './git-env.js';
 import { ATLAS_MCP_URL } from '../plugins/mcp-host.js';
 import { apiPort } from '../config.js';
-import { buildGitAuth, cleanupGitConfig } from './git-credentials.js';
+import { buildGitAuth, buildMultiRepoGitAuth, cleanupGitConfig } from './git-credentials.js';
 import { agentIdToSlug } from './commands-assembler.js';
 import { assemblePreamble } from './preamble-assembler.js';
 import {
@@ -810,6 +810,11 @@ interface SpawnCliOptions {
      *  the `[user]` block that attributes `git commit` to the App's
      *  bot identity (built via `buildGitAuth`). */
     gitConfigPath?: string | null;
+    /** Every temp git-config dir this run created. A multi-repo run builds one
+     *  per repo plus the composed one (`buildMultiRepoGitAuth`), so cleaning
+     *  only `gitConfigPath`'s dir would leak the rest in tmpdir. Empty for a
+     *  single-repo run, where `gitConfigPath` is the only dir. */
+    gitConfigDirs?: string[];
     /** Same-run plaintext token, exposed to the child as `GH_TOKEN` /
      *  `GITHUB_TOKEN` so `gh pr create` inside the CLI authenticates
      *  as the App instead of falling back to the developer's local
@@ -883,10 +888,20 @@ function spawnCli(opts: SpawnCliOptions): void {
         prompt,
         cwd,
         gitConfigPath,
+        gitConfigDirs,
         ghToken,
         artefactTmpRoot,
         copilotUserAgentPath,
     } = opts;
+    // One helper for both the exit and the error handler below, so they can
+    // never drift on which dirs get removed.
+    const cleanupGitDirs = (): void => {
+        if (gitConfigDirs && gitConfigDirs.length > 0) {
+            for (const d of gitConfigDirs) cleanupGitConfig(d);
+        } else if (gitConfigPath) {
+            cleanupGitConfig(gitConfigPath);
+        }
+    };
     // Ollama runs the Claude Code binary — it differs only in the env overlay
     // applied to `childEnv` below. Branch on the dialect, never on `agent.cli`.
     const dialect = CLI_DIALECT[agent.cli];
@@ -1208,7 +1223,7 @@ function spawnCli(opts: SpawnCliOptions): void {
         // route through cleanupGitConfig which does a recursive
         // sanity-checked rmSync — a bare `unlinkSync` here would leave
         // the hook + dir orphaned in tmpdir.
-        if (gitConfigPath) cleanupGitConfig(gitConfigPath);
+        cleanupGitDirs();
         // 2026-06-09 — cleanup the user-level Copilot agent file (see
         // `runCopilotAgentFiles` declaration). Best-effort — gone is
         // fine if a prior cleanup already removed it.
@@ -1334,7 +1349,7 @@ function spawnCli(opts: SpawnCliOptions): void {
         // Same reasoning as the exit-handler above — migration 025 turned
         // gitConfigPath into a file inside a temp dir, so recursive
         // cleanup is required.
-        if (gitConfigPath) cleanupGitConfig(gitConfigPath);
+        cleanupGitDirs();
         const stagedCopilotAgentOnError = runCopilotAgentFiles.get(runId);
         if (stagedCopilotAgentOnError) {
             try { unlinkSync(stagedCopilotAgentOnError); } catch { /* already gone */ }
@@ -1515,14 +1530,40 @@ export async function spawnAgentRun(
     // inside the CLI is attributed to the App, not the developer's
     // ~/.gitconfig. buildGitAuth is the ONLY correct way to build this file.
     let gitConfigPath: string | null = null;
+    let gitConfigDirs: string[] = [];
     let ghToken: string | null = null;
     let humanName: string | null = null;
     let humanEmail: string | null = null;
-    if (effectiveProjectId && projectCredentialId) {
+    // A multi-repo Task gets ONE identity per repo, not one for the whole run.
+    // Previously every checkout inherited the FIRST repo's credential, so a
+    // commit in repo #2 was authored by repo #1's bot and carried repo #1's
+    // Owner trailer — while Atlas's own `commitPending` used each repo's own
+    // credential (workflow-engine.ts:336,797,1020). That disagreement is what
+    // made attribution look broken for agent commits only.
+    if (effectiveProjectId && multiRepo && multiRepo.length > 1) {
+        try {
+            const auth = await buildMultiRepoGitAuth(
+                multiRepo.map(({ repo }) => ({ gitPath: repo.git_path, credentialId: repo.credential_id })),
+            );
+            if (auth) {
+                gitConfigPath = auth.configPath;
+                gitConfigDirs = auth.configDirs;
+                ghToken = auth.token;
+                humanName = auth.humanName;
+                humanEmail = auth.humanEmail;
+            }
+        } catch (err) {
+            broadcastSSE({
+                type: 'agent_output',
+                output: `[agent-runner] warning: could not prepare per-repo git auth: ${(err as Error).message}`,
+            });
+        }
+    } else if (effectiveProjectId && projectCredentialId) {
         try {
             const auth = await buildGitAuth(projectCredentialId);
             if (auth) {
                 gitConfigPath = auth.configPath;
+                gitConfigDirs = [auth.configDir];
                 ghToken = auth.token;
                 humanName = auth.humanName;
                 humanEmail = auth.humanEmail;
@@ -1710,6 +1751,7 @@ export async function spawnAgentRun(
                     prompt: fullPrompt,
                     cwd,
                     gitConfigPath,
+                    gitConfigDirs,
                     ghToken,
                     artefactTmpRoot,
                     copilotUserAgentPath,

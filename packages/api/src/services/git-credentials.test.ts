@@ -7,9 +7,10 @@ import {
     mkdtempSync,
 } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { realpathSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildGitAuth, buildGitConfig, cleanupGitConfig } from './git-credentials.js';
+import { buildGitAuth, buildGitConfig, buildMultiRepoGitAuth, cleanupGitConfig } from './git-credentials.js';
 
 function shAvailable(): boolean {
     try {
@@ -501,5 +502,123 @@ describe('cleanupGitConfig', () => {
         expect(existsSync(auth!.configDir)).toBe(true);
         cleanupGitConfig(auth!.configPath);
         expect(existsSync(auth!.configDir)).toBe(false);
+    });
+});
+
+describe('buildMultiRepoGitAuth', () => {
+    const cleanupDirs: string[] = [];
+
+    beforeEach(() => {
+        svc.get.mockReset();
+        svc.getToken.mockReset();
+    });
+
+    afterEach(() => {
+        while (cleanupDirs.length > 0) {
+            const d = cleanupDirs.pop()!;
+            if (existsSync(d)) rmSync(d, { recursive: true, force: true });
+        }
+    });
+
+    function credential(id: string, slug: string, human: string | null) {
+        return {
+            id,
+            kind: 'github_app',
+            username: 'x-access-token',
+            app_id: 12345678,
+            app_slug: slug,
+            human_name: human,
+            human_email: human ? `${human}@example.invalid` : null,
+            human_gh_login: human,
+        };
+    }
+
+    it('returns null when no repo has a credential', async () => {
+        expect(await buildMultiRepoGitAuth([{ gitPath: '/tmp/x', credentialId: null }])).toBeNull();
+    });
+
+    // The bug: a multi-repo Task gave the agent ONE identity — the first
+    // repo's — for every checkout, so commits in repo #2 were authored by
+    // repo #1's bot and carried repo #1's Owner trailer. Atlas's own
+    // commitPending always used each repo's own credential, which is why the
+    // two paths disagreed and why only Atlas's commit looked right.
+    it.skipIf(!gitAvailable())(
+        'gives each repo its own identity and Owner trailer, inside linked worktrees',
+        async () => {
+            // Resolve, because git matches `gitdir:` against the REAL path and
+            // macOS /tmp is a symlink to /private/tmp. An unresolved path
+            // silently falls through to no identity — the original bug.
+            const root = realpathSync(mkdtempSync(join(tmpdir(), 'atlas-multi-')));
+            cleanupDirs.push(root);
+
+            svc.getToken.mockResolvedValue('ghs_token');
+            svc.get.mockImplementation(async (id: unknown) =>
+                id === 'credA' ? credential('credA', 'bot-a', 'owner-a') : credential('credB', 'bot-b', 'owner-b'),
+            );
+
+            const clones: Record<string, string> = {};
+            for (const name of ['web', 'core']) {
+                const clone = join(root, `clone-${name}`);
+                mkdirSync(clone, { recursive: true });
+                execFileSync('git', ['init', '-q', '-b', 'base', clone], { stdio: 'pipe' });
+                writeFileSync(join(clone, 'seed.txt'), 'seed\n');
+                const idEnv = ['-c', 'user.name=seed', '-c', 'user.email=s@e.invalid'];
+                execFileSync('git', ['-C', clone, ...idEnv, 'add', '-A'], { stdio: 'pipe' });
+                execFileSync('git', ['-C', clone, ...idEnv, 'commit', '-q', '-m', 'seed'], { stdio: 'pipe' });
+                clones[name] = clone;
+            }
+
+            const auth = await buildMultiRepoGitAuth([
+                { gitPath: clones['web']!, credentialId: 'credA' },
+                { gitPath: clones['core']!, credentialId: 'credB' },
+            ]);
+            expect(auth).not.toBeNull();
+            cleanupDirs.push(...auth!.configDirs);
+
+            const env = {
+                ...process.env,
+                GIT_CONFIG_GLOBAL: auth!.configPath,
+                GIT_CONFIG_NOSYSTEM: '1',
+                GIT_TERMINAL_PROMPT: '0',
+            };
+            const ws = join(root, 'ws', 'feature');
+            mkdirSync(ws, { recursive: true });
+            const git = (cwd: string, ...args: string[]) =>
+                execFileSync('git', args, { cwd, env, stdio: 'pipe', timeout: 30_000 }).toString();
+
+            for (const name of ['web', 'core']) {
+                git(root, '-C', clones[name]!, 'worktree', 'add', '-q', join(ws, name), '-b', 'feature');
+                writeFileSync(join(ws, name, 'f.txt'), 'x\n');
+                git(join(ws, name), 'add', '-A');
+                git(join(ws, name), 'commit', '-q', '-m', `work in ${name}`);
+            }
+
+            // Each checkout commits as ITS OWN bot, with ITS OWN Owner trailer.
+            expect(git(join(ws, 'web'), 'log', '-1', '--pretty=%an').trim()).toBe('bot-a[bot]');
+            expect(git(join(ws, 'web'), 'log', '-1', '--pretty=%B')).toContain('Co-Authored-By: owner-a <owner-a@example.invalid>');
+            expect(git(join(ws, 'core'), 'log', '-1', '--pretty=%an').trim()).toBe('bot-b[bot]');
+            expect(git(join(ws, 'core'), 'log', '-1', '--pretty=%B')).toContain('Co-Authored-By: owner-b <owner-b@example.invalid>');
+            // And neither leaked into the other.
+            expect(git(join(ws, 'core'), 'log', '-1', '--pretty=%B')).not.toContain('owner-a');
+        },
+    );
+
+    it('skips a repo whose credential cannot be minted, keeping the rest', async () => {
+        svc.getToken.mockImplementation(async (id: unknown) => {
+            if (id === 'bad') throw new Error('mint failed');
+            return 'ghs_token';
+        });
+        svc.get.mockImplementation(async (id: unknown) =>
+            id === 'bad' ? credential('bad', 'bot-bad', 'owner-bad') : credential('ok', 'bot-ok', 'owner-ok'),
+        );
+        const auth = await buildMultiRepoGitAuth([
+            { gitPath: '/tmp/clone-bad', credentialId: 'bad' },
+            { gitPath: '/tmp/clone-ok', credentialId: 'ok' },
+        ]);
+        expect(auth).not.toBeNull();
+        cleanupDirs.push(...auth!.configDirs);
+        const cfg = readFile(auth!.configPath);
+        expect(cfg).toContain('clone-ok');
+        expect(cfg).not.toContain('clone-bad');
     });
 });

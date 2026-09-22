@@ -256,9 +256,32 @@ Under ADR 0017 a multi-repo Task gives the agent one checkout per repo
 (`agent-runner.ts:1489-1512`), so every commit it makes in repo #2 is authored
 with repo #1's bot identity and repo #1's human trailer. In a two-repo project
 — which the walkthrough had — that alone produces the reported 6-vs-1 split.
-Not fixed here: one change at a time, and it deserves its own decision about
-what a multi-repo agent session should do when the repos carry different
-credentials.
+**FIXED (part four).** `buildMultiRepoGitAuth` composes one
+`GIT_CONFIG_GLOBAL` giving each repo its own identity, Owner trailer and
+token, through git's own `includeIf "gitdir:<clone>/"`. Each repo's existing
+`buildGitAuth` output is included conditionally, so `[user]`,
+`[http] extraheader` and `[core] hooksPath` all resolve per repo — including
+inside linked worktrees, because a worktree's gitdir
+(`<clone>/.git/worktrees/<name>`) lives under the clone the pattern matches.
+
+Two things shaped the implementation, both found by probing git before writing
+any code:
+
+- **The clone path must be `realpath`-resolved.** Git matches `gitdir:`
+  against the resolved path, and on macOS `/tmp` is a symlink to
+  `/private/tmp`. An unresolved path silently fails to match and the run falls
+  back to no identity — which IS the bug being fixed, so it would have looked
+  like the fix simply did not work. The first probe failed exactly this way.
+- **No repo config is mutated.** `git config --local` inside a linked worktree
+  writes to the clone's shared config, which other concurrent runs' worktrees
+  of the same clone also read — that would leak one Task's identity into
+  another. The conditional include lives only in this run's temp config and is
+  removed with it.
+
+Deliberately still first-repo-scoped, unchanged from before: `GH_TOKEN` (one
+value, and Atlas opens PRs itself per repo via `openPullRequest`) and the
+single `humanName`/`humanEmail` returned for callers that build one explicit
+`--trailer`.
 
 ---
 
