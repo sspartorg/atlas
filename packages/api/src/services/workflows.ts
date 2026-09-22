@@ -54,6 +54,8 @@ function asWorkflow(row: Record<string, unknown>): IWorkflow {
         cron_expr: (row['cron_expr'] as string | null) ?? null,
         next_run_at: (row['next_run_at'] as string | null) ?? null,
         last_run_at: (row['last_run_at'] as string | null) ?? null,
+        marketplace_source_id: (row['marketplace_source_id'] as string | null) ?? null,
+        marketplace_pulled_version: (row['marketplace_pulled_version'] as number | null) ?? null,
         created_at: row['created_at'] as string,
         updated_at: row['updated_at'] as string,
     };
@@ -201,7 +203,18 @@ export const workflowsService = {
         return row ? asWorkflow(row as never) : null;
     },
 
-    async create(input: CreateWorkflowInput): Promise<IWorkflow> {
+    /**
+     * `provenance` is a service-only argument on purpose. It is deliberately
+     * NOT part of `CreateWorkflowSchema`: that schema is what `POST
+     * /api/workflows` validates, so putting it there would let a client forge
+     * `marketplace_source_id` and claim a workflow came from a template it
+     * never came from — which is exactly the field upgrade resolution trusts.
+     * Only the code that actually pulled from a marketplace source may set it.
+     */
+    async create(
+        input: CreateWorkflowInput,
+        provenance?: { source_id: string; pulled_version: number }
+    ): Promise<IWorkflow> {
         const graph = input.graph ?? emptyGraph();
         const base = {
             project_id: input.project_id ?? null,
@@ -241,6 +254,8 @@ export const workflowsService = {
                 schedule_time_of_day: input.schedule_time_of_day ?? null,
                 schedule_weekday: input.schedule_weekday ?? null,
                 ...schedule,
+                marketplace_source_id: provenance?.source_id ?? null,
+                marketplace_pulled_version: provenance?.pulled_version ?? null,
             })
             .execute();
         broadcastWorkflowsChanged();
@@ -305,7 +320,14 @@ export const workflowsService = {
         const project = await db.selectFrom('projects').select('id').where('id', '=', projectId).executeTakeFirst();
         if (!project) throw new ApiError('not_found', 'Project not found', 404);
 
-        const agentIds = [...new Set(template.graph.nodes.flatMap((n) => (n.agent_id ? [n.agent_id] : [])))];
+        // Every agent this template needs, ITS SUB-TEMPLATES' INCLUDED.
+        // Scanning only `template.graph` under-reported badly: Delivery's own
+        // graph names four agents, but running it needs ten — the other six
+        // belong to the Build and Test sub-templates. They used to arrive only
+        // as a side effect of the recursive call below, and not at all when the
+        // project already had a sub-workflow, so a stale sub-workflow left its
+        // agents uninstalled and the run parked on a missing agent.
+        const agentIds = [...new Set(this.templateAgentIds(templateId))];
         for (const agentId of agentIds) {
             const exists = await db.selectFrom('agents').select('id').where('id', '=', agentId).executeTakeFirst();
             if (!exists) await marketplaceService.install(agentId);
@@ -313,12 +335,26 @@ export const workflowsService = {
         // Some catalog agents ship `inactive` (a leftover from per-agent
         // schedules); the engine parks on an inactive agent, so a workflow made
         // from a template would never run.
+        //
+        // This also re-activates an agent the Owner deliberately paused, which
+        // is wrong — but narrowing it to just-installed agents is worse on its
+        // own, because the workflow then parks at run time with no hint at
+        // creation time. The fix is to leave the status alone AND report it
+        // ("Coder is paused; this workflow will park until you enable it"),
+        // which lands with the import resolution report rather than here.
         if (agentIds.length > 0) {
             await db.updateTable('agents').set({ status: 'active' }).where('id', 'in', agentIds).where('status', '!=', 'active').execute();
         }
 
-        // `template:<id>` → that template's workflow in this project, by name,
-        // created from the template when the project lacks it.
+        // `template:<id>` → that template's workflow in this project, created
+        // from the template when the project lacks it.
+        //
+        // Matched on `marketplace_source_id`, not on name. Name-matching meant
+        // renaming "Build sub-task" made the next Delivery create a second copy
+        // instead of reusing it, and conversely any workflow that happened to
+        // carry the template's name was adopted as a build step whatever its
+        // graph contained. The name fallback stays for rows created before
+        // provenance existed.
         const resolveRef = async (ref: string | undefined): Promise<string | undefined> => {
             if (!ref?.startsWith(TEMPLATE_REF)) return ref;
             const childTemplate = this.listTemplates().find((t) => `${TEMPLATE_REF}${t.id}` === ref);
@@ -327,7 +363,12 @@ export const workflowsService = {
                 .selectFrom('workflows')
                 .select('id')
                 .where('project_id', '=', projectId)
-                .where('name', '=', childTemplate.name)
+                .where((eb) =>
+                    eb.or([
+                        eb('marketplace_source_id', '=', childTemplate.id),
+                        eb.and([eb('marketplace_source_id', 'is', null), eb('name', '=', childTemplate.name)]),
+                    ])
+                )
                 .executeTakeFirst();
             return (existing ?? (await this.createFromTemplate(childTemplate.id, projectId))).id;
         };
@@ -348,7 +389,30 @@ export const workflowsService = {
             raises_pr: template.raises_pr,
             push_to_default: template.push_to_default ?? false,
             graph: { nodes, edges: template.graph.edges },
-        });
+        }, { source_id: template.id, pulled_version: template.version });
+    },
+
+    /**
+     * Every agent id a template needs to run, walking its `template:` sub-refs.
+     *
+     * The web has had this rollup for a while (`pages/workflows/labels.ts`
+     * `templateAgentIds`) and used it for display; the API did not, which is
+     * why `createFromTemplate` installed four agents for Delivery when running
+     * it needs ten. One level of recursion is enough: a `sub_task` workflow
+     * cannot itself carry Sub-tasks steps (`validateWorkflowGraph`).
+     */
+    templateAgentIds(templateId: string): string[] {
+        const templates = this.listTemplates();
+        const root = templates.find((t) => t.id === templateId);
+        if (!root) return [];
+        const graphs = [root.graph];
+        for (const node of root.graph.nodes) {
+            const ref = node.sub_workflow_id;
+            if (!ref?.startsWith(TEMPLATE_REF)) continue;
+            const child = templates.find((t) => `${TEMPLATE_REF}${t.id}` === ref);
+            if (child) graphs.push(child.graph);
+        }
+        return [...new Set(graphs.flatMap((g) => g.nodes.flatMap((n) => (n.agent_id ? [n.agent_id] : []))))];
     },
 
     async listRuns(workflowId: string, limit = 50): Promise<IWorkflowRunSummary[]> {

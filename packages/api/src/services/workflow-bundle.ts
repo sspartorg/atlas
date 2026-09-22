@@ -257,6 +257,7 @@ function publishedEntry(row: PublishedRow, bundle: WorkflowBundle): IPublishedWo
         name: row.name,
         description: row.description,
         source_workflow_id: row.source_workflow_id,
+        version: row.version,
         input_kind: w.input_kind,
         // Defaults mirror workflowsService.create.
         trigger: w.trigger ?? 'manual',

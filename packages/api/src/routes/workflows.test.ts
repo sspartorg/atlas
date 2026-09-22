@@ -37,6 +37,10 @@ vi.mock('../services/worktree-orchestrator.js', async (importOriginal) => ({
 import { buildApp } from '../server.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertItem, insertProject } from '../../tests/_items.js';
+import { workflowsService } from '../services/workflows.js';
+
+/** Delivery's full agent closure: its own graph's four plus Build's and Test's. */
+const DELIVERY_AGENT_IDS = ['agent-po-writer', 'agent-po-reviewer', 'agent-architect', 'agent-architect-reviewer', 'agent-coder', 'agent-code-reviewer', 'agent-qa-writer', 'agent-qa-reviewer', 'agent-automation', 'agent-automation-reviewer'];
 
 let app: FastifyInstance;
 
@@ -147,6 +151,65 @@ describe('workflow CRUD', () => {
         // A sub-workflow a Sub-tasks step uses can't be deleted from under it.
         const del = await app.inject({ method: 'DELETE', url: `/api/workflows/${byName('Build sub-task')?.id ?? ''}` });
         expect(del.statusCode).toBe(409);
+    });
+
+    // Every agent Delivery needs to RUN, not just the four its own graph
+    // names — the other six live in the Build and Test sub-templates. Scanning
+    // only the parent graph left them uninstalled whenever the sub-workflow
+    // already existed, and the run then parked on a missing agent. Asserted
+    // against the template files directly: this is a pure rollup, no DB.
+    it('rolls up the sub-templates’ agents for a template', () => {
+        const ids = workflowsService.templateAgentIds('delivery').sort();
+        expect(ids).toEqual([
+            'agent-architect',
+            'agent-architect-reviewer',
+            'agent-automation',
+            'agent-automation-reviewer',
+            'agent-code-reviewer',
+            'agent-coder',
+            'agent-po-reviewer',
+            'agent-po-writer',
+            'agent-qa-reviewer',
+            'agent-qa-writer',
+        ]);
+        // The parent graph alone names only four of those ten.
+        expect(workflowsService.templateAgentIds('build').sort()).toEqual(['agent-code-reviewer', 'agent-coder']);
+    });
+
+    // Provenance is what makes a template-created workflow upgradable. Without
+    // it the workflow was a detached copy the moment it was written, and an
+    // improved upstream template could never reach it.
+    it('records the template it came from, on the workflow and its sub-workflows', async () => {
+        // `agent-coder` is already created by beforeEach.
+        for (const a of DELIVERY_AGENT_IDS.filter((x) => x !== 'agent-coder')) await insertAgent({ id: a, status: 'active' });
+        const res = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'delivery', project_id: 'p1' } });
+        expect(res.statusCode).toBe(201);
+        expect(res.json()).toMatchObject({ marketplace_source_id: 'delivery', marketplace_pulled_version: 1 });
+
+        const rows = await testDb.selectFrom('workflows').select(['name', 'marketplace_source_id', 'marketplace_pulled_version']).execute();
+        const byName = (n: string) => rows.find((r) => r.name === n);
+        expect(byName('Build sub-task')).toMatchObject({ marketplace_source_id: 'build', marketplace_pulled_version: 1 });
+        expect(byName('Test sub-task')).toMatchObject({ marketplace_source_id: 'test', marketplace_pulled_version: 1 });
+    });
+
+    // Sub-workflows used to be matched by NAME, so renaming one made the next
+    // Delivery fork a second copy instead of reusing it — and any workflow that
+    // happened to carry the template's name got adopted as a build step
+    // whatever its graph contained.
+    it('reuses a renamed sub-workflow through its provenance instead of forking', async () => {
+        // `agent-coder` is already created by beforeEach.
+        for (const a of DELIVERY_AGENT_IDS.filter((x) => x !== 'agent-coder')) await insertAgent({ id: a, status: 'active' });
+        const first = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'delivery', project_id: 'p1' } });
+        expect(first.statusCode).toBe(201);
+        const build = await testDb.selectFrom('workflows').select('id').where('marketplace_source_id', '=', 'build').executeTakeFirstOrThrow();
+        await testDb.updateTable('workflows').set({ name: 'Renamed by the Owner' }).where('id', '=', build.id).execute();
+
+        const second = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'delivery', project_id: 'p1' } });
+        expect(second.statusCode).toBe(201);
+        const builds = await testDb.selectFrom('workflows').select('id').where('marketplace_source_id', '=', 'build').execute();
+        expect(builds).toHaveLength(1);
+        const step = (second.json().graph.nodes as Array<{ id: string; sub_workflow_id?: string }>).find((n) => n.id === 'build');
+        expect(step?.sub_workflow_id).toBe(build.id);
     });
 
     it('rejects a Sub-tasks step that points at a Task workflow, and a scheduled sub-workflow', async () => {

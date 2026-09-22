@@ -24,6 +24,7 @@ const DEV_TEMPLATE: IWorkflowTemplate = {
     id: 'dev',
     name: 'Development',
     description: 'Architect, coder and reviewer — one PR per story.',
+    version: 1,
     input_kind: 'item',
     trigger: 'item_ready',
     use_worktree: true,

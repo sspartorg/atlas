@@ -68,6 +68,19 @@ export interface IWorkflow {
     cron_expr: string | null;
     next_run_at: string | null;
     last_run_at: string | null;
+    /**
+     * The marketplace template id (`"delivery"`) or published-entry id this
+     * workflow came from, and the version that was pulled. Mirrors the pair on
+     * `IAgent`, and works the same way: NULL means "not from a marketplace
+     * source" — a hand-built workflow, which is never stale.
+     *
+     * `marketplace_source_id` is also the lookup key when resolving a
+     * template's sub-workflows. It used to be the workflow's NAME, so renaming
+     * a sub-workflow forked it and an unrelated workflow that happened to share
+     * the name got adopted as a build step.
+     */
+    marketplace_source_id: string | null;
+    marketplace_pulled_version: number | null;
     created_at: string;
     updated_at: string;
 }
@@ -214,6 +227,13 @@ export interface IWorkflowTemplate {
     id: string;
     name: string;
     description: string;
+    /**
+     * Bumped by hand when the template's graph or copy changes, so a workflow
+     * created from it can tell it has fallen behind. The whole catalog was
+     * reset to 1 on 2026-09-22; before that templates carried no version at
+     * all, which is why a workflow made from one could never be upgraded.
+     */
+    version: number;
     input_kind: WorkflowInputKind;
     trigger: WorkflowTrigger;
     use_worktree: boolean;
@@ -269,6 +289,12 @@ export interface IPublishedWorkflow {
     push_to_default: boolean;
     /** Every agent it uses, its sub-workflows' included. */
     agent_ids: string[];
+    /**
+     * Bumped on every republish. Republishing overwrites the stored bundle in
+     * place, so without this a consumer who used the entry yesterday had no way
+     * to tell it changed today.
+     */
+    version: number;
     published_at: string;
     /** Equals `published_at` until it is published again. */
     updated_at: string;
