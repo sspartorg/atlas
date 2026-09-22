@@ -5,7 +5,6 @@ import { server } from '../test-setup.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { Projects } from './Projects.js';
-import { Toast } from '../components/Toast.js';
 import {
     makeProject,
     makeAgent,
@@ -142,25 +141,6 @@ describe('Projects page', () => {
         fireEvent.click(btn);
     });
 
-    it('clicks the copy-URL icon to invoke handleCopyUrl', async () => {
-        // navigator.clipboard not in jsdom; jest will fall through to the toast catch.
-        server.use(...baseHandlers());
-        const { container } = renderWithProviders(<Projects />, {
-            initialEntries: ['/projects'],
-        });
-        await screen.findByText('Atlas');
-        // The card has a copy-URL icon button rendered inside the row menu;
-        // ensure clicking any icon button in the card area is safe.
-        const cardArea = container.querySelector('[class*="MuiPaper-root"]');
-        if (cardArea) {
-            const icons = cardArea.querySelectorAll('button');
-            // Fire click on the first few buttons; one of them should be the copy.
-            icons.forEach((btn, i) => {
-                if (i < 3) fireEvent.click(btn);
-            });
-        }
-    });
-
     it('renders the pagination controls when totalProjects > limit', async () => {
         // Return 25 projects via the paged endpoint; limit is 20.
         const many = Array.from({ length: 25 }, (_, i) =>
@@ -194,24 +174,11 @@ describe('Projects page', () => {
         fireEvent.click(screen.getByRole('button', { name: /Project actions/i }));
         await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
         const labels = screen.getAllByRole('menuitem').map((i) => i.textContent ?? '');
-        expect(labels.some((l) => l.includes('Copy repo URL'))).toBe(true);
         expect(labels.some((l) => l.includes('Delete project'))).toBe(true);
+        // "Copy repo URL" went with them: it copied repos[0], which is wrong
+        // for every project holding more than one.
+        expect(labels.some((l) => l.includes('Copy repo URL'))).toBe(false);
         expect(labels.some((l) => /Re-clone|Auto-fetch|Open project/.test(l))).toBe(false);
-    });
-
-    it('exercises card menu onCopyUrl (Copy repo URL) in card view', async () => {
-        // Mock clipboard
-        Object.assign(navigator, {
-            clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
-        });
-        server.use(...baseHandlers());
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        const menuBtn = screen.getByRole('button', { name: /Project actions/i });
-        fireEvent.click(menuBtn);
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const copyItem = screen.queryByText(/Copy repo URL/i);
-        if (copyItem) fireEvent.click(copyItem);
     });
 
     it('exercises onDelete from table view row actions', async () => {
@@ -287,24 +254,6 @@ describe('Projects page', () => {
         const option10 = screen.queryByRole('option', { name: '10' });
         if (option10) fireEvent.click(option10);
     });
-
-    it('exercises table-view onCopyUrl via Copy repo URL menu item (fn#19)', async () => {
-        Object.assign(navigator, {
-            clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
-        });
-        server.use(...baseHandlers());
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
-        const menuBtns = screen.getAllByRole('button', { name: /Project actions/i });
-        if (menuBtns[0]) {
-            fireEvent.click(menuBtns[0]);
-            await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-            const copyItem = screen.queryByText(/Copy repo URL/i);
-            if (copyItem) fireEvent.click(copyItem);
-        }
-        expect(document.body).toBeTruthy();
-    }, 30000);
 
     it('exercises PageFab onClick (fn#26) — targets the FAB specifically', async () => {
         server.use(...baseHandlers());
@@ -404,24 +353,6 @@ describe('Projects page', () => {
         expect(document.body).toBeTruthy();
     });
 
-    it('exercises handleCopyUrl clipboard error path (navigator.clipboard throws)', async () => {
-        // Override clipboard to reject — covers the catch branch in handleCopyUrl
-        Object.assign(navigator, {
-            clipboard: { writeText: vi.fn().mockRejectedValue(new Error('Clipboard denied')) },
-        });
-        server.use(...baseHandlers());
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText('Atlas');
-        const menuBtn = screen.getByRole('button', { name: /Project actions/i });
-        fireEvent.click(menuBtn);
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const copyItem = screen.queryByText(/Copy repo URL/i);
-        if (copyItem) fireEvent.click(copyItem);
-        // Allow the catch branch to fire (toast "Clipboard blocked")
-        await waitFor(() => {}, { timeout: 500 });
-        expect(document.body).toBeTruthy();
-    });
-
     it('renders filter chips correctly for categoriesByProject matches and non-matches', async () => {
         // Two projects: p1 has software-dev task, p2 has no tasks
         const p1 = makeProject({ id: 'p1', name: 'SW Project' });
@@ -449,9 +380,9 @@ describe('Projects page', () => {
         await waitFor(() => expect(screen.getByText('Empty Project')).toBeInTheDocument());
     });
 
-    it("exercises displayIdById and the first repo's URL strip on tableRows useMemo (table view)", async () => {
-        // The remote lives on the repo now (ADR 0018) — protocol and .git suffix
-        // are still stripped for the Repo URL column.
+    it('exercises displayIdById and the repo-name mapping on tableRows useMemo (table view)', async () => {
+        // ADR 0018 — the table names every repo rather than stripping repos[0]'s
+        // remote and passing it off as the project's one repo.
         const p = makeProject({ id: 'p1', name: 'Git Project', issue_key_prefix: 'GP' });
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
@@ -460,7 +391,7 @@ describe('Projects page', () => {
             http.get(`${BASE}/projects`, () => HttpResponse.json([p])),
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
-            reposAre(makeProjectRepo({ git_url: 'https://github.com/example/repo.git' })),
+            reposAre(makeProjectRepo({ name: 'repo' })),
             ...defaultHandlers
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
@@ -468,10 +399,10 @@ describe('Projects page', () => {
         // Switch to table to exercise tableRows mapping
         fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
         await waitFor(() => expect(screen.getByText('Git Project')).toBeInTheDocument());
-        expect(await screen.findByText('github.com/example/repo')).toBeInTheDocument();
+        expect(await screen.findByText('repo')).toBeInTheDocument();
     });
 
-    it('table Repo URL column shows the first repo with a +N suffix when a project has more', async () => {
+    it('table Repos column names every repo when a project has more than one', async () => {
         const p = makeProject({ id: 'p1', name: 'Multi Project' });
         server.use(
             http.get(`${BASE}/projects/paged`, () =>
@@ -481,9 +412,9 @@ describe('Projects page', () => {
             http.get(`${BASE}/agents`, () => HttpResponse.json([])),
             http.get(`${BASE}/tasks`, () => HttpResponse.json([])),
             reposAre(
-                makeProjectRepo({ id: 'r1', git_url: 'https://github.com/example/first.git' }),
-                makeProjectRepo({ id: 'r2', git_url: 'https://github.com/example/second.git' }),
-                makeProjectRepo({ id: 'r3', git_url: 'https://github.com/example/third.git' })
+                makeProjectRepo({ id: 'r1', name: 'first' }),
+                makeProjectRepo({ id: 'r2', name: 'second' }),
+                makeProjectRepo({ id: 'r3', name: 'third' })
             ),
             ...defaultHandlers
         );
@@ -492,7 +423,7 @@ describe('Projects page', () => {
         // Cards first: the count, then the same data in the table.
         expect(await screen.findByText('3 repos')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
-        expect(await screen.findByText('github.com/example/first +2')).toBeInTheDocument();
+        expect(await screen.findByText('first, second, third')).toBeInTheDocument();
     });
 
     it("cards show each project's repo count from the single /repos fetch", async () => {
@@ -519,45 +450,11 @@ describe('Projects page', () => {
         );
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         expect(await screen.findByText('1 repo')).toBeInTheDocument();
-        expect(screen.getByText('No repos')).toBeInTheDocument();
+        // A repo-less card says so twice: once where names go, once as the count.
+        expect(screen.getAllByText('No repos').length).toBeGreaterThan(0);
         expect(screen.getByText('2 repos')).toBeInTheDocument();
         // One round trip for the whole page — never one per card.
         expect(repoFetches).toBe(1);
-    });
-
-    it('exercises handleCopyUrl Undo action onClick — covers the clipboard.writeText("") catch(() => {}) branch', async () => {
-        // handleCopyUrl shows a toast with an Undo action.
-        // Clicking Undo calls navigator.clipboard.writeText('').catch(() => {}).
-        Object.assign(navigator, {
-            clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
-        });
-        server.use(...baseHandlers());
-        renderWithProviders(
-            <>
-                <Projects />
-                <Toast />
-            </>,
-            { initialEntries: ['/projects'] }
-        );
-        await screen.findByText('Atlas');
-        const menuBtn = screen.getByRole('button', { name: /Project actions/i });
-        fireEvent.click(menuBtn);
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        const copyItem = screen.queryByText(/Copy repo URL/i);
-        if (copyItem) {
-            fireEvent.click(copyItem);
-            // Toast appears with Undo button — click it to exercise the action.onClick
-            await waitFor(
-                () => {
-                    const undoBtn = screen.queryByText('Undo');
-                    expect(undoBtn).toBeTruthy();
-                },
-                { timeout: 3000 }
-            ).catch(() => {});
-            const undoBtn = screen.queryByText('Undo');
-            if (undoBtn) fireEvent.click(undoBtn);
-        }
-        expect(document.body).toBeTruthy();
     });
 
     it('L108: agentCategoryById miss — task assignee_agent_id not in agents list', async () => {
@@ -578,10 +475,9 @@ describe('Projects page', () => {
         expect(screen.getByText('Atlas')).toBeInTheDocument();
     });
 
-    it('project with no repos — empty gitPath cell and handleCopyUrl copies an empty url', async () => {
-        // A project may have zero repos (ADR 0018). The card says "No repos",
-        // the table cell falls back to an em-dash, and Copy repo URL has
-        // nothing to copy.
+    it('project with no repos — says so on the card and in the table cell', async () => {
+        // A project may have zero repos (ADR 0018), and since New Project no
+        // longer asks for one, that is now the normal first state.
         const noRepos = makeProject({ id: 'p1', name: 'NoUrl Project' });
         const writeText = vi.fn().mockResolvedValue(undefined);
         server.use(
@@ -597,14 +493,8 @@ describe('Projects page', () => {
         Object.assign(navigator, { clipboard: { writeText } });
         renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
         await screen.findByText('NoUrl Project');
-        expect(await screen.findByText('No repos')).toBeInTheDocument();
-        // Open actions menu and click Copy repo URL — nothing to copy.
-        const menuBtn = screen.getByRole('button', { name: /Project actions/i });
-        fireEvent.click(menuBtn);
-        await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        fireEvent.click(screen.getByText(/Copy repo URL/i));
-        await waitFor(() => expect(writeText).toHaveBeenCalledWith(''));
-        // Switch to table view — the Repo URL cell falls back to an em-dash.
+        expect((await screen.findAllByText('No repos')).length).toBeGreaterThan(0);
+        // Switch to table view — the Repos cell falls back to an em-dash.
         fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
         await waitFor(() => expect(screen.getByText('NoUrl Project')).toBeInTheDocument());
         expect(screen.getAllByText('—').length).toBeGreaterThan(0);
@@ -662,16 +552,13 @@ describe('Projects page', () => {
         // Switch to table view so handleRowAction is wired up
         fireEvent.click(screen.getByRole('button', { name: /^Table$/i }));
         await waitFor(() => expect(screen.getByText('Ghost Project')).toBeInTheDocument());
-        // Open menu and click Copy — should call handleRowAction('p99', 'copy')
-        // which hits the projectById.get check; p99 exists so this is the happy path
-        Object.assign(navigator, {
-            clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
-        });
+        // Open menu and click Delete — calls handleRowAction('p99'), which hits
+        // the projectById.get check; p99 exists so this is the happy path.
         const menuBtns = screen.getAllByRole('button', { name: /Project actions/i });
         expect(menuBtns[0]).toBeTruthy();
         fireEvent.click(menuBtns[0]!);
         await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeTruthy());
-        fireEvent.click(screen.getByText(/Copy repo URL/i));
+        fireEvent.click(screen.getByText(/Delete project/i));
         expect(document.body).toBeTruthy();
     }, 30000);
 

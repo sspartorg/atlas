@@ -9,7 +9,6 @@ const defaultProps = {
     repos: [makeProjectRepo()],
     taskCount: 2,
     subTaskCount: 5,
-    onCopyUrl: vi.fn(),
     onDelete: vi.fn(),
 };
 
@@ -21,37 +20,20 @@ describe('ProjectCard', () => {
         expect(screen.getByText('Acme')).toBeInTheDocument();
     });
 
-    it("renders the first repo's git_url stripping https:// prefix and .git suffix", () => {
+    // ADR 0018 — a project holds 0..N equal repos, so the card names them all
+    // instead of printing repos[0]'s remote as if it were "the project's repo".
+    it('names every repo the project holds', () => {
         renderWithProviders(
             <ProjectCard
                 project={makeProject({ id: 'p1', name: 'Acme' })}
                 {...defaultProps}
-                repos={[makeProjectRepo({ git_url: 'https://github.com/acme/repo.git' })]}
+                repos={[
+                    makeProjectRepo({ id: 'r1', name: 'web' }),
+                    makeProjectRepo({ id: 'r2', name: 'api' }),
+                ]}
             />
         );
-        expect(screen.getByText('github.com/acme/repo')).toBeInTheDocument();
-    });
-
-    it("renders the first repo's git_url stripping http:// (non-https) prefix", () => {
-        renderWithProviders(
-            <ProjectCard
-                project={makeProject({ id: 'p1', name: 'Acme' })}
-                {...defaultProps}
-                repos={[makeProjectRepo({ git_url: 'http://github.com/acme/repo.git' })]}
-            />
-        );
-        expect(screen.getByText('github.com/acme/repo')).toBeInTheDocument();
-    });
-
-    it('renders em-dash when the first repo has no git_url', () => {
-        renderWithProviders(
-            <ProjectCard
-                project={makeProject({ id: 'p1', name: 'Acme' })}
-                {...defaultProps}
-                repos={[makeProjectRepo({ git_url: '' })]}
-            />
-        );
-        expect(screen.getByText('—')).toBeInTheDocument();
+        expect(screen.getByText('web, api')).toBeInTheDocument();
     });
 
     it('counts the repos: "1 repo", "2 repos", "No repos"', () => {
@@ -76,24 +58,8 @@ describe('ProjectCard', () => {
         two.unmount();
 
         renderWithProviders(<ProjectCard project={project} {...defaultProps} repos={[]} />);
-        expect(screen.getByText('No repos')).toBeInTheDocument();
-        // With no repo there is no remote to show.
-        expect(screen.getByText('—')).toBeInTheDocument();
-    });
-
-    it("shows the first repo's remote when the project has several", () => {
-        renderWithProviders(
-            <ProjectCard
-                project={makeProject({ id: 'p1', name: 'Acme' })}
-                {...defaultProps}
-                repos={[
-                    makeProjectRepo({ id: 'r1', git_url: 'https://github.com/acme/first.git' }),
-                    makeProjectRepo({ id: 'r2', git_url: 'https://github.com/acme/second.git' }),
-                ]}
-            />
-        );
-        expect(screen.getByText('github.com/acme/first')).toBeInTheDocument();
-        expect(screen.queryByText('github.com/acme/second')).not.toBeInTheDocument();
+        // Both the name slot and the count say so, and neither invents a URL.
+        expect(screen.getAllByText('No repos').length).toBeGreaterThan(0);
     });
 
     it('renders scheduleInfo icon when scheduleInfo is provided with next_run_at', () => {

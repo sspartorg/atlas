@@ -14,8 +14,7 @@ Single-project workspace. 6 tabs (Overview, Tasks, Guard-rails, Repos, Setup, Hi
 **Header (`ProjectHeader`)**
 - Breadcrumb: Projects > project name
 - Project name + display ID (`ATL-NNN`, monospace)
-- Repo URL link → external href to `git_url`
-- "no repo URL" fallback if missing
+- Repo-count pill (`Add a repo` / `1 repo` / `N repos`) — a button that switches to the **Repos** tab (`onViewRepos`). It used to special-case exactly one repo and print its URL + branch, which read as "the project's repo"; with New Project no longer asking for one, a repo-less project is the normal first state and the old "no repo URL set" was a dead end.
 - Last activity (relative time)
 - Guard-rails shield indicator (if `project.guardrails_md.trim().length > 0`)
 - **Actions** menu button → `ProjectActionsMenu`

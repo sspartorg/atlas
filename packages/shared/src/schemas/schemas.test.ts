@@ -11,8 +11,6 @@ import {
     UpdateRoleSchema,
     MemoryRegenerationTriggerSchema,
     UpdateAgentSchema,
-    CloneProjectSchema,
-    ConnectExistingProjectSchema,
     CreateAgentSchema,
     CreateCliModelSchema,
     CreateCommentSchema,
@@ -546,49 +544,7 @@ describe('credential schemas', () => {
     });
 });
 
-describe('project lifecycle schemas (clone / connect / delete / reclone)', () => {
-    it('CloneProjectSchema accepts a github URL', () => {
-        const out = CloneProjectSchema.parse({
-            repo_url: 'https://github.com/example/atlas',
-            credential_id: 'c1',
-            project_name: 'Atlas',
-            issue_key_prefix: 'ATL',
-        });
-        expect(out.default_branch).toBe('main');
-    });
-
-    it('CloneProjectSchema rejects non-github URL (the .refine body fires)', () => {
-        expect(
-            CloneProjectSchema.safeParse({
-                repo_url: 'https://gitlab.com/x/y',
-                credential_id: 'c1',
-                project_name: 'X',
-                issue_key_prefix: 'XXX',
-            }).success
-        ).toBe(false);
-    });
-
-    it('ConnectExistingProjectSchema accepts a github URL (.refine body fires)', () => {
-        const out = ConnectExistingProjectSchema.parse({
-            folder_path: '/tmp/x',
-            repo_url: 'https://github.com/o/r',
-            credential_id: 'c1',
-            issue_key_prefix: 'ABC',
-        });
-        expect(out.repo_url).toContain('github.com');
-    });
-
-    it('ConnectExistingProjectSchema rejects non-github URL', () => {
-        expect(
-            ConnectExistingProjectSchema.safeParse({
-                folder_path: '/tmp/x',
-                repo_url: 'https://bitbucket.org/o/r',
-                credential_id: 'c1',
-                issue_key_prefix: 'ABC',
-            }).success
-        ).toBe(false);
-    });
-
+describe('project lifecycle schemas (delete / reclone)', () => {
     it('DeleteProjectSchema requires a valid mode', () => {
         expect(DeleteProjectSchema.parse({ mode: 'purge' }).mode).toBe('purge');
         expect(DeleteProjectSchema.safeParse({ mode: 'wipe' }).success).toBe(false);
