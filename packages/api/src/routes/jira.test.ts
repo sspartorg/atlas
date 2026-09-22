@@ -144,10 +144,23 @@ describe('/api/projects/:projectId/jira-sources', () => {
         expect(JSON.parse(after.body)).toHaveLength(1);
     });
 
-    it('404s on an unknown project and an unknown source', async () => {
-        expect(
-            (await app.inject({ method: 'GET', url: '/api/projects/nope/jira-sources' })).statusCode
-        ).toBe(404);
+    // Every write bails the same way on an unknown project, so every write
+    // needs the assertion — the early return is its own statement in each.
+    it.each([
+        ['POST', '/api/projects/nope/jira-sources', { jql: 'project = ATL', repo_ids: ['p1'] }],
+        ['PATCH', '/api/projects/nope/jira-sources/1', { jql: 'project = ATL' }],
+        ['DELETE', '/api/projects/nope/jira-sources/1', undefined],
+        ['GET', '/api/projects/nope/jira-sources', undefined],
+    ])('404s %s on an unknown project', async (method, url, payload) => {
+        const res = await app.inject({
+            method: method as 'POST' | 'PATCH' | 'DELETE' | 'GET',
+            url,
+            ...(payload ? { payload } : {}),
+        });
+        expect(res.statusCode).toBe(404);
+    });
+
+    it('404s on an unknown source', async () => {
         expect(
             (
                 await app.inject({
@@ -156,6 +169,25 @@ describe('/api/projects/:projectId/jira-sources', () => {
                 })
             ).statusCode
         ).toBe(404);
+        expect(
+            (
+                await app.inject({
+                    method: 'PATCH',
+                    url: '/api/projects/p1/jira-sources/99999',
+                    payload: { jql: 'project = ATL' },
+                })
+            ).statusCode
+        ).toBe(404);
+    });
+
+    // A runaway config would run 50+ JQLs against someone's Jira every poll.
+    it('refuses more than 50 sources in one project', async () => {
+        for (let i = 0; i < 50; i++) {
+            expect((await create({ jql: `project = ATL AND x = ${i}`, repo_ids: ['p1'] })).statusCode).toBe(201);
+        }
+        const over = await create({ jql: 'project = ATL AND x = 50', repo_ids: ['p1'] });
+        expect(over.statusCode).toBe(409);
+        expect(JSON.parse(over.body).error).toMatch(/at most 50/);
     });
 
     it('rejects an empty repo list and a repo of another project', async () => {
