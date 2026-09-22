@@ -11,6 +11,7 @@ import {
     subTemplates,
     subtasksLabel,
     templateAgentIds,
+    triggerLabel,
 } from './labels.js';
 
 type Delivery = NonNullable<Parameters<typeof deliveryLabel>[0]>;
@@ -57,6 +58,37 @@ describe('deliveryLabel', () => {
         expect(deliveryLabel(delivery({ raises_pr: true, push_to_default: true }))).toBe(
             'No delivery',
         );
+    });
+});
+
+describe('triggerLabel', () => {
+    it('leaves a non-schedule trigger as its plain label', () => {
+        expect(
+            triggerLabel({ trigger: 'manual', schedule_preset: null, next_run_at: null })
+        ).toBe('Manual');
+        expect(
+            triggerLabel({ trigger: 'item_ready', schedule_preset: null, next_run_at: null })
+        ).toBe('On item ready');
+    });
+
+    // A bare "Scheduled" was the whole complaint: the cadence only existed on
+    // the Start node inside the canvas, so the list and header couldn't say
+    // whether a workflow ran hourly or weekly.
+    it('spells out the cadence and the next fire', () => {
+        const label = triggerLabel({
+            trigger: 'schedule',
+            schedule_preset: 'hourly',
+            next_run_at: '2026-09-22T14:00:00.000Z',
+        });
+        expect(label).toContain('Scheduled');
+        expect(label).toContain('every hour');
+        expect(label).toContain('next ');
+    });
+
+    it('still names the cadence before the first fire is computed', () => {
+        expect(
+            triggerLabel({ trigger: 'schedule', schedule_preset: 'weekly', next_run_at: null })
+        ).toBe('Scheduled · weekly');
     });
 });
 

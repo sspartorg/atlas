@@ -310,6 +310,7 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
                 saveDisabled={!dirty || clientErrors.length > 0 || !settings.name.trim()}
                 saving={update.isPending}
                 runDisabledReason={runDisabledReason}
+                onScheduleChange={onSettings}
                 onSave={() => void save()}
                 onRun={() => void runNow()}
                 onDelete={() => setDeleteOpen(true)}

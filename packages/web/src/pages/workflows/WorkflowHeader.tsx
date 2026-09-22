@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -10,7 +11,8 @@ import { api } from '../../api/api.js';
 import { usePublishWorkflow, useUpgradeWorkflow } from '../../hooks/useWorkflows.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
-import { INPUT_KIND_LABEL, TRIGGER_LABEL, deliveryLabel } from './labels.js';
+import { INPUT_KIND_LABEL, deliveryLabel, triggerLabel } from './labels.js';
+import { WorkflowScheduleDialog } from './WorkflowScheduleDialog.js';
 
 interface Props {
     workflow: IWorkflow;
@@ -22,6 +24,8 @@ interface Props {
     onSave: () => void;
     onRun: () => void;
     onDelete: () => void;
+    /** Omitted on surfaces with no draft to edit; the schedule then reads flat. */
+    onScheduleChange?: ((patch: Partial<IWorkflow>) => void) | undefined;
 }
 
 function Icon({ name }: { name: string }) {
@@ -47,8 +51,10 @@ export function WorkflowHeader({
     onSave,
     onRun,
     onDelete,
+    onScheduleChange,
 }: Props) {
     const active = wf.status === 'active';
+    const [scheduleOpen, setScheduleOpen] = useState(false);
     const toast = useToast();
     const publish = usePublishWorkflow();
     const upgrade = useUpgradeWorkflow();
@@ -142,7 +148,30 @@ export function WorkflowHeader({
                     )}
                 </Box>
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1 }}>
-                    {projectName} · {INPUT_KIND_LABEL[wf.input_kind]} · {TRIGGER_LABEL[wf.trigger]}{' '}
+                    {projectName} · {INPUT_KIND_LABEL[wf.input_kind]} ·{' '}
+                    {onScheduleChange && wf.input_kind !== 'sub_task' ? (
+                        <Box
+                            component="button"
+                            type="button"
+                            onClick={() => setScheduleOpen(true)}
+                            sx={{
+                                font: 'inherit',
+                                color: 'inherit',
+                                background: 'none',
+                                border: 'none',
+                                p: 0,
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                textDecorationStyle: 'dotted',
+                                textUnderlineOffset: 3,
+                                '&:hover': { color: ATLAS_PALETTE.slate },
+                            }}
+                        >
+                            {triggerLabel(wf)}
+                        </Box>
+                    ) : (
+                        triggerLabel(wf)
+                    )}{' '}
                     · {deliveryLabel(wf)}
                 </Typography>
             </Box>
@@ -226,6 +255,14 @@ export function WorkflowHeader({
                     </IconButton>
                 </Tooltip>
             </Box>
+            {onScheduleChange && (
+                <WorkflowScheduleDialog
+                    open={scheduleOpen}
+                    workflow={wf}
+                    onChange={onScheduleChange}
+                    onClose={() => setScheduleOpen(false)}
+                />
+            )}
         </Box>
     );
 }

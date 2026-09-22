@@ -8,7 +8,7 @@ import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { makePublishedWorkflow, makeWorkflow } from '../../test-utils/workflowFixtures.js';
 import { WorkflowHeader } from './WorkflowHeader.js';
 
-function mount(dirty: boolean) {
+function mount(dirty: boolean, extra: Partial<Parameters<typeof WorkflowHeader>[0]> = {}) {
     renderWithProviders(
         <>
             <Toast />
@@ -22,6 +22,7 @@ function mount(dirty: boolean) {
                 onSave={vi.fn()}
                 onRun={vi.fn()}
                 onDelete={vi.fn()}
+                {...extra}
             />
         </>
     );
@@ -41,6 +42,33 @@ describe('WorkflowHeader Export', () => {
             'aria-disabled',
             'true'
         );
+    });
+});
+
+// Setting a cadence used to mean opening the canvas and selecting the Start
+// node, so workflows sat on `manual` and the schedule was invisible.
+describe('WorkflowHeader schedule', () => {
+    it('opens the schedule from the header without touching the canvas', async () => {
+        const onScheduleChange = vi.fn();
+        mount(false, { onScheduleChange });
+
+        await userEvent.click(screen.getByRole('button', { name: /on item ready/i }));
+        expect(await screen.findByRole('dialog', { name: /schedule/i })).toBeInTheDocument();
+
+        await userEvent.click(screen.getByRole('combobox', { name: /trigger/i }));
+        await userEvent.click(screen.getByRole('option', { name: 'Scheduled' }));
+
+        // A schedule trigger with no preset is rejected by the API, so the
+        // control seeds one.
+        expect(onScheduleChange).toHaveBeenCalledWith(
+            expect.objectContaining({ trigger: 'schedule', schedule_preset: 'daily' })
+        );
+    });
+
+    it('reads flat with no draft to edit', () => {
+        mount(false);
+        expect(screen.queryByRole('button', { name: /on item ready/i })).not.toBeInTheDocument();
+        expect(screen.getByText(/on item ready/i)).toBeInTheDocument();
     });
 });
 

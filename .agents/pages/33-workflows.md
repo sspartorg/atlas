@@ -21,13 +21,14 @@ Card list of every workflow (ADR 0014, ADR 0015). A workflow is a graph of agent
 - `account_tree` tile, name, `{project name} · N agents`.
 - **Active / Inactive** pill (`status`).
 - Description (2-line clamp) when set.
-- Footer metas: **Trigger** (`Manual` / `On item ready` / `Scheduled · next {date}` when `next_run_at`), **Input** (`Per Task` / `Project run` / `Sub-task workflow`, `INPUT_KIND_LABEL` in `pages/workflows/labels.ts`), **Last run** (relative `last_run_at`).
+- Footer metas: **Trigger** (`triggerLabel()` in `pages/workflows/labels.ts`: `Manual` / `On item ready` / `Scheduled · every hour · next {date}` — the cadence is named, and `next …` is appended only once `next_run_at` is set), **Input** (`Per Task` / `Project run` / `Sub-task workflow`, `INPUT_KIND_LABEL` in `pages/workflows/labels.ts`), **Last run** (relative `last_run_at`).
 
 **`NewWorkflowDialog`** (`pages/workflows/NewWorkflowDialog.tsx`)
 - **Project** select (required — Create stays disabled until picked).
 - Radio cards: **Blank** ("A Start and an End node…", meta `Per Task · Push + PR`; creates `Untitled workflow` with a Start → End pass edge server-side) + one card per template from `GET /api/workflows/templates` showing description, `input · delivery` meta (e.g. `Per Task · Push + PR` for Delivery, `Sub-task workflow · Back to the Task` for Build / Test) and agent chips. Chips use the installed agent's name + accent; catalog agents that aren't installed render as a humanized id with a dashed border.
 - When the selected template needs uninstalled agents: "Installs from the marketplace: …".
-- **Create workflow** → `POST /api/workflows` (blank) or `POST /api/workflows/from-template` → navigates to the builder. Creating **Delivery** also creates the project's **Build sub-task** and **Test sub-task** workflows when missing (its Sub-tasks steps name them as `template:build` / `template:test`). Errors show inline as an `Alert`.
+- **Runs when** select (Blank only — a template carries its own trigger, e.g. Delivery ships `item_ready`). Defaults to **On item ready**; blank workflows used to be born `manual`, so the only way to run one was **Run now** and per-workflow scheduling went unnoticed. Picking **Scheduled** seeds `daily` 09:00 (the API rejects a schedule trigger with no preset); the cadence is then tuned from the builder header's schedule chip.
+- **Create workflow** → `POST /api/workflows` (blank) or `POST /api/workflows/from-template` → navigates to the builder. A workflow created with a self-starting trigger but **no agent node** in its graph is created `status: 'inactive'` (`services/workflows.ts`) — otherwise the next dispatch tick would take every ready Task in the project and run it through an empty Start→End graph. The builder's **Active** switch turns it on once the graph is built. Creating **Delivery** also creates the project's **Build sub-task** and **Test sub-task** workflows when missing (its Sub-tasks steps name them as `template:build` / `template:test`). Errors show inline as an `Alert`.
 
 **`ImportWorkflowDialog`** (`pages/workflows/ImportWorkflowDialog.tsx`)
 - **Project** select + a click-to-choose `.zip` drop box. **Import** stays disabled until both are set.

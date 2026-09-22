@@ -4,11 +4,13 @@ import type {
     IWorkflow,
     IWorkflowGraph,
     IWorkflowTemplate,
+    SchedulePreset,
     WorkflowInputKind,
     WorkflowTrigger,
 } from '@atlas/shared';
 import { flattenIssueTree } from '../../hooks/useIssues.js';
 import { itemPath } from '../../utils/itemPath.js';
+import { formatAbsolute } from '../../utils/time.js';
 
 // Plain-text presentation shared by the list, builder and item panel. Kept
 // free of @xyflow imports so non-canvas surfaces don't pull the canvas chunk.
@@ -18,6 +20,30 @@ export const TRIGGER_LABEL: Record<WorkflowTrigger, string> = {
     item_ready: 'On item ready',
     schedule: 'Scheduled',
 };
+
+const SCHEDULE_PRESET_LABEL: Record<SchedulePreset, string> = {
+    hourly: 'every hour',
+    every_4h: 'every 4 hours',
+    daily: 'daily',
+    weekly: 'weekly',
+    custom: 'custom cron',
+};
+
+/**
+ * The trigger as the Owner needs to read it: a bare "Scheduled" says nothing
+ * about the cadence, and the cadence only ever lived on the Start node inside
+ * the canvas. Renders "Manual", "On item ready", or
+ * "Scheduled · every hour · next 14:00".
+ */
+export function triggerLabel(
+    wf: Pick<IWorkflow, 'trigger' | 'schedule_preset' | 'next_run_at'>,
+): string {
+    if (wf.trigger !== 'schedule') return TRIGGER_LABEL[wf.trigger];
+    const parts = [TRIGGER_LABEL.schedule];
+    if (wf.schedule_preset) parts.push(SCHEDULE_PRESET_LABEL[wf.schedule_preset]);
+    if (wf.next_run_at) parts.push(`next ${formatAbsolute(wf.next_run_at)}`);
+    return parts.join(' · ');
+}
 
 export const INPUT_KIND_LABEL: Record<WorkflowInputKind, string> = {
     item: 'Per Task',
