@@ -1,5 +1,8 @@
-import { describe, expect, it, afterEach } from 'vitest';
-import { agentRunEnv, allowedToolsFor, claudeIsolationArgs } from './agent-runner.js';
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { agentRunEnv, allowedToolsFor, claudeIsolationArgs, copilotDenyToolArgs } from './agent-runner.js';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // Agent runs spawn the Owner's own `claude` binary. Without isolation they
 // inherit ~/.claude hooks, plugins, user CLAUDE.md and every user-scope MCP
@@ -36,6 +39,80 @@ describe('allowedToolsFor', () => {
 
     it('keeps it for freedom scouts, whose whole job is reading Jira', () => {
         expect(allowedToolsFor(false).split(',')).toContain('mcp__claude_ai_Atlassian');
+    });
+});
+
+// Copilot has no strict-MCP-config flag and Atlas spawns it with
+// --allow-all-tools, so an item-attached Copilot run used to reach every MCP
+// server the Owner had registered — further than an item-attached Claude run,
+// which strict-config confines to the Atlas server. Deny rules beat
+// --allow-all-tools, so denying each server by name is the equivalent.
+describe('copilotDenyToolArgs', () => {
+    const saved = process.env['COPILOT_HOME'];
+    let home: string;
+
+    beforeEach(() => {
+        home = mkdtempSync(join(tmpdir(), 'atlas-copilot-home-'));
+        process.env['COPILOT_HOME'] = home;
+    });
+
+    afterEach(() => {
+        if (saved === undefined) delete process.env['COPILOT_HOME'];
+        else process.env['COPILOT_HOME'] = saved;
+        rmSync(home, { recursive: true, force: true });
+    });
+
+    function writeConfig(body: string) {
+        mkdirSync(home, { recursive: true });
+        writeFileSync(join(home, 'mcp-config.json'), body, 'utf8');
+    }
+
+    /** ['--deny-tool','a','--deny-tool','b'] -> ['a','b'] */
+    function denied(args: string[]): string[] {
+        expect(args.length % 2).toBe(0);
+        return args.filter((_, i) => i % 2 === 1);
+    }
+
+    it('leaves freedom scouts alone — agent-jira-to-epic exists to read Jira', () => {
+        writeConfig(JSON.stringify({ mcpServers: { atlassian: {}, github: {} } }));
+        expect(copilotDenyToolArgs(false)).toEqual([]);
+    });
+
+    it('denies every server the Owner registered, plus the built-in', () => {
+        writeConfig(JSON.stringify({ mcpServers: { atlassian: {}, playwright: {} } }));
+        const args = copilotDenyToolArgs(true);
+        expect(args.filter((a) => a === '--deny-tool')).toHaveLength(3);
+        expect(denied(args).sort()).toEqual(['atlassian', 'github-mcp-server', 'playwright']);
+    });
+
+    it("keeps Atlas's own server reachable", () => {
+        writeConfig(JSON.stringify({ mcpServers: { atlas: {}, atlassian: {} } }));
+        expect(denied(copilotDenyToolArgs(true))).not.toContain('atlas');
+        expect(denied(copilotDenyToolArgs(true))).toContain('atlassian');
+    });
+
+    // A deny naming a server that isn't configured is inert, so the built-in
+    // is still worth passing on a machine where Copilot has never run.
+    it('still denies the built-in when there is no config at all', () => {
+        expect(denied(copilotDenyToolArgs(true))).toEqual(['github-mcp-server']);
+    });
+
+    it('does not throw on a malformed or empty config', () => {
+        writeConfig('{ not json');
+        expect(denied(copilotDenyToolArgs(true))).toEqual(['github-mcp-server']);
+        writeConfig(JSON.stringify({}));
+        expect(denied(copilotDenyToolArgs(true))).toEqual(['github-mcp-server']);
+    });
+
+    it('reads COPILOT_HOME rather than assuming ~/.copilot', () => {
+        // Nothing written to `home` yet, so a stray read of the real ~/.copilot
+        // would be the only way another server could appear here.
+        expect(denied(copilotDenyToolArgs(true))).toEqual(['github-mcp-server']);
+        writeConfig(JSON.stringify({ mcpServers: { relocated: {} } }));
+        expect(denied(copilotDenyToolArgs(true)).sort()).toEqual([
+            'github-mcp-server',
+            'relocated',
+        ]);
     });
 });
 

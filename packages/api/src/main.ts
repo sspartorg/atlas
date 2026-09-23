@@ -189,9 +189,11 @@ async function main(): Promise<void> {
     // loses a tool.
     await bootStep('tool catalog sync', syncToolCatalog);
     // Reapply seeded prompts (only when prompt_version === 1, i.e. owner
-    // hasn't edited). The spawned Claude CLI inherits Owner's user-level
-    // MCP config (Atlas + Atlassian + Playwright + …) — no generated
-    // mcp-config.json is needed.
+    // hasn't edited). No generated mcp-config.json is needed: a FREEDOM run
+    // inherits the Owner's user-level MCP config (Atlas + Atlassian +
+    // Playwright + …), and an item-attached run is confined instead — Claude
+    // by `claudeIsolationArgs` (strict, Atlas-only), Copilot by
+    // `copilotDenyToolArgs`. See services/agent-runner.ts.
     await bootStep('agent defaults sync', syncAgentDefaults);
 
     // Migrations may succeed against one DB and the runtime then point at a
