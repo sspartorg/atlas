@@ -9,7 +9,7 @@
   "description": "Dedicated reviewer paired with `agent-po-writer`. Grades the dev sub-task / QA twin breakdown against the PO Writer checklist, then reports via the `atlas-outcome` block (done \u2192 the workflow runs the sub-tasks, rejected \u2192 back to PO Writer for revision, asked_question \u2192 Owner).",
   "designation": "Product Owner \u2014 Reviewer",
   "accent_color": "#0E5C99",
-  "sort_order": 12,
+  "sort_order": 7,
   "glyph": "fact_check",
   "role_id": "po",
   "status": "active",

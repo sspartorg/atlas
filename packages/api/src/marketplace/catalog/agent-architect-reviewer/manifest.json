@@ -9,7 +9,7 @@
   "description": "Dedicated reviewer paired with `agent-architect`. Reads the spec from the shared workflow worktree, walks every required section, and reports via the `atlas-outcome` block (done \u2192 next workflow step, rejected \u2192 back to Architect for revision, asked_question \u2192 Owner).",
   "designation": "Software Architect \u2014 Reviewer",
   "accent_color": "#4263CB",
-  "sort_order": 13,
+  "sort_order": 8,
   "glyph": "fact_check",
   "role_id": "architect",
   "status": "active",

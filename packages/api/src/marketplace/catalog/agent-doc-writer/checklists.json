@@ -1,0 +1,27 @@
+[
+  {
+    "label": "Every user-facing thing the branch shipped is documented (command, flag, endpoint, option, env var, error)",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "Every factual claim was checked against the source, not the Task description",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "Documentation extends the repo's existing files; any self-update rule in AGENTS.md / CLAUDE.md was followed",
+    "sort_order": 2,
+    "required": true
+  },
+  {
+    "label": "Each documented flag or option carries one worked example",
+    "sort_order": 3,
+    "required": true
+  },
+  {
+    "label": "No production code was changed",
+    "sort_order": 4,
+    "required": true
+  }
+]

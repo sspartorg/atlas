@@ -297,8 +297,11 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
 
         beforeEach(() => {
             subTasks = [
-                { id: 'ATL-2', title: 'Sign in', acceptance_criteria: '- Given x', labels: ['dev'] },
+                // A complete set under the v2 contract: the dev sub-task carries
+                // `dev` plus exactly one layer label, and has BOTH twins.
+                { id: 'ATL-2', title: 'Sign in', acceptance_criteria: '- Given x', labels: ['dev', 'fullstack'] },
                 { id: 'ATL-3', title: 'Sign in [QA]', acceptance_criteria: '- Given x', labels: ['qa'] },
+                { id: 'ATL-5', title: 'Sign in [DOC]', acceptance_criteria: '- Given x', labels: ['doc'] },
             ];
             // tested_by is created QA -> dev, so it is incoming on the dev sub-task.
             links = { 'ATL-2': [{ relation_type: 'tested_by', direction: 'incoming', item_id: 'ATL-3' }] };
@@ -321,7 +324,7 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
             expect(r.out).toContain('no dev sub-tasks');
         });
 
-        it('lists every gap: empty AC, missing labels, missing twin link, missing twin', async () => {
+        it('lists every gap: empty AC, missing labels, missing twin link, missing twins', async () => {
             subTasks[0]!.acceptance_criteria = '  ';
             subTasks[1]!.labels = [];
             subTasks.push({ id: 'ATL-4', title: 'Sign out', acceptance_criteria: '- Given y', labels: [] });
@@ -333,6 +336,36 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
             expect(r.out).toMatch(/ATL-4 is missing the dev label/);
             expect(r.out).toMatch(/ATL-2 has no tested_by link/);
             expect(r.out).toMatch(/ATL-4 has no \[QA\] twin/);
+            // A missing [QA] twin used to `continue` past the [DOC] check, so a
+            // sub-task with neither reported one gap per round instead of both.
+            expect(r.out).toMatch(/ATL-4 has no \[DOC\] twin/);
+            expect(r.out).toMatch(/ATL-4 must carry exactly one layer label/);
+        });
+
+        it('rejects a dev sub-task with no layer label, or with two', async () => {
+            subTasks[0]!.labels = ['dev'];
+            let r = await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl });
+            expect(r.code).toBe(1);
+            expect(r.out).toMatch(/ATL-2 must carry exactly one layer label \(be\|fe\|fullstack\); it has none/);
+
+            subTasks[0]!.labels = ['dev', 'be', 'fe'];
+            r = await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl });
+            expect(r.code).toBe(1);
+            expect(r.out).toMatch(/it has be, fe/);
+        });
+
+        it('rejects a dev sub-task with no [DOC] twin', async () => {
+            subTasks = subTasks.filter((s) => !s.title.endsWith('[DOC]'));
+            const r = await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl });
+            expect(r.code).toBe(1);
+            expect(r.out).toMatch(/ATL-2 has no \[DOC\] twin/);
+        });
+
+        it('rejects a [DOC] twin that is missing the doc label', async () => {
+            subTasks[2]!.labels = [];
+            const r = await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl });
+            expect(r.code).toBe(1);
+            expect(r.out).toMatch(/ATL-5 is missing the doc label/);
         });
 
         it('accepts the tested_by link from either direction', async () => {

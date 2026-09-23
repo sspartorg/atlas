@@ -1,0 +1,22 @@
+{
+  "id": "agent-doc-reviewer",
+  "name": "Doc Reviewer",
+  "category": "software-dev",
+  "cli": "claude",
+  "model": "claude-sonnet-5",
+  "effort": "low",
+  "framework": "review",
+  "description": "Reviews one `[DOC]` sub-task: confirms everything the branch shipped is documented, checks each factual claim against the source, and rejects a wrong default or a non-existent flag back to Doc Writer.",
+  "designation": "Technical Writer - Reviewer",
+  "accent_color": "#B45309",
+  "sort_order": 12,
+  "glyph": "fact_check",
+  "role_id": "docs",
+  "status": "active",
+  "kind_slug": "custom",
+  "settings_json": {},
+  "memory_cadence": 1,
+  "summary": "Checks documentation against the diff it claims to describe.",
+  "version": 1,
+  "published_at": "2026-09-24T00:00:00Z"
+}

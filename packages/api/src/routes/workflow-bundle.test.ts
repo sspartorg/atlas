@@ -7,6 +7,7 @@ vi.mock('../routes/events.js', () => ({ eventsRoutes: async () => undefined, bro
 
 import { buildApp } from '../server.js';
 import { unpackWorkflowBundle } from '../services/workflow-bundle.js';
+import { workflowsService } from '../services/workflows.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertProject } from '../../tests/_items.js';
 
@@ -334,18 +335,21 @@ describe('POST /api/workflows/import', () => {
 });
 
 describe('GET /api/workflows/templates/:id/export', () => {
-    const DELIVERY_AGENTS = [
-        'agent-po-writer',
-        'agent-po-reviewer',
-        'agent-architect',
-        'agent-architect-reviewer',
-        'agent-coder',
-        'agent-code-reviewer',
-        'agent-qa-writer',
-        'agent-qa-reviewer',
-        'agent-automation',
-        'agent-automation-reviewer',
-    ];
+    // Derived, not restated. Exporting the template needs a catalog row for
+    // EVERY agent its graph and its sub-templates name, so a hardcoded list
+    // silently became a 404 the moment delivery v2 added a docs pair, four gate
+    // fixers and a release reviewer.
+    const DELIVERY_AGENTS = workflowsService.templateAgentIds('delivery');
+    const DELIVERY_SUB_WORKFLOWS = workflowsService
+        .listTemplates()
+        .filter((t) =>
+            workflowsService
+                .listTemplates()
+                .find((d) => d.id === 'delivery')
+                ?.graph.nodes.some((n) => n.sub_workflow_id === `template:${t.id}`)
+        )
+        .map((t) => t.name.toLowerCase().replace(/\s+/g, '-'))
+        .sort();
 
     async function seedCatalog(ids: string[]): Promise<void> {
         for (const [i, id] of ids.entries()) {
@@ -379,7 +383,7 @@ describe('GET /api/workflows/templates/:id/export', () => {
         await seedCatalog(DELIVERY_AGENTS);
         const zipBuf = await exportZip('/api/workflows/templates/delivery/export');
         const bundle = await unpackWorkflowBundle(zipBuf);
-        expect([...bundle.sub_workflows.keys()].sort()).toEqual(['build-sub-task', 'test-sub-task']);
+        expect([...bundle.sub_workflows.keys()].sort()).toEqual(DELIVERY_SUB_WORKFLOWS);
         expect([...bundle.agents.keys()].sort()).toEqual([...DELIVERY_AGENTS].sort());
         expect(bundle.agents.get('agent-coder')?.prompt_md).toBe('catalog agent-coder');
 
@@ -387,10 +391,10 @@ describe('GET /api/workflows/templates/:id/export', () => {
         expect(res.statusCode).toBe(201);
         const result = res.json() as IWorkflowImportResult;
         expect(result.installed_agents.sort()).toEqual([...DELIVERY_AGENTS].sort());
-        expect(result.sub_workflows.map((w) => w.name).sort()).toEqual(['Build sub-task', 'Test sub-task']);
+        expect(result.sub_workflows.map((w) => w.name).sort()).toEqual(['Build sub-task', 'Docs sub-task', 'Test sub-task']);
         const subIds = new Set(result.sub_workflows.map((w) => w.id));
         const steps = result.workflow.graph.nodes.filter((n) => n.type === 'subtasks');
-        expect(steps).toHaveLength(2);
+        expect(steps).toHaveLength(3);
         for (const s of steps) expect(subIds.has(s.sub_workflow_id ?? '')).toBe(true);
     });
 

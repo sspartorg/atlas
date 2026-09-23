@@ -262,6 +262,14 @@ export interface IWorkflowTemplate {
     push_code: boolean;
     raises_pr: boolean;
     push_to_default?: boolean;
+    /**
+     * Loop budget for a run created from this template. One `loop_count` is
+     * shared by every fail edge in a run, so a graph with many failable steps
+     * needs more than the column default of 3 — the Delivery template has six
+     * reviewer pairs, four gates and a release reviewer, and 3 would park a
+     * Task that simply took two rounds in two different places.
+     */
+    max_loops?: number | undefined;
     graph: IWorkflowGraph;
 }
 

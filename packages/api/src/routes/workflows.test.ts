@@ -41,7 +41,13 @@ import { workflowsService } from '../services/workflows.js';
 import type { IWorkflow } from '@atlas/shared';
 
 /** Delivery's full agent closure: its own graph's four plus Build's and Test's. */
-const DELIVERY_AGENT_IDS = ['agent-po-writer', 'agent-po-reviewer', 'agent-architect', 'agent-architect-reviewer', 'agent-coder', 'agent-code-reviewer', 'agent-qa-writer', 'agent-qa-reviewer', 'agent-automation', 'agent-automation-reviewer'];
+// Derived, not restated: every agent the Delivery template needs, its
+// sub-templates' included. The hardcoded list this replaces went stale the
+// moment the graph grew a docs sub-workflow, four gate fixers and a release
+// reviewer, and the symptom was an opaque 500 from create-from-template.
+const DELIVERY_AGENT_IDS = workflowsService.templateAgentIds('delivery');
+const templateVersion = (id: string): number =>
+    workflowsService.listTemplates().find((t) => t.id === id)?.version ?? 0;
 
 let app: FastifyInstance;
 
@@ -162,12 +168,11 @@ describe('workflow CRUD', () => {
     it('lists the shipped templates with valid graphs', async () => {
         const res = await app.inject({ method: 'GET', url: '/api/workflows/templates' });
         const ids = (res.json() as Array<{ id: string }>).map((t) => t.id).sort();
-        expect(ids).toEqual(['ai-readiness', 'build', 'delivery', 'test']);
+        expect(ids).toEqual(['ai-readiness', 'build', 'delivery', 'docs', 'test']);
     });
 
     it('creates Delivery with its Sub-tasks steps pointing at this project’s Build and Test sub-workflows', async () => {
-        const agents = ['po-writer', 'po-reviewer', 'architect', 'architect-reviewer', 'code-reviewer', 'qa-writer', 'qa-reviewer', 'automation', 'automation-reviewer'];
-        for (const a of agents) await insertAgent({ id: `agent-${a}`, status: 'active' });
+        for (const a of DELIVERY_AGENT_IDS.filter((x) => x !== 'agent-coder')) await insertAgent({ id: a, status: 'active' });
 
         const res = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'delivery', project_id: 'p1' } });
         expect(res.statusCode).toBe(201);
@@ -175,11 +180,23 @@ describe('workflow CRUD', () => {
         const byName = (name: string) => all.find((w) => w.name === name);
         expect(byName('Build sub-task')).toMatchObject({ input_kind: 'sub_task' });
         expect(byName('Test sub-task')).toMatchObject({ input_kind: 'sub_task' });
+        expect(byName('Docs sub-task')).toMatchObject({ input_kind: 'sub_task' });
         const steps = (res.json().graph.nodes as Array<{ id: string; type: string }>).filter((n) => n.type === 'subtasks');
         expect(steps).toEqual([
+            // Unlabelled on purpose: it is the catch-all, so a sub-task that
+            // arrives with no label is still built rather than stranding the run.
             expect.objectContaining({ id: 'build', sub_workflow_id: byName('Build sub-task')?.id }),
             expect.objectContaining({ id: 'test', sub_workflow_id: byName('Test sub-task')?.id, label: 'qa' }),
+            expect.objectContaining({ id: 'docs', sub_workflow_id: byName('Docs sub-task')?.id, label: 'doc' }),
         ]);
+
+        // Four gate steps, each naming a seeded guardrail script and each with
+        // a fixer on its fail edge. They spawn no agent when green.
+        const gates = (res.json().graph.nodes as Array<{ type: string; script_id?: string }>)
+            .filter((n) => n.type === 'gate')
+            .map((n) => n.script_id);
+        expect(gates).toEqual(['gate-hygiene', 'gate-coverage', 'gate-perf', 'gate-visual']);
+        expect(res.json().max_loops).toBe(templateVersion('delivery') > 1 ? 12 : 3);
 
         // A sub-workflow a Sub-tasks step uses can't be deleted from under it.
         const del = await app.inject({ method: 'DELETE', url: `/api/workflows/${byName('Build sub-task')?.id ?? ''}` });
@@ -200,12 +217,21 @@ describe('workflow CRUD', () => {
             'agent-automation-reviewer',
             'agent-code-reviewer',
             'agent-coder',
+            'agent-coverage-fixer',
+            'agent-doc-reviewer',
+            'agent-doc-writer',
+            'agent-hygiene-fixer',
+            'agent-perf-fixer',
             'agent-po-reviewer',
             'agent-po-writer',
             'agent-qa-reviewer',
             'agent-qa-writer',
+            'agent-release-reviewer',
+            'agent-visual-reviewer',
         ]);
-        // The parent graph alone names only four of those ten.
+        // The parent graph alone names nine of those seventeen; the other eight
+        // belong to the Build, Test and Docs sub-templates. Rolling them up is
+        // what stops a stale sub-workflow leaving its agents uninstalled.
         expect(workflowsService.templateAgentIds('build').sort()).toEqual(['agent-code-reviewer', 'agent-coder']);
         // An id that names no template resolves to no agents rather than
         // throwing: callers feed this straight into dependency resolution, and
@@ -221,12 +247,12 @@ describe('workflow CRUD', () => {
         for (const a of DELIVERY_AGENT_IDS.filter((x) => x !== 'agent-coder')) await insertAgent({ id: a, status: 'active' });
         const res = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'delivery', project_id: 'p1' } });
         expect(res.statusCode).toBe(201);
-        expect(res.json()).toMatchObject({ marketplace_source_id: 'delivery', marketplace_pulled_version: 1 });
+        expect(res.json()).toMatchObject({ marketplace_source_id: 'delivery', marketplace_pulled_version: templateVersion('delivery') });
 
         const rows = await testDb.selectFrom('workflows').select(['name', 'marketplace_source_id', 'marketplace_pulled_version']).execute();
         const byName = (n: string) => rows.find((r) => r.name === n);
-        expect(byName('Build sub-task')).toMatchObject({ marketplace_source_id: 'build', marketplace_pulled_version: 1 });
-        expect(byName('Test sub-task')).toMatchObject({ marketplace_source_id: 'test', marketplace_pulled_version: 1 });
+        expect(byName('Build sub-task')).toMatchObject({ marketplace_source_id: 'build', marketplace_pulled_version: templateVersion('build') });
+        expect(byName('Test sub-task')).toMatchObject({ marketplace_source_id: 'test', marketplace_pulled_version: templateVersion('test') });
     });
 
     // A workflow that never came from the marketplace has no pull to compare
@@ -260,7 +286,12 @@ describe('workflow CRUD', () => {
 
         expect(res.statusCode).toBe(200);
         const after = res.json() as IWorkflow;
-        expect(after.marketplace_pulled_version).toBe(1);
+        expect(after.marketplace_pulled_version).toBe(templateVersion('delivery'));
+        // The upgrade is the path that needs the loop budget — it is where an
+        // existing workflow's graph grows failable steps while the row still
+        // carries the old `max_loops`. Wiring it into create alone left every
+        // install parking on a limit the new graph was never meant to hit.
+        expect(after.max_loops).toBe(12);
         expect(after.upgrade_available).toBe(false);
         // The Owner asked, so the template's description won.
         expect(after.description).not.toBe('my own notes');

@@ -9,7 +9,7 @@
   "description": "Dedicated reviewer paired with `agent-coder`. Confirms the sub-task's commits cover its contract, scans them for anti-patterns, and re-runs the project's typecheck/lint/test gate on the Task's branch. Reports via the `atlas-outcome` block (done \u2192 next workflow step, rejected \u2192 back to Coder for revision, asked_question \u2192 Owner).",
   "designation": "Code \u2014 Reviewer",
   "accent_color": "#1D8348",
-  "sort_order": 14,
+  "sort_order": 9,
   "glyph": "fact_check",
   "role_id": "engineer",
   "status": "active",

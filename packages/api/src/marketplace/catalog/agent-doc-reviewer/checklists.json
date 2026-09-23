@@ -1,0 +1,22 @@
+[
+  {
+    "label": "Every user-facing change on the branch appears in the documentation",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "Each factual claim was verified against the source, not accepted on reading",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "Documentation sits with the repo's existing docs rather than in a parallel copy",
+    "sort_order": 2,
+    "required": true
+  },
+  {
+    "label": "No existing sentence elsewhere in the repo was left untrue by this change",
+    "sort_order": 3,
+    "required": true
+  }
+]

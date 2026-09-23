@@ -1,37 +1,358 @@
 {
     "id": "delivery",
     "name": "Delivery",
-    "description": "PO Writer splits a Task into sub-tasks and the Architect specs them. Then every dev sub-task is built and every [QA] sub-task tested, one at a time on the Task's branch, and the Task ends as one pull request. Unclear Tasks come back to you.",
-    "version": 1,
+    "description": "PO Writer splits a Task into sub-tasks and the Architect specs them. Every dev sub-task is built, every [QA] sub-task tested and every [DOC] sub-task documented, one at a time on the Task's branch. Four deterministic gates then check hygiene, coverage, performance and visuals - each costs nothing when green and wakes a specialist only when it is not - and a release reviewer reads the whole change before it becomes one pull request. Unclear Tasks come back to you.",
+    "version": 2,
     "input_kind": "item",
     "trigger": "item_ready",
     "use_worktree": true,
     "push_code": true,
     "raises_pr": true,
+    "max_loops": 12,
     "graph": {
         "nodes": [
-            { "id": "start", "type": "start", "position": { "x": 0, "y": 0 } },
-            { "id": "po-writer", "type": "agent", "agent_id": "agent-po-writer", "position": { "x": 0, "y": 130 } },
-            { "id": "po-review", "type": "agent", "agent_id": "agent-po-reviewer", "position": { "x": 0, "y": 260 } },
-            { "id": "owner", "type": "owner", "position": { "x": 320, "y": 190 } },
-            { "id": "architect", "type": "agent", "agent_id": "agent-architect", "position": { "x": 0, "y": 390 } },
-            { "id": "architect-review", "type": "agent", "agent_id": "agent-architect-reviewer", "position": { "x": 0, "y": 520 } },
-            { "id": "build", "type": "subtasks", "sub_workflow_id": "template:build", "position": { "x": 0, "y": 650 } },
-            { "id": "test", "type": "subtasks", "sub_workflow_id": "template:test", "label": "qa", "position": { "x": 0, "y": 780 } },
-            { "id": "end", "type": "end", "position": { "x": 0, "y": 910 } }
+            {
+                "id": "start",
+                "type": "start",
+                "position": {
+                    "x": 0,
+                    "y": 0
+                }
+            },
+            {
+                "id": "po-writer",
+                "type": "agent",
+                "agent_id": "agent-po-writer",
+                "position": {
+                    "x": 0,
+                    "y": 130
+                }
+            },
+            {
+                "id": "po-review",
+                "type": "agent",
+                "agent_id": "agent-po-reviewer",
+                "position": {
+                    "x": 0,
+                    "y": 260
+                }
+            },
+            {
+                "id": "owner",
+                "type": "owner",
+                "position": {
+                    "x": 320,
+                    "y": 190
+                }
+            },
+            {
+                "id": "architect",
+                "type": "agent",
+                "agent_id": "agent-architect",
+                "position": {
+                    "x": 0,
+                    "y": 390
+                }
+            },
+            {
+                "id": "architect-review",
+                "type": "agent",
+                "agent_id": "agent-architect-reviewer",
+                "position": {
+                    "x": 0,
+                    "y": 520
+                }
+            },
+            {
+                "id": "build",
+                "type": "subtasks",
+                "sub_workflow_id": "template:build",
+                "position": {
+                    "x": 0,
+                    "y": 650
+                }
+            },
+            {
+                "id": "test",
+                "type": "subtasks",
+                "sub_workflow_id": "template:test",
+                "label": "qa",
+                "position": {
+                    "x": 0,
+                    "y": 780
+                }
+            },
+            {
+                "id": "docs",
+                "type": "subtasks",
+                "sub_workflow_id": "template:docs",
+                "label": "doc",
+                "position": {
+                    "x": 0,
+                    "y": 910
+                }
+            },
+            {
+                "id": "gate-hygiene",
+                "type": "gate",
+                "script_id": "gate-hygiene",
+                "position": {
+                    "x": 0,
+                    "y": 1040
+                }
+            },
+            {
+                "id": "fix-hygiene",
+                "type": "agent",
+                "agent_id": "agent-hygiene-fixer",
+                "position": {
+                    "x": 320,
+                    "y": 1100
+                }
+            },
+            {
+                "id": "gate-coverage",
+                "type": "gate",
+                "script_id": "gate-coverage",
+                "position": {
+                    "x": 0,
+                    "y": 1170
+                }
+            },
+            {
+                "id": "fix-coverage",
+                "type": "agent",
+                "agent_id": "agent-coverage-fixer",
+                "position": {
+                    "x": 320,
+                    "y": 1230
+                }
+            },
+            {
+                "id": "gate-perf",
+                "type": "gate",
+                "script_id": "gate-perf",
+                "position": {
+                    "x": 0,
+                    "y": 1300
+                }
+            },
+            {
+                "id": "fix-perf",
+                "type": "agent",
+                "agent_id": "agent-perf-fixer",
+                "position": {
+                    "x": 320,
+                    "y": 1360
+                }
+            },
+            {
+                "id": "gate-visual",
+                "type": "gate",
+                "script_id": "gate-visual",
+                "position": {
+                    "x": 0,
+                    "y": 1430
+                }
+            },
+            {
+                "id": "fix-visual",
+                "type": "agent",
+                "agent_id": "agent-visual-reviewer",
+                "position": {
+                    "x": 320,
+                    "y": 1490
+                }
+            },
+            {
+                "id": "release-review",
+                "type": "agent",
+                "agent_id": "agent-release-reviewer",
+                "position": {
+                    "x": 0,
+                    "y": 1560
+                }
+            },
+            {
+                "id": "owner-release",
+                "type": "owner",
+                "position": {
+                    "x": 320,
+                    "y": 1620
+                }
+            },
+            {
+                "id": "end",
+                "type": "end",
+                "position": {
+                    "x": 0,
+                    "y": 1690
+                }
+            }
         ],
         "edges": [
-            { "id": "e-start", "source": "start", "target": "po-writer", "kind": "pass" },
-            { "id": "e-po-writer", "source": "po-writer", "target": "po-review", "kind": "pass" },
-            { "id": "e-po-writer-fail", "source": "po-writer", "target": "owner", "kind": "fail" },
-            { "id": "e-owner", "source": "owner", "target": "po-writer", "kind": "pass" },
-            { "id": "e-po-review", "source": "po-review", "target": "architect", "kind": "pass" },
-            { "id": "e-po-review-fail", "source": "po-review", "target": "po-writer", "kind": "fail" },
-            { "id": "e-architect", "source": "architect", "target": "architect-review", "kind": "pass" },
-            { "id": "e-architect-review", "source": "architect-review", "target": "build", "kind": "pass" },
-            { "id": "e-architect-review-fail", "source": "architect-review", "target": "architect", "kind": "fail" },
-            { "id": "e-build", "source": "build", "target": "test", "kind": "pass" },
-            { "id": "e-test", "source": "test", "target": "end", "kind": "pass" }
+            {
+                "id": "e-start-pass-po-writer",
+                "source": "start",
+                "target": "po-writer",
+                "kind": "pass"
+            },
+            {
+                "id": "e-po-writer-pass-po-review",
+                "source": "po-writer",
+                "target": "po-review",
+                "kind": "pass"
+            },
+            {
+                "id": "e-po-writer-fail-owner",
+                "source": "po-writer",
+                "target": "owner",
+                "kind": "fail"
+            },
+            {
+                "id": "e-owner-pass-po-writer",
+                "source": "owner",
+                "target": "po-writer",
+                "kind": "pass"
+            },
+            {
+                "id": "e-po-review-pass-architect",
+                "source": "po-review",
+                "target": "architect",
+                "kind": "pass"
+            },
+            {
+                "id": "e-po-review-fail-po-writer",
+                "source": "po-review",
+                "target": "po-writer",
+                "kind": "fail"
+            },
+            {
+                "id": "e-architect-pass-architect-review",
+                "source": "architect",
+                "target": "architect-review",
+                "kind": "pass"
+            },
+            {
+                "id": "e-architect-review-pass-build",
+                "source": "architect-review",
+                "target": "build",
+                "kind": "pass"
+            },
+            {
+                "id": "e-architect-review-fail-architect",
+                "source": "architect-review",
+                "target": "architect",
+                "kind": "fail"
+            },
+            {
+                "id": "e-build-pass-test",
+                "source": "build",
+                "target": "test",
+                "kind": "pass"
+            },
+            {
+                "id": "e-test-pass-docs",
+                "source": "test",
+                "target": "docs",
+                "kind": "pass"
+            },
+            {
+                "id": "e-docs-pass-gate-hygiene",
+                "source": "docs",
+                "target": "gate-hygiene",
+                "kind": "pass"
+            },
+            {
+                "id": "e-gate-hygiene-fail-fix-hygiene",
+                "source": "gate-hygiene",
+                "target": "fix-hygiene",
+                "kind": "fail"
+            },
+            {
+                "id": "e-fix-hygiene-pass-gate-hygiene",
+                "source": "fix-hygiene",
+                "target": "gate-hygiene",
+                "kind": "pass"
+            },
+            {
+                "id": "e-gate-hygiene-pass-gate-coverage",
+                "source": "gate-hygiene",
+                "target": "gate-coverage",
+                "kind": "pass"
+            },
+            {
+                "id": "e-gate-coverage-fail-fix-coverage",
+                "source": "gate-coverage",
+                "target": "fix-coverage",
+                "kind": "fail"
+            },
+            {
+                "id": "e-fix-coverage-pass-gate-coverage",
+                "source": "fix-coverage",
+                "target": "gate-coverage",
+                "kind": "pass"
+            },
+            {
+                "id": "e-gate-coverage-pass-gate-perf",
+                "source": "gate-coverage",
+                "target": "gate-perf",
+                "kind": "pass"
+            },
+            {
+                "id": "e-gate-perf-fail-fix-perf",
+                "source": "gate-perf",
+                "target": "fix-perf",
+                "kind": "fail"
+            },
+            {
+                "id": "e-fix-perf-pass-gate-perf",
+                "source": "fix-perf",
+                "target": "gate-perf",
+                "kind": "pass"
+            },
+            {
+                "id": "e-gate-perf-pass-gate-visual",
+                "source": "gate-perf",
+                "target": "gate-visual",
+                "kind": "pass"
+            },
+            {
+                "id": "e-gate-visual-fail-fix-visual",
+                "source": "gate-visual",
+                "target": "fix-visual",
+                "kind": "fail"
+            },
+            {
+                "id": "e-fix-visual-pass-gate-visual",
+                "source": "fix-visual",
+                "target": "gate-visual",
+                "kind": "pass"
+            },
+            {
+                "id": "e-gate-visual-pass-release-review",
+                "source": "gate-visual",
+                "target": "release-review",
+                "kind": "pass"
+            },
+            {
+                "id": "e-release-review-pass-end",
+                "source": "release-review",
+                "target": "end",
+                "kind": "pass"
+            },
+            {
+                "id": "e-release-review-fail-owner-release",
+                "source": "release-review",
+                "target": "owner-release",
+                "kind": "fail"
+            },
+            {
+                "id": "e-owner-release-pass-build",
+                "source": "owner-release",
+                "target": "build",
+                "kind": "pass"
+            }
         ]
     }
 }
