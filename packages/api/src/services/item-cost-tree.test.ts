@@ -170,7 +170,7 @@ describe('costRowsForRoot', () => {
         });
     });
 
-    it('returns descendant rows ordered by cost DESC (excluding the root)', async () => {
+    it('returns descendant rows ordered by cost DESC, omitting a runless root', async () => {
         const r = await costRowsForRoot('ATL-1');
         expect(r.rows.length).toBe(3);
         expect(r.rows[0]!.id).toBe('ATL-2');
@@ -178,14 +178,40 @@ describe('costRowsForRoot', () => {
         expect(r.total).toBe(3);
         expect(r.page).toBe(1);
         expect(r.limit).toBe(25);
-        // Root is NOT in the rows.
+        // ATL-1 owns no runs here, so it would only pad the table.
         expect(r.rows.find((row) => row.id === 'ATL-1')).toBeUndefined();
+    });
+
+    // A Task-level workflow writes agent_runs.item_id = <task id> for every
+    // non-Sub-tasks step. Excluding the root unconditionally hid that spend from
+    // the table while the hero still counted it, and made the `task` type filter
+    // resolve to zero rows on every Task that had runs of its own.
+    it('includes the root at depth 0 when it owns completed runs', async () => {
+        await seedRun({
+            id: 'r-root',
+            item_id: 'ATL-1',
+            status: 'completed',
+            cost: 9,
+            completed_at: new Date().toISOString(),
+        });
+        const r = await costRowsForRoot('ATL-1');
+        expect(r.total).toBe(4);
+        const root = r.rows.find((row) => row.id === 'ATL-1');
+        expect(root).toBeDefined();
+        expect(root!.depth).toBe(0);
+        expect(root!.run_count).toBe(1);
+        // It sorts by cost like any other row.
+        expect(r.rows[0]!.id).toBe('ATL-1');
+
+        const filtered = await costRowsForRoot('ATL-1', { type: 'task' });
+        expect(filtered.rows.map((row) => row.id)).toEqual(['ATL-1']);
     });
 
     it('honours the type filter', async () => {
         const r = await costRowsForRoot('ATL-1', { type: 'sub_task' });
         expect(r.rows.map((row) => row.id).sort()).toEqual(['ATL-2', 'ATL-3', 'ATL-4']);
         expect(r.total).toBe(3);
+        // The root has no runs in this fixture, so the `task` filter is empty.
         expect((await costRowsForRoot('ATL-1', { type: 'task' })).total).toBe(0);
     });
 

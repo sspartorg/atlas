@@ -406,6 +406,34 @@ describe('RelatedItemsCard', () => {
             expect(screen.getByLabelText('GitHub PR URL')).toBeInTheDocument();
         });
 
+        it('cancelling the confirmation leaves the PR link alone', async () => {
+            const calls: number[] = [];
+            server.use(
+                ...defaultHandlers,
+                http.delete('http://localhost:3000/api/issues/external-links/200', () => {
+                    calls.push(200);
+                    return new HttpResponse(null, { status: 204 });
+                })
+            );
+            renderWithProviders(
+                <RelatedItemsCard
+                    issueType="sub_task"
+                    issueId="S1"
+                    relatedLinks={[]}
+                    externalLinks={[makeExtLink({ id: 200 })]}
+                    agents={[]}
+                    onOpenPicker={vi.fn()}
+                />
+            );
+            fireEvent.click(screen.getByLabelText('Remove PR link'));
+            // The copy has to be honest about what survives: the PR stays open.
+            expect(
+                await screen.findByText(/nothing is closed, merged or deleted on GitHub/i)
+            ).toBeInTheDocument();
+            fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+            expect(calls).toEqual([]);
+        });
+
         it('clicking the "Remove PR link" icon triggers the delete mutation', async () => {
             const calls: number[] = [];
             server.use(
@@ -426,6 +454,9 @@ describe('RelatedItemsCard', () => {
                 />
             );
             fireEvent.click(screen.getByLabelText('Remove PR link'));
+            // The unlink is behind a confirmation now: the PR itself is untouched
+            // on GitHub, so the modal has to say so before anything is deleted.
+            fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
             // Allow the mutation to flush.
             await screen.findByText('#42');
             expect(calls).toEqual([200]);
@@ -463,6 +494,7 @@ describe('RelatedItemsCard', () => {
             // handleUnlinkPr's toast detail also falls back to link.url when
             // external_ref is falsy.
             fireEvent.click(screen.getByLabelText('Remove PR link'));
+            fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
             await screen.findByText('https://github.com/foo/bar/pull/300');
         });
     });

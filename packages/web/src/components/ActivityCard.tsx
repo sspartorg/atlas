@@ -620,8 +620,17 @@ function EventRow({
             >
                 {icon}
             </Box>
-            <Box sx={{ flex: 1, pt: 0.5 }}>
-                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate80, lineHeight: 1.6 }}>
+            {/* minWidth:0 lets the flex child shrink below its content — without it an
+                unbreakable PR URL in a link_created/link_deleted row widens the whole rail. */}
+            <Box sx={{ flex: 1, minWidth: 0, pt: 0.5 }}>
+                <Typography
+                    sx={{
+                        fontSize: 13,
+                        color: ATLAS_PALETTE.slate80,
+                        lineHeight: 1.6,
+                        overflowWrap: 'anywhere',
+                    }}
+                >
                     {body}
                 </Typography>
                 <Tooltip title={formatAbsolute(event.created_at)} placement="top" arrow>

@@ -25,6 +25,7 @@ import { useSettings } from '../hooks/useSettings.js';
 import { useToast } from '../hooks/useToast.js';
 import { WorkItemTable, type WorkItemTableRow } from './WorkItemTable.js';
 import { AddPrLinkDialog } from './AddPrLinkDialog.js';
+import { ConfirmActionModal } from './ConfirmActionModal.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 
 import { relativeTime } from '../utils/time.js';
@@ -101,6 +102,7 @@ export function RelatedItemsCard({
     const deleteExtLink = useDeleteIssueExternalLink(issueType, issueId);
     const toast = useToast();
     const [addPrOpen, setAddPrOpen] = useState(false);
+    const [unlinkingPr, setUnlinkingPr] = useState<IItemExternalLink | null>(null);
 
     const { data: settings } = useSettings();
 
@@ -325,7 +327,9 @@ export function RelatedItemsCard({
         );
     }
 
-    async function handleUnlinkPr(link: IItemExternalLink) {
+    async function handleUnlinkPr() {
+        const link = unlinkingPr;
+        if (!link) return;
         try {
             await deleteExtLink.mutateAsync(link.id);
             toast.show({
@@ -335,6 +339,7 @@ export function RelatedItemsCard({
         } catch (err) {
             toast.show({ message: 'Remove failed', detail: (err as Error).message });
         }
+        setUnlinkingPr(null);
     }
 
     const prSection = (
@@ -459,7 +464,7 @@ export function RelatedItemsCard({
                             <IconButton
                                 size="small"
                                 aria-label="Remove PR link"
-                                onClick={() => void handleUnlinkPr(l)}
+                                onClick={() => setUnlinkingPr(l)}
                                 sx={{
                                     color: ATLAS_PALETTE.slate40,
                                     '&:hover': { color: ATLAS_PALETTE.error },
@@ -598,6 +603,18 @@ export function RelatedItemsCard({
                 onClose={() => setAddPrOpen(false)}
                 issueType={issueType}
                 issueId={issueId}
+            />
+            <ConfirmActionModal
+                open={unlinkingPr !== null}
+                title="Remove this PR link?"
+                body={`Atlas stops tracking ${
+                    unlinkingPr?.external_ref ? `#${unlinkingPr.external_ref}` : 'this pull request'
+                } on this item, and stops updating its status here.\n\nThe pull request itself is left exactly as it is — nothing is closed, merged or deleted on GitHub. You can link it again with "Add PR link".`}
+                confirmLabel="Remove"
+                tone="destructive"
+                busy={deleteExtLink.isPending}
+                onCancel={() => setUnlinkingPr(null)}
+                onConfirm={() => void handleUnlinkPr()}
             />
         </>
     );

@@ -93,6 +93,25 @@ describe('/api/integrations/jira', () => {
         expect(res.statusCode).toBe(400);
         expect(JSON.parse(res.body)).toMatchObject({ kind: 'credentials_missing' });
     });
+
+    // G-014: "Sync now" writes comments to real Jira issues. It used to run even
+    // with the bridge switched off, which posted one comment and then went silent
+    // for good, because only the scheduled tick honours `enabled`.
+    it('refuses a manual sync while the bridge is switched off', async () => {
+        await app.inject({
+            method: 'PUT',
+            url: '/api/integrations/jira',
+            payload: {
+                site_url: 'https://acme.atlassian.net',
+                email: 'me@acme.test',
+                api_token: 'tok-123',
+            },
+        });
+        const res = await app.inject({ method: 'POST', url: '/api/integrations/jira/sync' });
+        expect(res.statusCode).toBe(409);
+        expect(JSON.parse(res.body)).toMatchObject({ kind: 'conflict' });
+        expect(JSON.parse(res.body).error).toMatch(/switched off/i);
+    });
 });
 
 // Migration 010 — a source is a query + workflow + repos combo belonging to a

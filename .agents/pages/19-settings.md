@@ -79,7 +79,7 @@ Configures the Jira bridge. Every field saves on blur (or on change for selects 
   - Header switch **Jira sync enabled**: the minute tick only syncs while it is on.
   - **Poll every** N minutes (≥ 5; an invalid value reverts), and **Extra fields** (comma-separated Jira field names or ids).
   - A footer line shows "Last sync <time> · <message>" (danger colour when the last sync failed) or "Not synced yet".
-  - **Sync now** button → `POST /api/integrations/jira/sync`. It toasts the counts, invalidates every query, and is disabled until a token is stored.
+  - **Sync now** button → `POST /api/integrations/jira/sync`. It toasts the counts, invalidates every query, and is disabled until a token is stored **and the Import switch is on**. G-014: a manual sync writes comments to live Jira issues, so it honours the same switch the poller does — it used to run from a switched-off bridge, posting one comment and then falling silent because only `tick` checked `enabled`. The API returns 409 `conflict` for the same case; credentials are checked first, so a blank config still gives 400 `credentials_missing`.
 - ~~**Sources**~~ — **moved to the project** (migration 010). A source is one JQL + workflow + repos combo and now lives on Project Detail's **Jira** tab (`ProjectJiraCard`, see [`03-project-detail`](03-project-detail.md)). The Import subtitle points there. Only the connection, the poll interval, the extra fields and **Sync now** remain here, because there is one self-hosted site and one poller. `PUT /api/integrations/jira` no longer accepts `sources` at all — the schema is `.strict()`, so a stale caller gets a 400.
 
 ## Tab 6 — Help & About (`HelpAboutTab`)

@@ -250,10 +250,13 @@ export interface CostRowsParams {
 }
 
 /**
- * Paginated descendant rows of `rootItemId`. The root itself is NOT
- * included — only its descendants — because the UI shows the root's
- * own totals separately in the hero. Excluding it from the table keeps
- * the per-row indentation calc clean.
+ * Paginated rows for `rootItemId` and its descendants. The root is included
+ * at depth 0 only when it owns completed runs of its own: a Task-level
+ * workflow writes `agent_runs.item_id = <task id>` for every non-Sub-tasks
+ * step, and hiding those made the hero total exceed the sum of the visible
+ * rows and left the `task` type filter resolving to zero rows forever.
+ * A root with no runs of its own stays out, so the table isn't padded with
+ * an empty row the hero already covers.
  */
 export async function costRowsForRoot(
     rootItemId: string,
@@ -303,9 +306,9 @@ export async function costRowsForRoot(
               FROM tree t
               LEFT JOIN agent_runs r
                 ON r.item_id = t.id AND r.status = 'completed'
-             WHERE t.id <> ${rootItemId}
-               AND (${typeFilter}::text IS NULL OR t.type::text = ${typeFilter}::text)
+             WHERE (${typeFilter}::text IS NULL OR t.type::text = ${typeFilter}::text)
              GROUP BY t.id, t.type, t.title, t.parent_id, t.depth
+            HAVING t.id <> ${rootItemId} OR COUNT(r.id) > 0
         )
         SELECT
             id,

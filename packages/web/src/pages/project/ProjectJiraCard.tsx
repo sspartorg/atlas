@@ -118,7 +118,12 @@ export function ProjectJiraCard({ project }: Props) {
                         size="small"
                         startIcon={<SyncRounded />}
                         onClick={() => void runSync()}
-                        disabled={sync.isPending || !cfg?.api_token_set}
+                        disabled={sync.isPending || !cfg?.api_token_set || !cfg?.enabled}
+                        title={
+                            cfg?.enabled
+                                ? undefined
+                                : 'Turn on Import in Settings → Jira to sync — a sync writes comments to the matched Jira issues.'
+                        }
                         sx={{ textTransform: 'none' }}
                     >
                         {sync.isPending ? 'Syncing…' : 'Sync now'}
@@ -140,6 +145,14 @@ export function ProjectJiraCard({ project }: Props) {
                     Connect your Jira site in{' '}
                     <RouterLink to="/settings?tab=jira">Settings → Jira</RouterLink> first — one
                     site and token is shared by every project.
+                </Alert>
+            )}
+
+            {cfg?.api_token_set && !cfg.enabled && (
+                <Alert severity="warning" sx={{ mb: 3 }}>
+                    Import is switched off, so these sources are not polled and no progress
+                    reaches Jira. Turn it on in{' '}
+                    <RouterLink to="/settings?tab=jira">Settings → Jira</RouterLink>.
                 </Alert>
             )}
 

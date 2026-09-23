@@ -316,6 +316,18 @@ describe('JiraTab', () => {
         expect(screen.getByRole('button', { name: 'Sync now' })).toBeDisabled();
     });
 
+    // G-014: a manual sync writes comments to real Jira issues, so it follows the
+    // same switch the poller does. Running it from a switched-off bridge posted
+    // one comment and then went silent, which read like a broken workflow.
+    it('cannot sync while the bridge is switched off', async () => {
+        mount(() => undefined, { config: { enabled: false } });
+        const sync = await screen.findByRole('button', { name: 'Sync now' });
+        expect(sync).toBeDisabled();
+        expect(sync).toHaveAttribute('title', expect.stringContaining('Turn on Import'));
+        // Testing the connection is still fine — it writes nothing.
+        expect(screen.getByRole('button', { name: 'Test connection' })).toBeEnabled();
+    });
+
     it('reports what a manual sync imported and commented', async () => {
         mount();
         server.use(
