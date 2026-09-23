@@ -34,7 +34,7 @@ export const LABEL_SX = {
     mb: 1.5,
     display: 'block',
 };
-export const HINT_SX = { fontSize: 11, color: ATLAS_PALETTE.slate60, ml: 1 };
+const HINT_SX = { fontSize: 11, color: ATLAS_PALETTE.slate60, ml: 1 };
 
 interface CredentialSelectProps {
     credentials: ICredential[];

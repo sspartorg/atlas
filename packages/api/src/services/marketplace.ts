@@ -165,7 +165,7 @@ export interface MarketplaceSearchInput {
  * whatever order the rows came back in, or an unchanged list hashes
  * differently between reads.
  */
-export function upgradableHash(input: {
+function upgradableHash(input: {
     prompt_md: string;
     settings_json: unknown;
     checklists: ReadonlyArray<{ label: string; sort_order: number; required: boolean }>;

@@ -97,3 +97,46 @@ describe('WorkflowHeader Publish', () => {
         expect(screen.getByRole('button', { name: /publish/i })).toBeDisabled();
     });
 });
+
+// Upgrading replaces the graph, so it is an explicit button rather than
+// something import does silently. Both outcomes were untested: a silent
+// failure here leaves the Owner believing they are on the newer version.
+describe('WorkflowHeader Upgrade', () => {
+    const BASE = 'http://localhost:3000/api';
+
+    it('shows the button only when the marketplace source is ahead', () => {
+        mount(false);
+        expect(
+            screen.queryByRole('button', { name: /upgrade available/i })
+        ).not.toBeInTheDocument();
+
+        mount(false, { workflow: makeWorkflow({ upgrade_available: true }) });
+        expect(screen.getByRole('button', { name: /upgrade available/i })).toBeInTheDocument();
+    });
+
+    it('upgrades from the marketplace and says so', async () => {
+        let hit = false;
+        server.use(
+            http.post(`${BASE}/workflows/wf-1/upgrade`, () => {
+                hit = true;
+                return HttpResponse.json(makeWorkflow({ upgrade_available: false }));
+            })
+        );
+        mount(false, { workflow: makeWorkflow({ upgrade_available: true }) });
+        await userEvent.click(screen.getByRole('button', { name: /upgrade available/i }));
+        expect(await screen.findByText('Upgraded from the marketplace')).toBeInTheDocument();
+        expect(hit).toBe(true);
+    });
+
+    it('surfaces the reason when the upgrade fails', async () => {
+        server.use(
+            http.post(`${BASE}/workflows/wf-1/upgrade`, () =>
+                HttpResponse.json({ error: 'Catalog entry is gone' }, { status: 404 })
+            )
+        );
+        mount(false, { workflow: makeWorkflow({ upgrade_available: true }) });
+        await userEvent.click(screen.getByRole('button', { name: /upgrade available/i }));
+        expect(await screen.findByText('Could not upgrade workflow')).toBeInTheDocument();
+        expect(await screen.findByText(/Catalog entry is gone/)).toBeInTheDocument();
+    });
+});

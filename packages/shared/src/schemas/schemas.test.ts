@@ -21,6 +21,7 @@ import {
     CreateGuardrailScriptSchema,
     CreateIssueLinkSchema,
     CreateProjectGuardrailSchema,
+    CreateProjectRepoSchema,
     CreateProjectSchema,
     CreateSubTaskSchema,
     CreateTaskSchema,
@@ -996,5 +997,65 @@ describe('UpdateExternalNotificationSchema — G-007 strictness', () => {
         // keeps the division of labour explicit: move the empty check into the
         // schema and this test tells you that you did.
         expect(UpdateExternalNotificationSchema.safeParse({}).success).toBe(true);
+    });
+});
+
+// ── GithubRepoUrlSchema — the last uncovered line in @atlas/shared ─────────
+//
+// `schemas/index.ts:522-527` is the refine behind every `repo_url`. It was the
+// one gap keeping the package off its ADR 0009 floor of 100% (measured 99.65%
+// statements / 97.05% functions on 2026-09-23), and it guards something real:
+// a repo URL becomes a `git clone` target that Atlas hands a credential to, so
+// the host has to be pinned, not merely well-formed.
+describe('CreateProjectRepoSchema — repo_url host pinning', () => {
+    const clone = {
+        mode: 'clone' as const,
+        name: 'web',
+        repo_url: 'https://github.com/acme/web',
+        credential_id: 'c1',
+    };
+
+    it('accepts a github.com https URL and defaults the branch to main', () => {
+        const res = CreateProjectRepoSchema.safeParse(clone);
+        expect(res.success).toBe(true);
+        if (res.success && res.data.mode === 'clone') expect(res.data.default_branch).toBe('main');
+    });
+
+    it('rejects a well-formed URL on any other host', () => {
+        // .url() passes, so this is the refine talking and nothing else.
+        const res = CreateProjectRepoSchema.safeParse({
+            ...clone,
+            repo_url: 'https://gitlab.com/acme/web',
+        });
+        expect(res.success).toBe(false);
+        if (!res.success) {
+            expect(res.error.issues[0]?.message).toMatch(/Only https:\/\/github\.com URLs/);
+        }
+    });
+
+    it('rejects http on github.com — the credential would go out in clear', () => {
+        expect(
+            CreateProjectRepoSchema.safeParse({ ...clone, repo_url: 'http://github.com/acme/web' })
+                .success
+        ).toBe(false);
+    });
+
+    it('applies the same rule to the connect branch', () => {
+        const connect = {
+            mode: 'connect' as const,
+            name: 'web',
+            folder_path: '/repos/web',
+            credential_id: 'c1',
+        };
+        expect(
+            CreateProjectRepoSchema.safeParse({
+                ...connect,
+                repo_url: 'https://github.com/acme/web',
+            }).success
+        ).toBe(true);
+        expect(
+            CreateProjectRepoSchema.safeParse({ ...connect, repo_url: 'https://example.com/x' })
+                .success
+        ).toBe(false);
     });
 });
