@@ -139,6 +139,19 @@ async function reseedCliModels(): Promise<void> {
     await db
         .insertInto('cli_models')
         .values([
+            // Migration 004 rows. This list is a hand-maintained mirror of the
+            // registry, and it silently drifted: 004 added the Claude 5 models
+            // and nothing updated here, so every test file that ran after one
+            // of the two `cli_models` truncations saw a registry stuck on the
+            // 2026-06-02 generation. Nothing caught it until a catalog agent
+            // moved to `claude-sonnet-5` and install failed with
+            // ModelNotInRegistryError — the exact order-dependent failure the
+            // comment above was written about. Adding a migration that touches
+            // `cli_models` means adding its rows here too.
+            { id: 'seed-claude-opus-5', cli: 'claude', model_name: 'claude-opus-5', note: 'Strongest general model.', sort_order: 1 },
+            { id: 'seed-claude-opus-5[1m]', cli: 'claude', model_name: 'claude-opus-5[1m]', note: 'Opus 5 with 1M context.', sort_order: 2 },
+            { id: 'seed-claude-sonnet-5', cli: 'claude', model_name: 'claude-sonnet-5', note: 'Faster and cheaper than Opus 5.', sort_order: 3 },
+            { id: 'seed-claude-fable-5-1', cli: 'claude', model_name: 'claude-fable-5-1', note: 'Most capable, most expensive.', sort_order: 4 },
             { id: 'seed-claude-opus-4-7', cli: 'claude', model_name: 'claude-opus-4-7', note: 'Strongest reasoning.', sort_order: 1 },
             { id: 'seed-claude-opus-4-7-1m', cli: 'claude', model_name: 'claude-opus-4-7[1m]', note: 'Opus 4.7 with 1M context.', sort_order: 2 },
             { id: 'seed-claude-opus-4-6', cli: 'claude', model_name: 'claude-opus-4-6', note: 'Previous-gen Opus.', sort_order: 3 },

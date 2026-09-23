@@ -20,20 +20,23 @@
 // measured by the live golden set (`evals/`); what it IS has to be true before
 // the run starts.
 //
-// Deliberately NOT asserted here yet: explicit `effort` on every manifest and a
-// per-prompt token budget. Both land with the change that makes them true,
-// because a contract test that fails on the tree it ships with is not a
-// contract.
+// On the prompt budget: it is a BLOAT GUARD, not a cost lever. The PR1 baseline
+// measured 18.25M cache-read tokens against 550 uncached input tokens across 38
+// dispatches — roughly 480K cached tokens per dispatch, almost all of it the
+// repository being pulled into context. A 1,500-token prompt is ~0.3% of one
+// dispatch. Trimming well-tuned prompts would buy a rounding error and cost
+// real instruction quality; the budgets below exist to catch a prompt that
+// balloons, not to squeeze the ones that work.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateWorkflowGraph } from '@atlas/shared';
+import { AgentEffortSchema, validateWorkflowGraph } from '@atlas/shared';
 import type { IWorkflowTemplate } from '@atlas/shared';
 import { loadCatalog } from './catalog-loader.js';
 import { AgentBundleManifestSchema } from '../services/agent-bundle.js';
-import { closeTestDb, testDb } from '../../tests/_pg-db.js';
+import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WORKFLOWS = join(__dirname, 'workflows');
@@ -46,6 +49,23 @@ function modelKey(cli: string, model: string): string {
     return `${cli}::${model}`;
 }
 
+/**
+ * Prompt budgets, in estimated tokens. Routed SDLC agents run inside the
+ * delivery chain and their prompt is read on every dispatch; the autonomous
+ * scouts run standalone and one of them (AI Readiness) legitimately enumerates
+ * the 8-12 documents it scaffolds.
+ *
+ * Headroom is deliberate — see the header. These catch a prompt doubling, not a
+ * prompt that is 200 tokens over.
+ */
+const PROMPT_BUDGET_ROUTED = 1_800;
+const PROMPT_BUDGET_AUTONOMOUS = 7_000;
+
+/** Same 4-chars-per-token heuristic `services/context-budget.ts` uses. */
+function estimateTokens(text: string): number {
+    return Math.ceil(text.length / 4);
+}
+
 function templates(): IWorkflowTemplate[] {
     return readdirSync(WORKFLOWS)
         .filter((f) => f.endsWith('.json'))
@@ -56,7 +76,12 @@ let registry: Set<string>;
 let roleIds: Set<string>;
 
 beforeAll(async () => {
-    // Read-only: both tables are seeded by migrations, not by any test.
+    // `truncateAll()` is what RESTORES the reference registry — two test files
+    // deliberately empty `cli_models` to assert on an empty one, and nothing
+    // else puts it back. Without this call the contract test reads whatever
+    // registry the previously-run file happened to leave behind, which made it
+    // pass or fail depending on suite order.
+    await truncateAll();
     const models = await testDb.selectFrom('cli_models').select(['cli', 'model_name']).execute();
     registry = new Set(models.map((m) => modelKey(m.cli, m.model_name)));
     const roles = await testDb.selectFrom('roles').select('id').execute();
@@ -136,6 +161,35 @@ describe('catalog contract', () => {
 
             it('uses a six-digit hex accent colour', () => {
                 expect(manifest.accent_color).toMatch(/^#[0-9A-Fa-f]{6}$/);
+            });
+
+            it('sets effort explicitly rather than inheriting the column default', () => {
+                // `effort` is passed straight through to the CLI as `--effort`
+                // and is the single dial that moves how many turns an agent
+                // takes. Every manifest omitted it until PR2, so the whole
+                // fleet silently ran at the `'medium'` DB default and nobody
+                // had ever chosen it. An unset value is not a neutral default,
+                // it is an unmade decision.
+                if (!manifest.effort) {
+                    throw new Error(
+                        `${manifest.id} does not set \`effort\`, so it inherits the DB default ` +
+                            `'medium'. Choose one deliberately and record why.`,
+                    );
+                }
+                expect(AgentEffortSchema.options).toContain(manifest.effort);
+            });
+
+            it('keeps its prompt inside the budget for its kind', () => {
+                const budget = manifest.role_id ? PROMPT_BUDGET_ROUTED : PROMPT_BUDGET_AUTONOMOUS;
+                const size = estimateTokens(entry.prompt_md);
+                if (size > budget) {
+                    throw new Error(
+                        `${manifest.id}/prompt.md is ~${size} tokens, over the ${budget} budget for a ` +
+                            `${manifest.role_id ? 'routed' : 'autonomous'} agent. This budget is a bloat guard: ` +
+                            `if the prompt genuinely needs the room, raise the constant and say why.`,
+                    );
+                }
+                expect(size).toBeLessThanOrEqual(budget);
             });
         });
     }

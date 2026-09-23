@@ -13,6 +13,7 @@ export function assemblePreamble(agentId: string): string {
         '2. `.atlas/current-task.md` — the item this run targets (absent when the run works on the project as a whole)',
         '3. `.atlas/outcome.md` — how to report this run\'s result; the workflow routes on it',
         '4. `.atlas/self-memory.md` — your past course-corrections',
+        '5. `.atlas/changed-files.md` — what this branch has already touched; read it before searching the repo',
         '',
         'You are one step in a workflow. Do your own job, commit your work, and end with the `atlas-outcome` block. Do not assign the item, change its status, push, or open pull requests — the workflow does that.',
     ].join('\n');

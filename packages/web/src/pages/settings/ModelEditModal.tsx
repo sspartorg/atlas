@@ -15,7 +15,7 @@ const MONO = '"JetBrains Mono", monospace';
 // Ollama `name:tag`. The placeholder is the only hint the Owner gets about the
 // shape the CLI expects, so keep one per CLI.
 const MODEL_NAME_PLACEHOLDER: Record<AgentCli, string> = {
-    claude: 'claude-opus-4-8…',
+    claude: 'claude-opus-5…',
     copilot: 'gpt-5.5…',
     ollama: 'qwen3.5 or gpt-oss:120b-cloud…',
 };

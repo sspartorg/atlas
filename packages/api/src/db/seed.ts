@@ -58,6 +58,14 @@ async function syncMarketplaceCatalog(): Promise<CatalogEntry[]> {
                 category: entry.manifest.category,
                 cli: entry.manifest.cli,
                 model: entry.manifest.model,
+                // `effort` was missing here while `marketplace_agents.effort`
+                // defaults to 'medium' and `install` copies that default onto
+                // the agent — so the manifest field was dead config and every
+                // installed agent ran at 'medium' no matter what the catalog
+                // declared. It is the one dial that changes how many turns an
+                // agent takes, which makes this the difference between choosing
+                // an effort and only appearing to.
+                effort: entry.manifest.effort,
                 framework: entry.manifest.framework,
                 prompt_md: entry.prompt_md,
                 description: entry.manifest.description,

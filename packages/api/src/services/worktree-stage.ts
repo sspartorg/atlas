@@ -36,6 +36,7 @@ import type { IssueType } from '@atlas/shared';
 import { assembleConstitution } from './constitution-assembler.js';
 import { assembleTemplates } from './templates-assembler.js';
 import { assembleCommands } from './commands-assembler.js';
+import { writeChangedFiles } from './changed-files.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeCurrentTask } from './current-task-writer.js';
@@ -108,6 +109,13 @@ export async function stageCliWorktree(
         });
         currentTaskPath = out.currentTaskPath;
     }
+
+    // Hand the agent the branch diff before it goes looking for it. The PR1
+    // baseline measured ~480K cached tokens per dispatch, almost all of it the
+    // repository being pulled into context; this replaces an exploratory crawl
+    // with a few hundred tokens. Best-effort — a repo with no remote stages
+    // nothing and the agent explores as before.
+    await writeChangedFiles(opts.worktreePath);
 
     if (opts.includeOutcome) {
         const atlasDir = join(opts.worktreePath, '.atlas');
