@@ -88,6 +88,38 @@ describe('/api/integrations/jira', () => {
         }
     });
 
+    // The token is stored encrypted and no read route returns it, so the Settings
+    // field could never show which token is in place. Reveal is a separate,
+    // audited call — same read model as credentials and shared secrets.
+    it('reveals the stored token on demand, and refuses when none is set', async () => {
+        const before = await app.inject({
+            method: 'POST',
+            url: '/api/integrations/jira/reveal-token',
+        });
+        expect(before.statusCode).toBe(400);
+        expect(JSON.parse(before.body)).toMatchObject({ kind: 'credentials_missing' });
+
+        await app.inject({
+            method: 'PUT',
+            url: '/api/integrations/jira',
+            payload: {
+                site_url: 'https://acme.atlassian.net',
+                email: 'me@acme.test',
+                api_token: 'tok-123',
+            },
+        });
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/integrations/jira/reveal-token',
+        });
+        expect(res.statusCode).toBe(200);
+        expect(JSON.parse(res.body)).toEqual({ value: 'tok-123' });
+
+        // The config read still never carries it.
+        const get = await app.inject({ method: 'GET', url: '/api/integrations/jira' });
+        expect(get.body).not.toContain('tok-123');
+    });
+
     it('asks for credentials before a sync', async () => {
         const res = await app.inject({ method: 'POST', url: '/api/integrations/jira/sync' });
         expect(res.statusCode).toBe(400);

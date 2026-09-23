@@ -139,6 +139,21 @@ export function StartInspector({ workflow: wf, projects, onChange }: Props) {
                     </Typography>
                 }
             />
+
+            {/* The worktree is PROVISIONED here, at the start of a run, but its
+                toggle lives on End with the rest of Delivery (ADR 0014). Nothing
+                on this node said a checkout would appear, which read as the flag
+                being on the wrong step. */}
+            {wf.use_worktree && wf.input_kind !== 'none' && (
+                <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
+                    Starting a run checks out one worktree per repo on branch{' '}
+                    <Box component="span" sx={{ fontFamily: 'mono' }}>
+                        atlas/wf/&lt;item&gt;
+                    </Box>
+                    , shared by every step. Turn it off, or change what happens to it, on the{' '}
+                    <strong>End</strong> step.
+                </Typography>
+            )}
         </Box>
     );
 }

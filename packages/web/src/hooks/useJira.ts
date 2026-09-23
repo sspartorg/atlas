@@ -15,6 +15,10 @@ export function useUpdateJiraConfig() {
     });
 }
 
+export function useRevealJiraToken() {
+    return useMutation({ mutationFn: () => api.jira.revealToken() });
+}
+
 export function useTestJira() {
     return useMutation({ mutationFn: () => api.jira.test() });
 }

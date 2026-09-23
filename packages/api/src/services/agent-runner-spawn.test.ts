@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest';
-import { agentRunEnv, claudeIsolationArgs } from './agent-runner.js';
+import { agentRunEnv, allowedToolsFor, claudeIsolationArgs } from './agent-runner.js';
 
 // Agent runs spawn the Owner's own `claude` binary. Without isolation they
 // inherit ~/.claude hooks, plugins, user CLAUDE.md and every user-scope MCP
@@ -18,6 +18,24 @@ describe('claudeIsolationArgs', () => {
 
     it('leaves freedom-mode scouts on the Owner config so their Playwright / claude.ai connectors still load', () => {
         expect(claudeIsolationArgs(false)).toEqual([]);
+    });
+});
+
+// The allowlist has to match what the run can actually reach. An item-attached
+// run is strict-MCP-isolated, so naming the Atlassian prefix only told the agent
+// it could fetch a Jira issue live — and a bridge-imported Task hands it a key
+// and a browse URL in the description. The snapshot IS the source of truth.
+describe('allowedToolsFor', () => {
+    it('withholds the Atlassian prefix from item-attached runs', () => {
+        const tools = allowedToolsFor(true).split(',');
+        expect(tools).not.toContain('mcp__claude_ai_Atlassian');
+        expect(tools).toContain('mcp__atlas');
+        expect(tools).toContain('mcp__playwright');
+        expect(tools).toEqual(expect.arrayContaining(['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep']));
+    });
+
+    it('keeps it for freedom scouts, whose whole job is reading Jira', () => {
+        expect(allowedToolsFor(false).split(',')).toContain('mcp__claude_ai_Atlassian');
     });
 });
 

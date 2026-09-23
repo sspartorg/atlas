@@ -860,6 +860,22 @@ export function claudeIsolationArgs(itemAttached: boolean): string[] {
 }
 
 /**
+ * The `--allowedTools` list, narrowed to what the run can actually reach.
+ *
+ * An item-attached run is MCP-isolated by `claudeIsolationArgs`, so the
+ * claude.ai Atlassian server is not loaded for it. Advertising the prefix
+ * anyway told the agent it could call Jira — and a Task imported by the bridge
+ * carries a Jira key and a browse URL in its description, which is exactly the
+ * invitation. The snapshot in the description is the source of truth (ADR 0016);
+ * a live re-fetch would read around Atlas and can't be audited.
+ */
+export function allowedToolsFor(itemAttached: boolean): string {
+    const base = 'mcp__atlas,mcp__playwright';
+    const tools = 'Bash,Read,Write,Edit,Glob,Grep';
+    return itemAttached ? `${base},${tools}` : `${base},mcp__claude_ai_Atlassian,${tools}`;
+}
+
+/**
  * Child env for every agent run. `ATLAS_API_URL` lets `.atlas/scripts`
  * validators query the API directly. The ollama overlay MUST come after the
  * `gitInvokeEnv` spread (which spreads process.env), or an
@@ -919,7 +935,13 @@ function spawnCli(opts: SpawnCliOptions): void {
     // list of MCP server prefixes the agent fleet uses (atlas, playwright,
     // claude.ai Atlassian). Claude Code's permission pattern syntax doesn't
     // support an `mcp__*` wildcard; each server must be named. Extend this
-    // list when a new agent needs a new server. The constitution's "Forbidden
+    // list when a new agent needs a new server.
+    // An ITEM-attached run does NOT get the Atlassian prefix: `--strict-mcp-config`
+    // already strips that server, so naming it only advertised a capability the
+    // agent doesn't have — and a Jira key in the Task description invited it to
+    // try. The Jira snapshot in the description IS the source of truth (ADR 0016);
+    // the issue must never be re-fetched live. Freedom scouts keep it: it is the
+    // whole point of agent-jira-to-epic. The constitution's "Forbidden
     // Atlas MCP tool calls" clause in prompt-builder.ts stays as the prompt-
     // level safety net for destructive control-plane mutations (createAgent
     // / updateAgent / deleteAgent etc.) regardless of the wildcard.
@@ -1035,7 +1057,7 @@ function spawnCli(opts: SpawnCliOptions): void {
               '--model', model,
               ...effortArgs,
               '--output-format', 'stream-json',
-              '--allowedTools', 'mcp__atlas,mcp__playwright,mcp__claude_ai_Atlassian,Bash,Read,Write,Edit,Glob,Grep',
+              '--allowedTools', allowedToolsFor(issueId !== null),
               '--disallowedTools', 'Task,WebFetch,WebSearch',
           ]
         : [

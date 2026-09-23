@@ -41,11 +41,16 @@ function mount(opts: {
     workflowId: string | null;
     runs: IWorkflowRunSummary[];
     subTaskStatuses?: string[];
+    taskStatus?: string;
 }) {
     server.use(
         http.get(`${BASE}/tasks/ATL-7/full`, () =>
             HttpResponse.json({
-                task: { id: 'ATL-7', workflow_id: opts.workflowId },
+                task: {
+                    id: 'ATL-7',
+                    workflow_id: opts.workflowId,
+                    status: opts.taskStatus ?? 'ready',
+                },
                 sub_tasks: (opts.subTaskStatuses ?? []).map((status, i) => ({
                     id: `ATL-${10 + i}`,
                     status,
@@ -130,5 +135,39 @@ describe('ItemWorkflowPanel', () => {
         });
         expect(await screen.findByRole('button', { name: 'Start now' })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Continue/ })).not.toBeInTheDocument();
+    });
+
+    // Start now is a RESTART: the engine re-enters after Start and re-provisions
+    // the worktree (reset --hard). Only `done` is refused server-side, so an item
+    // in review would silently lose uncommitted work. The Owner keeps the escape
+    // hatch, but has to mean it.
+    it('makes you confirm before restarting an item that is in review', async () => {
+        const user = userEvent.setup();
+        let started = false;
+        mount({
+            workflowId: 'wf-1',
+            runs: [summary({ status: 'completed' })],
+            taskStatus: 'in_review',
+        });
+        server.use(
+            http.post(`${BASE}/workflows/wf-1/runs`, () => {
+                started = true;
+                return HttpResponse.json({ run_id: 'wfr-9' }, { status: 202 });
+            })
+        );
+
+        // The label stops claiming it resumes.
+        await user.click(await screen.findByRole('button', { name: 'Restart' }));
+        expect(
+            await screen.findByText(/runs the whole workflow again from the first step/i)
+        ).toBeInTheDocument();
+        expect(screen.getByText(/uncommitted work in its worktree is discarded/i)).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Cancel' }));
+        expect(started).toBe(false);
+
+        await user.click(await screen.findByRole('button', { name: 'Restart' }));
+        await user.click(screen.getByRole('button', { name: 'Restart from the beginning' }));
+        await waitFor(() => expect(started).toBe(true));
     });
 });

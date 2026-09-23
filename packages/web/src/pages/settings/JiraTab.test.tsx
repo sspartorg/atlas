@@ -316,6 +316,51 @@ describe('JiraTab', () => {
         expect(screen.getByRole('button', { name: 'Sync now' })).toBeDisabled();
     });
 
+    // The token is write-only over the config read, so the field could never show
+    // which token is in place. Reveal is a separate, audited call. There is no
+    // local unmask mode: every field here saves on blur, so clicking the eye
+    // commits what you typed first — "show me what I'm about to save" can't happen.
+    it('fetches the stored token on demand and hides it again', async () => {
+        let reveals = 0;
+        server.use(
+            http.post(`${apiBase}/integrations/jira/reveal-token`, () => {
+                reveals++;
+                return HttpResponse.json({ value: 'stored-tok' });
+            })
+        );
+        mount();
+        const field = await screen.findByLabelText('Jira API token');
+        expect(field).toHaveAttribute('type', 'password');
+
+        await userEvent.click(screen.getByRole('button', { name: 'Show Jira API token' }));
+        await waitFor(() => expect(field).toHaveValue('stored-tok'));
+        expect(field).toHaveAttribute('type', 'text');
+        expect(reveals).toBe(1);
+
+        await userEvent.click(screen.getByRole('button', { name: 'Hide Jira API token' }));
+        expect(field).toHaveValue('');
+        expect(field).toHaveAttribute('type', 'password');
+    });
+
+    it('says so when the reveal call fails', async () => {
+        server.use(
+            http.post(`${apiBase}/integrations/jira/reveal-token`, () =>
+                HttpResponse.json({ error: 'Vault unreachable' }, { status: 500 })
+            )
+        );
+        mount();
+        await userEvent.click(
+            await screen.findByRole('button', { name: 'Show Jira API token' })
+        );
+        expect(await screen.findByText('Could not reveal')).toBeInTheDocument();
+        expect(screen.getByLabelText('Jira API token')).toHaveAttribute('type', 'password');
+    });
+
+    it('cannot reveal when no token is stored', async () => {
+        mount(() => undefined, { config: { api_token_set: false } });
+        expect(await screen.findByRole('button', { name: 'Show Jira API token' })).toBeDisabled();
+    });
+
     // G-014: a manual sync writes comments to real Jira issues, so it follows the
     // same switch the poller does. Running it from a switched-off bridge posted
     // one comment and then went silent, which read like a broken workflow.

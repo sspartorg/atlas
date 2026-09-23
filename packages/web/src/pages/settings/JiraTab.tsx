@@ -1,14 +1,20 @@
 import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
 import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import VisibilityOutlined from '@mui/icons-material/VisibilityOutlined';
+import VisibilityOffOutlined from '@mui/icons-material/VisibilityOffOutlined';
 import type { IJiraConfig } from '@atlas/shared';
 import type { JiraConfigUpdate } from '../../api/api.js';
 import { FormRow } from '../../components/FormSection.js';
 import {
     useJiraConfig,
+    useRevealJiraToken,
     useSyncJira,
     useTestJira,
     useUpdateJiraConfig,
@@ -31,6 +37,9 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
     const [siteUrl, setSiteUrl] = useState(cfg.site_url ?? '');
     const [email, setEmail] = useState(cfg.email ?? '');
     const [token, setToken] = useState('');
+    // The stored token is fetched on demand, never with the config.
+    const [revealed, setRevealed] = useState<string | null>(null);
+    const reveal = useRevealJiraToken();
     const [interval, setIntervalMinutes] = useState(String(cfg.poll_interval_minutes));
     const [extra, setExtra] = useState(cfg.extra_fields.join(', '));
 
@@ -44,6 +53,20 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
     function commitText(field: 'site_url' | 'email', value: string) {
         const next = value.trim() || null;
         if (next !== cfg[field]) save({ [field]: next });
+    }
+
+    // Reveal fetches the stored token; there is no local unmask mode, because
+    // every field on this form saves on blur — clicking the eye commits what you
+    // typed first, so "show me what I'm about to save" can never happen here.
+    function toggleReveal() {
+        if (revealed !== null) {
+            setRevealed(null);
+            return;
+        }
+        reveal.mutate(undefined, {
+            onSuccess: (r) => setRevealed(r.value),
+            onError: (err) => toast.show({ message: 'Could not reveal', detail: err.message }),
+        });
     }
 
     function commitToken() {
@@ -100,7 +123,7 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
         <Box>
             <SettingsSection
                 title="Jira connection"
-                subtitle="Your Atlassian site and an API token from id.atlassian.com → Security → API tokens. The token is stored encrypted and never shown again."
+                subtitle="Your Atlassian site and an API token from id.atlassian.com → Security → API tokens. The token is stored encrypted; the eye reveals it on demand and every reveal is logged."
             >
                 <FormRow label="Site URL">
                     <TextField
@@ -127,17 +150,58 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
                     <TextField
                         fullWidth
                         size="small"
-                        type="password"
+                        type={revealed !== null ? 'text' : 'password'}
                         autoComplete="off"
-                        value={token}
+                        value={revealed ?? token}
                         placeholder={
                             cfg.api_token_set
                                 ? 'Stored. Type to replace.'
                                 : 'Paste your Jira API token'
                         }
-                        onChange={(e) => setToken(e.target.value)}
+                        onChange={(e) => {
+                            setRevealed(null);
+                            setToken(e.target.value);
+                        }}
                         onBlur={commitToken}
-                        slotProps={{ htmlInput: { 'aria-label': 'Jira API token' } }}
+                        slotProps={{
+                            htmlInput: { 'aria-label': 'Jira API token', readOnly: revealed !== null },
+                            input: {
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <Tooltip
+                                            title={
+                                                revealed !== null
+                                                    ? 'Hide token'
+                                                    : 'Reveal the stored token'
+                                            }
+                                        >
+                                            <span>
+                                                <IconButton
+                                                    size="small"
+                                                    aria-label={
+                                                        revealed !== null
+                                                            ? 'Hide Jira API token'
+                                                            : 'Show Jira API token'
+                                                    }
+                                                    disabled={
+                                                        reveal.isPending || !cfg.api_token_set
+                                                    }
+                                                    onClick={toggleReveal}
+                                                >
+                                                    {revealed !== null ? (
+                                                        <VisibilityOffOutlined
+                                                            sx={{ fontSize: 18 }}
+                                                        />
+                                                    ) : (
+                                                        <VisibilityOutlined sx={{ fontSize: 18 }} />
+                                                    )}
+                                                </IconButton>
+                                            </span>
+                                        </Tooltip>
+                                    </InputAdornment>
+                                ),
+                            },
+                        }}
                     />
                 </FormRow>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 1 }}>

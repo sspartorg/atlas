@@ -291,6 +291,7 @@ export const api = {
         test: (data: { site_url?: string; email?: string; api_token?: string } = {}) =>
             post<IJiraTestResult>('/integrations/jira/test', data),
         sync: () => post<IJiraSyncResult>('/integrations/jira/sync', {}),
+        revealToken: () => post<{ value: string }>('/integrations/jira/reveal-token', {}),
     },
     // Migration 010 — sources are a project's query+workflow+repos combos.
     jiraSources: {

@@ -7,7 +7,7 @@ What each workflow is running, what is parked on me, and which ready Tasks it pi
 
 ## Sections
 1. **Workflow cards** (`pages/queue/WorkflowQueueCard.tsx`) — one per workflow from `GET /api/workflow-queue`, 1 column (2 from `lg`). Paused workflows are listed too; a project-run (`none`) workflow only while one of its runs is live; sub-workflows never.
-2. **Needs a workflow** (`pages/queue/UnassignedTasks.tsx`) — ready Tasks with no `workflow_id`, which nothing will start. Hidden when empty.
+2. **Needs a workflow** (`pages/queue/UnassignedTasks.tsx`) — `draft` **and** `ready` Tasks with no `workflow_id`, which nothing will start. A draft row is marked `· Draft` next to its project. Drafts are listed because a Jira source with no workflow imports its Task as a draft on purpose (ADR 0016) and it used to appear nowhere in the UI at all; picking a workflow promotes it to `ready` in the same call (`setItemWorkflow`). Dispatch is unaffected — `oldestReadyItem` still only ever takes `ready`. Hidden when empty.
 
 The old per-agent cards, agent drawer, "Pause All Agents" and the "Waiting on You" table are gone. Parked runs show on their workflow's card; `in_review` Tasks awaiting my sign-off live on the Dashboard's Awaiting You panel.
 
