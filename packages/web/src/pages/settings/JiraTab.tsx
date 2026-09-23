@@ -180,8 +180,8 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
                                                     size="small"
                                                     aria-label={
                                                         revealed !== null
-                                                            ? 'Hide Jira API token'
-                                                            : 'Show Jira API token'
+                                                            ? 'Hide Jira token'
+                                                            : 'Reveal Jira token'
                                                     }
                                                     disabled={
                                                         reveal.isPending || !cfg.api_token_set

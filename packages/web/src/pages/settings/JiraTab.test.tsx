@@ -332,12 +332,12 @@ describe('JiraTab', () => {
         const field = await screen.findByLabelText('Jira API token');
         expect(field).toHaveAttribute('type', 'password');
 
-        await userEvent.click(screen.getByRole('button', { name: 'Show Jira API token' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Reveal Jira token' }));
         await waitFor(() => expect(field).toHaveValue('stored-tok'));
         expect(field).toHaveAttribute('type', 'text');
         expect(reveals).toBe(1);
 
-        await userEvent.click(screen.getByRole('button', { name: 'Hide Jira API token' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Hide Jira token' }));
         expect(field).toHaveValue('');
         expect(field).toHaveAttribute('type', 'password');
     });
@@ -350,7 +350,7 @@ describe('JiraTab', () => {
         );
         mount();
         await userEvent.click(
-            await screen.findByRole('button', { name: 'Show Jira API token' })
+            await screen.findByRole('button', { name: 'Reveal Jira token' })
         );
         expect(await screen.findByText('Could not reveal')).toBeInTheDocument();
         expect(screen.getByLabelText('Jira API token')).toHaveAttribute('type', 'password');
@@ -358,7 +358,7 @@ describe('JiraTab', () => {
 
     it('cannot reveal when no token is stored', async () => {
         mount(() => undefined, { config: { api_token_set: false } });
-        expect(await screen.findByRole('button', { name: 'Show Jira API token' })).toBeDisabled();
+        expect(await screen.findByRole('button', { name: 'Reveal Jira token' })).toBeDisabled();
     });
 
     // G-014: a manual sync writes comments to real Jira issues, so it follows the
