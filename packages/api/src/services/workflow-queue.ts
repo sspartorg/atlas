@@ -18,7 +18,12 @@ export const workflowQueueService = {
             .selectFrom('items as i')
             .selectAll('i')
             .where('i.type', '=', 'task')
-            .where('i.status', '=', 'ready')
+            // `draft` is here only to feed `unassigned` below. A Jira source
+            // with no workflow deliberately leaves its Task a draft (ADR 0016),
+            // and a draft with no workflow used to appear nowhere at all — the
+            // notification was the single trace of it. Dispatch still only ever
+            // takes `ready`, so listing it changes nothing about what runs.
+            .where('i.status', 'in', ['draft', 'ready'])
             .where(({ not, exists, selectFrom }) =>
                 not(
                     exists(
@@ -55,7 +60,7 @@ export const workflowQueueService = {
             workflow,
             running: runs.filter((r) => r.workflow_id === workflow.id && r.status === 'running'),
             waiting: runs.filter((r) => r.workflow_id === workflow.id && r.status === 'waiting_for_owner'),
-            queued: tasks.filter((t) => t.workflow_id === workflow.id),
+            queued: tasks.filter((t) => t.workflow_id === workflow.id && t.status === 'ready'),
         }));
         return {
             // A project-run (`none`) workflow never has Tasks queued; it shows

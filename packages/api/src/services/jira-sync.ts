@@ -1087,6 +1087,18 @@ export const jiraSync = {
     // live board exactly like the poller does. Without this gate a disabled
     // bridge posted one "queued" comment and then went silent forever, because
     // only `tick` honoured the switch.
+    /**
+     * On-demand reveal for the stored API token. Every read route returns only
+     * `api_token_set`, so the Settings field could never show which token is in
+     * place — the Owner could not tell a stale token from a good one without
+     * pasting a new one blind. Mirrors the credential / shared-secret read model
+     * (MCP-token gate + audit line at the route), so reveal stays auditable.
+     */
+    async revealToken(): Promise<string> {
+        const row = await loadRow();
+        return credsOf(row).token;
+    },
+
     syncNow: async () => {
         const row = await loadRow();
         // credsOf first: "connect the site" is the more useful complaint when

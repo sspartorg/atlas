@@ -76,7 +76,11 @@ describe('GET /api/workflow-queue', () => {
         expect(unassigned).toEqual([]);
     });
 
-    it('lists paused workflows and ready Tasks no workflow will pick up', async () => {
+    // A Jira source with no workflow imports its Task as a DRAFT on purpose
+    // (ADR 0016). That draft used to appear nowhere in the UI — the import
+    // notification was its only trace — so it belongs in this list too. Dispatch
+    // is unchanged: `oldestReadyItem` still only ever takes `ready`.
+    it('lists paused workflows and Tasks no workflow will pick up, draft or ready', async () => {
         await workflow('wf-dev', 'p1');
         await testDb.updateTable('workflows').set({ status: 'inactive' }).where('id', '=', 'wf-dev').execute();
         await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Loose', status: 'ready' });
@@ -84,7 +88,18 @@ describe('GET /api/workflow-queue', () => {
 
         const { workflows, unassigned } = await getQueue();
         expect(workflows.map((e) => [e.workflow.id, e.workflow.status])).toEqual([['wf-dev', 'inactive']]);
-        expect(unassigned.map((t) => t.id)).toEqual(['ATL-1']);
+        expect(unassigned.map((t) => t.id).sort()).toEqual(['ATL-1', 'ATL-2']);
+    });
+
+    it('never counts a draft as queued on a workflow', async () => {
+        await workflow('wf-dev', 'p1');
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', status: 'ready' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', status: 'draft' });
+        await queueFor('wf-dev', 'ATL-1', 'ATL-2');
+
+        const { workflows, unassigned } = await getQueue();
+        expect(workflows[0]?.queued.map((t) => t.id)).toEqual(['ATL-1']);
+        expect(unassigned).toEqual([]);
     });
 
     it('skips sub-task workflows, and project-run workflows unless one of their runs is live', async () => {

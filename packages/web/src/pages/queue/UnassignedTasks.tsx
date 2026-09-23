@@ -27,7 +27,8 @@ export function UnassignedTasks({ tasks, workflows, projectName, onPick }: Props
                 </Box>
             </Typography>
             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mb: 2 }}>
-                These Tasks are ready, but no workflow will pick them up. Pick one to queue each.
+                No workflow will pick these Tasks up. Pick one to queue each — a draft is queued at
+                the same time.
             </Typography>
             <Box
                 component="ul"
@@ -93,6 +94,9 @@ export function UnassignedTasks({ tasks, workflows, projectName, onPick }: Props
                             </Link>
                             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
                                 {projectName(t.project_id)}
+                                {/* A Jira source with no workflow imports its Task as a
+                                    draft (ADR 0016). Say so, or the row looks queued. */}
+                                {t.status === 'draft' ? ' · Draft' : ''}
                             </Typography>
                             {options.length === 0 ? (
                                 <Link component={RouterLink} to="/workflows" sx={{ fontSize: 12 }}>

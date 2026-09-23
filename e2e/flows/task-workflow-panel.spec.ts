@@ -78,9 +78,12 @@ test.describe('Task workflow panel', () => {
         expect(firstRun.steps.map((s) => s.agent_id)).toEqual(['agent-po-writer']);
         expect(firstRun.children.map((c) => c.item_id)).toEqual([first.id]);
 
-        // Nothing open after the run: no Continue.
+        // Nothing open after the run: no Continue. The Task is now in review, so
+        // the start affordance reads "Restart" — running it again re-enters the
+        // graph at step 1 and resets the worktree, which is not a resume.
         await goto(page, `/tasks/${task.id}`);
-        await expect(page.getByRole('button', { name: 'Start now' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Restart' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Start now' })).toHaveCount(0);
         await expect(page.getByRole('button', { name: /^Continue/ })).toHaveCount(0);
 
         // A fix sub-task added after review is open → Continue · 1 open.
@@ -108,7 +111,8 @@ test.describe('Task workflow panel', () => {
         await expect(page.getByText('Sub-tasks · 1 of 1 done').first()).toBeVisible();
 
         await goto(page, `/tasks/${task.id}`);
-        await expect(page.getByRole('button', { name: 'Start now' })).toBeVisible();
+        // Still in review after the continue run, so still "Restart".
+        await expect(page.getByRole('button', { name: 'Restart' })).toBeVisible();
         await expect(page.getByRole('button', { name: /^Continue/ })).toHaveCount(0);
     });
 });

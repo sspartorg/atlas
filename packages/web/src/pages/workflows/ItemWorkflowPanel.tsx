@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import Button from '@mui/material/Button';
@@ -7,6 +8,7 @@ import Select from '@mui/material/Select';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { api } from '../../api/api.js';
+import { ConfirmActionModal } from '../../components/ConfirmActionModal.js';
 import { InfoRow } from '../../components/InfoPanel.js';
 import {
     useItemWorkflowRuns,
@@ -36,6 +38,7 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
         queryFn: () => api.tasks.full(itemId),
         select: (full) => ({
             workflowId: full.task.workflow_id,
+            status: full.task.status,
             // Same rule as the engine: open = not yet in review or done.
             openSubtasks: full.sub_tasks.filter(
                 (s) => s.status !== 'in_review' && s.status !== 'done'
@@ -44,6 +47,7 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
     });
     const workflowId = task?.workflowId ?? null;
     const openSubtasks = task?.openSubtasks ?? 0;
+    const [confirmRestart, setConfirmRestart] = useState(false);
     const { data: workflows = [] } = useWorkflows(projectId);
     const { data: runs = [] } = useItemWorkflowRuns(itemId);
     const setWorkflow = useSetItemWorkflow();
@@ -62,6 +66,19 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
         Boolean(assigned?.graph.nodes.some((n) => n.type === 'subtasks'));
     const onError = (message: string) => (err: Error) =>
         toast.show({ message, detail: err.message });
+
+    // "Start now" is a RESTART, not a resume: the engine re-enters at the node
+    // after Start and re-provisions the worktree, which resets the branch hard.
+    // Only `done` is refused server-side, so an item you are reviewing would
+    // silently go back to In Progress and lose uncommitted work. The Owner keeps
+    // the escape hatch (same philosophy as the status OVERRIDE group) but has to
+    // mean it. The designed post-review path is "Continue · N open".
+    const restartsReview = task?.status === 'in_review';
+    function startRun() {
+        setConfirmRestart(false);
+        if (!workflowId) return;
+        start.mutate({ workflowId, itemId }, { onError: onError('Could not start workflow') });
+    }
 
     return (
         <>
@@ -121,15 +138,10 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
                             size="small"
                             variant="outlined"
                             disabled={start.isPending}
-                            onClick={() =>
-                                start.mutate(
-                                    { workflowId, itemId },
-                                    { onError: onError('Could not start workflow') }
-                                )
-                            }
+                            onClick={() => (restartsReview ? setConfirmRestart(true) : startRun())}
                             sx={{ textTransform: 'none', fontSize: 12, py: 0, minWidth: 0 }}
                         >
-                            Start now
+                            {restartsReview ? 'Restart' : 'Start now'}
                         </Button>
                     )}
                     {workflowId && canContinue && (
@@ -161,6 +173,20 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
                     )}
                 </InfoRow>
             )}
+            <ConfirmActionModal
+                open={confirmRestart}
+                title="Restart the workflow on an item in review?"
+                body={`This does not resume where the run stopped — it runs the whole workflow again from the first step.
+
+The item goes back to In Progress, and the run branch is reset to the latest default branch, so any uncommitted work in its worktree is discarded. A pull request that is already open is updated in place.
+
+To pick up open sub-tasks instead, cancel and use "Continue".`}
+                confirmLabel="Restart from the beginning"
+                tone="destructive"
+                busy={start.isPending}
+                onCancel={() => setConfirmRestart(false)}
+                onConfirm={startRun}
+            />
         </>
     );
 }

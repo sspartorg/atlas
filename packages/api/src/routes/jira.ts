@@ -25,6 +25,18 @@ export async function jiraRoutes(app: FastifyInstance) {
         return reply.send(await jiraSync.saveConfig(body));
     });
 
+    // Reveal the stored token. `credsOf` inside the service throws 400
+    // `credentials_missing` when none is set, which is the honest answer.
+    app.post(
+        '/api/integrations/jira/reveal-token',
+        { preHandler: requireMcpToken },
+        async (req, reply) => {
+            const value = await jiraSync.revealToken();
+            req.log.info({ tag: 'secret_reveal', scope: 'jira_api_token' }, 'secret revealed');
+            return reply.send({ value });
+        }
+    );
+
     app.post('/api/integrations/jira/test', { preHandler: requireMcpToken }, async (req, reply) => {
         const body = TestJiraConnectionSchema.parse(req.body ?? {});
         return reply.send(await jiraSync.testConnection(body));

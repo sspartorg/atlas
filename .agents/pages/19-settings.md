@@ -73,7 +73,7 @@ The card Atlas sends looks like this — paste into [adaptivecards.io/designer](
 ## Tab 5 — Jira (`JiraTab`, ADR 0016)
 Configures the Jira bridge. Every field saves on blur (or on change for selects and switches) through `PUT /api/integrations/jira` and shows a toast.
 - **Jira connection**
-  - Site URL (https; http only on loopback), Email, and API token (a password field). Saving the token also saves the typed site and email in the same request; changing the site or email alone clears the stored token. The token is write-only: once stored, the field is empty with the placeholder "Stored. Type to replace.", and the GET never returns it.
+  - Site URL (https; http only on loopback), Email, and API token (a password field). Saving the token also saves the typed site and email in the same request; changing the site or email alone clears the stored token. The token is write-only *over the config read*: once stored, the field is empty with the placeholder "Stored. Type to replace.", and the GET never returns it. An **eye button** in the field (`Show Jira API token` / `Hide Jira API token`) fetches it on demand from `POST /api/integrations/jira/reveal-token`, which is MCP-token gated and writes a `secret_reveal` audit line; the field is read-only while revealed, and the button is disabled when no token is stored. There is deliberately no local unmask mode — every field on this form saves on blur, so clicking the eye commits what you typed first.
   - **Test connection** button → `POST /api/integrations/jira/test`. It toasts "Connected to Jira as <name>" or the error, and is disabled until a token is stored.
 - **Import**
   - Header switch **Jira sync enabled**: the minute tick only syncs while it is on.
