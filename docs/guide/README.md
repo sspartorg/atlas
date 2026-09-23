@@ -95,9 +95,13 @@ fetches a single value on demand when you click Reveal, and each reveal is logge
 
 ![New project modal](images/doc-11-new-project.png)
 
-A **project** groups one or more repos. Create one from `/projects` → **New Project**, either cloning
-fresh from a URL or connecting a folder already on disk. You choose an **issue key prefix** (e.g.
-`ATL`) — it is frozen at creation and every Task in the project is numbered from it: `ATL-1`, `ATL-2`.
+A **project** groups one or more repos. Create one from `/projects` → **New Project**: a name, a
+**description**, and an **issue key prefix** (e.g. `ATL`) — the prefix is frozen at creation and every
+Task in the project is numbered from it: `ATL-1`, `ATL-2`.
+
+Creating a project clones nothing. Since **ADR 0017 / 0018** a project is a container, not a checkout:
+repos are added afterwards from the **Repos** tab, either cloned fresh from a URL or connected from a
+folder already on disk. The old project-level clone/connect step is gone.
 
 ![Project — Repos tab](images/doc-13-project-repos.png)
 
@@ -184,13 +188,19 @@ The builder canvas takes node types: **agent** nodes, an **Owner** node (park an
 **Sub-tasks** node (run each of the Task's sub-tasks through a sub-workflow), and **End**. Edges are
 **pass** or **fail**, so a reviewer rejecting work sends it back rather than forward.
 
-The Start inspector sets the trigger:
+The **Start** inspector sets the workflow's identity and its trigger:
 
 - **manual** — you press Run.
 - **item_ready** — any Task queued on this workflow starts automatically once it reaches `ready`.
 - **schedule** — cron.
 
-and the delivery behaviour: whether to use a worktree, whether to push, and whether to open a PR.
+plus the project, the input kind, Tasks-in-parallel and Max loops.
+
+The **End** inspector sets the delivery behaviour: **Use a worktree**, and whether to push, open a PR,
+or push straight to the default branch. Those four are one decision set, which is why they sit
+together on End (ADR 0014) — even though the worktree is actually *provisioned* when the run starts.
+Start shows a read-only reminder of that: a run checks out one worktree per repo on
+`atlas/wf/<item>`, shared by every step. `use_worktree` is a workflow-level setting and defaults on.
 
 ---
 
@@ -204,11 +214,17 @@ Task provisions nothing — no branch, no worktree. That happens when a workflow
 Assign a workflow from the Task's right rail. A Task with no workflow sits waiting for you; Atlas will
 not guess one.
 
-Then the chain runs: the PO writer splits the Task into sub-tasks, the architect specs them, and each
-sub-task is built and tested one at a time **on the Task's branch**. A `[QA]` suffix marks the sub-tasks
-the test sub-workflow picks up.
+Then the graph runs — agents never hand off to each other; each one ends with an outcome and the
+workflow decides the next step. On the `delivery` template the PO writer splits the Task into
+sub-tasks, the architect specs them, and each sub-task is built and tested one at a time **on the
+Task's branch**.
 
-![Task detail — a multi-repo Task](images/doc-15-task-detail.png)
+A Sub-tasks step claims sub-tasks by **label**, not by title: the `test` step carries `label: "qa"` and
+picks up sub-tasks labelled `qa`, while the unlabelled `build` step takes everything no other step
+claims. The `[QA]` in a generated title is a convenience for reading the list — it is the label that
+routes. An open sub-task that no step claims parks the run at End rather than being skipped.
+
+![Task detail](images/doc-15-task-detail.png)
 
 **One Task = one branch = one pull request per repo it changed.** A Task spanning two repos produces two
 PRs from the same branch name, cross-linked to each other.
@@ -219,6 +235,16 @@ under a separate **Override** heading and is recorded as an override.
 
 While a workflow run holds a Task, status and assignee changes are refused with a 409. Stop the run to
 take it back.
+
+The Task's right rail carries the run controls. **Continue · N open** appears after a finished run when
+sub-tasks are still open — it re-enters at the Sub-tasks step on the same branch and updates the same
+PR, which is the rework loop. On a Task that is already **in review** the start button reads
+**Restart** and asks first: restarting re-runs the whole graph from step 1, puts the item back to In
+Progress, and resets the run branch to the latest default branch, so uncommitted work in that worktree
+is discarded.
+
+Removing a PR link from the **Pull Requests** list also asks first. It only stops Atlas tracking that
+PR — the pull request itself stays open on GitHub; nothing is closed, merged or deleted there.
 
 ---
 
@@ -264,13 +290,26 @@ Closed sessions keep a readable transcript at `/terminal/:id/history`.
 
 `Settings → Jira`. The bridge is plain code on a timer — no AI, no tokens spent.
 
-Configure a site URL, an email and an API token, then one or more **sources**. Each source is a repo, a
-JQL query, and optionally a workflow. Every poll runs each JQL; new issues become Tasks in that repo's
-project, and a source carrying a workflow queues the Task on it automatically. Without one the Task
-waits for you.
+Configure a site URL, an email and an API token. The token is stored encrypted and never comes back
+with the config; the eye button in the field fetches it on demand, and every reveal is logged.
 
-Progress flows back as comments — queued, in progress, waiting on you, ready for review with the PR,
-done — and a Task reaching Done transitions the Jira issue.
+**Sources live on the project, not here** — open a project and its **Jira** tab. A source is one JQL
+query, the workflow that works what it finds, and the repos those Tasks touch. Every poll runs each
+source's JQL; new issues become Tasks in that source's project, and a source carrying a workflow queues
+the Task on it automatically. Without one the Task stays a **draft** and you get a notification — that
+is deliberate, so a query you are still tuning cannot start work on its own. Those drafts are listed on
+the Queue page under *Needs a workflow*.
+
+The **Import** switch on `Settings → Jira` is the master on/off. While it is off nothing is polled and
+no progress reaches Jira — and **Sync now is disabled**, because a manual sync writes comments to real
+issues exactly like the poller does. The project's Jira tab shows a warning when the site is connected
+but Import is off, so a configured-looking source is never silently idle.
+
+With it on, the poller ticks every minute: a Task whose status changed posts a comment within about a
+minute, and a full sync — pulling new issues and flushing comment digests — runs on the poll interval
+(60 minutes by default). Progress flows back as comments — queued, in progress, waiting on you, ready
+for review with every PR and its state, done — and a Task reaching Done transitions the Jira issue.
+A Task still in `draft` is never commented on.
 
 > **Trust boundary.** Anyone who can edit an issue matching your JQL is writing text that becomes an
 > agent's prompt. Atlas quotes imported text line by line under a note saying it describes the work and
@@ -284,8 +323,9 @@ credentials to that origin.
 
 ## 12. Queue, Search, Analytics, Reminders, Scratch Pad
 
-**Queue** shows what each workflow is running, what is waiting on you, and which ready Tasks have no
-workflow yet.
+**Queue** shows what each workflow is running, what is waiting on you, and which Tasks have no workflow
+yet — drafts as well as ready ones, since a Jira import with no workflow lands as a draft. Picking a
+workflow there queues the Task in the same click.
 
 **Search** (`Ctrl/Cmd+K`) covers Tasks and sub-tasks with filters for project, type, status, assignee
 and labels.
