@@ -1,6 +1,6 @@
 # Conventions — How to Use & Maintain `.agents/`
 
-A short version of these rules lives in the project root `CLAUDE.md`. This file is the detailed handbook.
+A short version of these rules lives in the root [`AGENTS.md`](../AGENTS.md), which every coding agent reads first (the root `CLAUDE.md` is only a pointer to it). This file is the detailed handbook.
 
 ---
 
@@ -14,8 +14,9 @@ A short version of these rules lives in the project root `CLAUDE.md`. This file 
 
 **It is not** a place for:
 
-- Code conventions or rules of engagement — those live in `CLAUDE.md`.
-- Implementation plans — those live in local `.claude/plans/` (transient).
+- Code conventions or rules of engagement — those live in root `AGENTS.md` and the per-package `packages/*/AGENTS.md`.
+- Architecture decisions — those live in `docs/adr/`, which is authoritative and immutable. `.agents/` is a derived cache; when the two disagree, the ADR wins and this folder is wrong.
+- Implementation plans — those live in `docs/superpowers/plans/` (kept) or a local plan file (transient).
 
 ## Commit discipline (Theme 11)
 
@@ -57,7 +58,7 @@ Every file under `pages/` follows this shape. Keep the prose tight; favor bullet
 ```markdown
 # <Page Name>
 
-**Route:** `/path`  •  **Component:** `packages/web/src/pages/<File>.tsx`
+**Route:** `/path`  •  **Component:** `packages/web/src/pages/<File>.tsx`  •  **Slug:** `<slug>`
 
 ## Purpose
 One sentence on why this page exists.
@@ -139,7 +140,7 @@ Leave a single-line `TODO(.agents):` comment referencing the file that needs upd
 
 ## Adding a new page doc
 
-1. Look up the next available filename number under `pages/`. Use the format `NN-slug.md` where `slug` is the page's URL slug.
+1. Look up the next available filename number under `pages/`. Use the format `NN-slug.md` where `slug` is the page's URL slug. A letter suffix (`24a-terminal-session.md`) is fine when a page slots between two existing numbers — renumbering the whole folder churns every cross-link for nothing. Gaps in the sequence are normal: 05–12 and 32 were pages ADR 0015 deleted.
 2. Copy the template above into the new file.
 3. Add a row to `routes-map.md`.
 4. Add a line to `README.md`'s "Pages" index.
@@ -159,10 +160,19 @@ Leave a single-line `TODO(.agents):` comment referencing the file that needs upd
 
 ## Self-check before pushing
 
-Pre-commit hook (not required, but recommended) could flag the following:
+There is a pre-commit hook (husky + lint-staged + secretlint), but it does NOT check doc freshness. A future hook could flag the following:
 
 - A change inside `packages/web/src/pages/*.tsx` without a touch in `.agents/pages/`.
 - A change inside `packages/api/src/routes/*.ts` without a touch in `.agents/api-surface.md`.
 - A change inside `packages/shared/src/status-machine/*.ts` without a touch in `.agents/data-model.md`.
 
 Until the hook exists, this is on the author + reviewer.
+
+---
+
+## Line references rot
+
+`file:line` citations are the most useful and the most perishable thing in this folder — a 20-line insert above a cited symbol silently invalidates every number below it. Two rules:
+
+- **Verify before you trust.** A line number in a page doc is a hint, not a fact. Grep for the quoted string or symbol; if it moved, fix the citation in the same change.
+- **Prefer a quoted string or symbol name over a bare number** when one exists, because it survives edits. `"Replying continues the waiting workflow run." (ActivityCard.tsx:814)` is greppable even when `:814` goes stale; a bare `:814` is not.

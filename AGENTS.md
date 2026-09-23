@@ -111,7 +111,7 @@ For full MUI/data-fetching/status-display patterns, see `packages/web/AGENTS.md`
 - Tasks are queued for workflows (`items.workflow_id`); sub-tasks never are. A Task's sub-tasks run inside the Task's run through its **Sub-tasks** steps: one at a time, each through a sub-workflow, on the Task's branch and worktree. One Task = one branch = one PR per repo it changed (or one push to the default branch). A Project holds several repos (its own git fields are the primary); a Task picks one or more (`items.repo_ids`), worked side by side in one run (ADR 0017)
 - Agents never route items — no agent assigns, changes status, pushes or opens PRs. Every agent ends with an `atlas-outcome` block and the workflow graph decides the next step
 - While a workflow run is working an item, the API rejects status / assign PATCHes with 409 (`services/workflow-lock.ts`) — stop the run to take the item back
-- Design: `docs/adr/0014-workflows-replace-agent-handoffs.md`, `docs/adr/0015-one-task-one-pr.md` (Tasks, Sub-tasks steps, one PR per Task), `docs/adr/0017-multi-repo-projects.md` (multi-repo projects and Tasks)
+- Design: `docs/adr/0014-workflows-replace-agent-handoffs.md`, `docs/adr/0015-one-task-one-pr.md` (Tasks, Sub-tasks steps, one PR per Task), `docs/adr/0016-jira-bridge.md` (the Jira bridge; a source with no workflow leaves its Task a draft on purpose), `docs/adr/0017-multi-repo-projects.md` (multi-repo projects and Tasks), `docs/adr/0018-repos-without-a-primary.md` (no repo is primary), `docs/adr/0020-atlas-runs-the-verification-gate.md` (Atlas, not the agent, runs the gate before any push)
 
 ### Status transitions
 - The UI must HIDE invalid transitions from the normal picker — not grey them out, not list them as if they were legal moves
