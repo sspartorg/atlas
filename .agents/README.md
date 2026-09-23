@@ -71,6 +71,7 @@ This folder is the **single source of truth for application behavior** — what 
 - [`pages/22-scratch-pad.md`](pages/22-scratch-pad.md) — `/scratch-pad`
 - [`pages/23-terminal.md`](pages/23-terminal.md) — `/terminal`
 - [`pages/24-terminal-layout.md`](pages/24-terminal-layout.md) — `/terminal/layout`
+- [`pages/24a-terminal-session.md`](pages/24a-terminal-session.md) — `/terminal/:id`
 - [`pages/25-terminal-history.md`](pages/25-terminal-history.md) — `/terminal/:id/history`
 - [`pages/26-terminal-standalone.md`](pages/26-terminal-standalone.md) — `/terminal/standalone`
 - [`pages/27-marketplace.md`](pages/27-marketplace.md) — `/agents/marketplace`

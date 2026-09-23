@@ -22,7 +22,6 @@ Live Swagger UI at `/api/docs`; OpenAPI 3 JSON at `/api/docs/json`. This markdow
 | POST | `/api/agents` | Create agent (Add Agent dialog). `400 MODEL_NOT_IN_REGISTRY` when `(cli, model)` is absent from `cli_models`; **2026-09-12** `400 ROLE_NOT_IN_CATALOG` when `role_id` is a `SdlcRole` slug with no `roles` row (`assertRoleInCatalog`) — both FKs previously surfaced as raw 500s. `role_id: null` is always valid: autonomous agents sit outside the SDLC chain. |
 | PATCH | `/api/agents/:id` | Update agent (rename, pause/resume, CLI/model/effort, prompt, checklists) |
 | DELETE | `/api/agents/:id` | Delete agent. `409 conflict` (`Agent is used by workflow(s): <names>`) while any `workflows.graph` has a node with that `agent_id` (`workflowsService.workflowsUsingAgent`, JSONB `@>`) |
-| POST | `/api/agents/:id/duplicate` | Duplicate agent with new ID |
 | GET | `/api/agents/:id/memory` | Read the agent's procedural-memory markdown (auto-creates an empty row on first read) |
 | PUT | `/api/agents/:id/memory` | Replace or append the memory body. Body: `{ body_md, mode?: 'replace' \| 'append' }`. `'replace'` (default) bumps version + flips source to `manual-edit`. **Theme 08** â€” `'append'` calls `appendLesson()`: inserts a `- <body_md>` bullet under `## Course corrections`, bumps version, audits with `trigger='mcp_update'`, does NOT reset the cadence counter. |
 | POST | `/api/agents/:id/memory/regenerate` | Regenerate from recent runs; bumps version, flips source to `ai-generated`, links `last_run_id`. **Theme 08** â€” audits a row in `memory_regenerations` with `trigger='manual'` + resets `runs_since_regen`. |
@@ -32,6 +31,9 @@ Live Swagger UI at `/api/docs`; OpenAPI 3 JSON at `/api/docs/json`. This markdow
 | POST | `/api/agents/:id/prompt-versions/:version/revert` | Set this historical version as the new active prompt; appends a new version row whose `reverted_from` points back to the source |
 | POST | `/api/agents/:id/dry-run` | Smoke-test the CLI wiring. Spawns the agent's configured `cli` (e.g. `claude`) with `--print --model <agent.model>` and streams stdout/stderr via SSE (`dry_run_started`, `dry_run_output`, `dry_run_done`). Prompt is **only** the workspace constitution (guardrails) + an optional Owner note + a 3-line verification ask. No issue context, no agent prompt_md, no MCP, no DB write. Body: `{ extra_prompt?: string \| null }`. Returns `{ dryRunId, model, cli, promptLen }`. Powers the Agent Detail â†’ Test Run tab. |
 | POST | `/api/agents/:id/compile-prompt` | Pure read â€” compile the **exact prompt** that `Run now` would pipe to the CLI, without spawning anything. Reuses `services/prompt-builder.ts:buildPrompt()` (same function the runner calls). Body: `{ issue_type?, issue_id? }` — both or neither; omitted = the project-level prompt (`# Project-level Run` section). Returns `{ prompt, filename, length, agent: {id, name, cli, model}, issue: {type, id, title}, guardrails_count, sections }`. No DB write, no CLI spawn, no SSE. Used by the Run Now dialog's **Preview prompt** button to download the prompt as `.md` for offline inspection. |
+| GET | `/api/agents/:id/checklists` | The agent's checklist items (`agentsService.getChecklists`). The PUT twin is documented above; the GET was not. |
+| POST | `/api/agents/:id/accept-upgrade` | Accept a marketplace upgrade for an installed agent, optionally per-field (`AcceptUpgradeBodySchema.fields`) → the updated agent. 404 when the agent or its catalog entry is gone. Write-gated. |
+| POST | `/api/agents/:id/dismiss-upgrade` | Dismiss the pending upgrade so the banner stops showing → the updated agent. 404 as above. Write-gated. |
 
 A08 â€” `POST /api/agents` and `PATCH /api/agents/:id` accept an optional `role_id` (one of the 10 SDLC role slugs, or `null` to detach). The MCP `createAgent` / `updateAgent` tools also expose `role_id` via the shared `SdlcRoleSchema`. The runner reads `agent.prompt_md` exclusively â€” never `roles.default_prompt_md` â€” so re-pointing an agent at a different role does not change the prompt the next dispatch sees.
 
@@ -65,6 +67,10 @@ A08 â€” `POST /api/agents` and `PATCH /api/agents/:id` accept an optional `
 | PATCH | `/api/projects/:id/repos/:repoId` | **ADR 0018.** Any repo (`UpdateProjectRepoSchema`: `default_branch`, `setup_sh_body`, `setup_ps1_body`). 404 unknown repo. |
 | DELETE | `/api/projects/:id/repos/:repoId` | **ADR 0018.** Unregisters any repo, including the last one (its folder stays on disk), and removes it from every Task's `repo_ids`. 409 while a workflow run (running or parked) works on a Task that uses it. A project with no repos can hold Tasks but cannot queue them. |
 | POST | `/api/projects/:id/generate-ai-scaffold` | **Theme 09b / ADR 0014/0018** — body `{repo_id?}` (defaults to the project's first repo); starts a project-level run of the project's **AI Readiness** workflow, creating it from the `ai-readiness` template (`workflowsService.createFromTemplate`, installs `agent-ai-readiness` if missing) on first use; matched by template name in the project. Token-gated. 409 if the project has no repos, or that repo's `clone_status !== 'ready'`, or it has no `credential_id`. Returns `202 { run_id, workflow_id }` (`run_id` is the **workflow run** id). The agent commits the scaffold (AGENTS.md + CLAUDE.md + Copilot instructions + `.agents/`) in the run's worktree on `atlas/wf/<runId8>`; the workflow's End pushes and opens the PR. 500 `Failed to spawn AI-readiness run` if the start throws. |
+| GET | `/api/projects/prefix-available?prefix=` | Is an issue-key prefix free? `{ available: true }`, or `{ available: false, reason }` (`invalid` when it fails `IssueKeyPrefixSchema`). Used live by the create-project form. |
+| GET | `/api/projects/folder-origin?path=` | The `origin` remote of a local folder, or `{ origin: null }` when the path is missing, not a git repo, or unreadable. 400 without `path`. Powers the folder picker's "this folder is already a clone of …" hint. |
+| POST | `/api/projects/:id/delete` | Start an async project delete → **202** `{ delete_id }`, progress over SSE. `DeleteProjectSchema.mode` is `detach` or `purge`; `purge` additionally requires `confirm_name` to equal the project name (400 otherwise). 404 unknown project. Write-gated. |
+| GET | `/api/projects/:id/env/:key/value` | On-demand reveal of one project env var → `{ value }`. Key must be UPPER_SNAKE_CASE (400). 404 unknown project. Write-gated + audited, same read model as credentials and shared secrets. |
 
 ### `routes/tasks.ts` — Tasks (ADR 0015)
 **Why this group exists**: A **Task** is the top-level item (migration 037 turned every epic into one) and the only item a workflow is queued for; its workflow run delivers one branch and one PR. Status transitions go through a dedicated `/status` endpoint so the status machine, the children-done rule and assignee validation are enforced in one place.
@@ -217,6 +223,12 @@ In-memory client registry (`Set<(SSEEvent) => void>` in `routes/events.ts:5`). D
 | POST | `/api/settings/external-notification/test` | Send test message |
 | PATCH | `/api/settings/notifications` | Per-event toggles + quiet hours |
 | POST | `/api/settings/reset` | **Destructive.** Drop all data and return to onboarding. Wipes: `comments`, `notifications`, `agent_runs`, `jira_issues`, `jira_config` (the Jira token), `items`, `projects` (cascades to project workflows + their runs), `credentials`, `agent_checklists`, `agents` (cascades to `agent_memory` + `agent_prompt_versions`). Preserved: reference seed data (`cli_models`, `tool_catalog`, `guardrail_rules`, `guardrail_scripts`, `roles`, `marketplace_agents`) and — not in the delete list — `reminders`, `scratch_pad`, project guardrail tables cascade with `projects`. Does not re-install any agent; the Owner lands on onboarding with zero agents. Resets the `settings` singleton to defaults. |
+| PATCH | `/api/settings/profile` | Owner name / workspace path (`UpdateProfileSchema`) → the updated settings. Write-gated. |
+| PATCH | `/api/settings/constitution` | `{ constitution_md }` → the updated settings. The body is type-guarded and capped at 64k on purpose: it is templated into EVERY agent-run prompt, so an unchecked value both 500'd on null and let a runaway payload bloat every later CLI call. Write-gated. |
+| POST | `/api/settings/log-level` | `{ level }` ∈ `trace\|debug\|info\|warn\|error\|fatal` → `{ level, applied: true }`; flips the live logger with no restart. 400 `validation_error` otherwise. `PATCH /api/settings/env` reuses the same path when the edited var happens to be the log level. Write-gated. |
+| POST | `/api/settings/external-notification/reveal-token` | `{ value }` — the stored external-notification token. 404 when none is stored. Audited (`tag: 'secret_reveal'`). Write-gated. |
+| POST | `/api/settings/external-notification/reveal-webhook-url` | Same, for the webhook URL. |
+| POST | `/api/settings/test/clear-onboarding` | Resets `settings.onboarding_complete` to 0 → `{ onboarding_complete: 0 }`. Exists so e2e can replay onboarding. Write-gated. |
 
 ### `routes/jira.ts` — Jira bridge (ADR 0016)
 **Why this group exists**: the Jira bridge's singleton config and its two manual controls. The API token is write-only: it is stored encrypted (`v1:` + AES-GCM) and no route returns it; responses carry `api_token_set`.
@@ -243,6 +255,7 @@ In-memory client registry (`Set<(SSEEvent) => void>` in `routes/events.ts:5`). D
 | POST | `/api/credentials` | Create (validates token against host, encrypts at rest) |
 | PATCH | `/api/credentials/:id` | Update (token optional — blank keeps existing) |
 | DELETE | `/api/credentials/:id` | Delete |
+| POST | `/api/credentials/:id/refresh` | Mint a fresh installation token for a **`github_app`** credential and return the row with ciphertext stripped, so the UI gets the new `expires_at` without a second GET. 400 for any other `kind` (a PAT has nothing to refresh), 404 unknown id. Write-gated. |
 
 ### `routes/schedules.ts` â€” Project auto-fetch
 **Why this group exists**: Auto-fetch keeps the worktree's view of remote refs fresh so the Owner doesn't need to `git fetch` before every session; **ADR 0018** — it is per repo: each one has its own remote, credential and staleness tolerance. `pause_while_agents_active` still looks at the whole project. The `/fire` endpoint exists for manual testing â€” without it, validating a new cron expression required waiting for the next scheduled fire. Croner jobs live in an in-memory registry that rebuilds on startup and catches missed fires (server may have been off when a schedule was due).
@@ -253,6 +266,7 @@ In-memory client registry (`Set<(SSEEvent) => void>` in `routes/events.ts:5`). D
 | PUT | `/api/projects/:id/repos/:repoId/schedule` | Upsert that repo's schedule |
 | DELETE | `/api/projects/:id/repos/:repoId/schedule` | Delete it and unregister its timer |
 | POST | `/api/projects/:id/repos/:repoId/schedule/fire` | Manual one-off fire (testing) |
+| GET | `/api/schedules` | Every ENABLED repo auto-fetch schedule across all projects (`schedulesService.listEnabled`). The poller's view; the per-repo GET/PUT twins are below. |
 
 Registered Croner jobs live in `services/schedule-registry.ts` (boot on startup, catch missed fires on restart).
 
@@ -267,6 +281,7 @@ Registered Croner jobs live in `services/schedule-registry.ts` (boot on startup,
 | POST | `/api/notifications/:id/cancel` | Cancel a pending one |
 | POST | `/api/notifications/mark-all-read` | Bulk mark read (in-app feed) |
 | POST | `/api/notifications/send-external` | A09 one-shot external message (MCP `sendExternalNotification`). Body `{message (1-4000), event_key? (≤64)}`. **2026-09-14:** returns `202 {ok: true, sent: boolean}` — `sent:false` means quiet hours, an off event toggle, or no configured transport suppressed it (previously always `{ok:true}`) |
+| POST | `/api/notifications/:id/read` | Mark one notification read → `{ ok: true, changed }`. 400 `validation_error` on a non-numeric id. Not write-gated — the bell is Owner-only UI. |
 
 **2026-09-14 — delivery status honesty.** `sendExternalNotification` returns `true` only when a transport actually sent; quiet hours, an off event toggle, or an unconfigured transport return `false`. `sendExternalForNotification` then writes `external_status='sent'` only on `true`, otherwise reverts the row to `'none'` (the schema's existing "no external delivery" value, same as cancel — no new status added), so the Notification Log never shows "Sent" with no channel connected.
 
@@ -300,7 +315,6 @@ Registered Croner jobs live in `services/schedule-registry.ts` (boot on startup,
 | GET | `/api/reminders` | List active + completed reminders |
 | POST | `/api/reminders` | Create a reminder (body: `{ subject, next_fire_at, frequency?, payload? }`) |
 | DELETE | `/api/reminders/:id` | Cancel a reminder (status â†’ 'cancelled', does not delete the row) |
-| POST | `/api/reminders/:id/fire` | Manual fire (testing) |
 
 ### `routes/analytics.ts` â€” Analytics
 **Why this group exists**: Cost rollup + token usage + run-frequency reports aggregated server-side because computing them client-side requires the full `agent_runs` table.
@@ -336,6 +350,8 @@ Drill-downs take and return Tasks (`type = 'task'`); `type` filters accept `task
 A **workflow** bundle nests agent bundles under `agents/<id>/` — see `routes/workflows.ts` → *Workflow bundles*. The Workflows tab of `/agents/marketplace` lists `GET /api/workflows/templates` (Starter workflows) and `GET /api/marketplace/workflows` (Published by you — those routes live in `routes/workflows.ts`).
 | GET | `/api/agents/:id/export` | Download the active agent as a zip |
 | POST | `/api/agents/:id/detach` | Detach from marketplace source (`marketplace_source_id` â†’ NULL) |
+| GET | `/api/marketplace/agents/:catalog_id/diff/:agent_id` | Field-by-field diff between a catalog entry and the installed agent, backing the upgrade modal. 404 when either side is missing. |
+| GET | `/api/marketplace/agents/:id/export` | The catalog agent as a zip (`Content-Type: application/zip`, `Content-Disposition: attachment; filename="<id>.zip"`). 404 unknown catalog id. |
 
 ### `routes/guardrail-scripts.ts` and `routes/project-guardrail-scripts.ts` â€” Guardrail scripts
 **Why this group exists**: Scripted guardrails (sh/ps1) live in `guardrail_scripts` + `project_guardrail_scripts`. Agents fetch + execute these as part of the SDLC validation flow. A project script with the same slug as a workspace script (e.g. `coder-tests-green`) overrides it for that project's worktrees. **2026-09-14:** the seeded `coder-tests-green` gate is project-agnostic — it runs `typecheck` / `lint` only when `package.json` declares them, via the package manager the lockfile implies (pnpm / yarn / npm), and accepts `*.test|spec.{js,ts,jsx,tsx,mjs,cjs}`, `*_test.go`, `test_*.py`. It used to hardcode `pnpm typecheck` + `pnpm lint` + `*.test.ts`, so Coder parked every non-pnpm project.
@@ -454,6 +470,23 @@ Consecutive steps (and consecutive sub-task runs) never wait for this tick — t
 | GET (WS) | `/api/cli/sessions/:id/stream` | Live byte stream; terminal data is binary both directions, text frames are control envelopes |
 
 **WS stream contract** (`services/cli-session-host.ts`): terminal geometry is **pinned** — PTY, server mirror, and every browser pane all run at the shared `TERMINAL_COLS × TERMINAL_ROWS` (120×30, `@atlas/shared`) for the whole session lifetime, and `pty.resize()` has zero call sites. This is the fix for the ConPTY "zombie characters": ConPTY answers any resize by repainting its whole buffer with reflow semantics that never exactly match xterm's, so any moment where the PTY's believed width and a viewer's width differ strands unerased cells — and with one PTY and N viewers, dynamic geometry can never be mismatch-free. Browser panes adapt by scaling their font, never the grid. On attach the server first sends a **`{cmd:'ptyInfo'}` text frame** — on a Windows host it carries `windowsPty: {backend:'conpty'|'winpty', buildNumber}` (node-pty's own gate: conpty iff build ≥ 18309), which the browser applies to xterm's `windowsPty` option (also passed to the headless mirror at creation) to honor ConPTY's other repaint assumptions. Then the server replays a **serialized screen snapshot** — a clean, well-formed VT stream produced by a per-session `@xterm/headless` mirror (`services/terminal-screen-state.ts`) — then forwards raw PTY bytes live, each byte delivered exactly once (snapshot XOR live). The snapshot contains no DSR queries and is always laid out at the pinned grid, so reconnect/refresh never renders mid-sequence "zombie" characters. Inbound: raw bytes are typed into the PTY; the JSON control envelope `{cmd:'resize'}` is recognized, consumed, and **dropped** (kept only so a stale client's frame can never be typed into the shell as literal JSON). Auth: WS upgrades bypass the POST-only write gate, so the route accepts only trusted browser Origins or `?token=<ATLAS_MCP_TOKEN>`.
+
+### `routes/push-subscriptions.ts` — Web push
+
+Browser push subscriptions for Owner notifications. Backed by the `push_subscriptions` table and `services/web-push.ts`.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/push-subscriptions/vapid-public-key` | `{ publicKey }`. **Deliberately not write-gated** — the browser must fetch it *before* it can call `subscribe()`, so gating it would be a chicken-and-egg loop. A VAPID public key is public by design. |
+| POST | `/api/push-subscriptions/subscribe` | `{ endpoint, p256dh, auth, userAgent? }` → **201** `{ ok: true }`. Upserts on `endpoint`, so re-subscribing the same browser refreshes the keys and `last_seen_at` instead of duplicating the row. |
+| POST | `/api/push-subscriptions/unsubscribe` | `{ endpoint }` → **204**. Deletes that row. |
+| POST | `/api/push-subscriptions/test` | Sends a test push to every stored subscription (`sendTestPush`) → its per-subscription result. Backs the **Send test** button on Settings → Notifications. |
+
+### `routes/perf.ts` — request timing
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/_perf/routes` | In-memory per-route request stats (`readStats()`). Debug surface for the perf gate; underscore-prefixed to mark it as non-product. For per-request detail, scrape the `atlas:perf:request` structured log stream instead. |
 
 ### `routes/server.ts` â€” process control
 **Why this group exists**: Several env vars are read once at process boot (DB path, port); applying their new values requires a restart. Rather than instruct the Owner to find the shell and kill the process, the app exposes one button that exits cleanly and expects a supervisor (nodemon in dev, PM2 in deploy) to relaunch â€” the only mechanism by which a non-CLI Owner can apply restart-required env changes.

@@ -6,21 +6,21 @@
 All-time cost for one Task and its sub-tasks, filterable by item kind.
 
 ## States
-- No id in the URL: "No task id in the URL." (`:90`).
-- Loading: three `<Skeleton>` blocks (`:99`).
-- Error: `Failed to load task analytics: <message>` (`:110`).
+- No id in the URL: "No task id in the URL." (`:77`).
+- Loading: three `<Skeleton>` blocks (`:86-88`).
+- Error: `Failed to load task analytics: <message>` (`:97`).
 - Populated: Task totals → per-kind cards (clickable filters) → paged descendant table.
 
 ## UI elements
 
 **Header** — project link (→ `/analytics/project/:projectId`), Task id, Task title + all-time rolled totals.
 
-**Per-kind cards** (`:270`) — one per descendant kind (`task`, `sub_task`). Each is a **filter toggle**: clicking sets `typeFilter` and resets `page` to 1 (`:277`).
+**Per-kind cards** (`:252`) — one per descendant kind (`task`, `sub_task`). Each is a **filter toggle**: clicking sets `typeFilter` and resets `page` to 1 (`:259-260`). `byKindPie` filters to `total_cost_usd > 0` (`:105`), so a kind with no spend shows no card.
 
 **Descendant table**
-- Sub-caption: `Every descendant of this task. Sorted by cost. Filtered to <label> only.` (`:346`)
-- **`Showing only: <label>` chip** (`:351`) — deletable; clearing it resets `page` (`:354`).
-- **Rows-per-page** select — resets `page` (`:522`). **Pagination** over the filtered total.
+- Sub-caption: `Every descendant of this task. Sorted by cost. Filtered to <label> only.` (`:335`)
+- **`Showing only: <label>` chip** (`:340`) — deletable; clearing it resets `page` (`:342-343`).
+- **Rows-per-page** select — resets `page` (`:524`). **Pagination** over the filtered total.
 
 ## Modals / drawers
 None.
@@ -39,7 +39,7 @@ None.
 
 ## Edge cases / quirks
 - **`typeFilter ?? 'all'` is in the query key** so `null` and `undefined` don't share a cache slot with a filtered payload. Don't "simplify" it away.
-- Every control that changes the result set resets `page` to 1 (`:277`, `:354`, `:522`); a new filter control must too.
+- Every control that changes the result set resets `page` to 1 (`:259-260`, `:342-343`, `:524`); a new filter control must too.
 - Totals are descendant-rolled. All-time, like the project page — not the current month (see [`30-analytics.md`](30-analytics.md)).
 
 ## Related pages
