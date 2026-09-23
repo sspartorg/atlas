@@ -117,8 +117,73 @@ describe('validateWorkflowGraph', () => {
         graph.edges.push(edge('test', 'po', 'fail'));
         expect(errorsOf(graph)).toEqual([
             'build: Choose the sub-workflow for these sub-tasks',
-            'test: Only agent nodes can have a fail connection',
+            'test: Only agent and gate steps can have a fail connection',
         ]);
+    });
+
+    describe('gate steps', () => {
+        // Start -> gate -> End, with the gate failing to a fixer that loops back.
+        // This shape is the entire point of the node type: the script decides,
+        // and an agent is dispatched only when it says no.
+        function gateGraph(): IWorkflowGraph {
+            return {
+                nodes: [
+                    node('start', 'start'),
+                    node('cov', 'gate', { script_id: 'gate-coverage' }),
+                    node('fixer', 'agent', { agent_id: 'agent-coverage-fixer' }),
+                    node('end', 'end'),
+                ],
+                edges: [
+                    edge('start', 'cov'),
+                    edge('cov', 'end'),
+                    edge('cov', 'fixer', 'fail'),
+                    edge('fixer', 'cov'),
+                ],
+            };
+        }
+
+        it('accepts a gate that fails to a fixer which loops back to it', () => {
+            // The cycle runs through a fail edge, so `loop_count` advances on
+            // every traversal and `max_loops` bounds it. `findPassLoop` walks
+            // pass edges only, which is why this is not rejected as a loop.
+            expect(errorsOf(gateGraph())).toEqual([]);
+        });
+
+        it('requires a script on a gate step', () => {
+            const graph = gateGraph();
+            graph.nodes[1] = node('cov', 'gate');
+            expect(errorsOf(graph)).toEqual(['cov: Choose the script for this gate']);
+        });
+
+        it('rejects a script on any step that is not a gate', () => {
+            const graph = devGraph();
+            graph.nodes[1] = node('coder', 'agent', { agent_id: 'agent-coder', script_id: 'gate-coverage' });
+            expect(errorsOf(graph)).toEqual(['coder: Only gate steps take a script']);
+        });
+
+        it('allows a gate at most one fail connection', () => {
+            const graph = gateGraph();
+            graph.nodes.push(node('other', 'agent', { agent_id: 'agent-hygiene-fixer' }));
+            graph.edges.push(edge('cov', 'other', 'fail'), edge('other', 'end'));
+            expect(errorsOf(graph)).toEqual(['cov: At most one fail connection']);
+        });
+
+        it('still requires exactly one pass connection from a gate', () => {
+            const graph = gateGraph();
+            graph.edges = graph.edges.filter((e) => !(e.source === 'cov' && e.kind === 'pass'));
+            expect(errorsOf(graph)).toContain('cov: Needs exactly one pass connection');
+        });
+
+        it('parses a gate node through the graph schema', () => {
+            const parsed = WorkflowGraphSchema.safeParse(gateGraph());
+            expect(parsed.success).toBe(true);
+        });
+
+        it('rejects a script_id longer than 64 characters', () => {
+            const graph = gateGraph();
+            graph.nodes[1] = node('cov', 'gate', { script_id: 'g'.repeat(65) });
+            expect(WorkflowGraphSchema.safeParse(graph).success).toBe(false);
+        });
     });
 
     it('allows Sub-tasks steps only in workflows that run on a Task', () => {
@@ -155,7 +220,7 @@ describe('validateWorkflowGraph', () => {
             edge('coder', 'end', 'fail'),
         );
         expect(errorsOf(graph)).toEqual([
-            'start: Only agent nodes can have a fail connection',
+            'start: Only agent and gate steps can have a fail connection',
             'coder: Needs exactly one pass connection',
             'coder: At most one fail connection',
             'owner: Needs exactly one pass connection',

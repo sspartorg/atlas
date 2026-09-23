@@ -6,10 +6,16 @@ The **SDLC role catalog** is the canonical list of roles an agent can play in At
 - The curated starter prompt for each role (the `default_prompt_md` + `default_reviewer_prompt_md` columns).
 - The default activation policy: which roles ship enabled vs. disabled on a fresh install.
 
-## Ten slugs in the type; five rows in the DB
+## Eleven slugs in the type; ten rows in the DB
 
-> **2026-09-12 correction.** The `SdlcRole` union and `SDLC_ROLES` in
-> `@atlas/shared` declare all ten slugs below, but the shipped baseline seeds
+> **2026-09-24 update.** Migration `012_sdlc_roles_backfill.ts` seeds
+> `tester`, `devops`, `security`, `designer` and the new `docs`, so ten of the
+> eleven slugs now have a row and can be assigned. Only `spec-writer` remains
+> type-only, deliberately: its job was folded into Architect, and seeding a row
+> for a role with no agent would invite someone to wire it back up.
+>
+> **2026-09-12 correction (historical).** The `SdlcRole` union and `SDLC_ROLES` in
+> `@atlas/shared` declared all ten slugs below, but the shipped baseline seeded
 > only **five** `roles` rows — `po`, `architect`, `engineer`, `qa`,
 > `automation` (the five performer agents that have curated prompts).
 > `spec-writer`, `tester`, `devops`, `security` and `designer` are type-level
@@ -56,7 +62,7 @@ The policy is a curation signal, not a runtime guard. The Owner can flip `agents
 | `label` | TEXT NOT NULL | Display string used by the Role filter chip + AgentCard subtitle fallback. |
 | `description` | TEXT NOT NULL DEFAULT `''` | One-liner shown on the (future) Roles admin page. |
 | `default_prompt_md` | TEXT NOT NULL DEFAULT `''` | Curated performer prompt. Owner edits via `PATCH /api/roles/:id`. |
-| `default_reviewer_prompt_md` | TEXT NOT NULL DEFAULT `''` | Curated reviewer-persona prompt. Empty for roles with no paired reviewer (architect, tester, automation, devops, security, designer). |
+| ~~`default_reviewer_prompt_md`~~ | — | **This column does not exist and never has** (corrected 2026-09-24, when migration 012 failed on it with `42703`). The reviewer persona lives in the paired reviewer agent's own catalog bundle, which is where it belongs — a reviewer is a separate agent, not a second prompt on a role. |
 | `default_status` | TEXT NOT NULL DEFAULT `'inactive'` | CHECK: `'active'\|'inactive'`. All five seeded rows (`po`, `engineer`, `qa`, `architect`, `automation`) are `active` (verified 2026-09-14). |
 | `sort_order` | INTEGER NOT NULL DEFAULT 0 | UI ordering for the Role dropdown. |
 | `created_at`, `updated_at` | TIMESTAMPTZ | Auto-managed. |

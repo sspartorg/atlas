@@ -153,6 +153,35 @@ describe('writeChangedFiles (real git)', () => {
         expect(await writeChangedFiles(solo)).toBeNull();
     });
 
+    it('falls back to origin/main when the clone has no origin/HEAD', async () => {
+        // `origin/HEAD` is only set up by some clone paths, so the conventional
+        // names have to be tried. A worktree provisioned by the orchestrator
+        // often has the remote-tracking ref but not the symbolic one.
+        const noHead = join(root, 'no-head');
+        await exec('git', ['clone', upstream, noHead]);
+        await exec('git', ['remote', 'set-head', 'origin', '--delete'], { cwd: noHead });
+        expect(await resolveBaseRef(noHead)).toBe('origin/main');
+    });
+
+    it('returns null rather than throwing when the diff itself fails', async () => {
+        // A base ref that shares no history with HEAD: `git merge-base` exits
+        // non-zero, which lands in the catch. Staging context must never be
+        // able to fail a run.
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const orphan = join(root, 'orphan');
+        await exec('git', ['clone', upstream, orphan]);
+        await exec('git', ['config', 'user.email', 'test@example.com'], { cwd: orphan });
+        await exec('git', ['config', 'user.name', 'Test'], { cwd: orphan });
+        await exec('git', ['checkout', '--orphan', 'detached'], { cwd: orphan });
+        writeFileSync(join(orphan, 'only.txt'), 'only\n');
+        await exec('git', ['add', '-A'], { cwd: orphan });
+        await exec('git', ['commit', '-m', 'unrelated root'], { cwd: orphan });
+
+        await expect(writeChangedFiles(orphan)).resolves.toBeNull();
+        expect(warn).toHaveBeenCalled();
+        warn.mockRestore();
+    });
+
     it('never throws when the path is not a repository at all', async () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         const notARepo = join(root, 'empty');

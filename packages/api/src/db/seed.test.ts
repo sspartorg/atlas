@@ -133,9 +133,17 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
         // substituting `pnpm typecheck + pnpm lint`).
         'check-automation-tests',
         'commit-discipline',
+        // 2026-09-24 — the four `gate` node scripts. These are not run by an
+        // agent at all: a gate step executes them and routes on the exit code,
+        // so a green branch spends no tokens on them and a fixer agent is
+        // dispatched only when one goes red.
+        'gate-hygiene',
+        'gate-coverage',
+        'gate-perf',
+        'gate-visual',
     ] as const;
 
-    it('exports 7 seeds with the canonical ids', () => {
+    it('exports every seed with the canonical ids', () => {
         expect(GUARDRAIL_SCRIPT_SEEDS).toHaveLength(EXPECTED_IDS.length);
         const ids = GUARDRAIL_SCRIPT_SEEDS.map((s) => s.id).sort();
         expect(ids).toEqual([...EXPECTED_IDS].sort());

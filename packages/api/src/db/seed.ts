@@ -853,6 +853,371 @@ foreach ($g in $gaps) { $i++; Write-Output ("{0}. {1}" -f $i, $g) }
 exit 1
 `,
     },
+    {
+        id: 'gate-hygiene',
+        name: 'Hygiene gate (lint, typecheck, debug residue)',
+        description:
+            "Gate node script. Runs the project's declared lint and typecheck scripts and scans the branch diff for console.log, debugger and untracked TODO/FIXME markers. A tracked marker (TODO(ATL-12):) is allowed. format:check is deliberately excluded - a permanently red gate is one nobody reads. Nothing here is a judgement call, which is why it runs as a gate node with no LLM attached; the paired hygiene fixer is dispatched only on a non-zero exit.",
+        sort_order: 107,
+        body_sh: `#!/usr/bin/env bash
+# Hygiene gate. $1 is the item id (unused).
+# Project-agnostic: a declared script is run, an undeclared one is skipped.
+# Nothing here is a judgement call, which is the point - this runs as a gate
+# node with no LLM attached and only wakes one on a non-zero exit.
+set -u
+gaps=""
+n=0
+pm=npm
+[ -f pnpm-lock.yaml ] && pm=pnpm
+[ -f yarn.lock ] && pm=yarn
+has_script() {
+    [ -f package.json ] && node -e "process.exit((require('./package.json').scripts || {})['$1'] ? 0 : 1)" 2>/dev/null
+}
+# \`format:check\` is deliberately absent. Atlas's own repo reports ~409
+# unformatted files and has chosen not to enforce it (it is not in \`pnpm gate\`
+# either); a gate that is permanently red is a gate nobody reads.
+for s in lint typecheck; do
+    if has_script "$s"; then
+        out="$("$pm" run "$s" 2>&1)" || {
+            n=$((n+1))
+            gaps="$gaps$n. $s failed
+$(printf '%s' "$out" | tail -20)
+"
+        }
+    fi
+done
+base="$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD~10)"
+# Bracket the plus rather than escaping it: in BSD grep's BRE, \`\\+\` is the
+# GNU one-or-more operator, so \`^\\+\` parses as "repeat ^" and errors out.
+added="$(git diff -U0 "$base" HEAD 2>/dev/null | grep -E '^[+]' | grep -vE '^[+][+][+]' || true)"
+# A bare TODO is residue; a tracked one (\`TODO(.agents):\`, \`TODO(ATL-12):\`)
+# is a deliberate, reviewable marker that AGENTS.md sanctions. Flag the first
+# and leave the second alone.
+residue="$(printf '%s\\n' "$added" | grep -nE 'console\\.log\\(|debugger;|TODO[^(]|FIXME[^(]|XXX' || true)"
+if [ -n "$residue" ]; then
+    n=$((n+1))
+    gaps="$gaps$n. debug/TODO residue in the diff:
+$(printf '%s' "$residue" | head -20)
+"
+fi
+if [ -z "$gaps" ]; then exit 0; fi
+printf 'gate-hygiene:\\n%s' "$gaps"
+exit 1
+`,
+        body_ps1: `# Hygiene gate. $args[0] is the item id (unused).
+# \`format:check\` is deliberately absent - a gate that is permanently red is a
+# gate nobody reads.
+$ErrorActionPreference = 'Continue'
+$gaps = New-Object System.Collections.ArrayList
+$pm = 'npm'
+if (Test-Path -LiteralPath 'pnpm-lock.yaml') { $pm = 'pnpm' }
+if (Test-Path -LiteralPath 'yarn.lock') { $pm = 'yarn' }
+function Has-Script([string]$name) {
+    if (-not (Test-Path -LiteralPath 'package.json')) { return $false }
+    try {
+        $pkg = Get-Content -Raw 'package.json' | ConvertFrom-Json
+        return ($null -ne $pkg.scripts -and $null -ne $pkg.scripts.$name)
+    } catch { return $false }
+}
+foreach ($s in @('lint', 'typecheck')) {
+    if (Has-Script $s) {
+        $out = & $pm run $s 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            [void]$gaps.Add("$s failed\`n" + (($out | Select-Object -Last 20) -join "\`n"))
+        }
+    }
+}
+$base = (git merge-base HEAD origin/main 2>$null)
+if ([string]::IsNullOrWhiteSpace($base)) { $base = 'HEAD~10' }
+$diff = git diff -U0 $base HEAD 2>$null
+$added = $diff | Where-Object { $_ -match '^\\+' -and $_ -notmatch '^\\+\\+\\+' }
+# A bare TODO is residue; a tracked one (TODO(ATL-12):) is a deliberate marker.
+$residue = $added | Where-Object { $_ -match 'console\\.log\\(|debugger;|TODO[^(]|FIXME[^(]|XXX' }
+if ($residue.Count -gt 0) {
+    [void]$gaps.Add("debug/TODO residue in the diff:\`n" + (($residue | Select-Object -First 20) -join "\`n"))
+}
+if ($gaps.Count -eq 0) { exit 0 }
+Write-Output 'gate-hygiene:'
+$i = 0
+foreach ($g in $gaps) { $i++; Write-Output ("{0}. {1}" -f $i, $g) }
+exit 1
+`,
+    },
+    {
+        id: 'gate-coverage',
+        name: 'Coverage gate (statements floor)',
+        description:
+            "Gate node script. Runs the project's declared coverage script, reads the statements percentage out of coverage-summary.json and fails below a 95% floor. A project that declares no coverage script, or whose script writes no summary, is skipped rather than failed - ADR 0020: absence of evidence is not evidence. Override the floor by giving the project its own copy of this script.",
+        sort_order: 108,
+        body_sh: `#!/usr/bin/env bash
+# Coverage gate. $1 is the item id (unused).
+# Runs the project's own coverage script and reads the summary it writes.
+# A project that declares no coverage script is NOT a failure - it is a project
+# without coverage tooling, and blocking delivery on that would make this gate
+# a tax rather than a check (ADR 0020: absence of evidence is not evidence).
+set -u
+FLOOR=95
+pm=npm
+[ -f pnpm-lock.yaml ] && pm=pnpm
+[ -f yarn.lock ] && pm=yarn
+has_script() {
+    [ -f package.json ] && node -e "process.exit((require('./package.json').scripts || {})['$1'] ? 0 : 1)" 2>/dev/null
+}
+script=""
+for s in test:coverage coverage; do
+    if has_script "$s"; then script="$s"; break; fi
+done
+if [ -z "$script" ]; then
+    echo "gate-coverage: skipped - no coverage script declared"
+    exit 0
+fi
+if ! out="$("$pm" run "$script" 2>&1)"; then
+    printf 'gate-coverage:\\n1. %s failed\\n%s\\n' "$script" "$(printf '%s' "$out" | tail -30)"
+    exit 1
+fi
+summary="$(find . -name coverage-summary.json -not -path '*/node_modules/*' 2>/dev/null | head -1)"
+if [ -z "$summary" ]; then
+    echo "gate-coverage: skipped - the coverage script wrote no coverage-summary.json"
+    exit 0
+fi
+pct="$(node -e "const t=require(process.argv[1]).total;console.log(t.statements.pct)" "$summary" 2>/dev/null || echo "")"
+if [ -z "$pct" ]; then
+    echo "gate-coverage: skipped - could not read statements pct from $summary"
+    exit 0
+fi
+below="$(node -e "process.exit(Number(process.argv[1]) < Number(process.argv[2]) ? 0 : 1)" "$pct" "$FLOOR" && echo yes || echo no)"
+if [ "$below" = "yes" ]; then
+    printf 'gate-coverage:\\n1. statements %s%% is below the %s%% floor\\n' "$pct" "$FLOOR"
+    printf '   Report: %s\\n' "$summary"
+    exit 1
+fi
+echo "gate-coverage: statements $pct% (floor $FLOOR%)"
+exit 0
+`,
+        body_ps1: `# Coverage gate. $args[0] is the item id (unused).
+# A project with no coverage script is not a failure - ADR 0020: absence of
+# evidence is not evidence.
+$ErrorActionPreference = 'Continue'
+$FLOOR = 95
+$pm = 'npm'
+if (Test-Path -LiteralPath 'pnpm-lock.yaml') { $pm = 'pnpm' }
+if (Test-Path -LiteralPath 'yarn.lock') { $pm = 'yarn' }
+function Has-Script([string]$name) {
+    if (-not (Test-Path -LiteralPath 'package.json')) { return $false }
+    try {
+        $pkg = Get-Content -Raw 'package.json' | ConvertFrom-Json
+        return ($null -ne $pkg.scripts -and $null -ne $pkg.scripts.$name)
+    } catch { return $false }
+}
+$script = ''
+foreach ($s in @('test:coverage', 'coverage')) { if (Has-Script $s) { $script = $s; break } }
+if ($script -eq '') {
+    Write-Output 'gate-coverage: skipped - no coverage script declared'
+    exit 0
+}
+$out = & $pm run $script 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Output 'gate-coverage:'
+    Write-Output ("1. {0} failed" -f $script)
+    Write-Output (($out | Select-Object -Last 30) -join "\`n")
+    exit 1
+}
+$summary = Get-ChildItem -Recurse -Filter 'coverage-summary.json' -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notmatch 'node_modules' } | Select-Object -First 1
+if ($null -eq $summary) {
+    Write-Output 'gate-coverage: skipped - the coverage script wrote no coverage-summary.json'
+    exit 0
+}
+try {
+    $pct = (Get-Content -Raw $summary.FullName | ConvertFrom-Json).total.statements.pct
+} catch {
+    Write-Output 'gate-coverage: skipped - could not read statements pct'
+    exit 0
+}
+if ([double]$pct -lt [double]$FLOOR) {
+    Write-Output 'gate-coverage:'
+    Write-Output ("1. statements {0}% is below the {1}% floor" -f $pct, $FLOOR)
+    Write-Output ("   Report: {0}" -f $summary.FullName)
+    exit 1
+}
+Write-Output ("gate-coverage: statements {0}% (floor {1}%)" -f $pct, $FLOOR)
+exit 0
+`,
+    },
+    {
+        id: 'gate-perf',
+        name: 'Performance gate (declared perf script)',
+        description:
+            "Gate node script. Scoped: skips immediately when the branch changed only docs and tests, because those cannot move latency. Otherwise runs the project's declared perf script and fails on a budget breach. A project with no perf script is skipped, not failed.",
+        sort_order: 109,
+        body_sh: `#!/usr/bin/env bash
+# Performance gate. $1 is the item id (unused).
+# Scoped: it only runs when the branch touched something that can plausibly
+# change latency. A docs-only or test-only change gets an immediate pass rather
+# than paying for a perf suite that cannot move.
+set -u
+base="$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD~10)"
+changed="$(git diff --name-only "$base" HEAD 2>/dev/null || true)"
+touched="$(printf '%s\\n' "$changed" | grep -viE '^(docs?/|\\.agents/|.*\\.md$|.*\\.(test|spec)\\.[cm]?[jt]sx?$)' | grep -v '^$' || true)"
+if [ -z "$touched" ]; then
+    echo "gate-perf: skipped - nothing outside docs and tests changed"
+    exit 0
+fi
+pm=npm
+[ -f pnpm-lock.yaml ] && pm=pnpm
+[ -f yarn.lock ] && pm=yarn
+has_script() {
+    [ -f package.json ] && node -e "process.exit((require('./package.json').scripts || {})['$1'] ? 0 : 1)" 2>/dev/null
+}
+script=""
+for s in test:perf perf e2e:perf; do
+    if has_script "$s"; then script="$s"; break; fi
+done
+if [ -z "$script" ]; then
+    echo "gate-perf: skipped - no perf script declared"
+    exit 0
+fi
+if ! out="$("$pm" run "$script" 2>&1)"; then
+    printf 'gate-perf:\\n1. %s reported a budget breach\\n%s\\n' "$script" "$(printf '%s' "$out" | tail -40)"
+    exit 1
+fi
+echo "gate-perf: $script passed"
+exit 0
+`,
+        body_ps1: `# Performance gate. $args[0] is the item id (unused).
+# Scoped: a docs-only or test-only change cannot move latency, so it passes
+# immediately rather than paying for a perf suite.
+$ErrorActionPreference = 'Continue'
+$base = (git merge-base HEAD origin/main 2>$null)
+if ([string]::IsNullOrWhiteSpace($base)) { $base = 'HEAD~10' }
+$changed = git diff --name-only $base HEAD 2>$null
+$touched = $changed | Where-Object { $_ -notmatch '(?i)^(docs?/|\\.agents/)|\\.md$|\\.(test|spec)\\.[cm]?[jt]sx?$' }
+if ($null -eq $touched -or $touched.Count -eq 0) {
+    Write-Output 'gate-perf: skipped - nothing outside docs and tests changed'
+    exit 0
+}
+$pm = 'npm'
+if (Test-Path -LiteralPath 'pnpm-lock.yaml') { $pm = 'pnpm' }
+if (Test-Path -LiteralPath 'yarn.lock') { $pm = 'yarn' }
+function Has-Script([string]$name) {
+    if (-not (Test-Path -LiteralPath 'package.json')) { return $false }
+    try {
+        $pkg = Get-Content -Raw 'package.json' | ConvertFrom-Json
+        return ($null -ne $pkg.scripts -and $null -ne $pkg.scripts.$name)
+    } catch { return $false }
+}
+$script = ''
+foreach ($s in @('test:perf', 'perf', 'e2e:perf')) { if (Has-Script $s) { $script = $s; break } }
+if ($script -eq '') {
+    Write-Output 'gate-perf: skipped - no perf script declared'
+    exit 0
+}
+$out = & $pm run $script 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Output 'gate-perf:'
+    Write-Output ("1. {0} reported a budget breach" -f $script)
+    Write-Output (($out | Select-Object -Last 40) -join "\`n")
+    exit 1
+}
+Write-Output ("gate-perf: {0} passed" -f $script)
+exit 0
+`,
+    },
+    {
+        id: 'gate-visual',
+        name: 'Visual gate (cross-viewport capture and diff)',
+        description:
+            "Gate node script. Skips unless the branch touched UI files, then runs the project's declared visual script. A real diff against a committed baseline fails. When the only problem is that no baseline exists yet, it also prints ATLAS_GATE_NEEDS_REVIEW, which routes to the visual reviewer instead of being treated as breakage - a missing baseline is the normal state on a new screen.",
+        sort_order: 110,
+        body_sh: `#!/usr/bin/env bash
+# Visual gate. $1 is the item id (unused).
+# Exits 0 on pass or skip and non-zero on a problem. When the problem is only
+# that no baseline exists yet, it also prints ATLAS_GATE_NEEDS_REVIEW, which
+# tells Atlas to route to the visual reviewer rather than treat it as breakage -
+# a missing baseline is the normal state on a new screen, not an error.
+set -u
+base="$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD~10)"
+changed="$(git diff --name-only "$base" HEAD 2>/dev/null || true)"
+ui="$(printf '%s\\n' "$changed" | grep -iE '\\.(tsx|jsx|vue|svelte|css|scss|less|html)$' || true)"
+if [ -z "$ui" ]; then
+    echo "gate-visual: skipped - no UI files changed"
+    exit 0
+fi
+pm=npm
+[ -f pnpm-lock.yaml ] && pm=pnpm
+[ -f yarn.lock ] && pm=yarn
+has_script() {
+    [ -f package.json ] && node -e "process.exit((require('./package.json').scripts || {})['$1'] ? 0 : 1)" 2>/dev/null
+}
+script=""
+for s in test:visual e2e:visual visual; do
+    if has_script "$s"; then script="$s"; break; fi
+done
+if [ -z "$script" ]; then
+    echo "gate-visual: skipped - no visual script declared"
+    exit 0
+fi
+if out="$("$pm" run "$script" 2>&1)"; then
+    echo "gate-visual: $script passed"
+    exit 0
+fi
+if printf '%s' "$out" | grep -qiE 'snapshot .*(missing|not found)|no snapshot|writing new snapshot|--update-snapshots'; then
+    echo 'ATLAS_GATE_NEEDS_REVIEW'
+    printf 'gate-visual:\\n1. captured, but there is no baseline to compare against\\n%s\\n' "$(printf '%s' "$out" | tail -30)"
+    exit 1
+fi
+printf 'gate-visual:\\n1. visual diff against the committed baseline\\n%s\\n' "$(printf '%s' "$out" | tail -40)"
+exit 1
+`,
+        body_ps1: `# Visual gate. $args[0] is the item id (unused).
+# Exits 0 on pass or skip and non-zero on a problem. When the problem is only
+# that no baseline exists yet, it also prints ATLAS_GATE_NEEDS_REVIEW, which
+# routes to the visual reviewer - a missing baseline is the normal state on a
+# new screen, not an error.
+$ErrorActionPreference = 'Continue'
+$base = (git merge-base HEAD origin/main 2>$null)
+if ([string]::IsNullOrWhiteSpace($base)) { $base = 'HEAD~10' }
+$changed = git diff --name-only $base HEAD 2>$null
+$ui = $changed | Where-Object { $_ -match '(?i)\\.(tsx|jsx|vue|svelte|css|scss|less|html)$' }
+if ($null -eq $ui -or $ui.Count -eq 0) {
+    Write-Output 'gate-visual: skipped - no UI files changed'
+    exit 0
+}
+$pm = 'npm'
+if (Test-Path -LiteralPath 'pnpm-lock.yaml') { $pm = 'pnpm' }
+if (Test-Path -LiteralPath 'yarn.lock') { $pm = 'yarn' }
+function Has-Script([string]$name) {
+    if (-not (Test-Path -LiteralPath 'package.json')) { return $false }
+    try {
+        $pkg = Get-Content -Raw 'package.json' | ConvertFrom-Json
+        return ($null -ne $pkg.scripts -and $null -ne $pkg.scripts.$name)
+    } catch { return $false }
+}
+$script = ''
+foreach ($s in @('test:visual', 'e2e:visual', 'visual')) { if (Has-Script $s) { $script = $s; break } }
+if ($script -eq '') {
+    Write-Output 'gate-visual: skipped - no visual script declared'
+    exit 0
+}
+$out = & $pm run $script 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Output ("gate-visual: {0} passed" -f $script)
+    exit 0
+}
+$text = ($out | Out-String)
+if ($text -match '(?i)snapshot .*(missing|not found)|no snapshot|writing new snapshot|--update-snapshots') {
+    Write-Output 'ATLAS_GATE_NEEDS_REVIEW'
+    Write-Output 'gate-visual:'
+    Write-Output '1. captured, but there is no baseline to compare against'
+    Write-Output (($out | Select-Object -Last 30) -join "\`n")
+    exit 1
+}
+Write-Output 'gate-visual:'
+Write-Output '1. visual diff against the committed baseline'
+Write-Output (($out | Select-Object -Last 40) -join "\`n")
+exit 1
+`,
+    },
 ];
 
 async function seedGuardrailScripts(): Promise<void> {

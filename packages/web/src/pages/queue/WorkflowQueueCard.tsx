@@ -26,6 +26,9 @@ const NODE_LABEL = {
     start: 'Starting',
     owner: 'Owner',
     subtasks: 'Sub-tasks',
+    // ADR 0021 — a gate step runs a script, not an agent, so the queue shows
+    // what is being checked rather than who is working.
+    gate: 'Checking',
     end: 'Delivering',
 } as const;
 

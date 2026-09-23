@@ -5,6 +5,7 @@
 
 import JSZip from 'jszip';
 import { z } from 'zod';
+import { SDLC_ROLES } from '@atlas/shared';
 import type {
     AgentCategory,
     AgentCli,
@@ -33,7 +34,12 @@ const AGENT_KIND_SLUG_VALUES: readonly AgentKindSlug[] = [
     'knowledge-base',
     'custom',
 ];
-const SDLC_ROLE_VALUES: readonly SdlcRole[] = ['po', 'architect', 'engineer', 'qa', 'automation'];
+// Was a hand-written subset of five. It had to be, because `roles` only ever
+// seeded five rows and `agents.role_id` is an FK into it — a bundle claiming
+// `designer` parsed here and then failed at the insert. Migration 012 seeds the
+// rest, so the schema can finally be the whole union and the catalog contract
+// test checks each id against the live table.
+const SDLC_ROLE_VALUES: readonly SdlcRole[] = SDLC_ROLES;
 
 export const AgentBundleManifestSchema = z.object({
     id: z.string().min(1),

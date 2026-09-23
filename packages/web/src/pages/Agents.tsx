@@ -180,6 +180,7 @@ export function Agents() {
             devops: 0,
             security: 0,
             designer: 0,
+            docs: 0,
         };
         for (const w of agents ?? []) {
             if (w.role_id) base[w.role_id] += 1;

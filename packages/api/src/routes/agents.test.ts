@@ -1170,19 +1170,23 @@ describe('role_id not in the roles catalog', () => {
         const res = await app.inject({
             method: 'PATCH',
             url: '/api/agents/agent-role-guard',
-            payload: { role_id: 'tester' },
+            // `spec-writer` is the one slug that is deliberately type-only:
+            // its job folded into Architect, and migration 012 pointedly did
+            // NOT seed it. `tester` / `designer` used to stand in here and
+            // stopped being uncatalogued when 012 gave them rows.
+            payload: { role_id: 'spec-writer' },
         });
         expect(res.statusCode).toBe(400);
         const body = JSON.parse(res.body);
         expect(body.code).toBe('ROLE_NOT_IN_CATALOG');
-        expect(body.error).toContain('tester');
+        expect(body.error).toContain('spec-writer');
     });
 
     it('POST returns 400 for an uncatalogued role', async () => {
         const res = await app.inject({
             method: 'POST',
             url: '/api/agents',
-            payload: agentPayload('agent-role-guard-2', { role_id: 'designer' }),
+            payload: agentPayload('agent-role-guard-2', { role_id: 'spec-writer' }),
         });
         expect(res.statusCode).toBe(400);
         expect(JSON.parse(res.body).code).toBe('ROLE_NOT_IN_CATALOG');

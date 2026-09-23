@@ -8,7 +8,7 @@ import { ATLAS_PALETTE } from '../../theme/tokens.js';
 export const PALETTE_MIME = 'application/x-atlas-workflow-node';
 
 export interface IPaletteItem {
-    type: 'agent' | 'owner' | 'subtasks' | 'end';
+    type: 'agent' | 'owner' | 'subtasks' | 'gate' | 'end';
     agent_id?: string;
 }
 
@@ -139,6 +139,13 @@ export function NodePalette({ agents, showSubtasks, onAdd }: PaletteProps) {
                     onAdd={onAdd}
                 />
             )}
+            <PaletteChip
+                item={{ type: 'gate' }}
+                label="Gate"
+                icon="verified_user"
+                color={ATLAS_PALETTE.warnFg}
+                onAdd={onAdd}
+            />
             <PaletteChip
                 item={{ type: 'end' }}
                 label="End"

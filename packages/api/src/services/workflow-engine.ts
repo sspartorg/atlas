@@ -39,7 +39,7 @@ import { externalLinks, parseGithubPrUrl, fetchGithubPrTitle } from './external-
 import { commentsService } from './comments.js';
 import { assertDepsAllDoneForDispatch } from './dependency-guard.js';
 import { decideRunRouting } from './agent-runner-outcome-routing.js';
-import { GATE_SCRIPT_ID, runVerificationGate } from './verification-gate.js';
+import { GATE_SCRIPT_ID, runGuardrailScript, runVerificationGate } from './verification-gate.js';
 import { recordGateResult } from './run-gate-results.js';
 import {
     WORKTREE_BRANCH_RE,
@@ -385,7 +385,129 @@ async function goTo(run: RunRow, nodeId: string, why?: string): Promise<void> {
         await runNextSubtask(run, node);
         return;
     }
+    if (node.type === 'gate') {
+        await runGateNode(run, node);
+        return;
+    }
     await spawnNode(run, node);
+}
+
+/**
+ * A gate step: run a guardrail script and route on what it says. No agent is
+ * spawned and no tokens are spent — the whole point is that coverage, lint,
+ * performance and visual checks are exit codes, and an LLM should only be woken
+ * when one of them says no.
+ *
+ * Runs once per repo the Task touches (ADR 0017), same as the pre-push gate,
+ * and stops at the first repo that fails so the fixer gets one problem to solve
+ * rather than a pile.
+ *
+ * `unavailable` parks rather than fails, exactly as ADR 0020 requires: a script
+ * that could not run is absence of evidence, and treating it as a red result
+ * would convert an unenforced gate into one that blocks every delivery.
+ */
+async function runGateNode(run: RunRow, node: IWorkflowNode): Promise<void> {
+    const scriptId = node.script_id;
+    /* v8 ignore start -- unreachable by construction: `startWorkflowRun`
+       validates the graph before the first step, `validateWorkflowGraph`
+       rejects a gate with no `script_id`, and the run then routes off the
+       frozen `graph_snapshot`, so no later edit can introduce one. The guard
+       stays because `script_id` is optional on the type and parking is the
+       right answer if a future call path ever reaches here without one. */
+    if (!scriptId) {
+        await park(run, node.id, 'This gate step has no script configured');
+        return;
+    }
+    /* v8 ignore stop */
+    await db
+        .updateTable('workflow_runs')
+        .set({ current_node_id: node.id, updated_at: new Date().toISOString() })
+        .where('id', '=', run.id)
+        .execute();
+
+    const item = run.item_id ? await loadItem(run.item_id) : undefined;
+    const { repos, workspace } = await runRepos(run);
+    if (repos.length === 0) {
+        await park(run, node.id, `The gate '${scriptId}' had no repo to run in`);
+        return;
+    }
+
+    for (const { repo, path } of repos) {
+        const tag = workspace ? `${repo.name}: ` : '';
+        const result = await runGuardrailScript({
+            repoPath: path,
+            projectId: repo.project_id,
+            scriptId,
+            itemId: item?.id ?? run.id,
+        });
+        await recordGateResult({
+            workflow_run_id: run.id,
+            node_id: node.id,
+            repo_id: repo.id,
+            script_id: scriptId,
+            verdict: result.kind,
+            ...(result.kind === 'fail' || result.kind === 'needs_review'
+                ? { exit_code: result.exitCode ?? null, output_tail: result.output }
+                : {}),
+            ...(result.kind === 'pass' && result.output ? { output_tail: result.output } : {}),
+            ...(result.kind === 'unavailable' ? { output_tail: result.reason } : {}),
+        });
+
+        if (result.kind === 'unavailable') {
+            await park(
+                run,
+                node.id,
+                `${tag}The gate '${scriptId}' could not run (${result.reason}), so nothing was checked. ` +
+                    `This is not a failure — resume the run to retry.`,
+            );
+            return;
+        }
+        if (result.kind === 'fail' || result.kind === 'needs_review') {
+            const failTarget = nextNodeId(run.graph_snapshot, node.id, 'fail');
+            const detail = `${tag}${result.output}`;
+            if (!failTarget) {
+                // A gate with nobody to route a failure to is still a real
+                // verdict; it parks with the Owner rather than passing.
+                await park(run, node.id, detail);
+                return;
+            }
+            const workflow = await loadWorkflow(run.workflow_id);
+            const loops = run.loop_count + 1;
+            if (loops > (workflow?.max_loops ?? 3)) {
+                await park(run, node.id, `Loop limit reached (${workflow?.max_loops ?? 3}): ${detail}`);
+                return;
+            }
+            await db.updateTable('workflow_runs').set({ loop_count: loops }).where('id', '=', run.id).execute();
+            run.loop_count = loops;
+            // The script's own output IS the fixer's contract, so it is posted
+            // on the item the way a rejecting reviewer's `reason` is — the next
+            // step reads it from `.atlas/current-task.md`.
+            if (run.item_id) {
+                try {
+                    await commentsService.create({
+                        author: 'agent',
+                        agent_id: null,
+                        issue_type: item?.type as IssueType,
+                        issue_id: run.item_id,
+                        body: `**${scriptId}** did not pass.\n\n\`\`\`\n${detail}\n\`\`\``,
+                    });
+                } catch {
+                    /* the park reason and the gate row already carry the signal */
+                }
+            }
+            await goTo(run, failTarget, `${scriptId} did not pass`);
+            return;
+        }
+    }
+
+    const pass = nextNodeId(run.graph_snapshot, node.id, 'pass');
+    /* v8 ignore next 4 -- same reason as the `script_id` guard above: every
+       non-end node needs exactly one pass connection to validate at all. */
+    if (!pass) {
+        await park(run, node.id, 'No pass connection from this gate');
+        return;
+    }
+    await goTo(run, pass);
 }
 
 /**

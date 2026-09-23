@@ -7,7 +7,7 @@ import { ATLAS_PALETTE, ELEVATION, TYPOGRAPHY } from '../../theme/tokens.js';
 import { getAgentView } from '../agents/agentViewModel.js';
 import { LiveDot } from '../../components/LiveDot.js';
 import type { INodeRunInfo, WfNode } from './graph.js';
-import { INPUT_KIND_LABEL, TRIGGER_LABEL, deliveryLabel, subtasksLabel } from './labels.js';
+import { INPUT_KIND_LABEL, TRIGGER_LABEL, deliveryLabel, gateTitle, subtasksLabel } from './labels.js';
 
 export interface ICanvasContext {
     agentsById: Map<string, IAgent>;
@@ -417,6 +417,48 @@ function SubtasksNode({ id, data, selected }: NodeProps<WfNode>) {
     );
 }
 
+function GateNode({ id, data, selected }: NodeProps<WfNode>) {
+    // ADR 0021 — a gate runs a guardrail script and routes on its exit code.
+    // It carries a fail handle for the same reason an agent does: that edge is
+    // where the fixer is dispatched, and it is the whole point of the step.
+    const accent = ATLAS_PALETTE.warnFg;
+    return (
+        <NodeShell
+            id={id}
+            selected={selected}
+            accent={accent}
+            handles={
+                <>
+                    <TargetHandles />
+                    <Handle
+                        type="source"
+                        position={Position.Bottom}
+                        id="pass"
+                        className="wf-handle-pass"
+                    />
+                    <Handle
+                        type="source"
+                        position={Position.Right}
+                        id="fail"
+                        className="wf-handle-fail"
+                    />
+                    <FailLabel />
+                </>
+            }
+        >
+            <Glyph
+                name="verified_user"
+                color={accent}
+                bg={`color-mix(in srgb, ${accent} 14%, transparent)`}
+            />
+            <Box sx={{ minWidth: 0, pr: 8 }}>
+                <Title>{gateTitle(data.script_id)}</Title>
+                <Caption>No agent runs here</Caption>
+            </Box>
+        </NodeShell>
+    );
+}
+
 function EndNode({ id, selected }: NodeProps<WfNode>) {
     const { delivery } = useContext(CanvasContext);
     return (
@@ -435,5 +477,6 @@ export const NODE_TYPES = {
     agent: AgentNode,
     owner: OwnerNode,
     subtasks: SubtasksNode,
+    gate: GateNode,
     end: EndNode,
 };

@@ -42,7 +42,7 @@ export const CLI_SHORT_LABEL: Record<AgentCli, string> = {
 // CLI — the composite FK `agents (cli, model) → cli_models (cli, model_name)`
 // rejects anything else.
 export const DEFAULT_MODEL_BY_CLI: Record<AgentCli, string> = {
-    claude: 'claude-opus-4-7',
+    claude: 'claude-opus-5',
     copilot: 'claude-sonnet-4.6',
     ollama: 'qwen3.5',
 };

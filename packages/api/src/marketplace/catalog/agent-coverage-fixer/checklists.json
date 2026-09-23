@@ -1,0 +1,27 @@
+[
+  {
+    "label": "Uncovered lines were found from the coverage report, not guessed from the source",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "Every test added has a stated reason it would go red if the behaviour broke",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "The coverage floor was not lowered and no blanket ignore was added",
+    "sort_order": 2,
+    "required": true
+  },
+  {
+    "label": "No existing test was deleted or weakened",
+    "sort_order": 3,
+    "required": true
+  },
+  {
+    "label": "The gate was re-run and the statements percentage is at or above the floor",
+    "sort_order": 4,
+    "required": true
+  }
+]

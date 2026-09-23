@@ -59,6 +59,7 @@ export const SDLC_ROLE_LABELS: Record<SdlcRole, string> = {
     devops: 'DevOps Engineer',
     security: 'Security Review Lead',
     designer: 'UX/Visual Designer',
+    docs: 'Technical Writer',
 };
 
 // A08 — Default activation policy. Engineer + the three engineering-
@@ -77,6 +78,7 @@ export const SDLC_ROLE_DEFAULT_STATUS: Record<SdlcRole, AgentStatus> = {
     devops: 'inactive',
     security: 'inactive',
     designer: 'inactive',
+    docs: 'inactive',
 };
 
 export const STATUS_LABELS: Record<IssueStatus, string> = {
