@@ -536,8 +536,15 @@ for s in $checks; do
     fi
 done
 base="$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD~10)"
-changed_tests="$(git diff --name-only "$base" HEAD 2>/dev/null | grep -E '(\\.(test|spec)\\.[cm]?[jt]sx?$)|(_test\\.go$)|((^|/)test_[^/]*\\.py$)' || true)"
-if [ -z "$changed_tests" ]; then
+changed="$(git diff --name-only "$base" HEAD 2>/dev/null || true)"
+changed_tests="$(printf '%s\\n' "$changed" | grep -E '(\\.(test|spec)\\.[cm]?[jt]sx?$)|(_test\\.go$)|((^|/)test_[^/]*\\.py$)' || true)"
+# A multi-repo Task stages its Task-wide artefacts into the FIRST repo (ADR
+# 0017/0018): the Architect's specs/<n>-<slug>/spec.md and the QA plan at
+# tests/qa/<itemId>.csv. A repo that received ONLY those got no product code,
+# so demanding a changed test file there can never be satisfied and the run
+# parks at End forever. Require tests only where real work landed.
+changed_code="$(printf '%s\\n' "$changed" | grep -vE '^(specs/|tests/qa/)' | grep -v '^$' || true)"
+if [ -n "$changed_code" ] && [ -z "$changed_tests" ]; then
     n=$((n+1))
     gaps="$gaps$n. no test files added/modified
 "
@@ -574,7 +581,16 @@ if (-not [string]::IsNullOrWhiteSpace($changed)) {
         if ($line -match '(\\.(test|spec)\\.[cm]?[jt]sx?$)|(_test\\.go$)|((^|/)test_[^/]*\\.py$)') { $tests += $line }
     }
 }
-if ($tests.Count -eq 0) { [void]$gaps.Add('no test files added/modified') }
+# See the bash twin: a repo that received only Task-wide artefacts (specs/,
+# tests/qa/) got no product code, so a changed-test requirement there can never
+# pass. Require tests only where real work landed.
+$code = @()
+if (-not [string]::IsNullOrWhiteSpace($changed)) {
+    foreach ($line in ($changed -split "\`r?\`n")) {
+        if ($line -and $line -notmatch '^(specs/|tests/qa/)') { $code += $line }
+    }
+}
+if ($code.Count -gt 0 -and $tests.Count -eq 0) { [void]$gaps.Add('no test files added/modified') }
 if ($gaps.Count -eq 0) { exit 0 }
 Write-Output 'coder-tests-green:'
 $i = 0

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import { GUARDRAIL_SCRIPT_SEEDS, runSeed } from './seed.js';
 import { db } from './kysely-client.js';
@@ -144,9 +144,15 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
             const dir = mkdtempSync(join(tmpdir(), 'coder-gate-'));
             const sh = (cmd: string) => execSync(cmd, { cwd: dir, stdio: 'pipe' });
             sh('git init -q -b main && git config user.email t@t && git config user.name t');
-            for (const [p, body] of Object.entries(files)) writeFileSync(join(dir, p), body);
+            const write = (p: string, body: string) => {
+                // Nested paths (specs/…, tests/qa/…) need their parent; a no-op
+                // for the flat filenames the other cases use.
+                mkdirSync(dirname(join(dir, p)), { recursive: true });
+                writeFileSync(join(dir, p), body);
+            };
+            for (const [p, body] of Object.entries(files)) write(p, body);
             sh('git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD');
-            for (const [p, body] of Object.entries(changed)) writeFileSync(join(dir, p), body);
+            for (const [p, body] of Object.entries(changed)) write(p, body);
             sh('git add -A && git commit -qm change');
             writeFileSync(join(dir, 'gate.sh'), seed?.body_sh ?? '');
             return dir;
@@ -186,6 +192,33 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
         it('still fails when no test file changed', () => {
             const dir = repoWith({ 'package.json': '{"scripts":{}}' }, { 'a.js': 'x' });
             expect(gateExit(dir)).toBe(1);
+        });
+
+        // A multi-repo Task stages its Task-wide artefacts — the Architect's
+        // spec and the QA plan — into the FIRST repo (ADR 0017/0018). When that
+        // repo receives no product code, a changed-test requirement there can
+        // never be satisfied and the run parks at End forever. Found by running
+        // a Jira Story through the real Delivery workflow: the artefact repo
+        // blocked delivery of a sibling that was entirely green.
+        it('passes a repo whose only changes are Task-wide artefacts', () => {
+            const dir = repoWith(
+                { 'package.json': '{"scripts":{}}' },
+                {
+                    'specs/2-add-count/spec.md': '# spec',
+                    'tests/qa/ATL-11.csv': 'Summary,Description\\nx,y',
+                },
+            );
+            expect(gateExit(dir, '--run-tests')).toBe(0);
+        });
+
+        // The other half of the rule, and the one that matters: artefacts must
+        // not excuse untested code sitting beside them.
+        it('still fails when artefacts ship alongside untested code', () => {
+            const dir = repoWith(
+                { 'package.json': '{"scripts":{}}' },
+                { 'specs/2-add-count/spec.md': '# spec', 'src.js': 'export const f = 1;' },
+            );
+            expect(gateExit(dir, '--run-tests')).toBe(1);
         });
     });
 
