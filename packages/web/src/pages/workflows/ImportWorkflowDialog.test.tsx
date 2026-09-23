@@ -104,4 +104,51 @@ describe('ImportWorkflowDialog', () => {
             await screen.findByText('Workflow bundle: missing workflow.json')
         ).toBeInTheDocument();
     });
+
+    // A delivery bundle brings its build/test sub-workflows with it. They are
+    // created silently otherwise, and the Owner finds workflows they did not
+    // make.
+    it('names the sub-workflows the bundle brought along', () => {
+        const detail = importDetail({
+            workflow: makeWorkflow({ id: 'wf-1', name: 'Delivery' }),
+            sub_workflows: [
+                makeWorkflow({ id: 'wf-build', name: 'Build sub-task' }),
+                makeWorkflow({ id: 'wf-test', name: 'Test sub-task' }),
+            ],
+            installed_agents: [],
+            reused_agents: [],
+            agents: {
+                installed: [],
+                upgraded: [],
+                skipped_edited: [],
+                unchanged: [],
+                paused: [],
+            },
+            workflows: { created: [], upgraded: [], reused: [], skipped_edited: [] },
+        });
+        expect(detail).toContain('Sub-workflows Build sub-task, Test sub-task');
+    });
+
+    // The drop zone is a div with role="button", so the keyboard path is hand
+    // written rather than free. Enter and Space both have to reach the picker
+    // or the dialog is mouse-only.
+    it('opens the file picker by click, Enter and Space', async () => {
+        mount();
+        const input = screen.getByTestId('workflow-zip-input');
+        const click = vi.spyOn(input, 'click').mockImplementation(() => undefined);
+        const zone = await screen.findByRole('button', { name: 'Choose a .zip file' });
+
+        await userEvent.click(zone);
+        expect(click).toHaveBeenCalledTimes(1);
+
+        fireEvent.keyDown(zone, { key: 'Enter' });
+        expect(click).toHaveBeenCalledTimes(2);
+
+        fireEvent.keyDown(zone, { key: ' ' });
+        expect(click).toHaveBeenCalledTimes(3);
+
+        // Any other key is inert — Tab must still move focus off the zone.
+        fireEvent.keyDown(zone, { key: 'Tab' });
+        expect(click).toHaveBeenCalledTimes(3);
+    });
 });
