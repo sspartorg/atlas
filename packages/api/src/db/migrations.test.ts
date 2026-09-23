@@ -2,6 +2,7 @@ import { describe, expect, it, beforeAll } from 'vitest';
 import { sql } from 'kysely';
 import { testDb, truncateAll } from '../../tests/_pg-db.js';
 import { runSeed } from '../db/seed.js';
+import { loadCatalog } from '../marketplace/catalog-loader.js';
 import { marketplaceService } from '../services/marketplace.js';
 
 // 2026-06-09 — Migrations rebase. The 17 historical files (001_baseline +
@@ -300,37 +301,66 @@ describe('Workstream #4 — model registry alignment', () => {
         ).rejects.toThrow(/agents_cli_model_fk|foreign key/i);
     });
 
-    describe('after marketplace install of the four Copilot SDLC agents', () => {
+    describe('after marketplace install of the SDLC engineering agents', () => {
+        // These four shipped on `cli: copilot` with the dot-form model name
+        // until the fleet moved to `claude`. The dot-vs-hyphen split is still
+        // real — `cli-model-naming.ts` passes the stored string to the CLI
+        // verbatim, so the same model is spelled `claude-sonnet-4.6` for
+        // copilot and `claude-sonnet-5` for claude — but no catalog agent
+        // exercises the copilot side any more. What matters here is unchanged:
+        // whatever a manifest declares has to satisfy the composite FK, and the
+        // `agents_cli_model_fk` case above proves an unregistered pair is
+        // rejected.
+        const ENGINEERING_AGENTS = [
+            'agent-coder',
+            'agent-automation',
+            'agent-code-reviewer',
+            'agent-automation-reviewer',
+        ];
+
         beforeAll(async () => {
             await truncateAll();
             await reseedCliModels();
             await runSeed();
-            for (const id of [
-                'agent-coder',
-                'agent-automation',
-                'agent-code-reviewer',
-                'agent-automation-reviewer',
-            ]) {
+            for (const id of ENGINEERING_AGENTS) {
                 await marketplaceService.install(id);
             }
         });
 
-        it('the four copilot SDLC agents land on claude-sonnet-4.6 (dot form)', async () => {
+        it('installs each one on the (cli, model, effort) its manifest declares', async () => {
             const rows = await testDb
                 .selectFrom('agents')
-                .select(['id', 'cli', 'model'])
-                .where('id', 'in', [
-                    'agent-coder',
-                    'agent-automation',
-                    'agent-code-reviewer',
-                    'agent-automation-reviewer',
-                ])
+                .select(['id', 'cli', 'model', 'effort'])
+                .where('id', 'in', ENGINEERING_AGENTS)
                 .execute();
-            expect(rows).toHaveLength(4);
+            expect(rows).toHaveLength(ENGINEERING_AGENTS.length);
+
+            const manifests = new Map(loadCatalog().map((e) => [e.manifest.id, e.manifest]));
             for (const row of rows) {
-                expect(row.cli).toBe('copilot');
-                expect(row.model).toBe('claude-sonnet-4.6');
+                const manifest = manifests.get(row.id);
+                expect(manifest, `${row.id} is not in the catalog`).toBeDefined();
+                expect(row.cli).toBe(manifest!.cli);
+                expect(row.model).toBe(manifest!.model);
+                // The install path copies `marketplace_agents.effort`, which is
+                // only correct if `runSeed` wrote the manifest's value there.
+                // It did not until PR2, so this read the column default and the
+                // whole fleet silently ran at 'medium'.
+                expect(row.effort).toBe(manifest!.effort);
             }
+        });
+
+        it('puts every installed (cli, model) in the registry the FK checks', async () => {
+            const rows = await testDb
+                .selectFrom('agents')
+                .innerJoin('cli_models', (join) =>
+                    join
+                        .onRef('cli_models.cli', '=', 'agents.cli')
+                        .onRef('cli_models.model_name', '=', 'agents.model'),
+                )
+                .select('agents.id')
+                .where('agents.id', 'in', ENGINEERING_AGENTS)
+                .execute();
+            expect(rows).toHaveLength(ENGINEERING_AGENTS.length);
         });
     });
 });

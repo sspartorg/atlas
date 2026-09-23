@@ -4,6 +4,7 @@
   "category": "software-dev",
   "cli": "claude",
   "model": "haiku",
+  "effort": "low",
   "framework": "importer",
   "description": "Pulls your Jira-assigned items into Atlas as draft Tasks. Edit the prompt with your Atlas project name, then run it from a scheduled workflow (e.g. daily at 09:00).",
   "designation": "Jira Importer",

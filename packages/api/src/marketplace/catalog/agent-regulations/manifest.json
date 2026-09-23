@@ -4,6 +4,7 @@
   "category": "content",
   "cli": "claude",
   "model": "haiku",
+  "effort": "low",
   "framework": "compliance-watch",
   "description": "Weekly regulator-news scan scoped to your project_type + regions. Edit the prompt with your Atlas project name + project type + regions, then activate.",
   "designation": "Legal Scout",

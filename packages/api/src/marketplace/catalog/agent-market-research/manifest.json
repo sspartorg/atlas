@@ -4,6 +4,7 @@
   "category": "content",
   "cli": "claude",
   "model": "haiku",
+  "effort": "low",
   "framework": "competitive-watch",
   "description": "Weekly competitor pricing + positioning watch. Edit the prompt with your Atlas project name + competitor list, then activate.",
   "designation": "Competitive Analyst",

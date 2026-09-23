@@ -57,6 +57,29 @@ describe('runSeed — agents table is owned by marketplace install, not the seed
         expect(catalog.length).toBeGreaterThan(0);
     });
 
+    it('carries every manifest\'s cli, model and effort into marketplace_agents', async () => {
+        // `effort` used to be absent from the seed row while the column
+        // defaults to 'medium' and `install` copies that default onto the
+        // agent — so the manifest field was dead config and the entire fleet
+        // ran at 'medium' whatever the catalog declared. `effort` is the one
+        // dial that changes how many turns an agent takes, so a silent
+        // fallback here is the difference between choosing it and only
+        // appearing to.
+        await runSeed();
+        const rows = await db
+            .selectFrom('marketplace_agents')
+            .select(['id', 'cli', 'model', 'effort'])
+            .execute();
+        const byId = new Map(rows.map((r) => [r.id, r]));
+        for (const entry of loadCatalog()) {
+            const row = byId.get(entry.manifest.id);
+            expect(row, `${entry.manifest.id} missing from marketplace_agents`).toBeDefined();
+            expect(row!.cli).toBe(entry.manifest.cli);
+            expect(row!.model).toBe(entry.manifest.model);
+            expect(row!.effort).toBe(entry.manifest.effort);
+        }
+    });
+
     it('does not resurrect an agent the Owner deleted (the bug this plan fixes)', async () => {
         await runSeed();
         await marketplaceService.install('agent-knowledge-base');
