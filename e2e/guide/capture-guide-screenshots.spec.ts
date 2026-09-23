@@ -118,6 +118,16 @@ test.describe('@guide capture the user-guide screenshots', () => {
         await shoot(page, 'doc-11-new-project');
     });
 
+    // doc-15 was the one hand-captured image left, taken on the live dev stack
+    // against a Task in review. The sweep that renamed that rail's button from
+    // "Start now" to "Restart" on an in-review item turned it into a picture
+    // that contradicts the running app. Captured here instead: the seeded
+    // ETM-1 is `in_progress` with no workflow run, so the rail shows no run
+    // controls at all and the image cannot drift with their labels again.
+    test('doc-15 task detail', async ({ page }) => {
+        await capture(page, '/tasks/ETM-1', 'doc-15-task-detail');
+    });
+
     test('doc-12 agents in dark mode', async ({ page }) => {
         await setThemeMode(page, 'dark');
         await goto(page, '/agents');
