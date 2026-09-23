@@ -1,0 +1,17 @@
+{
+  "id": "multi-repo-contract",
+  "title": "Machine-readable CLI output the web can consume",
+  "probes": "One Task, two repos, one branch, one PR per repo (ADR 0015/0017), with a data contract that has to agree across both.",
+  "description": "As someone scripting the todo list I want structured output so that I do not have to parse the human-readable lines.\n\n- Add `--json` to `todo list` in the CLI, emitting the filtered todos as a JSON array with no decorative text.\n- The web repo currently reads the todo file directly. Give it a documented shape for a todo and have both repos agree on it, so a field added in one is not silently missing in the other.\n\nThe human-readable output must be unchanged when `--json` is absent.",
+  "repos": [
+    "atlas-sdlc-sandbox",
+    "atlas-sdlc-sandbox-web"
+  ],
+  "expect": {
+    "terminal_status": [
+      "completed"
+    ],
+    "min_sub_tasks": 2,
+    "requires_pr": true
+  }
+}

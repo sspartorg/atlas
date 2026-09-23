@@ -1,0 +1,17 @@
+{
+  "id": "bugfix-root-cause",
+  "title": "Tag filtering behaves differently in the CLI and on the web",
+  "probes": "Whether the chain fixes the root cause across both repos or patches the one symptom the ticket names. A regression test for BOTH call sites is the pass condition.",
+  "description": "Filtering by tag does not agree between the two surfaces.\n\nThe CLI lowercases the tag before matching (`list` in the sandbox CLI), so `todo list --tag Work` finds a todo tagged `work`. The web server passes the raw query string through, so `/?tag=Work` finds nothing for the same todo.\n\nMake tag matching behave identically on both surfaces, and cover each one with a test that fails before the fix. Decide which behaviour is correct and say why in the PR; do not just make the web match the CLI without stating the reason.",
+  "repos": [
+    "atlas-sdlc-sandbox",
+    "atlas-sdlc-sandbox-web"
+  ],
+  "expect": {
+    "terminal_status": [
+      "completed"
+    ],
+    "min_sub_tasks": 1,
+    "requires_pr": true
+  }
+}

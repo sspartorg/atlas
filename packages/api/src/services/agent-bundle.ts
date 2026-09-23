@@ -35,7 +35,7 @@ const AGENT_KIND_SLUG_VALUES: readonly AgentKindSlug[] = [
 ];
 const SDLC_ROLE_VALUES: readonly SdlcRole[] = ['po', 'architect', 'engineer', 'qa', 'automation'];
 
-const AgentBundleManifestSchema = z.object({
+export const AgentBundleManifestSchema = z.object({
     id: z.string().min(1),
     name: z.string().min(1),
     category: z.enum(AGENT_CATEGORY_VALUES as readonly [AgentCategory, ...AgentCategory[]]),

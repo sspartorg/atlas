@@ -39,7 +39,8 @@ import { externalLinks, parseGithubPrUrl, fetchGithubPrTitle } from './external-
 import { commentsService } from './comments.js';
 import { assertDepsAllDoneForDispatch } from './dependency-guard.js';
 import { decideRunRouting } from './agent-runner-outcome-routing.js';
-import { runVerificationGate } from './verification-gate.js';
+import { GATE_SCRIPT_ID, runVerificationGate } from './verification-gate.js';
+import { recordGateResult } from './run-gate-results.js';
 import {
     WORKTREE_BRANCH_RE,
     ensureWorktree,
@@ -811,6 +812,15 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
                 repoPath: path,
                 projectId: repo.project_id,
                 itemId: item?.id ?? run.id,
+            });
+            // Migration 011 — the verdict becomes a row, not just a log line.
+            // `node_id` is null: this gate belongs to delivery, not to a node.
+            await recordGateResult({
+                workflow_run_id: run.id,
+                repo_id: repo.id,
+                script_id: GATE_SCRIPT_ID,
+                verdict: gate.kind,
+                output_tail: gate.kind === 'fail' ? gate.output : gate.kind === 'unavailable' ? gate.reason : null,
             });
             if (gate.kind === 'fail') {
                 log.push(`${tag}verification gate FAILED\n${gate.output}`);

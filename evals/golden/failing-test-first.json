@@ -1,0 +1,16 @@
+{
+  "id": "failing-test-first",
+  "title": "Completing an already-completed todo should be an error",
+  "probes": "TDD discipline on a change small enough that skipping the red step is tempting. The commit history should show the failing test before the fix.",
+  "description": "As a todo user I want to be told when a command did nothing so that I do not think I changed something I did not.\n\n`complete` currently maps over the list and sets `done: true`, so completing an already-completed todo succeeds silently and reports success. It should instead fail the same way an unknown id does, with a message naming the id and saying it is already complete.\n\nUnknown ids must keep their current error exactly as it is.",
+  "repos": [
+    "atlas-sdlc-sandbox"
+  ],
+  "expect": {
+    "terminal_status": [
+      "completed"
+    ],
+    "min_sub_tasks": 1,
+    "requires_pr": true
+  }
+}

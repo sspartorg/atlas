@@ -1,0 +1,16 @@
+{
+  "id": "docs-only",
+  "title": "Document every CLI flag in the README",
+  "probes": "The DOC path on its own. There is no production code to write, so a chain that insists on a code change is over-reaching.",
+  "description": "The sandbox CLI README lists a couple of commands and stops. `add` alone accepts `--due`, `--priority` and repeated tag arguments, and `list` accepts `--all`, `--overdue` and `--tag`; none are documented.\n\nDocument every command and every flag the CLI actually accepts, with one worked example each, plus the `TODO_FILE` environment variable. Read the source to find them rather than trusting the current README.\n\nAccuracy matters more than length: a documented flag that does not exist is worse than an undocumented one.",
+  "repos": [
+    "atlas-sdlc-sandbox"
+  ],
+  "expect": {
+    "terminal_status": [
+      "completed"
+    ],
+    "min_sub_tasks": 1,
+    "requires_pr": true
+  }
+}

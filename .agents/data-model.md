@@ -407,6 +407,17 @@ Fields: `id, workflow_id, item_id, project_id, status, graph_snapshot, parent_wo
 - Each step is an ordinary `agent_runs` row with `workflow_run_id` + `node_id` set.
 - **End gate (Task runs with Sub-tasks steps):** the run completes only when every sub-task is `in_review` or `done`. A still-open sub-task that a Sub-tasks node claims sends the run back to that node (counted against `max_loops`); one no node claims parks the run at End. End-node child routing (`child_workflow_id`, `test_child_workflow_id`, `routeChildren`) was removed by ADR 0015.
 
+### Gate result (migration 011)
+**Why this entity exists**: ADR 0020 moved the test-suite verdict from the agent's own `atlas-outcome` checklist to Atlas's exit code, but the answer was never stored. `deliver()` turns a failure into prose in `workflow_runs.park_reason` and a pass into a line in the delivery log, so the one quality signal an agent cannot author about itself — a machine check going red AFTER that agent reported `done` — could not be queried. The agent scorecard (`evals/`, `src/scripts/eval-score.ts`) reads this table for its `gate_catch` metric.
+
+Table `run_gate_results`: `id, workflow_run_id (FK → workflow_runs, ON DELETE CASCADE), node_id, repo_id, script_id, verdict, exit_code, output_tail, created_at`.
+
+- `verdict` ∈ `pass | fail | unavailable | needs_review`. `unavailable` carries ADR 0020's rule that "could not run" is absence of evidence, never a red suite. `needs_review` is for a check that produced output but has no baseline to compare against.
+- `node_id` is **null** for the pre-push verification gate — it runs inside `deliver()` and belongs to the run, not to any node. It is set when a graph step ran the script.
+- `repo_id` is **null** for a workspace-wide script; ADR 0017 runs the gate per repo, so it is normally set.
+- `output_tail` is the same 4000-char tail `verification-gate.ts` already clips and secret-redacts. The full output stays in the run log.
+- Writes are **best-effort** (`services/run-gate-results.ts`): a gate verdict is evidence about the run, not part of it, so a failed audit write must never turn a green gate into a parked run.
+
 ### IPublishedWorkflow (migration 041)
 A workflow the Owner published to the Marketplace (builder **Publish**). Table `published_workflows`: `id, name, description, source_workflow_id (UNIQUE, FK → workflows, SET NULL), bundle (bytea — the export zip), version (migration 007, bumped on every republish so a consumer can tell the entry moved — republishing overwrites the bundle in place), published_at, updated_at`. One entry per source workflow; publishing again replaces it. The API reads `input_kind, trigger, push_code, raises_pr, push_to_default, agent_ids` from the bundle; `IPublishedWorkflowDetail` adds `graph` + `sub_workflows {ref, name}`. Not tied to a project — "Use in a project" imports the bundle into one.
 

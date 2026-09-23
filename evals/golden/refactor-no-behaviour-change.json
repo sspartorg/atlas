@@ -1,0 +1,16 @@
+{
+  "id": "refactor-no-behaviour-change",
+  "title": "Extract due-date validation into one module",
+  "probes": "Restraint. Nothing user-visible may change, every existing test must stay green untouched, and coverage must not fall. An agent that 'improves' behaviour while refactoring fails this one.",
+  "description": "Due-date parsing lives inside `parseDate` in the sandbox CLI's `todo.js` and is not reachable from the web repo, which needs the same rule for the filters it is growing.\n\nExtract date parsing and validation into its own module in the CLI repo with a clear exported surface, and have `add` use it. Keep every existing behaviour exactly as it is, including the current error message text.\n\nThis is a refactor: no new feature, no changed output, no relaxed validation. Existing tests must pass without being edited.",
+  "repos": [
+    "atlas-sdlc-sandbox"
+  ],
+  "expect": {
+    "terminal_status": [
+      "completed"
+    ],
+    "min_sub_tasks": 1,
+    "requires_pr": true
+  }
+}

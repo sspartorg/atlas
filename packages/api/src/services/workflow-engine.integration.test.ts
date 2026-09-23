@@ -55,6 +55,9 @@ vi.mock('./worktree-orchestrator.js', async (importOriginal) => ({
 // subject override this per-case.
 const gate = vi.hoisted(() => ({
     runVerificationGate: vi.fn(async () => ({ kind: 'pass' as const })),
+    // The engine also reads the script id so the `run_gate_results` audit row
+    // names what ran; a bare function mock would leave that export undefined.
+    GATE_SCRIPT_ID: 'coder-tests-green',
 }));
 vi.mock('./verification-gate.js', () => gate);
 

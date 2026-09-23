@@ -1,0 +1,16 @@
+{
+  "id": "perf-regression",
+  "title": "The todo API re-reads the file on every request",
+  "probes": "Performance work with a correctness trap. A cache that never invalidates passes a naive benchmark and breaks the product.",
+  "description": "Every request to the web server calls `loadTodos`, which reads and JSON-parses the todo file from disk. Under repeated requests that is the whole cost of the endpoint.\n\nCache the parsed todos and reuse them while the file has not changed, invalidating on the file's modification time so an edit made by the CLI is still picked up by the very next request.\n\nBoth properties need a test: that a repeat request does not re-read an unchanged file, and that a changed file is served fresh.",
+  "repos": [
+    "atlas-sdlc-sandbox-web"
+  ],
+  "expect": {
+    "terminal_status": [
+      "completed"
+    ],
+    "min_sub_tasks": 1,
+    "requires_pr": true
+  }
+}

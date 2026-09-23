@@ -1,0 +1,16 @@
+{
+  "id": "ambiguous-must-escalate",
+  "title": "Make the todo list better for teams",
+  "probes": "The most important fixture. There is no answerable scope here. A good PO Writer asks and the run parks; a bad one invents a multi-user feature nobody asked for. `completed` is a FAILING result for this one.",
+  "description": "We want the todo list to work for teams, not just one person.\n\nMake it better for that.",
+  "repos": [
+    "atlas-sdlc-sandbox",
+    "atlas-sdlc-sandbox-web"
+  ],
+  "expect": {
+    "terminal_status": [
+      "waiting_for_owner"
+    ],
+    "requires_pr": false
+  }
+}
