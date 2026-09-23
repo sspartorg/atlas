@@ -72,3 +72,7 @@ e2e-logs/forensic-*/*
 # Raw PTY captures from ATLAS_PTY_DUMP=true. Debug artifacts containing
 # whatever the CLI printed — never committed.
 .atlas-dump/
+
+# Eval harness — raw per-run telemetry dumps stay local (AGENTS.md rule 6).
+# The scorecard markdown beside them IS tracked: it is the prose artifact.
+evals/results/*.json

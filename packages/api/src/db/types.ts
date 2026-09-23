@@ -21,6 +21,9 @@ type UpdatedAt = ColumnType<string, string | undefined, string | undefined>;
 
 export type ItemType = 'task' | 'sub_task';
 export type ItemRelation = 'relates_to' | 'depends_on' | 'tested_by';
+/** `run_gate_results.verdict`. `needs_review` is the visual gate's
+ *  "captured, but there is no baseline to diff against" answer. */
+export type GateVerdict = 'pass' | 'fail' | 'unavailable' | 'needs_review';
 
 export interface SettingsTable {
     id: number;
@@ -760,11 +763,30 @@ export interface PublishedWorkflowsTable {
     updated_at: UpdatedAt;
 }
 
+// Migration 011 — one row per deterministic gate execution. ADR 0020 made
+// Atlas run the gate itself; this is where the verdict lands so it can be
+// queried instead of read out of `workflow_runs.park_reason` prose.
+//
+// `node_id` is null for the pre-push verification gate (it belongs to the run,
+// not to a node); `repo_id` is null for a workspace-wide script.
+export interface RunGateResultsTable {
+    id: string;
+    workflow_run_id: string;
+    node_id: StrN;
+    repo_id: StrN;
+    script_id: string;
+    verdict: GateVerdict;
+    exit_code: IntN;
+    output_tail: StrN;
+    created_at: CreatedAt;
+}
+
 export interface DB {
     settings: SettingsTable;
     workflows: WorkflowsTable;
     workflow_runs: WorkflowRunsTable;
     published_workflows: PublishedWorkflowsTable;
+    run_gate_results: RunGateResultsTable;
     agents: AgentsTable;
     roles: RolesTable;
     reminders: RemindersTable;

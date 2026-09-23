@@ -1,0 +1,16 @@
+{
+  "id": "frontend-only",
+  "title": "Flag overdue todos in the web list",
+  "probes": "A pure presentation change. Exercises the `fe` label and is the one fixture where the visual gate has real work.",
+  "description": "As a todo user looking at the web page I want overdue items to stand out so that I notice them without reading every date.\n\nThe CLI already appends `[OVERDUE]` to an overdue line (`formatTodo` in the sandbox CLI). The web page shows nothing. Render an overdue marker on the web list using the same rule: not done, and `due` earlier than the local calendar date.\n\nIt must stay legible at a narrow phone width, and must not rely on colour alone to convey the state.",
+  "repos": [
+    "atlas-sdlc-sandbox-web"
+  ],
+  "expect": {
+    "terminal_status": [
+      "completed"
+    ],
+    "min_sub_tasks": 1,
+    "requires_pr": true
+  }
+}

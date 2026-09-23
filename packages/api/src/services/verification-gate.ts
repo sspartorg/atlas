@@ -86,7 +86,7 @@ export type GateResult =
     | { kind: 'unavailable'; reason: string };
 
 /** The guardrail script id whose body is the gate. Project row overrides the Atlas one. */
-const GATE_SCRIPT_ID = 'coder-tests-green';
+export const GATE_SCRIPT_ID = 'coder-tests-green';
 
 function tail(text: string): string {
     return text.length <= MAX_REPORTED_OUTPUT ? text : text.slice(-MAX_REPORTED_OUTPUT);

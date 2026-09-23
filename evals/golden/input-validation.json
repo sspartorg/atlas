@@ -1,0 +1,16 @@
+{
+  "id": "input-validation",
+  "title": "Reject absurd todo titles and due dates",
+  "probes": "Validation at a trust boundary \u2014 the one class of work that must never be simplified away. Error messages have to be specific enough to act on.",
+  "description": "As a todo user I want bad input rejected at the point I type it so that the file never holds something that breaks the list later.\n\n`add` accepts any non-blank title and any parseable date. Add limits:\n\n- A title longer than 200 characters is rejected, naming the limit and the actual length.\n- A due date more than 100 years in the future or in the past is rejected as out of range, distinct from the existing invalid-date error.\n- Leading and trailing whitespace keeps being trimmed, and a whitespace-only title keeps its current error.\n\nEvery rejection is an error with a non-zero exit, never a silently truncated value.",
+  "repos": [
+    "atlas-sdlc-sandbox"
+  ],
+  "expect": {
+    "terminal_status": [
+      "completed"
+    ],
+    "min_sub_tasks": 1,
+    "requires_pr": true
+  }
+}

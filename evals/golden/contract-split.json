@@ -1,0 +1,16 @@
+{
+  "id": "contract-split",
+  "title": "Filter the web list by priority",
+  "probes": "The one case where BE must land before FE. A correct PO splits this into two dev sub-tasks linked `depends_on`; a lazy one merges them and the FE half has nothing to call.",
+  "description": "As a todo user I want to see only my high-priority items so that I can work the top of the list.\n\nThe web server already supports `?tag=`; add `?priority=`:\n\n- `visibleTodos` must accept a `priority` option and filter on it, rejecting anything that is not high/normal/low.\n- `GET /api/todos?priority=high` and the HTML page must both honour it.\n- The HTML page needs a way to switch priority without hand-editing the URL.\n\nThe filter behaviour has to be settled and tested before the page can use it.",
+  "repos": [
+    "atlas-sdlc-sandbox-web"
+  ],
+  "expect": {
+    "terminal_status": [
+      "completed"
+    ],
+    "min_sub_tasks": 2,
+    "requires_pr": true
+  }
+}

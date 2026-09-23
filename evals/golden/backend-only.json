@@ -1,0 +1,16 @@
+{
+  "id": "backend-only",
+  "title": "Add a todo statistics endpoint",
+  "probes": "A capability with no UI surface at all. The PO should label it `be`, and the visual gate should find nothing to check.",
+  "description": "As someone watching the todo list I want a machine-readable summary so that I can graph it later.\n\nAdd `GET /api/todos/stats` to the web server returning JSON with: `total`, `done`, `open`, `overdue`, and `by_priority` (counts for high/normal/low). It must honour the existing `tag` query parameter so the stats can be scoped the same way the list is.\n\nNo change to the HTML page and no new CLI command.",
+  "repos": [
+    "atlas-sdlc-sandbox-web"
+  ],
+  "expect": {
+    "terminal_status": [
+      "completed"
+    ],
+    "min_sub_tasks": 1,
+    "requires_pr": true
+  }
+}

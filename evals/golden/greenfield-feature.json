@@ -1,0 +1,17 @@
+{
+  "id": "greenfield-feature",
+  "title": "Archive completed todos",
+  "probes": "The full chain on a genuinely new capability spanning both repos: PO scoping, Architect spec, Coder TDD, QA plan, automation, docs, one PR per repo.",
+  "description": "As a todo user I want completed items to move out of my way so that my list stays short without losing history.\n\nToday `complete` only flips `done: true` and the item stays in the file forever. Add an archive concept:\n\n- A new CLI command `todo archive` moves every completed todo into an archive so it no longer appears in `list --all`.\n- `todo archive --list` shows what has been archived.\n- The web view keeps showing only live todos; add `?archived=1` to see the archive.\n\nArchived todos must survive a restart and must never be silently deleted.",
+  "repos": [
+    "atlas-sdlc-sandbox",
+    "atlas-sdlc-sandbox-web"
+  ],
+  "expect": {
+    "terminal_status": [
+      "completed"
+    ],
+    "min_sub_tasks": 2,
+    "requires_pr": true
+  }
+}
