@@ -20,6 +20,7 @@ One sub-task of a Task (ADR 0015). Sub-tasks are never queued for a workflow of 
 **Body cards**
 - **Description**, **Acceptance criteria** — `EditableMarkdownCard` → `PATCH /api/sub-tasks/:id`.
 - `RelatedItemsCard` with `allowAddTestLink` — **Tested by** / **Tests** section (`tested_by` twin links) always offers **Add test link**; that picker is restricted to sub-tasks of the same Task (`restrictToTaskId`). Blocked by / Relates to / Pull Requests hide while empty.
+- **Pull Requests row actions** — **Add PR link** opens `AddPrLinkDialog` (GitHub PR URLs only). Each row carries a **Remove PR link** icon button (`aria-label="Remove PR link"`) which opens a `ConfirmActionModal` before anything is deleted: it unlinks the row and clears `items.pr_url` when that column points at the same PR, and says plainly that the pull request itself stays open on GitHub — nothing is closed, merged or deleted there.
 - `ConversationCard` — while the sub-task is `waiting_for_info` with no assignee and its latest run is a workflow step, helper text reads "Replying continues the waiting workflow run." The reply resumes the sub-task's run and its Task's run.
 
 **Right rail**

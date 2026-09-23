@@ -1302,10 +1302,37 @@ export async function tickWorkflowDispatch(now: Date = new Date()): Promise<numb
                 started++;
             }
         } catch (err) {
-            console.warn(`[workflow-dispatch] ${wf.id}: ${(err as Error).message}`);
+            await reportDispatchFailure(wf, (err as Error).message);
         }
     }
     return started;
+}
+
+// ponytail: in-memory, so a restart re-notifies once. A table would need a
+// migration to say nothing the notification itself doesn't already say.
+const lastDispatchFailure = new Map<string, { message: string; at: number }>();
+const DISPATCH_FAILURE_REARM_MS = 60 * 60 * 1000;
+
+/**
+ * A failed dispatch used to be a `console.warn` nobody reads, leaving the Task
+ * at `ready` forever with no trace in the UI. Notify once per distinct message
+ * per workflow — the tick runs every minute and would otherwise spam — and
+ * re-arm hourly so a long-running failure doesn't go quiet for good.
+ */
+async function reportDispatchFailure(
+    wf: { id: string; name: string },
+    message: string,
+): Promise<void> {
+    const seen = lastDispatchFailure.get(wf.id);
+    const now = Date.now();
+    if (seen && seen.message === message && now - seen.at < DISPATCH_FAILURE_REARM_MS) return;
+    lastDispatchFailure.set(wf.id, { message, at: now });
+    await notificationsService.create({
+        event_type: 'workflow_run',
+        message: `${wf.name}: could not start a queued item — ${message}`,
+        kind: 'needs_you',
+        agent_id: null,
+    });
 }
 
 let kickPending = false;

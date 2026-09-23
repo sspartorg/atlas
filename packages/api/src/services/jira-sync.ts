@@ -34,6 +34,13 @@ const DIGEST_LINE_CHARS = 500;
 // Jira rejects comments over 32,767 characters.
 const DIGEST_MAX_CHARS = 20_000;
 
+export class JiraSyncDisabledError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'JiraSyncDisabledError';
+    }
+}
+
 interface Creds {
     site_url: string;
     email: string;
@@ -850,11 +857,11 @@ async function headline(
 ): Promise<AdfText[]> {
     const who = strong(`Atlas ${taskId}`);
     switch (status) {
+        // Unreachable: the G-013 gate below drops `draft` before this is called.
+        // Loud rather than silent, so a regression can't quietly resume posting
+        // "Atlas is not doing anything" onto a customer's board.
         case 'draft':
-            return [
-                who,
-                plain(': imported. No workflow is set for it yet; the owner will pick one.'),
-            ];
+            throw new Error(`headline: draft is not a milestone (${taskId})`);
         case 'ready': {
             const wf = workflowId ? await workflowsService.get(workflowId) : null;
             return [who, plain(`: queued${wf ? ` on the ${wf.name} workflow` : ''}.`)];
@@ -998,15 +1005,33 @@ async function exclusive<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 async function recordSync(ok: boolean, message: string, stampSyncTime: boolean): Promise<void> {
+    const text = message.slice(0, 2_000);
+    // A failing push used to surface only as grey text on the Settings tab, so a
+    // 401 (which also abandons every remaining issue in the pass) went unnoticed
+    // for as long as the Owner didn't open that page. Notify on a NEW failure
+    // only — the between-poll tick runs every minute and would otherwise spam.
+    const prev = await db
+        .selectFrom('jira_config')
+        .select(['last_sync_ok', 'last_sync_message'])
+        .where('id', '=', 1)
+        .executeTakeFirst();
     await db
         .updateTable('jira_config')
         .set({
             last_sync_ok: ok,
-            last_sync_message: message.slice(0, 2_000),
+            last_sync_message: text,
             ...(stampSyncTime ? { last_sync_at: new Date().toISOString() } : {}),
         })
         .where('id', '=', 1)
         .execute();
+    if (!ok && (prev?.last_sync_ok !== false || prev.last_sync_message !== text)) {
+        await notificationsService.create({
+            event_type: 'jira_sync',
+            message: `Jira sync failed: ${text}`,
+            kind: 'needs_you',
+            agent_id: null,
+        });
+    }
 }
 
 function summarize(r: IJiraSyncResult): string {
@@ -1058,7 +1083,22 @@ export const jiraSync = {
     getConfig,
     saveConfig,
     testConnection,
-    syncNow: () => exclusive(fullSync),
+    // G-014: the switch means the bridge is OFF, and a manual sync writes to a
+    // live board exactly like the poller does. Without this gate a disabled
+    // bridge posted one "queued" comment and then went silent forever, because
+    // only `tick` honoured the switch.
+    syncNow: async () => {
+        const row = await loadRow();
+        // credsOf first: "connect the site" is the more useful complaint when
+        // nothing is configured at all, and it's what the API already promised.
+        credsOf(row);
+        if (!row?.enabled) {
+            throw new JiraSyncDisabledError(
+                'Jira sync is switched off. Turn on Import in Settings → Jira to sync.'
+            );
+        }
+        return exclusive(fullSync);
+    },
     tick,
     // Sources belong to a project (migration 010).
     listSources,

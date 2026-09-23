@@ -337,6 +337,16 @@ export const externalLinks = {
             .executeTakeFirst();
         await db.deleteFrom('item_external_links').where('id', '=', linkId).execute();
         if (row) {
+            // items.pr_url is a separate column the workflow engine writes; without
+            // this the detail page keeps rendering a PR the Owner just unlinked.
+            if (row.link_kind === 'pull_request') {
+                await db
+                    .updateTable('items')
+                    .set({ pr_url: null })
+                    .where('id', '=', row.item_id)
+                    .where('pr_url', '=', row.url)
+                    .execute();
+            }
             await recordExternalLinkEvent(
                 'link_deleted',
                 row.item_id,

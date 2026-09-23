@@ -287,6 +287,47 @@ describe('externalLinks.delete', () => {
         const events = await eventsLog.list('ATL-1');
         expect(events.filter((e) => e.event_type === 'link_deleted')).toHaveLength(0);
     });
+
+    // items.pr_url is written by the workflow engine and is a separate column
+    // from the link row; leaving it set kept the detail page rendering a PR the
+    // Owner had just unlinked.
+    it('clears items.pr_url when it points at the removed PR', async () => {
+        const url = 'https://github.com/foo/bar/pull/42';
+        await testDb.updateTable('items').set({ pr_url: url }).where('id', '=', 'ATL-1').execute();
+        const link = await externalLinks.create({
+            itemId: 'ATL-1',
+            url,
+            linkKind: 'pull_request',
+        });
+        await externalLinks.delete(link.id);
+        const row = await testDb
+            .selectFrom('items')
+            .select('pr_url')
+            .where('id', '=', 'ATL-1')
+            .executeTakeFirst();
+        expect(row?.pr_url).toBeNull();
+    });
+
+    it('leaves items.pr_url alone when it points at a different PR', async () => {
+        const kept = 'https://github.com/foo/bar/pull/1';
+        await testDb
+            .updateTable('items')
+            .set({ pr_url: kept })
+            .where('id', '=', 'ATL-1')
+            .execute();
+        const link = await externalLinks.create({
+            itemId: 'ATL-1',
+            url: 'https://github.com/foo/bar/pull/2',
+            linkKind: 'pull_request',
+        });
+        await externalLinks.delete(link.id);
+        const row = await testDb
+            .selectFrom('items')
+            .select('pr_url')
+            .where('id', '=', 'ATL-1')
+            .executeTakeFirst();
+        expect(row?.pr_url).toBe(kept);
+    });
 });
 
 describe('external link cascade on item delete', () => {

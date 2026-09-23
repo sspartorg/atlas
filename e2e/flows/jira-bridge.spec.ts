@@ -156,6 +156,18 @@ test.describe('Jira bridge', () => {
         await page.getByRole('button', { name: 'Test connection' }).click();
         await expect(page.getByText('Connected to Jira as Fake Owner')).toBeVisible();
 
+        // G-014 — a manual sync writes comments to real Jira issues, so it
+        // honours the Import switch exactly like the poller does. This spec
+        // used to rely on Sync now running from a switched-off bridge, which
+        // is the bug that let a disabled integration post one comment to a
+        // live board and then go silent for good.
+        await expect(page.getByRole('button', { name: 'Sync now' })).toBeDisabled();
+        // click(), not check(): the switch reflects server config, so its checked
+        // state only settles after the PUT round-trips and the query updates.
+        await page.getByLabel('Jira sync enabled').click();
+        await expect(page.getByText('Jira sync on')).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Sync now' })).toBeEnabled();
+
         // The token never comes back from the API.
         const cfgRes = await request.get(`${API}/api/integrations/jira`);
         expect(await cfgRes.text()).not.toContain('e2e-token');

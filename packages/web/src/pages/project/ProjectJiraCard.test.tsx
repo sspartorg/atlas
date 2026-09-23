@@ -149,4 +149,19 @@ describe('ProjectJiraCard', () => {
         expect(await screen.findByText(/Connect your Jira site in/)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Sync now/i })).toBeDisabled();
     });
+
+    // Connected but switched off is the silent case: sources look configured and
+    // nothing is polled, so the card has to say so rather than look healthy.
+    it('warns when the site is connected but Import is switched off', async () => {
+        mockSources([]);
+        server.use(
+            http.get(`${BASE}/integrations/jira`, () =>
+                HttpResponse.json({ api_token_set: true, enabled: false })
+            )
+        );
+        renderCard();
+        expect(await screen.findByText(/Import is switched off/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Sync now/i })).toBeDisabled();
+        expect(screen.queryByText(/Connect your Jira site in/)).not.toBeInTheDocument();
+    });
 });

@@ -233,7 +233,12 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
                         variant="contained"
                         size="small"
                         onClick={runSync}
-                        disabled={sync.isPending || !cfg.api_token_set}
+                        disabled={sync.isPending || !cfg.api_token_set || !cfg.enabled}
+                        title={
+                            cfg.enabled
+                                ? undefined
+                                : 'Turn on Import to sync — a sync writes comments to the matched Jira issues.'
+                        }
                     >
                         {sync.isPending ? 'Syncing…' : 'Sync now'}
                     </Button>

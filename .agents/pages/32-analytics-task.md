@@ -32,7 +32,7 @@ None.
 ## API endpoints touched
 `routes/analytics.ts`; both routes only accept a `task` id:
 - `GET /api/analytics/task/:taskId` — `task` header, rolled totals + per-kind breakdown; 404 `Item is not a task` for a sub-task id
-- `GET /api/analytics/task/:taskId/children?page&limit&type` — paged descendants; `type` ∈ `task | sub_task`
+- `GET /api/analytics/task/:taskId/children?page&limit&type` — paged descendants **plus the root Task itself at `depth: 0` when it owns completed runs**; `type` ∈ `task | sub_task`. A Task-level workflow writes `agent_runs.item_id = <task id>` for every non-Sub-tasks step, so those runs are the Task's own. Before this, the root was excluded unconditionally: the hero total exceeded the sum of the visible rows and the `task` per-kind card was a dead filter that always returned "No items match the current filter."
 
 ## Permissions / guards
 - Auth: post-onboarding only. Read-only.

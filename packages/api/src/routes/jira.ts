@@ -6,7 +6,7 @@ import {
     UpdateJiraSourceSchema,
 } from '@atlas/shared';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
-import { jiraSync } from '../services/jira-sync.js';
+import { JiraSyncDisabledError, jiraSync } from '../services/jira-sync.js';
 import { projectsService } from '../services/projects.js';
 
 // Jira bridge config + manual controls (ADR 0016). The API token is write-only:
@@ -34,7 +34,14 @@ export async function jiraRoutes(app: FastifyInstance) {
         '/api/integrations/jira/sync',
         { preHandler: requireMcpToken },
         async (_req, reply) => {
-            return reply.send(await jiraSync.syncNow());
+            try {
+                return reply.send(await jiraSync.syncNow());
+            } catch (err) {
+                if (err instanceof JiraSyncDisabledError) {
+                    return reply.status(409).send({ error: err.message, kind: 'conflict' });
+                }
+                throw err;
+            }
         }
     );
 
