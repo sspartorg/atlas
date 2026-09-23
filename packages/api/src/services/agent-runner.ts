@@ -14,8 +14,15 @@ class LiveRunOnItemError extends Error {
 }
 import { spawn as nodeSpawn, execFile as nodeExecFile } from 'child_process';
 import { promisify } from 'node:util';
-import { unlinkSync, mkdtempSync, rmSync, mkdirSync, appendFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {
+    unlinkSync,
+    mkdtempSync,
+    rmSync,
+    mkdirSync,
+    appendFileSync,
+    readFileSync,
+} from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { db } from '../db/kysely-client.js';
 import { broadcastSSE } from '../routes/events.js';
@@ -876,6 +883,62 @@ export function allowedToolsFor(itemAttached: boolean): string {
 }
 
 /**
+ * Copilot CLI's built-in GitHub MCP server. Named so it can be denied even
+ * though it never appears in `mcp-config.json`.
+ * https://github.com/github/github-mcp-server — "Name your server
+ * `github-mcp-server` to replace the built-in server".
+ */
+const COPILOT_BUILTIN_MCP_SERVERS = ['github-mcp-server'];
+
+/** `~/.copilot`, or `COPILOT_HOME` when the Owner has relocated it. */
+function copilotHome(): string {
+    return process.env['COPILOT_HOME']?.trim() || join(homedir(), '.copilot');
+}
+
+/**
+ * The MCP servers an item-attached Copilot run must not reach.
+ *
+ * Claude gets this for free: `claudeIsolationArgs` hands it a strict, Atlas-only
+ * MCP config. Copilot has no strict-config flag, and Atlas spawns it with
+ * `--allow-all-tools` so it never stops to ask — which pre-approved every tool
+ * of every MCP server the Owner had registered. An item-attached Copilot run
+ * therefore reached further than an item-attached Claude run, and a Task
+ * imported by the Jira bridge carries a Jira key and a browse URL in its
+ * description: exactly the invitation to go and re-fetch the issue. The
+ * snapshot in the description is the source of truth (ADR 0016).
+ *
+ * `--deny-tool <server>` with no tool in parentheses denies every tool from
+ * that server, and GitHub documents that "deny rules always take precedence
+ * over allow rules, even when `--allow-all` is set" — so this holds despite
+ * `--allow-all-tools`.
+ *
+ * Deny-list rather than an `--allow-tool` allowlist on purpose: Copilot's
+ * built-in tool names are not documented well enough to allowlist blind (see
+ * github/copilot-cli#1482), and getting one wrong would approve nothing and
+ * hang the run. A deny for a server that isn't configured is inert, so the
+ * failure mode here is "no worse than before", never a broken run.
+ *
+ * Freedom scouts (no item) keep every server, exactly like `claudeIsolationArgs`
+ * returns `[]` for them — `agent-jira-to-epic` exists to read Jira.
+ */
+export function copilotDenyToolArgs(itemAttached: boolean): string[] {
+    if (!itemAttached) return [];
+    const servers = new Set(COPILOT_BUILTIN_MCP_SERVERS);
+    try {
+        const raw = readFileSync(join(copilotHome(), 'mcp-config.json'), 'utf8');
+        const parsed = JSON.parse(raw) as { mcpServers?: Record<string, unknown> };
+        for (const name of Object.keys(parsed.mcpServers ?? {})) {
+            // Atlas's own server is the one thing an item run is meant to reach.
+            if (name !== 'atlas') servers.add(name);
+        }
+    } catch {
+        // No config, unreadable, or not JSON: the built-ins are still denied.
+        // Copilot may simply never have been run on this machine.
+    }
+    return [...servers].flatMap((name) => ['--deny-tool', name]);
+}
+
+/**
  * Child env for every agent run. `ATLAS_API_URL` lets `.atlas/scripts`
  * validators query the API directly. The ollama overlay MUST come after the
  * `gitInvokeEnv` spread (which spreads process.env), or an
@@ -956,7 +1019,11 @@ function spawnCli(opts: SpawnCliOptions): void {
     //
     // GitHub Copilot CLI (`copilot` binary, installed via
     // `npm i -g @github/copilot`): --allow-all-tools is required for
-    // non-interactive runs; --add-dir whitelists the repo path. The prompt
+    // non-interactive runs; --add-dir whitelists the repo path. Because
+    // --allow-all-tools pre-approves every MCP tool too, an item-attached run
+    // adds `--deny-tool <server>` per server (`copilotDenyToolArgs`) — deny
+    // beats allow-all, and that is Copilot's equivalent of the strict MCP
+    // config `claudeIsolationArgs` gives Claude. The prompt
     // arrives via `-p <text>` argv, but `<text>` is now a short shim
     // pointing at the staged prompt file (see prompt staging block below);
     // Copilot reads the file via its built-in tools.
@@ -1106,6 +1173,10 @@ function spawnCli(opts: SpawnCliOptions): void {
               '--model', model,
               ...effortArgs,
               '--allow-all-tools',
+              // Deny beats --allow-all-tools, so this is the isolation an
+              // item-attached Copilot run gets in place of Claude's strict
+              // MCP config. See `copilotDenyToolArgs`.
+              ...copilotDenyToolArgs(issueId !== null),
               '--autopilot',
               '--max-autopilot-continues', '30',
               '--add-dir', cwd,
