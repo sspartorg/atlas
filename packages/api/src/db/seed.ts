@@ -880,7 +880,7 @@ exit 1
         id: 'gate-hygiene',
         name: 'Hygiene gate (lint, typecheck, debug residue)',
         description:
-            "Gate node script. Runs the project's declared lint and typecheck scripts and scans the branch diff for console.log, debugger and untracked TODO/FIXME markers. A tracked marker (TODO(ATL-12):) is allowed. format:check is deliberately excluded - a permanently red gate is one nobody reads. Nothing here is a judgement call, which is why it runs as a gate node with no LLM attached; the paired hygiene fixer is dispatched only on a non-zero exit.",
+            "Gate node script. Runs the project's declared lint and typecheck scripts and scans the branch diff for console.log, debugger and untracked TODO/FIXME markers. The marker match is word-bounded on both sides, so `TODO_FILE` and `HTTP_TODOS` are not residue; a tracked marker (TODO(ATL-12):) is allowed. format:check is deliberately excluded - a permanently red gate is one nobody reads. Nothing here is a judgement call, which is why it runs as a gate node with no LLM attached; the paired hygiene fixer is dispatched only on a non-zero exit.",
         sort_order: 107,
         body_sh: `#!/usr/bin/env bash
 # Hygiene gate. $1 is the item id (unused).
@@ -916,7 +916,13 @@ added="$(git diff -U0 "$base" HEAD 2>/dev/null | grep -E '^[+]' | grep -vE '^[+]
 # A bare TODO is residue; a tracked one (\`TODO(.agents):\`, \`TODO(ATL-12):\`)
 # is a deliberate, reviewable marker that AGENTS.md sanctions. Flag the first
 # and leave the second alone.
-residue="$(printf '%s\\n' "$added" | grep -nE 'console\\.log\\(|debugger;|TODO[^(]|FIXME[^(]|XXX' || true)"
+#
+# Word-bounded on BOTH sides, which \`TODO[^(]\` was not: that flagged
+# \`TODO_FILE\` (an env var) and \`HTTP_TODOS\` (a fixture name) as residue.
+# On a todo app that is every other line, and the first live run duly spent a
+# fixer run renaming identifiers to appease it. \`XXX\` is gone for the same
+# reason -- too weak a signal to be worth its false positives.
+residue="$(printf '%s\\n' "$added" | grep -nE '(console\\.log\\(|debugger;|(^|[^A-Za-z0-9_])(TODO|FIXME)([^A-Za-z0-9_(]|$))' || true)"
 if [ -n "$residue" ]; then
     n=$((n+1))
     gaps="$gaps$n. debug/TODO residue in the diff:
@@ -955,7 +961,8 @@ if ([string]::IsNullOrWhiteSpace($base)) { $base = 'HEAD~10' }
 $diff = git diff -U0 $base HEAD 2>$null
 $added = $diff | Where-Object { $_ -match '^\\+' -and $_ -notmatch '^\\+\\+\\+' }
 # A bare TODO is residue; a tracked one (TODO(ATL-12):) is a deliberate marker.
-$residue = $added | Where-Object { $_ -match 'console\\.log\\(|debugger;|TODO[^(]|FIXME[^(]|XXX' }
+# Word-bounded on both sides -- see body_sh for why TODO[^(] was wrong.
+$residue = $added | Where-Object { $_ -match '(console\\.log\\(|debugger;|(^|[^A-Za-z0-9_])(TODO|FIXME)([^A-Za-z0-9_(]|$))' }
 if ($residue.Count -gt 0) {
     [void]$gaps.Add("debug/TODO residue in the diff:\`n" + (($residue | Select-Object -First 20) -join "\`n"))
 }

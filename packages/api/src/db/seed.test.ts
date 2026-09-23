@@ -168,6 +168,50 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
         }
     });
 
+    describe.skipIf(process.platform === 'win32')('gate-hygiene tells residue from identifiers', () => {
+        const seed = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === 'gate-hygiene');
+
+        function repoWithDiff(added: string): number {
+            const dir = mkdtempSync(join(tmpdir(), 'hygiene-gate-'));
+            const sh = (cmd: string) => execSync(cmd, { cwd: dir, stdio: 'pipe' });
+            sh('git init -q -b main && git config user.email t@t && git config user.name t');
+            writeFileSync(join(dir, 'package.json'), '{"scripts":{}}');
+            writeFileSync(join(dir, 'a.js'), 'const base = 1;\n');
+            sh('git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD');
+            writeFileSync(join(dir, 'a.js'), `const base = 1;\n${added}\n`);
+            sh('git add -A && git commit -qm change');
+            writeFileSync(join(dir, 'gate.sh'), seed?.body_sh ?? '');
+            try {
+                execSync('bash gate.sh X', { cwd: dir, stdio: 'pipe' });
+                return 0;
+            } catch (err) {
+                return (err as { status: number }).status;
+            }
+        }
+
+        // The first live run of delivery v2 spent a whole fixer dispatch
+        // renaming `HTTP_TODOS` and rewording `TODO_FILE` because the pattern
+        // was `TODO[^(]`, which matches any identifier that merely starts with
+        // those four letters. On a todo app that is every other line.
+        it.each([
+            ['const TODO_FILE = process.env.TODO_FILE;', 'an env var named TODO_FILE'],
+            ['const HTTP_TODOS = [];', 'a fixture named HTTP_TODOS'],
+            ['const STATS_TODOS = [];', 'a fixture named STATS_TODOS'],
+            ['// TODO(ATL-12): tracked and allowed', 'a tracked TODO marker'],
+        ])('passes %s (%s)', (line) => {
+            expect(repoWithDiff(line)).toBe(0);
+        });
+
+        it.each([
+            ['// TODO come back to this', 'a bare TODO'],
+            ['// FIXME broken', 'a bare FIXME'],
+            ['console.log("debug");', 'a console.log'],
+            ['debugger;', 'a debugger statement'],
+        ])('fails on %s (%s)', (line) => {
+            expect(repoWithDiff(line)).toBe(1);
+        });
+    });
+
     describe.skipIf(process.platform === 'win32')('coder-tests-green runs on non-pnpm projects', () => {
         const seed = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === 'coder-tests-green');
 
