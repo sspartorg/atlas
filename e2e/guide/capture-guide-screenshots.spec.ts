@@ -44,6 +44,10 @@ const VIEWPORT = { width: 1440, height: 900 };
 
 const enabled = process.env['GUIDE'] === '1';
 
+/** Seeded by `e2e/fixtures/run-seed.ts`. */
+const PROJECT_ID = 'e2e-terminal-project';
+const API = 'http://127.0.0.1:6001';
+
 async function shoot(page: Page, name: string): Promise<void> {
     // Not fullPage: a guide figure shows one screen the way the Owner sees it.
     await page.screenshot({ path: join(OUT, `${name}.png`) });
@@ -77,6 +81,30 @@ test.describe('@guide capture the user-guide screenshots', () => {
 
     test.beforeAll(() => {
         mkdirSync(OUT, { recursive: true });
+    });
+
+    // FIRST, deliberately. This is the only capture that mutates the roster:
+    // creating the delivery workflow installs the ten agents its graph
+    // references. Captured last, it left doc-04 showing a one-agent roster and
+    // doc-12 showing ten — two pictures of the same page that disagree.
+    test('doc-14 workflow builder', async ({ page }) => {
+        // The seed ships no workflow, so build the one the guide names. This
+        // also installs the agents the template references, which is why the
+        // capture asserts a node is on the canvas rather than trusting a 201.
+        const res = await page.request.post(`${API}/api/workflows/from-template`, {
+            data: { template_id: 'delivery', project_id: PROJECT_ID },
+        });
+        expect(res.status(), await res.text()).toBe(201);
+        const { id } = (await res.json()) as { id: string };
+
+        await goto(page, `/workflows/${id}`);
+        await assertNotOnboarding(page, 'doc-14-workflow-builder');
+        await expect(page.getByText('Workflow settings')).toBeVisible();
+        // React Flow mounts the graph asynchronously; without this the canvas
+        // photographs empty and the image looks like a broken builder.
+        await expect(page.getByText('PO Writer').first()).toBeVisible();
+        await settle(page);
+        await shoot(page, 'doc-14-workflow-builder');
     });
 
     test('doc-03 marketplace and doc-04 agents', async ({ page }) => {
@@ -126,6 +154,19 @@ test.describe('@guide capture the user-guide screenshots', () => {
     // controls at all and the image cannot drift with their labels again.
     test('doc-15 task detail', async ({ page }) => {
         await capture(page, '/tasks/ETM-1', 'doc-15-task-detail');
+    });
+
+    // doc-13 was hand-captured on the live dev stack, carrying a real project
+    // name into a public repo. Placed before the dark-mode capture so it comes
+    // out light like the rest of the set.
+    test('doc-13 project repos', async ({ page }) => {
+        await goto(page, `/projects/${PROJECT_ID}?tab=repos`);
+        await assertNotOnboarding(page, 'doc-13-project-repos');
+        // Assert the Repos tab actually rendered. A bare capture here would
+        // happily photograph the Overview tab and look entirely plausible.
+        await expect(page.getByRole('button', { name: /add repo/i }).first()).toBeVisible();
+        await settle(page);
+        await shoot(page, 'doc-13-project-repos');
     });
 
     test('doc-12 agents in dark mode', async ({ page }) => {
