@@ -1,0 +1,32 @@
+[
+  {
+    "label": "Every capture the gate produced was viewed, at every viewport",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "Overflow, clipping, collision, contrast and touch-target size were each checked",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "A fix addresses the cause (a fixed width, a missing max-width), not one breakpoint",
+    "sort_order": 2,
+    "required": true
+  },
+  {
+    "label": "A baseline was blessed only after looking at it, and the summary says why it is correct",
+    "sort_order": 3,
+    "required": true
+  },
+  {
+    "label": "No pixel tolerance was raised and no baseline was deleted",
+    "sort_order": 4,
+    "required": true
+  },
+  {
+    "label": "The gate was re-run",
+    "sort_order": 5,
+    "required": true
+  }
+]

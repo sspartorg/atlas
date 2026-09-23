@@ -36,6 +36,7 @@ import { AgentEffortSchema, validateWorkflowGraph } from '@atlas/shared';
 import type { IWorkflowTemplate } from '@atlas/shared';
 import { loadCatalog } from './catalog-loader.js';
 import { AgentBundleManifestSchema } from '../services/agent-bundle.js';
+import { GUARDRAIL_SCRIPT_SEEDS } from '../db/seed.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -74,6 +75,7 @@ function templates(): IWorkflowTemplate[] {
 
 let registry: Set<string>;
 let roleIds: Set<string>;
+let scriptIds: Set<string>;
 
 beforeAll(async () => {
     // `truncateAll()` is what RESTORES the reference registry — two test files
@@ -86,6 +88,9 @@ beforeAll(async () => {
     registry = new Set(models.map((m) => modelKey(m.cli, m.model_name)));
     const roles = await testDb.selectFrom('roles').select('id').execute();
     roleIds = new Set(roles.map((r) => r.id));
+    // `truncateAll()` does not restore guardrail_scripts, so read the seeds the
+    // way production does rather than the table.
+    scriptIds = new Set(GUARDRAIL_SCRIPT_SEEDS.map((g) => g.id));
 });
 
 afterAll(async () => {
@@ -220,6 +225,18 @@ describe('workflow templates', () => {
                     .filter((n) => n.type === 'agent')
                     .map((n) => n.agent_id)
                     .filter((id): id is string => typeof id === 'string' && !catalogIds.has(id));
+                expect(missing).toEqual([]);
+            });
+
+            it('references only guardrail scripts that ship as seeds', () => {
+                // A gate step naming a script that does not exist resolves to
+                // `unavailable` at runtime, which ADR 0020 turns into a parked
+                // run rather than a failure — so it would look like a stuck
+                // workflow rather than a typo.
+                const missing = t.graph.nodes
+                    .filter((n) => n.type === 'gate')
+                    .map((n) => n.script_id)
+                    .filter((id): id is string => typeof id === 'string' && !scriptIds.has(id));
                 expect(missing).toEqual([]);
             });
 

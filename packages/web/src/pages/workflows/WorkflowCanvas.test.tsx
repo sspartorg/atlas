@@ -56,6 +56,34 @@ describe('WorkflowCanvas', () => {
         expect(canvas.querySelectorAll('.react-flow__node').length).toBe(4);
     });
 
+    it('draws a gate step with its script name and no agent', () => {
+        // ADR 0021 — a gate has no agent, so the caption has to say so rather
+        // than leave a blank where an agent name usually sits.
+        const graph = {
+            nodes: [
+                { id: 'start', type: 'start' as const, position: { x: 0, y: 0 } },
+                {
+                    id: 'cov',
+                    type: 'gate' as const,
+                    script_id: 'gate-coverage',
+                    position: { x: 0, y: 130 },
+                },
+                { id: 'end', type: 'end' as const, position: { x: 0, y: 260 } },
+            ],
+            edges: [
+                { id: 'e1', source: 'start', target: 'cov', kind: 'pass' as const },
+                { id: 'e2', source: 'cov', target: 'end', kind: 'pass' as const },
+            ],
+        };
+        const flow = toFlow(graph);
+        renderWithProviders(
+            <WorkflowCanvas nodes={flow.nodes} edges={flow.edges} context={context()} />
+        );
+        const canvas = screen.getByTestId('workflow-canvas');
+        expect(within(canvas).getByText('Coverage')).toBeInTheDocument();
+        expect(within(canvas).getByText('No agent runs here')).toBeInTheDocument();
+    });
+
     it('renders overlay children inside the canvas', () => {
         // The run view passes its legend in as a child; it has to land inside
         // the ReactFlow viewport so it floats over the graph.

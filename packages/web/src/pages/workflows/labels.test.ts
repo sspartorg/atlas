@@ -9,6 +9,7 @@ import {
     graphAgentIds,
     itemPathIn,
     subTemplates,
+    gateTitle,
     subtasksLabel,
     templateAgentIds,
     triggerLabel,
@@ -111,6 +112,21 @@ describe('agentLabel', () => {
         expect(agentLabel('agent-po-writer', new Map())).toBe('PO Writer');
         expect(agentLabel('agent-qa-reviewer', new Map())).toBe('QA Reviewer');
         expect(agentLabel('agent-ai-readiness', new Map())).toBe('AI Readiness');
+    });
+});
+
+describe('gateTitle', () => {
+    it('prettifies a gate script id', () => {
+        expect(gateTitle('gate-coverage')).toBe('Coverage');
+        expect(gateTitle('gate-hygiene')).toBe('Hygiene');
+    });
+
+    it('keeps an id that does not carry the gate- prefix', () => {
+        expect(gateTitle('coder-tests-green')).toBe('Coder tests green');
+    });
+
+    it('prompts when the gate has no script yet', () => {
+        expect(gateTitle(undefined)).toBe('Choose a script');
     });
 });
 

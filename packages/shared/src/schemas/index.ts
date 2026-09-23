@@ -28,6 +28,7 @@ export const SdlcRoleSchema = z.enum([
     'devops',
     'security',
     'designer',
+    'docs',
 ]);
 
 // A08 — `PATCH /api/roles/:id` body. Edits only the default prompt

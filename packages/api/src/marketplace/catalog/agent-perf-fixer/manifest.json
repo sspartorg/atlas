@@ -1,0 +1,22 @@
+{
+  "id": "agent-perf-fixer",
+  "name": "Performance Fixer",
+  "category": "software-dev",
+  "cli": "claude",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "framework": "review",
+  "description": "Dispatched only when the `gate-perf` script reports a budget breach. Measures the actual cost before changing anything, fixes the cause rather than the measurement, and never widens a budget or trades correctness for latency.",
+  "designation": "Performance Engineer",
+  "accent_color": "#EA580C",
+  "sort_order": 20,
+  "glyph": "speed",
+  "role_id": "devops",
+  "status": "active",
+  "kind_slug": "custom",
+  "settings_json": {},
+  "memory_cadence": 1,
+  "summary": "Optimises the touched routes back under budget after gate-perf reported a breach.",
+  "version": 1,
+  "published_at": "2026-09-24T00:00:00Z"
+}

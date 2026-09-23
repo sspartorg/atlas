@@ -55,6 +55,10 @@ vi.mock('./worktree-orchestrator.js', async (importOriginal) => ({
 // subject override this per-case.
 const gate = vi.hoisted(() => ({
     runVerificationGate: vi.fn(async () => ({ kind: 'pass' as const })),
+    // A `gate` step calls this one. Default pass so the graphs that carry a
+    // gate but are not about it keep flowing; the gate-step tests below
+    // override it per case.
+    runGuardrailScript: vi.fn(async () => ({ kind: 'pass' as const })),
     // The engine also reads the script id so the `run_gate_results` audit row
     // names what ran; a bare function mock would leave that export undefined.
     GATE_SCRIPT_ID: 'coder-tests-green',
@@ -80,7 +84,7 @@ import {
 } from './workflow-engine.js';
 import { commentsService } from './comments.js';
 
-const node = (id: string, type: 'start' | 'agent' | 'owner' | 'subtasks' | 'end', extra: Record<string, string> = {}) => ({
+const node = (id: string, type: 'start' | 'agent' | 'owner' | 'subtasks' | 'gate' | 'end', extra: Record<string, string> = {}) => ({
     id,
     type,
     position: { x: 0, y: 0 },
@@ -642,6 +646,175 @@ describe('workflow engine — delivery modes', () => {
         expect(git.openPullRequest).not.toHaveBeenCalled();
         expect(await runOf(runId)).toMatchObject({ status: 'completed', pr_url: null });
         expect(await itemOf('ATL-2')).toMatchObject({ status: 'done' });
+    });
+});
+
+
+describe('workflow engine — gate steps', () => {
+    // Start -> Coder -> [gate] -> End, with the gate failing to a fixer that
+    // loops back to it. This is the shape the node type exists for: the script
+    // decides, and an agent is dispatched only when it says no.
+    function gateGraph(withFixer = true): IWorkflowGraph {
+        const nodes = [
+            node('start', 'start'),
+            node('coder', 'agent', { agent_id: 'agent-coder' }),
+            node('cov', 'gate', { script_id: 'gate-coverage' }),
+            node('end', 'end'),
+        ];
+        const edges = [edge('start', 'coder'), edge('coder', 'cov'), edge('cov', 'end')];
+        if (withFixer) {
+            nodes.splice(3, 0, node('fixer', 'agent', { agent_id: 'agent-reviewer' }));
+            edges.push(edge('cov', 'fixer', 'fail'), edge('fixer', 'cov'));
+        }
+        return { nodes, edges } as IWorkflowGraph;
+    }
+
+    // Gate STEPS only. The pre-push verification gate (ADR 0020) writes to the
+    // same table with `node_id` null, because it belongs to the run rather than
+    // to any node — a run that reaches End records both, and conflating them
+    // would make these assertions depend on whether delivery happened.
+    const gateRows = (runId: string) =>
+        testDb
+            .selectFrom('run_gate_results')
+            .select(['node_id', 'script_id', 'verdict', 'output_tail'])
+            .where('workflow_run_id', '=', runId)
+            .where('node_id', 'is not', null)
+            .orderBy('created_at', 'asc')
+            .execute();
+
+    beforeEach(async () => {
+        await testDb.deleteFrom('workflows').where('id', '=', 'wf-gate').execute();
+        await insertWorkflow('wf-gate', { graph: JSON.stringify(gateGraph()) });
+    });
+
+    it('passes without spawning an agent — a green gate costs nothing', async () => {
+        gate.runGuardrailScript.mockResolvedValue({ kind: 'pass' } as never);
+        const runId = await startWorkflowRun('wf-gate', 'ATL-2');
+        await finishStep('completed', 'done');
+
+        // Coder ran; the gate did not add a second dispatch.
+        expect(spawned.map((s) => s.nodeId)).toEqual(['coder']);
+        expect(gate.runGuardrailScript).toHaveBeenCalledWith(
+            expect.objectContaining({ scriptId: 'gate-coverage' }),
+        );
+        expect(await gateRows(runId)).toEqual([
+            expect.objectContaining({ node_id: 'cov', script_id: 'gate-coverage', verdict: 'pass' }),
+        ]);
+
+        // The pre-push gate is recorded alongside it, distinguished by a null
+        // node_id — the scorecard needs to tell "a step checked this" apart
+        // from "delivery checked this".
+        const all = await testDb
+            .selectFrom('run_gate_results')
+            .select(['node_id', 'script_id'])
+            .where('workflow_run_id', '=', runId)
+            .execute();
+        expect(all).toContainEqual({ node_id: null, script_id: 'coder-tests-green' });
+    });
+
+    it('dispatches the fixer on a red gate, with the script output as its contract', async () => {
+        gate.runGuardrailScript.mockResolvedValue({
+            kind: 'fail',
+            output: 'gate-coverage:\n1. statements 91% is below the 95% floor',
+            exitCode: 1,
+        } as never);
+        const runId = await startWorkflowRun('wf-gate', 'ATL-2');
+        await finishStep('completed', 'done');
+
+        expect(spawned.map((s) => s.nodeId)).toEqual(['coder', 'fixer']);
+        const rows = await gateRows(runId);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ verdict: 'fail' });
+        expect(rows[0]?.output_tail).toContain('91%');
+
+        // The fixer reads the gap list from the thread, the same way a Coder
+        // reads a rejecting reviewer's reason.
+        const bodies = (await commentsService.list('task', 'ATL-2')).map((c) => c.body);
+        expect(bodies.some((b) => b.includes('gate-coverage') && b.includes('91%'))).toBe(true);
+    });
+
+    it('re-runs the gate after the fixer and continues once it is green', async () => {
+        gate.runGuardrailScript.mockResolvedValueOnce({ kind: 'fail', output: 'red', exitCode: 1 } as never);
+        gate.runGuardrailScript.mockResolvedValue({ kind: 'pass' } as never);
+
+        const runId = await startWorkflowRun('wf-gate', 'ATL-2');
+        await finishStep('completed', 'done'); // coder -> gate (red) -> fixer
+        expect(spawned.map((s) => s.nodeId)).toEqual(['coder', 'fixer']);
+
+        await finishStep('completed', 'done'); // fixer -> gate (green) -> End
+        expect(spawned.map((s) => s.nodeId)).toEqual(['coder', 'fixer']);
+        const verdicts = (await gateRows(runId)).map((r) => r.verdict);
+        expect(verdicts).toEqual(['fail', 'pass']);
+        const run = await testDb.selectFrom('workflow_runs').select('status').where('id', '=', runId).executeTakeFirstOrThrow();
+        expect(run.status).toBe('completed');
+    });
+
+    it('routes needs_review down the fail edge — a missing baseline is not breakage', async () => {
+        gate.runGuardrailScript.mockResolvedValue({
+            kind: 'needs_review',
+            output: 'ATLAS_GATE_NEEDS_REVIEW\ngate-visual:\n1. no baseline to compare against',
+            exitCode: 1,
+        } as never);
+        const runId = await startWorkflowRun('wf-gate', 'ATL-2');
+        await finishStep('completed', 'done');
+
+        expect(spawned.map((s) => s.nodeId)).toEqual(['coder', 'fixer']);
+        expect((await gateRows(runId))[0]).toMatchObject({ verdict: 'needs_review' });
+    });
+
+    it('parks — and does NOT fail — when the gate could not run at all', async () => {
+        // ADR 0020: absence of evidence is not evidence. Treating this as red
+        // would turn an unenforced gate into one that blocks every delivery.
+        gate.runGuardrailScript.mockResolvedValue({
+            kind: 'unavailable',
+            reason: "no 'gate-coverage' guardrail script is configured",
+        } as never);
+        const runId = await startWorkflowRun('wf-gate', 'ATL-2');
+        await finishStep('completed', 'done');
+
+        expect(spawned.map((s) => s.nodeId)).toEqual(['coder']);
+        const run = await testDb
+            .selectFrom('workflow_runs')
+            .select(['status', 'parked_node_id', 'park_reason'])
+            .where('id', '=', runId)
+            .executeTakeFirstOrThrow();
+        expect(run.status).toBe('waiting_for_owner');
+        expect(run.parked_node_id).toBe('cov');
+        expect(run.park_reason).toContain('could not run');
+        expect((await gateRows(runId))[0]).toMatchObject({ verdict: 'unavailable' });
+    });
+
+    it('parks once the gate is still red past max_loops', async () => {
+        gate.runGuardrailScript.mockResolvedValue({ kind: 'fail', output: 'still red', exitCode: 1 } as never);
+        const runId = await startWorkflowRun('wf-gate', 'ATL-2');
+        await finishStep('completed', 'done'); // gate red #1 -> fixer
+        await finishStep('completed', 'done'); // gate red #2 -> fixer
+        await finishStep('completed', 'done'); // gate red #3 -> over max_loops (2)
+
+        const run = await testDb
+            .selectFrom('workflow_runs')
+            .select(['status', 'park_reason'])
+            .where('id', '=', runId)
+            .executeTakeFirstOrThrow();
+        expect(run.status).toBe('waiting_for_owner');
+        expect(run.park_reason).toContain('Loop limit reached');
+    });
+
+    it('parks rather than passing when a red gate has nowhere to route', async () => {
+        await testDb.deleteFrom('workflows').where('id', '=', 'wf-gate').execute();
+        await insertWorkflow('wf-gate', { graph: JSON.stringify(gateGraph(false)) });
+        gate.runGuardrailScript.mockResolvedValue({ kind: 'fail', output: 'red with no fixer', exitCode: 1 } as never);
+
+        const runId = await startWorkflowRun('wf-gate', 'ATL-2');
+        await finishStep('completed', 'done');
+
+        const run = await testDb
+            .selectFrom('workflow_runs')
+            .select(['status', 'park_reason'])
+            .where('id', '=', runId)
+            .executeTakeFirstOrThrow();
+        expect(run.status).toBe('waiting_for_owner');
+        expect(run.park_reason).toContain('red with no fixer');
     });
 });
 

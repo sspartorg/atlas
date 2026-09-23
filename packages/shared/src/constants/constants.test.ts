@@ -159,7 +159,7 @@ describe('guardrails', () => {
 });
 
 describe('A08 — SDLC role catalog', () => {
-    it('SDLC_ROLES has the 10 canonical roles in catalog order', () => {
+    it('SDLC_ROLES has the 11 canonical roles in catalog order', () => {
         expect(SDLC_ROLES).toEqual([
             'po',
             'spec-writer',
@@ -171,6 +171,7 @@ describe('A08 — SDLC role catalog', () => {
             'devops',
             'security',
             'designer',
+            'docs',
         ]);
     });
 

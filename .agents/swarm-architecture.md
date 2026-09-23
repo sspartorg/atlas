@@ -54,6 +54,19 @@ Each has `role_id` pointing at a row in [`role-catalog.md`](role-catalog.md). Ag
 
 **Sub-task order:** `delivery`'s first Sub-tasks step (no label) builds every sub-task not labelled `qa`, oldest first; the second tests every `qa` sub-task, so each `[QA]` twin runs after all the code is built on the branch. A sub-task created mid-run (e.g. a fix a reviewer asked for) is picked up by its step, or the End gate sends the run back to that step.
 
+### Gate fixers (4, ADR 0021)
+
+A `gate` step runs a `guardrail_scripts` body and routes on its exit code — no agent, no tokens. These four are dispatched **only** on a gate's fail edge, with the script's own output as their contract, and their pass edge goes back to the gate. **For a fixer, the gate is the reviewer**: re-running a script is deterministic, free, and cannot be talked into passing, which makes it a strictly better check than a second LLM for anything an exit code can express.
+
+| Agent | Role | Gate | Dispatched when |
+|---|---|---|---|
+| `agent-hygiene-fixer` | `security` | `gate-hygiene` | Declared lint/typecheck failed, or the diff carries `console.log` / `debugger` / an untracked TODO |
+| `agent-coverage-fixer` | `tester` | `gate-coverage` | Statements fell below the floor |
+| `agent-perf-fixer` | `devops` | `gate-perf` | The declared perf script reported a budget breach |
+| `agent-visual-reviewer` | `designer` | `gate-visual` | A diff against a committed baseline, or `ATLAS_GATE_NEEDS_REVIEW` — captured with no baseline to compare against |
+
+The visual one is an agent rather than a script for a reason the others are not: a screen with no baseline has nothing to diff, so the judgement is "does this look right", which needs eyes.
+
 ### Autonomous catalog agents (6, inactive)
 
 All `role_id: NULL`, `status: 'inactive'`. Owner enables by editing the prompt's `{{ placeholder }}` blocks, flipping status, and adding the agent to a no-item workflow (scheduled or manual).

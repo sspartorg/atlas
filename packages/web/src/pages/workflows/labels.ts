@@ -97,6 +97,18 @@ export function subtasksLabel(label: string | undefined): string {
     return label ? `Labelled “${label}”` : 'All other sub-tasks';
 }
 
+/**
+ * A gate step's display name. The script id is the honest label — it is what
+ * the Owner would grep for in Settings > Guardrail scripts, and what the run's
+ * comment thread names when the gate goes red — so it is prettified rather
+ * than replaced with a title that would have to be kept in sync.
+ */
+export function gateTitle(scriptId: string | undefined): string {
+    if (!scriptId) return 'Choose a script';
+    const bare = scriptId.startsWith('gate-') ? scriptId.slice('gate-'.length) : scriptId;
+    return bare.replace(/[-_]/g, ' ').replace(/^./, (c) => c.toUpperCase());
+}
+
 export function graphAgentIds(graph: IWorkflowGraph): string[] {
     return graph.nodes.flatMap((n) => (n.type === 'agent' && n.agent_id ? [n.agent_id] : []));
 }

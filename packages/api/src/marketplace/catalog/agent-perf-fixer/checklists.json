@@ -1,0 +1,27 @@
+[
+  {
+    "label": "The cause of the breach was measured, not assumed",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "No budget was widened, sample count reduced, or slow case skipped",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "Behaviour is unchanged; any cache added has a test proving invalidation works",
+    "sort_order": 2,
+    "required": true
+  },
+  {
+    "label": "Before and after numbers are quoted in the summary",
+    "sort_order": 3,
+    "required": true
+  },
+  {
+    "label": "The gate was re-run and passes",
+    "sort_order": 4,
+    "required": true
+  }
+]

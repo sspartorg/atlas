@@ -9,6 +9,7 @@ import type { IAgent, IProject, IWorkflow } from '@atlas/shared';
 import { SelectableCard } from '../../components/SchedulePresetFields.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { SectionLabel, StartInspector } from './StartInspector.js';
+import { useGuardrailScripts } from '../../hooks/useGuardrails.js';
 import type { IWfNodeData, WfNode } from './graph.js';
 
 interface Props {
@@ -26,6 +27,7 @@ const TITLES = {
     agent: 'Agent step',
     owner: 'Owner',
     subtasks: 'Sub-tasks step',
+    gate: 'Gate step',
     end: 'End',
 } as const;
 
@@ -152,6 +154,48 @@ function AgentPanel({
                 agent reports done, and its red <Box component="strong">fail</Box> connection when a
                 reviewer rejects the work. With no fail connection, a failure sends the item back to
                 you.
+            </Explain>
+        </Box>
+    );
+}
+
+function GatePanel({ node, onNodeData }: Pick<Props, 'onNodeData'> & { node: WfNode }) {
+    const { data: scripts } = useGuardrailScripts();
+    const all = scripts ?? [];
+    const picked = all.find((g) => g.id === node.data.script_id);
+    // Same reasoning as the Sub-tasks panel: a script id that no longer exists
+    // is not the same as no id. At run time it resolves to `unavailable`, which
+    // ADR 0020 turns into a parked run rather than a failure — so it looks like
+    // a stuck workflow, not a typo. Say so here, where it can be fixed.
+    const dangling = node.data.script_id != null && !picked;
+    return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <TextField
+                select
+                label="Guardrail script"
+                size="small"
+                error={dangling}
+                value={picked ? picked.id : ''}
+                onChange={(e) => onNodeData({ script_id: e.target.value || undefined })}
+                helperText={
+                    dangling
+                        ? 'This gate points at a script that no longer exists — pick one.'
+                        : 'Runs once per repo the Task touches'
+                }
+                fullWidth
+            >
+                {all.map((g) => (
+                    <MenuItem key={g.id} value={g.id}>
+                        {g.name}
+                    </MenuItem>
+                ))}
+            </TextField>
+            <Explain>
+                A gate runs this script and routes on its exit code — no agent, no tokens. Exit 0
+                takes the pass connection. Anything else takes the fail connection, with the
+                script&apos;s own output handed to whatever is on the other end as its brief. A
+                script that cannot run at all pauses the run and comes back to you, rather than
+                counting as a failure.
             </Explain>
         </Box>
     );
@@ -337,6 +381,9 @@ export function WorkflowInspector(props: Props) {
                     node={props.node}
                     onNodeData={props.onNodeData}
                 />
+            )}
+            {type === 'gate' && props.node && (
+                <GatePanel node={props.node} onNodeData={props.onNodeData} />
             )}
             {type === 'end' && <EndPanel workflow={props.workflow} onChange={props.onChange} />}
         </Box>

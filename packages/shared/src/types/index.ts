@@ -40,7 +40,8 @@ export type SdlcRole =
     | 'automation'
     | 'devops'
     | 'security'
-    | 'designer';
+    | 'designer'
+    | 'docs';
 
 export const SDLC_ROLES: readonly SdlcRole[] = [
     'po',
@@ -53,6 +54,7 @@ export const SDLC_ROLES: readonly SdlcRole[] = [
     'devops',
     'security',
     'designer',
+    'docs',
 ];
 
 /**

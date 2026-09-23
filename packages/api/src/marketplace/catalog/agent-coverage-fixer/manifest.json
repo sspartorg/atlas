@@ -1,0 +1,22 @@
+{
+  "id": "agent-coverage-fixer",
+  "name": "Coverage Fixer",
+  "category": "software-dev",
+  "cli": "claude",
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "framework": "tdd-red-green-refactor",
+  "description": "Dispatched only when the `gate-coverage` script exits non-zero. Reads the coverage report to find what is genuinely uncovered in the branch's own diff and writes tests that would fail if the behaviour broke - never assertion-free tests, never a lowered floor.",
+  "designation": "Test Coverage",
+  "accent_color": "#0891B2",
+  "sort_order": 19,
+  "glyph": "shield_with_heart",
+  "role_id": "tester",
+  "status": "active",
+  "kind_slug": "custom",
+  "settings_json": {},
+  "memory_cadence": 1,
+  "summary": "Writes the tests that close the gap gate-coverage measured.",
+  "version": 1,
+  "published_at": "2026-09-24T00:00:00Z"
+}

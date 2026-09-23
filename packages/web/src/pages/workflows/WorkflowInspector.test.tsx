@@ -64,6 +64,7 @@ describe('WorkflowInspector', () => {
             ['agent', 'Agent step'],
             ['owner', 'Owner'],
             ['subtasks', 'Sub-tasks step'],
+            ['gate', 'Gate step'],
             ['end', 'End'],
         ];
         for (const [type, title] of titles) {
@@ -86,6 +87,26 @@ describe('WorkflowInspector', () => {
     it('explains that an Owner node parks the run and waits for a reply', () => {
         mount({ node: node('owner') });
         expect(screen.getByText(/comes back to you as Waiting for info/)).toBeInTheDocument();
+    });
+
+    // ─── Gate step ──────────────────────────────────────────────────────────
+
+    it('explains that a gate routes on an exit code and spends no tokens', () => {
+        mount({ node: node('gate', { script_id: 'gate-coverage' }) });
+        expect(screen.getByText(/no agent, no tokens/)).toBeInTheDocument();
+        expect(screen.getByText(/pauses the run and comes back to you/)).toBeInTheDocument();
+    });
+
+    it('flags a gate pointing at a script that no longer exists', () => {
+        // At run time this resolves to `unavailable`, which parks the run
+        // rather than failing it — so it reads as a stuck workflow, not a typo.
+        mount({ node: node('gate', { script_id: 'gate-deleted' }) });
+        expect(screen.getByText(/no longer exists/)).toBeInTheDocument();
+    });
+
+    it('says what a gate does when no script is picked yet', () => {
+        mount({ node: node('gate') });
+        expect(screen.getByText('Runs once per repo the Task touches')).toBeInTheDocument();
     });
 
     // ─── Agent step ─────────────────────────────────────────────────────────

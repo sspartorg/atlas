@@ -423,7 +423,7 @@ describe('POST /api/cli/sessions', () => {
         expect(body.worktree_branch).toMatch(/^atlas\/terminal\//);
         expect(typeof body.claude_session_id).toBe('string');
         expect(body.claude_session_id.length).toBeGreaterThan(0);
-        expect(body.model).toBe('claude-opus-4-7');
+        expect(body.model).toBe('claude-opus-5');
         expect(body.initial_prompt).toBe('hello');
 
         expect(mockPtys).toHaveLength(1);

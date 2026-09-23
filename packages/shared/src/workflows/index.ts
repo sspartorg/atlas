@@ -2,7 +2,13 @@ import { z } from 'zod';
 import type { AgentCli, AgentEffort, ITask, RunOutcomeKind, RunStatus, SchedulePreset } from '../types/index.js';
 import { SchedulePresetSchema } from '../schemas/index.js';
 
-export const WORKFLOW_NODE_TYPES = ['start', 'agent', 'owner', 'subtasks', 'end'] as const;
+// `gate` runs a guardrail script and routes on its exit code — no agent, no
+// tokens. Coverage, lint, security, perf and visual are exit codes rather than
+// judgement calls, and running them as agent steps cost a full dispatch to
+// learn what bash already knew, while leaving the verdict self-reported
+// (campaign finding F-012, ADR 0020). A gate's fail edge is where an LLM
+// finally gets dispatched, with the script's own output as its contract.
+export const WORKFLOW_NODE_TYPES = ['start', 'agent', 'owner', 'subtasks', 'gate', 'end'] as const;
 export type WorkflowNodeType = (typeof WORKFLOW_NODE_TYPES)[number];
 
 export const WORKFLOW_EDGE_KINDS = ['pass', 'fail'] as const;
@@ -30,6 +36,8 @@ export interface IWorkflowNode {
      * Unset → the sub-tasks no other Sub-tasks step in the graph claims.
      */
     label?: string | undefined;
+    /** Gate only: the `guardrail_scripts.id` to execute, project override first. */
+    script_id?: string | undefined;
     position: { x: number; y: number };
 }
 
@@ -145,6 +153,7 @@ export const WorkflowGraphSchema: z.ZodType<IWorkflowGraph> = z.object({
                 agent_id: ID.optional(),
                 sub_workflow_id: ID.optional(),
                 label: z.string().trim().min(1).max(40).optional(),
+                script_id: z.string().trim().min(1).max(64).optional(),
                 position: z.object({ x: z.number(), y: z.number() }),
             }),
         )
@@ -406,6 +415,12 @@ export function validateWorkflowGraph(graph: IWorkflowGraph, inputKind?: Workflo
         if (n.type !== 'subtasks' && (n.sub_workflow_id || n.label)) {
             errors.push({ node_id: n.id, message: 'Only Sub-tasks steps take a sub-workflow or label' });
         }
+        if (n.type !== 'gate' && n.script_id) {
+            errors.push({ node_id: n.id, message: 'Only gate steps take a script' });
+        }
+        if (n.type === 'gate' && !n.script_id) {
+            errors.push({ node_id: n.id, message: 'Choose the script for this gate' });
+        }
         if (n.type === 'subtasks') {
             if (!n.sub_workflow_id) errors.push({ node_id: n.id, message: 'Choose the sub-workflow for these sub-tasks' });
             if (inputKind !== undefined && inputKind !== 'item') {
@@ -419,11 +434,17 @@ export function validateWorkflowGraph(graph: IWorkflowGraph, inputKind?: Workflo
             if (out.length > 0) errors.push({ node_id: n.id, message: 'End cannot have outgoing connections' });
             continue;
         }
-        if (n.type !== 'agent' && failCount > 0) {
-            errors.push({ node_id: n.id, message: 'Only agent nodes can have a fail connection' });
+        // A gate carries a fail edge for the same reason an agent does: it is the
+        // connection the run takes when the step says no. `findPassLoop` only
+        // walks pass edges, so `gate --fail--> fixer --pass--> gate` is a legal
+        // cycle and every traversal increments `loop_count`, which `max_loops`
+        // still bounds.
+        const canFail = n.type === 'agent' || n.type === 'gate';
+        if (!canFail && failCount > 0) {
+            errors.push({ node_id: n.id, message: 'Only agent and gate steps can have a fail connection' });
         }
         if (passCount !== 1) errors.push({ node_id: n.id, message: 'Needs exactly one pass connection' });
-        if (n.type === 'agent' && failCount > 1) errors.push({ node_id: n.id, message: 'At most one fail connection' });
+        if (canFail && failCount > 1) errors.push({ node_id: n.id, message: 'At most one fail connection' });
     }
 
     if (starts.length === 1) {

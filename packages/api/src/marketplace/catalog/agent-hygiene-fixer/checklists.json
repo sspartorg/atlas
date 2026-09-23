@@ -1,0 +1,22 @@
+[
+  {
+    "label": "Every gap in the gate's numbered list was closed at its cause",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "No rule was suppressed (no eslint-disable, @ts-ignore, prettier-ignore, --no-verify)",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "The gate was re-run and exits 0",
+    "sort_order": 2,
+    "required": true
+  },
+  {
+    "label": "No file the gate did not name was modified",
+    "sort_order": 3,
+    "required": true
+  }
+]
