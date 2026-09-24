@@ -17,6 +17,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Writes the tests that close the gap gate-coverage measured.",
-  "version": 1,
+  "version": 2,
   "published_at": "2026-09-24T00:00:00Z"
 }

@@ -1,0 +1,98 @@
+{
+  "agent-ai-news": {
+    "version": 2,
+    "hash": "f3a5edc210c12334"
+  },
+  "agent-ai-readiness": {
+    "version": 2,
+    "hash": "c2a9f78d4a4f0924"
+  },
+  "agent-architect": {
+    "version": 2,
+    "hash": "f8b13a392ebb5975"
+  },
+  "agent-architect-reviewer": {
+    "version": 1,
+    "hash": "298be6c7a4b1286a"
+  },
+  "agent-automation": {
+    "version": 2,
+    "hash": "8512e5508831e6c0"
+  },
+  "agent-automation-reviewer": {
+    "version": 1,
+    "hash": "39747032cecf09a5"
+  },
+  "agent-code-reviewer": {
+    "version": 2,
+    "hash": "c86d14a5dbe4b9bc"
+  },
+  "agent-coder": {
+    "version": 2,
+    "hash": "8e703cc338515d2d"
+  },
+  "agent-coverage-fixer": {
+    "version": 2,
+    "hash": "53860bc2e8c253d9"
+  },
+  "agent-doc-reviewer": {
+    "version": 1,
+    "hash": "a06ea1e744460147"
+  },
+  "agent-doc-writer": {
+    "version": 1,
+    "hash": "b48498dc3b1e2f98"
+  },
+  "agent-fix-reviewer": {
+    "version": 1,
+    "hash": "e8f2edcedac809e0"
+  },
+  "agent-hygiene-fixer": {
+    "version": 2,
+    "hash": "5c928395c315938a"
+  },
+  "agent-jira-to-epic": {
+    "version": 2,
+    "hash": "3dd61b81e2decce5"
+  },
+  "agent-knowledge-base": {
+    "version": 2,
+    "hash": "673b61f482d169a4"
+  },
+  "agent-market-research": {
+    "version": 2,
+    "hash": "0e49c2a7f85d0be9"
+  },
+  "agent-perf-fixer": {
+    "version": 2,
+    "hash": "71fc6374847b21ed"
+  },
+  "agent-po-reviewer": {
+    "version": 1,
+    "hash": "70c5f43bf26582f3"
+  },
+  "agent-po-writer": {
+    "version": 2,
+    "hash": "6b5c50ab513afe19"
+  },
+  "agent-qa-reviewer": {
+    "version": 1,
+    "hash": "5fc9f0ea8ef74f6b"
+  },
+  "agent-qa-writer": {
+    "version": 2,
+    "hash": "d6a56505e5936070"
+  },
+  "agent-regulations": {
+    "version": 2,
+    "hash": "d4bf3f6d48979a34"
+  },
+  "agent-release-reviewer": {
+    "version": 2,
+    "hash": "40f5b6886ccf38dd"
+  },
+  "agent-visual-reviewer": {
+    "version": 2,
+    "hash": "93faec3302293dff"
+  }
+}

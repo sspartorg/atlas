@@ -24,7 +24,8 @@
     "db:status": "tsx src/db/run-migrations.ts status",
     "db:seed": "tsx src/scripts/seed-cli.ts",
     "db:reset": "pnpm db:down:purge && pnpm db:up && pnpm db:wait && pnpm db:migrate",
-    "doctor": "tsx src/scripts/check-prereqs.ts"
+    "doctor": "tsx src/scripts/check-prereqs.ts",
+    "catalog:lock": "tsx src/scripts/write-catalog-lock.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",
