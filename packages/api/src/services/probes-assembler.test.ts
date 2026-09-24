@@ -17,6 +17,40 @@ afterAll(() => {
     for (const r of roots) rmSync(r, { recursive: true, force: true });
 });
 
+// Atlas writes `.atlas/` into every target repo's .gitignore and commits it
+// (worktree-orchestrator.ts:713). Anything a gate needs to PERSIST between
+// runs — a blessed baseline, a ratcheted floor, a project's perf budget —
+// therefore cannot live there, and the failure is silent: the gate just
+// reports "no baseline" forever, or quietly falls back to the default floor
+// on every branch. These paths must stay outside `.atlas/`.
+describe('gate state is committable', () => {
+    const readProbe = (name: string) =>
+        readFileSync(join(import.meta.dirname, '..', 'marketplace', 'probes', name), 'utf8');
+
+    it('no probe writes persisted state under .atlas/', () => {
+        for (const name of ['perf-probe.mjs', 'visual-probe.mjs']) {
+            // Comments discuss `.atlas/` precisely because it is the trap.
+            const body = readProbe(name)
+                .split('\n')
+                .filter((l) => !l.trim().startsWith('//'))
+                .join('\n');
+            for (const m of body.matchAll(/['"`](\.atlas\/[A-Za-z0-9._\-/{}]*)['"`]/g)) {
+                // `.atlas/probes/` is where the probe itself is staged, which is
+                // correct — it is scaffolding, not state.
+                expect(m[1], `${name} persists state to an ignored path`).toMatch(/^\.atlas\/probes\//);
+            }
+        }
+    });
+
+    it('the coverage ratchet writes outside .atlas/ too', async () => {
+        const { GUARDRAIL_SCRIPT_SEEDS } = await import('../db/seed.js');
+        const cov = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === 'gate-coverage');
+        expect(cov).toBeDefined();
+        expect(cov!.body_sh).toContain('atlas-gate/coverage-floor');
+        expect(cov!.body_sh).not.toContain('.atlas/coverage-floor');
+    });
+});
+
 describe('assembleProbes', () => {
     it('stages every probe into .atlas/probes/', () => {
         const dir = worktree();
@@ -95,7 +129,7 @@ createServer((req, res) => {
         const dir = project({
             'package.json': '{"scripts":{"start":"node server.mjs"}}',
             'server.mjs': SERVER,
-            '.atlas/perf-budget.json': '{"api_p95_ms": 500, "samples": 5, "warmup": 1}',
+            'atlas-gate/perf-budget.json': '{"api_p95_ms": 500, "samples": 5, "warmup": 1}',
         });
         const r = run(dir, "+++ b/server.mjs\n+ if (req.url === '/api/slow')\n", 39212);
         expect(r.code).toBe(0);

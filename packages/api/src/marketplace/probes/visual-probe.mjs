@@ -129,7 +129,10 @@ function main() {
     writeFileSync(spec, specSource(routes, port));
 
     // Baselines live in the repo so they are reviewable and travel with the
-    // branch that blessed them, exactly like the coverage ratchet.
+    // branch that blessed them, exactly like the coverage ratchet. In
+    // `atlas-gate/`, never `.atlas/` — Atlas gitignores `.atlas/` in every
+    // target repo, so a baseline written there could never be committed and
+    // the gate would ask for review on every run, forever.
     const engines = installedEngines();
     const config = join(dir, 'atlas-visual.config.ts');
     writeFileSync(
@@ -138,7 +141,7 @@ function main() {
 export default defineConfig({
     testDir: ${JSON.stringify(dir)},
     projects: [${engines.map((e) => `{ name: ${JSON.stringify(e)}, use: { ...devices[${JSON.stringify(e === 'chromium' ? 'Desktop Chrome' : e === 'webkit' ? 'Desktop Safari' : 'Desktop Firefox')}] } }`).join(', ')}],
-    snapshotPathTemplate: ${JSON.stringify(join(process.cwd(), '.atlas/visual-baselines/{projectName}/{arg}{ext}'))},
+    snapshotPathTemplate: ${JSON.stringify(join(process.cwd(), 'atlas-gate/visual-baselines/{projectName}/{arg}{ext}'))},
     fullyParallel: false,
     workers: 1,
     retries: 0,
@@ -188,7 +191,7 @@ export default defineConfig({
         console.log('ATLAS_GATE_NEEDS_REVIEW');
         console.log('gate-visual:');
         console.log('1. captured, but there is no baseline to compare against');
-        console.log(`   Baselines live in .atlas/visual-baselines/. Look at the captures, then bless them.`);
+        console.log(`   Baselines live in atlas-gate/visual-baselines/. Look at the captures, then bless them.`);
         console.log(out.split('\n').slice(-30).join('\n'));
         process.exit(1);
     }

@@ -1109,7 +1109,7 @@ set -u
 FLOOR=95
 # The ratchet lives in the repo so it is reviewable, diffable and travels with
 # the branch that earned it -- not in a database the team cannot see.
-RATCHET=".atlas/coverage-floor"
+RATCHET="atlas-gate/coverage-floor"
 pm=npm
 [ -f pnpm-lock.yaml ] && pm=pnpm
 [ -f yarn.lock ] && pm=yarn
@@ -1226,7 +1226,7 @@ exit 0
         id: 'gate-perf',
         name: 'Performance gate (declared perf script)',
         description:
-            "Gate node script. Scoped: skips immediately when the branch changed only docs and tests, because those cannot move latency. Otherwise runs the project's declared perf script, or falls back to Atlas's own probe (`.atlas/probes/perf-probe.mjs`), which starts the app via its `start` script and measures p95 on the routes the diff names against a 100ms API / 200ms page budget overridable in `.atlas/perf-budget.json`. Only a project with neither is skipped.",
+            "Gate node script. Scoped: skips immediately when the branch changed only docs and tests, because those cannot move latency. Otherwise runs the project's declared perf script, or falls back to Atlas's own probe (`.atlas/probes/perf-probe.mjs`), which starts the app via its `start` script and measures p95 on the routes the diff names against a 100ms API / 200ms page budget overridable in `atlas-gate/perf-budget.json`. Only a project with neither is skipped.",
         sort_order: 109,
         body_sh: `#!/usr/bin/env bash
 # Performance gate. $1 is the item id (unused).
@@ -1313,7 +1313,7 @@ exit 0
         id: 'gate-visual',
         name: 'Visual gate (cross-viewport capture and diff)',
         description:
-            "Gate node script. Skips unless the branch touched UI files, then runs the project's declared visual script, or falls back to Atlas's own probe (`.atlas/probes/visual-probe.mjs`), which drives the project's Playwright across three viewports (desktop, iPad portrait, phone) and both colour schemes, with baselines in `.atlas/visual-baselines/`. A real diff against a committed baseline fails. When the only problem is that no baseline exists yet, it also prints ATLAS_GATE_NEEDS_REVIEW, which routes to the visual reviewer instead of being treated as breakage - a missing baseline is the normal state on a new screen.",
+            "Gate node script. Skips unless the branch touched UI files, then runs the project's declared visual script, or falls back to Atlas's own probe (`.atlas/probes/visual-probe.mjs`), which drives the project's Playwright across three viewports (desktop, iPad portrait, phone) and both colour schemes, with baselines in `atlas-gate/visual-baselines/`. A real diff against a committed baseline fails. When the only problem is that no baseline exists yet, it also prints ATLAS_GATE_NEEDS_REVIEW, which routes to the visual reviewer instead of being treated as breakage - a missing baseline is the normal state on a new screen.",
         sort_order: 110,
         body_sh: `#!/usr/bin/env bash
 # Visual gate. $1 is the item id (unused).

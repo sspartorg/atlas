@@ -150,5 +150,29 @@ the probe says which engines it actually used rather than letting a single-
 engine pass read as more than it is.
 
 `gate-coverage` also ratchets: on a pass it writes the floor back to
-`.atlas/coverage-floor`, rounded down to a whole percent, so coverage a branch
+`atlas-gate/coverage-floor`, rounded down to a whole percent, so coverage a branch
 earned cannot be spent by the next one.
+
+### Why gate state is in `atlas-gate/` and not `.atlas/`
+
+Every other file Atlas puts in a worktree lives under `.atlas/`, and the first
+three versions of this work followed that convention. It is wrong, silently.
+
+Atlas writes `.atlas/` into the target repo's `.gitignore` and commits it
+(`worktree-orchestrator.ts:713`), which is right for scaffolding — a
+constitution and a staged script are regenerated every run and have no business
+in a diff. But a gate's *persisted* state is the opposite kind of thing. A
+blessed baseline, a ratcheted floor and a project's perf budget only mean
+anything if they survive to the next branch, and they can only be trusted if a
+human can see them change.
+
+Under `.atlas/` neither is possible. The baseline is never committed, so
+`gate-visual` reports "no baseline" on every run forever and never compares
+anything. The floor resets to the default on every branch, so the ratchet never
+ratchets. Both failures are silent, and both look exactly like the feature
+working.
+
+So anything a gate must remember goes in `atlas-gate/`, tracked and reviewable,
+and a test asserts that no probe writes state under `.atlas/`. The trap is
+invisible by reading the code, because the wrong path looks like every other
+path in the system.

@@ -19,7 +19,10 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createConnection } from 'node:net';
 
-const BUDGET_FILE = '.atlas/perf-budget.json';
+// `atlas-gate/`, not `.atlas/`: Atlas gitignores `.atlas/` in every target
+// repo (worktree-orchestrator.ts:713), so a budget written there would never
+// be committed and every branch would silently fall back to the defaults.
+const BUDGET_FILE = 'atlas-gate/perf-budget.json';
 /** Industry-standard defaults, overridable per project via BUDGET_FILE. */
 const DEFAULTS = { api_p95_ms: 100, web_p95_ms: 200, samples: 20, warmup: 3 };
 const START_TIMEOUT_MS = 30_000;
