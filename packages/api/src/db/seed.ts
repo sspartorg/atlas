@@ -1313,7 +1313,7 @@ exit 0
         id: 'gate-visual',
         name: 'Visual gate (cross-viewport capture and diff)',
         description:
-            "Gate node script. Skips unless the branch touched UI files, then runs the project's declared visual script, or falls back to Atlas's own probe (`.atlas/probes/visual-probe.mjs`), which drives the project's Playwright across three viewports (desktop, iPad portrait, phone) and both colour schemes, with baselines in `atlas-gate/visual-baselines/`. A real diff against a committed baseline fails. When the only problem is that no baseline exists yet, it also prints ATLAS_GATE_NEEDS_REVIEW, which routes to the visual reviewer instead of being treated as breakage - a missing baseline is the normal state on a new screen.",
+            "Gate node script. Skips unless the branch touched UI files - by extension, or by adding HTML markup or a style rule in any file, which is how a server-rendered app's .js/.py/.go templates are caught - then runs the project's declared visual script, or falls back to Atlas's own probe (`.atlas/probes/visual-probe.mjs`), which drives the project's Playwright across three viewports (desktop, iPad portrait, phone) and both colour schemes, with baselines in `atlas-gate/visual-baselines/`. A real diff against a committed baseline fails. When the only problem is that no baseline exists yet, it also prints ATLAS_GATE_NEEDS_REVIEW, which routes to the visual reviewer instead of being treated as breakage - a missing baseline is the normal state on a new screen.",
         sort_order: 110,
         body_sh: `#!/usr/bin/env bash
 # Visual gate. $1 is the item id (unused).
@@ -1324,9 +1324,21 @@ exit 0
 set -u
 base="$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD~10)"
 changed="$(git diff --name-only "$base" HEAD 2>/dev/null || true)"
-ui="$(printf '%s\\n' "$changed" | grep -iE '\\.(tsx|jsx|vue|svelte|css|scss|less|html)$' || true)"
+ui="$(printf '%s\\n' "$changed" | grep -iE '\\.(tsx|jsx|vue|svelte|css|scss|less|html|astro|hbs|ejs|pug|erb|twig|njk|php)$' || true)"
+# An extension list assumes a component framework. A server-rendered app builds
+# its HTML inside .js/.ts/.py/.go/.rb, so the golden set's own frontend-only
+# fixture changed src/render.js, matched nothing, and skipped the gate that
+# exists for exactly that change. So also look at what the diff ADDS: markup or
+# a style rule in added lines is a UI change whatever the file is called.
 if [ -z "$ui" ]; then
-    echo "gate-visual: skipped - no UI files changed"
+    markup="$(git diff -U0 "$base" HEAD 2>/dev/null | grep -E '^[+]' | grep -vE '^[+][+][+]' \\
+        | grep -ciE '</?(div|span|ul|ol|li|section|article|header|footer|nav|main|aside|table|tr|td|th|form|input|button|label|select|textarea|img|svg|h[1-6]|p|a|style|link|meta)\\b|<!doctype|style=\"|className=|class=\"' || true)"
+    if [ "\${markup:-0}" -gt 0 ]; then
+        ui="markup in the diff"
+    fi
+fi
+if [ -z "$ui" ]; then
+    echo "gate-visual: skipped - no UI files changed and no markup added"
     exit 0
 fi
 pm=npm
@@ -1371,9 +1383,16 @@ $ErrorActionPreference = 'Continue'
 $base = (git merge-base HEAD origin/main 2>$null)
 if ([string]::IsNullOrWhiteSpace($base)) { $base = 'HEAD~10' }
 $changed = git diff --name-only $base HEAD 2>$null
-$ui = $changed | Where-Object { $_ -match '(?i)\\.(tsx|jsx|vue|svelte|css|scss|less|html)$' }
-if ($null -eq $ui -or $ui.Count -eq 0) {
-    Write-Output 'gate-visual: skipped - no UI files changed'
+$ui = $changed | Where-Object { $_ -match '(?i)\\.(tsx|jsx|vue|svelte|css|scss|less|html|astro|hbs|ejs|pug|erb|twig|njk|php)$' }
+# See body_sh: an extension list misses every server-rendered app, which builds
+# its HTML inside .js/.ts/.py/.go/.rb. Fall back to what the diff ADDS.
+if ($null -eq $ui -or @($ui).Count -eq 0) {
+    $adds = git diff -U0 $base HEAD 2>$null | Where-Object { $_ -match '^\\+' -and $_ -notmatch '^\\+\\+\\+' }
+    $markup = @($adds | Where-Object { $_ -match '(?i)</?(div|span|ul|ol|li|section|article|header|footer|nav|main|aside|table|tr|td|th|form|input|button|label|select|textarea|img|svg|h[1-6]|p|a|style|link|meta)\\b|<!doctype|style="|className=|class="' })
+    if ($markup.Count -gt 0) { $ui = @('markup in the diff') }
+}
+if ($null -eq $ui -or @($ui).Count -eq 0) {
+    Write-Output 'gate-visual: skipped - no UI files changed and no markup added'
     exit 0
 }
 $pm = 'npm'
