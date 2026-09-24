@@ -36,7 +36,7 @@ export async function buildIssueTree(opts: BuildOpts = {}): Promise<IIssueTreeRe
     const { projectId, includeArchived = false } = opts;
 
     // 1. Pull every item for the scope in one query.
-    let itemsQ = db.selectFrom('items').selectAll();
+    let itemsQ = db.selectFrom('items_live').selectAll();
     if (projectId) itemsQ = itemsQ.where('project_id', '=', projectId);
     // Archive filter: hide items closed (status=done) more than 7 days ago.
     // `include_archived` bypasses this so the older long-tail is reachable.

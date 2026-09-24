@@ -15,13 +15,15 @@ type CreateSubTaskInput = {
     assignee_agent_id?: string | null | undefined;
     reporter_agent_id?: string | null | undefined;
     labels?: string[] | undefined;
+    /** Migration 016 — the throwaway item an agent test run acts on. */
+    is_test?: boolean | undefined;
 };
 
 // ── Sub-tasks ──────────────────────────────────────────────────────────────
 export const subTasksService = {
     async list(taskId: string): Promise<ISubTask[]> {
         const rows = await db
-            .selectFrom('items')
+            .selectFrom('items_live')
             .selectAll()
             .where('type', '=', 'sub_task')
             .where('parent_id', '=', taskId)
@@ -33,7 +35,7 @@ export const subTasksService = {
 
     async listAll(): Promise<ISubTask[]> {
         const rows = await db
-            .selectFrom('items')
+            .selectFrom('items_live')
             .selectAll()
             .where('type', '=', 'sub_task')
             .orderBy('created_at', 'desc')
@@ -60,6 +62,7 @@ export const subTasksService = {
             assignee_agent_id: assigneeId,
             reporter_agent_id: data.reporter_agent_id ?? null,
             labels: data.labels ?? [],
+            ...(data.is_test ? { is_test: true } : {}),
         });
         const task = rowToSubTask(row);
         await eventsLog.record({

@@ -82,12 +82,12 @@ export const countsService = {
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .executeTakeFirst(),
             db
-                .selectFrom('items')
+                .selectFrom('items_live')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('type', '=', 'task')
                 .executeTakeFirst(),
             db
-                .selectFrom('items')
+                .selectFrom('items_live')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('type', '=', 'sub_task')
                 .executeTakeFirst(),
@@ -97,7 +97,7 @@ export const countsService = {
             // and ready Tasks with no workflow go nowhere, so neither counts.
             Promise.all([
                 db
-                    .selectFrom('items as i')
+                    .selectFrom('items_live as i')
                     .innerJoin('workflows as w', 'w.id', 'i.workflow_id')
                     .select(({ fn }) => fn.countAll<string>().as('n'))
                     .where('i.type', '=', 'task')
@@ -178,18 +178,18 @@ export const countsService = {
                 .where('status', '=', 'active')
                 .executeTakeFirst(),
             db
-                .selectFrom('items')
+                .selectFrom('items_live')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('type', '=', 'task')
                 .executeTakeFirst(),
             db
-                .selectFrom('items')
+                .selectFrom('items_live')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('type', '=', 'task')
                 .where('status', 'in', ['ready', 'in_progress', 'in_review'])
                 .executeTakeFirst(),
             db
-                .selectFrom('items')
+                .selectFrom('items_live')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('type', '=', 'task')
                 .where('status', '=', 'done')
@@ -202,12 +202,12 @@ export const countsService = {
             // Same predicates as getAwaitingItems / getQueueItems below,
             // minus their display limit.
             db
-                .selectFrom('items')
+                .selectFrom('items_live')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('status', 'in', ['waiting_for_info', 'in_review'])
                 .executeTakeFirst(),
             db
-                .selectFrom('items')
+                .selectFrom('items_live')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('status', '=', 'in_progress')
                 .executeTakeFirst(),
@@ -355,28 +355,28 @@ export const countsService = {
             terminalCostRow,
         ] = await Promise.all([
             db
-                .selectFrom('items')
+                .selectFrom('items_live')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('project_id', '=', projectId)
                 .where('type', '=', 'task')
                 .where('status', '!=', 'done')
                 .executeTakeFirst(),
             db
-                .selectFrom('items')
+                .selectFrom('items_live')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('project_id', '=', projectId)
                 .where('type', '=', 'task')
                 .where('status', '=', 'ready')
                 .executeTakeFirst(),
             db
-                .selectFrom('items')
+                .selectFrom('items_live')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('project_id', '=', projectId)
                 .where('type', '=', 'task')
                 .where('status', 'in', ['in_progress', 'in_review'])
                 .executeTakeFirst(),
             db
-                .selectFrom('items')
+                .selectFrom('items_live')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
                 .where('project_id', '=', projectId)
                 .where('type', '=', 'task')
@@ -451,7 +451,7 @@ export const countsService = {
 
     async getAwaitingItems() {
         const rows = await db
-            .selectFrom('items')
+            .selectFrom('items_live')
             .select(['type as issue_type', 'id', 'title', 'status', 'updated_at'])
             .where('status', 'in', ['waiting_for_info', 'in_review'])
             .orderBy('updated_at', 'asc')
@@ -462,7 +462,7 @@ export const countsService = {
 
     async getQueueItems() {
         const rows = await db
-            .selectFrom('items as x')
+            .selectFrom('items_live as x')
             .leftJoin('agents as a', 'a.id', 'x.assignee_agent_id')
             .select([
                 'x.type as issue_type',

@@ -15,7 +15,7 @@ export const workflowQueueService = {
         const ids = workflows.map((w) => w.id);
 
         let ready = db
-            .selectFrom('items as i')
+            .selectFrom('items_live as i')
             .selectAll('i')
             .where('i.type', '=', 'task')
             // `draft` is here only to feed `unassigned` below. A Jira source

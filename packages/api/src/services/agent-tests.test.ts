@@ -9,6 +9,7 @@ const spawnAgentRun = vi.hoisted(() => vi.fn(async () => 'run-1'));
 vi.mock('./agent-runner.js', () => ({ spawnAgentRun }));
 
 import { agentTestsService } from './agent-tests.js';
+import { tasksService } from './tasks.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertProject } from '../../tests/_items.js';
 
@@ -61,6 +62,31 @@ afterAll(async () => {
 });
 
 describe('agentTestsService', () => {
+    // `agent_test_runs.item_id` is ON DELETE SET NULL, so the cascade that takes
+    // the run rows would leave every throwaway item behind with nothing pointing
+    // at it — invisible since migration 016, and therefore never collectable by
+    // hand either.
+    it('takes the items its runs created with it when deleted', async () => {
+        const test = await makeTest({
+            name: 'builds it',
+            item_template: { issue_type: 'sub_task', title: 'Build the endpoint' },
+        });
+        await agentTestsService.run(test.id);
+        expect(await testDb.selectFrom('items').select('id').execute()).toHaveLength(2);
+
+        await agentTestsService.remove(test.id);
+        // The sub-task AND the parent Task only `parent_id` knew about.
+        expect(await testDb.selectFrom('items').select('id').execute()).toEqual([]);
+    });
+
+    it('leaves items it did not create alone', async () => {
+        const keep = await tasksService.create({ project_id: 'p1', title: 'real work' });
+        const test = await makeTest();
+        await agentTestsService.run(test.id);
+        await agentTestsService.remove(test.id);
+        expect((await testDb.selectFrom('items').select('id').execute()).map((r) => r.id)).toEqual([keep.id]);
+    });
+
     it('creates, lists, updates and deletes a test', async () => {
         const created = await makeTest();
         expect(created.name).toBe('scopes a task');
@@ -110,6 +136,25 @@ describe('agentTestsService', () => {
                 .executeTakeFirst();
             expect(sub?.type).toBe('sub_task');
             expect(sub?.parent_id).toBeTruthy();
+        });
+
+        // Migration 016. The item is real so the agent behaves as it would in
+        // production; `is_test` is what keeps it out of the Owner's Task list,
+        // search, queue, counts, labels and analytics.
+        it('marks the items it creates as test items', async () => {
+            const task = await agentTestsService.run((await makeTest()).id);
+            const sub = await agentTestsService.run(
+                (await makeTest({ name: 'builds it', item_template: { issue_type: 'sub_task', title: 'Build the endpoint' } })).id,
+            );
+
+            const flags = await testDb.selectFrom('items').select(['id', 'is_test']).execute();
+            // Three rows: the Task, the sub-task, and the sub-task's throwaway
+            // parent — all of them invisible, including the parent nothing
+            // records a reference to.
+            expect(flags).toHaveLength(3);
+            expect(flags.every((f) => f.is_test)).toBe(true);
+            expect(await testDb.selectFrom('items_live').select('id').execute()).toEqual([]);
+            expect([task.item_id, sub.item_id]).not.toContain(null);
         });
 
         // A dispatch that never started is a broken environment, not a failing

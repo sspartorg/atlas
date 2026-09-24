@@ -59,6 +59,19 @@ Tab switching is plain `useTabParam(tabSlug)`. (The legacy `LinearProgress` mid-
 - **Version history table** below the editor reads from `GET /agents/:id/prompt-versions`. The list is scrollable (`max-height: 360px`); the page never expands beyond the card. Rows show version / created / edited-by / status / action.
 - **Revert** action per non-active row → `POST /agents/:id/prompt-versions/:version/revert`. The server appends a new active version whose body equals the source and whose `reverted_from` points back. The active row shows `current` (italic) instead of an action.
 
+### Tests (`TestsTabContent`) — ADR 0023 phase 1
+
+**Not the same thing as Test Run.** Test Run fires an ad-hoc prompt and keeps nothing; a test owns a realistic input item, asserts something about the outcome, and keeps its history.
+
+**Why a test carries an item rather than a prompt.** PO Writer refuses anything that is not a Task (its kind guard), Coder needs a sub-task with a repo and a spec, Release Reviewer needs a whole branch. A bare prompt cannot exercise any of them — which is why Test Run has never been usable as a test.
+
+- **New test** → `POST /api/agents/:id/tests`: a name, an item template (`issue_type`, title, description, acceptance criteria, labels), a project, a repo (the picker only appears when the project has more than one), and expectations.
+- **Expectations**: outcome kind (`done` / `rejected` / `asked_question`), every required checklist row passed, summary contains / omits given text, cost and duration ceilings. `asked_question` is a **passing** expectation, not a fallback — an agent that asks rather than inventing a feature from an unanswerable Task has succeeded.
+- **Run** → `POST /api/agent-tests/:testId/run` (202). Each run materialises a **fresh throwaway item** from the template — a test pointing at a live item gives a different answer whenever the repo moves under it. That item is flagged `is_test` (migration 016), so it never reaches the Task list, search, the queue, counts, label facets or analytics, and it is deleted with the test.
+- **Cost before the click**: `GET /api/agents/:id/cost-estimate` shows the mean of the agent's last 20 completed runs. `null` (no history) renders as unknown, not as free.
+- **History**: `GET /api/agent-tests/:testId/runs`, polled every 5s while any verdict is `running`. A verdict is `passed` / `failed` / `errored`, with the failing expectations listed verbatim. **`errored` is not `failed`** — a dispatch that never started is a broken environment, not a failing agent.
+- Evaluation is **lazy**: there is no completion hook on `agent_runs`, so a run is judged the first time the tab reads it.
+
 ### Test Run (`TestRunTab`)
 Live CLI connection test, not a real `agent_runs` row. **Run test** → `POST /api/agents/:id/dry-run` (route name kept for back-compat) with the optional extra-prompt line; the API spawns the agent's configured CLI (`agent.cli`) with `--print --model {agent.model}` and pipes a one-line ping prompt via stdin (`"Reply with the single word OK and nothing else."`). stdout/stderr stream into the dark terminal panel via the `dry_run_*` SSE events (filtered by `dryRunId`). On close the server emits a verdict line `[test] connection ok · 2.3s` (or `connection failed · exit=N · 2.3s`) as the final event output; the UI prints it in green/orange. **Stop** closes the SSE locally (server may still finish). **Copy log** copies the timestamped output. No DB writes, no constitution, no agent prompt, no MCP, no issue context — this only verifies the CLI binary, credentials, and model can complete an LLM round-trip.
 
@@ -100,6 +113,9 @@ Procedural-memory editor backed by the `agent_memory` table.
 - `GET /api/cli/availability` (CLI not-installed warnings)
 - `POST /api/agents/:id/compile-prompt` (Run now dialog — Preview prompt button)
 - `POST /api/agents/:id/dry-run` (Test Run tab — live CLI smoke-test)
+- `GET /api/agents/:id/tests`, `POST /api/agents/:id/tests` (Tests tab)
+- `GET /api/agents/:id/cost-estimate` (Tests tab — spend before the click)
+- `GET /api/agent-tests/:testId/runs`, `POST /api/agent-tests/:testId/run`, `PATCH`/`DELETE /api/agent-tests/:testId`
 - `POST /api/agents/:id/duplicate`, `DELETE /api/agents/:id`
 
 ## Permissions / guards

@@ -186,6 +186,7 @@ Fields (`ITask`): `id, project_id, title, description, status, assignee_agent_id
 - `worktree_branch` — the run branch (`atlas/wf/<taskId>` unless the Owner points it at a valid existing branch); `worktree_path` stays null for workflow runs (the path lives on `workflow_runs`).
 - `id` is `<project issue_key_prefix>-<seq>` (e.g. `SDB-12`), shared counter with sub-tasks.
 - Closing (`→ done`) is refused with 422 while any sub-task isn't `done`, unless overridden (`assertChildrenDone`, `routes/tasks.ts`).
+- `is_test` (migration 016, **not on the wire**): the throwaway item an agent test run materialised. See `items_live` below.
 
 > **All items carry a nullable `reporter_agent_id`** referencing `agents.id`. Agent-created items stamp the creating agent (the `x-atlas-agent-id` header / MCP `agent_id`); UI-created items stamp `null`, rendered as Owner. Agent narrative flows through the comments thread (the `proposed_plan_md` trio was dropped by migration 021).
 
@@ -417,6 +418,36 @@ Table `run_gate_results`: `id, workflow_run_id (FK → workflow_runs, ON DELETE 
 - `repo_id` is **null** for a workspace-wide script; ADR 0017 runs the gate per repo, so it is normally set.
 - `output_tail` is the same 4000-char tail `verification-gate.ts` already clips and secret-redacts. The full output stays in the run log.
 - Writes are **best-effort** (`services/run-gate-results.ts`): a gate verdict is evidence about the run, not part of it, so a failed audit write must never turn a green gate into a parked run.
+
+### `items_live` (migration 016)
+**Why this view exists**: `agentTestsService.run()` materialises the item its agent acts on through the normal item services, on purpose — an agent that behaved differently against a synthetic item would make the test worthless (migration 014). The cost is that the item is real in every other way too: it takes an `ATL-nnn` key from the project counter and appears in Tasks, search, the queue, counts, label facets and analytics. A `sub_task` template creates two of them, because the sub-task needs a throwaway parent. The only marker used to be a `[test]` suffix in the title, which nothing read.
+
+`CREATE VIEW items_live AS SELECT * FROM items WHERE NOT is_test`, plus a partial index `items (project_id, type) WHERE NOT is_test`.
+
+- **Every list, count, search and aggregate reads `items_live`.** By-id reads keep using `items` — the run, the prompt builder, the workflow engine and the comment thread all need the item they are working on, and a test whose own item vanished from under it would be a worse bug than the one this fixes. So do run-joins (`agent_runs → items` for a title): a test run is a real run of that agent.
+- A view rather than a predicate on thirty queries, because the edit count is the same either way and what differs is the next listing somebody writes. One that forgets `.where('is_test','=',false)` looks exactly like one that remembers; one that reads `items` where its siblings read `items_live` is visible in a diff.
+- **`SELECT *` freezes the column list at creation.** A migration that adds a column to `items` must recreate the view. `db/items-live-view.test.ts` compares the two column lists so that failure is a red test rather than a runtime error in production.
+- Deleting a test deletes the items its runs made (`agentTestsService.remove`): `agent_test_runs.item_id` is `ON DELETE SET NULL`, so the cascade would otherwise leave them behind with nothing pointing at them.
+- **Ceiling**: a test item still consumes the project issue counter, so the `ATL-nnn` sequence has gaps. Cosmetic once the rows are invisible; a separate namespace would mean a second allocation path against `items.id` as an FK target in a dozen tables.
+
+### IAgentTest / IAgentTestRun (ADR 0023 phase 1, migration 014)
+**Why these entities exist**: Atlas ships a fleet of agents and lets customers install more, edit them and write their own, and had no way for anyone to find out whether one works. The measurement that existed was `evals/` — fixtures in the repo, a CLI runner, a CLI scorer, a gitignored markdown file — all of it local and none of it reachable by a customer.
+
+**Why a test owns an item template rather than a prompt.** The `Test Run` tab has fired an ad-hoc prompt at an agent since the beginning and has never been usable as a test, for a structural reason: PO Writer refuses anything that is not a Task (its kind guard), Coder needs a sub-task with a repo and a spec, Release Reviewer needs a whole branch. A bare prompt cannot exercise any of them. A test therefore carries the item it wants the agent to act on — which is exactly what a golden fixture already is, and why these are one primitive rather than two features.
+
+Table `agent_tests`: `id, agent_id (FK → agents, CASCADE), project_id (FK → projects, CASCADE), repo_id (FK → project_repos, SET NULL — nullable: an agent that touches no repo still deserves a test), name, item_template jsonb, expectations jsonb, created_at, updated_at`.
+
+- `item_template` = `{ issue_type, title, description?, acceptance_criteria?, labels? }`.
+- `expectations` = `{ outcome_kind?, required_checklist_all_passed?, summary_contains?, summary_omits?, max_cost_usd?, max_duration_s? }`. Judged by the pure `evaluateAgentTest` (`services/agent-tests-evaluate.ts`), which replays `decideRunRouting` — the same function the workflow engine routes on — so a test and the engine can never disagree about what an agent did.
+- `asked_question` is a first-class **passing** expectation, not a fallback: an agent that asks rather than inventing a feature from an unanswerable Task has succeeded.
+- `required_checklist_all_passed` **fails** when the agent has no required checklist rows, rather than passing vacuously — campaign finding F-012.
+
+Table `agent_test_runs`: `id, agent_test_id (FK, CASCADE), agent_run_id (FK → agent_runs, SET NULL), item_id (FK → items, SET NULL), verdict, failures jsonb, cost_usd numeric(12,6), duration_s, created_at, evaluated_at`.
+
+- `verdict` ∈ `running | passed | failed | errored`. **`errored` is not `failed`**: a dispatch that never started is a broken environment, not a failing agent — the same distinction ADR 0020 draws for a gate that could not run.
+- `failures` is the ordered list of expectations that did not hold; empty on a pass.
+- `item_id` records the throwaway item the run acted on, so a failure can be opened and read rather than guessed at.
+- **Evaluation is lazy**: there is no completion hook on `agent_runs`, so a run is judged the first time `listRuns` reads it. A run nobody opens stays `running`.
 
 ### IPublishedWorkflow (migration 041)
 A workflow the Owner published to the Marketplace (builder **Publish**). Table `published_workflows`: `id, name, description, source_workflow_id (UNIQUE, FK → workflows, SET NULL), bundle (bytea — the export zip), version (migration 007, bumped on every republish so a consumer can tell the entry moved — republishing overwrites the bundle in place), published_at, updated_at`. One entry per source workflow; publishing again replaces it. The API reads `input_kind, trigger, push_code, raises_pr, push_to_default, agent_ids` from the bundle; `IPublishedWorkflowDetail` adds `graph` + `sub_workflows {ref, name}`. Not tied to a project — "Use in a project" imports the bundle into one.

@@ -114,6 +114,14 @@ export interface CreateItemInput {
     // Task 1 — free-form labels for filtering.
     labels?: string[] | undefined;
     repo_ids?: string[] | undefined;
+    /**
+     * Migration 016 — the throwaway item an agent test run acts on.
+     *
+     * It is a real item in every way the agent can observe, because a test
+     * against a synthetic one would not measure anything. It is simply kept
+     * out of every list, count, search and aggregate (`items_live`).
+     */
+    is_test?: boolean | undefined;
 }
 
 export async function createItem(input: CreateItemInput): Promise<IItemRow> {
@@ -170,6 +178,7 @@ export async function createItem(input: CreateItemInput): Promise<IItemRow> {
                 // explicitly so PG accepts it as a JSONB value.
                 labels: JSON.stringify(input.labels ?? []) as never,
                 repo_ids: JSON.stringify(input.repo_ids ?? []),
+                is_test: input.is_test ?? false,
             })
             .returningAll()
             .executeTakeFirstOrThrow();
@@ -291,7 +300,7 @@ export async function searchItems(filters: SearchFilters, limit = 50): Promise<S
     const q = filters.q?.trim() ?? '';
     const hasQuery = q.length > 0;
 
-    let qb = db.selectFrom('items').select((_eb) => [
+    let qb = db.selectFrom('items_live').select((_eb) => [
         'id',
         'type',
         'title',
