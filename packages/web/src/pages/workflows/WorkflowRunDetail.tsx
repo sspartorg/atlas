@@ -12,8 +12,10 @@ import {
     useResumeWorkflowRun,
     useStopWorkflowRun,
     useWorkflowRun,
+    useWorkflowRunGateResults,
     useWorkflows,
 } from '../../hooks/useWorkflows.js';
+import type { GateResultRow } from '../../api/types.js';
 import { useAgents } from '../../hooks/useAgents.js';
 import { useIssues } from '../../hooks/useIssues.js';
 import { useToast } from '../../hooks/useToast.js';
@@ -26,6 +28,81 @@ import { WorkflowCanvas } from './WorkflowCanvas.js';
 import { WorkflowRunStatusChip } from './WorkflowRunStatusChip.js';
 import { nodeRunStates, toFlow } from './graph.js';
 import { durationLabel, itemPathIn } from './labels.js';
+
+
+/**
+ * How a gate verdict reads at a glance.
+ *
+ * `skipped` is its own colour on purpose. It exits 0 and takes the pass edge,
+ * but it means "I had nothing I could check" — not "I checked and it is fine".
+ * Showing both as green is how `gate-visual` reported a pass on the one
+ * golden-set fixture built to exercise it, and how a red suite reached the end
+ * of a run behind four green rows.
+ */
+const GATE_VERDICT: Record<GateResultRow['verdict'], { label: string; color: string }> = {
+    pass: { label: 'passed', color: ATLAS_PALETTE.greenDark },
+    fail: { label: 'failed', color: ATLAS_PALETTE.red },
+    skipped: { label: 'skipped', color: ATLAS_PALETTE.slate60 },
+    unavailable: { label: 'could not run', color: ATLAS_PALETTE.slate60 },
+    needs_review: { label: 'needs review', color: ATLAS_PALETTE.amber },
+};
+
+function GateRow({ gate }: { gate: GateResultRow }) {
+    const v = GATE_VERDICT[gate.verdict];
+    return (
+        <Box sx={{ px: 4, py: 2, borderTop: `1px solid ${ATLAS_PALETTE.slate12}` }}>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 600, fontFamily: 'monospace' }}>
+                    {gate.script_id}
+                </Typography>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: v.color }}>{v.label}</Typography>
+                {gate.repo_name && (
+                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>{gate.repo_name}</Typography>
+                )}
+                {gate.exit_code != null && (
+                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>exit {gate.exit_code}</Typography>
+                )}
+            </Box>
+            {/* The script's own words. For a skip this is the REASON — the
+                difference between a check that ran and one that had nothing to
+                do — which is the whole point of surfacing these. */}
+            {gate.output_tail && (
+                <Typography
+                    component="pre"
+                    sx={{
+                        m: 0,
+                        mt: 0.5,
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        whiteSpace: 'pre-wrap',
+                        color: ATLAS_PALETTE.slate60,
+                        maxHeight: 160,
+                        overflowY: 'auto',
+                    }}
+                >
+                    {gate.output_tail}
+                </Typography>
+            )}
+        </Box>
+    );
+}
+
+function GatesSection({ runId }: { runId: string }) {
+    const { data: gates } = useWorkflowRunGateResults(runId);
+    if (!gates || gates.length === 0) return null;
+    const skipped = gates.filter((g) => g.verdict === 'skipped').length;
+    return (
+        <>
+            <Typography variant="overline" sx={{ display: 'block', px: 4, pt: 3, color: ATLAS_PALETTE.slate60 }}>
+                Gates · {gates.length}
+                {skipped > 0 ? ` · ${skipped} skipped` : ''}
+            </Typography>
+            {gates.map((g) => (
+                <GateRow key={g.id} gate={g} />
+            ))}
+        </>
+    );
+}
 
 function StepRow({ step, onOpen }: { step: IWorkflowRunStep; onOpen: () => void }) {
     const tone = runStatusPaletteEntry(step.status);
@@ -429,6 +506,10 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
                                   onOpen={() => navigate(`/agents/${s.agent_id}/runs/${s.id}`)}
                               />
                           ))}
+                    {/* Gate steps spawn no agent, so they never appear above.
+                        Until this section existed the Owner had no way to see
+                        why a gate passed — or that it had skipped. */}
+                    <GatesSection runId={run.id} />
                     {run.children.length > 0 && (
                         <>
                             <Typography

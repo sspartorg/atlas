@@ -450,6 +450,9 @@ async function runGateNode(run: RunRow, node: IWorkflowNode): Promise<void> {
                 ? { exit_code: result.exitCode ?? null, output_tail: result.output }
                 : {}),
             ...(result.kind === 'pass' && result.output ? { output_tail: result.output } : {}),
+            // A skip takes the pass edge but is recorded as itself: it means
+            // "could not check", not "checked and fine" (migration 013).
+            ...(result.kind === 'skipped' ? { output_tail: result.output } : {}),
             ...(result.kind === 'unavailable' ? { output_tail: result.reason } : {}),
         });
 
@@ -942,7 +945,12 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
                 repo_id: repo.id,
                 script_id: GATE_SCRIPT_ID,
                 verdict: gate.kind,
-                output_tail: gate.kind === 'fail' ? gate.output : gate.kind === 'unavailable' ? gate.reason : null,
+                output_tail:
+                    gate.kind === 'fail' || gate.kind === 'skipped'
+                        ? gate.output
+                        : gate.kind === 'unavailable'
+                          ? gate.reason
+                          : null,
             });
             if (gate.kind === 'fail') {
                 log.push(`${tag}verification gate FAILED\n${gate.output}`);
@@ -954,7 +962,14 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
                 result.failure ??= `${tag}The verification gate could not run (${gate.reason}), so nothing was pushed. This is not a test failure — Atlas simply could not confirm the suite. Resume the run to retry.`;
                 continue;
             }
-            log.push(`${tag}verification gate passed`);
+            // A skip pushes, exactly as before — but it must not be logged as a
+            // pass. "I checked and it is fine" and "there was nothing I could
+            // check" are the two things migration 013 exists to separate.
+            log.push(
+                gate.kind === 'skipped'
+                    ? `${tag}verification gate skipped: ${gate.output}`
+                    : `${tag}verification gate passed`,
+            );
 
             // push_to_default publishes straight onto the default branch; on a
             // non-fast-forward pushWorktree rebases onto it and retries once.

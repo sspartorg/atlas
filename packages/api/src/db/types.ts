@@ -23,7 +23,7 @@ export type ItemType = 'task' | 'sub_task';
 export type ItemRelation = 'relates_to' | 'depends_on' | 'tested_by';
 /** `run_gate_results.verdict`. `needs_review` is the visual gate's
  *  "captured, but there is no baseline to diff against" answer. */
-export type GateVerdict = 'pass' | 'fail' | 'unavailable' | 'needs_review';
+export type GateVerdict = 'pass' | 'fail' | 'skipped' | 'unavailable' | 'needs_review';
 
 export interface SettingsTable {
     id: number;

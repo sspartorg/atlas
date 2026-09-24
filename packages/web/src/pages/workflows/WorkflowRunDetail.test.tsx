@@ -14,9 +14,10 @@ const BASE = 'http://localhost:3000/api';
 
 beforeAll(stubReactFlowDom);
 
-function mount(run: IWorkflowRunDetail) {
+function mount(run: IWorkflowRunDetail, gates: unknown[] = []) {
     server.use(
         http.get(`${BASE}/workflow-runs/${run.id}`, () => HttpResponse.json(run)),
+        http.get(`${BASE}/workflow-runs/${run.id}/gate-results`, () => HttpResponse.json(gates)),
         http.get(`${BASE}/workflows`, () => HttpResponse.json([])),
         http.get(`${BASE}/agents`, () =>
             HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'Coder' })])
@@ -156,5 +157,48 @@ describe('WorkflowRunDetail', () => {
             'href',
             '/workflows/wf-build/runs/wfr-1'
         );
+    });
+
+    // Gate nodes spawn no agent, so they have no `agent_runs` row and never
+    // appeared on this page. The Owner therefore could not see why a gate
+    // passed — or that it had not run at all.
+    describe('gate verdicts', () => {
+        it('lists each gate with its script id and verdict', async () => {
+            mount(makeRunDetail({ id: 'r1', workflow_id: 'w1' }), [
+                { id: '1', node_id: 'gate-hygiene', repo_id: null, repo_name: null, script_id: 'gate-hygiene', verdict: 'pass', exit_code: null, output_tail: null, created_at: '2026-09-24T00:00:01' },
+                { id: '2', node_id: 'gate-perf', repo_id: null, repo_name: null, script_id: 'gate-perf', verdict: 'pass', exit_code: null, output_tail: 'gate-perf: within budget', created_at: '2026-09-24T00:00:02' },
+            ]);
+            expect(await screen.findByText('gate-hygiene')).toBeInTheDocument();
+            expect(screen.getByText('gate-perf')).toBeInTheDocument();
+            expect(screen.getAllByText('passed').length).toBeGreaterThan(0);
+        });
+
+        // The reason this section exists. `gate-visual` reported a pass on the
+        // one golden-set fixture built to exercise it, because a skip and a
+        // pass were the same verdict. They must never read alike again.
+        it('shows a skip as skipped, not as passed, and gives the reason', async () => {
+            mount(makeRunDetail({ id: 'r1', workflow_id: 'w1' }), [
+                { id: '3', node_id: 'gate-visual', repo_id: null, repo_name: null, script_id: 'gate-visual', verdict: 'skipped', exit_code: null, output_tail: 'gate-visual: skipped - no UI files changed and no markup added', created_at: '2026-09-24T00:00:03' },
+            ]);
+            expect(await screen.findByText('skipped')).toBeInTheDocument();
+            expect(screen.queryByText('passed')).not.toBeInTheDocument();
+            expect(
+                screen.getByText(/skipped - no UI files changed and no markup added/)
+            ).toBeInTheDocument();
+        });
+
+        it('counts the skips in the section header', async () => {
+            mount(makeRunDetail({ id: 'r1', workflow_id: 'w1' }), [
+                { id: '4', node_id: 'gate-hygiene', repo_id: null, repo_name: null, script_id: 'gate-hygiene', verdict: 'pass', exit_code: null, output_tail: null, created_at: '2026-09-24T00:00:04' },
+                { id: '5', node_id: 'gate-coverage', repo_id: null, repo_name: null, script_id: 'gate-coverage', verdict: 'skipped', exit_code: null, output_tail: 'gate-coverage: skipped - no coverage script and no test script declared', created_at: '2026-09-24T00:00:05' },
+            ]);
+            expect(await screen.findByText(/Gates · 2 · 1 skipped/)).toBeInTheDocument();
+        });
+
+        it('renders nothing when the run ran no gates', async () => {
+            mount(makeRunDetail({ id: 'r1', workflow_id: 'w1' }), []);
+            await screen.findByText(/Steps/);
+            expect(screen.queryByText(/Gates ·/)).not.toBeInTheDocument();
+        });
     });
 });

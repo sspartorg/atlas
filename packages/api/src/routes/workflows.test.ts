@@ -39,6 +39,7 @@ import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertItem, insertProject } from '../../tests/_items.js';
 import { workflowsService } from '../services/workflows.js';
 import type { IWorkflow } from '@atlas/shared';
+import { recordGateResult } from '../services/run-gate-results.js';
 
 /** Delivery's full agent closure: its own graph's four plus Build's and Test's. */
 // Derived, not restated: every agent the Delivery template needs, its
@@ -378,6 +379,40 @@ describe('workflow CRUD', () => {
 });
 
 describe('workflow runs over HTTP', () => {
+    // Gate nodes spawn no agent, so they have no `agent_runs` row and cannot
+    // appear on the run's `steps`. Until this route existed their verdicts were
+    // readable only from Postgres — which is how a `skipped` gate passed for a
+    // verified one on the golden set.
+    it('serves a run\'s gate verdicts, keeping a skip distinct from a pass', async () => {
+        const wf = (await createWorkflow()).json();
+        const start = await app.inject({ method: 'POST', url: `/api/workflows/${wf.id}/runs`, payload: { item_id: 'ATL-1' } });
+        const runId = start.json().run_id as string;
+
+        const empty = await app.inject({ method: 'GET', url: `/api/workflow-runs/${runId}/gate-results` });
+        expect(empty.statusCode).toBe(200);
+        expect(empty.json()).toEqual([]);
+
+        await recordGateResult({ workflow_run_id: runId, script_id: 'gate-hygiene', verdict: 'pass' });
+        await recordGateResult({
+            workflow_run_id: runId,
+            script_id: 'gate-visual',
+            verdict: 'skipped',
+            output_tail: 'gate-visual: skipped - no UI files changed and no markup added',
+        });
+
+        const res = await app.inject({ method: 'GET', url: `/api/workflow-runs/${runId}/gate-results` });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().map((g: { script_id: string; verdict: string }) => [g.script_id, g.verdict])).toEqual([
+            ['gate-hygiene', 'pass'],
+            ['gate-visual', 'skipped'],
+        ]);
+    });
+
+    it('404s the gate verdicts of a run that does not exist', async () => {
+        const res = await app.inject({ method: 'GET', url: '/api/workflow-runs/no-such-run/gate-results' });
+        expect(res.statusCode).toBe(404);
+    });
+
     it('starts a run on an item, shows its steps, and stops it', async () => {
         const wf = (await createWorkflow()).json();
         const start = await app.inject({ method: 'POST', url: `/api/workflows/${wf.id}/runs`, payload: { item_id: 'ATL-1' } });

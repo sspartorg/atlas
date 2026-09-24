@@ -91,6 +91,17 @@ export type GateResult =
      * that can look at the captures.
      */
     | { kind: 'needs_review'; output: string; exitCode?: number }
+    /**
+     * Exit 0, and the script said it had nothing to check.
+     *
+     * Distinct from `pass` on purpose. Both exit 0 and both take the pass edge,
+     * but they mean opposite things: `pass` is "I checked and it is fine",
+     * `skipped` is "I could not check". Collapsing them is how a red suite
+     * reached the end of a run behind four green rows (ATL-110) and how
+     * `gate-visual` reported a pass on the one fixture built to exercise it.
+     * Nothing downstream could tell verified from not-checked.
+     */
+    | { kind: 'skipped'; output: string }
     | { kind: 'unavailable'; reason: string };
 
 /** The guardrail script id whose body is the gate. Project row overrides the Atlas one. */
@@ -105,6 +116,13 @@ export const GATE_SCRIPT_ID = 'coder-tests-green';
  * PowerShell (the `gate-visual` seed in `db/seed.ts`), so there is no import to
  * share it with. This side is the authority; the scripts spell it literally.
  */
+/**
+ * Every shipped guardrail script announces a no-op as `<id>: skipped - <why>`
+ * on its first line. Matching the convention rather than adding a second
+ * sentinel keeps the scripts as they are; a project override that does not
+ * follow it simply reads as `pass`, which is the old behaviour.
+ */
+const SKIPPED_RE = /^[^\n]*:\s*skipped\b/i;
 const NEEDS_REVIEW_SENTINEL = 'ATLAS_GATE_NEEDS_REVIEW';
 const NEEDS_REVIEW_RE = new RegExp(`(^|\\n)\\s*${NEEDS_REVIEW_SENTINEL}\\b`);
 
@@ -207,6 +225,7 @@ export async function runGuardrailScript(opts: {
         // one that had nothing to do). Omitted when empty so a silent pass is
         // exactly `{ kind: 'pass' }`.
         const said = tail(`${ok.stdout ?? ''}`.trim());
+        if (said && SKIPPED_RE.test(said)) return { kind: 'skipped', output: said };
         return said ? { kind: 'pass', output: said } : { kind: 'pass' };
     } catch (err: unknown) {
         const e = err as {

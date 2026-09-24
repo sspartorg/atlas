@@ -58,6 +58,36 @@ describe.skipIf(!posix)('runVerificationGate', () => {
         expect(await run()).toEqual({ kind: 'pass' });
     });
 
+    // "I checked and it is fine" and "there was nothing I could check" are both
+    // exit 0 and both take the pass edge, and they mean opposite things. On
+    // ATL-110 a red suite reached the end of a run behind four `pass` rows, two
+    // of which were skips, and gate-visual reported a pass on the one fixture
+    // built to exercise it. The verdict has to say which happened.
+    it('reports skipped — NOT pass — when the script says it had nothing to check', async () => {
+        await setGateScript('#!/usr/bin/env bash\necho "gate-coverage: skipped - no coverage script declared"\nexit 0\n');
+        expect(await run()).toEqual({
+            kind: 'skipped',
+            output: 'gate-coverage: skipped - no coverage script declared',
+        });
+    });
+
+    it('still reports pass when a passing script says something that is not a skip', async () => {
+        await setGateScript('#!/usr/bin/env bash\necho "gate-perf: within budget"\nexit 0\n');
+        expect(await run()).toEqual({ kind: 'pass', output: 'gate-perf: within budget' });
+    });
+
+    // A project override need not follow the house convention; when it does
+    // not, it reads as `pass`, which is exactly the old behaviour.
+    it('treats a silent exit 0 as pass, not skipped', async () => {
+        await setGateScript('#!/usr/bin/env bash\nexit 0\n');
+        expect(await run()).toEqual({ kind: 'pass' });
+    });
+
+    it('does not mistake the word "skipped" later in the output for a skip', async () => {
+        await setGateScript('#!/usr/bin/env bash\nprintf "gate-hygiene: clean\\n3 tests skipped\\n"\nexit 0\n');
+        expect((await run()).kind).toBe('pass');
+    });
+
     it('fails when the script exits non-zero, and reports what it printed', async () => {
         await setGateScript('#!/usr/bin/env bash\nprintf "coder-tests-green:\\n  test script failed\\n"\nexit 1\n');
         const res = await run();

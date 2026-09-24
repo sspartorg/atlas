@@ -89,6 +89,7 @@ import type {
     AnalyticsProjectTasksResponse,
     AnalyticsTaskResponse,
     AnalyticsTaskChildrenResponse,
+    GateResultRow,
 } from './types.js';
 
 const BASE = '/api';
@@ -1179,6 +1180,9 @@ export const api = {
         get: (id: string) => get<IWorkflowRunDetail>(`/workflow-runs/${id}`),
         stop: (id: string) => post<IWorkflowRunDetail>(`/workflow-runs/${id}/stop`, {}),
         resume: (id: string) => post<IWorkflowRunDetail>(`/workflow-runs/${id}/resume`, {}),
+        // Gate nodes spawn no agent, so they have no `agent_runs` row and no
+        // place on the steps list. Their verdicts come from their own route.
+        gateResults: (id: string) => get<GateResultRow[]>(`/workflow-runs/${id}/gate-results`),
     },
 
     // What each workflow is running and has queued (the /queue page).
