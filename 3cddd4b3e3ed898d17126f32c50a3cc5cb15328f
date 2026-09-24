@@ -1,0 +1,10 @@
+Correction: the `Refs: ATL-2` trailer on this commit is wrong.
+
+ATL-2 is a golden-set fixture Task ("[ATL-1] Create a simple landing page"),
+not the tracking Task for this work. The correct reference is **ATL-91** —
+"SDLC v1 PR5 — close every gap the audit and the golden set left open".
+
+Recorded as a note rather than rewritten: 23 commits sit on top of these on a
+public `main`, and rewriting them would invalidate every SHA above, break
+existing clones and forks, and orphan the references in ten merged PRs — to
+correct three metadata lines.
