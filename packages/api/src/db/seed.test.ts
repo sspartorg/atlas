@@ -514,7 +514,10 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
     // which is ~12 lines per check rather than one bloated check. Anything
     // that grows past ITS ceiling belongs in `marketplace/probes/` as a real
     // `.mjs` file, the way `gate-perf` and `gate-visual` did.
-    const LINE_BUDGET: Record<string, number> = { 'gate-hygiene': 120 };
+    // `gate-coverage` measures coverage, ratchets the floor, AND runs the suite
+    // when no coverage script is declared (ATL-149). The prose was trimmed twice
+    // before this number moved; what is left is the logic.
+    const LINE_BUDGET: Record<string, number> = { 'gate-hygiene': 120, 'gate-coverage': 90 };
     const DEFAULT_LINE_BUDGET = 80;
 
     it('each script body is within its line budget', () => {
@@ -693,5 +696,87 @@ describe.skipIf(process.platform === 'win32')('gate-visual decides what counts a
             }),
         );
         expect(out).toContain('skipped - no UI files changed and no markup added');
+    });
+});
+
+// A gate that skips is not a gate. `gate-coverage` looked for a COVERAGE script
+// only, and finding none skipped the measurement AND the test run. The sandbox
+// declares `"test": "node --test"` - it has tests, and the gate never ran them.
+//
+// On ATL-110 a doc sub-task rewrote a README line a sibling sub-task's test
+// asserted on. The suite went red at HEAD and all four gates reported pass; an
+// LLM reviewer caught it, not the deterministic chain built for exactly that.
+// ADR 0020's "absence of evidence is not a failure" covers the measurement,
+// which genuinely cannot be taken without coverage tooling. It does not cover
+// tests the project already has.
+describe.skipIf(process.platform === 'win32')('gate-coverage runs the suite it can run', () => {
+    function repo(pkg: Record<string, unknown>, files: Record<string, string> = {}): string {
+        const dir = mkdtempSync(join(tmpdir(), 'cov-gate-'));
+        writeFileSync(join(dir, 'package.json'), JSON.stringify(pkg));
+        for (const [name, body] of Object.entries(files)) {
+            mkdirSync(join(dir, name, '..'), { recursive: true });
+            writeFileSync(join(dir, name), body);
+        }
+        return dir;
+    }
+
+    function run(dir: string): { code: number; out: string } {
+        const body = GUARDRAIL_SCRIPT_SEEDS.find((x) => x.id === 'gate-coverage')?.body_sh ?? '';
+        writeFileSync(join(dir, 'gate.sh'), body);
+        try {
+            return { code: 0, out: execSync('bash gate.sh ATL-1', { cwd: dir, encoding: 'utf8', stdio: 'pipe' }) };
+        } catch (err) {
+            const e = err as { status: number; stdout: Buffer };
+            return { code: e.status, out: String(e.stdout ?? '') };
+        }
+    }
+
+    const PASSING = "const assert = require('node:assert');\nassert.equal(1, 1);\n";
+    const FAILING = "const assert = require('node:assert');\nassert.equal(1, 2);\n";
+
+    it('runs the declared test script when no coverage script exists', () => {
+        const r = run(repo({ scripts: { test: 'node t.js' } }, { 't.js': PASSING }));
+        expect(r.code).toBe(0);
+        expect(r.out).toContain('tests pass, coverage not measured');
+    });
+
+    it('FAILS on a red suite even though coverage cannot be measured', () => {
+        const r = run(repo({ scripts: { test: 'node t.js' } }, { 't.js': FAILING }));
+        expect(r.code).toBe(1);
+        expect(r.out).toContain('the test suite failed');
+    });
+
+    it('still skips, and never fails, when there is no test script either', () => {
+        const r = run(repo({ scripts: {} }));
+        expect(r.code).toBe(0);
+        expect(r.out).toContain('no coverage script and no test script declared');
+    });
+
+    // The fallback must not shadow the real path: a project WITH coverage
+    // tooling keeps its floor and its ratchet untouched.
+    it('leaves a declared coverage script on its original path', () => {
+        const r = run(
+            repo(
+                { scripts: { 'test:coverage': 'node c.js', test: 'node t.js' } },
+                {
+                    'c.js': "require('fs').mkdirSync('coverage',{recursive:true});require('fs').writeFileSync('coverage/coverage-summary.json',JSON.stringify({total:{statements:{pct:99}}}));",
+                    't.js': FAILING,
+                },
+            ),
+        );
+        // The coverage script ran and passed the floor; the failing `test`
+        // script was never invoked, exactly as before.
+        expect(r.code).toBe(0);
+        expect(r.out).not.toContain('the test suite failed');
+    });
+
+    it('checks the same things on both platforms', () => {
+        const seed = GUARDRAIL_SCRIPT_SEEDS.find((x) => x.id === 'gate-coverage');
+        const strip = (b: string) =>
+            b.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
+        for (const token of ['the test suite failed', 'coverage not measured', 'no test script declared']) {
+            expect(strip(seed!.body_sh), `bash is missing ${token}`).toContain(token);
+            expect(strip(seed!.body_ps1), `powershell is missing ${token}`).toContain(token);
+        }
     });
 });
