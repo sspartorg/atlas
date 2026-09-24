@@ -90,6 +90,11 @@ import type {
     AnalyticsTaskResponse,
     AnalyticsTaskChildrenResponse,
     GateResultRow,
+    AgentTest,
+    AgentTestRun,
+    AgentCostEstimate,
+    AgentTestItemTemplate,
+    AgentTestExpectations,
 } from './types.js';
 
 const BASE = '/api';
@@ -1174,6 +1179,26 @@ export const api = {
         use: (id: string, projectId: string) =>
             post<IWorkflowImportResult>(`/marketplace/workflows/${encodeURIComponent(id)}/use`, { project_id: projectId }),
         unpublish: (id: string) => del(`/marketplace/workflows/${encodeURIComponent(id)}`),
+    },
+
+    // Agent tests (ADR 0023) — what makes "does this agent work?" answerable
+    // without a terminal.
+    agentTests: {
+        list: (agentId: string) => get<AgentTest[]>(`/agents/${agentId}/tests`),
+        costEstimate: (agentId: string) => get<AgentCostEstimate>(`/agents/${agentId}/cost-estimate`),
+        create: (
+            agentId: string,
+            body: {
+                project_id: string;
+                repo_id?: string | null;
+                name: string;
+                item_template: AgentTestItemTemplate;
+                expectations?: AgentTestExpectations;
+            },
+        ) => post<AgentTest>(`/agents/${agentId}/tests`, body),
+        remove: (testId: string) => del(`/agent-tests/${testId}`),
+        run: (testId: string) => post<AgentTestRun>(`/agent-tests/${testId}/run`, {}),
+        runs: (testId: string) => get<AgentTestRun[]>(`/agent-tests/${testId}/runs`),
     },
 
     workflowRuns: {

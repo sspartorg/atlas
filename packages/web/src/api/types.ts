@@ -347,3 +347,60 @@ export interface GateResultRow {
     output_tail: string | null;
     created_at: string;
 }
+
+/**
+ * A saved test for one agent (ADR 0023).
+ *
+ * It carries the ITEM the agent should act on, not a prompt: PO Writer refuses
+ * anything that is not a Task, Coder needs a sub-task with a repo. A bare
+ * prompt cannot exercise them, which is why the Test Run tab has never been
+ * usable as a test.
+ */
+export interface AgentTestItemTemplate {
+    issue_type: 'task' | 'sub_task';
+    title: string;
+    description?: string;
+    acceptance_criteria?: string;
+    labels?: string[];
+}
+
+export interface AgentTestExpectations {
+    /** `asked_question` is a pass when that is what the agent should do. */
+    outcome_kind?: 'done' | 'rejected' | 'asked_question';
+    required_checklist_all_passed?: boolean;
+    summary_contains?: string[];
+    summary_omits?: string[];
+    max_cost_usd?: number;
+    max_duration_s?: number;
+}
+
+export interface AgentTest {
+    id: string;
+    agent_id: string;
+    project_id: string;
+    repo_id: string | null;
+    name: string;
+    item_template: AgentTestItemTemplate;
+    expectations: AgentTestExpectations;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface AgentTestRun {
+    id: string;
+    agent_test_id: string;
+    agent_run_id: string | null;
+    item_id: string | null;
+    /** `errored` is a broken environment, not a failing agent. */
+    verdict: 'running' | 'passed' | 'failed' | 'errored';
+    failures: string[];
+    cost_usd: number | null;
+    duration_s: number | null;
+    created_at: string;
+}
+
+export interface AgentCostEstimate {
+    /** Null, not zero, when the agent has never run — those differ. */
+    estimated_cost_usd: number | null;
+    sample_size: number;
+}
