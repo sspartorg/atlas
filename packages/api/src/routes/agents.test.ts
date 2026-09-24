@@ -12,13 +12,19 @@ vi.mock('../services/dry-run.js', () => ({
     startDryRun: vi.fn().mockResolvedValue({ runId: 'dry-run-1', status: 'queued' }),
 }));
 
+const spawnAgentRunMock = vi.hoisted(() => vi.fn(async () => 'spawned-run-1'));
+vi.mock('../services/agent-runner.js', async (orig) => ({
+    ...(await orig<Record<string, unknown>>()),
+    spawnAgentRun: spawnAgentRunMock,
+}));
+
 vi.mock('../services/compile-prompt.js', () => ({
     compilePromptFor: vi.fn().mockResolvedValue({ prompt: 'compiled', tokens: 100 }),
 }));
 
 import { buildApp } from '../server.js';
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
-import { insertAgent } from '../../tests/_items.js';
+import { insertAgent, insertProject } from '../../tests/_items.js';
 import { packAgentBundle } from '../services/agent-bundle.js';
 import { marketplaceService } from '../services/marketplace.js';
 
@@ -1199,5 +1205,115 @@ describe('role_id not in the roles catalog', () => {
             payload: agentPayload('agent-role-guard-3', { role_id: null }),
         });
         expect(res.statusCode).toBe(201);
+    });
+});
+
+// ── Agent tests (ADR 0023) ─────────────────────────────────────────────────
+//
+// A customer installing an agent from the marketplace does it on trust, and one
+// they wrote themselves cannot be qualified at all. These routes are what make
+// "does this agent work?" answerable without a terminal.
+describe('agent tests over HTTP', () => {
+    async function seed(): Promise<void> {
+        await insertProject('p1', 'ATL');
+        await insertAgent({ id: 'agent-coder' });
+    }
+
+    const body = {
+        project_id: 'p1',
+        name: 'scopes a task',
+        item_template: { issue_type: 'task', title: 'Add a stats endpoint' },
+        expectations: { outcome_kind: 'done' },
+    };
+
+    it('creates, lists, patches and deletes a test', async () => {
+        await seed();
+        const created = await app.inject({ method: 'POST', url: '/api/agents/agent-coder/tests', payload: body });
+        expect(created.statusCode).toBe(201);
+        const id = created.json().id as string;
+
+        const listed = await app.inject({ method: 'GET', url: '/api/agents/agent-coder/tests' });
+        expect(listed.json()).toHaveLength(1);
+
+        const patched = await app.inject({
+            method: 'PATCH',
+            url: `/api/agent-tests/${id}`,
+            payload: { name: 'renamed' },
+        });
+        expect(patched.json().name).toBe('renamed');
+
+        const removed = await app.inject({ method: 'DELETE', url: `/api/agent-tests/${id}` });
+        expect(removed.statusCode).toBe(204);
+        expect((await app.inject({ method: 'GET', url: '/api/agents/agent-coder/tests' })).json()).toEqual([]);
+    });
+
+    it('404s every route for an agent or test that does not exist', async () => {
+        await seed();
+        for (const url of ['/api/agents/nope/tests', '/api/agents/nope/cost-estimate', '/api/agent-tests/nope/runs']) {
+            expect((await app.inject({ method: 'GET', url })).statusCode).toBe(404);
+        }
+        expect((await app.inject({ method: 'POST', url: '/api/agents/nope/tests', payload: body })).statusCode).toBe(404);
+        expect(
+            (await app.inject({ method: 'PATCH', url: '/api/agent-tests/nope', payload: { name: 'x' } })).statusCode,
+        ).toBe(404);
+        expect((await app.inject({ method: 'POST', url: '/api/agent-tests/nope/run' })).statusCode).toBe(404);
+    });
+
+    it('runs a test and records the dispatch', async () => {
+        await seed();
+        // The real `spawnAgentRun` INSERTs the `agent_runs` row, and
+        // `agent_test_runs.agent_run_id` has a foreign key to it — a mock that
+        // only returned an id would pass a constraint the product relies on.
+        spawnAgentRunMock.mockImplementation(async () => {
+            await testDb
+                .insertInto('agent_runs')
+                .values({ id: 'spawned-run-1', agent_id: 'agent-coder', status: 'queued' } as never)
+                .execute();
+            return 'spawned-run-1';
+        });
+        const created = await app.inject({ method: 'POST', url: '/api/agents/agent-coder/tests', payload: body });
+        const id = created.json().id as string;
+
+        const run = await app.inject({ method: 'POST', url: `/api/agent-tests/${id}/run` });
+        // 202: the dispatch is asynchronous, the verdict lands on a later read.
+        expect(run.statusCode).toBe(202);
+        expect(run.json().verdict).toBe('running');
+
+        const runs = await app.inject({ method: 'GET', url: `/api/agent-tests/${id}/runs` });
+        expect(runs.json()).toHaveLength(1);
+    });
+
+    describe('cost estimate', () => {
+        // Spend that surprises you afterwards is what stops people running
+        // tests at all, so the estimate is shown before the button is pressed.
+        it('averages the agent\'s recent completed runs', async () => {
+            await seed();
+            for (const [i, cost] of [0.2, 0.4].entries()) {
+                await testDb
+                    .insertInto('agent_runs')
+                    .values({ id: `r${i}`, agent_id: 'agent-coder', status: 'completed', total_cost_usd: cost } as never)
+                    .execute();
+            }
+            const res = await app.inject({ method: 'GET', url: '/api/agents/agent-coder/cost-estimate' });
+            expect(res.json()).toEqual({ estimated_cost_usd: 0.3, sample_size: 2 });
+        });
+
+        // Null, not zero: "we do not know yet" and "it is free" are different
+        // answers and only one of them is honest.
+        it('returns null rather than zero when the agent has never run', async () => {
+            await seed();
+            const res = await app.inject({ method: 'GET', url: '/api/agents/agent-coder/cost-estimate' });
+            expect(res.json()).toEqual({ estimated_cost_usd: null, sample_size: 0 });
+        });
+
+        it('ignores runs that did not complete', async () => {
+            await seed();
+            await testDb
+                .insertInto('agent_runs')
+                .values({ id: 'r-err', agent_id: 'agent-coder', status: 'error', total_cost_usd: 99 } as never)
+                .execute();
+            expect((await app.inject({ method: 'GET', url: '/api/agents/agent-coder/cost-estimate' })).json())
+                .toEqual({ estimated_cost_usd: null, sample_size: 0 });
+        });
     });
 });

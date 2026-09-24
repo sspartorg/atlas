@@ -16,6 +16,7 @@ import {
 } from '../services/marketplace.js';
 import { unpackAgentBundle, AgentBundleParseError } from '../services/agent-bundle.js';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
+import { agentTestsService } from '../services/agent-tests.js';
 import {
     AgentChecklistsPutSchema,
     AgentMemoryUpdateSchema,
@@ -31,6 +32,39 @@ const AcceptUpgradeBodySchema = z.object({
             z.enum(['prompt_md', 'settings_json', 'checklists']),
         )
         .min(1),
+});
+
+
+const AgentTestItemTemplateSchema = z.object({
+    issue_type: z.enum(['task', 'sub_task']),
+    title: z.string().trim().min(1).max(500),
+    description: z.string().max(20000).optional(),
+    acceptance_criteria: z.string().max(20000).optional(),
+    labels: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+});
+
+const AgentTestExpectationsSchema = z.object({
+    outcome_kind: z.enum(['done', 'rejected', 'asked_question']).optional(),
+    required_checklist_all_passed: z.boolean().optional(),
+    summary_contains: z.array(z.string().min(1).max(200)).max(20).optional(),
+    summary_omits: z.array(z.string().min(1).max(200)).max(20).optional(),
+    max_cost_usd: z.number().positive().optional(),
+    max_duration_s: z.number().int().positive().optional(),
+});
+
+const AgentTestBodySchema = z.object({
+    project_id: z.string().min(1),
+    repo_id: z.string().min(1).nullable().optional(),
+    name: z.string().trim().min(1).max(200),
+    item_template: AgentTestItemTemplateSchema,
+    expectations: AgentTestExpectationsSchema.optional(),
+});
+
+const AgentTestPatchSchema = z.object({
+    repo_id: z.string().min(1).nullable().optional(),
+    name: z.string().trim().min(1).max(200).optional(),
+    item_template: AgentTestItemTemplateSchema.optional(),
+    expectations: AgentTestExpectationsSchema.optional(),
 });
 
 export async function agentsRoutes(app: FastifyInstance) {
@@ -210,6 +244,88 @@ export async function agentsRoutes(app: FastifyInstance) {
 
         const result = await startDryRun(agent, extra);
         return reply.status(202).send(result);
+    });
+
+    // ── Agent tests (ADR 0023) ─────────────────────────────────────────────
+    //
+    // A customer installing an agent from the marketplace does it on trust, and
+    // one they wrote themselves cannot be qualified at all. These are what make
+    // "does this agent work?" a question the product can answer.
+
+    app.get('/api/agents/:id/tests', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        return reply.send(await agentTestsService.list(id));
+    });
+
+    /**
+     * What one run of this agent is likely to cost, from its own history.
+     *
+     * Shown before the button is pressed. Spend that surprises you afterwards
+     * is the thing that stops people running tests at all.
+     */
+    app.get('/api/agents/:id/cost-estimate', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        const rows = await db
+            .selectFrom('agent_runs')
+            .select(['total_cost_usd'])
+            .where('agent_id', '=', id)
+            .where('status', '=', 'completed')
+            .where('total_cost_usd', 'is not', null)
+            .orderBy('created_at', 'desc')
+            .limit(20)
+            .execute();
+        const costs = rows.map((r) => Number(r.total_cost_usd)).filter((n) => Number.isFinite(n));
+        return reply.send({
+            // Null rather than 0: "we do not know yet" and "it is free" are
+            // different answers, and only one of them is honest here.
+            estimated_cost_usd: costs.length ? Number((costs.reduce((a, b) => a + b, 0) / costs.length).toFixed(4)) : null,
+            sample_size: costs.length,
+        });
+    });
+
+    app.post('/api/agents/:id/tests', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id } = req.params as { id: string };
+        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        const body = AgentTestBodySchema.parse(req.body ?? {});
+        return reply.status(201).send(
+            await agentTestsService.create({
+                agent_id: id,
+                project_id: body.project_id,
+                repo_id: body.repo_id ?? null,
+                name: body.name,
+                item_template: body.item_template,
+                ...(body.expectations ? { expectations: body.expectations } : {}),
+            }),
+        );
+    });
+
+    app.patch('/api/agent-tests/:testId', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { testId } = req.params as { testId: string };
+        if (!(await agentTestsService.get(testId))) return reply.status(404).send({ error: 'Agent test not found' });
+        const body = AgentTestPatchSchema.parse(req.body ?? {});
+        return reply.send(await agentTestsService.update(testId, body));
+    });
+
+    app.delete('/api/agent-tests/:testId', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { testId } = req.params as { testId: string };
+        await agentTestsService.remove(testId);
+        return reply.status(204).send();
+    });
+
+    app.get('/api/agent-tests/:testId/runs', async (req, reply) => {
+        const { testId } = req.params as { testId: string };
+        if (!(await agentTestsService.get(testId))) return reply.status(404).send({ error: 'Agent test not found' });
+        return reply.send(await agentTestsService.listRuns(testId));
+    });
+
+    app.post('/api/agent-tests/:testId/run', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { testId } = req.params as { testId: string };
+        if (!(await agentTestsService.get(testId))) return reply.status(404).send({ error: 'Agent test not found' });
+        // 202: the dispatch is asynchronous. The verdict lands on the run row
+        // when it is next read.
+        return reply.status(202).send(await agentTestsService.run(testId));
     });
 
     app.post(
