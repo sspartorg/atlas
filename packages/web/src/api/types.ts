@@ -372,6 +372,12 @@ export interface AgentTestExpectations {
     summary_omits?: string[];
     max_cost_usd?: number;
     max_duration_s?: number;
+    /** ADR 0023 phase 3 — a workflow eval's assertions about the whole delivery. */
+    terminal_status?: string[];
+    min_sub_tasks?: number;
+    /** `false` is a real assertion: inventing a feature shows up as a PR. */
+    requires_pr?: boolean;
+    gate_verdicts_all_pass?: boolean;
     /** Migration 017 — what the run DID. Unanswerable here is `errored`, never a pass. */
     tools_required?: string[];
     tools_forbidden?: string[];
@@ -383,7 +389,12 @@ export interface AgentTestExpectations {
 
 export interface AgentTest {
     id: string;
-    agent_id: string;
+    /** Exactly one of `agent_id` / `workflow_id` is set (migration 019). */
+    agent_id: string | null;
+    /** Set when this fixture runs through a whole workflow, not one agent. */
+    workflow_id: string | null;
+    /** A tag, for grouping fixtures into a set. */
+    suite: string | null;
     project_id: string;
     repo_id: string | null;
     name: string;
@@ -411,6 +422,20 @@ export interface AgentTestRun {
     judge_verdict: 'pass' | 'fail' | 'abstained' | null;
     judge_reason: string | null;
     judge_cost_usd: number | null;
+    /** Set for a workflow eval; the run it is judged on. */
+    workflow_run_id: string | null;
+}
+
+/** A fixture waiting on an Owner answer (ATL-173). */
+export interface ParkedFixture {
+    run_id: string;
+    agent_test_id: string;
+    test_name: string;
+    workflow_run_id: string;
+    item_id: string | null;
+    parked_node_id: string | null;
+    park_reason: string | null;
+    started_at: string;
 }
 
 /**

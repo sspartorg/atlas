@@ -94,6 +94,7 @@ import type {
     AgentTestRun,
     AgentTestBatch,
     AgentPerformance,
+    ParkedFixture,
     AgentCostEstimate,
     AgentTestItemTemplate,
     AgentTestExpectations,
@@ -1207,6 +1208,21 @@ export const api = {
         batches: (testId: string) => get<AgentTestBatch[]>(`/agent-tests/${testId}/batches`),
         /** ATL-140 — what this agent's own runs already prove. */
         performance: (agentId: string) => get<AgentPerformance>(`/agents/${agentId}/performance`),
+        /** ADR 0023 phase 3 — fixtures pointed at a whole workflow. */
+        forWorkflow: (workflowId: string) => get<AgentTest[]>(`/workflows/${workflowId}/tests`),
+        createForWorkflow: (
+            workflowId: string,
+            body: {
+                project_id: string;
+                repo_id?: string | null;
+                suite?: string | null;
+                name: string;
+                item_template: AgentTestItemTemplate;
+                expectations?: AgentTestExpectations;
+            },
+        ) => post<AgentTest>(`/workflows/${workflowId}/tests`, body),
+        /** ATL-173 — fixtures of this workflow that are waiting on an answer. */
+        parked: (workflowId: string) => get<ParkedFixture[]>(`/workflows/${workflowId}/evals/parked`),
     },
 
     workflowRuns: {

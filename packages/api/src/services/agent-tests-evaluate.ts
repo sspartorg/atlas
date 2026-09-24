@@ -47,6 +47,33 @@ export interface AgentTestExpectations {
     files_touched?: string[] | undefined;
     /** Substrings; nothing it touched may contain any of them. */
     files_untouched?: string[] | undefined;
+
+    // ── Workflow evals only (ADR 0023 phase 3) ────────────────────────────
+    //
+    // The same fixture run through a whole workflow instead of one agent. These
+    // are `eval-score.ts`'s `expect` block, which has lived in `evals/golden/`
+    // JSON since the harness shipped.
+
+    /** `workflow_runs.status` must be one of these. */
+    terminal_status?: string[] | undefined;
+    min_sub_tasks?: number | undefined;
+    /**
+     * `false` is a real assertion, not a default. `ambiguous-must-escalate`
+     * exists because a PO Writer that invents a feature from an unanswerable
+     * Task has FAILED, and opening a PR is how that failure shows up.
+     */
+    requires_pr?: boolean | undefined;
+    /** No gate went red. A `skipped` is not a pass (migration 013). */
+    gate_verdicts_all_pass?: boolean | undefined;
+}
+
+/** What a finished workflow run produced, for the expectations above. */
+export interface WorkflowRunObservation {
+    status: string;
+    sub_task_count: number;
+    pr_count: number;
+    /** Every gate verdict recorded across the run tree. */
+    gate_verdicts: string[];
 }
 
 export interface AgentTestObservation {
@@ -57,6 +84,8 @@ export interface AgentTestObservation {
      * before migration 017, or whose output was not a transcript at all.
      */
     trace?: IRunTraceSummary | null | undefined;
+    /** Present only for a workflow eval; absent for a single-agent test. */
+    workflow?: WorkflowRunObservation | null | undefined;
     requiredChecklist: RequiredChecklistRow[];
     cost_usd: number | null;
     duration_s: number | null;
@@ -204,6 +233,58 @@ export function evaluateAgentTest(
                 return {
                     verdict: 'errored',
                     failures: ['this run touched more files than the trace records, so "untouched" cannot be proved'],
+                };
+            }
+        }
+    }
+
+    // ── Workflow-level expectations ──────────────────────────────────────
+    //
+    // Moved here from `scripts/eval-score.ts:checkExpectation`, which the CLI
+    // now imports: the golden set and a workflow eval run from the UI have to
+    // agree about what a fixture asserts, and the only way to guarantee that
+    // is one implementation.
+    const wantsWorkflow =
+        expectations.terminal_status !== undefined ||
+        expectations.min_sub_tasks !== undefined ||
+        expectations.requires_pr !== undefined ||
+        expectations.gate_verdicts_all_pass !== undefined;
+    if (wantsWorkflow) {
+        const wf = obs.workflow;
+        if (!wf) {
+            // A single-agent test cannot answer a question about a delivery.
+            return {
+                verdict: 'errored',
+                failures: ['this expectation is about a whole workflow run, and this test runs one agent'],
+            };
+        }
+        if (expectations.terminal_status && !expectations.terminal_status.includes(wf.status)) {
+            failures.push(
+                `expected the run to end ${expectations.terminal_status.join(' or ')}, got ${wf.status}`,
+            );
+        }
+        if (expectations.min_sub_tasks != null && wf.sub_task_count < expectations.min_sub_tasks) {
+            failures.push(
+                `expected at least ${expectations.min_sub_tasks} sub-tasks, got ${wf.sub_task_count}`,
+            );
+        }
+        if (expectations.requires_pr === true && wf.pr_count === 0) {
+            failures.push('expected a pull request, none was opened');
+        }
+        if (expectations.requires_pr === false && wf.pr_count > 0) {
+            failures.push(`expected no pull request, ${wf.pr_count} was opened`);
+        }
+        if (expectations.gate_verdicts_all_pass) {
+            const red = wf.gate_verdicts.filter((v) => v === 'fail').length;
+            if (red > 0) failures.push(`${red} gate verdict(s) went red`);
+            // A skip is not a pass (migration 013). Saying so is the
+            // difference between "every gate was green" and "every gate
+            // exited 0, and this many of them never checked anything".
+            const skipped = wf.gate_verdicts.filter((v) => v === 'skipped').length;
+            if (red === 0 && skipped === wf.gate_verdicts.length && skipped > 0) {
+                return {
+                    verdict: 'errored',
+                    failures: [`all ${skipped} gates skipped, so nothing was actually checked`],
                 };
             }
         }

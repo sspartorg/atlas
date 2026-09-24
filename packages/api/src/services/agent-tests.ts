@@ -13,6 +13,7 @@ import {
     type AgentTestRunRow,
 } from './agent-tests-evaluate-run.js';
 import { spawnAgentRun } from './agent-runner.js';
+import { startWorkflowRun } from './workflow-engine.js';
 import { summariseBatch, toBatches, type AgentTestBatch } from './agent-test-batches.js';
 import { subTasksService } from './sub-tasks.js';
 import { tasksService } from './tasks.js';
@@ -50,7 +51,10 @@ export interface RunTestOptions {
 }
 
 export interface CreateAgentTestInput {
-    agent_id: string;
+    /** Exactly one of these, by CHECK (migration 019). */
+    agent_id?: string | null | undefined;
+    workflow_id?: string | null | undefined;
+    suite?: string | null | undefined;
     project_id: string;
     repo_id?: string | null | undefined;
     name: string;
@@ -62,6 +66,7 @@ export interface CreateAgentTestInput {
  *  it forbids the explicit `undefined` a zod-parsed patch body carries. */
 export interface UpdateAgentTestInput {
     repo_id?: string | null | undefined;
+    suite?: string | null | undefined;
     name?: string | undefined;
     item_template?: AgentTestItemTemplate | undefined;
     expectations?: AgentTestExpectations | undefined;
@@ -89,7 +94,9 @@ export const agentTestsService = {
             .insertInto('agent_tests')
             .values({
                 id,
-                agent_id: input.agent_id,
+                agent_id: input.agent_id ?? null,
+                workflow_id: input.workflow_id ?? null,
+                suite: input.suite ?? null,
                 project_id: input.project_id,
                 repo_id: input.repo_id ?? null,
                 name: input.name,
@@ -104,6 +111,7 @@ export const agentTestsService = {
         const set: Record<string, unknown> = { updated_at: new Date().toISOString() };
         if (patch.name !== undefined) set['name'] = patch.name;
         if (patch.repo_id !== undefined) set['repo_id'] = patch.repo_id;
+        if (patch.suite !== undefined) set['suite'] = patch.suite;
         if (patch.item_template !== undefined) set['item_template'] = JSON.stringify(patch.item_template);
         if (patch.expectations !== undefined) set['expectations'] = JSON.stringify(patch.expectations);
         await db.updateTable('agent_tests').set(set as never).where('id', '=', id).execute();
@@ -168,9 +176,20 @@ export const agentTestsService = {
         const batchId = randomUUID();
         const label = opts.label?.trim() || null;
 
-        const rows = await Promise.all(
-            Array.from({ length: samples }, (_, i) => runOneSample(test, batchId, i, label)),
-        );
+        // Agent tests run in parallel because each gets its own `mkdtemp`
+        // directory. A workflow eval calls `startWorkflowRun`, which provisions
+        // a worktree under the project git lock — running those side by side
+        // would have them fighting over it.
+        const rows: AgentTestRunRow[] = [];
+        if (test.workflow_id) {
+            for (let i = 0; i < samples; i++) rows.push(await runOneSample(test, batchId, i, label));
+        } else {
+            rows.push(
+                ...(await Promise.all(
+                    Array.from({ length: samples }, (_, i) => runOneSample(test, batchId, i, label)),
+                )),
+            );
+        }
         return summariseBatch(batchId, rows);
     },
 
@@ -198,7 +217,114 @@ export const agentTestsService = {
     async listBatches(testId: string): Promise<AgentTestBatch[]> {
         return toBatches(await this.listRuns(testId));
     },
+
+    /** The fixtures pointed at one workflow (ADR 0023 phase 3). */
+    async listForWorkflow(workflowId: string): Promise<AgentTestRow[]> {
+        const rows = await db
+            .selectFrom('agent_tests')
+            .selectAll()
+            .where('workflow_id', '=', workflowId)
+            .orderBy('created_at', 'desc')
+            .execute();
+        return rows.map((r) => asTest(r as never));
+    },
+
+    /**
+     * Every fixture in a suite, with its history.
+     *
+     * A "suite" is a tag: running the golden set means running each of its
+     * fixtures, and comparing two fleet versions is reading the same suite
+     * filtered by the `label` each run carried.
+     */
+    async suite(name: string): Promise<Array<{ test: AgentTestRow; batches: AgentTestBatch[] }>> {
+        const rows = await db
+            .selectFrom('agent_tests')
+            .selectAll()
+            .where('suite', '=', name)
+            .orderBy('name', 'asc')
+            .execute();
+        const out: Array<{ test: AgentTestRow; batches: AgentTestBatch[] }> = [];
+        for (const r of rows) {
+            const test = asTest(r as never);
+            out.push({ test, batches: await this.listBatches(test.id) });
+        }
+        return out;
+    },
+
+    /**
+     * Runs of this test that are parked, waiting on the Owner.
+     *
+     * ATL-173: every fixture parks once at PO Writer's brainstorm by design,
+     * and across a set that is ~12 substantive answers — the slowest part of
+     * the whole exercise, and the Owner is the bottleneck, not the agents. If
+     * those parks are not something to answer in the UI, a set run from the UI
+     * is worse than the CLI, not better.
+     */
+    async parked(testIds: string[]): Promise<ParkedFixture[]> {
+        if (testIds.length === 0) return [];
+        const runs = await db
+            .selectFrom('agent_test_runs')
+            .select(['id', 'agent_test_id', 'workflow_run_id'])
+            .where('agent_test_id', 'in', testIds)
+            .where('workflow_run_id', 'is not', null)
+            .execute();
+        const runIds = runs.flatMap((r) => (r.workflow_run_id ? [r.workflow_run_id] : []));
+        if (runIds.length === 0) return [];
+
+        // Two reads rather than one join: `workflow_run_id` is nullable, and
+        // Kysely will not join from the nullable side.
+        const [parkedRuns, tests] = await Promise.all([
+            db
+                .selectFrom('workflow_runs')
+                .select(['id', 'item_id', 'parked_node_id', 'park_reason', 'started_at'])
+                .where('id', 'in', runIds)
+                .where('status', '=', 'waiting_for_owner')
+                .execute(),
+            db.selectFrom('agent_tests').select(['id', 'name']).where('id', 'in', testIds).execute(),
+        ]);
+        const nameOf = new Map(tests.map((t) => [t.id, t.name]));
+        const byWorkflowRun = new Map(parkedRuns.map((w) => [w.id, w]));
+
+        return runs
+            .flatMap((r) => {
+                const wf = r.workflow_run_id ? byWorkflowRun.get(r.workflow_run_id) : undefined;
+                if (!wf) return [];
+                return [
+                    {
+                        run_id: r.id,
+                        agent_test_id: r.agent_test_id,
+                        test_name: nameOf.get(r.agent_test_id) ?? r.agent_test_id,
+                        workflow_run_id: wf.id,
+                        item_id: wf.item_id ?? null,
+                        parked_node_id: wf.parked_node_id ?? null,
+                        park_reason: wf.park_reason ?? null,
+                        // `timestamptz` arrives as a Date whatever Kysely says.
+                        started_at: String(wf.started_at ?? ''),
+                    },
+                ];
+            })
+            .sort((x, y) => x.started_at.localeCompare(y.started_at));
+    },
 };
+
+/**
+ * A fixture waiting on an answer.
+ *
+ * Carrying `park_reason` across the whole set is the second thing ATL-173
+ * names: two fixtures once escalated on the same defect and the two Owner
+ * rulings would have contradicted each other, because each run only ever sees
+ * its own branch.
+ */
+export interface ParkedFixture {
+    run_id: string;
+    agent_test_id: string;
+    test_name: string;
+    workflow_run_id: string;
+    item_id: string | null;
+    parked_node_id: string | null;
+    park_reason: string | null;
+    started_at: string;
+}
 
 /** One sample: its own throwaway item, its own dispatch, its own row. */
 async function runOneSample(
@@ -256,13 +382,23 @@ async function runOneSample(
         .execute();
 
     try {
-        const runId = await spawnAgentRun({
-            agentId: test.agent_id,
-            issueType: t.issue_type,
-            issueId: itemId,
-            projectId: test.project_id,
-        });
-        await db.updateTable('agent_test_runs').set({ agent_run_id: runId } as never).where('id', '=', id).execute();
+        if (test.workflow_id) {
+            // The end-to-end eval: the same fixture, through the whole chain.
+            const workflowRunId = await startWorkflowRun(test.workflow_id, itemId);
+            await db
+                .updateTable('agent_test_runs')
+                .set({ workflow_run_id: workflowRunId } as never)
+                .where('id', '=', id)
+                .execute();
+        } else {
+            const runId = await spawnAgentRun({
+                agentId: test.agent_id as string,
+                issueType: t.issue_type,
+                issueId: itemId,
+                projectId: test.project_id,
+            });
+            await db.updateTable('agent_test_runs').set({ agent_run_id: runId } as never).where('id', '=', id).execute();
+        }
     } catch (err) {
         // The dispatch never happened — a missing CLI, a bad model. That is
         // a broken environment, not a failing agent, so it is `errored`.

@@ -3,7 +3,7 @@
 **Route:** `/workflows/:id` • **Component:** `packages/web/src/pages/workflows/WorkflowBuilder.tsx` • **Slug:** `workflows`
 
 ## Purpose
-Design one workflow on a ReactFlow canvas (`@xyflow/react`, lazy chunk) and list its runs. Two tabs via `?tab=`: **Builder** (default) and **Runs**.
+Design one workflow on a ReactFlow canvas (`@xyflow/react`, lazy chunk), list its runs, and measure it. Three tabs via `?tab=`: **Builder** (default), **Runs** and **Evals**.
 
 ## States
 - **Loading**: centered spinner.
@@ -50,6 +50,11 @@ Design one workflow on a ReactFlow canvas (`@xyflow/react`, lazy chunk) and list
 
 **Runs tab** (`WorkflowRunsTab.tsx`)
 - Table: Item (Task / sub-task title + mono id, or "Project run"), Status chip (`WORKFLOW_RUN_STATUS_PALETTE`), Started (relative, absolute tooltip), Duration, Pull request link. Row click → `/workflows/:id/runs/:runId`. Empty: "No runs yet…".
+
+**Evals tab** (`WorkflowEvalsTab.tsx`) — ADR 0023 phase 3 / ATL-173
+- Fixtures pointed at this workflow: the same primitive the agent Tests tab runs through one agent, run through the whole chain instead. Verdict, cost and the failure histogram come from the same batch aggregate.
+- **The parked inbox sits above everything.** Every fixture parks once at PO Writer's brainstorm by design; across a set that is ~12 substantive answers and the slowest part of the exercise, with the Owner as the bottleneck. Each park shows its node and its reason, with a link to answer it — and they are listed **together**, because two fixtures once escalated on the same defect and the two rulings would have contradicted each other. Polls every 15s, since a run parks mid-flight.
+- The empty state says why: one run of a delivery chain is dollars and tens of minutes, so fixtures are written deliberately rather than from a quick form.
 
 ## Why these affordances exist
 - **Whole-workflow PATCH** — ReactFlow edits the graph as one document and the run needs a frozen snapshot anyway; one save keeps settings and graph consistent.
