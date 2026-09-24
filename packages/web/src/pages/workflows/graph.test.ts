@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { IWorkflowGraph } from '@atlas/shared';
 import { makeRunDetail, makeRunStep, makeWorkflow } from '../../test-utils/workflowFixtures.js';
-import { connectEdges, nodeRunStates, normalizeGraph, newNodeId, toFlow, toGraph, type WfNode } from './graph.js';
+import {
+    connectEdges,
+    nodeRunStates,
+    normalizeGraph,
+    newNodeId,
+    routeEdges,
+    targetHandleOf,
+    toFlow,
+    toGraph,
+    type WfEdge,
+    type WfNode,
+} from './graph.js';
 
 describe('workflow graph helpers', () => {
     it('round-trips a saved graph through the canvas shapes', () => {
@@ -284,5 +295,146 @@ describe('nodeRunStates', () => {
     it('keeps sub-task progress when the run marks the same node current', () => {
         const run = { ...subtasksRun([{ id: 'c1', status: 'running' }]), status: 'running' as const, current_node_id: 'build' };
         expect(nodeRunStates(run).get('build')).toEqual({ state: 'current', visits: 1, subtasks: { done: 0, started: 1 } });
+    });
+});
+
+describe('targetHandleOf', () => {
+    // The old rule was `targetY < sourceY`, so a target on the same row took
+    // the top handle: the edge left the source's right flank, doubled back
+    // across the source card and dropped in from above. `delivery.json` does
+    // this four times, once per fixer/reviewer pair.
+    it('sends an edge into a node on the same row to the side handle', () => {
+        expect(targetHandleOf(1100, 1100)).toBe('loop');
+    });
+
+    // A fixer sits 60px under its gate and a card is 64 tall, so the gap is
+    // negative once the source card is drawn. There is no room for a lane.
+    it('sends an edge into a node less than a card-height below to the side handle', () => {
+        expect(targetHandleOf(1100, 1160)).toBe('loop');
+    });
+
+    it('sends an edge into a node a clear card-height below into the top handle', () => {
+        expect(targetHandleOf(1100, 1164)).toBe('in');
+        expect(targetHandleOf(0, 130)).toBe('in');
+    });
+});
+
+describe('routeEdges', () => {
+    function node(id: string, x: number, y: number): WfNode {
+        return { id, type: 'agent', position: { x, y }, data: {} };
+    }
+    function edge(id: string, source: string, target: string, kind: 'pass' | 'fail'): WfEdge {
+        return { id, source, target, data: { kind } };
+    }
+    const offsetOf = (edges: WfEdge[], id: string) =>
+        edges.find((e) => e.id === id)?.pathOptions?.offset;
+
+    // Two fail edges out of the same column whose spans cross would otherwise
+    // both turn at the default 20px and be drawn as one line.
+    it('gives two overlapping edges in one corridor different lanes', () => {
+        const nodes = [node('a', 0, 0), node('b', 0, 600), node('c', 0, 300), node('d', 0, 900)];
+        const routed = routeEdges(nodes, [
+            edge('long', 'b', 'a', 'fail'),
+            edge('short', 'd', 'c', 'fail'),
+        ]);
+        expect(offsetOf(routed, 'long')).not.toBe(offsetOf(routed, 'short'));
+    });
+
+    // Lanes are a scarce resource: an edge that shares no vertical space with
+    // another must not be pushed outward for it.
+    it('reuses the innermost lane for edges whose spans do not meet', () => {
+        const nodes = [node('a', 0, 0), node('b', 0, 100), node('c', 0, 800), node('d', 0, 900)];
+        const routed = routeEdges(nodes, [
+            edge('top', 'b', 'a', 'fail'),
+            edge('bottom', 'd', 'c', 'fail'),
+        ]);
+        expect(offsetOf(routed, 'top')).toBe(20);
+        expect(offsetOf(routed, 'bottom')).toBe(20);
+    });
+
+    // Corridors beside different columns are different corridors.
+    it('does not make edges in far-apart columns compete for lanes', () => {
+        const nodes = [node('a', 0, 0), node('b', 0, 600), node('c', 620, 0), node('d', 620, 600)];
+        const routed = routeEdges(nodes, [
+            edge('left', 'b', 'a', 'fail'),
+            edge('right', 'd', 'c', 'fail'),
+        ]);
+        expect(offsetOf(routed, 'left')).toBe(20);
+        expect(offsetOf(routed, 'right')).toBe(20);
+    });
+
+    // The corridor is 104px wide between columns. An unbounded lane index
+    // would eventually route an edge straight through the next column.
+    it('keeps every lane inside the corridor', () => {
+        const nodes = Array.from({ length: 16 }, (_, i) => node(`n${i}`, 0, i * 40));
+        const edges = Array.from({ length: 8 }, (_, i) =>
+            edge(`e${i}`, `n${15 - i}`, `n${i}`, 'fail'),
+        );
+        for (const e of routeEdges(nodes, edges)) {
+            expect(e.pathOptions?.offset).toBeLessThanOrEqual(92);
+        }
+    });
+
+    // A lane that depended on edge order would flicker on every re-render.
+    it('assigns the same lanes however the edges are ordered', () => {
+        const nodes = [node('a', 0, 0), node('b', 0, 600), node('c', 0, 300), node('d', 0, 900)];
+        const edges = [edge('x', 'b', 'a', 'fail'), edge('y', 'd', 'c', 'fail')];
+        const forwards = routeEdges(nodes, edges);
+        const backwards = routeEdges(nodes, [...edges].reverse());
+        expect(offsetOf(forwards, 'x')).toBe(offsetOf(backwards, 'x'));
+        expect(offsetOf(forwards, 'y')).toBe(offsetOf(backwards, 'y'));
+    });
+
+    // A pass edge climbing back up the graph enters the same right-hand
+    // corridor as a fail edge, and has to be counted with them.
+    it('gives a loop-back pass edge a lane of its own beside a fail edge', () => {
+        const nodes = [node('a', 0, 0), node('b', 0, 600), node('c', 0, 300)];
+        const routed = routeEdges(nodes, [
+            edge('fail', 'b', 'a', 'fail'),
+            edge('loopback', 'b', 'c', 'pass'),
+        ]);
+        expect(routed.find((e) => e.id === 'loopback')?.targetHandle).toBe('loop');
+        expect(offsetOf(routed, 'loopback')).not.toBe(offsetOf(routed, 'fail'));
+    });
+
+    // An edge whose endpoints were deleted still has to be drawn, so the
+    // Owner can see the broken connection in order to remove it. Missing
+    // positions read as the origin rather than crashing the lookup.
+    it('routes an edge whose nodes are gone without crashing', () => {
+        const routed = routeEdges([], [edge('orphan', 'gone', 'also-gone', 'fail')]);
+        expect(routed[0]).toMatchObject({ id: 'orphan', targetHandle: 'loop' });
+        expect(routed[0]?.pathOptions?.offset).toBe(20);
+    });
+
+    // An edge ReactFlow synthesised carries no kind data; it counts as a pass
+    // connection, exactly as `toGraph` treats it.
+    it('treats an edge with no kind data as a pass connection', () => {
+        const nodes = [node('a', 0, 0), node('b', 0, 400)];
+        const routed = routeEdges(nodes, [{ id: 'bare', source: 'a', target: 'b' }]);
+        expect(routed[0]?.targetHandle).toBe('in');
+        expect(routed[0]?.pathOptions?.offset).toBe(20);
+    });
+
+    // The tie-break exists so a lane never depends on the order edges happen
+    // to be stored in. Two spans that start on the same row exercise both
+    // directions of the id comparison.
+    it('breaks a lane tie by id, whichever order the edges arrive in', () => {
+        const nodes = [node('a', 0, 0), node('b', 0, 400), node('c', 0, 0), node('d', 0, 400)];
+        const forwards = routeEdges(nodes, [edge('aa', 'b', 'a', 'fail'), edge('zz', 'd', 'c', 'fail')]);
+        const backwards = routeEdges(nodes, [edge('zz', 'd', 'c', 'fail'), edge('aa', 'b', 'a', 'fail')]);
+        const off = (es: WfEdge[], id: string) => es.find((e) => e.id === id)?.pathOptions?.offset;
+        expect(off(forwards, 'aa')).toBe(off(backwards, 'aa'));
+        expect(off(forwards, 'zz')).toBe(off(backwards, 'zz'));
+        expect(off(forwards, 'aa')).not.toBe(off(forwards, 'zz'));
+    });
+
+    // Positions move on every drag; the handle has to move with them rather
+    // than keeping whatever `toFlow` decided when the page loaded.
+    it('re-picks the target handle from where the nodes are now', () => {
+        const edges = [edge('e', 'a', 'b', 'fail')];
+        const below = routeEdges([node('a', 0, 0), node('b', 0, 400)], edges);
+        const above = routeEdges([node('a', 0, 400), node('b', 0, 0)], edges);
+        expect(below[0]?.targetHandle).toBe('in');
+        expect(above[0]?.targetHandle).toBe('loop');
     });
 });

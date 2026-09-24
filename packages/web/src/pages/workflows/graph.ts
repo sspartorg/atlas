@@ -1,4 +1,10 @@
-import { MarkerType, type Connection, type Edge, type Node } from '@xyflow/react';
+import {
+    MarkerType,
+    type Connection,
+    type Edge,
+    type Node,
+    type SmoothStepPathOptions,
+} from '@xyflow/react';
 import type {
     IWorkflowEdge,
     IWorkflowGraph,
@@ -19,6 +25,9 @@ import { ATLAS_PALETTE } from '../../theme/tokens.js';
 // passes out of its bottom. A connection that goes back up the graph (a
 // reviewer's fail loop, an Owner answer) enters on the node's right side
 // (`loop`), so loops run down the side instead of crossing the main line.
+//
+// That side is one corridor and every loop wants it, so `routeEdges` also
+// hands each edge its own lane within it — see the comment there.
 
 export interface IWfNodeData extends Record<string, unknown> {
     agent_id?: string | undefined;
@@ -28,7 +37,8 @@ export interface IWfNodeData extends Record<string, unknown> {
     script_id?: string | undefined;
 }
 export type WfNode = Node<IWfNodeData, WorkflowNodeType>;
-export type WfEdge = Edge<{ kind: WorkflowEdgeKind }>;
+/** `pathOptions` is a render-time lane assignment (see `routeEdges`); `toGraph` drops it. */
+export type WfEdge = Edge<{ kind: WorkflowEdgeKind }> & { pathOptions?: SmoothStepPathOptions };
 
 type TargetHandle = 'in' | 'loop';
 
@@ -50,10 +60,98 @@ function flowEdge(e: IWorkflowEdge, targetHandle: TargetHandle): WfEdge {
     };
 }
 
-/** An edge into a node above its source is a loop back; it enters on the side. */
-function targetHandleOf(graph: IWorkflowGraph, e: IWorkflowEdge): TargetHandle {
-    const y = (id: string) => graph.nodes.find((n) => n.id === id)?.position.y ?? 0;
-    return y(e.target) < y(e.source) ? 'loop' : 'in';
+/** A node card's height. The clearance an edge needs to drop cleanly into a top handle. */
+const NODE_H = 64;
+
+// Lane geometry for the right-hand corridor. `smoothstep`'s `offset` is the
+// distance its first and last turn sit from the handle, so a per-edge offset
+// gives each edge its own vertical lane instead of stacking every one of them
+// at the default 20px. A card is 216 wide on a 320 column pitch, so the
+// corridor beside a node spans 108..212 — five lanes fit with room to spare.
+const LANE_OFFSET = 20;
+const LANE_GAP = 18;
+const LANE_COUNT = 5;
+/** Corridors further apart than this do not compete for lanes. */
+const LANE_SPREAD = 120;
+
+/**
+ * Which handle an edge enters its target by.
+ *
+ * A target that is not a clear node-height below the source cannot be entered
+ * from the top: `smoothstep` would exit the source's right flank, double back
+ * over the source card and drop in from above, crossing everything converging
+ * on that same top handle. The old rule compared y with a bare `<`, so an equal
+ * row (a fixer and its reviewer) and a near miss (a fixer only 60px under its
+ * gate) both took the top handle and both drew that S.
+ */
+export function targetHandleOf(sourceY: number, targetY: number): TargetHandle {
+    return targetY - sourceY >= NODE_H ? 'in' : 'loop';
+}
+
+/** Two spans overlap if neither ends before the other begins. */
+function overlaps(a: Corridor, b: Corridor): boolean {
+    return a.top <= b.bottom && b.top <= a.bottom && Math.abs(a.x - b.x) < LANE_SPREAD;
+}
+
+interface Corridor {
+    top: number;
+    bottom: number;
+    x: number;
+}
+
+/**
+ * Assign every edge its target handle and its lane, from live node positions.
+ *
+ * Both are derived, never persisted — which is the point. `toFlow` picks a
+ * handle once from the saved graph, so dragging a node above its source left
+ * the edge entering from the top until the page was reloaded. Running this on
+ * render instead keeps the drawing honest about where the nodes actually are.
+ *
+ * Only edges that use a node's right flank compete for space: a `fail` edge
+ * leaves by it, and any edge going back up the graph enters by it. Those are
+ * coloured greedily by interval, which is optimal for intervals and needs no
+ * search. Everything else keeps the default offset.
+ */
+export function routeEdges(nodes: WfNode[], edges: WfEdge[]): WfEdge[] {
+    const at = new Map(nodes.map((n) => [n.id, n.position]));
+    const y = (id: string) => at.get(id)?.y ?? 0;
+    const x = (id: string) => at.get(id)?.x ?? 0;
+
+    const handles = new Map<string, TargetHandle>();
+    for (const e of edges) handles.set(e.id, targetHandleOf(y(e.source), y(e.target)));
+
+    // Sorted by where each span starts, then by id so the result never depends
+    // on edge order — an unstable lane would flicker on every re-render.
+    const queued = edges
+        .filter((e) => (e.data?.kind ?? 'pass') === 'fail' || handles.get(e.id) === 'loop')
+        .map((e) => ({
+            id: e.id,
+            top: Math.min(y(e.source), y(e.target)),
+            bottom: Math.max(y(e.source), y(e.target)) + NODE_H,
+            // A fail edge leaves its source's flank; a loop-back enters its target's.
+            x: (e.data?.kind ?? 'pass') === 'fail' ? x(e.source) : x(e.target),
+        }))
+        .sort((a, b) => a.top - b.top || (a.id < b.id ? -1 : 1));
+
+    const lanes = new Map<string, number>();
+    const placed: Array<Corridor & { lane: number }> = [];
+    for (const span of queued) {
+        const taken = new Set(placed.filter((p) => overlaps(p, span)).map((p) => p.lane));
+        let lane = 0;
+        while (taken.has(lane)) lane++;
+        lanes.set(span.id, lane);
+        placed.push({ ...span, lane });
+    }
+
+    return edges.map((e) => ({
+        ...e,
+        targetHandle: handles.get(e.id) ?? 'in',
+        pathOptions: { offset: LANE_OFFSET + ((lanes.get(e.id) ?? 0) % LANE_COUNT) * LANE_GAP },
+    }));
+}
+
+function yOf(graph: IWorkflowGraph, id: string): number {
+    return graph.nodes.find((n) => n.id === id)?.position.y ?? 0;
 }
 
 export function toFlow(graph: IWorkflowGraph): { nodes: WfNode[]; edges: WfEdge[] } {
@@ -70,7 +168,7 @@ export function toFlow(graph: IWorkflowGraph): { nodes: WfNode[]; edges: WfEdge[
             },
             deletable: n.type !== 'start',
         })),
-        edges: graph.edges.map((e) => flowEdge(e, targetHandleOf(graph, e))),
+        edges: graph.edges.map((e) => flowEdge(e, targetHandleOf(yOf(graph, e.source), yOf(graph, e.target)))),
     };
 }
 
