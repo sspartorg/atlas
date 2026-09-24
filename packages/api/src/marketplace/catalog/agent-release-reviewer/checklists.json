@@ -23,5 +23,10 @@
     "label": "The gates were not re-run - their verdicts were read",
     "sort_order": 4,
     "required": true
+  },
+  {
+    "label": "Every gap reported as rejected has a `dev`-labelled fix sub-task filed for it",
+    "sort_order": 5,
+    "required": true
   }
 ]
