@@ -18,7 +18,7 @@ export interface RoutingDecision {
     detail?: string;
 }
 
-interface RequiredChecklistRow {
+export interface RequiredChecklistRow {
     id: number;
     label: string;
 }

@@ -1,0 +1,168 @@
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
+
+// The dispatch itself is out of scope here: what this file proves is that a
+// test materialises an item, records the run, and judges it once the dispatch
+// finishes. Spawning a real CLI would test the runner, not this.
+const spawnAgentRun = vi.hoisted(() => vi.fn(async () => 'run-1'));
+vi.mock('./agent-runner.js', () => ({ spawnAgentRun }));
+
+import { agentTestsService } from './agent-tests.js';
+import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
+import { insertAgent, insertProject } from '../../tests/_items.js';
+
+async function makeTest(over: Record<string, unknown> = {}) {
+    return agentTestsService.create({
+        agent_id: 'agent-coder',
+        project_id: 'p1',
+        name: 'scopes a task',
+        item_template: { issue_type: 'task', title: 'Add a stats endpoint', description: 'body' },
+        ...over,
+    } as never);
+}
+
+/** Put the dispatch into a terminal state so the lazy evaluator will judge it. */
+async function finishRun(over: Record<string, unknown> = {}): Promise<void> {
+    await testDb
+        .updateTable('agent_runs')
+        .set({
+            status: 'completed',
+            outcome_kind: 'done',
+            outcome_summary: 'created the sub-tasks',
+            total_cost_usd: 0.25,
+            started_at: new Date('2026-01-01T00:00:00Z').toISOString(),
+            completed_at: new Date('2026-01-01T00:00:30Z').toISOString(),
+            ...over,
+        } as never)
+        .where('id', '=', 'run-1')
+        .execute();
+}
+
+beforeEach(async () => {
+    await truncateAll();
+    await insertProject('p1', 'ATL');
+    await insertAgent({ id: 'agent-coder' });
+    spawnAgentRun.mockReset();
+    // The real `spawnAgentRun` INSERTs the `agent_runs` row; `agent_test_runs`
+    // has a foreign key to it, so a mock that only returns an id would pass a
+    // constraint the product relies on.
+    spawnAgentRun.mockImplementation(async () => {
+        await testDb
+            .insertInto('agent_runs')
+            .values({ id: 'run-1', agent_id: 'agent-coder', status: 'queued' } as never)
+            .execute();
+        return 'run-1';
+    });
+});
+
+afterAll(async () => {
+    await closeTestDb();
+});
+
+describe('agentTestsService', () => {
+    it('creates, lists, updates and deletes a test', async () => {
+        const created = await makeTest();
+        expect(created.name).toBe('scopes a task');
+        expect((await agentTestsService.list('agent-coder')).map((t) => t.id)).toEqual([created.id]);
+
+        const updated = await agentTestsService.update(created.id, { name: 'renamed' });
+        expect(updated?.name).toBe('renamed');
+
+        await agentTestsService.remove(created.id);
+        expect(await agentTestsService.list('agent-coder')).toEqual([]);
+    });
+
+    describe('run', () => {
+        it('materialises a Task from the template and dispatches the agent at it', async () => {
+            const test = await makeTest();
+            const run = await agentTestsService.run(test.id);
+
+            expect(run.item_id).toBeTruthy();
+            expect(run.agent_run_id).toBe('run-1');
+            expect(run.verdict).toBe('running');
+
+            const item = await testDb
+                .selectFrom('items')
+                .select(['type', 'title'])
+                .where('id', '=', run.item_id!)
+                .executeTakeFirst();
+            expect(item?.type).toBe('task');
+            // The name is in the title so a throwaway item found later can be
+            // traced back to the test that made it.
+            expect(item?.title).toContain('[test] scopes a task');
+            expect(spawnAgentRun).toHaveBeenCalledWith(
+                expect.objectContaining({ agentId: 'agent-coder', issueType: 'task', issueId: run.item_id }),
+            );
+        });
+
+        // A sub-task with no parent is a shape no agent ever sees in production,
+        // so a test that produced one would not be testing the real thing.
+        it('gives a sub_task template a parent Task', async () => {
+            const test = await makeTest({
+                item_template: { issue_type: 'sub_task', title: 'Build the endpoint' },
+            });
+            const run = await agentTestsService.run(test.id);
+            const sub = await testDb
+                .selectFrom('items')
+                .select(['type', 'parent_id'])
+                .where('id', '=', run.item_id!)
+                .executeTakeFirst();
+            expect(sub?.type).toBe('sub_task');
+            expect(sub?.parent_id).toBeTruthy();
+        });
+
+        // A dispatch that never started is a broken environment, not a failing
+        // agent — the same distinction ADR 0020 draws for a gate that could not run.
+        it('records a dispatch that could not start as errored, not failed', async () => {
+            spawnAgentRun.mockRejectedValueOnce(new Error('claude: command not found'));
+            const test = await makeTest();
+            const run = await agentTestsService.run(test.id);
+            expect(run.verdict).toBe('errored');
+            expect(run.failures[0]).toContain('command not found');
+        });
+    });
+
+    describe('listRuns judges a finished dispatch', () => {
+        it('passes a run that met its expectations', async () => {
+            const test = await makeTest({ expectations: { outcome_kind: 'done', summary_contains: ['sub-tasks'] } });
+            await agentTestsService.run(test.id);
+            await finishRun();
+
+            const [judged] = await agentTestsService.listRuns(test.id);
+            expect(judged!.verdict).toBe('passed');
+            expect(judged!.failures).toEqual([]);
+            expect(judged!.cost_usd).toBe(0.25);
+            expect(judged!.duration_s).toBe(30);
+        });
+
+        it('fails a run that did not, and says which expectation', async () => {
+            const test = await makeTest({ expectations: { outcome_kind: 'asked_question' } });
+            await agentTestsService.run(test.id);
+            await finishRun();
+
+            const [judged] = await agentTestsService.listRuns(test.id);
+            expect(judged!.verdict).toBe('failed');
+            expect(judged!.failures[0]).toContain('expected outcome `asked_question`');
+        });
+
+        it('leaves a dispatch that has not finished as running', async () => {
+            const test = await makeTest();
+            await agentTestsService.run(test.id);
+            await finishRun({ status: 'in_progress' });
+            expect((await agentTestsService.listRuns(test.id))[0]!.verdict).toBe('running');
+        });
+
+        // Judging is lazy, so it must also be idempotent: a second read must
+        // not re-open a verdict that was already reached.
+        it('does not re-judge a run it has already decided', async () => {
+            const test = await makeTest({ expectations: { outcome_kind: 'done' } });
+            await agentTestsService.run(test.id);
+            await finishRun();
+
+            expect((await agentTestsService.listRuns(test.id))[0]!.verdict).toBe('passed');
+            await testDb.updateTable('agent_runs').set({ outcome_kind: 'rejected' } as never).where('id', '=', 'run-1').execute();
+            expect((await agentTestsService.listRuns(test.id))[0]!.verdict).toBe('passed');
+        });
+    });
+});

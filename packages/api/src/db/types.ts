@@ -781,12 +781,44 @@ export interface RunGateResultsTable {
     created_at: CreatedAt;
 }
 
+
+/** ADR 0023 — a saved test for one agent: the item to act on, and what should happen. */
+export interface AgentTestsTable {
+    id: string;
+    agent_id: string;
+    project_id: string;
+    repo_id: StrN;
+    name: string;
+    item_template: unknown;
+    expectations: unknown;
+    created_at: CreatedAt;
+    updated_at: CreatedAt;
+}
+
+export type AgentTestVerdict = 'running' | 'passed' | 'failed' | 'errored';
+
+/** One execution of an `agent_tests` row, and what it decided. */
+export interface AgentTestRunsTable {
+    id: string;
+    agent_test_id: string;
+    agent_run_id: StrN;
+    item_id: StrN;
+    verdict: AgentTestVerdict;
+    failures: unknown;
+    cost_usd: number | null;
+    duration_s: IntN;
+    created_at: CreatedAt;
+    evaluated_at: StrN;
+}
+
 export interface DB {
     settings: SettingsTable;
     workflows: WorkflowsTable;
     workflow_runs: WorkflowRunsTable;
     published_workflows: PublishedWorkflowsTable;
     run_gate_results: RunGateResultsTable;
+    agent_tests: AgentTestsTable;
+    agent_test_runs: AgentTestRunsTable;
     agents: AgentsTable;
     roles: RolesTable;
     reminders: RemindersTable;
