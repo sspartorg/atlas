@@ -11,7 +11,7 @@
   "accent_color": "#9333EA",
   "sort_order": 13,
   "glyph": "fact_check",
-  "role_id": "security",
+  "role_id": "engineer",
   "status": "active",
   "kind_slug": "custom",
   "settings_json": {},
