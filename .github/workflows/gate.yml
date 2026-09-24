@@ -93,6 +93,45 @@ jobs:
       # and pass, so this job can enforce them. Same minutes, one more gate.
       - run: pnpm -F @atlas/api test:coverage
 
+  powershell:
+    name: powershell guardrails (windows)
+    # The Windows half of every guardrail script, actually executed.
+    #
+    # Until this job existed no `body_ps1` had ever been run by a test: there
+    # is no PowerShell on the dev host and every other job is Linux, so the
+    # Windows side shipped verified by string contract alone. PR #45 found
+    # `gate-hygiene`'s ps1 running two checks out of nine that way, caught only
+    # because a human read it; running them found two more.
+    #
+    # `windows-latest` rather than ubuntu-with-pwsh on purpose. The point is the
+    # platform customers actually run on — path separators, line endings and
+    # `npm.cmd` shims included — not just the interpreter.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # No database: these tests read `GUARDRAIL_SCRIPT_SEEDS` from source and
+      # execute the bodies against throwaway git repos in the temp dir.
+      - run: pnpm -F @atlas/api exec vitest run src/db/seed-powershell.test.ts
+      # The suite skips itself where PowerShell is absent (ADR 0020: a missing
+      # interpreter is absence of evidence). On THIS job that would mean the
+      # job proves nothing, so fail if nothing ran.
+      - name: fail if the PowerShell cases were skipped
+        shell: pwsh
+        run: |
+          $out = pnpm -F @atlas/api exec vitest run src/db/seed-powershell.test.ts --reporter=json 2>&1 | Out-String
+          if ($out -match '"numPassedTests":\s*([0-9]+)') {
+              if ([int]$Matches[1] -lt 5) { throw "only $($Matches[1]) PowerShell cases ran - is pwsh missing?" }
+              Write-Output "$($Matches[1]) PowerShell cases ran"
+          } else { throw 'could not read the test count' }
+
   e2e:
     name: e2e (chromium + mobile + ipad)
     # Most expensive job: Postgres + a Chromium download + 3 viewport

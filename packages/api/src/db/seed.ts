@@ -934,7 +934,12 @@ fi
 # turns an upstream advisory into a failure on whoever pushed next, which is
 # how a security gate gets switched off.
 deps_touched="$(printf '%s\\n' "$changed" | grep -E '(^|/)(package\\.json|package-lock\\.json|pnpm-lock\\.yaml|yarn\\.lock)$' || true)"
-if [ -n "$deps_touched" ]; then
+# No lockfile is no audit, not a clean one: npm exits non-zero with ENOLOCK,
+# and reading that as an advisory sends the fixer after a vulnerability that
+# does not exist. A false red is how a security gate gets ignored (ADR 0020).
+has_lock=0
+for f in package-lock.json pnpm-lock.yaml yarn.lock; do [ -f "$f" ] && has_lock=1; done
+if [ -n "$deps_touched" ] && [ "$has_lock" = "1" ]; then
     case "$pm" in
         pnpm) audit_out="$(pnpm audit --audit-level high 2>&1)" || audit_failed=1 ;;
         yarn) audit_out="$(yarn npm audit --severity high 2>&1)" || audit_failed=1 ;;
@@ -1043,7 +1048,9 @@ if (-not (Has-Script 'secretlint') -and $changed.Count -gt 0) {
 # Advisories, but only when the branch touched the manifest or lockfile.
 # Auditing an untouched tree turns an upstream advisory into a failure on
 # whoever pushed next, which is how a security gate gets switched off.
-if (@($changed | Where-Object { $_ -match '(^|/)(package\\.json|pnpm-lock\\.yaml|package-lock\\.json|yarn\\.lock)$' }).Count -gt 0) {
+# See body_sh: no lockfile means the audit cannot run, not that it passed.
+$hasLock = @('package-lock.json', 'pnpm-lock.yaml', 'yarn.lock') | Where-Object { Test-Path -LiteralPath $_ }
+if (@($changed | Where-Object { $_ -match '(^|/)(package\\.json|pnpm-lock\\.yaml|package-lock\\.json|yarn\\.lock)$' }).Count -gt 0 -and @($hasLock).Count -gt 0) {
     $auditOut = switch ($pm) {
         'pnpm' { & pnpm audit --audit-level high 2>&1 }
         'yarn' { & yarn npm audit --severity high 2>&1 }
@@ -1080,7 +1087,11 @@ foreach ($f in (git diff --name-only $base HEAD 2>$null)) {
     $isCli = ($f -match '(^|/)bin/') -or ($f -match '(^|/)[^/]*cli[^/]*\\.[cm]?[jt]sx?$') -or ($bins -contains $f)
     $pat = if ($isCli) { $marker } else { 'console\\.log\\(|' + $marker }
     foreach ($line in @($adds)) {
-        if ($line -match $pat) { [void]$residue.Add("$($f): $line") }
+        # -cmatch, not -match: PowerShell matches case-insensitively by
+        # default and grep -E does not, so a lowercase todo -- as in a
+        # package.json bin entry named todo -- was debug residue on Windows
+        # and fine on Linux. The marker is an uppercase convention.
+        if ($line -cmatch $pat) { [void]$residue.Add("$($f): $line") }
     }
 }
 if ($residue.Count -gt 0) {
