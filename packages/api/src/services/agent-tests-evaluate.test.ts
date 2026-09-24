@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { IRunOutcome } from '@atlas/shared';
+import type { IRunOutcome, IRunTraceSummary } from '@atlas/shared';
 
 import { evaluateAgentTest, type AgentTestObservation } from './agent-tests-evaluate.js';
 
@@ -166,5 +166,110 @@ describe('evaluateAgentTest', () => {
             obs(),
         );
         expect(r.failures).toHaveLength(3);
+    });
+});
+
+// ── What it DID (migration 017) ──────────────────────────────────────────
+//
+// Everything above asserts on the `atlas-outcome` block the agent writes about
+// itself. These assert on the record of what it actually did.
+
+describe('trace expectations', () => {
+    function trace(over: Partial<IRunTraceSummary> = {}): IRunTraceSummary {
+        return {
+            source: 'claude',
+            turns: 10,
+            tool_calls: 6,
+            tools: { Read: 4, Bash: 2 },
+            tool_sequence: ['Read', 'Bash'],
+            thinking_blocks: 2,
+            subagent_turns: 0,
+            files_touched: ['src/todos.js', 'README.md'],
+            errors: 0,
+            ttft_ms: 2000,
+            truncated: false,
+            ...over,
+        };
+    }
+    const done: IRunOutcome = { kind: 'done', summary: 'did it' };
+    const observe = (t: IRunTraceSummary | null) => ({
+        outcome: done,
+        trace: t,
+        requiredChecklist: [],
+        cost_usd: 0.1,
+        duration_s: 10,
+        ran: true,
+    });
+
+    it('passes when the tools it required were used', () => {
+        expect(evaluateAgentTest({ tools_required: ['Read'] }, observe(trace())).verdict).toBe('passed');
+    });
+
+    it('fails when a required tool was never used', () => {
+        const r = evaluateAgentTest({ tools_required: ['Edit'] }, observe(trace()));
+        expect(r.verdict).toBe('failed');
+        expect(r.failures[0]).toContain('never used');
+    });
+
+    // `tools_forbidden: ['Edit','Write']` on a reviewer is a real assertion:
+    // a reviewer that edited the code under review is not reviewing it.
+    it('fails when it used a tool the test forbids', () => {
+        const r = evaluateAgentTest({ tools_forbidden: ['Bash'] }, observe(trace()));
+        expect(r.verdict).toBe('failed');
+        expect(r.failures[0]).toContain('forbids');
+    });
+
+    it('holds it to a turn and tool-call ceiling', () => {
+        expect(evaluateAgentTest({ max_turns: 5 }, observe(trace())).failures[0]).toContain('10 turns');
+        expect(evaluateAgentTest({ max_tool_calls: 3 }, observe(trace())).failures[0]).toContain('6 tool calls');
+        expect(evaluateAgentTest({ max_turns: 10, max_tool_calls: 6 }, observe(trace())).verdict).toBe('passed');
+    });
+
+    it('matches touched files by substring', () => {
+        expect(evaluateAgentTest({ files_touched: ['todos'] }, observe(trace())).verdict).toBe('passed');
+        expect(evaluateAgentTest({ files_untouched: ['README'] }, observe(trace())).failures[0]).toContain('forbids');
+    });
+
+    // The whole point. Silently passing an assertion nobody could make is the
+    // hole ADR 0020 closed by separating a gate that went green from one that
+    // could not run.
+    it('errors rather than passing when there is no trace to check', () => {
+        const r = evaluateAgentTest({ tools_required: ['Read'] }, observe(null));
+        expect(r.verdict).toBe('errored');
+        expect(r.failures[0]).toContain('no transcript');
+    });
+
+    // Copilot reports tool NAMES but not their arguments, so which files a run
+    // touched is genuinely unknown there.
+    it('errors rather than passing when this CLI cannot report files', () => {
+        const r = evaluateAgentTest(
+            { files_touched: ['src/'] },
+            observe(trace({ source: 'copilot', files_touched: null })),
+        );
+        expect(r.verdict).toBe('errored');
+        expect(r.failures[0]).toContain('does not report which files');
+    });
+
+    // A capped list can prove a file WAS touched; it can never prove one was
+    // not, because the missing entries are exactly what it dropped.
+    it('refuses to prove a negative from a truncated list', () => {
+        const r = evaluateAgentTest(
+            { files_untouched: ['secrets'] },
+            observe(trace({ truncated: true })),
+        );
+        expect(r.verdict).toBe('errored');
+        expect(r.failures[0]).toContain('cannot be proved');
+    });
+
+    it('still proves a positive from a truncated list', () => {
+        expect(
+            evaluateAgentTest({ files_touched: ['todos'] }, observe(trace({ truncated: true }))).verdict,
+        ).toBe('passed');
+    });
+
+    // A test that asks nothing about behaviour must not start demanding a
+    // trace that older runs do not have.
+    it('ignores a missing trace when nothing asked about behaviour', () => {
+        expect(evaluateAgentTest({ outcome_kind: 'done' }, observe(null)).verdict).toBe('passed');
     });
 });

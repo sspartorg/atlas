@@ -51,6 +51,15 @@ const AgentTestExpectationsSchema = z.object({
     summary_omits: z.array(z.string().min(1).max(200)).max(20).optional(),
     max_cost_usd: z.number().positive().optional(),
     max_duration_s: z.number().int().positive().optional(),
+    // Migration 017 — assertions about what the run DID, not what it said.
+    // A test that asks one of these and cannot be answered comes back
+    // `errored`, never a silent pass.
+    tools_required: z.array(z.string().min(1).max(120)).max(20).optional(),
+    tools_forbidden: z.array(z.string().min(1).max(120)).max(20).optional(),
+    max_turns: z.number().int().positive().optional(),
+    max_tool_calls: z.number().int().positive().optional(),
+    files_touched: z.array(z.string().min(1).max(300)).max(20).optional(),
+    files_untouched: z.array(z.string().min(1).max(300)).max(20).optional(),
 });
 
 const AgentTestBodySchema = z.object({

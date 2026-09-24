@@ -135,6 +135,31 @@ describe('TestsTabContent', () => {
         expect(screen.getByText(/Task: Add a health endpoint · expects asked_question/)).toBeInTheDocument();
     });
 
+    // Expectations arrive from the API, from MCP and with starter tests — not
+    // only from the one field the create form offers. A test whose assertions
+    // you cannot see is half a test.
+    it('says everything the test checks, not just the outcome', async () => {
+        mount({
+            tests: [
+                aTest({
+                    expectations: {
+                        outcome_kind: 'rejected',
+                        tools_forbidden: ['Edit', 'Write'],
+                        max_turns: 12,
+                        files_untouched: ['src/'],
+                        max_cost_usd: 0.5,
+                    },
+                }),
+            ],
+        });
+        const line = await screen.findByText(/^Checks:/);
+        expect(line).toHaveTextContent('never uses `Edit`');
+        expect(line).toHaveTextContent('never uses `Write`');
+        expect(line).toHaveTextContent('≤ 12 turns');
+        expect(line).toHaveTextContent('leaves src/ alone');
+        expect(line).toHaveTextContent('under $0.5');
+    });
+
     // Spend that surprises you afterwards is what stops people running tests at
     // all, so the estimate is on the button itself.
     it('puts the cost estimate on the Run button', async () => {

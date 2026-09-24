@@ -1,4 +1,4 @@
-import type { IRunOutcome } from '@atlas/shared';
+import type { IRunOutcome, IRunTraceSummary } from '@atlas/shared';
 
 import { decideRunRouting, type RequiredChecklistRow } from './agent-runner-outcome-routing.js';
 
@@ -31,11 +31,32 @@ export interface AgentTestExpectations {
     summary_omits?: string[] | undefined;
     max_cost_usd?: number | undefined;
     max_duration_s?: number | undefined;
+
+    // ── What it DID, from the transcript (migration 017) ──────────────────
+    //
+    // Everything above asserts on the `atlas-outcome` block, which the agent
+    // writes about itself. These assert on the record of what it actually did.
+
+    /** Every named tool was used at least once. */
+    tools_required?: string[] | undefined;
+    /** None of these was used. `["Edit","Write"]` on a reviewer is a real assertion. */
+    tools_forbidden?: string[] | undefined;
+    max_turns?: number | undefined;
+    max_tool_calls?: number | undefined;
+    /** Substrings; a path it touched must contain each one. */
+    files_touched?: string[] | undefined;
+    /** Substrings; nothing it touched may contain any of them. */
+    files_untouched?: string[] | undefined;
 }
 
 export interface AgentTestObservation {
     /** Null when the agent produced no parseable outcome block. */
     outcome: IRunOutcome | null;
+    /**
+     * What the run did, from its own transcript. Null for a run that finished
+     * before migration 017, or whose output was not a transcript at all.
+     */
+    trace?: IRunTraceSummary | null | undefined;
     requiredChecklist: RequiredChecklistRow[];
     cost_usd: number | null;
     duration_s: number | null;
@@ -46,6 +67,20 @@ export interface AgentTestObservation {
 export interface AgentTestEvaluation {
     verdict: 'passed' | 'failed' | 'errored';
     failures: string[];
+}
+
+/** Trace fields any CLI reports, versus the ones only some do. */
+const TRACE_KEYS = [
+    'tools_required',
+    'tools_forbidden',
+    'max_turns',
+    'max_tool_calls',
+    'files_touched',
+    'files_untouched',
+] as const;
+
+function asked(expectations: AgentTestExpectations): boolean {
+    return TRACE_KEYS.some((k) => expectations[k] !== undefined);
 }
 
 function has(haystack: string, needle: string): boolean {
@@ -113,6 +148,65 @@ export function evaluateAgentTest(
         obs.duration_s > expectations.max_duration_s
     ) {
         failures.push(`took ${obs.duration_s}s, over the ${expectations.max_duration_s}s ceiling`);
+    }
+
+    // ── Trace expectations ───────────────────────────────────────────────
+    //
+    // A test that asks about the run's behaviour and cannot be answered is
+    // `errored`, not `failed` and certainly not passed. Silently passing an
+    // assertion nobody could make is exactly the hole ADR 0020 closed when it
+    // separated a gate that went green from a gate that could not run.
+    if (asked(expectations)) {
+        const trace = obs.trace;
+        if (!trace) {
+            return {
+                verdict: 'errored',
+                failures: ['this run has no transcript to check, so its behaviour could not be asserted'],
+            };
+        }
+
+        const used = new Set(Object.keys(trace.tools));
+        for (const tool of expectations.tools_required ?? []) {
+            if (!used.has(tool)) failures.push(`never used \`${tool}\``);
+        }
+        for (const tool of expectations.tools_forbidden ?? []) {
+            if (used.has(tool)) failures.push(`used \`${tool}\`, which this test forbids`);
+        }
+        if (expectations.max_turns != null && trace.turns > expectations.max_turns) {
+            failures.push(`took ${trace.turns} turns, over the ${expectations.max_turns} ceiling`);
+        }
+        if (expectations.max_tool_calls != null && trace.tool_calls > expectations.max_tool_calls) {
+            failures.push(`made ${trace.tool_calls} tool calls, over the ${expectations.max_tool_calls} ceiling`);
+        }
+
+        const wantsFiles =
+            expectations.files_touched !== undefined || expectations.files_untouched !== undefined;
+        if (wantsFiles) {
+            // Copilot reports tool NAMES but not their arguments, so which
+            // files a run touched is genuinely unknown there. Reporting "0
+            // files" would be a claim nobody made.
+            if (trace.files_touched === null) {
+                return {
+                    verdict: 'errored',
+                    failures: [`the \`${trace.source}\` CLI does not report which files a run touched`],
+                };
+            }
+            const touched = trace.files_touched;
+            for (const want of expectations.files_touched ?? []) {
+                if (!touched.some((f) => f.includes(want))) failures.push(`never touched a file matching "${want}"`);
+            }
+            for (const avoid of expectations.files_untouched ?? []) {
+                const hit = touched.find((f) => f.includes(avoid));
+                if (hit) failures.push(`touched \`${hit}\`, which this test forbids`);
+            }
+            // A truncated list can only prove presence, never absence.
+            if (trace.truncated && (expectations.files_untouched ?? []).length > 0) {
+                return {
+                    verdict: 'errored',
+                    failures: ['this run touched more files than the trace records, so "untouched" cannot be proved'],
+                };
+            }
+        }
     }
 
     return { verdict: failures.length === 0 ? 'passed' : 'failed', failures };

@@ -177,6 +177,30 @@ function BatchBlock({ batch }: { batch: AgentTestBatch }) {
     );
 }
 
+/**
+ * Everything this test asserts, in words.
+ *
+ * Expectations can be set from the API, from MCP, or arrive with a starter
+ * test — so the card has to say what a test checks rather than showing only
+ * the one field the create form happens to offer.
+ */
+function expectationSummary(e: AgentTest['expectations']): string[] {
+    const out: string[] = [];
+    if (e.outcome_kind) out.push(`ends \`${e.outcome_kind}\``);
+    if (e.required_checklist_all_passed) out.push('every required checklist row passed');
+    for (const t of e.summary_contains ?? []) out.push(`says "${t}"`);
+    for (const t of e.summary_omits ?? []) out.push(`does not say "${t}"`);
+    for (const t of e.tools_required ?? []) out.push(`uses \`${t}\``);
+    for (const t of e.tools_forbidden ?? []) out.push(`never uses \`${t}\``);
+    if (e.max_turns != null) out.push(`≤ ${e.max_turns} turns`);
+    if (e.max_tool_calls != null) out.push(`≤ ${e.max_tool_calls} tool calls`);
+    for (const f of e.files_touched ?? []) out.push(`touches ${f}`);
+    for (const f of e.files_untouched ?? []) out.push(`leaves ${f} alone`);
+    if (e.max_cost_usd != null) out.push(`under $${e.max_cost_usd}`);
+    if (e.max_duration_s != null) out.push(`under ${e.max_duration_s}s`);
+    return out;
+}
+
 function TestCard({ test, agentId }: { test: AgentTest; agentId: string }) {
     const [open, setOpen] = useState(false);
     const [samples, setSamples] = useState(1);
@@ -252,6 +276,14 @@ function TestCard({ test, agentId }: { test: AgentTest; agentId: string }) {
                 {test.item_template.issue_type === 'sub_task' ? 'Sub-task' : 'Task'}: {test.item_template.title}
                 {test.expectations.outcome_kind ? ` · expects ${test.expectations.outcome_kind}` : ''}
             </Typography>
+            {/* A test whose assertions you cannot see is half a test — and
+                expectations arrive from the API and from starter tests, not
+                only from the one field the create form offers. */}
+            {expectationSummary(test.expectations).length > 0 && (
+                <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 0.25 }}>
+                    Checks: {expectationSummary(test.expectations).join(' · ')}
+                </Typography>
+            )}
             {/* The strip under the headline, so a flaky result is visible
                 without opening the history. */}
             {last && !open && <SampleStrip batch={last} />}
