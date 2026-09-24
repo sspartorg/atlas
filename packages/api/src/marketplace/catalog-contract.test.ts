@@ -291,6 +291,25 @@ describe('workflow templates', () => {
                     .filter((id) => !ids.has(id));
                 expect(missing).toEqual([]);
             });
+
+            // An Owner node on a fail edge holds the run until a human answers.
+            // That is right when the agent is asking a question and wrong when
+            // it is reporting work: the Release Reviewer's `rejected` means "a
+            // performer can close this", and routing it through an Owner made
+            // every cross-cutting nit page the Owner (ADR 0022, amended).
+            // `asked_question` still parks the run — that is engine behaviour,
+            // not an edge, so the Owner stays reachable either way.
+            it('routes a reviewer rejection to a performer, not to the Owner', () => {
+                const ownerIds = new Set(t.graph.nodes.filter((n) => n.type === 'owner').map((n) => n.id));
+                const offenders = t.graph.edges
+                    .filter((e) => e.kind === 'fail' && ownerIds.has(e.target))
+                    .map((e) => e.source)
+                    // PO Writer is the deliberate exception: at that point there
+                    // are no sub-tasks and nothing to hand work to, so its fail
+                    // edge genuinely is a question.
+                    .filter((src) => t.graph.nodes.find((n) => n.id === src)?.agent_id !== 'agent-po-writer');
+                expect(offenders).toEqual([]);
+            });
         });
     }
 });

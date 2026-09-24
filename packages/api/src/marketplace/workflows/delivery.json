@@ -1,8 +1,8 @@
 {
     "id": "delivery",
     "name": "Delivery",
-    "description": "PO Writer splits a Task into sub-tasks and the Architect specs them. Every dev sub-task is built, every [QA] sub-task tested and every [DOC] sub-task documented, one at a time on the Task's branch. Four deterministic gates then check hygiene, coverage, performance and visuals - each costs nothing when green, and when one goes red a specialist fixes it and a reviewer checks the fix was made at the cause rather than by defeating the check. A release reviewer reads the whole change before it becomes one pull request. Unclear Tasks come back to you.",
-    "version": 3,
+    "description": "PO Writer splits a Task into sub-tasks and the Architect specs them. Every dev sub-task is built, every [QA] sub-task tested and every [DOC] sub-task documented, one at a time on the Task's branch. Four deterministic gates then check hygiene, coverage, performance and visuals - each costs nothing when green, and when one goes red a specialist fixes it and a reviewer checks the fix was made at the cause rather than by defeating the check. A release reviewer reads the whole change before it becomes one pull request; a gap it finds becomes a fix sub-task that is built and re-verified without waking you. Unclear Tasks come back to you.",
+    "version": 4,
     "input_kind": "item",
     "trigger": "item_ready",
     "use_worktree": true,
@@ -210,14 +210,6 @@
                 }
             },
             {
-                "id": "owner-release",
-                "type": "owner",
-                "position": {
-                    "x": 320,
-                    "y": 1620
-                }
-            },
-            {
                 "id": "end",
                 "type": "end",
                 "position": {
@@ -378,16 +370,10 @@
                 "kind": "pass"
             },
             {
-                "id": "e-release-review-fail-owner-release",
+                "id": "e-release-review-fail-build",
                 "source": "release-review",
-                "target": "owner-release",
-                "kind": "fail"
-            },
-            {
-                "id": "e-owner-release-pass-build",
-                "source": "owner-release",
                 "target": "build",
-                "kind": "pass"
+                "kind": "fail"
             },
             {
                 "id": "e-review-fix-hygiene-pass-gate-hygiene",

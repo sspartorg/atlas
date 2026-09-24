@@ -8,7 +8,7 @@ The **autonomous SDLC swarm** is Atlas's long-term fleet vision: one agent per p
 
 | Capability | State |
 |---|---|
-| Building software (engineering chain) | **Template** — `delivery` v3 on a Task: scope → spec → build → test → document → four deterministic gates → release review, one branch and one PR |
+| Building software (engineering chain) | **Template** — `delivery` v4 on a Task: scope → spec → build → test → document → four deterministic gates → release review, one branch and one PR |
 | Reviewing engineering work | **Template** — each performer has a separate paired reviewer agent; a reviewer's fail connection loops back to its writer |
 | Autonomous regression testing | **Template** — `test` sub-workflow (QA Writer ⇄ QA Reviewer → Automation ⇄ Automation Reviewer) runs every `qa` sub-task inside the Task's `delivery` run, after the dev sub-tasks are built on the same branch |
 | Market research | **Catalog, inactive** — Playwright MCP scrape → draft Task; needs a scheduled no-item workflow |
@@ -17,7 +17,7 @@ The **autonomous SDLC swarm** is Atlas's long-term fleet vision: one agent per p
 | External work ingest (Jira) | **Catalog, inactive** — Atlassian MCP poll, dedup via `Source: <KEY>`; needs a scheduled no-item workflow |
 | AI-readiness audit (per-project) | **Template** — `ai-readiness` workflow (one node, no item, push + PR); started by "Generate AI scaffold" |
 | Documentation | **Template** — `docs` sub-workflow runs every `[DOC]` twin inside the Task's run |
-| Performance, coverage, hygiene, visual | **Template** — four `gate` steps in `delivery` v3, each with a paired fixer and a Fix Reviewer on its fail edge (ADR 0021) |
+| Performance, coverage, hygiene, visual | **Template** — four `gate` steps in `delivery` v4, each with a paired fixer and a Fix Reviewer on its fail edge (ADR 0021) |
 | Reading the whole change | **Template** — Release Reviewer, the only step that sees the branch as one change |
 | Exploratory bug-finding | **Disabled** — the `tester` role now has a row (migration 012) and backs the coverage fixer, but no exploratory-testing agent ships |
 | Knowledge base | **Catalog, inactive** — `agent-knowledge-base`, per-project `skills/` folder via PR; needs a no-item workflow |
@@ -51,7 +51,7 @@ Each has `role_id` pointing at a row in [`role-catalog.md`](role-catalog.md). Ag
 
 | Template | Input / trigger | Graph | Delivery |
 |---|---|---|---|
-| `delivery` ("Delivery") v3 | Task (`item`) / `item_ready` | PO Writer ⇄ PO Reviewer → Architect ⇄ Architect Reviewer → **Sub-tasks** (`template:build`, no label — the catch-all) → **Sub-tasks** (`template:test`, `qa`) → **Sub-tasks** (`template:docs`, `doc`) → four **gate** steps (hygiene, coverage, perf, visual), each failing to its fixer → **Fix Reviewer** → back to the gate → Release Reviewer → End. PO Writer fail → Owner → PO Writer; Release Reviewer fail → Owner → the build step, so a gap it found is closed by a sub-task and everything downstream re-verifies. `max_loops: 12` — one `loop_count` is shared by every fail edge | worktree, push + one PR per Task; the PR body lists every sub-task. Creating it also creates the project's Build / Test sub-task workflows when missing |
+| `delivery` ("Delivery") v4 | Task (`item`) / `item_ready` | PO Writer ⇄ PO Reviewer → Architect ⇄ Architect Reviewer → **Sub-tasks** (`template:build`, no label — the catch-all) → **Sub-tasks** (`template:test`, `qa`) → **Sub-tasks** (`template:docs`, `doc`) → four **gate** steps (hygiene, coverage, perf, visual), each failing to its fixer → **Fix Reviewer** → back to the gate → Release Reviewer → End. PO Writer fail → Owner → PO Writer. **Release Reviewer fail → the build step directly**: it files a `dev`-labelled fix sub-task per gap, the build step picks it up because it is the only open one, and everything downstream re-verifies — no Owner in the loop. It reaches the Owner only via `asked_question`, which is for decisions rather than work. `max_loops: 12` — one `loop_count` is shared by every fail edge | worktree, push + one PR per Task; the PR body lists every sub-task. Creating it also creates the project's Build / Test sub-task workflows when missing |
 | `build` ("Build sub-task") | `sub_task` / `manual` | Coder → Code Reviewer → End; reviewer fail → Coder | none of its own — the sub-task goes to `in_review` and the Task run continues |
 | `test` ("Test sub-task") | `sub_task` / `manual` | QA Writer → QA Reviewer → Automation → Automation Reviewer → End; reviewer fails loop back | none of its own |
 | `docs` ("Docs sub-task") | `sub_task` / `manual` | Doc Writer ⇄ Doc Reviewer → End | none of its own |

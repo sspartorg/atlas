@@ -94,6 +94,37 @@ and Delivery declares 12 — roughly one retry per failable step.
   than an argument.
 - `build` stays **unlabelled** on purpose: it is the catch-all, so a sub-task
   that arrives with no label is still built rather than stranding the run.
-- The Release Reviewer's rejection routes to an Owner node that re-enters at the
-  build step, so a gap it found is closed by a sub-task and everything
-  downstream re-verifies.
+- ~~The Release Reviewer's rejection routes to an Owner node that re-enters at
+  the build step~~ — **superseded 2026-09-24, delivery v4. See the amendment
+  below.**
+
+## Amendment (2026-09-24) — a rejection is work, not a question
+
+The Release Reviewer emits two different verdicts that meant the same thing in
+practice. Its prompt distinguishes **`rejected`** ("a gap a performer can
+close") from **`asked_question`** ("a decision only the Owner can make"), and
+the graph sent both to an Owner node. So a duplicated helper between two
+sub-tasks — ordinary work, with an obvious fix — woke a human and held the run
+until they answered.
+
+That is the opposite of what this chain is for. The goal is that a Task goes in
+and a merge-ready PR comes out; a human in the loop on every cross-cutting nit
+makes the Owner the bottleneck, which is exactly the failure the roster was
+built to remove.
+
+`release-review --fail--> build` now, with no Owner node in between. For it to
+mean anything the Release Reviewer had to gain one responsibility: **a
+rejection must file a `dev`-labelled fix sub-task per gap.** The build step runs
+the Task's *open* sub-tasks and every existing one is `in_review` or `done` by
+then, so a rejection that files nothing finds no work, walks the whole chain
+again unchanged, and burns a loop until `max_loops` parks it.
+
+Filing is not fixing. The sub-task goes to a Coder, through a Code Reviewer,
+and back through all four gates and the Release Reviewer itself — more review
+than a fix the reviewer typed, not less. Fix sub-tasks need no `[QA]` or
+`[DOC]` twin: coverage is ratcheted, so an untested fix fails the coverage gate
+rather than slipping past.
+
+The Owner is still reachable, through `asked_question`, which parks the run.
+The distinction the prompt always drew is now the distinction the graph makes:
+**work goes to a performer, a decision goes to the Owner.**
