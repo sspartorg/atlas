@@ -5,7 +5,8 @@
             "entry": [
                 "src/scripts/*.ts",
                 "src/db/migrations/*.ts",
-                "src/marketplace/probes/*.mjs"
+                "src/marketplace/probes/*.mjs",
+                "vitest.powershell.config.ts"
             ],
             "ignore": [
                 "src/db/types.ts"

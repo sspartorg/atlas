@@ -117,20 +117,27 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # No database: these tests read `GUARDRAIL_SCRIPT_SEEDS` from source and
-      # execute the bodies against throwaway git repos in the temp dir.
-      - run: pnpm -F @atlas/api exec vitest run src/db/seed-powershell.test.ts
-      # The suite skips itself where PowerShell is absent (ADR 0020: a missing
-      # interpreter is absence of evidence). On THIS job that would mean the
-      # job proves nothing, so fail if nothing ran.
-      - name: fail if the PowerShell cases were skipped
+      # A dedicated config with no Postgres globalSetup. These tests need no
+      # database -- they read `GUARDRAIL_SCRIPT_SEEDS` from source and run the
+      # bodies against throwaway git repos -- but `vitest.config.ts` stands one
+      # up for every api test, and on the first Windows run that killed the job
+      # with ECONNREFUSED before a single test was discovered.
+      - name: run the PowerShell guardrail bodies, and prove they were not skipped
         shell: pwsh
         run: |
-          $out = pnpm -F @atlas/api exec vitest run src/db/seed-powershell.test.ts --reporter=json 2>&1 | Out-String
-          if ($out -match '"numPassedTests":\s*([0-9]+)') {
-              if ([int]$Matches[1] -lt 5) { throw "only $($Matches[1]) PowerShell cases ran - is pwsh missing?" }
-              Write-Output "$($Matches[1]) PowerShell cases ran"
-          } else { throw 'could not read the test count' }
+          # The suite skips itself where PowerShell is absent (ADR 0020: a
+          # missing interpreter is absence of evidence). On THIS job that would
+          # mean the job proves nothing, so read the count and fail on a
+          # silent skip.
+          $json = pnpm -F @atlas/api exec vitest run --config vitest.powershell.config.ts --reporter=json 2>&1 | Out-String
+          Write-Output $json
+          if ($json -notmatch '"numPassedTests":\s*([0-9]+)') { throw 'could not read the test count' }
+          $passed = [int]$Matches[1]
+          if ($json -match '"numFailedTests":\s*([0-9]+)' -and [int]$Matches[1] -gt 0) {
+              throw "$($Matches[1]) PowerShell cases failed"
+          }
+          if ($passed -lt 5) { throw "only $passed PowerShell cases ran - is pwsh missing?" }
+          Write-Output "$passed PowerShell cases ran"
 
   e2e:
     name: e2e (chromium + mobile + ipad)
