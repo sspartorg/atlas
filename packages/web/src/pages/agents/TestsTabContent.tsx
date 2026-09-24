@@ -197,6 +197,7 @@ function expectationSummary(e: AgentTest['expectations']): string[] {
     if (e.max_tool_calls != null) out.push(`≤ ${e.max_tool_calls} tool calls`);
     for (const f of e.files_touched ?? []) out.push(`touches ${f}`);
     for (const f of e.files_untouched ?? []) out.push(`leaves ${f} alone`);
+    for (const c of e.judge_criteria ?? []) out.push(`judged: ${c}`);
     if (e.max_cost_usd != null) out.push(`under $${e.max_cost_usd}`);
     if (e.max_duration_s != null) out.push(`under ${e.max_duration_s}s`);
     return out;

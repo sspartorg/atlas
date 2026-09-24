@@ -1,7 +1,8 @@
-import type { IRunOutcome } from '@atlas/shared';
+import type { IRunOutcome, IRunTraceSummary } from '@atlas/shared';
 
 import { db } from '../db/kysely-client.js';
 import type { AgentTestVerdict, JudgeVerdict } from '../db/types.js';
+import { judgeAgentTestRun, type JudgeResult } from './agent-tests-judge.js';
 import {
     evaluateAgentTest,
     type AgentTestExpectations,
@@ -289,19 +290,85 @@ export async function judgePendingRun(run: AgentTestRunRow, test: AgentTestRow):
         ran: ar.status === 'completed',
     });
 
+    // ── The judge (ADR 0023) ─────────────────────────────────────────────
+    //
+    // Run only when the test asked for it. A judge that could not run is
+    // `errored`, never a pass and never the agent's fault — blaming an agent
+    // for a missing binary is the mistake this file already refuses to make
+    // about the dispatch itself. Every judge-authored failure carries a
+    // `judge:` prefix, so a reader can always tell which assertion was
+    // machine-graded.
+    const judged = await runJudge(test, outcome, ar.trace_summary);
+    const failures = [...evaluation.failures, ...judged.failures];
+    const verdict: typeof evaluation.verdict =
+        evaluation.verdict === 'errored' || judged.errored
+            ? 'errored'
+            : failures.length === 0
+              ? 'passed'
+              : 'failed';
+
     await db
         .updateTable('agent_test_runs')
         .set({
-            verdict: evaluation.verdict,
-            failures: JSON.stringify(evaluation.failures),
+            verdict,
+            failures: JSON.stringify(failures),
             cost_usd: cost,
             duration_s: duration,
+            judge_verdict: judged.result?.verdict ?? null,
+            judge_reason: judged.result?.reason ?? null,
+            judge_cost_usd: judged.result?.cost_usd ?? null,
             evaluated_at: new Date().toISOString(),
         } as never)
         .where('id', '=', run.id)
         .execute();
 
-    return { ...run, verdict: evaluation.verdict, failures: evaluation.failures, cost_usd: cost, duration_s: duration };
+    return {
+        ...run,
+        verdict,
+        failures,
+        cost_usd: cost,
+        duration_s: duration,
+        judge_verdict: judged.result?.verdict ?? null,
+        judge_reason: judged.result?.reason ?? null,
+        judge_cost_usd: judged.result?.cost_usd ?? null,
+    };
+}
+
+/** The judge's answer, in the shape the verdict above needs. */
+async function runJudge(
+    test: AgentTestRow,
+    outcome: IRunOutcome | null,
+    trace: IRunTraceSummary | null,
+): Promise<{ result: JudgeResult | null; failures: string[]; errored: boolean }> {
+    const criteria = test.expectations.judge_criteria;
+    if (!criteria || criteria.length === 0) return { result: null, failures: [], errored: false };
+
+    let result: JudgeResult | null;
+    try {
+        result = await judgeAgentTestRun(criteria, {
+            summary: outcome?.summary ?? '',
+            reason: outcome?.reason ?? null,
+            trace,
+        });
+    } catch (err) {
+        return { result: null, failures: [`judge: could not run (${(err as Error).message})`], errored: true };
+    }
+
+    // AI is off, so the question was never asked. Not a pass.
+    if (!result) {
+        return {
+            result: null,
+            failures: ['judge: this test has criteria to grade, but AI is not enabled here'],
+            errored: true,
+        };
+    }
+    if (result.verdict === 'abstained') {
+        return { result, failures: [`judge: could not decide (${result.reason})`], errored: true };
+    }
+    if (result.verdict === 'fail') {
+        return { result, failures: [`judge: ${result.reason}`], errored: false };
+    }
+    return { result, failures: [], errored: false };
 }
 
 /**

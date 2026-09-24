@@ -8,6 +8,7 @@ import { server } from '../../test-setup.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { makeAgent } from '../../test-utils/factories.js';
 import { TestsTabContent } from './TestsTabContent.js';
+import { Toast } from '../../components/Toast.js';
 
 const BASE = 'http://localhost:3000/api';
 const agent: IAgent = makeAgent({ id: 'agent-coder', name: 'Coder' });
@@ -20,6 +21,7 @@ interface MountOpts {
     estimate?: Record<string, unknown>;
     starters?: unknown[];
     repos?: unknown[];
+    failWrites?: boolean;
     onWrite?: (kind: string, payload: unknown) => void;
 }
 
@@ -55,11 +57,12 @@ function aBatch(samples: Array<Record<string, unknown>>, over: Record<string, un
     };
 }
 
-function mount({ tests = [], runs, batches, estimate, starters = [], repos = [], onWrite }: MountOpts = {}) {
+function mount({ tests = [], runs, batches, estimate, starters = [], repos = [], failWrites = false, onWrite }: MountOpts = {}) {
     const history = batches ?? (runs ? [aBatch(runs)] : []);
     server.use(
         http.post(`${BASE}/agents/agent-coder/tests`, async ({ request }) => {
             onWrite?.('create', await request.json());
+            if (failWrites) return HttpResponse.json({ error: 'that project has no repos' }, { status: 400 });
             return HttpResponse.json(aTest(), { status: 201 });
         }),
         http.delete(`${BASE}/agent-tests/:id`, ({ params }) => {
@@ -68,6 +71,7 @@ function mount({ tests = [], runs, batches, estimate, starters = [], repos = [],
         }),
         http.post(`${BASE}/agent-tests/:id/run`, async ({ params, request }) => {
             onWrite?.('run', { id: params['id'], body: await request.json() });
+            if (failWrites) return HttpResponse.json({ error: 'the CLI is not installed' }, { status: 500 });
             return HttpResponse.json(aBatch([{ verdict: 'running' }]), { status: 202 });
         }),
         http.get(`${BASE}/agents/agent-coder/tests`, () => HttpResponse.json(tests)),
@@ -88,7 +92,14 @@ function mount({ tests = [], runs, batches, estimate, starters = [], repos = [],
         http.get(`${BASE}/projects`, () => HttpResponse.json([{ id: 'p1', name: 'Sandbox' }])),
         http.get(`${BASE}/projects/:id/repos`, () => HttpResponse.json(repos)),
     );
-    return renderWithProviders(<TestsTabContent agent={agent} />);
+    // `Toast` renders what `toast.show` queues; without it the success and
+    // error handlers have nowhere to appear.
+    return renderWithProviders(
+        <>
+            <TestsTabContent agent={agent} />
+            <Toast />
+        </>,
+    );
 }
 
 const aTest = (over: Record<string, unknown> = {}) => ({
@@ -135,6 +146,61 @@ describe('TestsTabContent', () => {
         mount({ tests: [aTest()] });
         expect(await screen.findByText('Asks rather than building a whole Task')).toBeInTheDocument();
         expect(screen.getByText(/Task: Add a health endpoint · expects asked_question/)).toBeInTheDocument();
+    });
+
+    // Running a test spends real money; a refusal that vanished silently
+    // would be the worst way to find out it did not start.
+    it('says why a test could not start', async () => {
+        mount({ tests: [aTest()], failWrites: true });
+        await userEvent.click(await screen.findByRole('button', { name: /^Run/ }));
+        expect(await screen.findByText(/the CLI is not installed/)).toBeInTheDocument();
+    });
+
+    it('confirms when a single test starts, and when several do', async () => {
+        mount({ tests: [aTest()] });
+        await userEvent.click(await screen.findByRole('button', { name: /^Run/ }));
+        expect(await screen.findByText('Test started')).toBeInTheDocument();
+    });
+
+    it('covers every kind of assertion in the summary line', async () => {
+        mount({
+            tests: [
+                aTest({
+                    expectations: {
+                        required_checklist_all_passed: true,
+                        summary_contains: ['migration'],
+                        summary_omits: ['TODO'],
+                        tools_required: ['Read'],
+                        max_tool_calls: 40,
+                        files_touched: ['src/'],
+                        judge_criteria: ['did it say why?'],
+                        max_duration_s: 300,
+                    },
+                }),
+            ],
+        });
+        const line = await screen.findByText(/^Checks:/);
+        expect(line).toHaveTextContent('every required checklist row passed');
+        expect(line).toHaveTextContent('says "migration"');
+        expect(line).toHaveTextContent('does not say "TODO"');
+        expect(line).toHaveTextContent('uses `Read`');
+        expect(line).toHaveTextContent('≤ 40 tool calls');
+        expect(line).toHaveTextContent('touches src/');
+        expect(line).toHaveTextContent('judged: did it say why?');
+        expect(line).toHaveTextContent('under 300s');
+    });
+
+    it('says how far through a multi-sample batch is while it runs', async () => {
+        mount({
+            tests: [aTest()],
+            runs: [{ verdict: 'passed' }, { verdict: 'running' }, { verdict: 'running' }],
+        });
+        expect(await screen.findAllByText('running 1/3…')).not.toHaveLength(0);
+    });
+
+    it('shows the label a batch was run under', async () => {
+        mount({ tests: [aTest()], batches: [aBatch([{}], { label: 'before-prompt-diet' })] });
+        expect(await screen.findByText('before-prompt-diet')).toBeInTheDocument();
     });
 
     // Expectations arrive from the API, from MCP and with starter tests — not
