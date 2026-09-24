@@ -168,6 +168,50 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
         }
     });
 
+    describe.skipIf(process.platform === 'win32')('gate-hygiene tells residue from identifiers', () => {
+        const seed = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === 'gate-hygiene');
+
+        function repoWithDiff(added: string): number {
+            const dir = mkdtempSync(join(tmpdir(), 'hygiene-gate-'));
+            const sh = (cmd: string) => execSync(cmd, { cwd: dir, stdio: 'pipe' });
+            sh('git init -q -b main && git config user.email t@t && git config user.name t');
+            writeFileSync(join(dir, 'package.json'), '{"scripts":{}}');
+            writeFileSync(join(dir, 'a.js'), 'const base = 1;\n');
+            sh('git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD');
+            writeFileSync(join(dir, 'a.js'), `const base = 1;\n${added}\n`);
+            sh('git add -A && git commit -qm change');
+            writeFileSync(join(dir, 'gate.sh'), seed?.body_sh ?? '');
+            try {
+                execSync('bash gate.sh X', { cwd: dir, stdio: 'pipe' });
+                return 0;
+            } catch (err) {
+                return (err as { status: number }).status;
+            }
+        }
+
+        // The first live run of delivery v2 spent a whole fixer dispatch
+        // renaming `HTTP_TODOS` and rewording `TODO_FILE` because the pattern
+        // was `TODO[^(]`, which matches any identifier that merely starts with
+        // those four letters. On a todo app that is every other line.
+        it.each([
+            ['const TODO_FILE = process.env.TODO_FILE;', 'an env var named TODO_FILE'],
+            ['const HTTP_TODOS = [];', 'a fixture named HTTP_TODOS'],
+            ['const STATS_TODOS = [];', 'a fixture named STATS_TODOS'],
+            ['// TODO(ATL-12): tracked and allowed', 'a tracked TODO marker'],
+        ])('passes %s (%s)', (line) => {
+            expect(repoWithDiff(line)).toBe(0);
+        });
+
+        it.each([
+            ['// TODO come back to this', 'a bare TODO'],
+            ['// FIXME broken', 'a bare FIXME'],
+            ['console.log("debug");', 'a console.log'],
+            ['debugger;', 'a debugger statement'],
+        ])('fails on %s (%s)', (line) => {
+            expect(repoWithDiff(line)).toBe(1);
+        });
+    });
+
     describe.skipIf(process.platform === 'win32')('coder-tests-green runs on non-pnpm projects', () => {
         const seed = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === 'coder-tests-green');
 
@@ -297,8 +341,11 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
 
         beforeEach(() => {
             subTasks = [
-                { id: 'ATL-2', title: 'Sign in', acceptance_criteria: '- Given x', labels: ['dev'] },
+                // A complete set under the v2 contract: the dev sub-task carries
+                // `dev` plus exactly one layer label, and has BOTH twins.
+                { id: 'ATL-2', title: 'Sign in', acceptance_criteria: '- Given x', labels: ['dev', 'fullstack'] },
                 { id: 'ATL-3', title: 'Sign in [QA]', acceptance_criteria: '- Given x', labels: ['qa'] },
+                { id: 'ATL-5', title: 'Sign in [DOC]', acceptance_criteria: '- Given x', labels: ['doc'] },
             ];
             // tested_by is created QA -> dev, so it is incoming on the dev sub-task.
             links = { 'ATL-2': [{ relation_type: 'tested_by', direction: 'incoming', item_id: 'ATL-3' }] };
@@ -321,7 +368,7 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
             expect(r.out).toContain('no dev sub-tasks');
         });
 
-        it('lists every gap: empty AC, missing labels, missing twin link, missing twin', async () => {
+        it('lists every gap: empty AC, missing labels, missing twin link, missing twins', async () => {
             subTasks[0]!.acceptance_criteria = '  ';
             subTasks[1]!.labels = [];
             subTasks.push({ id: 'ATL-4', title: 'Sign out', acceptance_criteria: '- Given y', labels: [] });
@@ -333,6 +380,36 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
             expect(r.out).toMatch(/ATL-4 is missing the dev label/);
             expect(r.out).toMatch(/ATL-2 has no tested_by link/);
             expect(r.out).toMatch(/ATL-4 has no \[QA\] twin/);
+            // A missing [QA] twin used to `continue` past the [DOC] check, so a
+            // sub-task with neither reported one gap per round instead of both.
+            expect(r.out).toMatch(/ATL-4 has no \[DOC\] twin/);
+            expect(r.out).toMatch(/ATL-4 must carry exactly one layer label/);
+        });
+
+        it('rejects a dev sub-task with no layer label, or with two', async () => {
+            subTasks[0]!.labels = ['dev'];
+            let r = await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl });
+            expect(r.code).toBe(1);
+            expect(r.out).toMatch(/ATL-2 must carry exactly one layer label \(be\|fe\|fullstack\); it has none/);
+
+            subTasks[0]!.labels = ['dev', 'be', 'fe'];
+            r = await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl });
+            expect(r.code).toBe(1);
+            expect(r.out).toMatch(/it has be, fe/);
+        });
+
+        it('rejects a dev sub-task with no [DOC] twin', async () => {
+            subTasks = subTasks.filter((s) => !s.title.endsWith('[DOC]'));
+            const r = await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl });
+            expect(r.code).toBe(1);
+            expect(r.out).toMatch(/ATL-2 has no \[DOC\] twin/);
+        });
+
+        it('rejects a [DOC] twin that is missing the doc label', async () => {
+            subTasks[2]!.labels = [];
+            const r = await runGate('po-writer-output', cwd, 'ATL-1', { ATLAS_API_URL: apiUrl });
+            expect(r.code).toBe(1);
+            expect(r.out).toMatch(/ATL-5 is missing the doc label/);
         });
 
         it('accepts the tested_by link from either direction', async () => {

@@ -1,0 +1,75 @@
+{
+    "id": "docs",
+    "name": "Docs sub-task",
+    "description": "Doc Writer documents one [DOC] sub-task from what the branch actually shipped, and Doc Reviewer checks every claim against the diff.",
+    "version": 1,
+    "input_kind": "sub_task",
+    "trigger": "manual",
+    "use_worktree": true,
+    "push_code": false,
+    "raises_pr": false,
+    "graph": {
+        "nodes": [
+            {
+                "id": "start",
+                "type": "start",
+                "position": {
+                    "x": 0,
+                    "y": 0
+                }
+            },
+            {
+                "id": "doc-writer",
+                "type": "agent",
+                "agent_id": "agent-doc-writer",
+                "position": {
+                    "x": 0,
+                    "y": 130
+                }
+            },
+            {
+                "id": "doc-review",
+                "type": "agent",
+                "agent_id": "agent-doc-reviewer",
+                "position": {
+                    "x": 0,
+                    "y": 260
+                }
+            },
+            {
+                "id": "end",
+                "type": "end",
+                "position": {
+                    "x": 0,
+                    "y": 390
+                }
+            }
+        ],
+        "edges": [
+            {
+                "id": "e-start-pass-doc-writer",
+                "source": "start",
+                "target": "doc-writer",
+                "kind": "pass"
+            },
+            {
+                "id": "e-doc-writer-pass-doc-review",
+                "source": "doc-writer",
+                "target": "doc-review",
+                "kind": "pass"
+            },
+            {
+                "id": "e-doc-review-pass-end",
+                "source": "doc-review",
+                "target": "end",
+                "kind": "pass"
+            },
+            {
+                "id": "e-doc-review-fail-doc-writer",
+                "source": "doc-review",
+                "target": "doc-writer",
+                "kind": "fail"
+            }
+        ]
+    }
+}

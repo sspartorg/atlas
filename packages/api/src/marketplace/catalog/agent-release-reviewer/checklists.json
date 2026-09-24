@@ -1,0 +1,27 @@
+[
+  {
+    "label": "Every acceptance criterion on the Task points at a commit and a test that satisfies it",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "The seams between sub-tasks were read: no duplicated helper, no half-updated interface, no migration a sibling query ignores",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "Nothing outside the Task's scope is in the diff",
+    "sort_order": 2,
+    "required": true
+  },
+  {
+    "label": "No secret, credential, removed auth check, unvalidated input reaching a query or shell, or destructive migration without rollback",
+    "sort_order": 3,
+    "required": true
+  },
+  {
+    "label": "The gates were not re-run - their verdicts were read",
+    "sort_order": 4,
+    "required": true
+  }
+]

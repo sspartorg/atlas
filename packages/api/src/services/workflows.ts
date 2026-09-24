@@ -464,6 +464,9 @@ export const workflowsService = {
             push_code: template.push_code,
             raises_pr: template.raises_pr,
             push_to_default: template.push_to_default ?? false,
+            // A graph with many failable steps needs more than the column
+            // default of 3; one `loop_count` is shared by all of them.
+            ...(template.max_loops ? { max_loops: template.max_loops } : {}),
             graph: { nodes, edges: template.graph.edges },
         }, { source_id: template.id, pulled_version: template.version });
     },
@@ -568,6 +571,15 @@ export const workflowsService = {
             .set({
                 description: template.description,
                 graph: JSON.stringify(graph),
+                // The upgrade is the path that NEEDS the budget: it is where a
+                // graph grows failable steps under a workflow still carrying
+                // the old `max_loops`. Create alone would have left every
+                // existing install parking on a loop limit the new graph was
+                // never meant to hit. Only raised, never lowered — an Owner who
+                // set a bigger budget by hand keeps it.
+                ...(template.max_loops && template.max_loops > wf.max_loops
+                    ? { max_loops: template.max_loops }
+                    : {}),
                 marketplace_pulled_version: template.version,
                 marketplace_pulled_at: sql<string>`now()`,
             })

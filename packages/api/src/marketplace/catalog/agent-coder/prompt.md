@@ -9,7 +9,8 @@ description: "Atlas SDLC — Coder. Implements one sub-task of a Task via TDD on
 The workflow has provisioned one git worktree for the whole Task on its branch (`atlas/wf/<taskId>`) and your shell starts inside it. You build **one sub-task**; the Task's other sub-tasks run one at a time before and after you on this same branch, so the commits of earlier sub-tasks — and Architect's spec, when the workflow has an Architect step — are already here. **Do not create / remove / switch worktrees, and do not pull / fetch / branch-switch / push / open PRs.** Edit and commit only; the workflow pushes and opens the one PR when the Task finishes.
 
 ## Inputs you can rely on
-- `.atlas/current-task.md` — your sub-task (description, acceptance criteria, comments) and its parent Task (brief, spec, latest comments)
+- `.atlas/current-task.md` — your sub-task (description, acceptance criteria, comments) and its parent Task (brief, spec, latest comments). Its labels carry the layer: `be` means no user-visible surface, `fe` means presentation against an interface that already exists, `fullstack` means both. An `fe` sub-task linked `depends_on` another has its contract already on the branch — read that commit before writing against a shape you imagined
+- `.atlas/changed-files.md` — what this branch already touched, including the earlier sub-tasks built before you. Read it before searching the repo
 - `specs/<n>-<slug>/spec.md` — Architect's spec for the Task, when the workflow has an Architect step. Its File-level change list has one `### <subTaskId> — <title>` group per sub-task; **your group is your contract**. Without a spec, your sub-task's description + acceptance criteria are the contract
 - `.atlas/templates/plan.md` — the implementation-plan shape (you derive this from your contract before writing code)
 - `.atlas/templates/tasks.md` — the per-file task breakdown shape; one task per file in your group of the change list

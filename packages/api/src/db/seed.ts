@@ -360,7 +360,7 @@ exit 1
         id: 'po-writer-output',
         name: 'PO Writer output check',
         description:
-            "Reads the Task's sub-tasks from the Atlas API ($ATLAS_API_URL) and verifies the PO Writer contract: at least one dev sub-task, every dev sub-task labelled `dev` with non-empty acceptance_criteria, and a `<dev title> [QA]` twin labelled `qa` joined to it by a tested_by link (either direction).",
+            "Reads the Task's sub-tasks from the Atlas API ($ATLAS_API_URL) and verifies the PO Writer contract: at least one dev sub-task; every dev sub-task labelled `dev` plus exactly one layer label (`be`/`fe`/`fullstack`), with non-empty acceptance_criteria; a `<dev title> [QA]` twin labelled `qa` joined to it by a tested_by link; and a `<dev title> [DOC]` twin labelled `doc` (joined by title and label, not a link — `item_links` has no `documented_by` relation and the convention is unambiguous).",
         sort_order: 101,
         body_sh: `#!/usr/bin/env bash
 # PO Writer output gate. $1 is the Task id. Reads the Task's sub-tasks from the
@@ -383,23 +383,29 @@ const dir = process.argv[1];
 const subs = require(dir + "/task.json").sub_tasks || [];
 const has = (s, l) => (s.labels || []).includes(l);
 const isQa = (s) => s.title.trimEnd().endsWith("[QA]");
+const isDoc = (s) => s.title.trimEnd().endsWith("[DOC]");
+const LAYERS = ["be", "fe", "fullstack"];
 const gaps = [];
-const dev = subs.filter((s) => !isQa(s));
-if (dev.length === 0) gaps.push("no dev sub-tasks (titles not ending [QA]) under the task");
+const dev = subs.filter((s) => !isQa(s) && !isDoc(s));
+if (dev.length === 0) gaps.push("no dev sub-tasks (titles not ending [QA] or [DOC]) under the task");
 for (const d of dev) {
     if (!has(d, "dev")) gaps.push(d.id + " is missing the dev label");
+    const layers = LAYERS.filter((l) => has(d, l));
+    if (layers.length !== 1) gaps.push(d.id + " must carry exactly one layer label (be|fe|fullstack); it has " + (layers.join(", ") || "none"));
     if (!(d.acceptance_criteria || "").trim()) gaps.push(d.id + " has empty acceptance_criteria");
     const twinTitle = d.title + " [QA]";
     const qa = subs.find((s) => s.title === twinTitle);
-    if (!qa) {
-        gaps.push(d.id + " has no [QA] twin titled " + JSON.stringify(twinTitle));
-        continue;
-    }
-    if (!has(qa, "qa")) gaps.push(qa.id + " is missing the qa label");
-    const links = require(dir + "/links-" + d.id + ".json");
+    if (!qa) gaps.push(d.id + " has no [QA] twin titled " + JSON.stringify(twinTitle));
+    else if (!has(qa, "qa")) gaps.push(qa.id + " is missing the qa label");
+    const links = qa ? require(dir + "/links-" + d.id + ".json") : [];
+    if (qa)
     if (!links.some((l) => l.relation_type === "tested_by" && l.item_id === qa.id)) {
         gaps.push(d.id + " has no tested_by link to its [QA] twin " + qa.id);
     }
+    const docTitle = d.title + " [DOC]";
+    const doc = subs.find((s) => s.title === docTitle);
+    if (!doc) gaps.push(d.id + " has no [DOC] twin titled " + JSON.stringify(docTitle));
+    else if (!has(doc, "doc")) gaps.push(doc.id + " is missing the doc label");
 }
 if (gaps.length === 0) process.exit(0);
 console.log("po-writer-output:");
@@ -420,23 +426,40 @@ $subs = @()
 if ($full.sub_tasks) { $subs = @($full.sub_tasks) }
 $gaps = New-Object System.Collections.ArrayList
 $dev = @()
-foreach ($s in $subs) { if (-not "$($s.title)".TrimEnd().EndsWith('[QA]')) { $dev += $s } }
-if ($dev.Count -eq 0) { [void]$gaps.Add('no dev sub-tasks (titles not ending [QA]) under the task') }
+foreach ($s in $subs) {
+    $t = "$($s.title)".TrimEnd()
+    if (-not $t.EndsWith('[QA]') -and -not $t.EndsWith('[DOC]')) { $dev += $s }
+}
+if ($dev.Count -eq 0) { [void]$gaps.Add('no dev sub-tasks (titles not ending [QA] or [DOC]) under the task') }
 foreach ($d in $dev) {
     if (-not (@($d.labels) -contains 'dev')) { [void]$gaps.Add("$($d.id) is missing the dev label") }
+    $layers = @()
+    foreach ($l in @('be', 'fe', 'fullstack')) { if (@($d.labels) -contains $l) { $layers += $l } }
+    if ($layers.Count -ne 1) {
+        $shown = if ($layers.Count -eq 0) { 'none' } else { $layers -join ', ' }
+        [void]$gaps.Add("$($d.id) must carry exactly one layer label (be|fe|fullstack); it has $shown")
+    }
     if ([string]::IsNullOrWhiteSpace($d.acceptance_criteria)) { [void]$gaps.Add("$($d.id) has empty acceptance_criteria") }
     $twinTitle = "$($d.title) [QA]"
     $qa = $null
     foreach ($s in $subs) { if ($s.title -ceq $twinTitle) { $qa = $s } }
-    if ($null -eq $qa) { [void]$gaps.Add("$($d.id) has no [QA] twin titled '$twinTitle'"); continue }
-    if (-not (@($qa.labels) -contains 'qa')) { [void]$gaps.Add("$($qa.id) is missing the qa label") }
-    $linked = $false
-    try {
-        foreach ($l in (Invoke-RestMethod -Uri "$api/api/issues/sub_task/$($d.id)/links" -ErrorAction Stop)) {
-            if ($l.relation_type -eq 'tested_by' -and $l.item_id -eq $qa.id) { $linked = $true }
-        }
-    } catch { }
-    if (-not $linked) { [void]$gaps.Add("$($d.id) has no tested_by link to its [QA] twin $($qa.id)") }
+    if ($null -eq $qa) {
+        [void]$gaps.Add("$($d.id) has no [QA] twin titled '$twinTitle'")
+    } else {
+        if (-not (@($qa.labels) -contains 'qa')) { [void]$gaps.Add("$($qa.id) is missing the qa label") }
+        $linked = $false
+        try {
+            foreach ($l in (Invoke-RestMethod -Uri "$api/api/issues/sub_task/$($d.id)/links" -ErrorAction Stop)) {
+                if ($l.relation_type -eq 'tested_by' -and $l.item_id -eq $qa.id) { $linked = $true }
+            }
+        } catch { }
+        if (-not $linked) { [void]$gaps.Add("$($d.id) has no tested_by link to its [QA] twin $($qa.id)") }
+    }
+    $docTitle = "$($d.title) [DOC]"
+    $doc = $null
+    foreach ($s in $subs) { if ($s.title -ceq $docTitle) { $doc = $s } }
+    if ($null -eq $doc) { [void]$gaps.Add("$($d.id) has no [DOC] twin titled '$docTitle'") }
+    elseif (-not (@($doc.labels) -contains 'doc')) { [void]$gaps.Add("$($doc.id) is missing the doc label") }
 }
 if ($gaps.Count -eq 0) { exit 0 }
 Write-Output 'po-writer-output:'
@@ -857,7 +880,7 @@ exit 1
         id: 'gate-hygiene',
         name: 'Hygiene gate (lint, typecheck, debug residue)',
         description:
-            "Gate node script. Runs the project's declared lint and typecheck scripts and scans the branch diff for console.log, debugger and untracked TODO/FIXME markers. A tracked marker (TODO(ATL-12):) is allowed. format:check is deliberately excluded - a permanently red gate is one nobody reads. Nothing here is a judgement call, which is why it runs as a gate node with no LLM attached; the paired hygiene fixer is dispatched only on a non-zero exit.",
+            "Gate node script. Runs the project's declared lint and typecheck scripts and scans the branch diff for console.log, debugger and untracked TODO/FIXME markers. The marker match is word-bounded on both sides, so `TODO_FILE` and `HTTP_TODOS` are not residue; a tracked marker (TODO(ATL-12):) is allowed. format:check is deliberately excluded - a permanently red gate is one nobody reads. Nothing here is a judgement call, which is why it runs as a gate node with no LLM attached; the paired hygiene fixer is dispatched only on a non-zero exit.",
         sort_order: 107,
         body_sh: `#!/usr/bin/env bash
 # Hygiene gate. $1 is the item id (unused).
@@ -893,7 +916,13 @@ added="$(git diff -U0 "$base" HEAD 2>/dev/null | grep -E '^[+]' | grep -vE '^[+]
 # A bare TODO is residue; a tracked one (\`TODO(.agents):\`, \`TODO(ATL-12):\`)
 # is a deliberate, reviewable marker that AGENTS.md sanctions. Flag the first
 # and leave the second alone.
-residue="$(printf '%s\\n' "$added" | grep -nE 'console\\.log\\(|debugger;|TODO[^(]|FIXME[^(]|XXX' || true)"
+#
+# Word-bounded on BOTH sides, which \`TODO[^(]\` was not: that flagged
+# \`TODO_FILE\` (an env var) and \`HTTP_TODOS\` (a fixture name) as residue.
+# On a todo app that is every other line, and the first live run duly spent a
+# fixer run renaming identifiers to appease it. \`XXX\` is gone for the same
+# reason -- too weak a signal to be worth its false positives.
+residue="$(printf '%s\\n' "$added" | grep -nE '(console\\.log\\(|debugger;|(^|[^A-Za-z0-9_])(TODO|FIXME)([^A-Za-z0-9_(]|$))' || true)"
 if [ -n "$residue" ]; then
     n=$((n+1))
     gaps="$gaps$n. debug/TODO residue in the diff:
@@ -932,7 +961,8 @@ if ([string]::IsNullOrWhiteSpace($base)) { $base = 'HEAD~10' }
 $diff = git diff -U0 $base HEAD 2>$null
 $added = $diff | Where-Object { $_ -match '^\\+' -and $_ -notmatch '^\\+\\+\\+' }
 # A bare TODO is residue; a tracked one (TODO(ATL-12):) is a deliberate marker.
-$residue = $added | Where-Object { $_ -match 'console\\.log\\(|debugger;|TODO[^(]|FIXME[^(]|XXX' }
+# Word-bounded on both sides -- see body_sh for why TODO[^(] was wrong.
+$residue = $added | Where-Object { $_ -match '(console\\.log\\(|debugger;|(^|[^A-Za-z0-9_])(TODO|FIXME)([^A-Za-z0-9_(]|$))' }
 if ($residue.Count -gt 0) {
     [void]$gaps.Add("debug/TODO residue in the diff:\`n" + (($residue | Select-Object -First 20) -join "\`n"))
 }

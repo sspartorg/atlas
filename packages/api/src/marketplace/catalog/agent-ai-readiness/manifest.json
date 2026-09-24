@@ -9,7 +9,7 @@
   "description": "Walks the repo end-to-end (every package, public surfaces, key code paths, observed conventions) regardless of stack, then bootstraps an AI-ready scaffold on a fresh branch \u2014 8 always-on docs (AGENTS.md, CLAUDE.md, Copilot instructions, .agents/README.md + architecture.md + conventions.md + glossary.md + memory.md) plus up to 4 conditional .agents/ docs (data-model.md, api-surface.md, routes-map.md, testing.md) gated on what is detected. Also installs GitHub Spec Kit (uv + specify-cli) on the host so the downstream SDLC chain (Architect \u2192 Coder \u2192 QA \u2192 Curator) lands on a ready environment. memory.md is a bootstrap digest future agent runs read first. Fires from the \"Generate AI scaffold\" button on Project Detail.",
   "designation": "AI Readiness Specialist",
   "accent_color": "#6366F1",
-  "sort_order": 7,
+  "sort_order": 19,
   "glyph": "rocket_launch",
   "role_id": null,
   "status": "inactive",

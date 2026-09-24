@@ -33,16 +33,17 @@ The **SDLC role catalog** is the canonical list of roles an agent can play in At
 
 | `id` | Label | Seeded? | Default status | Notes |
 |---|---|---|---|---|
-| `po` | Product Owner | yes | active | PO Writer — brainstorm-before-scope; splits a Task into `dev` sub-tasks + `[QA]` twins labelled `qa`. Paired PO Reviewer agent checks them (`delivery` workflow). |
+| `po` | Product Owner | yes | active | PO Writer — brainstorm-before-scope; splits a Task into `dev` sub-tasks (each with exactly one layer label `be`/`fe`/`fullstack`) plus a `[QA]` twin and a `[DOC]` twin. Paired PO Reviewer agent checks them (`delivery` workflow). |
 | `spec-writer` | Specification Writer | **no** | — | Type-only. Removed from the chain; Architect now authors the spec. |
 | `engineer` | Engineer | yes | active | Coder — one dev sub-task at a time. Paired Code Reviewer agent (`build` sub-workflow; the Task's `delivery` run opens the one PR at End). |
 | `qa` | Quality Assurance | yes | active | QA Writer — test-plan CSV per `[QA]` sub-task. Paired QA Reviewer agent (`test` sub-workflow). |
 | `architect` | Software Architect | yes | active | Architect — authors one `specs/<n>-<slug>/spec.md` for the whole Task (saved to its `spec_md`) ahead of Coder (absorbed Spec Writer). Paired Architect Reviewer agent (`delivery` workflow). |
-| `tester` | Exploratory Tester | **no** | — | Type-only. |
+| `tester` | Exploratory Tester | yes | active | Coverage Fixer — writes the tests that close the gap `gate-coverage` measured (`delivery` v2). No exploratory-testing agent ships. |
 | `automation` | Automation Engineer | yes | active | Automates `[automation-yes]` QA cases on the Task's branch. Paired Automation Reviewer agent (`test` sub-workflow, after QA Reviewer). |
-| `devops` | DevOps Engineer | **no** | — | Type-only. |
-| `security` | Security Review Lead | **no** | — | Type-only. |
-| `designer` | UX/Visual Designer | **no** | — | Type-only. |
+| `devops` | DevOps Engineer | yes | active | Performance Fixer — brings the touched routes back under budget after `gate-perf` (`delivery` v2). |
+| `security` | Security Review Lead | yes | active | Hygiene Fixer — lint, types, secrets and debug residue after `gate-hygiene` (`delivery` v2). |
+| `designer` | UX/Visual Designer | yes | active | Visual Reviewer — reads the screens `gate-visual` captured, fixes overflow/contrast/theme, blesses a new baseline (`delivery` v2). |
+| `docs` | Technical Writer | yes | active | Doc Writer — documents one `[DOC]` sub-task from the branch diff. Paired Doc Reviewer agent (`docs` sub-workflow). |
 
 The slug `id` doubles as the canonical reference everywhere in the codebase — `SdlcRole` in `@atlas/shared`, the `agents.role_id` FK target, the URL param of `PATCH /api/roles/:id`. Adding a role means a migration + a shared-type bump; the runtime never invents roles on its own.
 

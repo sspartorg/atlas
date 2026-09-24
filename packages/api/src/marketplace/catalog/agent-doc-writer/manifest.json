@@ -1,0 +1,22 @@
+{
+  "id": "agent-doc-writer",
+  "name": "Doc Writer",
+  "category": "software-dev",
+  "cli": "claude",
+  "model": "claude-sonnet-5",
+  "effort": "low",
+  "framework": "docs",
+  "description": "Documents one `[DOC]` sub-task on the Task's branch: reads the branch diff rather than the Task description, extends the repo's existing documentation instead of creating a parallel copy, and verifies every flag, default and error it writes against the code.",
+  "designation": "Technical Writer",
+  "accent_color": "#D97706",
+  "sort_order": 6,
+  "glyph": "menu_book",
+  "role_id": "docs",
+  "status": "active",
+  "kind_slug": "custom",
+  "settings_json": {},
+  "memory_cadence": 1,
+  "summary": "Documents one [DOC] sub-task from what the branch actually shipped.",
+  "version": 1,
+  "published_at": "2026-09-24T00:00:00Z"
+}

@@ -9,7 +9,7 @@
   "description": "24-hour AI-tooling digest delivered as an external notification. Scrapes via Playwright MCP. Edit the prompt with your curated sources, then run it from a scheduled workflow (e.g. daily at 09:00).",
   "designation": "Daily AI News Scout",
   "accent_color": "#FACC15",
-  "sort_order": 8,
+  "sort_order": 20,
   "glyph": "newspaper",
   "role_id": null,
   "status": "inactive",
