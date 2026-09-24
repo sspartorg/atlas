@@ -104,3 +104,75 @@ which is the mechanism that already existed.
   documentation is true. Those pairs are unchanged.
 - The gate runs per repo and stops at the first failure, so a fixer gets one
   problem rather than a pile.
+
+## Amendment (2026-09-24) — the gate cannot review its own fixer
+
+Shipping the fixers exposed the one thing this design does not cover. "For a
+fixer, the gate is the reviewer" is true about *whether* the check passes and
+silent about *how* it was made to pass:
+
+| Gate | The honest fix | The one that games it |
+|---|---|---|
+| hygiene | delete the residue | `eslint-disable`, `@ts-ignore`, renaming a symbol until the pattern stops matching |
+| coverage | tests that fail when the behaviour breaks | assertion-free tests, a lowered floor, deleting the uncovered code |
+| perf | remove the cost | a widened budget, fewer samples, the slow case skipped |
+| visual | fix the layout | a raised tolerance, a baseline blessed unseen |
+
+Every one of those turns the gate green, and no exit code can tell them from a
+real fix — the check is deterministic, but the *route* to green is judgement.
+So each fixer's pass edge now goes to `agent-fix-reviewer` (one agent, four
+nodes) before the gate re-runs: it reads the gate's gap list against the
+fixer's diff and rejects suppression, faked evidence and scope creep. The gate
+still has the final say on green; the Fix Reviewer answers why.
+
+This is the narrow exception to "a deterministic check beats an LLM reviewer",
+and it is narrow on purpose: the Fix Reviewer reviews a diff that a script has
+already localised to a named gap list, which is the one shape of review an LLM
+does reliably.
+
+### The probes
+
+`gate-perf` and `gate-visual` originally delegated entirely to a script the
+project declared and skipped when there wasn't one — so the 100ms/200ms budgets
+and the cross-viewport check were enforced on exactly the projects that had
+already built that tooling, i.e. the ones that needed it least. Both gates now
+fall through to Atlas's own probes (`.atlas/probes/*.mjs`, staged by
+`probes-assembler.ts`) when the project declares nothing. The probes decline
+what they cannot do honestly: no `start` script, no browser, no route literal
+in the diff, an app that never opens its port — each prints why and exits 0,
+per ADR 0020.
+
+`gate-visual` runs every rendering engine installed on the host, not just
+Chromium. WebKit and Gecko disagree with Blink about flexbox min-size,
+scrollbar gutters and font metrics, which is where overflow on a narrow
+viewport usually comes from — one engine is not cross-browser coverage, and
+the probe says which engines it actually used rather than letting a single-
+engine pass read as more than it is.
+
+`gate-coverage` also ratchets: on a pass it writes the floor back to
+`atlas-gate/coverage-floor`, rounded down to a whole percent, so coverage a branch
+earned cannot be spent by the next one.
+
+### Why gate state is in `atlas-gate/` and not `.atlas/`
+
+Every other file Atlas puts in a worktree lives under `.atlas/`, and the first
+three versions of this work followed that convention. It is wrong, silently.
+
+Atlas writes `.atlas/` into the target repo's `.gitignore` and commits it
+(`worktree-orchestrator.ts:713`), which is right for scaffolding — a
+constitution and a staged script are regenerated every run and have no business
+in a diff. But a gate's *persisted* state is the opposite kind of thing. A
+blessed baseline, a ratcheted floor and a project's perf budget only mean
+anything if they survive to the next branch, and they can only be trusted if a
+human can see them change.
+
+Under `.atlas/` neither is possible. The baseline is never committed, so
+`gate-visual` reports "no baseline" on every run forever and never compares
+anything. The floor resets to the default on every branch, so the ratchet never
+ratchets. Both failures are silent, and both look exactly like the feature
+working.
+
+So anything a gate must remember goes in `atlas-gate/`, tracked and reviewable,
+and a test asserts that no probe writes state under `.atlas/`. The trap is
+invisible by reading the code, because the wrong path looks like every other
+path in the system.

@@ -1,1 +1,27 @@
-[]
+[
+  {
+    "label": "spec.md exists at specs/<n>-<slug>/ and carries all six required sections",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "Every dev sub-task has its own `### <subTaskId> \u2014 <title>` group in the File-level change list",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "Every acceptance criterion on every dev sub-task maps to at least one Test scenario",
+    "sort_order": 2,
+    "required": true
+  },
+  {
+    "label": "Every file named in a change group exists in the repo, or is explicitly marked as new",
+    "sort_order": 3,
+    "required": true
+  },
+  {
+    "label": "No implementation is prescribed that the sub-task's acceptance criteria do not require",
+    "sort_order": 4,
+    "required": true
+  }
+]

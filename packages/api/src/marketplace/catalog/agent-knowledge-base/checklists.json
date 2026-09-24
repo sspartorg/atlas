@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "label": "Every document added fills a gap that was identified from the repository, not assumed",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "Each document is verified against the code or the upstream source it describes",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "No existing document was overwritten without saying so in the summary",
+    "sort_order": 2,
+    "required": true
+  }
+]

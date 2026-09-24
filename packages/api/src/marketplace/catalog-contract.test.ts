@@ -62,6 +62,18 @@ function modelKey(cli: string, model: string): string {
 const PROMPT_BUDGET_ROUTED = 1_800;
 const PROMPT_BUDGET_AUTONOMOUS = 7_000;
 
+// Per-agent carve-outs. A budget raised to make a check pass is the exact move
+// `agent-fix-reviewer` exists to catch, so each entry names what bought the
+// room — and the default stays where it is, so nothing else drifts.
+//
+// agent-po-writer: the Owner's brief requires it to read the codebase and
+// establish whether the functionality already exists before it asks anything,
+// and to ask without a question cap. Both are steps, not prose; the prompt was
+// trimmed twice before this number moved. Cheap in context too — the PR1
+// baseline measured ~480K cache-read tokens per dispatch, next to which a 2K
+// prompt is a rounding error.
+const PROMPT_BUDGET_OVERRIDE: Record<string, number> = { 'agent-po-writer': 2100 };
+
 /** Same 4-chars-per-token heuristic `services/context-budget.ts` uses. */
 function estimateTokens(text: string): number {
     return Math.ceil(text.length / 4);
@@ -164,6 +176,33 @@ describe('catalog contract', () => {
                 }
             });
 
+            it('ships at least one REQUIRED checklist row', () => {
+                // `agent-runner-outcome-routing.ts` returns apply_on_pass the
+                // moment the required list is empty, so an agent with none is
+                // believed unconditionally when it says `done`. That is
+                // campaign finding F-012, and `reviewer-checklists.test.ts`
+                // only ever globbed `*-reviewer` — which is how agent-architect
+                // and agent-automation, the two steps that decide what
+                // everyone downstream builds, shipped able to self-certify.
+                const required = entry.checklists.filter((c) => c.required);
+                if (required.length === 0) {
+                    throw new Error(
+                        `${manifest.id} has no required checklist rows, so its \`done\` is an ` +
+                            `automatic pass (agent-runner-outcome-routing.ts). See F-012.`,
+                    );
+                }
+                expect(required.length).toBeGreaterThan(0);
+            });
+
+            it('checklist rows are well-formed and uniquely ordered', () => {
+                const orders = entry.checklists.map((c) => c.sort_order);
+                expect(new Set(orders).size).toBe(entry.checklists.length);
+                for (const c of entry.checklists) {
+                    expect(c.label.trim().length).toBeGreaterThan(0);
+                    expect(typeof c.required).toBe('boolean');
+                }
+            });
+
             it('uses a six-digit hex accent colour', () => {
                 expect(manifest.accent_color).toMatch(/^#[0-9A-Fa-f]{6}$/);
             });
@@ -185,7 +224,9 @@ describe('catalog contract', () => {
             });
 
             it('keeps its prompt inside the budget for its kind', () => {
-                const budget = manifest.role_id ? PROMPT_BUDGET_ROUTED : PROMPT_BUDGET_AUTONOMOUS;
+                const budget =
+                    PROMPT_BUDGET_OVERRIDE[manifest.id] ??
+                    (manifest.role_id ? PROMPT_BUDGET_ROUTED : PROMPT_BUDGET_AUTONOMOUS);
                 const size = estimateTokens(entry.prompt_md);
                 if (size > budget) {
                     throw new Error(

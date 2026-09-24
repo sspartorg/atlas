@@ -508,13 +508,68 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
         });
     });
 
-    it('each script body is <= 80 lines (per the plan budget)', () => {
+    // The budget exists so an embedded shell script cannot quietly become a
+    // program. `gate-hygiene` is the one carve-out: it runs five declared
+    // tools, standalone secretlint, a dependency audit and three diff scans,
+    // which is ~12 lines per check rather than one bloated check. Anything
+    // that grows past ITS ceiling belongs in `marketplace/probes/` as a real
+    // `.mjs` file, the way `gate-perf` and `gate-visual` did.
+    const LINE_BUDGET: Record<string, number> = { 'gate-hygiene': 120 };
+    const DEFAULT_LINE_BUDGET = 80;
+
+    it('each script body is within its line budget', () => {
         for (const seed of GUARDRAIL_SCRIPT_SEEDS) {
+            const budget = LINE_BUDGET[seed.id] ?? DEFAULT_LINE_BUDGET;
             const shLines = seed.body_sh.split('\n').length;
             const psLines = seed.body_ps1.split('\n').length;
-            expect(shLines, `${seed.id} bash lines`).toBeLessThanOrEqual(80);
-            expect(psLines, `${seed.id} powershell lines`).toBeLessThanOrEqual(80);
+            expect(shLines, `${seed.id} bash lines`).toBeLessThanOrEqual(budget);
+            expect(psLines, `${seed.id} powershell lines`).toBeLessThanOrEqual(budget);
         }
+    });
+
+    // A Windows project must not silently get a weaker gate than a Unix one.
+    // The ps1 for gate-hygiene ran only lint and typecheck while the bash ran
+    // nine checks, and nothing caught it because no test compared them.
+    //
+    // Comments are stripped first, and every token below is one that can only
+    // appear in an executable position. Matching prose would let a script pass
+    // this by DESCRIBING a check it does not run — which is the same trick
+    // `agent-fix-reviewer` exists to catch in a fixer's diff.
+    const withoutComments = (body: string) =>
+        body
+            .split('\n')
+            .filter((l) => !l.trim().startsWith('#'))
+            .join('\n');
+
+    it('gate-hygiene runs the same checks on both platforms', () => {
+        const seed = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === 'gate-hygiene');
+        expect(seed).toBeDefined();
+        const sh = withoutComments(seed!.body_sh);
+        const ps = withoutComments(seed!.body_ps1);
+        for (const token of [
+            'knip', // the declared-script loop
+            '--maskSecrets', // standalone secretlint over the diff
+            'audit-level', // dependency advisories
+            'TODO\\(\\.agents\\)', // stale-marker regex, not the prose in the gap message
+            'debugger;', // debug residue
+        ]) {
+            expect(sh, `bash does not run ${token}`).toContain(token);
+            expect(ps, `powershell does not run ${token}`).toContain(token);
+        }
+    });
+
+    // Template literals eat a single backslash. A `\+` written as one in the TS
+    // source reaches PowerShell as a bare `+`, which is an invalid quantifier,
+    // and `TODO\(\.agents\)` becomes a capture group that matches the wrong
+    // thing. Both happened; neither is visible by reading the TS.
+    it('powershell regex literals survive the template literal', () => {
+        const seed = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === 'gate-hygiene');
+        for (const line of seed!.body_ps1.split('\n')) {
+            if (line.trim().startsWith('#')) continue;
+            expect(line, 'bare ^+ is an invalid quantifier').not.toMatch(/-(not)?match '\^\+/);
+        }
+        expect(seed!.body_ps1).toContain('TODO\\(\\.agents\\)');
+        expect(seed!.body_ps1).toContain('package\\.json');
     });
 
     describe('runSeed seeds guardrail_scripts rows', () => {

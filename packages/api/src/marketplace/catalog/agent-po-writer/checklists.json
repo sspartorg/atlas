@@ -33,5 +33,15 @@
     "label": "Every dev sub-task is labelled `dev` and has a `[QA]` twin labelled `qa`, linked via `tested_by`",
     "sort_order": 6,
     "required": true
+  },
+  {
+    "label": "Checked the codebase for the functionality first and reported what already exists (with path:line)",
+    "sort_order": 7,
+    "required": true
+  },
+  {
+    "label": "Every dev sub-task has a `[DOC]` twin labelled `doc`",
+    "sort_order": 8,
+    "required": true
   }
 ]

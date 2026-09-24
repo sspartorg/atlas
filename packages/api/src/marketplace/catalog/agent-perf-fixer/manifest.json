@@ -9,7 +9,7 @@
   "description": "Dispatched only when the `gate-perf` script reports a budget breach. Measures the actual cost before changing anything, fixes the cause rather than the measurement, and never widens a budget or trades correctness for latency.",
   "designation": "Performance Engineer",
   "accent_color": "#EA580C",
-  "sort_order": 16,
+  "sort_order": 17,
   "glyph": "speed",
   "role_id": "devops",
   "status": "active",

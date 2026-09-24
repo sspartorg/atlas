@@ -4,7 +4,8 @@
         "packages/api": {
             "entry": [
                 "src/scripts/*.ts",
-                "src/db/migrations/*.ts"
+                "src/db/migrations/*.ts",
+                "src/marketplace/probes/*.mjs"
             ],
             "ignore": [
                 "src/db/types.ts"

@@ -883,7 +883,7 @@ exit 1
         id: 'gate-hygiene',
         name: 'Hygiene gate (lint, typecheck, debug residue)',
         description:
-            "Gate node script. Runs the project's declared lint and typecheck scripts and scans the branch diff for console.log, debugger and untracked TODO/FIXME markers. The marker match is word-bounded on both sides, so `TODO_FILE` and `HTTP_TODOS` are not residue; a tracked marker (TODO(ATL-12):) is allowed. `console.log` is checked only outside CLI entry points (package.json `bin`, `bin/`, `*cli.*`), where it is the product's stdout rather than debug residue. format:check is deliberately excluded - a permanently red gate is one nobody reads. Nothing here is a judgement call, which is why it runs as a gate node with no LLM attached; the paired hygiene fixer is dispatched only on a non-zero exit.",
+            "Gate node script. Runs the project's declared lint, typecheck, knip and secretlint scripts; runs secretlint over the diff even when undeclared if it resolves; audits dependencies at high severity when the branch touched a manifest or lockfile; scans the branch diff for console.log, debugger and untracked TODO/FIXME markers; and fails a branch that ADDS a TODO(.agents) staleness marker. The marker match is word-bounded on both sides, so `TODO_FILE` and `HTTP_TODOS` are not residue; a tracked marker (TODO(ATL-12):) is allowed. `console.log` is checked only outside CLI entry points (package.json `bin`, `bin/`, `*cli.*`), where it is the product's stdout rather than debug residue. format:check is deliberately excluded - a permanently red gate is one nobody reads. Nothing here is a judgement call, which is why it runs as a gate node with no LLM attached; the paired hygiene fixer is dispatched only on a non-zero exit.",
         sort_order: 107,
         body_sh: `#!/usr/bin/env bash
 # Hygiene gate. $1 is the item id (unused).
@@ -893,6 +893,8 @@ exit 1
 set -u
 gaps=""
 n=0
+base="$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD~10)"
+changed="$(git diff --name-only "$base" HEAD 2>/dev/null || true)"
 pm=npm
 [ -f pnpm-lock.yaml ] && pm=pnpm
 [ -f yarn.lock ] && pm=yarn
@@ -902,7 +904,7 @@ has_script() {
 # \`format:check\` is deliberately absent. Atlas's own repo reports ~409
 # unformatted files and has chosen not to enforce it (it is not in \`pnpm gate\`
 # either); a gate that is permanently red is a gate nobody reads.
-for s in lint typecheck; do
+for s in lint typecheck knip lint:knip secretlint; do
     if has_script "$s"; then
         out="$("$pm" run "$s" 2>&1)" || {
             n=$((n+1))
@@ -912,8 +914,50 @@ $(printf '%s' "$out" | tail -20)
         }
     fi
 done
-base="$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD~10)"
-changed="$(git diff --name-only "$base" HEAD 2>/dev/null || true)"
+
+# Secrets. A credential in a diff is the one finding here that cannot wait for
+# a human to notice, and it is also the one a project is least likely to have
+# wired up itself -- so run secretlint on the diff even when package.json does
+# not declare it, as long as it resolves.
+if ! has_script secretlint && [ -n "$changed" ] && node -e "require.resolve('secretlint/package.json')" >/dev/null 2>&1; then
+    files="$(printf '%s\\n' "$changed" | tr '\\n' ' ')"
+    out="$(npx --no-install secretlint --maskSecrets --no-color $files 2>&1)" || {
+        n=$((n+1))
+        gaps="$gaps$n. secretlint flagged the diff
+$(printf '%s' "$out" | tail -20)
+"
+    }
+fi
+
+# Known-vulnerable dependencies, but only when the branch actually touched the
+# manifest or lockfile. Auditing an untouched dependency tree on every branch
+# turns an upstream advisory into a failure on whoever pushed next, which is
+# how a security gate gets switched off.
+deps_touched="$(printf '%s\\n' "$changed" | grep -E '(^|/)(package\\.json|package-lock\\.json|pnpm-lock\\.yaml|yarn\\.lock)$' || true)"
+if [ -n "$deps_touched" ]; then
+    case "$pm" in
+        pnpm) audit_out="$(pnpm audit --audit-level high 2>&1)" || audit_failed=1 ;;
+        yarn) audit_out="$(yarn npm audit --severity high 2>&1)" || audit_failed=1 ;;
+        *)    audit_out="$(npm audit --audit-level=high 2>&1)" || audit_failed=1 ;;
+    esac
+    if [ "\${audit_failed:-0}" = "1" ]; then
+        n=$((n+1))
+        gaps="$gaps$n. dependency audit reports a high or critical advisory (the branch changed the manifest or lockfile)
+$(printf '%s' "$audit_out" | tail -20)
+"
+    fi
+fi
+
+# Stale documentation markers the repo itself asked to be chased. AGENTS.md
+# sanctions TODO(.agents): as a deliberate placeholder, so it is exempt from
+# the residue check above -- but a branch may not ADD one and walk away.
+stale="$(git diff -U0 "$base" HEAD 2>/dev/null | grep -E '^[+]' | grep -vE '^[+][+][+]' | grep -E 'TODO\\(\\.agents\\)' || true)"
+if [ -n "$stale" ]; then
+    n=$((n+1))
+    gaps="$gaps$n. this branch adds a TODO(.agents) marker -- update the doc in the same change
+$(printf '%s' "$stale" | head -10)
+"
+fi
 # \`console.log\` is debug residue in a library and the PRODUCT'S STDOUT in a
 # CLI. Flagging it everywhere told a CLI project its own user-facing output was
 # residue; the golden set hit this and the fixer rightly refused to rewrite
@@ -970,7 +1014,7 @@ function Has-Script([string]$name) {
         return ($null -ne $pkg.scripts -and $null -ne $pkg.scripts.$name)
     } catch { return $false }
 }
-foreach ($s in @('lint', 'typecheck')) {
+foreach ($s in @('lint', 'typecheck', 'knip', 'lint:knip', 'secretlint')) {
     if (Has-Script $s) {
         $out = & $pm run $s 2>&1
         if ($LASTEXITCODE -ne 0) {
@@ -980,6 +1024,41 @@ foreach ($s in @('lint', 'typecheck')) {
 }
 $base = (git merge-base HEAD origin/main 2>$null)
 if ([string]::IsNullOrWhiteSpace($base)) { $base = 'HEAD~10' }
+$changed = @(git diff --name-only $base HEAD 2>$null | Where-Object { $_ })
+# Secrets: the one finding that cannot wait for a human, and the one a project
+# is least likely to have wired up itself. Run it even when undeclared.
+if (-not (Has-Script 'secretlint') -and $changed.Count -gt 0) {
+    $hasSecretlint = $false
+    try { node -e "require.resolve('secretlint/package.json')" 2>$null | Out-Null; $hasSecretlint = ($LASTEXITCODE -eq 0) } catch { $hasSecretlint = $false }
+    if ($hasSecretlint) {
+        $existing = @($changed | Where-Object { Test-Path -LiteralPath $_ })
+        if ($existing.Count -gt 0) {
+            $out = & npx --no-install secretlint --maskSecrets --no-color @existing 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                [void]$gaps.Add("secretlint flagged the diff\`n" + (($out | Select-Object -Last 20) -join "\`n"))
+            }
+        }
+    }
+}
+# Advisories, but only when the branch touched the manifest or lockfile.
+# Auditing an untouched tree turns an upstream advisory into a failure on
+# whoever pushed next, which is how a security gate gets switched off.
+if (@($changed | Where-Object { $_ -match '(^|/)(package\\.json|pnpm-lock\\.yaml|package-lock\\.json|yarn\\.lock)$' }).Count -gt 0) {
+    $auditOut = switch ($pm) {
+        'pnpm' { & pnpm audit --audit-level high 2>&1 }
+        'yarn' { & yarn npm audit --severity high 2>&1 }
+        default { & npm audit --audit-level=high 2>&1 }
+    }
+    if ($LASTEXITCODE -ne 0) {
+        [void]$gaps.Add("dependency audit reports a high or critical advisory (the branch changed the manifest or lockfile)\`n" + (($auditOut | Select-Object -Last 20) -join "\`n"))
+    }
+}
+# AGENTS.md sanctions TODO(.agents): as a placeholder, so it is exempt from the
+# residue check below -- but a branch may not ADD one and walk away.
+$stale = @(git diff -U0 $base HEAD 2>$null | Where-Object { $_ -match '^\\+' -and $_ -notmatch '^\\+\\+\\+' -and $_ -match 'TODO\\(\\.agents\\)' })
+if ($stale.Count -gt 0) {
+    [void]$gaps.Add("this branch adds a TODO(.agents) marker -- update the doc in the same change\`n" + (($stale | Select-Object -First 10) -join "\`n"))
+}
 # console.log is debug residue in a library and the PRODUCT'S STDOUT in a CLI.
 # Entry points are exempt: package.json "bin" targets, bin/, and *cli.* files.
 # See body_sh for the incident that prompted this.
@@ -1028,6 +1107,9 @@ exit 1
 # a tax rather than a check (ADR 0020: absence of evidence is not evidence).
 set -u
 FLOOR=95
+# The ratchet lives in the repo so it is reviewable, diffable and travels with
+# the branch that earned it -- not in a database the team cannot see.
+RATCHET="atlas-gate/coverage-floor"
 pm=npm
 [ -f pnpm-lock.yaml ] && pm=pnpm
 [ -f yarn.lock ] && pm=yarn
@@ -1062,7 +1144,32 @@ if [ "$below" = "yes" ]; then
     printf '   Report: %s\\n' "$summary"
     exit 1
 fi
-echo "gate-coverage: statements $pct% (floor $FLOOR%)"
+# Ratchet. A floor that never moves only ever protects the number you started
+# with: a branch that lifts coverage to 97% leaves the next one free to drop it
+# back to 95 with nothing to say. Raising the recorded floor to what the branch
+# actually achieved is what makes coverage a direction rather than a line.
+#
+# Rounded DOWN to a whole percent on purpose. Ratcheting to two decimals makes
+# the floor unmeetable by anyone whose test ordering shifts a single branch,
+# which turns a quality signal into a flake.
+new_floor="$(node -e "process.stdout.write(String(Math.floor(Number(process.argv[1]))))" "$pct")"
+if [ -f "$RATCHET" ]; then
+    recorded="$(cat "$RATCHET" 2>/dev/null | tr -dc '0-9')"
+else
+    recorded="$FLOOR"
+fi
+[ -n "$recorded" ] || recorded="$FLOOR"
+if [ "$new_floor" -gt "$recorded" ] 2>/dev/null; then
+    printf '%s\\n' "$new_floor" > "$RATCHET"
+    echo "gate-coverage: statements $pct% -- floor raised $recorded% -> $new_floor%"
+    exit 0
+fi
+if [ "$new_floor" -lt "$recorded" ] 2>/dev/null; then
+    printf 'gate-coverage:\\n1. statements %s%% is below the ratcheted floor of %s%%\\n' "$pct" "$recorded"
+    printf '   The floor was raised to %s%% by an earlier branch (%s). Coverage may not go backwards.\\n' "$recorded" "$RATCHET"
+    exit 1
+fi
+echo "gate-coverage: statements $pct% (floor $recorded%)"
 exit 0
 `,
         body_ps1: `# Coverage gate. $args[0] is the item id (unused).
@@ -1119,7 +1226,7 @@ exit 0
         id: 'gate-perf',
         name: 'Performance gate (declared perf script)',
         description:
-            "Gate node script. Scoped: skips immediately when the branch changed only docs and tests, because those cannot move latency. Otherwise runs the project's declared perf script and fails on a budget breach. A project with no perf script is skipped, not failed.",
+            "Gate node script. Scoped: skips immediately when the branch changed only docs and tests, because those cannot move latency. Otherwise runs the project's declared perf script, or falls back to Atlas's own probe (`.atlas/probes/perf-probe.mjs`), which starts the app via its `start` script and measures p95 on the routes the diff names against a 100ms API / 200ms page budget overridable in `atlas-gate/perf-budget.json`. Only a project with neither is skipped.",
         sort_order: 109,
         body_sh: `#!/usr/bin/env bash
 # Performance gate. $1 is the item id (unused).
@@ -1145,7 +1252,15 @@ for s in test:perf perf e2e:perf; do
     if has_script "$s"; then script="$s"; break; fi
 done
 if [ -z "$script" ]; then
-    echo "gate-perf: skipped - no perf script declared"
+    # No project perf tooling: use Atlas's own probe rather than skipping. That
+    # skip meant the 100ms/200ms budgets were enforced only where someone had
+    # already built perf tooling -- the projects least in need of them.
+    if [ -f .atlas/probes/perf-probe.mjs ]; then
+        ATLAS_DIFF="$(git diff -U0 "$base" HEAD 2>/dev/null || true)" ATLAS_PM="$pm" \\
+            node .atlas/probes/perf-probe.mjs
+        exit $?
+    fi
+    echo "gate-perf: skipped - no perf script declared and no probe staged"
     exit 0
 fi
 if ! out="$("$pm" run "$script" 2>&1)"; then
@@ -1198,7 +1313,7 @@ exit 0
         id: 'gate-visual',
         name: 'Visual gate (cross-viewport capture and diff)',
         description:
-            "Gate node script. Skips unless the branch touched UI files, then runs the project's declared visual script. A real diff against a committed baseline fails. When the only problem is that no baseline exists yet, it also prints ATLAS_GATE_NEEDS_REVIEW, which routes to the visual reviewer instead of being treated as breakage - a missing baseline is the normal state on a new screen.",
+            "Gate node script. Skips unless the branch touched UI files, then runs the project's declared visual script, or falls back to Atlas's own probe (`.atlas/probes/visual-probe.mjs`), which drives the project's Playwright across three viewports (desktop, iPad portrait, phone) and both colour schemes, with baselines in `atlas-gate/visual-baselines/`. A real diff against a committed baseline fails. When the only problem is that no baseline exists yet, it also prints ATLAS_GATE_NEEDS_REVIEW, which routes to the visual reviewer instead of being treated as breakage - a missing baseline is the normal state on a new screen.",
         sort_order: 110,
         body_sh: `#!/usr/bin/env bash
 # Visual gate. $1 is the item id (unused).
@@ -1225,7 +1340,14 @@ for s in test:visual e2e:visual visual; do
     if has_script "$s"; then script="$s"; break; fi
 done
 if [ -z "$script" ]; then
-    echo "gate-visual: skipped - no visual script declared"
+    # No project visual tooling: use Atlas's own probe. It drives the project's
+    # own Playwright across three viewports and both themes.
+    if [ -f .atlas/probes/visual-probe.mjs ]; then
+        ATLAS_DIFF="$(git diff -U0 "$base" HEAD 2>/dev/null || true)" ATLAS_PM="$pm" \\
+            node .atlas/probes/visual-probe.mjs
+        exit $?
+    fi
+    echo "gate-visual: skipped - no visual script declared and no probe staged"
     exit 0
 fi
 if out="$("$pm" run "$script" 2>&1)"; then

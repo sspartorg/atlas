@@ -9,7 +9,7 @@
   "description": "Curates a `skills/` folder under each Atlas-managed project \u2014 Confluence-style technical reference of the application. Picks 1-3 documentation gaps per run and commits new / refined `skills/<topic>.md` entries; the workflow opens the PR.",
   "designation": "Knowledge Base Curator",
   "accent_color": "#7C3AED",
-  "sort_order": 23,
+  "sort_order": 24,
   "glyph": "menu_book",
   "role_id": null,
   "status": "inactive",
