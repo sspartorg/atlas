@@ -541,7 +541,7 @@ exit 1
         id: 'coder-tests-green',
         name: 'Coder typecheck/lint/tests changed',
         description:
-            "Coder gate: the project's own typecheck and lint scripts (run only when package.json declares them, via the package manager its lockfile implies) must exit 0, and the diff against origin/main (or HEAD~10) must add or modify at least one test file (*.test|spec.{js,ts,jsx,tsx,mjs,cjs}, *_test.go, test_*.py). With `--run-tests` as the second argument (Code Reviewer) the declared `test` script must pass too.",
+            "Coder gate: the project's own typecheck and lint scripts (run only when package.json declares them, via the package manager its lockfile implies) must exit 0, and the diff against origin/main (or HEAD~10) must add or modify at least one test file (*.test|spec.{js,ts,jsx,tsx,mjs,cjs}, *_test.go, test_*.py) — unless the only changes are Task-wide artefacts (specs/, tests/qa/) or documentation (docs/, *.md), which ship no product code and so need no test. With `--run-tests` as the second argument (Code Reviewer) the declared `test` script must pass too.",
         sort_order: 103,
         body_sh: `#!/usr/bin/env bash
 # Coder gate. $1 is the item id (unused). $2 = --run-tests also runs the
@@ -574,7 +574,10 @@ changed_tests="$(printf '%s\\n' "$changed" | grep -E '(\\.(test|spec)\\.[cm]?[jt
 # tests/qa/<itemId>.csv. A repo that received ONLY those got no product code,
 # so demanding a changed test file there can never be satisfied and the run
 # parks at End forever. Require tests only where real work landed.
-changed_code="$(printf '%s\\n' "$changed" | grep -vE '^(specs/|tests/qa/)' | grep -v '^$' || true)"
+# Documentation is not product code either. A docs sub-task legitimately
+# ships a README change and no test; demanding one there forces an agent to
+# either invent a throwaway test or park. The golden set hit exactly that.
+changed_code="$(printf '%s\\n' "$changed" | grep -viE '^(specs/|tests/qa/|docs?/)|\\.(md|markdown|txt|rst|adoc)$' | grep -v '^$' || true)"
 if [ -n "$changed_code" ] && [ -z "$changed_tests" ]; then
     n=$((n+1))
     gaps="$gaps$n. no test files added/modified
@@ -880,7 +883,7 @@ exit 1
         id: 'gate-hygiene',
         name: 'Hygiene gate (lint, typecheck, debug residue)',
         description:
-            "Gate node script. Runs the project's declared lint and typecheck scripts and scans the branch diff for console.log, debugger and untracked TODO/FIXME markers. The marker match is word-bounded on both sides, so `TODO_FILE` and `HTTP_TODOS` are not residue; a tracked marker (TODO(ATL-12):) is allowed. format:check is deliberately excluded - a permanently red gate is one nobody reads. Nothing here is a judgement call, which is why it runs as a gate node with no LLM attached; the paired hygiene fixer is dispatched only on a non-zero exit.",
+            "Gate node script. Runs the project's declared lint and typecheck scripts and scans the branch diff for console.log, debugger and untracked TODO/FIXME markers. The marker match is word-bounded on both sides, so `TODO_FILE` and `HTTP_TODOS` are not residue; a tracked marker (TODO(ATL-12):) is allowed. `console.log` is checked only outside CLI entry points (package.json `bin`, `bin/`, `*cli.*`), where it is the product's stdout rather than debug residue. format:check is deliberately excluded - a permanently red gate is one nobody reads. Nothing here is a judgement call, which is why it runs as a gate node with no LLM attached; the paired hygiene fixer is dispatched only on a non-zero exit.",
         sort_order: 107,
         body_sh: `#!/usr/bin/env bash
 # Hygiene gate. $1 is the item id (unused).
@@ -910,19 +913,38 @@ $(printf '%s' "$out" | tail -20)
     fi
 done
 base="$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD~10)"
-# Bracket the plus rather than escaping it: in BSD grep's BRE, \`\\+\` is the
-# GNU one-or-more operator, so \`^\\+\` parses as "repeat ^" and errors out.
-added="$(git diff -U0 "$base" HEAD 2>/dev/null | grep -E '^[+]' | grep -vE '^[+][+][+]' || true)"
+changed="$(git diff --name-only "$base" HEAD 2>/dev/null || true)"
+# \`console.log\` is debug residue in a library and the PRODUCT'S STDOUT in a
+# CLI. Flagging it everywhere told a CLI project its own user-facing output was
+# residue; the golden set hit this and the fixer rightly refused to rewrite
+# spec-mandated output as \`process.stdout.write\` to appease a script. So the
+# check is skipped for entry points: anything package.json declares as \`bin\`,
+# anything under bin/, and *cli.* files.
+bins="$(node -e "const b=(require('./package.json').bin)||{};const v=typeof b==='string'?[b]:Object.values(b);process.stdout.write(v.map(p=>String(p).replace(/^[.][/]/,'')).join('\\n'))" 2>/dev/null || true)"
 # A bare TODO is residue; a tracked one (\`TODO(.agents):\`, \`TODO(ATL-12):\`)
-# is a deliberate, reviewable marker that AGENTS.md sanctions. Flag the first
-# and leave the second alone.
-#
-# Word-bounded on BOTH sides, which \`TODO[^(]\` was not: that flagged
-# \`TODO_FILE\` (an env var) and \`HTTP_TODOS\` (a fixture name) as residue.
-# On a todo app that is every other line, and the first live run duly spent a
-# fixer run renaming identifiers to appease it. \`XXX\` is gone for the same
-# reason -- too weak a signal to be worth its false positives.
-residue="$(printf '%s\\n' "$added" | grep -nE '(console\\.log\\(|debugger;|(^|[^A-Za-z0-9_])(TODO|FIXME)([^A-Za-z0-9_(]|$))' || true)"
+# is a deliberate, reviewable marker that AGENTS.md sanctions. Word-bounded on
+# BOTH sides, which \`TODO[^(]\` was not: that flagged \`TODO_FILE\` (an env var)
+# and \`HTTP_TODOS\` (a fixture) as residue. On a todo app that is every other
+# line. \`XXX\` is gone for the same reason -- too weak to be worth it.
+marker='debugger;|(^|[^A-Za-z0-9_])(TODO|FIXME)([^A-Za-z0-9_(]|$)'
+residue=""
+for f in $changed; do
+    adds="$(git diff -U0 "$base" HEAD -- "$f" 2>/dev/null | grep -E '^[+]' | grep -vE '^[+][+][+]' || true)"
+    [ -n "$adds" ] || continue
+    pat="$marker"
+    is_cli=0
+    case "$f" in
+        bin/*|*/bin/*|*cli.js|*cli.ts|*cli.mjs|*cli.cjs|*cli.jsx|*cli.tsx) is_cli=1 ;;
+    esac
+    if [ "$is_cli" -eq 0 ] && [ -n "$bins" ] && printf '%s\\n' "$bins" | grep -Fxq "$f"; then
+        is_cli=1
+    fi
+    [ "$is_cli" -eq 0 ] && pat="console\\.log\\(|$pat"
+    hits="$(printf '%s\\n' "$adds" | grep -E "$pat" || true)"
+    [ -n "$hits" ] && residue="$residue$f:
+$hits
+"
+done
 if [ -n "$residue" ]; then
     n=$((n+1))
     gaps="$gaps$n. debug/TODO residue in the diff:
@@ -958,11 +980,30 @@ foreach ($s in @('lint', 'typecheck')) {
 }
 $base = (git merge-base HEAD origin/main 2>$null)
 if ([string]::IsNullOrWhiteSpace($base)) { $base = 'HEAD~10' }
-$diff = git diff -U0 $base HEAD 2>$null
-$added = $diff | Where-Object { $_ -match '^\\+' -and $_ -notmatch '^\\+\\+\\+' }
+# console.log is debug residue in a library and the PRODUCT'S STDOUT in a CLI.
+# Entry points are exempt: package.json "bin" targets, bin/, and *cli.* files.
+# See body_sh for the incident that prompted this.
+$bins = @()
+try {
+    $pkg = Get-Content -Raw 'package.json' | ConvertFrom-Json
+    if ($pkg.bin -is [string]) { $bins = @($pkg.bin) }
+    elseif ($null -ne $pkg.bin) { $bins = @($pkg.bin.PSObject.Properties | ForEach-Object { $_.Value }) }
+    $bins = $bins | ForEach-Object { ($_ -replace '^\\./', '') }
+} catch { $bins = @() }
 # A bare TODO is residue; a tracked one (TODO(ATL-12):) is a deliberate marker.
 # Word-bounded on both sides -- see body_sh for why TODO[^(] was wrong.
-$residue = $added | Where-Object { $_ -match '(console\\.log\\(|debugger;|(^|[^A-Za-z0-9_])(TODO|FIXME)([^A-Za-z0-9_(]|$))' }
+$marker = 'debugger;|(^|[^A-Za-z0-9_])(TODO|FIXME)([^A-Za-z0-9_(]|$)'
+$residue = New-Object System.Collections.ArrayList
+foreach ($f in (git diff --name-only $base HEAD 2>$null)) {
+    if ([string]::IsNullOrWhiteSpace($f)) { continue }
+    $adds = git diff -U0 $base HEAD -- $f 2>$null | Where-Object { $_ -match '^\\+' -and $_ -notmatch '^\\+\\+\\+' }
+    if ($null -eq $adds -or @($adds).Count -eq 0) { continue }
+    $isCli = ($f -match '(^|/)bin/') -or ($f -match '(^|/)[^/]*cli[^/]*\\.[cm]?[jt]sx?$') -or ($bins -contains $f)
+    $pat = if ($isCli) { $marker } else { 'console\\.log\\(|' + $marker }
+    foreach ($line in @($adds)) {
+        if ($line -match $pat) { [void]$residue.Add("$($f): $line") }
+    }
+}
 if ($residue.Count -gt 0) {
     [void]$gaps.Add("debug/TODO residue in the diff:\`n" + (($residue | Select-Object -First 20) -join "\`n"))
 }

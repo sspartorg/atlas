@@ -1,21 +1,21 @@
 [
   {
-    "label": "Happy-path scenario exists and passes",
+    "label": "Happy-path scenario is specified for every acceptance criterion",
     "sort_order": 0,
     "required": true
   },
   {
-    "label": "At least 2 edge-case scenarios exist and pass",
+    "label": "At least 2 edge-case scenarios are specified",
     "sort_order": 1,
     "required": true
   },
   {
-    "label": "Scenarios use stable selectors (no nth-child / brittle CSS)",
+    "label": "Scenarios specify stable selectors (no nth-child / brittle CSS)",
     "sort_order": 2,
     "required": true
   },
   {
-    "label": "No explicit sleeps — only awaitable waits",
+    "label": "No scenario calls for an explicit sleep \u2014 only awaitable waits",
     "sort_order": 3,
     "required": true
   }

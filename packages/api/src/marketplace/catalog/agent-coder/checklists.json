@@ -5,7 +5,7 @@
     "required": true
   },
   {
-    "label": "At least one new unit test added; integration test added if surface dictates",
+    "label": "At least one new unit test added, unless the sub-task ships only documentation; integration test added if the surface dictates",
     "sort_order": 1,
     "required": true
   },
