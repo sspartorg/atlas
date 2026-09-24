@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "label": "Every claim cites the page it came from",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "Pricing or positioning stated as fact was read this run, not recalled",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "Competitors outside the configured scope are excluded",
+    "sort_order": 2,
+    "required": true
+  }
+]

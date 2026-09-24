@@ -220,6 +220,7 @@ describe('workflow CRUD', () => {
             'agent-coverage-fixer',
             'agent-doc-reviewer',
             'agent-doc-writer',
+            'agent-fix-reviewer',
             'agent-hygiene-fixer',
             'agent-perf-fixer',
             'agent-po-reviewer',

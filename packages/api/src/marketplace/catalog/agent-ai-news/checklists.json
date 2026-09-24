@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "label": "Every item cites a source URL that was actually fetched this run",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "Nothing older than the stated window is included",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "No item is reported whose source could not be read",
+    "sort_order": 2,
+    "required": true
+  }
+]

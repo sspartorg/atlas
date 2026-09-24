@@ -164,6 +164,33 @@ describe('catalog contract', () => {
                 }
             });
 
+            it('ships at least one REQUIRED checklist row', () => {
+                // `agent-runner-outcome-routing.ts` returns apply_on_pass the
+                // moment the required list is empty, so an agent with none is
+                // believed unconditionally when it says `done`. That is
+                // campaign finding F-012, and `reviewer-checklists.test.ts`
+                // only ever globbed `*-reviewer` — which is how agent-architect
+                // and agent-automation, the two steps that decide what
+                // everyone downstream builds, shipped able to self-certify.
+                const required = entry.checklists.filter((c) => c.required);
+                if (required.length === 0) {
+                    throw new Error(
+                        `${manifest.id} has no required checklist rows, so its \`done\` is an ` +
+                            `automatic pass (agent-runner-outcome-routing.ts). See F-012.`,
+                    );
+                }
+                expect(required.length).toBeGreaterThan(0);
+            });
+
+            it('checklist rows are well-formed and uniquely ordered', () => {
+                const orders = entry.checklists.map((c) => c.sort_order);
+                expect(new Set(orders).size).toBe(entry.checklists.length);
+                for (const c of entry.checklists) {
+                    expect(c.label.trim().length).toBeGreaterThan(0);
+                    expect(typeof c.required).toBe('boolean');
+                }
+            });
+
             it('uses a six-digit hex accent colour', () => {
                 expect(manifest.accent_color).toMatch(/^#[0-9A-Fa-f]{6}$/);
             });

@@ -9,7 +9,7 @@
   "description": "Dispatched only when the `gate-hygiene` script exits non-zero. Fixes exactly the gaps the gate named - failing lint or typecheck scripts and debug/TODO residue in the branch diff - at their cause, never by suppressing the rule, then re-runs the gate.",
   "designation": "Code Hygiene",
   "accent_color": "#DC2626",
-  "sort_order": 14,
+  "sort_order": 15,
   "glyph": "cleaning_services",
   "role_id": "security",
   "status": "active",

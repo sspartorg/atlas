@@ -9,7 +9,7 @@
   "description": "Weekly regulator-news scan scoped to your project_type + regions. Edit the prompt with your Atlas project name + project type + regions, then activate.",
   "designation": "Legal Scout",
   "accent_color": "#0EA5E9",
-  "sort_order": 22,
+  "sort_order": 23,
   "glyph": "gavel",
   "role_id": null,
   "status": "inactive",

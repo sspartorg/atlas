@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "label": "Every document the scaffold claims to create exists and is non-empty",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "Nothing outside the scaffold's own paths was modified",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "Each generated document describes THIS repository, not a generic template",
+    "sort_order": 2,
+    "required": true
+  }
+]

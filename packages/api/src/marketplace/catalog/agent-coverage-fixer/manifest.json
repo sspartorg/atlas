@@ -9,7 +9,7 @@
   "description": "Dispatched only when the `gate-coverage` script exits non-zero. Reads the coverage report to find what is genuinely uncovered in the branch's own diff and writes tests that would fail if the behaviour broke - never assertion-free tests, never a lowered floor.",
   "designation": "Test Coverage",
   "accent_color": "#0891B2",
-  "sort_order": 15,
+  "sort_order": 16,
   "glyph": "shield_with_heart",
   "role_id": "tester",
   "status": "active",

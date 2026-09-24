@@ -1,0 +1,32 @@
+[
+  {
+    "label": "Every gap in the gate's list was closed at its cause, not suppressed",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "No rule suppression added (eslint-disable, @ts-ignore, prettier-ignore, .skip, --no-verify)",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "No threshold, budget, tolerance or sample count was weakened to pass",
+    "sort_order": 2,
+    "required": true
+  },
+  {
+    "label": "Every test the fixer added has a stated reason it would go red if the behaviour broke",
+    "sort_order": 3,
+    "required": true
+  },
+  {
+    "label": "No file the gate did not name was modified",
+    "sort_order": 4,
+    "required": true
+  },
+  {
+    "label": "The fixer's summary matches what the diff actually does",
+    "sort_order": 5,
+    "required": true
+  }
+]

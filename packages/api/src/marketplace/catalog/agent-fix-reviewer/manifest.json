@@ -1,0 +1,22 @@
+{
+  "id": "agent-fix-reviewer",
+  "name": "Fix Reviewer",
+  "category": "software-dev",
+  "cli": "claude",
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "framework": "review",
+  "description": "Runs after a gate fixer and before its gate re-runs. A gate reports whether its script passes; this agent answers what a script cannot \u2014 whether the fixer closed the gap at its cause or defeated the check with a suppression, an assertion-free test, a widened budget or a blessed baseline nobody looked at.",
+  "designation": "Gate Fix - Reviewer",
+  "accent_color": "#9333EA",
+  "sort_order": 13,
+  "glyph": "fact_check",
+  "role_id": "security",
+  "status": "active",
+  "kind_slug": "custom",
+  "settings_json": {},
+  "memory_cadence": 1,
+  "summary": "Checks whether a gate fixer fixed the cause or gamed the check.",
+  "version": 1,
+  "published_at": "2026-09-24T00:00:00Z"
+}

@@ -1,1 +1,27 @@
-[]
+[
+  {
+    "label": "Every `automation-yes` row in the CSV has a real test that executes the behaviour it names",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "The full declared test suite runs green after the additions",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "No test asserts only that a call did not throw; each has a specific reason it would go red",
+    "sort_order": 2,
+    "required": true
+  },
+  {
+    "label": "No `.skip` / `xit` / `--no-verify`, and no sleeps where an awaitable wait exists",
+    "sort_order": 3,
+    "required": true
+  },
+  {
+    "label": "Commits carry the `Refs: <itemId>` trailer",
+    "sort_order": 4,
+    "required": true
+  }
+]

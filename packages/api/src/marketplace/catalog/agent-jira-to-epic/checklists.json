@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "label": "Every imported issue is deduplicated against an existing Task before creating one",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "Each created Task records the source key so the link back is traceable",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "No issue outside the configured JQL scope was read or written",
+    "sort_order": 2,
+    "required": true
+  }
+]
