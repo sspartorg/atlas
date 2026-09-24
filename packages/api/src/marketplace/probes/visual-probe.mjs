@@ -49,6 +49,29 @@ function resolves(spec) {
     return r.status === 0;
 }
 
+/**
+ * The engines actually installed here.
+ *
+ * "Cross-browser" means more than one rendering engine, and the three differ
+ * in exactly the ways this gate is looking for: WebKit and Gecko disagree with
+ * Blink about flexbox min-size, scrollbar gutters and font metrics, which is
+ * where overflow on a narrow viewport usually comes from. But asking for an
+ * engine that is not installed fails the whole run, so the probe checks first
+ * and reports which engines it used — one engine's pass must not read as
+ * cross-browser coverage.
+ */
+function installedEngines() {
+    const probe = `const pw = require('@playwright/test'); const { existsSync } = require('fs');
+const out = [];
+for (const n of ['chromium', 'webkit', 'firefox']) {
+    try { if (existsSync(pw[n].executablePath())) out.push(n); } catch {}
+}
+process.stdout.write(out.join(','));`;
+    const r = spawnSync(process.execPath, ['-e', probe], { encoding: 'utf8' });
+    const found = (r.stdout ?? '').split(',').filter(Boolean);
+    return found.length > 0 ? found : ['chromium'];
+}
+
 /** Page routes only — an API route has nothing to look at. */
 function touchedPageRoutes(diff) {
     const routes = new Set();
@@ -72,6 +95,9 @@ function specSource(routes, port) {
     for (const route of routes) {
         for (const vp of VIEWPORTS) {
             for (const theme of THEMES) {
+                // The engine is NOT in the slug: Playwright already namespaces
+                // a snapshot by project, and {projectName} is in the path
+                // template below. Putting it in both would nest it twice.
                 const slug = `${route.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'root'}--${vp.name}--${theme}`;
                 cases.push(`
 test(${JSON.stringify(slug)}, async ({ page }) => {
@@ -104,13 +130,15 @@ function main() {
 
     // Baselines live in the repo so they are reviewable and travel with the
     // branch that blessed them, exactly like the coverage ratchet.
+    const engines = installedEngines();
     const config = join(dir, 'atlas-visual.config.ts');
     writeFileSync(
         config,
-        `import { defineConfig } from '@playwright/test';
+        `import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
     testDir: ${JSON.stringify(dir)},
-    snapshotPathTemplate: ${JSON.stringify(join(process.cwd(), '.atlas/visual-baselines/{arg}{ext}'))},
+    projects: [${engines.map((e) => `{ name: ${JSON.stringify(e)}, use: { ...devices[${JSON.stringify(e === 'chromium' ? 'Desktop Chrome' : e === 'webkit' ? 'Desktop Safari' : 'Desktop Firefox')}] } }`).join(', ')}],
+    snapshotPathTemplate: ${JSON.stringify(join(process.cwd(), '.atlas/visual-baselines/{projectName}/{arg}{ext}'))},
     fullyParallel: false,
     workers: 1,
     retries: 0,
@@ -133,8 +161,13 @@ export default defineConfig({
     });
     const out = `${run.stdout ?? ''}${run.stderr ?? ''}`;
 
+    const coverage = `${routes.length} route(s) x ${VIEWPORTS.length} viewports x ${THEMES.length} themes x ${engines.length} engine(s) (${engines.join(', ')})`;
     if (run.status === 0) {
-        console.log(`gate-visual: ${routes.length} route(s) x ${VIEWPORTS.length} viewports x ${THEMES.length} themes match their baselines`);
+        console.log(`gate-visual: ${coverage} match their baselines`);
+        if (engines.length === 1) {
+            console.log(`   Only ${engines[0]} is installed, so this is not cross-browser coverage.`);
+            console.log('   `npx playwright install webkit firefox` to widen it.');
+        }
         process.exit(0);
     }
 
@@ -162,6 +195,7 @@ export default defineConfig({
 
     console.log('gate-visual:');
     console.log('1. visual diff against the committed baseline');
+    console.log(`   Checked: ${coverage}.`);
     console.log(`   Viewports: ${VIEWPORTS.map((v) => `${v.name} ${v.width}x${v.height}`).join(', ')}; themes: ${THEMES.join(', ')}.`);
     console.log('   Fix the cause (a fixed width that should be a max-width), not the tolerance.');
     console.log(out.split('\n').slice(-40).join('\n'));

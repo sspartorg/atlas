@@ -142,6 +142,13 @@ what they cannot do honestly: no `start` script, no browser, no route literal
 in the diff, an app that never opens its port — each prints why and exits 0,
 per ADR 0020.
 
+`gate-visual` runs every rendering engine installed on the host, not just
+Chromium. WebKit and Gecko disagree with Blink about flexbox min-size,
+scrollbar gutters and font metrics, which is where overflow on a narrow
+viewport usually comes from — one engine is not cross-browser coverage, and
+the probe says which engines it actually used rather than letting a single-
+engine pass read as more than it is.
+
 `gate-coverage` also ratchets: on a pass it writes the floor back to
 `.atlas/coverage-floor`, rounded down to a whole percent, so coverage a branch
 earned cannot be spent by the next one.

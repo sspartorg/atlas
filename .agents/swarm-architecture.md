@@ -70,7 +70,7 @@ A `gate` step runs a `guardrail_scripts` body and routes on its exit code — no
 | `agent-hygiene-fixer` | `security` | `gate-hygiene` | Declared lint / typecheck / format / knip / secretlint failed, the diff carries `console.log` / `debugger` / an untracked TODO / a stale `TODO(.agents)` marker, or a touched manifest brought a high+ advisory |
 | `agent-coverage-fixer` | `tester` | `gate-coverage` | Statements fell below the floor, **or** below the branch's own ratcheted number |
 | `agent-perf-fixer` | `devops` | `gate-perf` | A touched route's p95 breached its budget — 100ms for an API route, 200ms for a page |
-| `agent-visual-reviewer` | `designer` | `gate-visual` | A diff against a committed baseline, or `ATLAS_GATE_NEEDS_REVIEW` — captured with no baseline to compare against |
+| `agent-visual-reviewer` | `designer` | `gate-visual` | A diff against a committed baseline on any installed engine, or `ATLAS_GATE_NEEDS_REVIEW` — captured with no baseline to compare against |
 
 The visual one is an agent rather than a script for a reason the others are not: a screen with no baseline has nothing to diff, so the judgement is "does this look right", which needs eyes.
 
