@@ -107,6 +107,37 @@ reported green on red suites. A gate verdict is an exit code, and migration 011
 (`run_gate_results`) is what makes it queryable instead of prose buried in
 `workflow_runs.park_reason`.
 
+## What the v4 slice found (2026-09-24)
+
+Three fixtures on delivery v4 — `frontend-only`, `perf-regression`,
+`ambiguous-must-escalate` — chosen to exercise what PRs #45/#46 changed:
+**56 dispatches, $27.05, 70 minutes, 0 of 14 gate verdicts red.** All three
+reached their expected terminal state. Scorecard:
+`evals/results/2026-09-24T09-40-23-368Z-v4-slice.md`.
+
+1. **The install was on v2 and nothing said so.** 17 agents at
+   `marketplace_pulled_version: 1`, `upgrade_available: 0`, because
+   `upgrade_available` is `installed_version < catalogVersion` and no manifest
+   version had been bumped in three PRs. The run would have measured v1 prompts
+   and called them v4. Fixed in #47 (`catalog.lock.json` + contract test).
+   **Before any eval run, check the install is actually on the version you mean
+   to measure.**
+
+2. **The Release Reviewer's v4 routing closed an XSS without waking the Owner.**
+   It overruled the Architect's "pre-existing and unchanged, out of scope" on an
+   unescaped `${t.id}`, on the grounds that the branch added the route that made
+   it reachable — filed the fix sub-task itself, and the chain built, tested and
+   re-verified it. Under v2 that parked.
+
+3. **`gate-visual` skipped `frontend-only`**, the fixture that exists to
+   exercise it, because its UI detection was an extension list and the sandbox
+   is a server-rendered Express app. Every server-rendered app had no visual
+   checking at all. Now also triggered by markup added in the diff.
+
+**`pass@1` mis-scores a correct rejection** — `agent-release-reviewer` reads 50%
+for the best call in the run. For reviewers, read `gate_catch` and read what the
+rejections actually were.
+
 ## What the first full run found (2026-09-24)
 
 All 12 fixtures, on delivery v2: **203 dispatches, $94.23, 245 minutes, 2 of 49

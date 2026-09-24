@@ -628,3 +628,70 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
         });
     });
 });
+
+// The golden set's `frontend-only` fixture is the one that exists to exercise
+// `gate-visual`, and on the first v4 run the gate SKIPPED it: the sandbox is a
+// server-rendered Express app that builds its HTML in `src/render.js`, and the
+// detection was an extension list — tsx|jsx|vue|svelte|css|scss|less|html — that
+// no `.js` file can ever match. Every server-rendered app (Express templates,
+// EJS, Pug, Go templates, Rails, PHP) therefore had no visual checking at all,
+// silently, while the gate reported a pass.
+describe.skipIf(process.platform === 'win32')('gate-visual decides what counts as a UI change', () => {
+    function repoWithChange(files: Record<string, string>): string {
+        const dir = mkdtempSync(join(tmpdir(), 'visual-gate-'));
+        const sh = (cmd: string) => execSync(cmd, { cwd: dir, stdio: 'pipe' });
+        sh('git init -q -b main && git config user.email t@t && git config user.name t');
+        writeFileSync(join(dir, 'package.json'), '{"scripts":{}}');
+        writeFileSync(join(dir, 'seed.txt'), 'base\n');
+        sh('git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD');
+        for (const [name, body] of Object.entries(files)) {
+            mkdirSync(join(dir, name, '..'), { recursive: true });
+            writeFileSync(join(dir, name), body);
+        }
+        sh('git add -A && git commit -qm change');
+        return dir;
+    }
+
+    function run(dir: string): string {
+        const body = GUARDRAIL_SCRIPT_SEEDS.find((x) => x.id === 'gate-visual')?.body_sh ?? '';
+        writeFileSync(join(dir, 'gate.sh'), body);
+        try {
+            return execSync('bash gate.sh ATL-1', { cwd: dir, encoding: 'utf8', stdio: 'pipe' });
+        } catch (err) {
+            return String((err as { stdout?: Buffer }).stdout ?? '');
+        }
+    }
+
+    it('runs for server-rendered markup inside a .js file', () => {
+        const out = run(
+            repoWithChange({
+                'src/render.js': "export const row = (t) => `<li class=\"todo\"><span>${t.title}</span></li>`;\n",
+            }),
+        );
+        expect(out, 'a server-rendered page is a UI change').not.toContain('skipped - no UI files changed');
+    });
+
+    it('runs for a style rule added in any file', () => {
+        const out = run(
+            repoWithChange({ 'src/page.js': "const css = 'body{margin:0}'; const el = '<div style=\"width:300px\">x</div>';\n" }),
+        );
+        expect(out).not.toContain('skipped - no UI files changed');
+    });
+
+    it('still runs on a plain .css file', () => {
+        const out = run(repoWithChange({ 'styles/app.css': '.todo { color: red; }\n' }));
+        expect(out).not.toContain('skipped - no UI files changed');
+    });
+
+    // The other half: widening the trigger must not make every backend change
+    // pay for starting the app and driving three viewports in two themes.
+    it('skips a backend change that renders nothing', () => {
+        const out = run(
+            repoWithChange({
+                'src/cache.js': 'export function load(f) { return JSON.parse(readFileSync(f)); }\n',
+                'test/cache.test.js': "it('caches', () => { expect(load(f)).toEqual([]); });\n",
+            }),
+        );
+        expect(out).toContain('skipped - no UI files changed and no markup added');
+    });
+});
