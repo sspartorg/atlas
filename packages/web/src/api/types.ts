@@ -325,3 +325,25 @@ export interface AnalyticsTaskChildrenResponse {
     page: number;
     limit: number;
 }
+
+/**
+ * One deterministic gate verdict on a run's timeline.
+ *
+ * `skipped` is deliberately distinct from `pass`. Both exit 0 and both take the
+ * pass edge, and they mean opposite things: `pass` is "I checked and it is
+ * fine", `skipped` is "I had nothing I could check". Collapsing them is how a
+ * red suite reached the end of a run behind four green rows, and how
+ * `gate-visual` reported a pass on the one golden-set fixture built to
+ * exercise it.
+ */
+export interface GateResultRow {
+    id: string;
+    node_id: string | null;
+    repo_id: string | null;
+    repo_name: string | null;
+    script_id: string;
+    verdict: 'pass' | 'fail' | 'skipped' | 'unavailable' | 'needs_review';
+    exit_code: number | null;
+    output_tail: string | null;
+    created_at: string;
+}

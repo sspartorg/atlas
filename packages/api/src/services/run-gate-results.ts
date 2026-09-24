@@ -49,3 +49,57 @@ export async function recordGateResult(input: RecordGateResultInput): Promise<vo
         console.warn(`[run-gate-results] could not record ${input.script_id}:`, err);
     }
 }
+
+/** One gate verdict as the run timeline shows it. */
+export interface RunGateResultRow {
+    id: string;
+    node_id: string | null;
+    repo_id: string | null;
+    repo_name: string | null;
+    script_id: string;
+    verdict: GateVerdict;
+    exit_code: number | null;
+    output_tail: string | null;
+    created_at: string;
+}
+
+/**
+ * Every gate verdict for a run, oldest first.
+ *
+ * Written since migration 011 and read, until now, by nothing but the eval
+ * scorer — so the Owner could not see why a gate passed without querying
+ * Postgres. That is how `gate-visual` reported a pass on the one golden-set
+ * fixture built to exercise it: the row said `skipped - no UI files changed`
+ * and nothing surfaced the row.
+ */
+export async function listGateResultsForRun(runId: string): Promise<RunGateResultRow[]> {
+    const rows = await db
+        .selectFrom('run_gate_results as g')
+        .leftJoin('project_repos as r', 'r.id', 'g.repo_id')
+        .select([
+            'g.id',
+            'g.node_id',
+            'g.repo_id',
+            'r.name as repo_name',
+            'g.script_id',
+            'g.verdict',
+            'g.exit_code',
+            'g.output_tail',
+            'g.created_at',
+        ])
+        .where('g.workflow_run_id', '=', runId)
+        .orderBy('g.created_at', 'asc')
+        .execute();
+    return rows.map((r) => ({
+        id: r.id,
+        node_id: r.node_id ?? null,
+        repo_id: r.repo_id ?? null,
+        repo_name: r.repo_name ?? null,
+        script_id: r.script_id,
+        verdict: r.verdict as GateVerdict,
+        exit_code: r.exit_code ?? null,
+        output_tail: r.output_tail ?? null,
+        // pg hands back a Date for timestamptz; the API speaks ISO strings.
+        created_at: new Date(r.created_at as unknown as string).toISOString(),
+    }));
+}

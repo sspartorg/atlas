@@ -148,6 +148,14 @@ export function useWorkflowRuns(workflowId: string) {
     });
 }
 
+export function useWorkflowRunGateResults(runId: string) {
+    return useQuery({
+        queryKey: ['workflow-run-gate-results', runId],
+        queryFn: () => api.workflowRuns.gateResults(runId),
+        enabled: Boolean(runId),
+    });
+}
+
 export function useWorkflowRun(runId: string) {
     return useQuery({
         queryKey: ['workflow-run', runId],

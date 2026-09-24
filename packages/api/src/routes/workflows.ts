@@ -17,6 +17,7 @@ import {
     startWorkflowRun,
 } from '../services/workflow-engine.js';
 import { DependenciesNotReadyError } from '../services/dependency-guard.js';
+import { listGateResultsForRun } from '../services/run-gate-results.js';
 import {
     exportTemplateBundle,
     exportWorkflowBundle,
@@ -198,6 +199,15 @@ export async function workflowsRoutes(app: FastifyInstance) {
         const run = await workflowsService.getRun(id);
         if (!run) throw new ApiError('not_found', 'Workflow run not found', 404);
         return reply.send(run);
+    });
+
+    // The gate verdicts for a run. Gate nodes spawn no agent, so they have no
+    // `agent_runs` row and were invisible everywhere except the eval scorer —
+    // which is how a `skipped` gate passed for a verified one on the golden set.
+    app.get('/api/workflow-runs/:id/gate-results', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        if (!(await workflowsService.getRun(id))) throw new ApiError('not_found', 'Workflow run not found', 404);
+        return reply.send(await listGateResultsForRun(id));
     });
 
     app.post('/api/workflow-runs/:id/stop', { preHandler: requireMcpToken }, async (req, reply) => {

@@ -22,7 +22,7 @@
 //   pnpm eval:score -- --since 2026-09-01 --label before-prompt-diet
 //   pnpm eval:score -- --run <workflowRunId> --run <workflowRunId>
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from '../db/kysely-client.js';
@@ -34,6 +34,7 @@ import type { IRunOutcome } from '@atlas/shared';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..');
 const DEFAULT_OUT = join(REPO_ROOT, 'evals', 'results');
+const GOLDEN_DIR = join(REPO_ROOT, 'evals', 'golden');
 
 const DEFAULT_WINDOW_DAYS = 30;
 
@@ -65,6 +66,78 @@ function parseArgs(argv: string[]): Args {
         args.since = d.toISOString();
     }
     return args;
+}
+
+
+/**
+ * A fixture's `expect` block, checked.
+ *
+ * `eval-run.ts` has declared `terminal_status`, `min_sub_tasks` and
+ * `requires_pr` since the harness shipped and never read any of them, so
+ * "the fixture passed" meant a human comparing a status column to a JSON file
+ * by eye — the self-reported verdict ADR 0020 exists to remove, reintroduced
+ * one layer up in the tooling.
+ *
+ * Fixtures are matched to runs by the Task title, because `eval-run.ts` creates
+ * each Task with `title: fixture.title` verbatim. A run whose title matches no
+ * fixture is not scored — it is somebody else's run, not a failure.
+ */
+export interface FixtureExpectation {
+    terminal_status?: string[];
+    min_sub_tasks?: number;
+    requires_pr?: boolean;
+}
+
+export interface Fixture {
+    id: string;
+    title: string;
+    expect?: FixtureExpectation;
+}
+
+function loadFixtures(): Map<string, Fixture> {
+    const byTitle = new Map<string, Fixture>();
+    if (!existsSync(GOLDEN_DIR)) return byTitle;
+    for (const file of readdirSync(GOLDEN_DIR).filter((f) => f.endsWith('.json'))) {
+        try {
+            const fx = JSON.parse(readFileSync(join(GOLDEN_DIR, file), 'utf8')) as Fixture;
+            if (fx.title) byTitle.set(fx.title, fx);
+        } catch {
+            // A malformed fixture is eval-run's problem to report, not ours.
+        }
+    }
+    return byTitle;
+}
+
+export interface FixtureVerdict {
+    fixture_id: string;
+    passed: boolean;
+    failures: string[];
+}
+
+export function checkExpectation(
+    fx: Fixture,
+    run: { status: string; pr_urls: unknown },
+    subTaskCount: number,
+): FixtureVerdict {
+    const exp = fx.expect ?? {};
+    const failures: string[] = [];
+    if (exp.terminal_status && !exp.terminal_status.includes(run.status)) {
+        failures.push(`terminal_status: expected ${exp.terminal_status.join(' or ')}, got ${run.status}`);
+    }
+    if (exp.min_sub_tasks != null && subTaskCount < exp.min_sub_tasks) {
+        failures.push(`min_sub_tasks: expected at least ${exp.min_sub_tasks}, got ${subTaskCount}`);
+    }
+    const prCount = Array.isArray(run.pr_urls) ? run.pr_urls.length : 0;
+    if (exp.requires_pr === true && prCount === 0) {
+        failures.push('requires_pr: expected a pull request, none was opened');
+    }
+    // A fixture that must NOT produce a PR fails just as hard when it does —
+    // `ambiguous-must-escalate` inventing a feature is the failure it exists
+    // to catch.
+    if (exp.requires_pr === false && prCount > 0) {
+        failures.push(`requires_pr is false but ${prCount} pull request(s) were opened`);
+    }
+    return { fixture_id: fx.id, passed: failures.length === 0, failures };
 }
 
 interface AgentScore {
@@ -290,9 +363,33 @@ async function main(): Promise<void> {
         list.push(r);
         stepsByRun.set(tree, list);
     }
+    // Fixture assertions (ATL-138). Titles and sub-task counts come from the
+    // same DB the rest of the scorecard reads; nothing is taken on trust.
+    const fixturesByTitle = loadFixtures();
+    const itemIds = roots.map((r) => r.item_id).filter((v): v is string => typeof v === 'string');
+    const items = itemIds.length
+        ? await db.selectFrom('items').select(['id', 'title']).where('id', 'in', itemIds).execute()
+        : [];
+    const titleById = new Map(items.map((i) => [i.id, i.title as string]));
+    const subCounts = itemIds.length
+        ? await db
+              .selectFrom('items')
+              .select(['parent_id', (eb) => eb.fn.countAll().as('n')])
+              .where('parent_id', 'in', itemIds)
+              .groupBy('parent_id')
+              .execute()
+        : [];
+    const subCountById = new Map(subCounts.map((r) => [r.parent_id as string, Number(r.n)]));
+
     const runReport = roots.map((run) => {
         const mine = stepsByRun.get(run.id) ?? [];
+        const title = run.item_id ? titleById.get(run.item_id) : undefined;
+        const fixture = title ? fixturesByTitle.get(title) : undefined;
+        const fixtureVerdict = fixture
+            ? checkExpectation(fixture, run as never, run.item_id ? (subCountById.get(run.item_id) ?? 0) : 0)
+            : null;
         return {
+            fixture: fixtureVerdict,
             id: run.id,
             workflow_id: run.workflow_id,
             item_id: run.item_id,
@@ -321,6 +418,12 @@ async function main(): Promise<void> {
         wall_clock_s: Math.round(agents.reduce((n, a) => n + a.wall_clock_s, 0)),
         gate_results: gateRows.length,
         gate_failures: gateRows.filter((g) => g.verdict === 'fail').length,
+        // A skip is not a pass (migration 013). Counting them separately is the
+        // difference between "91 gates were green" and "91 gates exited 0, and
+        // this many of them could not run".
+        gate_skipped: gateRows.filter((g) => g.verdict === 'skipped').length,
+        fixtures_checked: runReport.filter((r) => r.fixture).length,
+        fixtures_failed: runReport.filter((r) => r.fixture && !r.fixture.passed).length,
     };
 
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -357,9 +460,41 @@ function renderScorecard(
     lines.push(
         `${totals['runs']} workflow run(s) · ${totals['dispatches']} agent dispatch(es) · ` +
             `$${totals['cost_usd']} · ${Math.round((totals['wall_clock_s'] ?? 0) / 60)} min of agent time · ` +
-            `${totals['gate_failures']}/${totals['gate_results']} gate verdicts red`,
+            `${totals['gate_failures']}/${totals['gate_results']} gate verdicts red` +
+            (totals['gate_skipped'] ? `, ${totals['gate_skipped']} skipped` : ''),
         '',
     );
+
+    if (totals['fixtures_checked']) {
+        const failed = totals['fixtures_failed'] ?? 0;
+        lines.push(
+            `**Fixtures: ${(totals['fixtures_checked'] ?? 0) - failed} passed, ${failed} failed.** ` +
+                'Checked against each fixture\'s `expect` block.',
+            '',
+        );
+        const bad = runs.filter((r) => {
+            const f = r['fixture'] as { passed: boolean } | null;
+            return f && !f.passed;
+        });
+        if (bad.length) {
+            lines.push('| Fixture | Item | What did not hold |', '|---|---|---|');
+            for (const r of bad) {
+                const f = r['fixture'] as { fixture_id: string; failures: string[] };
+                lines.push(`| \`${f.fixture_id}\` | ${r['item_id'] ?? '—'} | ${f.failures.join('; ')} |`);
+            }
+            lines.push('');
+        }
+    }
+
+    if (totals['gate_skipped']) {
+        lines.push(
+            `> **${totals['gate_skipped']} of ${totals['gate_results']} gate verdicts were \`skipped\`** — the script ` +
+                'exited 0 having found nothing it could check (no coverage script, no browser, no UI files in the ' +
+                'diff). A skip takes the pass edge and is **not** a pass: read the red count alongside how many ' +
+                'gates could run at all.',
+            '',
+        );
+    }
 
     lines.push('## Per agent', '');
     lines.push('| Agent | Steps | pass@1 | Loops | Escalations | Gate catches | $ | $/step | Cache read | Model(s) | Effort(s) |');
@@ -387,13 +522,15 @@ function renderScorecard(
     );
 
     lines.push('## Per run', '');
-    lines.push('| Run | Item | Status | Dispatches | $ | Wall clock | Loops | Gates |');
-    lines.push('|---|---|---|--:|--:|--:|--:|---|');
+    lines.push('| Run | Item | Fixture | Status | Dispatches | $ | Wall clock | Loops | Gates |');
+    lines.push('|---|---|---|---|--:|--:|--:|--:|---|');
     for (const r of runs) {
         const secs = Number(r['wall_clock_s'] ?? 0);
         const gates = (r['gates'] as Array<{ script_id: string; verdict: string }>) ?? [];
+        const f = r['fixture'] as { fixture_id: string; passed: boolean } | null;
+        const fixtureCell = f ? `${f.passed ? 'pass' : '**FAIL**'} \`${f.fixture_id}\`` : '—';
         lines.push(
-            `| \`${String(r['id']).slice(0, 8)}\` | ${r['item_id'] ?? '—'} | ${r['status']} | ` +
+            `| \`${String(r['id']).slice(0, 8)}\` | ${r['item_id'] ?? '—'} | ${fixtureCell} | ${r['status']} | ` +
                 `${r['dispatches']} | ${r['cost_usd']} | ${Math.round(secs / 60)}m | ${r['loop_count']} | ` +
                 `${gates.map((g) => `${g.script_id}:${g.verdict}`).join(', ') || '—'} |`,
         );
