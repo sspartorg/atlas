@@ -93,6 +93,52 @@ jobs:
       # and pass, so this job can enforce them. Same minutes, one more gate.
       - run: pnpm -F @atlas/api test:coverage
 
+  powershell:
+    name: powershell guardrails (windows)
+    # The Windows half of every guardrail script, actually executed.
+    #
+    # Until this job existed no `body_ps1` had ever been run by a test: there
+    # is no PowerShell on the dev host and every other job is Linux, so the
+    # Windows side shipped verified by string contract alone. PR #45 found
+    # `gate-hygiene`'s ps1 running two checks out of nine that way, caught only
+    # because a human read it; running them found two more.
+    #
+    # `windows-latest` rather than ubuntu-with-pwsh on purpose. The point is the
+    # platform customers actually run on — path separators, line endings and
+    # `npm.cmd` shims included — not just the interpreter.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # A dedicated config with no Postgres globalSetup. These tests need no
+      # database -- they read `GUARDRAIL_SCRIPT_SEEDS` from source and run the
+      # bodies against throwaway git repos -- but `vitest.config.ts` stands one
+      # up for every api test, and on the first Windows run that killed the job
+      # with ECONNREFUSED before a single test was discovered.
+      - name: run the PowerShell guardrail bodies, and prove they were not skipped
+        shell: pwsh
+        run: |
+          # The suite skips itself where PowerShell is absent (ADR 0020: a
+          # missing interpreter is absence of evidence). On THIS job that would
+          # mean the job proves nothing, so read the count and fail on a
+          # silent skip.
+          $json = pnpm -F @atlas/api exec vitest run --config vitest.powershell.config.ts --reporter=json 2>&1 | Out-String
+          Write-Output $json
+          if ($json -notmatch '"numPassedTests":\s*([0-9]+)') { throw 'could not read the test count' }
+          $passed = [int]$Matches[1]
+          if ($json -match '"numFailedTests":\s*([0-9]+)' -and [int]$Matches[1] -gt 0) {
+              throw "$($Matches[1]) PowerShell cases failed"
+          }
+          if ($passed -lt 5) { throw "only $passed PowerShell cases ran - is pwsh missing?" }
+          Write-Output "$passed PowerShell cases ran"
+
   e2e:
     name: e2e (chromium + mobile + ipad)
     # Most expensive job: Postgres + a Chromium download + 3 viewport
