@@ -107,6 +107,43 @@ reported green on red suites. A gate verdict is an exit code, and migration 011
 (`run_gate_results`) is what makes it queryable instead of prose buried in
 `workflow_runs.park_reason`.
 
+## The full set on v4 (2026-09-24) — the before/after
+
+All 12 fixtures, delivery v4: **257 dispatches, $129.30, 327 minutes, 1 of 91
+gate verdicts red.** Every fixture met its `expect` block. Scorecard:
+`evals/results/2026-09-24T12-13-49-520Z-v4-full-12.md`.
+
+| | v1/v2 | v4 |
+|---|---|---|
+| Dispatches | 203 | 257 |
+| Cost | $94.23 | $129.30 |
+| Ran to a PR | 6 | **11** |
+| Parked on a defect | **5** | **0** |
+| Cost per delivered PR | $15.71 | **$11.75** |
+
+v4 costs 37% more per run and delivers 83% more PRs, so a merge-ready PR got a
+quarter cheaper. The five v2 runs that parked on defects were valuable as
+findings and worthless as delivery.
+
+**Read "1 of 91 red" with ATL-149 in hand.** On the sandbox repos `gate-coverage`
+skips (no coverage script declared) and `gate-visual` skips (`@playwright/test`
+not installed), and a skip and a pass are the same exit code. Two of four gates
+cannot run, so the chain verified less than the number implies. The one time a
+red suite survived to the end of a run, the **Release Reviewer** caught it, not
+a gate.
+
+**The Release Reviewer is 27% of the bill** ($35.34, $3.21/step) and earned it:
+four rejections, none of which woke the Owner, including an unescaped value
+reaching rendered HTML that the Architect's spec had ruled out of scope. Both of
+its best catches were cross-sub-task defects that no per-sub-task reviewer could
+have seen.
+
+**The harness cannot score a fixture's actual trap.** `expect` checks terminal
+status, sub-task count and PR existence. It cannot check that `contract-split`
+split the contract — that was verified out-of-band by reading the `depends_on`
+edges (three fixtures produced correct ones unprompted). ATL-138 should take a
+per-fixture assertion hook rather than three fixed fields.
+
 ## What the v4 slice found (2026-09-24)
 
 Three fixtures on delivery v4 — `frontend-only`, `perf-regression`,
