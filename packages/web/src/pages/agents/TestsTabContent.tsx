@@ -13,6 +13,7 @@ import {
     useAgentCostEstimate,
     useAgentTestBatches,
     useAgentTests,
+    useStarterTests,
     useCreateAgentTest,
     useDeleteAgentTest,
     useRunAgentTest,
@@ -20,7 +21,7 @@ import {
 import { useProjects } from '../../hooks/useProjects.js';
 import { useProjectRepos } from '../../hooks/useProjectRepos.js';
 import { useToast } from '../../hooks/useToast.js';
-import type { AgentTest, AgentTestBatch, AgentTestRun } from '../../api/types.js';
+import type { AgentTest, AgentTestBatch, AgentTestRun, StarterTest } from '../../api/types.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { formatCostUsd } from '../../utils/formatCost.js';
 import { relativeTime } from '../../utils/time.js';
@@ -304,8 +305,67 @@ function TestCard({ test, agentId }: { test: AgentTest; agentId: string }) {
     );
 }
 
+/**
+ * The tests this agent shipped with (ADR 0023 phase 4).
+ *
+ * Templates rather than rows: `agent_tests` needs a project and a repo, and a
+ * catalog bundle has neither. Adopting one writes an ordinary test that is
+ * then the Owner's, which is also why a bundle upgrade can never clobber it.
+ *
+ * Hidden once every one of them has been adopted — a permanent strip of
+ * things you have already done is noise.
+ */
+function StarterTests({
+    starters,
+    existing,
+    onAdopt,
+}: {
+    starters: StarterTest[];
+    existing: AgentTest[];
+    onAdopt: (t: StarterTest) => void;
+}) {
+    const taken = new Set(existing.map((t) => t.name));
+    const available = starters.filter((t) => !taken.has(t.name));
+    if (available.length === 0) return null;
+
+    return (
+        <Box
+            sx={{
+                border: `1px dashed ${ATLAS_PALETTE.slate12}`,
+                borderRadius: 1,
+                p: 2,
+                mb: 2.5,
+            }}
+        >
+            <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 0.5 }}>
+                Tests this agent ships with
+            </Typography>
+            <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mb: 1.5 }}>
+                Each one catches something specific. Add one and it becomes yours — an upgrade to this agent
+                will never change it.
+            </Typography>
+            <Box sx={{ display: 'grid', gap: 1.25 }}>
+                {available.map((t) => (
+                    <Box key={t.id} sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                        <Box sx={{ flex: 1 }}>
+                            <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{t.name}</Typography>
+                            {/* What it catches. Without this a red verdict is
+                                a puzzle rather than a finding. */}
+                            <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>{t.notes}</Typography>
+                        </Box>
+                        <Button size="small" variant="outlined" onClick={() => onAdopt(t)} sx={{ flexShrink: 0 }}>
+                            Add
+                        </Button>
+                    </Box>
+                ))}
+            </Box>
+        </Box>
+    );
+}
+
 export function TestsTabContent({ agent }: { agent: IAgent }) {
     const { data: tests, isLoading } = useAgentTests(agent.id);
+    const { data: starters = [] } = useStarterTests(agent.id);
     const { data: projects } = useProjects();
     const createTest = useCreateAgentTest(agent.id);
     const toast = useToast();
@@ -318,7 +378,26 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [outcome, setOutcome] = useState<string>('');
+    /** Set when the form was opened by adopting a starter test. */
+    const [adopted, setAdopted] = useState<StarterTest | null>(null);
     const { data: repos } = useProjectRepos(projectId);
+
+    /**
+     * Prefill the form from a shipped test.
+     *
+     * Through the same form rather than a one-click create, because a test
+     * needs a project to make its throwaway item in and a repo for the agent
+     * to work in — neither of which a catalog bundle can know.
+     */
+    function adopt(t: StarterTest) {
+        setAdopted(t);
+        setName(t.name);
+        setIssueType(t.item_template.issue_type);
+        setTitle(t.item_template.title);
+        setDescription(t.item_template.description ?? '');
+        setOutcome(t.expectations.outcome_kind ?? '');
+        setAdding(true);
+    }
 
     function submit() {
         createTest.mutate(
@@ -327,7 +406,14 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                 repo_id: repoId || null,
                 name: name.trim(),
                 item_template: { issue_type: issueType, title: title.trim(), description },
-                ...(outcome ? { expectations: { outcome_kind: outcome as 'done' } } : {}),
+                // Everything the shipped test asserted, not just the
+                // outcome the form can show: a tools_forbidden or a cost
+                // ceiling silently dropped on adoption would make the adopted
+                // copy weaker than the one it came from.
+                expectations: {
+                    ...(adopted?.expectations ?? {}),
+                    ...(outcome ? { outcome_kind: outcome as 'done' } : {}),
+                },
             },
             {
                 onSuccess: () => {
@@ -366,11 +452,16 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                 <Button
                     variant="contained"
                     sx={{ flexShrink: 0 }}
-                    onClick={() => setAdding((v) => !v)}
+                    onClick={() => {
+                        setAdopted(null);
+                        setAdding((v) => !v);
+                    }}
                 >
                     {adding ? 'Cancel' : 'New test'}
                 </Button>
             </Box>
+
+            <StarterTests starters={starters} existing={tests ?? []} onAdopt={adopt} />
 
             <Collapse in={adding}>
                 <Box

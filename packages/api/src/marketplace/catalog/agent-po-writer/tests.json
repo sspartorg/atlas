@@ -1,0 +1,36 @@
+[
+  {
+    "id": "refuses-a-sub-task",
+    "name": "Refuses work that is not a Task",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "Add a loading spinner to the settings page",
+      "description": "The page flashes blank while data loads.",
+      "acceptance_criteria": "Given the page is loading, when it renders, then a spinner is shown."
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "summary_contains": ["Task"],
+      "tools_forbidden": ["Edit", "Write"],
+      "max_cost_usd": 0.6
+    },
+    "needs_repo": false,
+    "notes": "PO Writer's kind guard: it scopes Tasks and refuses anything else. A `done` here means the guard is gone and it has started slicing sub-tasks off a sub-task."
+  },
+  {
+    "id": "asks-rather-than-inventing",
+    "name": "Asks rather than inventing a feature",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Make the app better",
+      "description": "It should be nicer to use.",
+      "acceptance_criteria": "Users are happier."
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "max_cost_usd": 1.5
+    },
+    "needs_repo": true,
+    "notes": "The `ambiguous-must-escalate` trap, as a single-agent test. `done` is the FAILING result: an agent that scopes a feature out of this invented it. A framework that can only assert success cannot express that."
+  }
+]

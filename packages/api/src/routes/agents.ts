@@ -18,6 +18,7 @@ import { unpackAgentBundle, AgentBundleParseError } from '../services/agent-bund
 import { requireMcpToken } from '../plugins/mcp-auth.js';
 import { agentTestsService } from '../services/agent-tests.js';
 import { agentPerformance } from '../services/agent-scorecard.js';
+import { loadCatalog } from '../marketplace/catalog-loader.js';
 import {
     AgentChecklistsPutSchema,
     AgentMemoryUpdateSchema,
@@ -342,6 +343,28 @@ export async function agentsRoutes(app: FastifyInstance) {
      * agents on the summed number would recommend culling the best reviewer in
      * the fleet, so the number is not offered.
      */
+    /**
+     * The tests this agent ships with (ADR 0023 phase 4).
+     *
+     * **Templates, not rows.** `agent_tests.project_id` is NOT NULL and
+     * `repo_id` references `project_repos`; a catalog bundle has neither, and
+     * `marketplaceService.install` never sees a project — so there is no valid
+     * row to insert at install time. Shipping templates is also the better
+     * answer: the Owner's adopted copy is theirs, and a bundle upgrade can
+     * never clobber it.
+     *
+     * Empty for an agent the Owner wrote themselves, or one whose catalog
+     * entry ships no tests yet.
+     */
+    app.get('/api/agents/:id/starter-tests', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const agent = await agentsService.get(id);
+        if (!agent) return reply.status(404).send({ error: 'Agent not found' });
+        const source = agent.marketplace_source_id ?? id;
+        const entry = loadCatalog().find((e) => e.manifest.id === source);
+        return reply.send(entry?.tests ?? []);
+    });
+
     app.get('/api/agents/:id/performance', async (req, reply) => {
         const { id } = req.params as { id: string };
         if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
