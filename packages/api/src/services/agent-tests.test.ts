@@ -40,6 +40,24 @@ async function finishRun(over: Record<string, unknown> = {}): Promise<void> {
         .execute();
 }
 
+/**
+ * Distinct run ids, each with its own `agent_runs` row — same reason the
+ * default mock inserts one: `agent_test_runs.agent_run_id` is a foreign key,
+ * so a mock that only returns an id would pass a constraint the product
+ * relies on.
+ */
+function mockDistinctSpawns(): void {
+    let n = 0;
+    spawnAgentRun.mockImplementation(async () => {
+        const id = `run-${++n}`;
+        await testDb
+            .insertInto('agent_runs')
+            .values({ id, agent_id: 'agent-coder', status: 'queued' } as never)
+            .execute();
+        return id;
+    });
+}
+
 beforeEach(async () => {
     await truncateAll();
     await insertProject('p1', 'ATL');
@@ -102,7 +120,10 @@ describe('agentTestsService', () => {
     describe('run', () => {
         it('materialises a Task from the template and dispatches the agent at it', async () => {
             const test = await makeTest();
-            const run = await agentTestsService.run(test.id);
+            const batch = await agentTestsService.run(test.id);
+            // One press is a batch; an un-sampled press is a batch of one.
+            expect(batch.n_runs).toBe(1);
+            const run = batch.runs[0]!;
 
             expect(run.item_id).toBeTruthy();
             expect(run.agent_run_id).toBe('run-1');
@@ -128,7 +149,7 @@ describe('agentTestsService', () => {
             const test = await makeTest({
                 item_template: { issue_type: 'sub_task', title: 'Build the endpoint' },
             });
-            const run = await agentTestsService.run(test.id);
+            const run = (await agentTestsService.run(test.id)).runs[0]!;
             const sub = await testDb
                 .selectFrom('items')
                 .select(['type', 'parent_id'])
@@ -142,10 +163,10 @@ describe('agentTestsService', () => {
         // production; `is_test` is what keeps it out of the Owner's Task list,
         // search, queue, counts, labels and analytics.
         it('marks the items it creates as test items', async () => {
-            const task = await agentTestsService.run((await makeTest()).id);
-            const sub = await agentTestsService.run(
+            const task = (await agentTestsService.run((await makeTest()).id)).runs[0]!;
+            const sub = (await agentTestsService.run(
                 (await makeTest({ name: 'builds it', item_template: { issue_type: 'sub_task', title: 'Build the endpoint' } })).id,
-            );
+            )).runs[0]!;
 
             const flags = await testDb.selectFrom('items').select(['id', 'is_test']).execute();
             // Three rows: the Task, the sub-task, and the sub-task's throwaway
@@ -157,14 +178,78 @@ describe('agentTestsService', () => {
             expect([task.item_id, sub.item_id]).not.toContain(null);
         });
 
+        // Sampling (migration 018). An agent is stochastic, so one dispatch
+        // decided a verdict that a second press could have reversed.
+        it('takes n independent samples, each with its own throwaway item', async () => {
+            mockDistinctSpawns();
+            const batch = await agentTestsService.run((await makeTest()).id, { n_runs: 4, label: 'before-diet' });
+
+            expect(batch.n_runs).toBe(4);
+            expect(batch.runs.map((r) => r.sample_index)).toEqual([0, 1, 2, 3]);
+            expect(new Set(batch.runs.map((r) => r.batch_id)).size).toBe(1);
+            expect(batch.label).toBe('before-diet');
+            // Four items, not one reused: a second dispatch against an item
+            // the first already changed is measuring something else.
+            expect(new Set(batch.runs.map((r) => r.item_id)).size).toBe(4);
+            expect(spawnAgentRun).toHaveBeenCalledTimes(4);
+            // Four real dispatches, not four rows that failed their FK.
+            expect(batch.runs.every((r) => r.verdict === 'running')).toBe(true);
+            expect(new Set(batch.runs.map((r) => r.agent_run_id)).size).toBe(4);
+        });
+
+        it('refuses to spend more than the cap however many samples are asked for', async () => {
+            mockDistinctSpawns();
+            const batch = await agentTestsService.run((await makeTest()).id, { n_runs: 99 });
+            expect(batch.n_runs).toBe(10);
+        });
+
+        it('treats an unsampled press as a batch of one', async () => {
+            const batch = await agentTestsService.run((await makeTest()).id);
+            expect(batch.n_runs).toBe(1);
+            expect(batch.runs[0]?.sample_index).toBe(0);
+        });
+
         // A dispatch that never started is a broken environment, not a failing
         // agent — the same distinction ADR 0020 draws for a gate that could not run.
         it('records a dispatch that could not start as errored, not failed', async () => {
             spawnAgentRun.mockRejectedValueOnce(new Error('claude: command not found'));
             const test = await makeTest();
-            const run = await agentTestsService.run(test.id);
+            const run = (await agentTestsService.run(test.id)).runs[0]!;
             expect(run.verdict).toBe('errored');
             expect(run.failures[0]).toContain('command not found');
+        });
+    });
+
+    describe('listBatches', () => {
+        // The verdict the Owner reads is about the batch, not about whichever
+        // sample they happen to be looking at.
+        it('reports how many of a batch’s samples passed, and which expectation was unstable', async () => {
+            mockDistinctSpawns();
+            const test = await makeTest({ expectations: { outcome_kind: 'done' } });
+            const batch = await agentTestsService.run(test.id, { n_runs: 3 });
+
+            // Two agree, one disagrees — the shape a single run cannot express.
+            for (const [i, r] of batch.runs.entries()) {
+                await testDb
+                    .updateTable('agent_runs')
+                    .set({
+                        status: 'completed',
+                        outcome_kind: i === 1 ? 'rejected' : 'done',
+                        outcome_summary: 's',
+                    } as never)
+                    .where('id', '=', r.agent_run_id!)
+                    .execute();
+            }
+
+            const [summary] = await agentTestsService.listBatches(test.id);
+            expect(summary?.n_runs).toBe(3);
+            expect(summary?.passed).toBe(2);
+            expect(summary?.failed).toBe(1);
+            expect(summary?.flaky).toBe(true);
+            expect(summary?.consistency).toBeCloseTo(2 / 3);
+            expect(summary?.failure_histogram).toEqual([
+                { failure: 'expected outcome `done`, got `rejected`', count: 1 },
+            ]);
         });
     });
 

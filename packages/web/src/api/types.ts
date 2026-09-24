@@ -397,10 +397,54 @@ export interface AgentTestRun {
     cost_usd: number | null;
     duration_s: number | null;
     created_at: string;
+    /** Migration 018 — one press of Run is a batch of n of these. */
+    batch_id: string;
+    sample_index: number;
+    label: string | null;
+    judge_verdict: 'pass' | 'fail' | 'abstained' | null;
+    judge_reason: string | null;
+    judge_cost_usd: number | null;
+}
+
+/**
+ * What n samples of one test add up to.
+ *
+ * An agent is stochastic, so a single run's verdict was whichever of two
+ * answers the Owner happened to press the button on.
+ */
+export interface AgentTestBatch {
+    batch_id: string;
+    label: string | null;
+    created_at: string;
+    n_runs: number;
+    passed: number;
+    failed: number;
+    errored: number;
+    running: number;
+    /** The first sample. Comparable with every un-sampled run in history. */
+    pass_at_1: boolean | null;
+    /** Any sample passed — "can it do this at all", not "reliably". */
+    pass_at_k: boolean | null;
+    /** passed / (n_runs - errored). A broken environment is not a wrong answer. */
+    consistency: number | null;
+    /** It passed sometimes. The most useful thing a batch can say. */
+    flaky: boolean;
+    /** Which expectation was unstable, and in how many samples. */
+    failure_histogram: Array<{ failure: string; count: number }>;
+    cost_usd: number;
+    judge_cost_usd: number;
+    duration_s_p50: number | null;
+    duration_s_p95: number | null;
+    runs: AgentTestRun[];
 }
 
 export interface AgentCostEstimate {
     /** Null, not zero, when the agent has never run — those differ. */
     estimated_cost_usd: number | null;
     sample_size: number;
+    n_runs: number;
+    /** What the Owner is about to spend, not what one run costs. */
+    estimated_total_usd: number | null;
+    /** p25..p75 of the same history, times n. A mean alone reads as a promise. */
+    estimated_range_usd: [number, number] | null;
 }

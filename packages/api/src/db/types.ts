@@ -823,6 +823,9 @@ export interface AgentTestsTable {
 export type AgentTestVerdict = 'running' | 'passed' | 'failed' | 'errored';
 
 /** One execution of an `agent_tests` row, and what it decided. */
+/** Migration 018 — a judge's answer about one sample. */
+export type JudgeVerdict = 'pass' | 'fail' | 'abstained';
+
 export interface AgentTestRunsTable {
     id: string;
     agent_test_id: string;
@@ -834,6 +837,17 @@ export interface AgentTestRunsTable {
     duration_s: IntN;
     created_at: CreatedAt;
     evaluated_at: StrN;
+    // Migration 018 — one press of Run is a batch of `n` samples, because an
+    // agent is stochastic and one sample is a coin flip. Every row that
+    // predates sampling was backfilled to a batch of one.
+    batch_id: ColumnType<string, string, string>;
+    sample_index: ColumnType<number, number | undefined, number | undefined>;
+    /** Free-text tag from the run request; powers before/after comparison. */
+    label: StrN;
+    judge_verdict: ColumnType<JudgeVerdict | null, JudgeVerdict | null | undefined, JudgeVerdict | null | undefined>;
+    judge_reason: StrN;
+    /** Kept apart from `cost_usd` so a judge can never fail a ceiling about the AGENT. */
+    judge_cost_usd: number | null;
 }
 
 export interface DB {

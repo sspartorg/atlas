@@ -62,8 +62,15 @@ beforeEach(async () => {
 
 afterAll(closeTestDb);
 
+// 30s, not the repo's default 15s. `completeRun` fans out to the memory hook,
+// the notification path and a dynamic `import('./workflow-engine.js')` that
+// vitest transforms cold on first call — 6-14s of harness, none of it the code
+// under test (`parseRunTrace` itself is 1.25ms over a 616KB transcript). At the
+// default this file passed or failed depending on machine load.
+const SLOW = { timeout: 30_000 };
+
 describe('completeRun', () => {
-    it('stores what the run actually did, parsed from its own transcript', async () => {
+    it('stores what the run actually did, parsed from its own transcript', SLOW, async () => {
         await seedRun('r-trace');
         await completeRun('r-trace', 'agent-coder', null, null, TRANSCRIPT);
 
@@ -89,7 +96,7 @@ describe('completeRun', () => {
 
     // Every run before migration 017 has none, and a consumer must be able to
     // tell "we did not look" from "it did nothing".
-    it('leaves the trace null when there is no transcript to read', async () => {
+    it('leaves the trace null when there is no transcript to read', SLOW, async () => {
         await seedRun('r-empty');
         await completeRun('r-empty', 'agent-coder', null, null, '');
         const row = await testDb
@@ -114,7 +121,15 @@ describe('evaluateAgentTestRun', () => {
         await seedRun('r-hook');
         await testDb
             .insertInto('agent_test_runs')
-            .values({ id: 'atr-1', agent_test_id: test.id, agent_run_id: 'r-hook', item_id: 'ATL-50' } as never)
+            // `batch_id` is NOT NULL since migration 018 — one press of Run
+            // is a batch, and a lone sample is a batch of one.
+            .values({
+                id: 'atr-1',
+                agent_test_id: test.id,
+                agent_run_id: 'r-hook',
+                item_id: 'ATL-50',
+                batch_id: 'atr-1',
+            } as never)
             .execute();
         return test.id;
     }
@@ -130,7 +145,7 @@ describe('evaluateAgentTestRun', () => {
 
     // The defect this closes: judging used to happen only on read, so a test
     // run nobody opened stayed `running` in the database for good.
-    it('decides the verdict when the dispatch finishes, with nobody watching', async () => {
+    it('decides the verdict when the dispatch finishes, with nobody watching', SLOW, async () => {
         await makeTestRun();
         await completeRun('r-hook', 'agent-coder', null, null, TRANSCRIPT);
         const judged = await verdictOf();

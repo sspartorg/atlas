@@ -92,6 +92,7 @@ import type {
     GateResultRow,
     AgentTest,
     AgentTestRun,
+    AgentTestBatch,
     AgentCostEstimate,
     AgentTestItemTemplate,
     AgentTestExpectations,
@@ -1185,7 +1186,8 @@ export const api = {
     // without a terminal.
     agentTests: {
         list: (agentId: string) => get<AgentTest[]>(`/agents/${agentId}/tests`),
-        costEstimate: (agentId: string) => get<AgentCostEstimate>(`/agents/${agentId}/cost-estimate`),
+        costEstimate: (agentId: string, nRuns = 1) =>
+            get<AgentCostEstimate>(`/agents/${agentId}/cost-estimate?n=${nRuns}`),
         create: (
             agentId: string,
             body: {
@@ -1197,8 +1199,11 @@ export const api = {
             },
         ) => post<AgentTest>(`/agents/${agentId}/tests`, body),
         remove: (testId: string) => del(`/agent-tests/${testId}`),
-        run: (testId: string) => post<AgentTestRun>(`/agent-tests/${testId}/run`, {}),
+        run: (testId: string, body: { n_runs?: number; label?: string } = {}) =>
+            post<AgentTestBatch>(`/agent-tests/${testId}/run`, body),
         runs: (testId: string) => get<AgentTestRun[]>(`/agent-tests/${testId}/runs`),
+        /** The same runs, folded into the batches the Owner actually pressed. */
+        batches: (testId: string) => get<AgentTestBatch[]>(`/agent-tests/${testId}/batches`),
     },
 
     workflowRuns: {

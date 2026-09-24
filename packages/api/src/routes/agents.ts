@@ -60,6 +60,17 @@ const AgentTestBodySchema = z.object({
     expectations: AgentTestExpectationsSchema.optional(),
 });
 
+/**
+ * `n_runs` is capped at 10 in the schema as well as the service: a bad number
+ * should be a 400 at the boundary, not a silently clamped spend.
+ */
+const AgentTestRunBodySchema = z
+    .object({
+        n_runs: z.number().int().min(1).max(10).optional(),
+        label: z.string().trim().max(120).optional(),
+    })
+    .strict();
+
 const AgentTestPatchSchema = z.object({
     repo_id: z.string().min(1).nullable().optional(),
     name: z.string().trim().min(1).max(200).optional(),
@@ -267,6 +278,8 @@ export async function agentsRoutes(app: FastifyInstance) {
     app.get('/api/agents/:id/cost-estimate', async (req, reply) => {
         const { id } = req.params as { id: string };
         if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        const { n } = req.query as { n?: string };
+        const samples = Math.min(10, Math.max(1, Number.parseInt(n ?? '1', 10) || 1));
         const rows = await db
             .selectFrom('agent_runs')
             .select(['total_cost_usd'])
@@ -276,12 +289,25 @@ export async function agentsRoutes(app: FastifyInstance) {
             .orderBy('created_at', 'desc')
             .limit(20)
             .execute();
-        const costs = rows.map((r) => Number(r.total_cost_usd)).filter((n) => Number.isFinite(n));
+        const costs = rows.map((r) => Number(r.total_cost_usd)).filter((n2) => Number.isFinite(n2));
+        const mean = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : null;
+        // The spread was always in the same 20 rows and always thrown away. A
+        // mean alone reads as a promise; a range reads as what it is.
+        const sorted = [...costs].sort((a, b) => a - b);
+        const at = (q: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1))];
+        const round = (v: number) => Number(v.toFixed(4));
         return reply.send({
             // Null rather than 0: "we do not know yet" and "it is free" are
             // different answers, and only one of them is honest here.
-            estimated_cost_usd: costs.length ? Number((costs.reduce((a, b) => a + b, 0) / costs.length).toFixed(4)) : null,
+            estimated_cost_usd: mean === null ? null : round(mean),
             sample_size: costs.length,
+            n_runs: samples,
+            // What the Owner is actually about to spend. ADR 0023's "spend is
+            // shown before it happens" is why this tab exists at all, and `n`
+            // silently costing n-times would undo it.
+            estimated_total_usd: mean === null ? null : round(mean * samples),
+            estimated_range_usd:
+                sorted.length === 0 ? null : [round((at(0.25) ?? 0) * samples), round((at(0.75) ?? 0) * samples)],
         });
     });
 
@@ -314,18 +340,33 @@ export async function agentsRoutes(app: FastifyInstance) {
         return reply.status(204).send();
     });
 
+    /** Flat runs. Kept so a client from before sampling keeps working. */
     app.get('/api/agent-tests/:testId/runs', async (req, reply) => {
         const { testId } = req.params as { testId: string };
         if (!(await agentTestsService.get(testId))) return reply.status(404).send({ error: 'Agent test not found' });
         return reply.send(await agentTestsService.listRuns(testId));
     });
 
+    /** The same runs folded into the batches the Owner actually pressed. */
+    app.get('/api/agent-tests/:testId/batches', async (req, reply) => {
+        const { testId } = req.params as { testId: string };
+        if (!(await agentTestsService.get(testId))) return reply.status(404).send({ error: 'Agent test not found' });
+        return reply.send(await agentTestsService.listBatches(testId));
+    });
+
     app.post('/api/agent-tests/:testId/run', { preHandler: requireMcpToken }, async (req, reply) => {
         const { testId } = req.params as { testId: string };
         if (!(await agentTestsService.get(testId))) return reply.status(404).send({ error: 'Agent test not found' });
-        // 202: the dispatch is asynchronous. The verdict lands on the run row
-        // when it is next read.
-        return reply.status(202).send(await agentTestsService.run(testId));
+        const body = AgentTestRunBodySchema.parse(req.body ?? {});
+        // 202: the dispatches are asynchronous. Verdicts land when each run
+        // finishes (`evaluateAgentTestRun`), so the batch comes back with
+        // every sample still `running`.
+        return reply.status(202).send(
+            await agentTestsService.run(testId, {
+                ...(body.n_runs !== undefined ? { n_runs: body.n_runs } : {}),
+                ...(body.label !== undefined ? { label: body.label } : {}),
+            }),
+        );
     });
 
     app.post(

@@ -15,24 +15,34 @@ export function useAgentTests(agentId: string) {
     });
 }
 
-/** What one run of this agent is likely to cost, shown before the button. */
-export function useAgentCostEstimate(agentId: string) {
+/**
+ * What this is about to cost, shown before the button.
+ *
+ * Keyed on `nRuns` too: sampling multiplies the bill, and ADR 0023's "spend is
+ * shown before it happens" is why this tab exists at all.
+ */
+export function useAgentCostEstimate(agentId: string, nRuns = 1) {
     return useQuery({
-        queryKey: ['agent-cost-estimate', agentId],
-        queryFn: () => api.agentTests.costEstimate(agentId),
+        queryKey: ['agent-cost-estimate', agentId, nRuns],
+        queryFn: () => api.agentTests.costEstimate(agentId, nRuns),
         enabled: Boolean(agentId),
     });
 }
 
-export function useAgentTestRuns(testId: string, enabled = true) {
+/**
+ * A test's history, folded into the batches the Owner pressed.
+ *
+ * One sample is a coin flip — the verdict worth reading is the batch's.
+ */
+export function useAgentTestBatches(testId: string, enabled = true) {
     return useQuery({
-        queryKey: ['agent-test-runs', testId],
-        queryFn: () => api.agentTests.runs(testId),
+        queryKey: ['agent-test-batches', testId],
+        queryFn: () => api.agentTests.batches(testId),
         enabled: Boolean(testId) && enabled,
-        // A dispatch is asynchronous and judged when read, so an open test
-        // polls until nothing is still running.
+        // Dispatches are asynchronous, so an open test polls until every
+        // sample of every batch has landed.
         refetchInterval: (query) =>
-            (query.state.data ?? []).some((r) => r.verdict === 'running') ? 5000 : false,
+            (query.state.data ?? []).some((b) => b.running > 0) ? 5000 : false,
     });
 }
 
@@ -61,7 +71,12 @@ export function useDeleteAgentTest(agentId: string) {
 export function useRunAgentTest() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: (testId: string) => api.agentTests.run(testId),
-        onSuccess: (_r, testId) => void qc.invalidateQueries({ queryKey: ['agent-test-runs', testId] }),
+        mutationFn: ({ testId, n_runs, label }: { testId: string; n_runs?: number; label?: string }) =>
+            api.agentTests.run(testId, {
+                ...(n_runs !== undefined ? { n_runs } : {}),
+                ...(label !== undefined ? { label } : {}),
+            }),
+        onSuccess: (_r, { testId }) =>
+            void qc.invalidateQueries({ queryKey: ['agent-test-batches', testId] }),
     });
 }
