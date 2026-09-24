@@ -176,3 +176,63 @@ So anything a gate must remember goes in `atlas-gate/`, tracked and reviewable,
 and a test asserts that no probe writes state under `.atlas/`. The trap is
 invisible by reading the code, because the wrong path looks like every other
 path in the system.
+
+## Amendment (2026-09-24) — a gate that skips is not a gate
+
+The full golden set on v4 reported **1 of 91 gate verdicts red**, which reads
+like a clean fleet and was partly an illusion. On the sandbox repos:
+
+```
+gate-coverage => pass :: skipped - no coverage script declared
+gate-visual   => pass :: skipped - @playwright/test is not installed
+```
+
+Two of the four gates could not run, and **a skip and a pass are the same exit
+code**, so nothing downstream could tell "verified" from "not checked".
+
+It cost something real. On ATL-110 a doc sub-task rewrote a README line that a
+sibling sub-task's test asserted on. The suite went red at HEAD, all four gates
+reported pass, and the failure was caught by the Release Reviewer — an LLM
+reading the branch — not by the deterministic chain built for exactly this.
+
+The cause was a conflation. `gate-coverage` looked for a *coverage* script, and
+finding none skipped the measurement **and the test run**. But the sandbox
+declares `"test": "node --test"`. It has tests. The gate never ran them.
+
+ADR 0020's "absence of evidence is never a failure" is right, and it applies to
+the **measurement**, which genuinely cannot be taken without coverage tooling.
+It does not apply to tests the project already has. So `gate-coverage` now:
+
+| Project declares | Behaviour |
+|---|---|
+| a coverage script | unchanged — floor, ratchet, `coverage-summary.json` |
+| no coverage script, a `test` script | **runs the suite**; red fails, green passes as `tests pass, coverage not measured` |
+| neither | still skips, still never fails |
+
+Verified against the commit that caused this: at `b33251c` on the ATL-110
+branch, the gate now exits 1 where it previously exited 0.
+
+### The gap list has to name the failure
+
+Surfacing the red suite was not enough. The tail of a TAP run is its summary,
+so `tail -30` handed the fixer `# fail 1` and no indication of *which* test —
+a contract a fixer can only guess at. The gap list now leads with the failing
+lines and then the tail:
+
+```
+1. the test suite failed (no coverage script declared, so coverage was not measured)
+not ok 34 - Confirm README no longer claims root serves todos
+```
+
+That is the same test the Release Reviewer had to identify by reading the
+branch. A gate's output is the fixer's whole brief; a verdict it cannot act on
+is worth very little more than no verdict.
+
+### What this does not fix
+
+`gate-visual` still skips when Playwright is absent, and that skip is correct —
+there is genuinely no browser to drive. The broader problem stands: a `pass`
+row and a `skipped` row are indistinguishable to anything reading
+`run_gate_results.verdict`. Distinguishing them is tracked separately, and
+until it is done, "N of M red" should be read alongside how many of the M could
+run at all.

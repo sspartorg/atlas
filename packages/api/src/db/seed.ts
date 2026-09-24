@@ -1097,7 +1097,7 @@ exit 1
         id: 'gate-coverage',
         name: 'Coverage gate (statements floor)',
         description:
-            "Gate node script. Runs the project's declared coverage script, reads the statements percentage out of coverage-summary.json and fails below a 95% floor. A project that declares no coverage script, or whose script writes no summary, is skipped rather than failed - ADR 0020: absence of evidence is not evidence. Override the floor by giving the project its own copy of this script.",
+            "Gate node script. Runs the project's declared coverage script, reads the statements percentage out of coverage-summary.json and fails below a 95% floor. A project with no coverage script but a declared `test` script still has its SUITE run - it fails on red and passes with 'coverage not measured' on green, because ADR 0020's absence-of-evidence rule covers the measurement, not the tests the project already has. Only a project with neither is skipped. Override the floor by giving the project its own copy of this script.",
         sort_order: 108,
         body_sh: `#!/usr/bin/env bash
 # Coverage gate. $1 is the item id (unused).
@@ -1120,8 +1120,22 @@ script=""
 for s in test:coverage coverage; do
     if has_script "$s"; then script="$s"; break; fi
 done
+# No coverage script is not no tests. Skipping both is how a red suite reached
+# the end of a run behind four green verdicts (ATL-149). ADR 0020 covers the
+# MEASUREMENT, which cannot be taken here - not the tests that already exist.
 if [ -z "$script" ]; then
-    echo "gate-coverage: skipped - no coverage script declared"
+    if has_script test; then
+        if ! out="$("$pm" run test 2>&1)"; then
+            # The tail of a TAP run is the summary, so \`tail\` alone hands the
+            # fixer "# fail 1" and no idea which test. Lead with the failures.
+            fails="$(printf '%s' "$out" | grep -iE '^not ok|FAIL' | head -10)"
+            printf 'gate-coverage:\\n1. the test suite failed (no coverage script declared, so coverage was not measured)\\n%s\\n%s\\n' "$fails" "$(printf '%s' "$out" | tail -20)"
+            exit 1
+        fi
+        echo "gate-coverage: tests pass, coverage not measured - no coverage script declared"
+        exit 0
+    fi
+    echo "gate-coverage: skipped - no coverage script and no test script declared"
     exit 0
 fi
 if ! out="$("$pm" run "$script" 2>&1)"; then
@@ -1189,8 +1203,22 @@ function Has-Script([string]$name) {
 }
 $script = ''
 foreach ($s in @('test:coverage', 'coverage')) { if (Has-Script $s) { $script = $s; break } }
+# See body_sh: no coverage script is not the same as no tests (ATL-149).
 if ($script -eq '') {
-    Write-Output 'gate-coverage: skipped - no coverage script declared'
+    if (Has-Script 'test') {
+        $tout = & $pm run test 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Output 'gate-coverage:'
+            Write-Output '1. the test suite failed (no coverage script declared, so coverage was not measured)'
+            # See body_sh: lead with the failures, not the TAP summary.
+            Write-Output ((@($tout | Where-Object { $_ -match '(?i)^not ok|FAIL' } | Select-Object -First 10)) -join "\`n")
+            Write-Output (($tout | Select-Object -Last 20) -join "\`n")
+            exit 1
+        }
+        Write-Output 'gate-coverage: tests pass, coverage not measured - no coverage script declared'
+        exit 0
+    }
+    Write-Output 'gate-coverage: skipped - no coverage script and no test script declared'
     exit 0
 }
 $out = & $pm run $script 2>&1
