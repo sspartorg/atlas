@@ -34,6 +34,7 @@ function makeRun(overrides: Partial<IAgentRun> = {}): IAgentRun {
         item_title: null,
         workflow_run_id: null,
         node_id: null,
+        trace_summary: null,
         ...overrides,
     };
 }

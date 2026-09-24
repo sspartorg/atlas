@@ -121,6 +121,9 @@ export function asAgentRun(r: Record<string, unknown>, issueType: IssueType): IA
         item_title: (r['item_title'] as string | null) ?? null,
         workflow_run_id: (r['workflow_run_id'] as string | null) ?? null,
         node_id: (r['node_id'] as string | null) ?? null,
+        // Migration 017. Null on every run that finished before it shipped —
+        // which the UI must render as "—", not as a run that did nothing.
+        trace_summary: (r['trace_summary'] as IAgentRun['trace_summary']) ?? null,
     };
 }
 

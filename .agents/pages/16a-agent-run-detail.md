@@ -53,6 +53,17 @@ Full read of a single `agent_runs` row: status header, issue link card, **per-ev
 **Mobile sticky bar**
 - Below `md`: hero action buttons collapse into a fixed bottom bar (Re-run + Copy log), sitting `bottomNavHeight + safe-area-inset-bottom` above the page's bottom edge so it doesn't overlap the global `BottomNav`.
 
+### How it worked (`RunTracePanel`) — ADR 0023
+
+What the agent did, beside what it said it did. Reads `run.trace_summary` (migration 017), parsed once at completion from the transcript the run already wrote.
+
+- Stat row: turns, tool calls, thinking blocks, sub-agent turns, time to first token, tool errors.
+- A bar per tool, biggest first, six rows then `+ N more tools, M calls`.
+- **Files touched**, relative to the run's own worktree or sandbox — the raw tool inputs are absolute against a temp path that changes every run.
+- A counter that would read as a claim of zero is **hidden**, not shown as 0: `tool errors` and `sub-agent` only appear when there were some.
+- When the CLI could not report a field, the panel says so in words ("This CLI does not report files touched or thinking") rather than printing a zero nobody claimed. Copilot has no thinking event and does not surface tool arguments.
+- **Renders nothing at all** for a run with no trace — every run that finished before migration 017. An empty panel would read as "this run did nothing".
+
 ## Why these affordances exist
 - **Separate route (not a drawer)** — Log inspection is the second most-used action after writing prompts; giving it a URL means logs can be shared, bookmarked, and reached by deep-link. A drawer would hide everything behind a back gesture and lose its place in browser history.
 - **Re-run with same inputs** — Tuning an agent often means "edit prompt → re-run on the same target". Putting the action on the run page (not just the agent page) cuts an item pick step out of every iteration.
