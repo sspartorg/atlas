@@ -17,6 +17,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Plans tests for a QA sub-task as a Jira-importable CSV.",
-  "version": 1,
+  "version": 2,
   "published_at": "2026-07-01T00:00:00Z"
 }

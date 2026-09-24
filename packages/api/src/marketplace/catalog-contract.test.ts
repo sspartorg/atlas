@@ -38,6 +38,7 @@ import { loadCatalog } from './catalog-loader.js';
 import { AgentBundleManifestSchema } from '../services/agent-bundle.js';
 import { GUARDRAIL_SCRIPT_SEEDS } from '../db/seed.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
+import { catalogLockEntries, readCatalogLock } from './catalog-lock.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WORKFLOWS = join(__dirname, 'workflows');
@@ -310,6 +311,42 @@ describe('workflow templates', () => {
                     .filter((src) => t.graph.nodes.find((n) => n.id === src)?.agent_id !== 'agent-po-writer');
                 expect(offenders).toEqual([]);
             });
+        });
+    }
+});
+
+// A bundle only reaches an EXISTING install if its version goes up:
+// `upgrade_available` is `installed_version < catalogVersion` and nothing more
+// (`services/marketplace.ts`). Editing a prompt without bumping the version is
+// therefore silent — new installs get the change, every existing one stays on
+// the version it pulled, forever, and nothing anywhere says so.
+//
+// It already happened: three PRs of prompt, checklist and manifest edits
+// shipped against `version: 1` bundles and reached nobody. It surfaced only
+// because a golden-set run was about to measure the old prompts and report
+// them as the new ones.
+describe('catalog lock', () => {
+    const onDisk = catalogLockEntries();
+    const locked = readCatalogLock();
+
+    it('locks every shipped bundle', () => {
+        expect(Object.keys(onDisk).sort()).toEqual(Object.keys(locked).sort());
+    });
+
+    for (const [id, now] of Object.entries(onDisk)) {
+        it(`${id} bumped its version if its content changed`, () => {
+            const was = locked[id];
+            expect(was, `${id} is not in catalog.lock.json — run \`pnpm -F @atlas/api catalog:lock\``).toBeDefined();
+            if (was!.hash === now.hash) {
+                expect(now.version, `${id} content is unchanged but its version moved`).toBe(was!.version);
+                return;
+            }
+            expect(
+                now.version,
+                `${id} content changed but version is still ${now.version}. ` +
+                    `Every existing install is frozen at v${was!.version} and will never receive this. ` +
+                    `Bump the manifest version, then run \`pnpm -F @atlas/api catalog:lock\`.`,
+            ).toBeGreaterThan(was!.version);
         });
     }
 });
