@@ -210,6 +210,40 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
         ])('fails on %s (%s)', (line) => {
             expect(repoWithDiff(line)).toBe(1);
         });
+
+        // `console.log` is debug residue in a library and the PRODUCT'S stdout
+        // in a CLI. Flagging it everywhere told a CLI project its own
+        // user-facing output was residue, and the fixer rightly refused to
+        // rewrite spec-mandated output as `process.stdout.write` to appease a
+        // script. Entry points are exempt; everything else still is not.
+        function repoWithCliDiff(): { code: number; out: string } {
+            const dir = mkdtempSync(join(tmpdir(), 'hygiene-cli-'));
+            const sh = (cmd: string) => execSync(cmd, { cwd: dir, stdio: 'pipe' });
+            sh('git init -q -b main && git config user.email t@t && git config user.name t');
+            mkdirSync(join(dir, 'src'), { recursive: true });
+            writeFileSync(join(dir, 'package.json'), '{"bin":{"todo":"src/cli.js"},"scripts":{}}');
+            writeFileSync(join(dir, 'src/cli.js'), 'const a = 1;\n');
+            writeFileSync(join(dir, 'src/lib.js'), 'const b = 1;\n');
+            sh('git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD');
+            writeFileSync(join(dir, 'src/cli.js'), 'const a = 1;\nconsole.log("user facing");\n');
+            writeFileSync(join(dir, 'src/lib.js'), 'const b = 1;\nconsole.log("debug left behind");\n');
+            sh('git add -A && git commit -qm change');
+            writeFileSync(join(dir, 'gate.sh'), seed?.body_sh ?? '');
+            try {
+                const out = execSync('bash gate.sh X', { cwd: dir, stdio: 'pipe' }).toString();
+                return { code: 0, out };
+            } catch (err) {
+                const e = err as { status: number; stdout: Buffer };
+                return { code: e.status, out: e.stdout.toString() };
+            }
+        }
+
+        it('exempts a declared bin from the console.log check but not a library file', () => {
+            const r = repoWithCliDiff();
+            expect(r.code).toBe(1);
+            expect(r.out).toContain('src/lib.js');
+            expect(r.out).not.toContain('src/cli.js');
+        });
     });
 
     describe.skipIf(process.platform === 'win32')('coder-tests-green runs on non-pnpm projects', () => {

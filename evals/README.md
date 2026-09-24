@@ -107,6 +107,48 @@ reported green on red suites. A gate verdict is an exit code, and migration 011
 (`run_gate_results`) is what makes it queryable instead of prose buried in
 `workflow_runs.park_reason`.
 
+## What the first full run found (2026-09-24)
+
+All 12 fixtures, on delivery v2: **203 dispatches, $94.23, 245 minutes, 2 of 49
+gate verdicts red.** Six ran to a PR; one parked exactly as designed; five
+parked on defects the set existed to find.
+
+`evals/results/2026-09-24-v1-full-golden-set.md` is the scorecard. The findings
+mattered more than the totals:
+
+1. **`gate-hygiene` called a CLI's own stdout "debug residue".** `console.log`
+   is residue in a library and the *product* in a command-line tool. The
+   Hygiene Fixer refused to rewrite spec-mandated output as
+   `process.stdout.write` to make the gate green, and escalated instead. The
+   check is now skipped for entry points (package.json `bin`, `bin/`, `*cli.*`).
+
+2. **`agent-qa-writer` could not honestly tick its own checklist.** Two of its
+   four required rows said a scenario "exists **and passes**" — but QA Writer
+   *plans* tests; `agent-automation` runs them. It parked rather than claim a
+   pass it had not observed. The rows now describe planning.
+
+3. **A documentation sub-task could not clear the code gates.**
+   `coder-tests-green` demanded a changed test file and the Coder's checklist
+   demanded a new unit test, neither of which a README-only diff can supply.
+   The Coder asked rather than inventing a throwaway test. Both now exempt
+   documentation-only diffs, as they already did for `specs/` and `tests/qa/`.
+
+4. **The Release Reviewer earned its place twice.** On two independent fixtures
+   it caught tests that pass on the branch and fail after merge — one
+   hard-coding `origin/main`'s current HEAD as a "legacy" commit, another
+   asserting `git diff` over three files is empty, which silently forbids anyone
+   from ever editing them again. Every gate was green on both. No exit code
+   could have found either.
+
+5. **PO Writer refused a false premise.** The `bugfix-root-cause` fixture
+   describes a bug that no longer exists; it read the code, said so, and asked
+   whether to rescope before slicing anything.
+
+The two fixtures that probe judgement rather than mechanism both behaved:
+`ambiguous-must-escalate` parked with six questions grounded in what the repos
+actually contain, and `contract-split` produced a `be` sub-task and an `fe` one
+linked `depends_on`, in that order.
+
 ## Output
 
 `results/` holds one pair per scoring run:
