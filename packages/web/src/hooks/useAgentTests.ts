@@ -80,3 +80,12 @@ export function useRunAgentTest() {
             void qc.invalidateQueries({ queryKey: ['agent-test-batches', testId] }),
     });
 }
+
+/** ATL-140 — what this agent's own runs already prove. */
+export function useAgentPerformance(agentId: string) {
+    return useQuery({
+        queryKey: ['agent-performance', agentId],
+        queryFn: () => api.agentTests.performance(agentId),
+        enabled: Boolean(agentId),
+    });
+}

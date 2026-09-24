@@ -17,6 +17,7 @@ import {
 import { unpackAgentBundle, AgentBundleParseError } from '../services/agent-bundle.js';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
 import { agentTestsService } from '../services/agent-tests.js';
+import { agentPerformance } from '../services/agent-scorecard.js';
 import {
     AgentChecklistsPutSchema,
     AgentMemoryUpdateSchema,
@@ -77,6 +78,13 @@ const AgentTestPatchSchema = z.object({
     item_template: AgentTestItemTemplateSchema.optional(),
     expectations: AgentTestExpectationsSchema.optional(),
 });
+
+/** 90 days. Long enough to show a prompt change landing, short enough to stay cheap. */
+const PERFORMANCE_WINDOW_DAYS = 90;
+
+function defaultSince(): string {
+    return new Date(Date.now() - PERFORMANCE_WINDOW_DAYS * 86_400_000).toISOString();
+}
 
 export async function agentsRoutes(app: FastifyInstance) {
     app.get('/api/agents', async (_req, reply) => reply.send(await agentsService.list()));
@@ -309,6 +317,32 @@ export async function agentsRoutes(app: FastifyInstance) {
             estimated_range_usd:
                 sorted.length === 0 ? null : [round((at(0.25) ?? 0) * samples), round((at(0.75) ?? 0) * samples)],
         });
+    });
+
+    /**
+     * What this agent's own runs already prove (ADR 0023 phase 2, ATL-140).
+     *
+     * 515 `agent_runs` rows carrying cli, model, effort, token counts, cost and
+     * outcome have sat unread since ADR 0014, snapshotted explicitly so agent
+     * configurations could be compared. This is the route over them.
+     *
+     * **There is no `pass@1` in the response.** It returns `first_pass` split
+     * three ways — applied / rejected / parked — because on the v4 golden set
+     * `agent-release-reviewer` scored 64% for rejecting four times, and those
+     * rejections were the most valuable thing in the run. A page that ranked
+     * agents on the summed number would recommend culling the best reviewer in
+     * the fleet, so the number is not offered.
+     */
+    app.get('/api/agents/:id/performance', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        const { since, until } = req.query as { since?: string; until?: string };
+        return reply.send(
+            await agentPerformance(id, {
+                since: since ?? defaultSince(),
+                ...(until ? { until } : {}),
+            }),
+        );
     });
 
     app.post('/api/agents/:id/tests', { preHandler: requireMcpToken }, async (req, reply) => {
