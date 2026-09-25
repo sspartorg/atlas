@@ -1,11 +1,13 @@
 import Box from '@mui/material/Box';
-import CircularProgress from '@mui/material/CircularProgress';
+import Skeleton from '@mui/material/Skeleton';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import type { IAgent } from '@atlas/shared';
 
 import { useAgentPerformance } from '../../hooks/useAgentTests.js';
 import type { AgentPerformance, FirstPass } from '../../api/types.js';
+import { EmptyState } from '../../components/EmptyState.js';
+import { InfoPanel } from '../../components/InfoPanel.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { formatCostUsd } from '../../utils/formatCost.js';
 
@@ -44,7 +46,7 @@ const OUTCOMES = [
         // Deliberately not the error colour. A reviewer's rejections are its
         // product; on a delivery they are the defect it stopped.
         color: ATLAS_PALETTE.brandBlue,
-        hint: 'Sent the work back first time. For a reviewer this is the job, not a failure.',
+        hint: 'Sent the work back on the first attempt.',
     },
     {
         key: 'parked' as const,
@@ -77,15 +79,6 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
         </Tooltip>
     ) : (
         body
-    );
-}
-
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-    return (
-        <Box sx={{ p: 2.5, borderRadius: '8px', border: `1px solid ${ATLAS_PALETTE.slate10}`, background: ATLAS_PALETTE.white }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 600, color: ATLAS_PALETTE.slate, mb: 2 }}>{title}</Typography>
-            {children}
-        </Box>
     );
 }
 
@@ -130,7 +123,7 @@ function secs(v: number | null): string {
 export function PerformanceTabContent({ agent }: { agent: IAgent }) {
     const { data, isLoading, error } = useAgentPerformance(agent.id);
 
-    if (isLoading) return <CircularProgress size={20} />;
+    if (isLoading) return <Skeleton variant="rounded" height={140} />;
     if (error) {
         return (
             <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.error }}>
@@ -143,37 +136,45 @@ export function PerformanceTabContent({ agent }: { agent: IAgent }) {
 
     if (perf.quality.dispatches === 0) {
         return (
-            <Box>
-                <Typography sx={{ fontSize: 14, fontWeight: 600, mb: 0.5 }}>Nothing to measure yet</Typography>
-                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                    This agent has taken no workflow steps in the last 90 days. Ad-hoc runs and test runs are not
-                    counted here — a step is a position in a graph, and neither has one.
-                </Typography>
-            </Box>
+            <EmptyState
+                variant="dashed"
+                icon={
+                    <Box
+                        component="span"
+                        className="material-symbols-rounded"
+                        aria-hidden="true"
+                        sx={{ fontSize: 32 }}
+                    >
+                        monitoring
+                    </Box>
+                }
+                title="Nothing to measure yet"
+                description="No workflow steps in the last 90 days. Ad-hoc runs and tests are not counted here."
+            />
         );
     }
 
     return (
         <Box sx={{ display: 'grid', gap: 2.5 }}>
-            <Card title="How its first attempts went">
+            <InfoPanel label="First attempt">
                 <FirstPassBar fp={perf.quality.first_pass} />
                 <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap', mt: 2.5 }}>
-                    <Stat label="steps" value={String(perf.quality.steps)} hint="Distinct positions it occupied in a workflow graph." />
+                    <Stat label="steps" value={String(perf.quality.steps)} hint="Distinct workflow steps it ran." />
                     <Stat
                         label="loops"
                         value={String(perf.quality.loops)}
-                        hint="Dispatches beyond the first on the same step — the price of getting it wrong."
+                        hint="Dispatches beyond the first on the same step."
                     />
                     <Stat
                         label="gate catches"
                         value={String(perf.quality.gate_catch)}
-                        hint="Times a deterministic gate went red after this agent last said the work was done. The one quality signal an agent cannot author about itself."
+                        hint="Times a gate went red after this agent said the work was done."
                     />
                 </Box>
-            </Card>
+            </InfoPanel>
 
             <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' } }}>
-                <Card title="Cost">
+                <InfoPanel label="Cost">
                     <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                         <Stat label="total" value={formatCostUsd(perf.cost.total_usd)} />
                         <Stat
@@ -186,8 +187,8 @@ export function PerformanceTabContent({ agent }: { agent: IAgent }) {
                             hint="Share of input served from cache."
                         />
                     </Box>
-                </Card>
-                <Card title="Latency">
+                </InfoPanel>
+                <InfoPanel label="Latency">
                     <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                         <Stat label="median" value={secs(perf.latency.p50_s)} />
                         <Stat label="p95" value={secs(perf.latency.p95_s)} />
@@ -197,14 +198,13 @@ export function PerformanceTabContent({ agent }: { agent: IAgent }) {
                             hint="Median time from a run starting to the agent's first word. Only from runs with a trace."
                         />
                     </Box>
-                </Card>
+                </InfoPanel>
             </Box>
 
-            <Card title="What it reaches for">
+            <InfoPanel label="Tools">
                 {perf.tools.runs_with_trace === 0 ? (
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
-                        None of these {perf.tools.runs_total} runs has a trace — every one of them finished before
-                        Atlas started reading transcripts.
+                        No trace on any of these {perf.tools.runs_total} runs, so there is no tool profile yet.
                     </Typography>
                 ) : (
                     <>
@@ -249,12 +249,12 @@ export function PerformanceTabContent({ agent }: { agent: IAgent }) {
                         </Typography>
                     </>
                 )}
-            </Card>
+            </InfoPanel>
 
             {/* ATL-140: the numbers must be attributable to the configuration
                 that produced them, so a model or prompt change reads as a break
                 in the series rather than a smear across it. */}
-            <Card title="Measured at">
+            <InfoPanel label="By model">
                 <Box sx={{ display: 'grid', gap: 1 }}>
                     {perf.by_config.map((c) => (
                         <Box
@@ -287,7 +287,7 @@ export function PerformanceTabContent({ agent }: { agent: IAgent }) {
                         </Box>
                     ))}
                 </Box>
-            </Card>
+            </InfoPanel>
         </Box>
     );
 }

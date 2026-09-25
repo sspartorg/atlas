@@ -285,17 +285,21 @@ describe('TestsTabContent', () => {
             notes: "PO Writer's kind guard. A `done` here means the guard is gone.",
         };
 
-        it('lists them with what each one catches', async () => {
+        it('lists them by what each one asserts, with the rationale on hover', async () => {
             mount({ starters: [starter] });
-            expect(await screen.findByText('Tests this agent ships with')).toBeInTheDocument();
-            expect(screen.getByText(/kind guard/)).toBeInTheDocument();
+            expect(await screen.findByText('Ships with this agent')).toBeInTheDocument();
+            // The assertions, not the prose: a caption is not the place for an
+            // essay, so `notes` is the tooltip.
+            const assertions = screen.getByText(/never uses `Edit`/);
+            expect(assertions).toBeInTheDocument();
+            expect(assertions).toHaveAttribute('title', starter.notes);
         });
 
         // A permanent strip of things you have already done is noise.
         it('stops offering one that has already been added', async () => {
             mount({ starters: [starter], tests: [aTest({ name: starter.name })] });
             await screen.findByText(starter.name);
-            expect(screen.queryByText('Tests this agent ships with')).not.toBeInTheDocument();
+            expect(screen.queryByText('Ships with this agent')).not.toBeInTheDocument();
         });
 
         // Through the form, not a one-click create: a test needs a project to

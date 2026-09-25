@@ -119,7 +119,7 @@ describe('AgentDetail', () => {
             expect(overviewTab).toHaveAttribute('aria-selected', 'true');
         });
 
-        it('renders all 5 tab labels', async () => {
+        it('renders every tab label', async () => {
             renderAgentDetail();
 
             await waitFor(() => {
@@ -127,8 +127,9 @@ describe('AgentDetail', () => {
             });
 
             expect(screen.getByRole('tab', { name: /prompt/i })).toBeInTheDocument();
-            expect(screen.getByRole('tab', { name: /test run/i })).toBeInTheDocument();
-            expect(screen.getByRole('tab', { name: /runs/i })).toBeInTheDocument();
+            expect(screen.getByRole('tab', { name: /^tests$/i })).toBeInTheDocument();
+            expect(screen.getByRole('tab', { name: /performance/i })).toBeInTheDocument();
+            expect(screen.getByRole('tab', { name: /^runs$/i })).toBeInTheDocument();
             expect(screen.getByRole('tab', { name: /memory/i })).toBeInTheDocument();
         });
     });
@@ -575,12 +576,72 @@ describe('AgentDetail', () => {
             );
         }
 
-        it('renders TestRunTab content when tab=test (line 319)', async () => {
+        it('renders TestsTab content when tab=tests', async () => {
             setupHandlers();
             server.use(
-                http.get(`${BASE}/projects`, () => HttpResponse.json([])),
-                http.get(`${BASE}/tasks`, () => HttpResponse.json([]))
+                http.get(`${BASE}/agents/agent-coder/tests`, () => HttpResponse.json([])),
+                http.get(`${BASE}/agents/agent-coder/starter-tests`, () => HttpResponse.json([])),
+                http.get(`${BASE}/projects`, () => HttpResponse.json([]))
             );
+            renderWithProviders(
+                <Routes>
+                    <Route path="/agents/:id" element={<AgentDetail />} />
+                </Routes>,
+                { initialEntries: ['/agents/agent-coder?tab=tests'] }
+            );
+            expect(
+                await screen.findByRole('button', { name: 'New test' }, { timeout: 5000 })
+            ).toBeInTheDocument();
+        }, 15000);
+
+        it('renders PerformanceTab content when tab=performance', async () => {
+            setupHandlers();
+            server.use(
+                http.get(`${BASE}/agents/agent-coder/performance`, () =>
+                    HttpResponse.json({
+                        window_days: 90,
+                        quality: {
+                            dispatches: 0,
+                            steps: 0,
+                            loops: 0,
+                            gate_catch: 0,
+                            first_pass: { applied: 0, rejected: 0, parked: 0 },
+                        },
+                        cost: {
+                            total_usd: 0,
+                            per_step_usd: null,
+                            cache_hit_pct: null,
+                            input_tokens: 0,
+                            output_tokens: 0,
+                            cached_tokens: 0,
+                        },
+                        latency: { p50_s: null, p95_s: null, max_s: null, ttft_p50_ms: null },
+                        tools: {
+                            runs_with_trace: 0,
+                            runs_total: 0,
+                            top: [],
+                            avg_turns: null,
+                            avg_tool_calls: null,
+                        },
+                        by_config: [],
+                        trend: [],
+                    })
+                )
+            );
+            renderWithProviders(
+                <Routes>
+                    <Route path="/agents/:id" element={<AgentDetail />} />
+                </Routes>,
+                { initialEntries: ['/agents/agent-coder?tab=performance'] }
+            );
+            expect(
+                await screen.findByText('Nothing to measure yet', undefined, { timeout: 5000 })
+            ).toBeInTheDocument();
+        }, 15000);
+
+        // A bookmark from before the Test Run tab was deleted.
+        it('falls back to Overview for an unknown tab key', async () => {
+            setupHandlers();
             renderWithProviders(
                 <Routes>
                     <Route path="/agents/:id" element={<AgentDetail />} />
@@ -588,12 +649,11 @@ describe('AgentDetail', () => {
                 { initialEntries: ['/agents/agent-coder?tab=test'] }
             );
             await waitFor(() =>
-                expect(screen.getByRole('tab', { name: /test run/i })).toHaveAttribute(
+                expect(screen.getByRole('tab', { name: /overview/i })).toHaveAttribute(
                     'aria-selected',
                     'true'
                 )
             );
-            expect(document.body).toBeTruthy();
         }, 15000);
 
         it('renders RunsTab content when tab=runs (line 320)', async () => {

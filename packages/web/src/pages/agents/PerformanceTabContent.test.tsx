@@ -92,7 +92,7 @@ describe('PerformanceTabContent', () => {
 
     it('says so plainly when no run has a trace yet', async () => {
         mount(perf({ tools: { runs_with_trace: 0, runs_total: 9, top: [], avg_turns: null, avg_tool_calls: null } }));
-        expect(await screen.findByText(/None of these 9 runs has a trace/)).toBeInTheDocument();
+        expect(await screen.findByText(/No trace on any of these 9 runs/)).toBeInTheDocument();
     });
 
     // ATL-140: the numbers must be attributable to the configuration that
