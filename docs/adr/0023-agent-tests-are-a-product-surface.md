@@ -1,7 +1,7 @@
 # ADR 0023 — Agent tests are a product surface, not a repo-local dev tool
 
-**Status:** proposed
-**Date:** 2026-09-24
+**Status:** accepted
+**Date:** 2026-09-24 (accepted 2026-09-25, all three phases shipped)
 
 ## Context
 
@@ -127,3 +127,49 @@ needed.
 - This is more surface to maintain, and some of it duplicates what the CLI does.
   The CLI stays: it is what CI runs, and `pnpm eval:contract` must keep working
   without a database full of product data.
+
+## What building it corrected (2026-09-25)
+
+All three phases shipped. Five things in this ADR turned out to be wrong, and
+the record is worth more than the tidiness:
+
+1. **Fixtures could not be seeded as rows.** `agent_tests.project_id` is NOT
+   NULL and `repo_id` references `project_repos`; a catalog bundle has neither,
+   and `marketplaceService.install` never sees a project. So a shipped test is
+   a **template** adopted through the create form, not a seeded row. That is
+   also the better answer: the adopted copy is the Owner's, and a bundle
+   upgrade can never clobber it — which removes "what happens to a customer's
+   edited copy" as a question entirely.
+
+2. **The agent page cannot label rejections from `role_id`.** The plan was
+   "Caught" for a reviewer and "Rejected" for a performer. `agent-coder` and
+   `agent-release-reviewer` are both `engineer`, and every reviewer shares a
+   role with the writer it reviews. Nothing is classified: the three outcomes
+   are shown side by side under plain names, and a rejection is simply never
+   drawn in the failure colour. The warning is satisfied by the shape of the
+   payload — the route returns no percentage at all — rather than by a caveat
+   string nobody reads.
+
+3. **Lazy evaluation was a choice, not a constraint.** This ADR's phase 1 said
+   there was no completion hook on `agent_runs`. There is: `completeRun`
+   already ran the memory hook best-effort at exactly that point. A test run
+   nobody opened stayed `running` in the database for good, and its verdict
+   depended on whether anyone was watching.
+
+4. **Copilot is not trace-blind.** It emits `tool.execution_start` with
+   `data.toolName`, so tool names, counts, ordering and turns all survive it.
+   Only thinking blocks and tool arguments are lost — which is why every field
+   a CLI cannot report is `null` rather than `0`, and why an expectation that
+   cannot be answered returns `errored` rather than passing.
+
+5. **`pass@1` is not the only number that needed this care.** The same rule —
+   an assertion nobody could make must never read as a pass — turned out to
+   apply to a trace expectation on a pre-017 run, a `files_untouched` check
+   against a truncated file list, a workflow eval where every gate skipped, and
+   a judge that abstained. All four are `errored`.
+
+One thing the ADR got exactly right and is worth restating: **`asked_question`
+as a pass matters as much as `done`.** It is now contract-tested at the fleet
+level — at least one shipped starter test must make asking the passing result,
+because a starter set that can only express success cannot say that an agent
+which asked rather than inventing a feature has succeeded.
