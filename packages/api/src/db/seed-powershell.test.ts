@@ -31,7 +31,7 @@ const pwsh = ['pwsh', 'powershell'].find(
     (bin) => spawnSync(bin, ['-NoLogo', '-Command', '$PSVersionTable.PSVersion.Major'], { stdio: 'ignore' }).status === 0,
 );
 
-function repoWith(files: Record<string, string>): string {
+function repoWith(files: Record<string, string>, message = 'change'): string {
     const dir = mkdtempSync(join(tmpdir(), 'ps-gate-'));
     const sh = (cmd: string) => execFileSync('bash', ['-c', cmd], { cwd: dir, stdio: 'pipe' });
     sh('git init -q -b main && git config user.email t@t && git config user.name t && git config commit.gpgsign false');
@@ -41,7 +41,7 @@ function repoWith(files: Record<string, string>): string {
         mkdirSync(dirname(join(dir, name)), { recursive: true });
         writeFileSync(join(dir, name), body);
     }
-    sh('git add -A && git commit -qm change');
+    sh(`git add -A && git commit -q -F - <<'MSG'\n${message}\nMSG`);
     return dir;
 }
 
@@ -56,115 +56,38 @@ function runGate(id: string, dir: string, arg = 'ATL-1'): { code: number; out: s
     return { code: r.status ?? 1, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
 }
 
-const PKG = '{"scripts":{}}';
-
 describe.skipIf(!pwsh)('PowerShell guardrail bodies, executed', () => {
-    describe('gate-hygiene', () => {
-        it('passes a clean diff', () => {
-            expect(runGate('gate-hygiene', repoWith({ 'a.js': 'const added = 2;\n', 'package.json': PKG })).code).toBe(0);
+    // ADR 0024 deleted the five scripts that guessed at the customer's stack,
+    // and with them the three describes that lived here. What is left checks
+    // Atlas's own artifacts, and this harness still has a job: it exists
+    // because a `.ps1` once ran two of the nine checks its bash sibling ran,
+    // and nothing caught it until a human read the file.
+    describe('commit-discipline', () => {
+        it('passes when every commit on the branch carries the trailer', () => {
+            const dir = repoWith({ 'a.js': 'const added = 1;\n' }, 'change\n\nCo-Authored-By: Someone <s@example.com>');
+            expect(runGate('commit-discipline', dir).code).toBe(0);
         });
 
-        it('flags a bare TODO', () => {
-            const r = runGate('gate-hygiene', repoWith({ 'a.js': '// TODO fix later\n', 'package.json': PKG }));
+        it('names the commit that is missing it', () => {
+            const dir = repoWith({ 'a.js': 'const added = 1;\n' });
+            const r = runGate('commit-discipline', dir);
             expect(r.code).toBe(1);
-            expect(r.out).toContain('residue');
-        });
-
-        it('flags debugger', () => {
-            expect(runGate('gate-hygiene', repoWith({ 'a.js': 'debugger;\n', 'package.json': PKG })).code).toBe(1);
-        });
-
-        // Word-bounded on both sides: `TODO_FILE` is an identifier.
-        it('does not flag TODO_FILE or HTTP_TODOS', () => {
-            const files = { 'a.js': "const TODO_FILE = 'x';\nconst HTTP_TODOS = 2;\n", 'package.json': PKG };
-            expect(runGate('gate-hygiene', repoWith(files)).code).toBe(0);
-        });
-
-        // The divergence this file was written to catch: `-match` is
-        // case-insensitive, `grep -E` is not.
-        it('does not flag a lowercase "todo", matching bash', () => {
-            const files = { 'package.json': '{"scripts":{},"bin":{"todo":"cli.js"}}', 'a.js': 'const x = 1;\n' };
-            const r = runGate('gate-hygiene', repoWith(files));
-            expect(r.out).not.toContain('residue');
-        });
-
-        it('allows a tracked TODO(ATL-12) marker', () => {
-            const files = { 'a.js': '// TODO(ATL-12): later\n', 'package.json': PKG };
-            expect(runGate('gate-hygiene', repoWith(files)).code).toBe(0);
-        });
-
-        it('flags a newly added TODO(.agents) staleness marker', () => {
-            const files = { 'a.js': '// TODO(.agents): update the doc\n', 'package.json': PKG };
-            const r = runGate('gate-hygiene', repoWith(files));
-            expect(r.code).toBe(1);
-            expect(r.out).toContain('TODO(.agents)');
-        });
-
-        it('flags console.log in a library file', () => {
-            const files = { 'lib.js': "console.log('debug');\n", 'package.json': PKG };
-            expect(runGate('gate-hygiene', repoWith(files)).code).toBe(1);
-        });
-
-        it('exempts console.log in a declared bin — that is the product, not residue', () => {
-            const files = { 'cli.js': "console.log('out');\n", 'package.json': '{"scripts":{},"bin":{"t":"cli.js"}}' };
-            expect(runGate('gate-hygiene', repoWith(files)).code).toBe(0);
-        });
-
-        it('runs a declared lint script', () => {
-            const files = { 'package.json': '{"scripts":{"lint":"node -e \\"process.exit(1)\\""}}' };
-            const r = runGate('gate-hygiene', repoWith(files));
-            expect(r.code).toBe(1);
-            expect(r.out).toContain('lint failed');
-        });
-
-        // knip joined the declared-script loop in #45; the ps1 never ran it.
-        it('runs a declared knip script', () => {
-            const files = { 'package.json': '{"scripts":{"knip":"node -e \\"process.exit(1)\\""}}' };
-            expect(runGate('gate-hygiene', repoWith(files)).out).toContain('knip failed');
-        });
-
-        // The false red. No lockfile means the audit could not run, not that a
-        // vulnerability exists.
-        it('does not invent an advisory when the manifest changed but there is no lockfile', () => {
-            const r = runGate('gate-hygiene', repoWith({ 'package.json': PKG }));
-            expect(r.out).not.toContain('advisory');
-            expect(r.code).toBe(0);
+            expect(r.out).toContain('missing Co-Authored-By trailer');
         });
     });
 
-    describe('gate-coverage', () => {
-        it('skips when neither a coverage nor a test script is declared', () => {
-            const r = runGate('gate-coverage', repoWith({ 'package.json': PKG }));
-            expect(r.code).toBe(0);
-            expect(r.out).toContain('no coverage script and no test script');
-        });
-
-        // ATL-149, on the Windows side.
-        it('runs the test script when there is no coverage script', () => {
-            const files = { 'package.json': '{"scripts":{"test":"node -e \\"\\""}}' };
-            const r = runGate('gate-coverage', repoWith(files));
-            expect(r.code).toBe(0);
-            expect(r.out).toContain('coverage not measured');
-        });
-
-        it('fails a red suite even though coverage cannot be measured', () => {
-            const files = { 'package.json': '{"scripts":{"test":"node -e \\"process.exit(1)\\""}}' };
-            const r = runGate('gate-coverage', repoWith(files));
+    describe('prereqs', () => {
+        // A dirty worktree is the one state every later script misreads: the
+        // diff it inspects is not the diff that will be pushed.
+        it('reports a dirty worktree', () => {
+            const dir = repoWith({ 'a.js': 'const added = 1;\n' });
+            writeFileSync(join(dir, 'uncommitted.txt'), 'x');
+            const r = runGate('prereqs', dir);
             expect(r.code).toBe(1);
-            expect(r.out).toContain('the test suite failed');
-        });
-    });
-
-    describe('gate-visual', () => {
-        it('skips a pure backend change', () => {
-            const files = { 'src/cache.js': 'export function load() { return 1; }\n', 'package.json': PKG };
-            expect(runGate('gate-visual', repoWith(files)).out).toContain('no UI files changed and no markup added');
-        });
-
-        // #48, on the Windows side: an extension list misses server-rendered apps.
-        it('does not skip server-rendered markup inside a .js file', () => {
-            const files = { 'src/render.js': 'const row = `<li class="todo"><span>x</span></li>`;\n', 'package.json': PKG };
-            expect(runGate('gate-visual', repoWith(files)).out).not.toContain('no UI files changed');
+            // Named, not just non-zero: a missing `.atlas` also exits 1 here,
+            // so the code alone would pass whether or not the dirty-tree check
+            // survived.
+            expect(r.out).toContain('dirty working tree');
         });
     });
 });

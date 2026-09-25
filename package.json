@@ -24,7 +24,7 @@
     "typecheck": "pnpm -r typecheck && pnpm -w run typecheck:e2e",
     "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
     "lint:knip": "knip",
-    "gate": "pnpm -r typecheck && pnpm -w run typecheck:e2e && pnpm -w run lint:knip && pnpm -r --workspace-concurrency=1 test:coverage && pnpm -r build && pnpm -F @atlas/web bundle:check",
+    "gate": "pnpm -r typecheck && pnpm -w run typecheck:e2e && pnpm -r lint && pnpm -w run lint:knip && pnpm -r --workspace-concurrency=1 test:coverage && pnpm -r build && pnpm -F @atlas/web bundle:check",
     "coverage:diff": "tsx tools/coverage/diff.ts",
     "eval:contract": "pnpm -F @atlas/api exec vitest run src/marketplace/catalog-contract.test.ts src/marketplace/reviewer-checklists.test.ts",
     "eval:score": "pnpm -F @atlas/api exec tsx src/scripts/eval-score.ts",

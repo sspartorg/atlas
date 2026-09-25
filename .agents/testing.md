@@ -15,12 +15,13 @@ Thresholds live in each package's `vitest.config.ts` under `test.coverage.thresh
 
 ## Coverage gate (Theme 12)
 
-`pnpm -w run gate` runs the full pre-merge chain:
+`pnpm -w run gate` runs the full pre-merge chain (2026-09-25: `pnpm -r lint` joined it — CI's Gate job has always run eslint and the local script did not, so four unused-import errors reached `main` with nothing local going red):
 
 1. `pnpm -r typecheck` â€” type-strict everywhere
-2. `pnpm -w run lint:knip` â€” no unused exports / files
-3. `pnpm -r test:coverage` â€” every package's threshold enforced
-4. `pnpm -r build` â€” clean prod artifacts
+2. `pnpm -r lint` â€” eslint, which CI's Gate job also runs
+3. `pnpm -w run lint:knip` â€” no unused exports / files
+4. `pnpm -r test:coverage` â€” every package's threshold enforced
+5. `pnpm -r build` â€” clean prod artifacts
 
 Two helper scripts:
 
