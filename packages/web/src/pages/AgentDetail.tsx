@@ -35,9 +35,10 @@ import { GlyphPickerModal } from './agents/GlyphPickerModal.js';
 import { DeleteAgentModal } from './agents/DeleteAgentModal.js';
 import { MarketplaceUpgradeBanner } from './agents/MarketplaceUpgradeBanner.js';
 import { TestsTabContent } from './agents/TestsTabContent.js';
+import { PerformanceTabContent } from './agents/PerformanceTabContent.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 
-const TAB_KEYS = ['overview', 'prompt', 'tests', 'test', 'runs', 'memory'] as const;
+const TAB_KEYS = ['overview', 'prompt', 'tests', 'performance', 'test', 'runs', 'memory'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 export function AgentDetail() {
@@ -274,6 +275,21 @@ export function AgentDetail() {
                                 iconPosition="start"
                             />
                             <Tab
+                                value="performance"
+                                label="Performance"
+                                icon={
+                                    <Box
+                                        component="span"
+                                        className="material-symbols-rounded"
+                                        aria-hidden="true"
+                                        sx={{ fontSize: 16 }}
+                                    >
+                                        monitoring
+                                    </Box>
+                                }
+                                iconPosition="start"
+                            />
+                            <Tab
                                 value="test"
                                 label="Test Run"
                                 icon={
@@ -324,6 +340,7 @@ export function AgentDetail() {
                     {tab === 'overview' && <OverviewTab agent={agent} view={view} />}
                     {tab === 'prompt' && <PromptTab agent={agent} />}
                     {tab === 'tests' && <TestsTabContent agent={agent} />}
+                    {tab === 'performance' && <PerformanceTabContent agent={agent} />}
                     {tab === 'test' && <TestRunTab agent={agent} view={view} />}
                     {tab === 'runs' && <RunsTab agent={agent} runs={runs ?? []} />}
                     {tab === 'memory' && <MemoryTab agent={agent} memory={memory} />}

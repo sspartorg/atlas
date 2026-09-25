@@ -26,7 +26,13 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from '../db/kysely-client.js';
-import { decideRunRouting } from '../services/agent-runner-outcome-routing.js';
+import {
+    iso,
+    scoreAgents,
+    seconds,
+    type AgentScore,
+    type RoutedStep,
+} from '../services/agent-scorecard.js';
 import type { IRunOutcome } from '@atlas/shared';
 
 // Anchor output at the repo root, not at packages/api/ — pnpm --filter changes
@@ -140,223 +146,29 @@ export function checkExpectation(
     return { fixture_id: fx.id, passed: failures.length === 0, failures };
 }
 
-interface AgentScore {
-    agent_id: string;
-    /** Distinct (run, node) positions this agent occupied. */
-    steps: number;
-    /** Individual dispatches, including retries after a fail edge. */
-    dispatches: number;
-    /** Steps whose FIRST dispatch routed pass. The headline quality number. */
-    pass_at_1: number;
-    /** Dispatches beyond the first on the same step — the cost of getting it wrong. */
-    loops: number;
-    /** Dispatches that parked the run with the Owner (asked a question, or went silent). */
-    escalations: number;
-    /**
-     * Times a deterministic gate went red after this agent was the last to
-     * report done. The only quality signal in the system that the agent cannot
-     * author itself — see ADR 0020 and campaign finding F-012.
-     */
-    gate_catch: number;
-    cost_usd: number;
-    input_tokens: number;
-    output_tokens: number;
-    cache_read_tokens: number;
-    cache_creation_tokens: number;
-    wall_clock_s: number;
-    models: Record<string, number>;
-    efforts: Record<string, number>;
-}
-
-function emptyScore(agent_id: string): AgentScore {
-    return {
-        agent_id, steps: 0, dispatches: 0, pass_at_1: 0, loops: 0, escalations: 0,
-        gate_catch: 0, cost_usd: 0, input_tokens: 0, output_tokens: 0,
-        cache_read_tokens: 0, cache_creation_tokens: 0, wall_clock_s: 0,
-        models: {}, efforts: {},
-    };
-}
-
-/**
- * Normalise a timestamp column to an ISO string.
- *
- * The Kysely column types declare `string`, but node-postgres parses
- * `timestamptz` into a `Date` before Kysely ever sees it — so these values
- * arrive as Dates at runtime and string operations on them throw. Everything
- * below sorts and compares timestamps, so they are normalised once, here.
- */
-function iso(value: unknown): string | null {
-    if (value === null || value === undefined) return null;
-    if (value instanceof Date) return value.toISOString();
-    return String(value);
-}
-
-function seconds(from: string | null, to: string | null): number {
-    if (!from || !to) return 0;
-    const ms = new Date(to).getTime() - new Date(from).getTime();
-    return ms > 0 ? ms / 1000 : 0;
-}
-
-function bump(counter: Record<string, number>, key: string | null): void {
-    const k = key ?? '(unset)';
-    counter[k] = (counter[k] ?? 0) + 1;
-}
-
 async function main(): Promise<void> {
     const args = parseArgs(process.argv.slice(2));
 
-    // 1. Root runs in scope. A Task's sub-task runs are children (ADR 0015) and
-    //    are pulled in via the tree below, never selected directly — otherwise
-    //    a sub-task run would be counted as its own delivery.
-    let q = db
-        .selectFrom('workflow_runs')
-        .selectAll()
-        .where('parent_workflow_run_id', 'is', null);
-    if (args.runs.length > 0) q = q.where('id', 'in', args.runs);
-    if (args.since) q = q.where('started_at', '>=', args.since);
-    if (args.project) q = q.where('project_id', '=', args.project);
-    const roots = await q.orderBy('started_at', 'asc').execute();
-
+    // Steps 1-6 — scoping, routing replay and per-agent aggregation — now
+    // live in `services/agent-scorecard.ts`, because the product's agent page
+    // needs exactly the same numbers (ADR 0023 phase 2). Imported rather than
+    // copied: there is no second implementation because there is no second
+    // copy of the code.
+    const card = await scoreAgents({
+        since: args.since,
+        project_id: args.project,
+        run_ids: args.runs,
+    });
+    const { routed, rootOf, gateRows } = card;
+    const roots = card.roots;
     if (roots.length === 0) {
         console.error('No workflow runs in scope. Widen --since, or run eval-run.ts first.');
         await db.destroy();
         process.exit(1);
     }
 
-    // 2. Children, one level deep — `validateWorkflowGraph` forbids a
-    //    sub-workflow from carrying its own Sub-tasks step, so there is no
-    //    deeper level to walk.
-    const rootIds = roots.map((r) => r.id);
-    const children = await db
-        .selectFrom('workflow_runs')
-        .selectAll()
-        .where('parent_workflow_run_id', 'in', rootIds)
-        .execute();
-
-    const allRunIds = [...rootIds, ...children.map((c) => c.id)];
-    const rootOf = new Map<string, string>();
-    for (const id of rootIds) rootOf.set(id, id);
-    for (const c of children) rootOf.set(c.id, c.parent_workflow_run_id ?? c.id);
-
-    // 3. Every dispatch, and the required checklists needed to replay routing.
-    const rawSteps = await db
-        .selectFrom('agent_runs')
-        .select([
-            'id', 'agent_id', 'node_id', 'workflow_run_id', 'status',
-            'outcome_kind', 'outcome_checklist', 'cli', 'model', 'effort',
-            'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_creation_tokens',
-            'total_cost_usd', 'started_at', 'completed_at', 'created_at',
-        ])
-        .where('workflow_run_id', 'in', allRunIds)
-        .orderBy('created_at', 'asc')
-        .execute();
-    const steps = rawSteps.map((s) => ({
-        ...s,
-        started_at: iso(s.started_at),
-        completed_at: iso(s.completed_at),
-        created_at: iso(s.created_at) ?? '',
-    }));
-
-    const checklistRows = await db
-        .selectFrom('agent_checklists')
-        .select(['agent_id', 'id', 'label'])
-        .where('required', '=', true)
-        .execute();
-    const requiredByAgent = new Map<string, Array<{ id: number; label: string }>>();
-    for (const row of checklistRows) {
-        const list = requiredByAgent.get(row.agent_id) ?? [];
-        // `agent_checklists.id` is bigint, so pg hands it back as a string.
-        // `decideRunRouting` matches it against the numeric ids the agent
-        // reports in its outcome block, so the coercion is load-bearing —
-        // without it every required row reads as failed and every `done`
-        // scores as a fail. `workflow-engine.ts` does the same Number() cast.
-        list.push({ id: Number(row.id), label: row.label });
-        requiredByAgent.set(row.agent_id, list);
-    }
-
-    const rawGates = await db
-        .selectFrom('run_gate_results')
-        .selectAll()
-        .where('workflow_run_id', 'in', allRunIds)
-        .orderBy('created_at', 'asc')
-        .execute();
-    const gateRows = rawGates.map((g) => ({ ...g, created_at: iso(g.created_at) ?? '' }));
-
-    // 4. Replay routing for every dispatch.
-    type Routed = (typeof steps)[number] & { routing: ReturnType<typeof decideRunRouting>['kind'] };
-    const routed: Routed[] = steps.map((s) => {
-        // A run that never completed produced no block at all; that is the same
-        // information the engine had, and it parks on it.
-        // Only `kind` and `checklist` steer the decision; `summary` / `reason`
-        // feed the detail string, which is not scored. `exactOptionalPropertyTypes`
-        // is on, so an absent checklist is omitted rather than set to null.
-        const outcome: IRunOutcome | null = s.outcome_kind
-            ? { kind: s.outcome_kind, ...(s.outcome_checklist ? { checklist: s.outcome_checklist } : {}) }
-            : null;
-        const decision = decideRunRouting({
-            outcome,
-            requiredChecklist: requiredByAgent.get(s.agent_id) ?? [],
-        });
-        return { ...s, routing: decision.kind };
-    });
-
-    // 5. Per-agent aggregation. A "step" is one (run, node) position; repeat
-    //    dispatches against the same position are the fail-edge loop.
-    const byAgent = new Map<string, AgentScore>();
-    const stepGroups = new Map<string, Routed[]>();
-    for (const r of routed) {
-        const key = `${r.workflow_run_id ?? 'none'}::${r.node_id ?? r.agent_id}`;
-        const list = stepGroups.get(key) ?? [];
-        list.push(r);
-        stepGroups.set(key, list);
-
-        const score = byAgent.get(r.agent_id) ?? emptyScore(r.agent_id);
-        score.dispatches += 1;
-        score.cost_usd += r.total_cost_usd ?? 0;
-        score.input_tokens += r.input_tokens ?? 0;
-        score.output_tokens += r.output_tokens ?? 0;
-        score.cache_read_tokens += r.cache_read_tokens ?? 0;
-        score.cache_creation_tokens += r.cache_creation_tokens ?? 0;
-        score.wall_clock_s += seconds(r.started_at, r.completed_at);
-        if (r.routing === 'park_waiting_for_info') score.escalations += 1;
-        bump(score.models, r.model);
-        bump(score.efforts, r.effort);
-        byAgent.set(r.agent_id, score);
-    }
-
-    for (const group of stepGroups.values()) {
-        const first = group[0];
-        if (!first) continue;
-        const score = byAgent.get(first.agent_id);
-        if (!score) continue;
-        score.steps += 1;
-        score.loops += group.length - 1;
-        if (first.routing === 'apply_on_pass') score.pass_at_1 += 1;
-    }
-
-    // 6. Attribute each red gate to whoever last said the work was fine. That
-    //    agent is the one whose `done` the gate just contradicted.
-    const completedPasses = routed
-        .filter((r) => r.routing === 'apply_on_pass' && r.completed_at)
-        .sort((a, b) => (a.completed_at ?? '').localeCompare(b.completed_at ?? ''));
-    for (const gate of gateRows) {
-        if (gate.verdict !== 'fail') continue;
-        const tree = rootOf.get(gate.workflow_run_id) ?? gate.workflow_run_id;
-        let culprit: Routed | null = null;
-        for (const r of completedPasses) {
-            const rTree = rootOf.get(r.workflow_run_id ?? '') ?? r.workflow_run_id;
-            if (rTree !== tree) continue;
-            if ((r.completed_at ?? '') > gate.created_at) break;
-            culprit = r;
-        }
-        if (culprit) {
-            const score = byAgent.get(culprit.agent_id);
-            if (score) score.gate_catch += 1;
-        }
-    }
-
     // 7. Per-run rollup.
-    const stepsByRun = new Map<string, Routed[]>();
+    const stepsByRun = new Map<string, RoutedStep[]>();
     for (const r of routed) {
         const tree = rootOf.get(r.workflow_run_id ?? '') ?? r.workflow_run_id ?? 'none';
         const list = stepsByRun.get(tree) ?? [];
@@ -410,7 +222,7 @@ async function main(): Promise<void> {
         };
     });
 
-    const agents = [...byAgent.values()].sort((a, b) => b.dispatches - a.dispatches);
+    const agents = card.agents;
     const totals = {
         runs: roots.length,
         dispatches: routed.length,

@@ -448,3 +448,53 @@ export interface AgentCostEstimate {
     /** p25..p75 of the same history, times n. A mean alone reads as a promise. */
     estimated_range_usd: [number, number] | null;
 }
+
+
+// ── Agent performance (ADR 0023 phase 2, ATL-140) ────────────────────────
+
+/**
+ * How a step's FIRST dispatch went, split three ways rather than summed.
+ *
+ * ADR 0023: `pass@1` must not be shown as a bare ranking. On the v4 golden set
+ * `agent-release-reviewer` scored 64% **because it rejected four times**, and
+ * those rejections were the most valuable thing in the run. So the API does
+ * not return a percentage and the page does not compute one.
+ */
+export interface FirstPass {
+    applied: number;
+    rejected: number;
+    parked: number;
+}
+
+export interface AgentPerformance {
+    agent_id: string;
+    role_id: string | null;
+    window: { since: string | null; until: string | null };
+    quality: { steps: number; dispatches: number; first_pass: FirstPass; loops: number; gate_catch: number };
+    cost: {
+        total_usd: number;
+        per_step_usd: number | null;
+        input_tokens: number;
+        output_tokens: number;
+        cache_read_tokens: number;
+        cache_creation_tokens: number;
+        cache_hit_pct: number | null;
+    };
+    latency: { p50_s: number | null; p95_s: number | null; max_s: number | null; ttft_p50_ms: number | null };
+    tools: {
+        /** Traces exist only from migration 017 on — hence a stated denominator. */
+        runs_with_trace: number;
+        runs_total: number;
+        top: Array<{ name: string; calls: number; runs: number }>;
+        avg_turns: number | null;
+        avg_tool_calls: number | null;
+    };
+    by_config: Array<{
+        model: string | null;
+        effort: string | null;
+        steps: number;
+        first_pass: FirstPass;
+        cost_usd: number;
+    }>;
+    trend: Array<{ bucket: string; steps: number; first_pass: FirstPass; cost_usd: number; p95_s: number | null }>;
+}

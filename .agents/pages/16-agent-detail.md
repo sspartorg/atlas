@@ -73,6 +73,17 @@ Tab switching is plain `useTabParam(tabSlug)`. (The legacy `LinearProgress` mid-
 - **History**: `GET /api/agent-tests/:testId/runs`, polled every 5s while any verdict is `running`. A verdict is `passed` / `failed` / `errored`, with the failing expectations listed verbatim. **`errored` is not `failed`** — a dispatch that never started is a broken environment, not a failing agent.
 - Evaluation is **lazy**: there is no completion hook on `agent_runs`, so a run is judged the first time the tab reads it.
 
+### Performance (`PerformanceTabContent`) — ADR 0023 phase 2 / ATL-140
+
+What this agent's runs already prove. 515 `agent_runs` rows have carried cli, model, effort, token counts, cost and outcome since ADR 0014 — snapshotted explicitly so configurations could be compared — and until now the only reader was a CLI writing markdown into a gitignored directory.
+
+- **How its first attempts went** — `applied` / `sent back` / `asked you`, as one bar with counts. **No pass rate appears anywhere on this page.** `agent-release-reviewer` scored 64% on the v4 set because it rejected four times, and those rejections were the run's most valuable output; a page that ranked on that number would recommend culling the best reviewer in the fleet. A rejection is never drawn in the error colour.
+- Beside it: **steps**, **loops** (dispatches beyond the first on the same step), and **gate catches** — the one quality signal an agent cannot author about itself (ADR 0020).
+- **Cost** (total, per step, cache hit) and **Latency** (median, p95, time to first token).
+- **What it reaches for** — the tool profile from migration 017 traces, always with the denominator stated (`From 1 of 24 runs`), because a percentage over an unstated one is the dishonest kind of number. Says so plainly when no run has a trace.
+- **Measured at** — per `(model, effort)` slice, so a config change reads as a break in the series rather than a smear across it (ATL-140's fourth criterion).
+- Ad-hoc runs and agent test runs are **not** counted: a step is a position in a workflow graph and neither has one. Test quality lives on the Tests tab.
+
 ### Test Run (`TestRunTab`)
 Live CLI connection test, not a real `agent_runs` row. **Run test** → `POST /api/agents/:id/dry-run` (route name kept for back-compat) with the optional extra-prompt line; the API spawns the agent's configured CLI (`agent.cli`) with `--print --model {agent.model}` and pipes a one-line ping prompt via stdin (`"Reply with the single word OK and nothing else."`). stdout/stderr stream into the dark terminal panel via the `dry_run_*` SSE events (filtered by `dryRunId`). On close the server emits a verdict line `[test] connection ok · 2.3s` (or `connection failed · exit=N · 2.3s`) as the final event output; the UI prints it in green/orange. **Stop** closes the SSE locally (server may still finish). **Copy log** copies the timestamped output. No DB writes, no constitution, no agent prompt, no MCP, no issue context — this only verifies the CLI binary, credentials, and model can complete an LLM round-trip.
 
@@ -115,6 +126,7 @@ Procedural-memory editor backed by the `agent_memory` table.
 - `POST /api/agents/:id/compile-prompt` (Run now dialog — Preview prompt button)
 - `POST /api/agents/:id/dry-run` (Test Run tab — live CLI smoke-test)
 - `GET /api/agents/:id/tests`, `POST /api/agents/:id/tests` (Tests tab)
+- `GET /api/agents/:id/performance` (Performance tab)
 - `GET /api/agents/:id/cost-estimate` (Tests tab — spend before the click)
 - `GET /api/agent-tests/:testId/runs`, `POST /api/agent-tests/:testId/run`, `PATCH`/`DELETE /api/agent-tests/:testId`
 - `POST /api/agents/:id/duplicate`, `DELETE /api/agents/:id`

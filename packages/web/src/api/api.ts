@@ -93,6 +93,7 @@ import type {
     AgentTest,
     AgentTestRun,
     AgentTestBatch,
+    AgentPerformance,
     AgentCostEstimate,
     AgentTestItemTemplate,
     AgentTestExpectations,
@@ -1204,6 +1205,8 @@ export const api = {
         runs: (testId: string) => get<AgentTestRun[]>(`/agent-tests/${testId}/runs`),
         /** The same runs, folded into the batches the Owner actually pressed. */
         batches: (testId: string) => get<AgentTestBatch[]>(`/agent-tests/${testId}/batches`),
+        /** ATL-140 — what this agent's own runs already prove. */
+        performance: (agentId: string) => get<AgentPerformance>(`/agents/${agentId}/performance`),
     },
 
     workflowRuns: {
