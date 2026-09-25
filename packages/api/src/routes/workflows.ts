@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import {
     CreateWorkflowFromTemplateSchema,
     CreateWorkflowSchema,
@@ -10,6 +11,7 @@ import {
 import { requireMcpToken } from '../plugins/mcp-auth.js';
 import { ApiError } from '../utils/errors.js';
 import { workflowsService } from '../services/workflows.js';
+import { agentTestsService } from '../services/agent-tests.js';
 import {
     WorkflowStartError,
     cancelWorkflowRun,
@@ -55,6 +57,24 @@ function sendZip(reply: FastifyReply, zip: { filename: string; data: Buffer }) {
         .header('Content-Disposition', `attachment; filename="${zip.filename}"`)
         .send(zip.data);
 }
+
+/** A fixture pointed at a workflow. Same shape as an agent test's, plus a suite tag. */
+const WorkflowTestBodySchema = z
+    .object({
+        project_id: z.string().min(1),
+        repo_id: z.string().min(1).nullable().optional(),
+        suite: z.string().trim().min(1).max(120).nullable().optional(),
+        name: z.string().trim().min(1).max(200),
+        item_template: z.object({
+            issue_type: z.enum(['task', 'sub_task']),
+            title: z.string().trim().min(1).max(500),
+            description: z.string().max(20_000).optional(),
+            acceptance_criteria: z.string().max(20_000).optional(),
+            labels: z.array(z.string().min(1).max(40)).max(20).optional(),
+        }),
+        expectations: z.record(z.string(), z.unknown()).optional(),
+    })
+    .strict();
 
 export async function workflowsRoutes(app: FastifyInstance) {
     app.get('/api/workflows', async (req, reply) => {
@@ -215,6 +235,63 @@ export async function workflowsRoutes(app: FastifyInstance) {
         if (!(await workflowsService.getRun(id))) throw new ApiError('not_found', 'Workflow run not found', 404);
         await cancelWorkflowRun(id);
         return reply.send(await workflowsService.getRun(id));
+    });
+
+    // ── Workflow evals (ADR 0023 phase 3, ATL-173) ────────────────────────
+    //
+    // The same fixture primitive as an agent test, run through the whole chain
+    // instead of one agent. `evals/` does this from a terminal today: 12
+    // fixtures, 257 dispatches, $129.30 and 327 minutes on the v4 set, with the
+    // scorecard in a gitignored markdown file.
+
+    app.get('/api/workflows/:id/tests', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        return reply.send(await agentTestsService.listForWorkflow(id));
+    });
+
+    app.post('/api/workflows/:id/tests', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const workflow = await workflowsService.get(id);
+        if (!workflow) return reply.status(404).send({ error: 'Workflow not found' });
+        // A sub-task workflow runs only from a Task workflow's Sub-tasks step,
+        // so a fixture pointed at one could never start. Refused at CREATE
+        // rather than discovered at run time, an hour and several dollars in.
+        if (workflow.input_kind === 'sub_task') {
+            throw new ApiError(
+                'validation_error',
+                "A sub-task workflow runs only from a Task workflow's Sub-tasks step, so it cannot be evaluated on its own",
+                400,
+            );
+        }
+        const body = WorkflowTestBodySchema.parse(req.body ?? {});
+        return reply.status(201).send(
+            await agentTestsService.create({
+                workflow_id: id,
+                project_id: body.project_id,
+                repo_id: body.repo_id ?? null,
+                suite: body.suite ?? null,
+                name: body.name,
+                item_template: body.item_template,
+                ...(body.expectations ? { expectations: body.expectations } : {}),
+            }),
+        );
+    });
+
+    /**
+     * Fixtures of one workflow that are parked, waiting on an answer.
+     *
+     * ATL-173 names this as the thing that decides whether running a set from
+     * the UI beats the CLI: every fixture parks once at PO Writer's brainstorm
+     * by design, that is ~12 substantive answers across a set, and it is the
+     * slowest part of the whole exercise. It also carries every park reason
+     * together, because two fixtures once escalated on the same defect and the
+     * two rulings would have contradicted each other — each run only ever sees
+     * its own branch.
+     */
+    app.get('/api/workflows/:id/evals/parked', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const tests = await agentTestsService.listForWorkflow(id);
+        return reply.send(await agentTestsService.parked(tests.map((t) => t.id)));
     });
 
     app.post('/api/workflow-runs/:id/resume', { preHandler: requireMcpToken }, async (req, reply) => {

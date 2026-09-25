@@ -48,6 +48,7 @@ import { WorkflowInspector } from './WorkflowInspector.js';
 import { NodePalette, PALETTE_MIME, type IPaletteItem } from './NodePalette.js';
 import { RunWorkflowDialog } from './RunWorkflowDialog.js';
 import { WorkflowRunsTab } from './WorkflowRunsTab.js';
+import { WorkflowEvalsTab } from './WorkflowEvalsTab.js';
 import {
     connectEdges,
     newNodeId,
@@ -60,7 +61,7 @@ import {
 } from './graph.js';
 import { tidyGraph } from './layout.js';
 
-const TAB_KEYS = ['builder', 'runs'] as const;
+const TAB_KEYS = ['builder', 'runs', 'evals'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 function toUpdate(w: IWorkflow): UpdateWorkflowInput {
@@ -361,11 +362,14 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
                 >
                     <Tab value="builder" label="Builder" />
                     <Tab value="runs" label="Runs" />
+                    <Tab value="evals" label="Evals" />
                 </Tabs>
             </Box>
 
             {tab === 'runs' ? (
                 <WorkflowRunsTab workflowId={baseline.id} />
+            ) : tab === 'evals' ? (
+                <WorkflowEvalsTab workflowId={baseline.id} />
             ) : (
                 <>
                     <GraphErrors errors={errors} />

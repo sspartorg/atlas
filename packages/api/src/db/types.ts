@@ -810,12 +810,19 @@ export interface RunGateResultsTable {
 /** ADR 0023 — a saved test for one agent: the item to act on, and what should happen. */
 export interface AgentTestsTable {
     id: string;
-    agent_id: string;
+    /** Migration 019 — null when this fixture targets a workflow instead. */
+    agent_id: StrN;
     project_id: string;
     repo_id: StrN;
     name: string;
     item_template: unknown;
     expectations: unknown;
+    // Migration 019 — exactly one of `agent_id` / `workflow_id` is set, by
+    // CHECK. Running a fixture through one agent qualifies it; running the
+    // same fixture through a workflow is the end-to-end eval.
+    workflow_id: StrN;
+    /** A tag, not an entity. Grouping is GROUP BY. */
+    suite: StrN;
     created_at: CreatedAt;
     updated_at: CreatedAt;
 }
@@ -848,6 +855,8 @@ export interface AgentTestRunsTable {
     judge_reason: StrN;
     /** Kept apart from `cost_usd` so a judge can never fail a ceiling about the AGENT. */
     judge_cost_usd: number | null;
+    /** Migration 019 — the workflow run a workflow eval is judged on. */
+    workflow_run_id: StrN;
 }
 
 export interface DB {

@@ -2,7 +2,11 @@ import type { IRunOutcome } from '@atlas/shared';
 
 import { db } from '../db/kysely-client.js';
 import type { AgentTestVerdict, JudgeVerdict } from '../db/types.js';
-import { evaluateAgentTest, type AgentTestExpectations } from './agent-tests-evaluate.js';
+import {
+    evaluateAgentTest,
+    type AgentTestExpectations,
+    type WorkflowRunObservation,
+} from './agent-tests-evaluate.js';
 
 // Judging one test run, and the row shapes that judging needs.
 //
@@ -34,12 +38,16 @@ export interface AgentTestItemTemplate {
 
 export interface AgentTestRow {
     id: string;
-    agent_id: string;
+    /** Null when this fixture targets a workflow instead (migration 019). */
+    agent_id: string | null;
     project_id: string;
     repo_id: string | null;
     name: string;
     item_template: AgentTestItemTemplate;
     expectations: AgentTestExpectations;
+    /** Exactly one of `agent_id` / `workflow_id` is set, by CHECK. */
+    workflow_id: string | null;
+    suite: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -62,6 +70,8 @@ export interface AgentTestRunRow {
     judge_reason: string | null;
     /** Apart from `cost_usd`: a judge must never fail a ceiling about the agent. */
     judge_cost_usd: number | null;
+    /** Migration 019 — set for a workflow eval; judged on the whole run. */
+    workflow_run_id: string | null;
 }
 
 function iso(v: unknown): string {
@@ -71,12 +81,14 @@ function iso(v: unknown): string {
 export function asTest(r: Record<string, unknown>): AgentTestRow {
     return {
         id: r['id'] as string,
-        agent_id: r['agent_id'] as string,
+        agent_id: (r['agent_id'] as string) ?? null,
         project_id: r['project_id'] as string,
         repo_id: (r['repo_id'] as string) ?? null,
         name: r['name'] as string,
         item_template: r['item_template'] as AgentTestItemTemplate,
         expectations: (r['expectations'] as AgentTestExpectations) ?? {},
+        workflow_id: (r['workflow_id'] as string) ?? null,
+        suite: (r['suite'] as string) ?? null,
         created_at: iso(r['created_at']),
         updated_at: iso(r['updated_at']),
     };
@@ -101,6 +113,7 @@ export function asRun(r: Record<string, unknown>): AgentTestRunRow {
         judge_verdict: (r['judge_verdict'] as JudgeVerdict) ?? null,
         judge_reason: (r['judge_reason'] as string) ?? null,
         judge_cost_usd: r['judge_cost_usd'] == null ? null : Number(r['judge_cost_usd']),
+        workflow_run_id: (r['workflow_run_id'] as string) ?? null,
     };
 }
 
@@ -111,7 +124,120 @@ export function asRun(r: Record<string, unknown>): AgentTestRunRow {
  * crashed between the dispatch finishing and the hook firing would otherwise
  * leave the run `running` for good.
  */
+/** Statuses a `workflow_runs` row can no longer move out of. Parked is not one. */
+const WORKFLOW_TERMINAL = new Set(['completed', 'error', 'cancelled']);
+
+/**
+ * What a finished workflow run produced.
+ *
+ * Gate verdicts are gathered across the whole tree: ADR 0015 runs a Task's
+ * sub-tasks as child runs, and a gate that went red inside one is still this
+ * delivery's red gate.
+ */
+async function observeWorkflowRun(workflowRunId: string): Promise<WorkflowRunObservation | null> {
+    const run = await db
+        .selectFrom('workflow_runs')
+        .select(['status', 'item_id', 'pr_urls'])
+        .where('id', '=', workflowRunId)
+        .executeTakeFirst();
+    if (!run || !WORKFLOW_TERMINAL.has(run.status as string)) return null;
+
+    const children = await db
+        .selectFrom('workflow_runs')
+        .select('id')
+        .where('parent_workflow_run_id', '=', workflowRunId)
+        .execute();
+    const tree = [workflowRunId, ...children.map((c) => c.id)];
+
+    const gates = await db
+        .selectFrom('run_gate_results')
+        .select('verdict')
+        .where('workflow_run_id', 'in', tree)
+        .execute();
+
+    const subTasks = run.item_id
+        ? await db
+              .selectFrom('items')
+              .select('id')
+              .where('parent_id', '=', run.item_id)
+              .where('type', '=', 'sub_task')
+              .execute()
+        : [];
+
+    return {
+        status: run.status as string,
+        sub_task_count: subTasks.length,
+        pr_count: Array.isArray(run.pr_urls) ? run.pr_urls.length : 0,
+        gate_verdicts: gates.map((g) => g.verdict as string),
+    };
+}
+
+/**
+ * Judge a workflow eval once its run has finished.
+ *
+ * A parked run is NOT finished — ATL-173: every fixture parks once at PO
+ * Writer's brainstorm by design, and the verdict has to wait for the answer.
+ */
+async function judgeWorkflowEval(run: AgentTestRunRow, test: AgentTestRow): Promise<AgentTestRunRow> {
+    if (!run.workflow_run_id) return run;
+    const wf = await observeWorkflowRun(run.workflow_run_id);
+    if (!wf) return run;
+
+    // The delivery's whole cost, not one dispatch's: an eval is judged on the
+    // chain, and its `max_cost_usd` ceiling is about the chain.
+    const spend = await db
+        .selectFrom('agent_runs')
+        .select(({ fn }) => [fn.sum<string>('total_cost_usd').as('cost')])
+        .where('workflow_run_id', 'in', [
+            run.workflow_run_id,
+            ...(
+                await db
+                    .selectFrom('workflow_runs')
+                    .select('id')
+                    .where('parent_workflow_run_id', '=', run.workflow_run_id)
+                    .execute()
+            ).map((c) => c.id),
+        ])
+        .executeTakeFirst();
+    const cost = spend?.cost == null ? null : Number(spend.cost);
+
+    const timing = await db
+        .selectFrom('workflow_runs')
+        .select(['started_at', 'finished_at'])
+        .where('id', '=', run.workflow_run_id)
+        .executeTakeFirst();
+    const from = timing?.started_at ? new Date(iso(timing.started_at)).getTime() : null;
+    const to = timing?.finished_at ? new Date(iso(timing.finished_at)).getTime() : null;
+    const duration = from && to ? Math.round((to - from) / 1000) : null;
+
+    const evaluation = evaluateAgentTest(test.expectations, {
+        // A workflow eval asserts on the delivery, not on any one dispatch's
+        // self-report, so there is no outcome block to read.
+        outcome: null,
+        workflow: wf,
+        requiredChecklist: [],
+        cost_usd: cost,
+        duration_s: duration,
+        ran: wf.status === 'completed' || wf.status === 'error',
+    });
+
+    await db
+        .updateTable('agent_test_runs')
+        .set({
+            verdict: evaluation.verdict,
+            failures: JSON.stringify(evaluation.failures),
+            cost_usd: cost,
+            duration_s: duration,
+            evaluated_at: new Date().toISOString(),
+        } as never)
+        .where('id', '=', run.id)
+        .execute();
+
+    return { ...run, verdict: evaluation.verdict, failures: evaluation.failures, cost_usd: cost, duration_s: duration };
+}
+
 export async function judgePendingRun(run: AgentTestRunRow, test: AgentTestRow): Promise<AgentTestRunRow> {
+    if (run.workflow_run_id) return judgeWorkflowEval(run, test);
     if (!run.agent_run_id) return run;
     const ar = await db
         .selectFrom('agent_runs')
@@ -140,12 +266,14 @@ export async function judgePendingRun(run: AgentTestRunRow, test: AgentTestRow):
           } as IRunOutcome)
         : null;
 
-    const requiredChecklist = await db
-        .selectFrom('agent_checklists')
-        .select(['id', 'label'])
-        .where('agent_id', '=', test.agent_id)
-        .where('required', '=', true)
-        .execute();
+    const requiredChecklist = test.agent_id
+        ? await db
+              .selectFrom('agent_checklists')
+              .select(['id', 'label'])
+              .where('agent_id', '=', test.agent_id)
+              .where('required', '=', true)
+              .execute()
+        : [];
 
     const startedAt = ar.started_at ? new Date(iso(ar.started_at)).getTime() : null;
     const completedAt = ar.completed_at ? new Date(iso(ar.completed_at)).getTime() : null;

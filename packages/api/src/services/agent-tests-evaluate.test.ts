@@ -272,4 +272,48 @@ describe('trace expectations', () => {
     it('ignores a missing trace when nothing asked about behaviour', () => {
         expect(evaluateAgentTest({ outcome_kind: 'done' }, observe(null)).verdict).toBe('passed');
     });
+
+    // A single-agent test cannot answer a question about a whole delivery,
+    // and guessing would be worse than saying so.
+    it('errors when a workflow-level expectation is asked of one agent', () => {
+        const r = evaluateAgentTest({ terminal_status: ['completed'] }, observe(trace()));
+        expect(r.verdict).toBe('errored');
+        expect(r.failures[0]).toContain('whole workflow run');
+    });
+
+    it('checks a delivery against every workflow-level expectation', () => {
+        const wf = { status: 'completed', sub_task_count: 1, pr_count: 0, gate_verdicts: ['pass', 'fail'] };
+        const r = evaluateAgentTest(
+            {
+                terminal_status: ['completed'],
+                min_sub_tasks: 3,
+                requires_pr: true,
+                gate_verdicts_all_pass: true,
+            },
+            { ...observe(trace()), workflow: wf },
+        );
+        expect(r.verdict).toBe('failed');
+        expect(r.failures).toEqual([
+            'expected at least 3 sub-tasks, got 1',
+            'expected a pull request, none was opened',
+            '1 gate verdict(s) went red',
+        ]);
+    });
+
+    it('passes a delivery that met all of them', () => {
+        const wf = { status: 'completed', sub_task_count: 4, pr_count: 1, gate_verdicts: ['pass'] };
+        const r = evaluateAgentTest(
+            { terminal_status: ['completed'], min_sub_tasks: 3, requires_pr: true, gate_verdicts_all_pass: true },
+            { ...observe(trace()), workflow: wf },
+        );
+        expect(r.verdict).toBe('passed');
+    });
+
+    it('checks that the summary omits what it must not say', () => {
+        const r = evaluateAgentTest(
+            { summary_omits: ['did it'] },
+            { ...observe(trace()), outcome: { kind: 'done', summary: 'did it anyway' } },
+        );
+        expect(r.failures[0]).toContain('and should not');
+    });
 });
