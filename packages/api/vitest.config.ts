@@ -88,12 +88,6 @@ export default defineConfig({
                 // uses it (worktree-orchestrator, cli-sessions). Same exclusion
                 // category as worktree-orchestrator.ts.
                 'src/services/git-credentials.ts',
-                // dry-run.ts — subprocess-spawning CLI connection test. The 14-test
-                // suite covers the synchronous return path. The subprocess event
-                // callbacks (stdout/stderr/close/error) require PTY-level mocking
-                // that exceeds the unit-test surface. Excluded per the same
-                // convention as agent-runner.ts / auto-fetch-runner.ts.
-                'src/services/dry-run.ts',
                 // W2 — git-status/git-verify/clone/delete/reclone covered by unit tests (chunk N).
                 // 'src/services/clone-runner.ts',
                 // 'src/services/delete-runner.ts',
@@ -115,8 +109,6 @@ export default defineConfig({
                 // 2026-06-25 (W2 chunk 3) — covered by agents.test.ts (44 tests)
                 // 2026-06-25 (W2 chunk 5) — covered by agent-memory.test.ts (34 tests)
                 // 2026-06-25 (W2 chunk 1) — covered by dependency-guard.test.ts (14 tests)
-                // 2026-06-25 (W2 chunk 6) — dry-run.test.ts covers return path (14 tests);
-                // subprocess callbacks excluded (see above).
                 // 2026-06-25 (W1 chunk 23) — mcp-config-writer.ts exclude
                 // dropped: the file never existed in the tree.
                 // Theme 09 — agent prompts + source data files.

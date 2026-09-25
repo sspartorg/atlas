@@ -103,8 +103,8 @@ export default defineConfig({
                 // 'src/pages/agents/AutonomousSettingsTab.tsx',
                 // Agent tab *Content components — heavy form panels with complex
                 // schema-driven fields (model select, schedule presets, cron builder,
-                // handoff rule editor, dry-run terminal). Each deferred-mount wrapper
-                // (OverviewTab/PromptTab/HandoffsTab/RunsTab/TestRunTab) is covered by
+                // handoff rule editor). Each deferred-mount wrapper
+                // (OverviewTab/PromptTab/HandoffsTab/RunsTab) is covered by
                 // its own unit test. The *Content panels' form interactions are
                 // covered by E2E/integration tests (Track in W1-later or Playwright).
                 // 2026-06-25 (W1 chunk 23) — covered by OverviewTabContent.test.tsx
@@ -113,11 +113,9 @@ export default defineConfig({
                 // 'src/pages/agents/PromptTabContent.tsx',
                 // 2026-06-25 (W1 chunk 23) — covered by HandoffsTabContent.test.tsx
                 // 'src/pages/agents/HandoffsTabContent.tsx',
-                // 2026-06-25 (W1 chunk 24) — covered by MemoryTabContent.test.tsx, RunsTabContent.test.tsx, TestRunTab.test.tsx, TestRunTabContent.test.tsx
+                // 2026-06-25 (W1 chunk 24) — covered by MemoryTabContent.test.tsx, RunsTabContent.test.tsx
                 // 'src/pages/agents/MemoryTabContent.tsx',
                 // 'src/pages/agents/RunsTabContent.tsx',
-                // 'src/pages/agents/TestRunTab.tsx',
-                // 'src/pages/agents/TestRunTabContent.tsx',
                 // 2026-06-25 (W1 chunk 25) — covered by ImportAgentZipModal.test.tsx
                 // 'src/pages/agents/ImportAgentZipModal.tsx',
                 // 2026-06-25 (W1 chunk 25) — covered by QueueWaitingOnYou.test.tsx (mobile branch added)
