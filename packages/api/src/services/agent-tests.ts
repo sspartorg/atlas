@@ -13,6 +13,7 @@ import {
     type AgentTestRunRow,
 } from './agent-tests-evaluate-run.js';
 import { spawnAgentRun } from './agent-runner.js';
+import { summariseBatch, toBatches, type AgentTestBatch } from './agent-test-batches.js';
 import { subTasksService } from './sub-tasks.js';
 import { tasksService } from './tasks.js';
 
@@ -34,6 +35,19 @@ import { tasksService } from './tasks.js';
 // the dispatch finishing and the hook firing.
 
 export type { AgentTestRow, AgentTestRunRow };
+
+/**
+ * Ten is the cap because the dialog shows the estimated total before the
+ * click, and past ten the number stops being a decision anybody makes lightly.
+ */
+const MAX_SAMPLES = 10;
+
+export interface RunTestOptions {
+    /** Samples to take. 1 keeps the old behaviour exactly. */
+    n_runs?: number | undefined;
+    /** Free-text tag, e.g. `before-prompt-diet`, for comparing two batches. */
+    label?: string | undefined;
+}
 
 export interface CreateAgentTestInput {
     agent_id: string;
@@ -133,75 +147,31 @@ export const agentTestsService = {
      * one would; an agent that behaved differently against a synthetic item
      * would make the test worthless.
      */
-    async run(testId: string): Promise<AgentTestRunRow> {
+    /**
+     * Run a test `n` times and return the batch.
+     *
+     * One sample is a coin flip: the agent is stochastic, so a test that passes
+     * three times in five reported whichever of the two the Owner happened to
+     * press the button on. The samples are independent — each materialises its
+     * own throwaway item, because a second dispatch against an item the first
+     * one already changed is measuring something else.
+     *
+     * They run in parallel, which is safe here specifically: an agent test
+     * calls `spawnAgentRun` with no workflow run, so each one gets its own
+     * `mkdtemp` directory and never takes the project git lock. A workflow-level
+     * eval would have to serialise.
+     */
+    async run(testId: string, opts: RunTestOptions = {}): Promise<AgentTestBatch> {
         const test = await this.get(testId);
         if (!test) throw new Error(`Agent test ${testId} not found`);
+        const samples = Math.min(MAX_SAMPLES, Math.max(1, Math.trunc(opts.n_runs ?? 1)));
+        const batchId = randomUUID();
+        const label = opts.label?.trim() || null;
 
-        const t = test.item_template;
-        const suffix = `[test] ${test.name}`;
-        let itemId: string;
-        if (t.issue_type === 'sub_task') {
-            // A sub-task needs a parent. The test owns a throwaway Task for it
-            // so the agent sees the shape it expects rather than an orphan.
-            const parent = await tasksService.create({
-                project_id: test.project_id,
-                title: `${t.title} ${suffix}`,
-                description: t.description ?? '',
-                is_test: true,
-                ...(test.repo_id ? { repo_ids: [test.repo_id] } : {}),
-            });
-            const sub = await subTasksService.create({
-                task_id: parent.id,
-                title: `${t.title} ${suffix}`,
-                description: t.description ?? '',
-                acceptance_criteria: t.acceptance_criteria ?? '',
-                labels: t.labels ?? [],
-                is_test: true,
-            });
-            itemId = sub.id;
-        } else {
-            const task = await tasksService.create({
-                project_id: test.project_id,
-                title: `${t.title} ${suffix}`,
-                description: t.description ?? '',
-                acceptance_criteria: t.acceptance_criteria ?? '',
-                labels: t.labels ?? [],
-                is_test: true,
-                ...(test.repo_id ? { repo_ids: [test.repo_id] } : {}),
-            });
-            itemId = task.id;
-        }
-
-        const id = randomUUID();
-        await db
-            .insertInto('agent_test_runs')
-            .values({ id, agent_test_id: testId, item_id: itemId } as never)
-            .execute();
-
-        try {
-            const runId = await spawnAgentRun({
-                agentId: test.agent_id,
-                issueType: t.issue_type,
-                issueId: itemId,
-                projectId: test.project_id,
-            });
-            await db.updateTable('agent_test_runs').set({ agent_run_id: runId } as never).where('id', '=', id).execute();
-        } catch (err) {
-            // The dispatch never happened — a missing CLI, a bad model. That is
-            // a broken environment, not a failing agent, so it is `errored`.
-            await db
-                .updateTable('agent_test_runs')
-                .set({
-                    verdict: 'errored',
-                    failures: JSON.stringify([`could not start the run: ${(err as Error).message}`]),
-                    evaluated_at: new Date().toISOString(),
-                } as never)
-                .where('id', '=', id)
-                .execute();
-        }
-
-        const row = await db.selectFrom('agent_test_runs').selectAll().where('id', '=', id).executeTakeFirst();
-        return asRun(row as never);
+        const rows = await Promise.all(
+            Array.from({ length: samples }, (_, i) => runOneSample(test, batchId, i, label)),
+        );
+        return summariseBatch(batchId, rows);
     },
 
     /**
@@ -223,4 +193,90 @@ export const agentTestsService = {
         }
         return out;
     },
+
+    /** The same runs, folded into the batches the Owner actually pressed. */
+    async listBatches(testId: string): Promise<AgentTestBatch[]> {
+        return toBatches(await this.listRuns(testId));
+    },
 };
+
+/** One sample: its own throwaway item, its own dispatch, its own row. */
+async function runOneSample(
+    test: AgentTestRow,
+    batchId: string,
+    sampleIndex: number,
+    label: string | null,
+): Promise<AgentTestRunRow> {
+    const t = test.item_template;
+    const suffix = `[test] ${test.name}`;
+    let itemId: string;
+    if (t.issue_type === 'sub_task') {
+        // A sub-task needs a parent. The test owns a throwaway Task for it
+        // so the agent sees the shape it expects rather than an orphan.
+        const parent = await tasksService.create({
+            project_id: test.project_id,
+            title: `${t.title} ${suffix}`,
+            description: t.description ?? '',
+            is_test: true,
+            ...(test.repo_id ? { repo_ids: [test.repo_id] } : {}),
+        });
+        const sub = await subTasksService.create({
+            task_id: parent.id,
+            title: `${t.title} ${suffix}`,
+            description: t.description ?? '',
+            acceptance_criteria: t.acceptance_criteria ?? '',
+            labels: t.labels ?? [],
+            is_test: true,
+        });
+        itemId = sub.id;
+    } else {
+        const task = await tasksService.create({
+            project_id: test.project_id,
+            title: `${t.title} ${suffix}`,
+            description: t.description ?? '',
+            acceptance_criteria: t.acceptance_criteria ?? '',
+            labels: t.labels ?? [],
+            is_test: true,
+            ...(test.repo_id ? { repo_ids: [test.repo_id] } : {}),
+        });
+        itemId = task.id;
+    }
+
+    const id = randomUUID();
+    await db
+        .insertInto('agent_test_runs')
+        .values({
+            id,
+            agent_test_id: test.id,
+            item_id: itemId,
+            batch_id: batchId,
+            sample_index: sampleIndex,
+            label,
+        } as never)
+        .execute();
+
+    try {
+        const runId = await spawnAgentRun({
+            agentId: test.agent_id,
+            issueType: t.issue_type,
+            issueId: itemId,
+            projectId: test.project_id,
+        });
+        await db.updateTable('agent_test_runs').set({ agent_run_id: runId } as never).where('id', '=', id).execute();
+    } catch (err) {
+        // The dispatch never happened — a missing CLI, a bad model. That is
+        // a broken environment, not a failing agent, so it is `errored`.
+        await db
+            .updateTable('agent_test_runs')
+            .set({
+                verdict: 'errored',
+                failures: JSON.stringify([`could not start the run: ${(err as Error).message}`]),
+                evaluated_at: new Date().toISOString(),
+            } as never)
+            .where('id', '=', id)
+            .execute();
+    }
+
+    const row = await db.selectFrom('agent_test_runs').selectAll().where('id', '=', id).executeTakeFirst();
+    return asRun(row as never);
+}

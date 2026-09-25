@@ -1275,12 +1275,33 @@ describe('agent tests over HTTP', () => {
         const id = created.json().id as string;
 
         const run = await app.inject({ method: 'POST', url: `/api/agent-tests/${id}/run` });
-        // 202: the dispatch is asynchronous, the verdict lands on a later read.
+        // 202: the dispatches are asynchronous, and the route returns the
+        // BATCH — one press is n samples, and an unsampled press is a batch
+        // of one (migration 018).
         expect(run.statusCode).toBe(202);
-        expect(run.json().verdict).toBe('running');
+        expect(run.json()).toMatchObject({ n_runs: 1, running: 1 });
+        expect(run.json().runs[0].verdict).toBe('running');
 
         const runs = await app.inject({ method: 'GET', url: `/api/agent-tests/${id}/runs` });
         expect(runs.json()).toHaveLength(1);
+
+        const batches = await app.inject({ method: 'GET', url: `/api/agent-tests/${id}/batches` });
+        expect(batches.json()).toHaveLength(1);
+        expect(batches.json()[0]).toMatchObject({ n_runs: 1, running: 1, consistency: null });
+    });
+
+    // The cap is enforced at the boundary as well as in the service: a bad
+    // number should be a 400, not a silently clamped spend.
+    it('refuses a sample count outside the cap', async () => {
+        await seed();
+        const created = await app.inject({ method: 'POST', url: '/api/agents/agent-coder/tests', payload: body });
+        const id = created.json().id as string;
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/agent-tests/${id}/run`,
+            payload: { n_runs: 50 },
+        });
+        expect(res.statusCode).toBe(400);
     });
 
     describe('cost estimate', () => {
@@ -1295,7 +1316,7 @@ describe('agent tests over HTTP', () => {
                     .execute();
             }
             const res = await app.inject({ method: 'GET', url: '/api/agents/agent-coder/cost-estimate' });
-            expect(res.json()).toEqual({ estimated_cost_usd: 0.3, sample_size: 2 });
+            expect(res.json()).toMatchObject({ estimated_cost_usd: 0.3, sample_size: 2 });
         });
 
         // Null, not zero: "we do not know yet" and "it is free" are different
@@ -1303,7 +1324,7 @@ describe('agent tests over HTTP', () => {
         it('returns null rather than zero when the agent has never run', async () => {
             await seed();
             const res = await app.inject({ method: 'GET', url: '/api/agents/agent-coder/cost-estimate' });
-            expect(res.json()).toEqual({ estimated_cost_usd: null, sample_size: 0 });
+            expect(res.json()).toMatchObject({ estimated_cost_usd: null, sample_size: 0 });
         });
 
         it('ignores runs that did not complete', async () => {
@@ -1313,7 +1334,7 @@ describe('agent tests over HTTP', () => {
                 .values({ id: 'r-err', agent_id: 'agent-coder', status: 'error', total_cost_usd: 99 } as never)
                 .execute();
             expect((await app.inject({ method: 'GET', url: '/api/agents/agent-coder/cost-estimate' })).json())
-                .toEqual({ estimated_cost_usd: null, sample_size: 0 });
+                .toMatchObject({ estimated_cost_usd: null, sample_size: 0 });
         });
     });
 });

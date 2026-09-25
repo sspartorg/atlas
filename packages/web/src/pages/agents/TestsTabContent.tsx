@@ -5,12 +5,13 @@ import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Collapse from '@mui/material/Collapse';
+import Tooltip from '@mui/material/Tooltip';
 import CircularProgress from '@mui/material/CircularProgress';
 import type { IAgent } from '@atlas/shared';
 
 import {
     useAgentCostEstimate,
-    useAgentTestRuns,
+    useAgentTestBatches,
     useAgentTests,
     useCreateAgentTest,
     useDeleteAgentTest,
@@ -19,7 +20,7 @@ import {
 import { useProjects } from '../../hooks/useProjects.js';
 import { useProjectRepos } from '../../hooks/useProjectRepos.js';
 import { useToast } from '../../hooks/useToast.js';
-import type { AgentTest, AgentTestRun } from '../../api/types.js';
+import type { AgentTest, AgentTestBatch, AgentTestRun } from '../../api/types.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { formatCostUsd } from '../../utils/formatCost.js';
 import { relativeTime } from '../../utils/time.js';
@@ -53,34 +54,123 @@ const OUTCOMES = [
     { value: 'asked_question', label: 'asked_question — asked instead of guessing' },
 ] as const;
 
-function RunRow({ run }: { run: AgentTestRun }) {
-    const v = VERDICT[run.verdict];
+/** How many samples one press takes. An agent is stochastic; one is a coin flip. */
+const SAMPLE_CHOICES = [1, 3, 5, 10] as const;
+
+/**
+ * The verdict, as a sentence rather than a chip.
+ *
+ * `3/5 passed · flaky` is the thing a single run could never say, and the
+ * reason sampling exists: before this, a test that passes three times in five
+ * printed whichever of "passed" and "failed" the Owner happened to press.
+ */
+function BatchVerdict({ batch }: { batch: AgentTestBatch }) {
+    if (batch.running > 0) {
+        return (
+            <Typography sx={{ fontSize: 12, fontWeight: 700, color: ATLAS_PALETTE.slate60 }}>
+                {batch.n_runs > 1 ? `running ${batch.n_runs - batch.running}/${batch.n_runs}…` : 'running…'}
+            </Typography>
+        );
+    }
+    const judged = batch.n_runs - batch.errored;
+    // Nothing ran at all — a broken environment, not a failing agent.
+    if (judged === 0) {
+        return (
+            <Typography sx={{ fontSize: 12, fontWeight: 700, color: ATLAS_PALETTE.amber }}>
+                could not run
+            </Typography>
+        );
+    }
+    const colour = batch.flaky
+        ? ATLAS_PALETTE.amber
+        : batch.passed === judged
+          ? ATLAS_PALETTE.greenDark
+          : ATLAS_PALETTE.red;
     return (
-        <Box sx={{ py: 1, borderTop: `1px solid ${ATLAS_PALETTE.slate12}` }}>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
+            <Typography sx={{ fontSize: 12, fontWeight: 700, color: colour }}>
+                {judged > 1 ? `${batch.passed}/${judged} passed` : batch.passed === 1 ? 'passed' : 'failed'}
+            </Typography>
+            {batch.flaky && (
+                <Tooltip title="It passed sometimes. A verdict from one run would have been a coin flip.">
+                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: ATLAS_PALETTE.amber }}>
+                        · flaky
+                    </Typography>
+                </Tooltip>
+            )}
+            {batch.errored > 0 && (
+                <Tooltip title="Dispatches that never started — a broken environment, not a wrong answer. They are left out of the score.">
+                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.amber }}>
+                        · {batch.errored} could not run
+                    </Typography>
+                </Tooltip>
+            )}
+        </Box>
+    );
+}
+
+/** One segment per sample, in the order they were taken. */
+function SampleStrip({ batch }: { batch: AgentTestBatch }) {
+    if (batch.n_runs < 2) return null;
+    return (
+        <Box sx={{ display: 'flex', gap: 0.5, mt: 0.75 }} aria-label={`${batch.n_runs} samples`}>
+            {batch.runs.map((r) => (
+                <Tooltip key={r.id} title={`Sample ${r.sample_index + 1}: ${VERDICT[r.verdict].label}`}>
+                    <Box
+                        sx={{
+                            height: 6,
+                            flex: 1,
+                            maxWidth: 48,
+                            borderRadius: '3px',
+                            background: VERDICT[r.verdict].color,
+                            opacity: r.verdict === 'running' ? 0.35 : 1,
+                        }}
+                    />
+                </Tooltip>
+            ))}
+        </Box>
+    );
+}
+
+function BatchBlock({ batch }: { batch: AgentTestBatch }) {
+    return (
+        <Box sx={{ py: 1.25, borderTop: `1px solid ${ATLAS_PALETTE.slate12}` }}>
             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                <Typography sx={{ fontSize: 12, fontWeight: 700, color: v.color, minWidth: 90 }}>
-                    {v.label}
-                </Typography>
+                <BatchVerdict batch={batch} />
                 <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
-                    {relativeTime(run.created_at)}
+                    {relativeTime(batch.created_at)}
                 </Typography>
-                {run.cost_usd != null && (
+                {batch.cost_usd > 0 && (
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
-                        {formatCostUsd(run.cost_usd)}
+                        {formatCostUsd(batch.cost_usd)}
                     </Typography>
                 )}
-                {run.duration_s != null && (
-                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>{run.duration_s}s</Typography>
+                {batch.duration_s_p50 != null && (
+                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
+                        {batch.duration_s_p50}s median
+                    </Typography>
                 )}
-                {run.item_id && (
-                    <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>{run.item_id}</Typography>
+                {batch.label && (
+                    <Typography
+                        sx={{
+                            fontSize: 11,
+                            color: ATLAS_PALETTE.slate60,
+                            background: ATLAS_PALETTE.slate06,
+                            borderRadius: '4px',
+                            px: 0.75,
+                        }}
+                    >
+                        {batch.label}
+                    </Typography>
                 )}
             </Box>
-            {/* Every expectation that did not hold. A verdict you cannot act on
-                is barely better than no verdict. */}
-            {run.failures.map((f, i) => (
-                <Typography key={i} sx={{ fontSize: 12, color: ATLAS_PALETTE.red, pl: 0.5 }}>
-                    • {f}
+            <SampleStrip batch={batch} />
+            {/* WHICH expectation was unstable, not merely that something was.
+                "3 of 5 runs" is the part a single verdict cannot express. */}
+            {batch.failure_histogram.map((f) => (
+                <Typography key={f.failure} sx={{ fontSize: 12, color: ATLAS_PALETTE.red, pl: 0.5, mt: 0.5 }}>
+                    • {batch.n_runs > 1 ? `${f.count} of ${batch.n_runs} runs: ` : ''}
+                    {f.failure}
                 </Typography>
             ))}
         </Box>
@@ -89,44 +179,64 @@ function RunRow({ run }: { run: AgentTestRun }) {
 
 function TestCard({ test, agentId }: { test: AgentTest; agentId: string }) {
     const [open, setOpen] = useState(false);
-    const { data: runs } = useAgentTestRuns(test.id, open);
+    const [samples, setSamples] = useState(1);
+    // Always fetched, not only while expanded: the headline verdict is the
+    // point of the row, and a batch still running has to keep polling.
+    const { data: batches } = useAgentTestBatches(test.id);
     const runTest = useRunAgentTest();
     const removeTest = useDeleteAgentTest(agentId);
-    const { data: estimate } = useAgentCostEstimate(agentId);
+    const { data: estimate } = useAgentCostEstimate(agentId, samples);
     const toast = useToast();
 
-    const last = runs?.[0];
+    const last = batches?.[0];
     return (
         <Box sx={{ border: `1px solid ${ATLAS_PALETTE.slate12}`, borderRadius: 1, p: 2, mb: 1.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
                 <Typography sx={{ fontSize: 14, fontWeight: 600, flex: 1 }}>{test.name}</Typography>
-                {last && (
-                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: VERDICT[last.verdict].color }}>
-                        {VERDICT[last.verdict].label}
-                    </Typography>
-                )}
+                {last && <BatchVerdict batch={last} />}
                 <Button size="small" onClick={() => setOpen((v) => !v)}>
                     {open ? 'Hide' : 'History'}
                 </Button>
+                <TextField
+                    select
+                    size="small"
+                    value={samples}
+                    onChange={(e) => setSamples(Number(e.target.value))}
+                    label="Runs"
+                    sx={{ width: 96 }}
+                    slotProps={{ htmlInput: { 'aria-label': `Samples for ${test.name}` } }}
+                >
+                    {SAMPLE_CHOICES.map((n) => (
+                        <MenuItem key={n} value={n}>
+                            {n === 1 ? '1' : `${n}×`}
+                        </MenuItem>
+                    ))}
+                </TextField>
                 <Button
                     size="small"
                     variant="contained"
                     disabled={runTest.isPending}
                     onClick={() => {
                         setOpen(true);
-                        runTest.mutate(test.id, {
-                            onSuccess: () => toast.show({ message: 'Test started' }),
-                            onError: (e) => toast.show({ message: (e as Error).message }),
-                        });
+                        runTest.mutate(
+                            { testId: test.id, n_runs: samples },
+                            {
+                                onSuccess: () =>
+                                    toast.show({
+                                        message: samples > 1 ? `${samples} runs started` : 'Test started',
+                                    }),
+                                onError: (e) => toast.show({ message: (e as Error).message }),
+                            },
+                        );
                     }}
                 >
-                    {/* The estimate is shown on the button itself. Spend that
-                        surprises you afterwards is what stops people running
-                        tests at all. */}
+                    {/* The TOTAL, not the per-run figure: `5×` silently costing
+                        five times over is exactly the surprise ADR 0023 says
+                        stops people running tests at all. */}
                     {runTest.isPending
                         ? 'Starting…'
-                        : estimate?.estimated_cost_usd != null
-                          ? `Run · ~${formatCostUsd(estimate.estimated_cost_usd)}`
+                        : estimate?.estimated_total_usd != null
+                          ? `Run · ~${formatCostUsd(estimate.estimated_total_usd)}`
                           : 'Run'}
                 </Button>
                 <Button
@@ -142,16 +252,19 @@ function TestCard({ test, agentId }: { test: AgentTest; agentId: string }) {
                 {test.item_template.issue_type === 'sub_task' ? 'Sub-task' : 'Task'}: {test.item_template.title}
                 {test.expectations.outcome_kind ? ` · expects ${test.expectations.outcome_kind}` : ''}
             </Typography>
+            {/* The strip under the headline, so a flaky result is visible
+                without opening the history. */}
+            {last && !open && <SampleStrip batch={last} />}
             <Collapse in={open}>
                 <Box sx={{ mt: 1 }}>
-                    {!runs ? (
+                    {!batches ? (
                         <CircularProgress size={16} />
-                    ) : runs.length === 0 ? (
+                    ) : batches.length === 0 ? (
                         <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
                             Never run.
                         </Typography>
                     ) : (
-                        runs.map((r) => <RunRow key={r.id} run={r} />)
+                        batches.map((b) => <BatchBlock key={b.batch_id} batch={b} />)
                     )}
                 </Box>
             </Collapse>

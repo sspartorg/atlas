@@ -1,7 +1,7 @@
 import type { IRunOutcome } from '@atlas/shared';
 
 import { db } from '../db/kysely-client.js';
-import type { AgentTestVerdict } from '../db/types.js';
+import type { AgentTestVerdict, JudgeVerdict } from '../db/types.js';
 import { evaluateAgentTest, type AgentTestExpectations } from './agent-tests-evaluate.js';
 
 // Judging one test run, and the row shapes that judging needs.
@@ -54,6 +54,14 @@ export interface AgentTestRunRow {
     cost_usd: number | null;
     duration_s: number | null;
     created_at: string;
+    /** Migration 018 — one press of Run is a batch of `n` of these. */
+    batch_id: string;
+    sample_index: number;
+    label: string | null;
+    judge_verdict: JudgeVerdict | null;
+    judge_reason: string | null;
+    /** Apart from `cost_usd`: a judge must never fail a ceiling about the agent. */
+    judge_cost_usd: number | null;
 }
 
 function iso(v: unknown): string {
@@ -85,6 +93,14 @@ export function asRun(r: Record<string, unknown>): AgentTestRunRow {
         cost_usd: r['cost_usd'] == null ? null : Number(r['cost_usd']),
         duration_s: r['duration_s'] == null ? null : Number(r['duration_s']),
         created_at: iso(r['created_at']),
+        // `batch_id` is NOT NULL from migration 018 on; the fallback covers a
+        // row read mid-migration rather than a shape that can persist.
+        batch_id: (r['batch_id'] as string) ?? (r['id'] as string),
+        sample_index: Number(r['sample_index'] ?? 0),
+        label: (r['label'] as string) ?? null,
+        judge_verdict: (r['judge_verdict'] as JudgeVerdict) ?? null,
+        judge_reason: (r['judge_reason'] as string) ?? null,
+        judge_cost_usd: r['judge_cost_usd'] == null ? null : Number(r['judge_cost_usd']),
     };
 }
 
