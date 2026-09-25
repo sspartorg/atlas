@@ -372,6 +372,13 @@ export interface AgentTestExpectations {
     summary_omits?: string[];
     max_cost_usd?: number;
     max_duration_s?: number;
+    /** Migration 017 — what the run DID. Unanswerable here is `errored`, never a pass. */
+    tools_required?: string[];
+    tools_forbidden?: string[];
+    max_turns?: number;
+    max_tool_calls?: number;
+    files_touched?: string[];
+    files_untouched?: string[];
 }
 
 export interface AgentTest {

@@ -124,6 +124,8 @@ export async function judgePendingRun(run: AgentTestRunRow, test: AgentTestRow):
             'total_cost_usd',
             'started_at',
             'completed_at',
+            // Migration 017 — what the run did, for the expectations that ask.
+            'trace_summary',
         ])
         .where('id', '=', run.agent_run_id)
         .executeTakeFirst();
@@ -152,6 +154,7 @@ export async function judgePendingRun(run: AgentTestRunRow, test: AgentTestRow):
 
     const evaluation = evaluateAgentTest(test.expectations, {
         outcome,
+        trace: ar.trace_summary,
         requiredChecklist: requiredChecklist.map((c) => ({ id: Number(c.id), label: c.label })),
         cost_usd: cost,
         duration_s: duration,
