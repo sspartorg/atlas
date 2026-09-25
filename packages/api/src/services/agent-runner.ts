@@ -37,6 +37,8 @@ import { verifyRunCommits } from './commit-verifier.js';
 import { buildWorktreePreamble } from './worktree-orchestrator.js';
 import { runProjectSetup } from './project-setup-runner.js';
 import { parseRunOutcome } from './run-outcome-parser.js';
+import { parseRunTrace } from './run-trace-parser.js';
+import { evaluateAgentTestRun } from './agent-tests-evaluate-run.js';
 import {
     buildCompletionCommentBody,
     buildOrchestratorRunCompletedBody,
@@ -448,6 +450,13 @@ async function createAgentNotification(opts: {
 // to persist, its prompt MUST exit `asked_question` with a clear error; the
 // orchestrator does NOT backfill or retry on the agent's behalf.
 
+/** `timestamptz` arrives as a Date from node-postgres whatever Kysely's type says. */
+function startedAtOf(row: { started_at?: unknown } | undefined): string | null {
+    const v = row?.started_at;
+    if (v instanceof Date) return v.toISOString();
+    return typeof v === 'string' ? v : null;
+}
+
 export async function completeRun(
     runId: string,
     agentId: string,
@@ -466,20 +475,29 @@ export async function completeRun(
     // Keep that status; the output + cost were earned regardless.
     const currentRow = await db
         .selectFrom('agent_runs')
-        .select('status')
+        // `started_at` comes along for the trace: the transcript's own
+        // `system/init` event carries no timestamp, so the run's start is the
+        // only thing the first assistant event can be measured against.
+        .select(['status', 'started_at'])
         .where('id', '=', runId)
         .executeTakeFirst();
     const wasCancelled = (currentRow?.status as string | undefined) === 'cancelled';
+    // Migration 017 — read the transcript once, here, rather than on every
+    // poll of a multi-megabyte column. A run stopped mid-flight still did
+    // whatever it did, so its trace is worth as much as its cost.
+    const trace = parseRunTrace(output, cli, startedAtOf(currentRow));
+    const traceCol = trace ? { trace_summary: JSON.stringify(trace) } : {};
     await db
         .updateTable('agent_runs')
         .set({
             ...(wasCancelled
-                ? { output_text: output, ...(cost ?? {}) }
+                ? { output_text: output, ...(cost ?? {}), ...traceCol }
                 : {
                       status: 'completed',
                       output_text: output,
                       completed_at: now,
                       ...(cost ?? {}),
+                      ...traceCol,
                   }),
         })
         .where('id', '=', runId)
@@ -551,6 +569,17 @@ export async function completeRun(
     }
 
     await notifyStep(runId);
+
+    // ADR 0023 — judge whatever agent test was waiting on this dispatch.
+    // Best-effort, and a no-op for the overwhelming majority of runs, which
+    // are not tests: one indexed lookup that finds nothing. Judging used to
+    // happen only when somebody opened the Tests tab, so a run nobody watched
+    // stayed `running` for good.
+    try {
+        await evaluateAgentTestRun(runId);
+    } catch {
+        /* a verdict is evidence about the run, not part of it */
+    }
 
     // Theme 08 — post-run memory hook. Best-effort; a memory failure must
     // NOT fail the run itself.
@@ -671,6 +700,14 @@ async function errorRun(
     }
 
     await notifyStep(runId);
+
+    // A crashed dispatch is still a finished one, and a test waiting on it
+    // deserves its `errored` verdict now rather than whenever somebody looks.
+    try {
+        await evaluateAgentTestRun(runId);
+    } catch {
+        /* a verdict is evidence about the run, not part of it */
+    }
 
     try {
         await agentMemoryService.maybeRegenerateAfterRun(agentId, runId, 'error');

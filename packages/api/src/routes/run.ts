@@ -141,6 +141,9 @@ export async function runRoutes(app: FastifyInstance) {
                 'r.credits as credits',
                 'r.workflow_run_id as workflow_run_id',
                 'r.node_id as node_id',
+                // Migration 017 — what the run actually did. Null on anything
+                // that finished before it shipped.
+                'r.trace_summary as trace_summary',
             ])
             .where('r.id', '=', id)
             .executeTakeFirst();
@@ -381,6 +384,13 @@ export async function runRoutes(app: FastifyInstance) {
                 // kind and the one-line summary are what a list renders.
                 'r.outcome_kind as outcome_kind',
                 'r.outcome_summary as outcome_summary',
+                // Migration 017 — deliberately NOT sent in list mode: a trace
+                // carries up to 200 tool names and 100 paths, which over 500
+                // rows is megabytes nothing on a list renders. Selected as an
+                // explicit NULL rather than omitted, so the next reader sees a
+                // decision instead of repeating the omission this file already
+                // records twice above.
+                sql<string | null>`NULL::jsonb`.as('trace_summary'),
             ]);
         if (issue_id) q = q.where('r.item_id', '=', issue_id);
         // 2026-09-12: `agent_id` and `issue_type` were in the accepted query

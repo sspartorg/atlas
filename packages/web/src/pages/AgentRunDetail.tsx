@@ -22,6 +22,7 @@ import { useIsMobile } from '../hooks/useIsMobile.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 import { ConfirmActionModal } from '../components/ConfirmActionModal.js';
 import { RunEventViewer } from '../components/RunEventViewer.js';
+import { RunTracePanel } from '../components/RunTracePanel.js';
 import { AiUsagePanel } from '../components/AiUsagePanel.js';
 import { api } from '../api/api.js';
 import { ATLAS_PALETTE, TYPOGRAPHY, MOBILE_SHELL } from '../theme/tokens.js';
@@ -615,6 +616,12 @@ export function AgentRunDetail() {
                     </Box>
                 </Box>
             </Box>
+
+            {/* ADR 0023 — what the run actually did, read from its own
+                transcript at completion. Above the raw log because it is the
+                summary somebody scrolls the log to reconstruct. Renders
+                nothing for a run that finished before migration 017. */}
+            <RunTracePanel trace={run.trace_summary} />
 
             {/* W4 — kind-aware banner when the runner classified the
                 failure. Shown above the raw log so the Owner sees the

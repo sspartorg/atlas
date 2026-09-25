@@ -527,6 +527,21 @@ export interface ItemExternalLinksTable {
     pr_state_checked_at: TSn;
 }
 
+/** Shape written by `services/run-trace-parser.ts`. Declared here so the column is typed, not `unknown`. */
+export interface RunTraceSummaryJson {
+    source: 'claude' | 'copilot' | 'unknown';
+    turns: number;
+    tool_calls: number;
+    tools: Record<string, number>;
+    tool_sequence: string[];
+    thinking_blocks: number | null;
+    subagent_turns: number | null;
+    files_touched: string[] | null;
+    errors: number | null;
+    ttft_ms: number | null;
+    truncated: boolean;
+}
+
 export interface AgentRunsTable {
     id: string;
     agent_id: string;
@@ -587,6 +602,11 @@ export interface AgentRunsTable {
     effort: StrN;
     prompt_version: IntN;
     created_at: CreatedAt;
+    // Migration 017 — what the run actually did, parsed once from
+    // `output_text` at completion (`run-trace-parser.ts`). Null on every run
+    // that finished before this shipped, and on one whose transcript was
+    // unreadable; consumers must render that as "—", never as zero.
+    trace_summary: ColumnType<RunTraceSummaryJson | null, string | null | undefined, string | null | undefined>;
 }
 
 export interface CommentsTable {

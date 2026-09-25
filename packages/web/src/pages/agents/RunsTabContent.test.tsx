@@ -38,6 +38,7 @@ function makeRun(over: Partial<IAgentRun> = {}): IAgentRun {
         item_title: null,
         workflow_run_id: null,
         node_id: null,
+        trace_summary: null,
         created_at: '2026-05-16T00:00:00.000Z',
         ...over,
     };

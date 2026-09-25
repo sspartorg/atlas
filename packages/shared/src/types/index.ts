@@ -617,6 +617,47 @@ export interface IAgentRun {
     workflow_run_id: string | null;
     /** ADR 0014 — the graph node this step executed. */
     node_id: string | null;
+    /**
+     * ADR 0023 — what the run actually did, read once from its own transcript
+     * at completion (migration 017).
+     *
+     * **NULL on every run that finished before this shipped**, and on one whose
+     * output was not a transcript. That is not the same as a run that did
+     * nothing, so it renders as "—" rather than as zero.
+     */
+    trace_summary: IRunTraceSummary | null;
+}
+
+/**
+ * A compact reading of one dispatch's transcript.
+ *
+ * Every field a given CLI cannot report is **null, never 0** — "we did not
+ * look" and "it did not happen" are different answers, and an expectation
+ * asserting on a field this CLI cannot answer has to come back `errored`
+ * rather than silently passing. Same distinction ADR 0020 draws for a gate
+ * that could not run.
+ */
+export interface IRunTraceSummary {
+    source: 'claude' | 'copilot' | 'unknown';
+    /** Assistant messages — how many turns it took. */
+    turns: number;
+    tool_calls: number;
+    /** Tool name → call count. */
+    tools: Record<string, number>;
+    /** The order they were called in, capped at 200. */
+    tool_sequence: string[];
+    /** Null on Copilot, which emits no equivalent event. */
+    thinking_blocks: number | null;
+    /** Turns produced by a sub-agent the run spawned. Null on Copilot. */
+    subagent_turns: number | null;
+    /** Paths from tool inputs, relative to the run's own sandbox. Null on Copilot. */
+    files_touched: string[] | null;
+    /** Tool results flagged as errors. */
+    errors: number | null;
+    /** Run start → first assistant event. */
+    ttft_ms: number | null;
+    /** A cap was hit, so `tool_sequence` or `files_touched` is partial. */
+    truncated: boolean;
 }
 
 export interface ICostSummary {

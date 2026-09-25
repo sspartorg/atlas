@@ -1,10 +1,17 @@
 import { randomUUID } from 'node:crypto';
 
-import type { IRunOutcome, IssueType } from '@atlas/shared';
+import type { IssueType } from '@atlas/shared';
 
 import { db } from '../db/kysely-client.js';
-import type { AgentTestVerdict } from '../db/types.js';
-import { evaluateAgentTest, type AgentTestExpectations } from './agent-tests-evaluate.js';
+import type { AgentTestExpectations } from './agent-tests-evaluate.js';
+import {
+    asRun,
+    asTest,
+    judgePendingRun,
+    type AgentTestItemTemplate,
+    type AgentTestRow,
+    type AgentTestRunRow,
+} from './agent-tests-evaluate-run.js';
 import { spawnAgentRun } from './agent-runner.js';
 import { subTasksService } from './sub-tasks.js';
 import { tasksService } from './tasks.js';
@@ -22,80 +29,11 @@ import { tasksService } from './tasks.js';
 // every time; pointing at a live item would give a different answer whenever
 // the repo moved under it.
 //
-// Evaluation is lazy. The dispatch is asynchronous and there is no completion
-// hook to attach to, so a run is judged the first time it is read after the
-// agent finished. That keeps the write path to "create item, spawn, record" and
-// means a crashed API never leaves a test permanently unjudged.
+// Judging happens at completion (`agent-tests-evaluate-run.ts`, called by the
+// runner), with a fallback on read for a run the API missed by crashing between
+// the dispatch finishing and the hook firing.
 
-/** Statuses an `agent_runs` row can no longer move out of. */
-const TERMINAL = new Set(['completed', 'error', 'cancelled', 'setup_failed']);
-
-interface AgentTestItemTemplate {
-    issue_type: IssueType;
-    title: string;
-    // `| undefined` throughout: these arrive parsed by zod, which produces an
-    // explicit undefined for an absent optional, and the repo runs with
-    // `exactOptionalPropertyTypes`.
-    description?: string | undefined;
-    acceptance_criteria?: string | undefined;
-    labels?: string[] | undefined;
-}
-
-export interface AgentTestRow {
-    id: string;
-    agent_id: string;
-    project_id: string;
-    repo_id: string | null;
-    name: string;
-    item_template: AgentTestItemTemplate;
-    expectations: AgentTestExpectations;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface AgentTestRunRow {
-    id: string;
-    agent_test_id: string;
-    agent_run_id: string | null;
-    item_id: string | null;
-    verdict: AgentTestVerdict;
-    failures: string[];
-    cost_usd: number | null;
-    duration_s: number | null;
-    created_at: string;
-}
-
-function iso(v: unknown): string {
-    return v instanceof Date ? v.toISOString() : String(v ?? '');
-}
-
-function asTest(r: Record<string, unknown>): AgentTestRow {
-    return {
-        id: r['id'] as string,
-        agent_id: r['agent_id'] as string,
-        project_id: r['project_id'] as string,
-        repo_id: (r['repo_id'] as string) ?? null,
-        name: r['name'] as string,
-        item_template: r['item_template'] as AgentTestItemTemplate,
-        expectations: (r['expectations'] as AgentTestExpectations) ?? {},
-        created_at: iso(r['created_at']),
-        updated_at: iso(r['updated_at']),
-    };
-}
-
-function asRun(r: Record<string, unknown>): AgentTestRunRow {
-    return {
-        id: r['id'] as string,
-        agent_test_id: r['agent_test_id'] as string,
-        agent_run_id: (r['agent_run_id'] as string) ?? null,
-        item_id: (r['item_id'] as string) ?? null,
-        verdict: r['verdict'] as AgentTestVerdict,
-        failures: (r['failures'] as string[]) ?? [],
-        cost_usd: r['cost_usd'] == null ? null : Number(r['cost_usd']),
-        duration_s: r['duration_s'] == null ? null : Number(r['duration_s']),
-        created_at: iso(r['created_at']),
-    };
-}
+export type { AgentTestRow, AgentTestRunRow };
 
 export interface CreateAgentTestInput {
     agent_id: string;
@@ -280,78 +218,9 @@ export const agentTestsService = {
         const out: AgentTestRunRow[] = [];
         for (const r of rows) {
             out.push(
-                r.verdict === 'running' && test ? await evaluatePending(asRun(r as never), test) : asRun(r as never),
+                r.verdict === 'running' && test ? await judgePendingRun(asRun(r as never), test) : asRun(r as never),
             );
         }
         return out;
     },
 };
-
-/**
- * Judge one pending run, if its dispatch has finished.
- *
- * Lazy on purpose: there is no completion hook on `agent_runs`, and polling for
- * one would be a second scheduler. Reading is when someone cares about the
- * answer, which is exactly when it is worth computing.
- */
-async function evaluatePending(run: AgentTestRunRow, test: AgentTestRow): Promise<AgentTestRunRow> {
-    if (!run.agent_run_id) return run;
-    const ar = await db
-        .selectFrom('agent_runs')
-        .select([
-            'status',
-            'outcome_kind',
-            'outcome_summary',
-            'outcome_reason',
-            'outcome_checklist',
-            'total_cost_usd',
-            'started_at',
-            'completed_at',
-        ])
-        .where('id', '=', run.agent_run_id)
-        .executeTakeFirst();
-    if (!ar || !TERMINAL.has(ar.status as string)) return run;
-
-    const outcome: IRunOutcome | null = ar.outcome_kind
-        ? ({
-              kind: ar.outcome_kind,
-              summary: ar.outcome_summary ?? '',
-              reason: ar.outcome_reason ?? undefined,
-              checklist: ar.outcome_checklist ?? undefined,
-          } as IRunOutcome)
-        : null;
-
-    const requiredChecklist = await db
-        .selectFrom('agent_checklists')
-        .select(['id', 'label'])
-        .where('agent_id', '=', test.agent_id)
-        .where('required', '=', true)
-        .execute();
-
-    const startedAt = ar.started_at ? new Date(iso(ar.started_at)).getTime() : null;
-    const completedAt = ar.completed_at ? new Date(iso(ar.completed_at)).getTime() : null;
-    const duration = startedAt && completedAt ? Math.round((completedAt - startedAt) / 1000) : null;
-    const cost = ar.total_cost_usd == null ? null : Number(ar.total_cost_usd);
-
-    const evaluation = evaluateAgentTest(test.expectations, {
-        outcome,
-        requiredChecklist: requiredChecklist.map((c) => ({ id: Number(c.id), label: c.label })),
-        cost_usd: cost,
-        duration_s: duration,
-        ran: ar.status === 'completed',
-    });
-
-    await db
-        .updateTable('agent_test_runs')
-        .set({
-            verdict: evaluation.verdict,
-            failures: JSON.stringify(evaluation.failures),
-            cost_usd: cost,
-            duration_s: duration,
-            evaluated_at: new Date().toISOString(),
-        } as never)
-        .where('id', '=', run.id)
-        .execute();
-
-    return { ...run, verdict: evaluation.verdict, failures: evaluation.failures, cost_usd: cost, duration_s: duration };
-}
