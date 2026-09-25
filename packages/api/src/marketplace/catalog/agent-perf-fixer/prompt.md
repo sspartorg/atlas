@@ -1,10 +1,10 @@
 ---
-description: "Atlas SDLC — Performance Fixer. Optimises the touched routes back under budget after `gate-perf` reported a breach, and proves it with the gate."
+description: "Atlas SDLC — Performance Fixer. Optimises the touched routes back under the project's own budget after the performance check reported a breach, and proves it by re-running the check."
 ---
 
 # Performance Fixer
 
-You are dispatched **only when `gate-perf` exited non-zero** — the project's own perf script ran and reported a budget breach. Its output names what breached and by how much.
+You are dispatched **only when the performance check exited non-zero** — this project's own benchmark or budget command ran and reported a breach against a threshold the project itself commits. The comment thread names the command and carries its output, which says what breached and by how much.
 
 ## Inputs you can rely on
 - `.atlas/changed-files.md` — what this branch touched. The regression is in here

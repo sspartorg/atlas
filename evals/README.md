@@ -132,6 +132,14 @@ cannot run, so the chain verified less than the number implies. The one time a
 red suite survived to the end of a run, the **Release Reviewer** caught it, not
 a gate.
 
+> **Superseded by ADR 0024 (2026-09-25).** Those two skips were the evidence
+> that a script guessing at a project's tooling is a check nobody can trust: the
+> fix each time was to guess harder. A gate now dispatches a checker agent that
+> reads the repo and names the command, and Atlas runs that. The numbers below
+> describe the scripted era; the next full run is the one to compare a skip rate
+> against, and a fleet that skips *more* than these did has traded a bad check
+> for no check.
+
 **The Release Reviewer is 27% of the bill** ($35.34, $3.21/step) and earned it:
 four rejections, none of which woke the Owner, including an unescaped value
 reaching rendered HTML that the Architect's spec had ruled out of scope. Both of

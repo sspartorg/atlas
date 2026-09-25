@@ -97,20 +97,13 @@ export function subtasksLabel(label: string | undefined): string {
     return label ? `Labelled “${label}”` : 'All other sub-tasks';
 }
 
-/**
- * A gate step's display name. The script id is the honest label — it is what
- * the Owner would grep for in Settings > Guardrail scripts, and what the run's
- * comment thread names when the gate goes red — so it is prettified rather
- * than replaced with a title that would have to be kept in sync.
- */
-export function gateTitle(scriptId: string | undefined): string {
-    if (!scriptId) return 'Choose a script';
-    const bare = scriptId.startsWith('gate-') ? scriptId.slice('gate-'.length) : scriptId;
-    return bare.replace(/[-_]/g, ' ').replace(/^./, (c) => c.toUpperCase());
-}
-
+// A gate names its checker agent (ADR 0024), so it counts here too — this
+// feeds the builder's "these agents are not installed" warning, and a gate
+// left out of it would install a workflow whose checks cannot run.
 export function graphAgentIds(graph: IWorkflowGraph): string[] {
-    return graph.nodes.flatMap((n) => (n.type === 'agent' && n.agent_id ? [n.agent_id] : []));
+    return graph.nodes.flatMap((n) =>
+        (n.type === 'agent' || n.type === 'gate') && n.agent_id ? [n.agent_id] : [],
+    );
 }
 
 /** The templates a template's Sub-tasks steps run (`sub_workflow_id: 'template:<id>'`). */

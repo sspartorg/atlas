@@ -8,8 +8,6 @@ import { mergeSecrets } from './secret-substitution.js';
 import { environmentSecretsService } from './environment-secrets.js';
 import { projectEnvFileService } from './project-env-file.js';
 import { redactSecretValues } from './project-setup-runner.js';
-import { guardrailScriptsService } from './guardrailScripts.js';
-import { projectGuardrailScriptsService } from './projectGuardrailScripts.js';
 
 // ADR 0020 — Atlas runs the verification gate itself.
 //
@@ -20,17 +18,19 @@ import { projectGuardrailScriptsService } from './projectGuardrailScripts.js';
 // worktree. Campaign finding F-012 recorded the consequence: one Task shipped
 // two PRs with red suites while every reviewer agent reported green.
 //
-// This module is the other consumer of those staged scripts. The agent still
-// gets them to run during its own work; now the engine runs the gate once more
-// itself, immediately before a push, and believes the exit code instead.
+// ADR 0024 changed WHO decides what to run, not who runs it. The command is
+// named by a checker agent that read the repo (a gate step) or by the Owner on
+// the repo row (the pre-push gate). Atlas executes it and believes the exit
+// code. It no longer ships bash that guesses at a package manager, a coverage
+// floor or which file extensions mean "UI".
 //
 // Design contracts:
 //   - **Per repo, not per run.** ADR 0017 Tasks span several repos and each
 //     carries its own suite, so the gate runs in the checkout about to be
 //     pushed. A repo whose suite is red is not pushed; its siblings are
 //     unaffected.
-//   - **"Could not run" is never a failure.** A missing script, an absent
-//     binary or a timeout is *absence of evidence*. Returning `unavailable`
+//   - **"Could not run" is never a failure.** No command, an absent binary or
+//     a timeout is *absence of evidence*. Returning `unavailable`
 //     parks the run with the Owner. Treating it as red would convert an
 //     unenforced gate into one that blocks every delivery — a worse failure
 //     than the one being fixed.
@@ -104,23 +104,12 @@ export type GateResult =
     | { kind: 'skipped'; output: string }
     | { kind: 'unavailable'; reason: string };
 
-/** The guardrail script id whose body is the gate. Project row overrides the Atlas one. */
-export const GATE_SCRIPT_ID = 'coder-tests-green';
-
 /**
- * A gate script opts into the `needs_review` verdict by printing this on a line
- * of its own. See `runGuardrailScript` for why it is a sentinel and not an exit
- * code.
- *
- * Not exported: the other half of this contract is written in bash and
- * PowerShell (the `gate-visual` seed in `db/seed.ts`), so there is no import to
- * share it with. This side is the authority; the scripts spell it literally.
- */
-/**
- * Every shipped guardrail script announces a no-op as `<id>: skipped - <why>`
- * on its first line. Matching the convention rather than adding a second
- * sentinel keeps the scripts as they are; a project override that does not
- * follow it simply reads as `pass`, which is the old behaviour.
+ * A check announces "nothing to do here" as `<something>: skipped - <why>` on
+ * its first line, and opts into `needs_review` by printing
+ * `ATLAS_GATE_NEEDS_REVIEW` on a line of its own. Both are conventions a
+ * checker agent is told to honour in its prompt, and both are optional: a
+ * command that prints neither is judged on its exit code alone.
  */
 const SKIPPED_RE = /^[^\n]*:\s*skipped\b/i;
 const NEEDS_REVIEW_SENTINEL = 'ATLAS_GATE_NEEDS_REVIEW';
@@ -131,64 +120,62 @@ function tail(text: string): string {
 }
 
 /**
- * Run the project's own typecheck/lint/test gate in `repoPath` and report what
- * the exit code says. `--run-tests` is what makes the script run the declared
- * `test` script rather than stopping at typecheck and lint.
- */
-/**
- * Run any guardrail script in `repoPath` and report what its exit code says.
+ * Run a command in `repoPath` and report what its exit code says.
  *
- * `runVerificationGate` is the ADR 0020 pre-push caller; `gate` workflow steps
- * are the other. They share every line of the hardening below — the script body
- * comes from the database rather than the worktree (G-022), the child gets an
- * environment allowlist rather than `process.env` (G-021), and output is
- * secret-redacted before it is persisted — because a gate step is exactly as
- * exposed as the pre-push gate is.
+ * ADR 0024 — the command is named by a checker agent that read this repo, or
+ * set by the Owner on the repo (`project_repos.verify_command`). Atlas composes
+ * none of it: the product has no opinion about whether a customer runs `pnpm
+ * test`, `cargo test` or `bazel test //...`, and every version of it that did
+ * was wrong for somebody.
  *
- * Verdict contract: exit 0 is a pass, any non-zero is a fail — except that a
- * script may downgrade its own failure to `needs_review` by printing the
- * sentinel `ATLAS_GATE_NEEDS_REVIEW` on a line of its own. The sentinel rather
- * than a reserved exit code because 2 is a generic failure for a great many
- * tools (a usage error, a config error), and silently reading those as "a human
- * should look at this" would route real breakage to the wrong place.
+ * The hardening is the same one ADR 0020's pre-push gate has always used, and
+ * it is load-bearing for a different reason now. Running an LLM-named string is
+ * no new capability — `allowedToolsFor` hands the same agent unrestricted
+ * `Bash` in this same checkout, and it could have typed the command inline.
+ * What IS new is that this runs unsupervised after the dispatch ended and its
+ * output is persisted to `run_gate_results` and posted on the item. So:
+ *
+ *   - the child gets an environment ALLOWLIST, never `process.env` (G-021):
+ *     `DATABASE_URL`, `POSTGRES_PASSWORD` and `ATLAS_MCP_TOKEN` are not in it,
+ *     so a suite that dumps its environment on failure cannot write a live
+ *     password into a stored log;
+ *   - output is secret-redacted before it is returned, and withheld entirely
+ *     if the secret set could not be loaded to mask it;
+ *   - the command is written to a 0600 tmpfile OUTSIDE the worktree, so
+ *     nothing the repo ships decides what runs.
+ *
+ * Not defended, and not defended before this either: a command that deletes the
+ * home directory. The worktree is disposable; `$HOME` is not. The threat model
+ * is unchanged — the agent has had `Bash` all along.
+ *
+ * Verdict contract: exit 0 is a pass, any non-zero is a fail — except that the
+ * command may downgrade its own failure to `needs_review` by printing the
+ * sentinel `ATLAS_GATE_NEEDS_REVIEW` on a line of its own (a missing visual
+ * baseline is the case it exists for). A sentinel rather than a reserved exit
+ * code because 2 is a generic failure for a great many tools, and reading those
+ * as "a human should look at this" would route real breakage to the wrong
+ * place. A first line matching `<something>: skipped` is a `skipped`, which
+ * takes the pass edge but is never recorded as a pass (migration 013).
  */
-export async function runGuardrailScript(opts: {
+export async function runNamedCommand(opts: {
     repoPath: string;
     projectId: string;
-    /** The `guardrail_scripts.id` to run; a project row overrides the Atlas one. */
-    scriptId: string;
-    /** Passed through as the script's first argument. */
-    itemId: string;
-    /** Extra argv after the item id, e.g. `--run-tests`. */
-    args?: readonly string[];
+    /** One line, as the checker named it. Run by `bash -c` semantics, so `&&` and pipes work. */
+    command: string;
 }): Promise<GateResult> {
-    // G-022 — run the script Atlas HAS, never the one sitting in the repo.
-    //
-    // This used to `execFile` `<repo>/.atlas/scripts/bash/check-…​.sh` directly.
-    // `constitution-assembler` normally writes that file during staging, but
-    // the gate never verified it had: a repository that ships its own copy of
-    // that path gets it executed with `cwd` = the repo, on a worktree that was
-    // never staged or whose guardrail row was deleted. `access()` tested
-    // existence, which a planted file also satisfies. Note the execute bit is
-    // no defence either — `bash <path>` ignores it.
-    //
-    // The body now comes from `guardrail_scripts` (project override wins, the
-    // same precedence `mergeScriptsById` uses) and is written to a 0600 tmpfile
-    // outside the worktree, mirroring `project-setup-runner.ts`. A repo can no
-    // longer choose what Atlas executes.
-    const body = await gateScriptBody(opts.projectId, opts.scriptId);
-    if (!body) {
-        return {
-            kind: 'unavailable',
-            reason: `no '${opts.scriptId}' guardrail script is configured`,
-        };
+    const command = opts.command.trim();
+    if (!command) {
+        return { kind: 'unavailable', reason: 'no command to run' };
     }
     const isWin = process.platform === 'win32';
+    // `set -u` only. Not `set -e`: the command is one line and its exit status
+    // is the script's, and a `set -e` here would change the meaning of a
+    // pipeline the checker deliberately wrote.
+    const body = isWin
+        ? `$ErrorActionPreference = 'Continue'\n${command}\nexit $LASTEXITCODE\n`
+        : `set -u\n${command}\n`;
     const scriptPath = join(tmpdir(), `atlas-gate-${randomUUID()}.${isWin ? 'ps1' : 'sh'}`);
-    await writeFile(scriptPath, body.endsWith('\n') ? body : body + '\n', {
-        encoding: 'utf8',
-        mode: 0o600,
-    });
+    await writeFile(scriptPath, body, { encoding: 'utf8', mode: 0o600 });
 
     // Same secret set the setup runner masks with. Failing to load them must
     // not block delivery, but it does mean we cannot mask — in that case the
@@ -204,15 +191,10 @@ export async function runGuardrailScript(opts: {
     }
 
     const timeoutMs = Number(process.env['ATLAS_GATE_TIMEOUT_MS']) || DEFAULT_TIMEOUT_MS;
-    const isWindows = isWin;
-    const bin = isWindows ? 'powershell.exe' : 'bash';
-    const extra = opts.args ?? [];
-    const args = isWindows
-        ? ['-NoProfile', '-NonInteractive', '-File', scriptPath, opts.itemId, ...extra]
-        : [scriptPath, opts.itemId, ...extra];
+    const bin = isWin ? 'powershell.exe' : 'bash';
+    const args = isWin ? ['-NoProfile', '-NonInteractive', '-File', scriptPath] : [scriptPath];
 
     try {
-      try {
         const ok = await execFileAsync(bin, args, {
             cwd: opts.repoPath,
             env: gateEnv(),
@@ -220,10 +202,10 @@ export async function runGuardrailScript(opts: {
             maxBuffer: MAX_BUFFER,
             windowsHide: true,
         });
-        // A passing gate still says something worth recording ("skipped - no
-        // perf script declared" is the difference between a check that ran and
-        // one that had nothing to do). Omitted when empty so a silent pass is
-        // exactly `{ kind: 'pass' }`.
+        // A passing check still says something worth recording ("skipped - no
+        // perf harness in this repo" is the difference between a check that ran
+        // and one that had nothing to do). Omitted when empty so a silent pass
+        // is exactly `{ kind: 'pass' }`.
         const said = tail(`${ok.stdout ?? ''}`.trim());
         if (said && SKIPPED_RE.test(said)) return { kind: 'skipped', output: said };
         return said ? { kind: 'pass', output: said } : { kind: 'pass' };
@@ -239,10 +221,10 @@ export async function runGuardrailScript(opts: {
         // answer. Same for a spawn failure, which surfaces as a string code
         // (ENOENT, EACCES) rather than a numeric exit status.
         if (e.killed || e.signal) {
-            return { kind: 'unavailable', reason: `verification gate timed out after ${timeoutMs}ms` };
+            return { kind: 'unavailable', reason: `the check timed out after ${timeoutMs}ms` };
         }
         if (typeof e.code !== 'number') {
-            return { kind: 'unavailable', reason: `could not run the verification gate: ${String(e.code ?? 'unknown')}` };
+            return { kind: 'unavailable', reason: `could not run the check: ${String(e.code ?? 'unknown')}` };
         }
         const stdout = e.stdout instanceof Buffer ? e.stdout.toString('utf8') : (e.stdout ?? '');
         const stderr = e.stderr instanceof Buffer ? e.stderr.toString('utf8') : (e.stderr ?? '');
@@ -255,40 +237,9 @@ export async function runGuardrailScript(opts: {
             return { kind: 'needs_review', output: clipped, exitCode: e.code };
         }
         return { kind: 'fail', output: clipped, exitCode: e.code };
-      }
     } finally {
-        // The body can contain nothing secret, but it is Atlas-authored code
-        // in a shared tmpdir — remove it even when the run throws.
+        // One line of Atlas-written wrapper around a command from an LLM, in a
+        // shared tmpdir — remove it even when the run throws.
         await unlink(scriptPath).catch(() => undefined);
     }
-}
-
-/** A guardrail script body, project override first. */
-async function gateScriptBody(projectId: string, scriptId: string): Promise<string | null> {
-    const pick = (r: { id: string; body_sh: string; body_ps1: string }) =>
-        process.platform === 'win32' ? r.body_ps1 : r.body_sh;
-    try {
-        const project = await projectGuardrailScriptsService.list(projectId);
-        const override = project.find((r) => r.id === scriptId);
-        if (override) return pick(override) || null;
-        const atlas = await guardrailScriptsService.list();
-        const row = atlas.find((r) => r.id === scriptId);
-        return row ? pick(row) || null : null;
-    } catch {
-        return null;
-    }
-}
-
-/**
- * ADR 0020's pre-push gate: the project's own typecheck/lint/test script, run
- * by Atlas rather than asserted by an agent. `--run-tests` is what makes the
- * script run the declared `test` script instead of stopping at typecheck and
- * lint.
- */
-export async function runVerificationGate(opts: {
-    repoPath: string;
-    projectId: string;
-    itemId: string;
-}): Promise<GateResult> {
-    return runGuardrailScript({ ...opts, scriptId: GATE_SCRIPT_ID, args: ['--run-tests'] });
 }

@@ -63,6 +63,8 @@ export async function insertProjectRepo(
         credential_id: string;
         clone_status: 'pending' | 'cloning' | 'ready' | 'error';
         position: number;
+        /** ADR 0024 — what the pre-push gate runs. Set, so delivery tests reach the push. */
+        verify_command: string;
     }> = {},
 ): Promise<string> {
     const id = overrides.id ?? `${projectId}-repo-${Math.random().toString(36).slice(2, 8)}`;
@@ -81,6 +83,10 @@ export async function insertProjectRepo(
             git_url: overrides.git_url ?? '',
             default_branch: overrides.default_branch ?? 'main',
             clone_status: overrides.clone_status ?? 'ready',
+            // Non-empty by default: an empty command parks the run before the
+            // push (ADR 0024), which is a behaviour its own tests assert, not
+            // one every delivery fixture should have to opt out of.
+            verify_command: overrides.verify_command ?? 'echo verified',
             position:
                 overrides.position ??
                 existing.reduce((max, r) => Math.max(max, r.position), -1) + 1,

@@ -189,3 +189,80 @@ describe('syncAgentDefaults — catalog-driven reconciliation', () => {
         expect(updated?.prompt_md).toBe('whatever');
     });
 });
+
+// ADR 0024 — migration 020 rewrote every saved `gate` node to name a checker
+// agent. Without this, the Owner's existing Delivery workflow parks on its
+// first gate with "agent-tests-check is missing or inactive", which is a
+// migration that only half happened.
+describe('syncAgentDefaults — agents an installed workflow needs', () => {
+    async function workflowNaming(agentId: string): Promise<void> {
+        await testDb
+            .insertInto('workflows')
+            .values({
+                id: `wf-${agentId}`,
+                project_id: null,
+                name: 'Delivery',
+                // `none` + no worktree is the one shape that needs no project
+                // (`workflows_project_required_check`): this test is about
+                // scanning saved graphs, not about what a workflow runs on.
+                input_kind: 'none',
+                use_worktree: false,
+                trigger: 'manual',
+                graph: JSON.stringify({
+                    nodes: [
+                        { id: 'start', type: 'start', position: { x: 0, y: 0 } },
+                        { id: 'cov', type: 'gate', agent_id: agentId, position: { x: 0, y: 1 } },
+                        { id: 'end', type: 'end', position: { x: 0, y: 2 } },
+                    ],
+                    edges: [
+                        { id: 'e1', source: 'start', target: 'cov', kind: 'pass' },
+                        { id: 'e2', source: 'cov', target: 'end', kind: 'pass' },
+                    ],
+                }),
+            } as never)
+            .execute();
+    }
+
+    it('installs a published agent a saved graph names but nobody installed', async () => {
+        await insertCatalogEntry('agent-tests-check', 'checker prompt');
+        await workflowNaming('agent-tests-check');
+
+        await syncAgentDefaults();
+
+        const row = await testDb
+            .selectFrom('agents')
+            .select(['id', 'prompt_md'])
+            .where('id', '=', 'agent-tests-check')
+            .executeTakeFirst();
+        expect(row).toMatchObject({ id: 'agent-tests-check', prompt_md: 'checker prompt' });
+    });
+
+    // Narrow on purpose: completing a migration is not licence to install the
+    // whole catalog behind the Owner's back.
+    it('installs nothing for a published agent no workflow names', async () => {
+        await insertCatalogEntry('agent-market-research', 'scout prompt');
+
+        await syncAgentDefaults();
+
+        expect(
+            await testDb.selectFrom('agents').select('id').where('id', '=', 'agent-market-research').executeTakeFirst(),
+        ).toBeUndefined();
+    });
+
+    it('does not fail the boot when an agent cannot be installed', async () => {
+        // A model the Owner pruned from `cli_models` is the realistic case:
+        // `install` throws on the FK, and boot must survive it.
+        await insertCatalogEntry('agent-perf-check', 'checker prompt');
+        await testDb
+            .updateTable('marketplace_agents')
+            .set({ model: 'model-that-is-not-registered' })
+            .where('id', '=', 'agent-perf-check')
+            .execute();
+        await workflowNaming('agent-perf-check');
+
+        await expect(syncAgentDefaults()).resolves.toBeUndefined();
+        expect(
+            await testDb.selectFrom('agents').select('id').where('id', '=', 'agent-perf-check').executeTakeFirst(),
+        ).toBeUndefined();
+    });
+});

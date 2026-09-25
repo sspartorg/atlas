@@ -1,0 +1,22 @@
+{
+  "id": "agent-hygiene-check",
+  "name": "Hygiene Check",
+  "category": "software-dev",
+  "cli": "claude",
+  "model": "haiku",
+  "effort": "low",
+  "framework": "review",
+  "description": "Gate checker. Reads the repo's manifests and CI config, decides whether this project has a lint/typecheck story of its own, and names the single command that proves it. Atlas runs that command and routes on its exit code. Names no command it did not find declared, and invents no threshold.",
+  "designation": "Hygiene Check",
+  "accent_color": "#DC2626",
+  "sort_order": 14,
+  "glyph": "cleaning_services",
+  "role_id": "security",
+  "status": "active",
+  "kind_slug": "custom",
+  "settings_json": {},
+  "memory_cadence": 1,
+  "summary": "Finds this project's own lint and typecheck command, or says it has none.",
+  "version": 1,
+  "published_at": "2026-09-25T00:00:00Z"
+}

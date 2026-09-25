@@ -56,16 +56,16 @@ describe('WorkflowCanvas', () => {
         expect(canvas.querySelectorAll('.react-flow__node').length).toBe(4);
     });
 
-    it('draws a gate step with its script name and no agent', () => {
-        // ADR 0021 — a gate has no agent, so the caption has to say so rather
-        // than leave a blank where an agent name usually sits.
+    it('draws a gate step named after its checker agent', () => {
+        // ADR 0024 — a gate dispatches a checker, so it is named after that
+        // agent and the caption says what the step actually does with it.
         const graph = {
             nodes: [
                 { id: 'start', type: 'start' as const, position: { x: 0, y: 0 } },
                 {
                     id: 'cov',
                     type: 'gate' as const,
-                    script_id: 'gate-coverage',
+                    agent_id: 'agent-tests-check',
                     position: { x: 0, y: 130 },
                 },
                 { id: 'end', type: 'end' as const, position: { x: 0, y: 260 } },
@@ -80,8 +80,10 @@ describe('WorkflowCanvas', () => {
             <WorkflowCanvas nodes={flow.nodes} edges={flow.edges} context={context()} />
         );
         const canvas = screen.getByTestId('workflow-canvas');
-        expect(within(canvas).getByText('Coverage')).toBeInTheDocument();
-        expect(within(canvas).getByText('No agent runs here')).toBeInTheDocument();
+        // No agent is installed in this fixture's context, so the node falls
+        // back to the id — which is still the honest label.
+        expect(within(canvas).getByText('agent-tests-check')).toBeInTheDocument();
+        expect(within(canvas).getByText('Names the command, Atlas runs it')).toBeInTheDocument();
     });
 
     it('renders overlay children inside the canvas', () => {

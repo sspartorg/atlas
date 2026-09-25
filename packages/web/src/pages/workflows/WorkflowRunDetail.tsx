@@ -63,6 +63,21 @@ function GateRow({ gate }: { gate: GateResultRow }) {
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>exit {gate.exit_code}</Typography>
                 )}
             </Box>
+            {/* What Atlas actually ran on the machine. The checker chose it, so
+                "which command was this" is a question the Owner will ask. */}
+            {gate.command && (
+                <Typography
+                    sx={{
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        color: ATLAS_PALETTE.slate60,
+                        mt: 0.5,
+                        overflowWrap: 'anywhere',
+                    }}
+                >
+                    {gate.command}
+                </Typography>
+            )}
             {/* The script's own words. For a skip this is the REASON — the
                 difference between a check that ran and one that had nothing to
                 do — which is the whole point of surfacing these. */}

@@ -191,12 +191,18 @@ describe('workflow CRUD', () => {
             expect.objectContaining({ id: 'docs', sub_workflow_id: byName('Docs sub-task')?.id, label: 'doc' }),
         ]);
 
-        // Four gate steps, each naming a seeded guardrail script and each with
-        // a fixer on its fail edge. They spawn no agent when green.
-        const gates = (res.json().graph.nodes as Array<{ type: string; script_id?: string }>)
+        // Four gate steps, each naming the checker agent that reads the repo and
+        // decides what this project's check actually is (ADR 0024), and each with
+        // a fixer on its fail edge.
+        const gates = (res.json().graph.nodes as Array<{ type: string; agent_id?: string }>)
             .filter((n) => n.type === 'gate')
-            .map((n) => n.script_id);
-        expect(gates).toEqual(['gate-hygiene', 'gate-coverage', 'gate-perf', 'gate-visual']);
+            .map((n) => n.agent_id);
+        expect(gates).toEqual([
+            'agent-hygiene-check',
+            'agent-tests-check',
+            'agent-perf-check',
+            'agent-visual-check',
+        ]);
         expect(res.json().max_loops).toBe(templateVersion('delivery') > 1 ? 12 : 3);
 
         // A sub-workflow a Sub-tasks step uses can't be deleted from under it.
@@ -222,18 +228,26 @@ describe('workflow CRUD', () => {
             'agent-doc-reviewer',
             'agent-doc-writer',
             'agent-fix-reviewer',
+            'agent-hygiene-check',
             'agent-hygiene-fixer',
+            'agent-perf-check',
             'agent-perf-fixer',
             'agent-po-reviewer',
             'agent-po-writer',
             'agent-qa-reviewer',
             'agent-qa-writer',
             'agent-release-reviewer',
+            'agent-tests-check',
+            'agent-visual-check',
             'agent-visual-reviewer',
         ]);
-        // The parent graph alone names nine of those seventeen; the other eight
-        // belong to the Build, Test and Docs sub-templates. Rolling them up is
-        // what stops a stale sub-workflow leaving its agents uninstalled.
+        // ADR 0024 — the four `*-check` agents come from the gate nodes, which
+        // carry an `agent_id` like any other step. A gate left out of this roll-up
+        // would install a Delivery whose checks cannot run.
+        //
+        // The parent graph alone names most of those; the rest belong to the
+        // Build, Test and Docs sub-templates. Rolling them up is what stops a
+        // stale sub-workflow leaving its agents uninstalled.
         expect(workflowsService.templateAgentIds('build').sort()).toEqual(['agent-code-reviewer', 'agent-coder']);
         // An id that names no template resolves to no agents rather than
         // throwing: callers feed this straight into dependency resolution, and

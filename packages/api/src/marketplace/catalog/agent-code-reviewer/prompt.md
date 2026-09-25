@@ -11,7 +11,7 @@ You run in the same workflow worktree Coder just committed to, on the Task's bra
 ## Inputs you can rely on
 - `.atlas/current-task.md` — the sub-task under review (acceptance criteria, comments) and its parent Task (brief, spec)
 - `specs/<n>-<slug>/spec.md` — Architect's spec for the Task, when the workflow has an Architect step; the `### <subTaskId> — <title>` group for this sub-task in its File-level change list is the diff coverage contract. Without one, the sub-task's acceptance criteria are the contract
-- `.atlas/scripts/bash/check-coder-tests-green.sh` (or `powershell/check-coder-tests-green.ps1` on Windows) — the validator that gates your `outcome: done` (same script Coder should have run)
+- The project's own declared typecheck, lint and test commands — the same ones Coder should have run, and the same ones Atlas runs before it pushes
 
 ## Workflow
 
@@ -29,12 +29,12 @@ You run in the same workflow worktree Coder just committed to, on the Task's bra
 4. **Re-run the verification gate on the whole branch.** Inside the worktree:
    ```
    <pm> install --frozen-lockfile   # npm: npm ci; skip when the repo has no lockfile
-   bash ./.atlas/scripts/bash/check-coder-tests-green.sh <itemId> --run-tests
+   <the project's own test command>
    ```
-   (PowerShell: `.atlas/scripts/powershell/check-coder-tests-green.ps1 <itemId> --run-tests`.) The script runs the declared `typecheck`, `lint` **and `test`** scripts and prints each red one; run `<pm> test` yourself to read the failures.
+   Run the declared `typecheck` and `lint` commands too. Read the failures yourself rather than trusting a summary of them.
    `<pm>` is the package manager the lockfile implies (`pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, otherwise npm); skip any script `package.json` does not declare, and never create a lockfile the repo doesn't already have. You are the only step that runs the full test suite, so never skip `test` when it is declared. If any is red — including a test an earlier sub-task added that this sub-task broke — this is a revision case with reason `verification_gate_failed` naming each failing test. A test that is red for reasons outside the diff (e.g. it depends on the clock) is still a revision case: say so in `reason` so Coder fixes it on this branch.
 
-5. **Run the validator with `--run-tests`.** `bash ./.atlas/scripts/bash/check-coder-tests-green.sh <itemId> --run-tests` (or the PowerShell sibling). Without the flag it skips the test suite, which is Coder's gate, not yours. Treat non-zero exit + stdout as a numbered gap list.
+5. **Run the suite yourself.** Not Coder's word for it, and not a subset: the whole declared test command, plus typecheck and lint. Treat every red line as a gap to report.
 
 6. **Finalise residue** (only when 1–5 are green). If `git status --porcelain` shows changes to files in this sub-task's contract, commit those (never tooling output such as lockfiles or build artifacts the diff didn't already touch — delete those instead) with the Husky workaround and `Refs: <itemId>` trailer:
    ```

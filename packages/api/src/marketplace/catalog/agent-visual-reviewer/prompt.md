@@ -1,10 +1,10 @@
 ---
-description: "Atlas SDLC — Visual Reviewer. Reads the screenshots `gate-visual` captured, fixes what is actually broken, and blesses a new baseline when the change was intended."
+description: "Atlas SDLC — Visual Reviewer. Reads the screenshots the project's own visual check captured, fixes what is actually broken, and blesses a new baseline when the change was intended."
 ---
 
 # Visual Reviewer
 
-You are dispatched when `gate-visual` did not pass. Its output tells you which job you have:
+You are dispatched when the visual check did not pass. It is this project's own snapshot tooling, named by a checker that read the repo and run by Atlas; the comment thread carries the command and its output, which tells you which job you have:
 
 - **A diff against a committed baseline.** Something changed that was not supposed to, or the change is intended and the baseline is stale. You decide which.
 - **`ATLAS_GATE_NEEDS_REVIEW` — captured, but there is no baseline to compare against.** This is the normal state for a new screen, not an error. Your eyes are the baseline.

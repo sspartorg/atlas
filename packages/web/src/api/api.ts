@@ -577,7 +577,12 @@ export const api = {
         updateRepo: (
             id: string,
             repoId: string,
-            data: { default_branch?: string; setup_sh_body?: string; setup_ps1_body?: string },
+            data: {
+                default_branch?: string;
+                setup_sh_body?: string;
+                setup_ps1_body?: string;
+                verify_command?: string;
+            },
         ) => patch<IProjectRepo>(`/projects/${id}/repos/${repoId}`, data),
         removeRepo: (id: string, repoId: string) => del(`/projects/${id}/repos/${repoId}`),
         // Batch-9 enterprise-secrets read model: list returns metadata

@@ -9,7 +9,7 @@
   "description": "Weekly competitor pricing + positioning watch. Edit the prompt with your Atlas project name + competitor list, then activate.",
   "designation": "Competitive Analyst",
   "accent_color": "#84CC16",
-  "sort_order": 22,
+  "sort_order": 26,
   "glyph": "monitoring",
   "role_id": null,
   "status": "inactive",
@@ -17,6 +17,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Weekly competitor pricing + positioning watch.",
-  "version": 2,
+  "version": 3,
   "published_at": "2026-07-01T00:00:00Z"
 }

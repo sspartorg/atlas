@@ -21,12 +21,31 @@ import type { IRunOutcome, IRunOutcomeChecklistItem, RunOutcomeKind } from '@atl
 //       evidence: "no tests yet"
 //   ```
 //
+// A gate checker (ADR 0024) adds two keys to the same block rather than
+// getting a protocol of its own:
+//
+//   ```atlas-outcome
+//   outcome: done
+//   applies: true
+//   command: pnpm -s vitest run --coverage
+//   summary: |
+//     vitest.config.ts declares its own thresholds; --coverage exits non-zero
+//     below the project's number.
+//   ```
+//
+// `applies: false` means the concern does not exist in this project and the
+// summary says why. An absent `applies`, or `applies: true` with no command,
+// is not a pass — the engine parks, because a checker that named no proof
+// produced no evidence.
+//
 // Hand-rolled parser (avoids a yaml dependency for a four-field block).
 // Returns null when the block is missing or unparseable; the runner
 // treats that as `'asked_question'` so a silent agent never advances
 // the chain.
 
 const VALID_OUTCOMES: ReadonlyArray<RunOutcomeKind> = ['done', 'rejected', 'asked_question'];
+/** Matches `UpdateProjectRepoSchema.verify_command`, which stores the same strings. */
+const MAX_COMMAND_LEN = 500;
 const FENCE_RE = /```atlas-outcome\s*\n([\s\S]*?)\n```/g;
 
 // Claude CLI runs under `--output-format=stream-json`: every event is a JSON
@@ -224,6 +243,8 @@ export function parseRunOutcome(outputText: string | null | undefined): IRunOutc
     let summary: string | undefined;
     let reason: string | undefined;
     let checklist: IRunOutcomeChecklistItem[] | undefined;
+    let applies: boolean | undefined;
+    let command: string | undefined;
 
     for (const f of fields) {
         if (f.key === 'outcome') {
@@ -240,6 +261,18 @@ export function parseRunOutcome(outputText: string | null | undefined): IRunOutc
         } else if (f.key === 'checklist') {
             const items = parseChecklist(f.value);
             if (items.length > 0) checklist = items;
+        } else if (f.key === 'applies') {
+            // Only the two literals. Anything else leaves it undefined, which
+            // the gate router treats as "did not answer" rather than guessing
+            // which way a checker meant "probably".
+            const v = unquote(f.value).trim().toLowerCase();
+            if (v === 'true') applies = true;
+            else if (v === 'false') applies = false;
+        } else if (f.key === 'command') {
+            // One line. A block would be a script, and a script is what ADR
+            // 0024 stopped shipping; the ceiling matches the column's.
+            const v = unquote(f.value).trim();
+            if (v.length > 0 && v.length <= MAX_COMMAND_LEN && !v.includes('\n')) command = v;
         }
     }
 
@@ -248,5 +281,7 @@ export function parseRunOutcome(outputText: string | null | undefined): IRunOutc
     if (summary !== undefined) out.summary = summary;
     if (reason !== undefined) out.reason = reason;
     if (checklist !== undefined) out.checklist = checklist;
+    if (applies !== undefined) out.applies = applies;
+    if (command !== undefined) out.command = command;
     return out;
 }

@@ -576,6 +576,10 @@ export const UpdateProjectRepoSchema = z
         default_branch: z.string().min(1).optional(),
         setup_sh_body: z.string().optional(),
         setup_ps1_body: z.string().optional(),
+        // ADR 0024. One line, because it is executed: a body belongs in the
+        // setup script, and the 500 matches the ceiling the outcome parser
+        // puts on a command a checker names.
+        verify_command: z.string().max(500).optional(),
     })
     .strict();
 

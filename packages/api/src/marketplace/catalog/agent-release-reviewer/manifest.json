@@ -9,7 +9,7 @@
   "description": "Reads the branch as one change against the Task the Owner filed, after every gate has passed and every sub-task has been built, tested and documented. Checks each acceptance criterion against a commit and a test, reads the seams between sub-tasks, flags scope creep, and rejects anything unsafe regardless of how green the gates are.",
   "designation": "Release - Reviewer",
   "accent_color": "#15803D",
-  "sort_order": 14,
+  "sort_order": 18,
   "glyph": "rocket_launch",
   "role_id": "engineer",
   "status": "active",
@@ -17,6 +17,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "The last read of the whole Task before the Owner sees the PR.",
-  "version": 3,
+  "version": 4,
   "published_at": "2026-09-24T00:00:00Z"
 }

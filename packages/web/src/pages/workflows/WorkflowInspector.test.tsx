@@ -91,22 +91,32 @@ describe('WorkflowInspector', () => {
 
     // ─── Gate step ──────────────────────────────────────────────────────────
 
-    it('explains that a gate routes on an exit code and spends no tokens', () => {
-        mount({ node: node('gate', { script_id: 'gate-coverage' }) });
-        expect(screen.getByText(/no agent, no tokens/)).toBeInTheDocument();
+    it('explains that the checker names the command and Atlas runs it', () => {
+        mount({
+            node: node('gate', { agent_id: 'agent-tests-check' }),
+            agents: [makeAgent({ id: 'agent-tests-check', name: 'Tests Check' })],
+        });
+        expect(screen.getByText(/believes the exit code/)).toBeInTheDocument();
         expect(screen.getByText(/pauses the run and comes back to you/)).toBeInTheDocument();
+        // The honest half: a project with no such tooling is not a pass.
+        expect(screen.getByText(/recorded as skipped, not as/)).toBeInTheDocument();
     });
 
-    it('flags a gate pointing at a script that no longer exists', () => {
-        // At run time this resolves to `unavailable`, which parks the run
-        // rather than failing it — so it reads as a stuck workflow, not a typo.
-        mount({ node: node('gate', { script_id: 'gate-deleted' }) });
-        expect(screen.getByText(/no longer exists/)).toBeInTheDocument();
+    it('flags a gate pointing at a checker that is not installed', () => {
+        // At run time the step parks rather than failing — so it reads as a
+        // stuck workflow, not a typo. Say so here, where it can be fixed.
+        mount({
+            node: node('gate', { agent_id: 'agent-gone' }),
+            agents: [makeAgent({ id: 'agent-tests-check', name: 'Tests Check' })],
+        });
+        expect(screen.getByText(/isn't installed/)).toBeInTheDocument();
     });
 
-    it('says what a gate does when no script is picked yet', () => {
+    it('says what a gate does when no checker is picked yet', () => {
         mount({ node: node('gate') });
-        expect(screen.getByText('Runs once per repo the Task touches')).toBeInTheDocument();
+        expect(
+            screen.getByText('Reads the repo and names the command this project already trusts'),
+        ).toBeInTheDocument();
     });
 
     // ─── Agent step ─────────────────────────────────────────────────────────

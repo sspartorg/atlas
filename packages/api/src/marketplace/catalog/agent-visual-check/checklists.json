@@ -1,0 +1,22 @@
+[
+  {
+    "label": "Read this repo's own manifests and config before answering",
+    "sort_order": 0,
+    "required": true
+  },
+  {
+    "label": "The command named is one this project already declares or configures",
+    "sort_order": 1,
+    "required": true
+  },
+  {
+    "label": "No threshold, budget or baseline was invented",
+    "sort_order": 2,
+    "required": true
+  },
+  {
+    "label": "Nothing in the repo was modified",
+    "sort_order": 3,
+    "required": true
+  }
+]

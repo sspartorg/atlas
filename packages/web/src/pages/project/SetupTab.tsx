@@ -39,20 +39,24 @@ export function SetupTab({ projectId }: Props) {
 
     const [sh, setSh] = useState('');
     const [ps1, setPs1] = useState('');
+    const [verify, setVerify] = useState('');
 
     // Sync local state when the repo finishes loading, refetches, or changes.
     useEffect(() => {
         if (repo) {
             setSh(repo.setup_sh_body ?? '');
             setPs1(repo.setup_ps1_body ?? '');
+            setVerify(repo.verify_command ?? '');
         }
     }, [repo]);
 
     const dirty = useMemo(
         () =>
             repo !== undefined &&
-            (sh !== (repo.setup_sh_body ?? '') || ps1 !== (repo.setup_ps1_body ?? '')),
-        [repo, sh, ps1]
+            (sh !== (repo.setup_sh_body ?? '') ||
+                ps1 !== (repo.setup_ps1_body ?? '') ||
+                verify !== (repo.verify_command ?? '')),
+        [repo, sh, ps1, verify]
     );
 
     async function handleSave(): Promise<void> {
@@ -60,10 +64,10 @@ export function SetupTab({ projectId }: Props) {
         await update.mutateAsync(
             {
                 repoId: repo.id,
-                data: { setup_sh_body: sh, setup_ps1_body: ps1 },
+                data: { setup_sh_body: sh, setup_ps1_body: ps1, verify_command: verify.trim() },
             },
             {
-                onSuccess: () => toast.show({ message: 'Setup scripts saved' }),
+                onSuccess: () => toast.show({ message: 'Setup saved' }),
             }
         );
     }
@@ -169,6 +173,22 @@ export function SetupTab({ projectId }: Props) {
                     ))}
                 </Select>
             </FormControl>
+
+            {/* ADR 0024 — the command Atlas runs here before it pushes, and
+                believes the exit code of. Atlas will not guess a stack's test
+                command: empty means the run parks rather than pushing
+                unverified. */}
+            <TextField
+                fullWidth
+                size="small"
+                label="Verify command"
+                value={verify}
+                onChange={(e) => setVerify(e.target.value)}
+                placeholder="pnpm -r test"
+                helperText="Run in this repo before any push; a non-zero exit stops the delivery. Left empty, the first delivery run fills it in from what the Tests check finds — and never overwrites what you type here."
+                slotProps={{ htmlInput: { style: { fontFamily: MONO, fontSize: 13 } } }}
+                sx={{ mb: 3 }}
+            />
 
             {update.isError && (
                 <Alert severity="error" sx={{ mb: 3 }}>
@@ -330,6 +350,7 @@ export function SetupTab({ projectId }: Props) {
                         maxRows={36}
                         value={sh}
                         onChange={(e) => setSh(e.target.value)}
+                        slotProps={{ htmlInput: { 'aria-label': 'Bash setup script' } }}
                         placeholder={
                             '#!/usr/bin/env bash\nset -euo pipefail\n\n# Symlinks, env scaffolding, tool checks — anything one-shot per worktree.\n'
                         }
@@ -379,6 +400,7 @@ export function SetupTab({ projectId }: Props) {
                         maxRows={36}
                         value={ps1}
                         onChange={(e) => setPs1(e.target.value)}
+                        slotProps={{ htmlInput: { 'aria-label': 'PowerShell setup script' } }}
                         placeholder={
                             "$ErrorActionPreference = 'Stop'\n\n# Symlinks, env scaffolding, tool checks — anything one-shot per worktree.\n"
                         }

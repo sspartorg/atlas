@@ -38,6 +38,7 @@ export function makeProjectRepo(overrides: Partial<IProjectRepo> = {}): IProject
         name: 'atlas',
         git_url: 'https://github.com/example/atlas',
         git_path: '/tmp/atlas',
+        verify_command: '',
         credential_id: null,
         default_branch: 'main',
         clone_status: 'ready',

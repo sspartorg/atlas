@@ -128,3 +128,14 @@ rather than slipping past.
 The Owner is still reachable, through `asked_question`, which parks the run.
 The distinction the prompt always drew is now the distinction the graph makes:
 **work goes to a performer, a decision goes to the Owner.**
+
+## Amendment (2026-09-25) — the four gates gained checkers
+
+[ADR 0024](0024-agent-decides-atlas-executes.md) turned each gate step into a
+checker dispatch plus a command run by Atlas, so the roster gains four agents —
+`agent-hygiene-check`, `agent-tests-check`, `agent-perf-check`,
+`agent-visual-check` — and Delivery is version 5. The topology is unchanged:
+`check → fixer → fix-reviewer → check`, `max_loops: 12`, the same four fixers on
+the same fail edges. `gate-coverage` is renamed `gate-tests`, because the
+checker runs the project's suite and adds coverage only where the project
+declares its own threshold.

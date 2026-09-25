@@ -68,6 +68,7 @@ function fromRow(r: RepoRow): IProjectRepo {
         clone_status: r.clone_status,
         setup_sh_body: r.setup_sh_body,
         setup_ps1_body: r.setup_ps1_body,
+        verify_command: r.verify_command,
     };
 }
 
@@ -152,7 +153,12 @@ async function insert(
 async function update(
     projectId: string,
     repoId: string,
-    patch: { default_branch?: string | undefined; setup_sh_body?: string | undefined; setup_ps1_body?: string | undefined }
+    patch: {
+        default_branch?: string | undefined;
+        setup_sh_body?: string | undefined;
+        setup_ps1_body?: string | undefined;
+        verify_command?: string | undefined;
+    }
 ): Promise<IProjectRepo> {
     const values = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const q = db.updateTable('project_repos').where('id', '=', repoId).where('project_id', '=', projectId);

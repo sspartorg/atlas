@@ -9,7 +9,7 @@
   "description": "Pulls your Jira-assigned items into Atlas as draft Tasks. Edit the prompt with your Atlas project name, then run it from a scheduled workflow (e.g. daily at 09:00).",
   "designation": "Jira Importer",
   "accent_color": "#3B82F6",
-  "sort_order": 19,
+  "sort_order": 23,
   "glyph": "sync_alt",
   "role_id": null,
   "status": "inactive",
@@ -17,6 +17,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Pulls your Jira-assigned items into Atlas as draft Tasks.",
-  "version": 2,
+  "version": 3,
   "published_at": "2026-07-01T00:00:00Z"
 }

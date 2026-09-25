@@ -1,11 +1,11 @@
 {
   "agent-ai-news": {
-    "version": 2,
-    "hash": "f3a5edc210c12334"
+    "version": 3,
+    "hash": "96493bd505a8b350"
   },
   "agent-ai-readiness": {
-    "version": 2,
-    "hash": "c2a9f78d4a4f0924"
+    "version": 3,
+    "hash": "6606145ddd18a8f8"
   },
   "agent-architect": {
     "version": 3,
@@ -24,16 +24,16 @@
     "hash": "39747032cecf09a5"
   },
   "agent-code-reviewer": {
-    "version": 3,
-    "hash": "bd816113840b84f6"
+    "version": 4,
+    "hash": "3c1369aa6e50c462"
   },
   "agent-coder": {
-    "version": 3,
-    "hash": "f075ae809e0e5a19"
+    "version": 4,
+    "hash": "4518884c3ba972ab"
   },
   "agent-coverage-fixer": {
-    "version": 2,
-    "hash": "53860bc2e8c253d9"
+    "version": 4,
+    "hash": "7db1727745469f2e"
   },
   "agent-doc-reviewer": {
     "version": 1,
@@ -47,25 +47,33 @@
     "version": 1,
     "hash": "e8f2edcedac809e0"
   },
+  "agent-hygiene-check": {
+    "version": 1,
+    "hash": "aef3327565ee0321"
+  },
   "agent-hygiene-fixer": {
-    "version": 3,
-    "hash": "488bad0d502f3609"
+    "version": 5,
+    "hash": "f0d9b82de14a8a38"
   },
   "agent-jira-to-epic": {
-    "version": 2,
-    "hash": "3dd61b81e2decce5"
+    "version": 3,
+    "hash": "76facdfabea64db6"
   },
   "agent-knowledge-base": {
-    "version": 2,
-    "hash": "673b61f482d169a4"
+    "version": 3,
+    "hash": "12bc96ad305e7f36"
   },
   "agent-market-research": {
-    "version": 2,
-    "hash": "0e49c2a7f85d0be9"
+    "version": 3,
+    "hash": "8ab944412b5a92e9"
+  },
+  "agent-perf-check": {
+    "version": 1,
+    "hash": "b77c4f96018a777a"
   },
   "agent-perf-fixer": {
-    "version": 2,
-    "hash": "71fc6374847b21ed"
+    "version": 4,
+    "hash": "e4672a7131a92895"
   },
   "agent-po-reviewer": {
     "version": 1,
@@ -84,15 +92,23 @@
     "hash": "d498dfd606dd198c"
   },
   "agent-regulations": {
-    "version": 2,
-    "hash": "d4bf3f6d48979a34"
+    "version": 3,
+    "hash": "73c5641bcaaf51f1"
   },
   "agent-release-reviewer": {
-    "version": 3,
-    "hash": "f0c88d3295fae2a8"
+    "version": 4,
+    "hash": "80a616c04bddc19b"
+  },
+  "agent-tests-check": {
+    "version": 1,
+    "hash": "cf16868b17f0f407"
+  },
+  "agent-visual-check": {
+    "version": 1,
+    "hash": "16a31934fec02ff7"
   },
   "agent-visual-reviewer": {
-    "version": 2,
-    "hash": "93faec3302293dff"
+    "version": 4,
+    "hash": "a0ab700caf8a81ed"
   }
 }
