@@ -24,6 +24,8 @@ interface CreateInput {
     assignee_agent_id?: string | null;
     labels?: string[];
     repo_ids?: string[];
+    /** Migration 016 — the throwaway item an agent test run acts on. */
+    is_test?: boolean;
 }
 
 interface UpdateInput {
@@ -42,7 +44,7 @@ interface UpdateInput {
 async function subTaskCounts(taskIds: string[]): Promise<Map<string, number>> {
     if (taskIds.length === 0) return new Map();
     const rows = await db
-        .selectFrom('items')
+        .selectFrom('items_live')
         .select(({ fn }) => ['parent_id', fn.countAll<string>().as('n')])
         .where('type', '=', 'sub_task')
         .where('parent_id', 'in', taskIds)
@@ -77,7 +79,7 @@ export const tasksService = {
     // `includeArchived` defaults to false: hides tasks closed (status=done)
     // more than 7 days ago. Set true to bypass the filter (archived view).
     async list(projectId?: string, includeArchived = false): Promise<ITaskListItem[]> {
-        let q = db.selectFrom('items').selectAll().where('type', '=', 'task');
+        let q = db.selectFrom('items_live').selectAll().where('type', '=', 'task');
         if (projectId) q = q.where('project_id', '=', projectId);
         if (!includeArchived) {
             q = q.where(
@@ -108,6 +110,7 @@ export const tasksService = {
             assignee_agent_id: data.assignee_agent_id ?? null,
             labels: data.labels ?? [],
             repo_ids: repoIds,
+            ...(data.is_test ? { is_test: true } : {}),
         });
         const task = rowToTask(row);
         await eventsLog.record({
@@ -260,7 +263,7 @@ export const tasksService = {
 
     async count(): Promise<number> {
         const r = await db
-            .selectFrom('items')
+            .selectFrom('items_live')
             .select(({ fn }) => fn.countAll<string>().as('n'))
             .where('type', '=', 'task')
             .executeTakeFirst();
@@ -269,7 +272,7 @@ export const tasksService = {
 
     async awaitingPickupCount(): Promise<number> {
         const r = await db
-            .selectFrom('items')
+            .selectFrom('items_live')
             .select(({ fn }) => fn.countAll<string>().as('n'))
             .where('type', '=', 'task')
             .where('status', '=', 'ready')

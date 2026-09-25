@@ -11,6 +11,10 @@ import { tasksService } from './tasks.js';
 
 // Agent tests as product data (ADR 0023).
 //
+// The items a run materialises carry `is_test` (migration 016): real to the
+// agent in every way it can observe, invisible to every list, count, search and
+// aggregate the Owner looks at.
+//
 // A test owns the item it wants the agent to act on, because a bare prompt
 // cannot exercise the agents Atlas ships — PO Writer refuses anything that is
 // not a Task, Coder needs a sub-task with a repo. Each run materialises a fresh
@@ -154,8 +158,32 @@ export const agentTestsService = {
         return this.get(id);
     },
 
+    /**
+     * Delete a test, and the throwaway items its runs made.
+     *
+     * `agent_test_runs.item_id` is `ON DELETE SET NULL`, so the cascade that
+     * takes the run rows would otherwise leave every item behind with nothing
+     * pointing at it — invisible now (migration 016), but never collectable.
+     *
+     * For a sub-task template, `item_id` is the sub-task; its throwaway parent
+     * Task is only reachable through `parent_id`, so both are collected here
+     * and the parent's delete cascades to the child.
+     */
     async remove(id: string): Promise<void> {
+        const rows = await db
+            .selectFrom('agent_test_runs as r')
+            .innerJoin('items as i', 'i.id', 'r.item_id')
+            .select(['i.id as id', 'i.parent_id as parent_id'])
+            .where('r.agent_test_id', '=', id)
+            .execute();
+        const itemIds = [...new Set(rows.flatMap((r) => [r.id, r.parent_id]))].filter(
+            (v): v is string => v !== null,
+        );
         await db.deleteFrom('agent_tests').where('id', '=', id).execute();
+        if (itemIds.length > 0) {
+            // Belt and braces: only ever delete rows this flagged as its own.
+            await db.deleteFrom('items').where('id', 'in', itemIds).where('is_test', '=', true).execute();
+        }
     },
 
     /**
@@ -181,6 +209,7 @@ export const agentTestsService = {
                 project_id: test.project_id,
                 title: `${t.title} ${suffix}`,
                 description: t.description ?? '',
+                is_test: true,
                 ...(test.repo_id ? { repo_ids: [test.repo_id] } : {}),
             });
             const sub = await subTasksService.create({
@@ -189,6 +218,7 @@ export const agentTestsService = {
                 description: t.description ?? '',
                 acceptance_criteria: t.acceptance_criteria ?? '',
                 labels: t.labels ?? [],
+                is_test: true,
             });
             itemId = sub.id;
         } else {
@@ -198,6 +228,7 @@ export const agentTestsService = {
                 description: t.description ?? '',
                 acceptance_criteria: t.acceptance_criteria ?? '',
                 labels: t.labels ?? [],
+                is_test: true,
                 ...(test.repo_id ? { repo_ids: [test.repo_id] } : {}),
             });
             itemId = task.id;

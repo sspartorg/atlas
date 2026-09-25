@@ -16,7 +16,7 @@ export async function labelsRoutes(app: FastifyInstance): Promise<void> {
     app.get('/api/labels', async (req, reply) => {
         const q = req.query as { project_id?: string };
         let query = db
-            .selectFrom('items')
+            .selectFrom('items_live')
             .select(sql<string>`DISTINCT jsonb_array_elements_text(labels)`.as('label'));
         if (q.project_id) {
             query = query.where('project_id', '=', q.project_id);

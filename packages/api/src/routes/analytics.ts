@@ -628,7 +628,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                     COALESCE(SUM(r.cache_read_tokens), 0)::text AS cache_read_tokens,
                     COUNT(r.id)::text AS run_count,
                     COUNT(DISTINCT i.id)::text AS item_count
-                  FROM items i
+                  FROM items_live i
                   LEFT JOIN agent_runs r
                     ON r.item_id = i.id AND r.status = 'completed'
                  WHERE i.project_id = ${projectId}
@@ -647,11 +647,11 @@ export async function analyticsRoutes(app: FastifyInstance) {
             }>`
                 WITH RECURSIVE tree(root_id, id, parent_id, type, depth) AS (
                     SELECT e.id, e.id, e.parent_id, e.type, 0
-                      FROM items e
+                      FROM items_live e
                      WHERE e.project_id = ${projectId} AND e.type = 'task'
                     UNION ALL
                     SELECT t.root_id, i.id, i.parent_id, i.type, t.depth + 1
-                      FROM items i
+                      FROM items_live i
                       JOIN tree t ON i.parent_id = t.id
                 )
                 SELECT
@@ -667,7 +667,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                   FROM tree
                   LEFT JOIN agent_runs r
                     ON r.item_id = tree.id AND r.status = 'completed'
-                  LEFT JOIN items e ON e.id = tree.root_id
+                  LEFT JOIN items_live e ON e.id = tree.root_id
                  GROUP BY tree.root_id, e.title
                  ORDER BY COALESCE(SUM(r.total_cost_usd), 0) DESC, tree.root_id ASC
             `.execute(db),
@@ -890,11 +890,11 @@ export async function analyticsRoutes(app: FastifyInstance) {
         }>`
             WITH RECURSIVE tree(root_id, id, parent_id, depth) AS (
                 SELECT e.id, e.id, e.parent_id, 0
-                  FROM items e
+                  FROM items_live e
                  WHERE e.project_id = ${projectId} AND e.type = 'task'
                 UNION ALL
                 SELECT t.root_id, i.id, i.parent_id, t.depth + 1
-                  FROM items i
+                  FROM items_live i
                   JOIN tree t ON i.parent_id = t.id
             ),
             rolled AS (
@@ -911,7 +911,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                   FROM tree
                   LEFT JOIN agent_runs r
                     ON r.item_id = tree.id AND r.status = 'completed'
-                  LEFT JOIN items e ON e.id = tree.root_id
+                  LEFT JOIN items_live e ON e.id = tree.root_id
                  GROUP BY tree.root_id, e.title
             )
             SELECT

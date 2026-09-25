@@ -446,6 +446,11 @@ export interface ItemsTable {
     // Migration 040 — a sub-task's hand-set run order within its Task.
     sort_order: IntN;
 
+    // Migration 016 — the throwaway item an agent test run acts on. True keeps
+    // it out of every list, count, search and aggregate (`items_live`) while
+    // leaving it fetchable by id, which the run itself depends on.
+    is_test: ColumnType<boolean, boolean | undefined, boolean | undefined>;
+
     created_at: CreatedAt;
     updated_at: UpdatedAt;
     search_tsv: ColumnType<string, never, never>;
@@ -838,6 +843,10 @@ export interface DB {
     tool_catalog: ToolCatalogTable;
     guardrail_rules: GuardrailRulesTable;
     items: ItemsTable;
+    // Migration 016 — `items` minus the throwaway items agent test runs create.
+    // Every list, count, search and aggregate reads this; only by-id lookups
+    // read `items` directly. Same shape, so the row type is the same.
+    items_live: ItemsTable;
     item_links: ItemLinksTable;
     item_external_links: ItemExternalLinksTable;
     jira_config: JiraConfigTable;

@@ -35,7 +35,7 @@ const LAST_ACTIVITY_SQL = sql<string>`
                 JOIN project_repos pr ON pr.id = ps.repo_id
                 WHERE pr.project_id = p.id), p.updated_at),
       COALESCE((SELECT MAX(updated_at) FROM project_guardrails pg WHERE pg.project_id = p.id), p.updated_at),
-      COALESCE((SELECT MAX(updated_at) FROM items i WHERE i.project_id = p.id), p.updated_at)
+      COALESCE((SELECT MAX(updated_at) FROM items_live i WHERE i.project_id = p.id), p.updated_at)
     )
 `;
 
