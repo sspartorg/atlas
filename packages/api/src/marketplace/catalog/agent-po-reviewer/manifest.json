@@ -6,8 +6,8 @@
   "model": "claude-sonnet-5",
   "effort": "medium",
   "framework": "review",
-  "description": "Dedicated reviewer paired with `agent-po-writer`. Grades the dev sub-task / QA twin breakdown against the PO Writer checklist, then reports via the `atlas-outcome` block (done \u2192 the workflow runs the sub-tasks, rejected \u2192 back to PO Writer for revision, asked_question \u2192 Owner).",
-  "designation": "Product Owner \u2014 Reviewer",
+  "description": "Dedicated reviewer paired with `agent-po-writer`. Grades the dev sub-task / QA twin breakdown against the PO Writer checklist, then reports via the `atlas-outcome` block (done → the workflow runs the sub-tasks, rejected → back to PO Writer for revision, asked_question → Owner).",
+  "designation": "Product Owner — Reviewer",
   "accent_color": "#0E5C99",
   "sort_order": 7,
   "glyph": "fact_check",
@@ -17,6 +17,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Dedicated reviewer paired with `agent-po-writer`.",
-  "version": 1,
+  "version": 2,
   "published_at": "2026-07-01T00:00:00Z"
 }

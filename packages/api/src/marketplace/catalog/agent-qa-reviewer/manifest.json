@@ -6,8 +6,8 @@
   "model": "claude-sonnet-5",
   "effort": "high",
   "framework": "review",
-  "description": "Dedicated reviewer paired with `agent-qa-writer`. Parses the QA test-plan CSV, enforces the per-criterion five-kind coverage floor, and verifies the `tested_by` link. Reports via the `atlas-outcome` block (done \u2192 next workflow step, rejected \u2192 back to QA Writer for revision, asked_question \u2192 Owner).",
-  "designation": "Quality Assurance \u2014 Reviewer",
+  "description": "Dedicated reviewer paired with `agent-qa-writer`. Parses the QA test-plan CSV, enforces the per-criterion five-kind coverage floor, and verifies the `tested_by` link. Reports via the `atlas-outcome` block (done → next workflow step, rejected → back to QA Writer for revision, asked_question → Owner).",
+  "designation": "Quality Assurance — Reviewer",
   "accent_color": "#8E44AD",
   "sort_order": 10,
   "glyph": "fact_check",
@@ -17,6 +17,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Dedicated reviewer paired with `agent-qa-writer`.",
-  "version": 1,
+  "version": 2,
   "published_at": "2026-07-01T00:00:00Z"
 }

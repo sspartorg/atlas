@@ -1,6 +1,7 @@
 import { db } from '../db/kysely-client.js';
 import type { IWorkflowGraph } from '@atlas/shared';
 import { marketplaceService } from './marketplace.js';
+import { adoptStarterTests } from './agent-starter-tests.js';
 
 // Per-boot reconciliation of installed agent prompts. `runSeed` in db/seed.ts
 // only syncs the marketplace catalog into `marketplace_agents` — it never
@@ -88,9 +89,11 @@ export async function syncAgentDefaults(): Promise<void> {
     }
 
     const installed = await installAgentsWorkflowsNeed();
-    if (stats.prompts_updated > 0 || installed > 0) {
+    const tests = await adoptShippedFixtures();
+    if (stats.prompts_updated > 0 || installed > 0 || tests > 0) {
         console.log(
-            `[catalog-sync] applied: ${stats.prompts_updated} prompt(s), ${installed} agent(s) installed.`,
+            `[catalog-sync] applied: ${stats.prompts_updated} prompt(s), ${installed} agent(s) installed, ` +
+                `${tests} shipped fixture(s) adopted.`,
         );
     }
 }
@@ -139,4 +142,34 @@ async function installAgentsWorkflowsNeed(): Promise<number> {
         }
     }
     return installed;
+}
+
+/**
+ * Give every installed agent the fixtures its bundle ships (migration 021).
+ *
+ * `marketplaceService.install` adopts them for a fresh install; this is what
+ * gives the Owner's EXISTING installs theirs, without a data migration that
+ * would have to read catalog files from inside a `knex` transaction. Idempotent
+ * and edit-preserving — `adoptStarterTests` decides — so running it every boot
+ * costs one query per agent and changes nothing once it has caught up.
+ */
+async function adoptShippedFixtures(): Promise<number> {
+    const agents = await db
+        .selectFrom('agents')
+        .select(['id', 'marketplace_source_id'])
+        .execute();
+    let adopted = 0;
+    for (const a of agents) {
+        // An agent the Owner wrote themselves has no bundle to adopt from. The
+        // fallback to `id` matches the starter-tests route: an agent installed
+        // under its catalog id and then unlinked still reads its own bundle.
+        const source = a.marketplace_source_id ?? a.id;
+        try {
+            const r = await adoptStarterTests(a.id, source);
+            adopted += r.inserted + r.upgraded;
+        } catch (err) {
+            console.warn(`[catalog-sync] could not adopt fixtures for ${a.id}:`, (err as Error).message);
+        }
+    }
+    return adopted;
 }

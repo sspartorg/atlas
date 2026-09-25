@@ -1,0 +1,70 @@
+[
+  {
+    "id": "rejects-an-undocumented-change",
+    "kind": "job",
+    "name": "Rejects documentation that misses a user-facing change",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "[DOC] Review the export documentation",
+      "description": "A branch in this repository documents the CSV export. Check it against what the branch actually shipped.",
+      "acceptance_criteria": "Given the documentation, when a reader looks for export, then they find what it does and one worked example."
+    },
+    "expectations": {
+      "outcome_kind": "rejected",
+      "judge_criteria": [
+        "The reason names something the branch shipped that the documentation does not mention, or a claim that is not true of the code.",
+        "The reason says the claim was checked against the source."
+      ],
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 2.0
+    },
+    "needs_repo": true,
+    "notes": "Documentation review that reads only the prose approves anything fluent. The second criterion is the difference between reading the docs and checking them."
+  },
+  {
+    "id": "asks-without-documentation",
+    "kind": "contract",
+    "name": "Asks when there is nothing to check",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "[DOC] Review the docs",
+      "description": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 0.6
+    },
+    "needs_repo": true,
+    "notes": "No named change means no diff to check the documentation against, and a review of documentation against nothing always passes."
+  },
+  {
+    "id": "reviews-without-writing-docs",
+    "kind": "trace",
+    "name": "Reviews without writing the documentation",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "[DOC] Review the helper documentation",
+      "description": "A branch in this repository documents a slug helper. Review it.",
+      "acceptance_criteria": "Given the documentation, when a reader looks for the helper, then they find what it does."
+    },
+    "expectations": {
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 1.5
+    },
+    "needs_repo": true,
+    "notes": "A reviewer that rewrites the page has approved its own words, and the Technical Writer never sees what was wrong with theirs."
+  }
+]

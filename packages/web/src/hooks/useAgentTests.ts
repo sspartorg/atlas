@@ -71,13 +71,30 @@ export function useDeleteAgentTest(agentId: string) {
 export function useRunAgentTest() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ testId, n_runs, label }: { testId: string; n_runs?: number; label?: string }) =>
+        mutationFn: ({
+            testId,
+            n_runs,
+            label,
+            project_id,
+            repo_id,
+        }: {
+            testId: string;
+            n_runs?: number;
+            label?: string;
+            /** Migration 021 — a fixture binds to a project when it runs. */
+            project_id?: string;
+            repo_id?: string | null;
+        }) =>
             api.agentTests.run(testId, {
                 ...(n_runs !== undefined ? { n_runs } : {}),
                 ...(label !== undefined ? { label } : {}),
+                ...(project_id !== undefined ? { project_id } : {}),
+                ...(repo_id !== undefined ? { repo_id } : {}),
             }),
-        onSuccess: (_r, { testId }) =>
-            void qc.invalidateQueries({ queryKey: ['agent-test-batches', testId] }),
+        onSuccess: (_r, { testId }) => {
+            void qc.invalidateQueries({ queryKey: ['agent-test-batches', testId] });
+            void qc.invalidateQueries({ queryKey: ['agent-qualification'] });
+        },
     });
 }
 
@@ -96,5 +113,33 @@ export function useStarterTests(agentId: string) {
         queryKey: ['agent-starter-tests', agentId],
         queryFn: () => api.agentTests.starter(agentId),
         enabled: Boolean(agentId),
+    });
+}
+
+/**
+ * The suite verdict for one agent, or for every installed agent.
+ *
+ * Polled while anything is running, for the same reason the batch hook is: a
+ * suite run is asynchronous and the header has to stop saying "running" by
+ * itself.
+ */
+export function useAgentQualification(agentId?: string) {
+    return useQuery({
+        queryKey: ['agent-qualification', agentId ?? 'all'],
+        queryFn: () => api.agentTests.qualification(agentId),
+    });
+}
+
+/** Run every fixture this agent has, under one label. */
+export function useRunAgentSuite(agentId: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (body: { n_runs?: number; project_id?: string; repo_id?: string | null }) =>
+            api.agentTests.runSuite(agentId, body),
+        onSuccess: () => {
+            void qc.invalidateQueries({ queryKey: ['agent-tests', agentId] });
+            void qc.invalidateQueries({ queryKey: ['agent-qualification', agentId] });
+            void qc.invalidateQueries({ queryKey: ['agent-test-batches'] });
+        },
     });
 }

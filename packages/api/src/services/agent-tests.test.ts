@@ -364,3 +364,54 @@ describe('agentTestsService', () => {
         });
     });
 });
+
+// A suite run is N batches under one label (migration 018), not a new row kind
+// — and it spends real money, so the guards matter more than the mechanism.
+describe('agentTestsService.runSuite', () => {
+    it('runs every fixture under one shared label', async () => {
+        mockDistinctSpawns();
+        await makeTest({ name: 'one' });
+        await makeTest({ name: 'two' });
+
+        const batches = await agentTestsService.runSuite('agent-coder', { project_id: 'p1' });
+        expect(batches).toHaveLength(2);
+        const labels = new Set(batches.map((b) => b.label));
+        expect(labels.size, 'one suite run is one label').toBe(1);
+        expect([...labels][0]).toMatch(/^suite-/);
+    });
+
+    it('refuses a second run while one is in flight', async () => {
+        mockDistinctSpawns();
+        await makeTest({ name: 'one' });
+        await agentTestsService.runSuite('agent-coder', { project_id: 'p1' });
+        // The first run's samples are still `running`; pressing again would
+        // double a real bill rather than queue.
+        await expect(agentTestsService.runSuite('agent-coder', { project_id: 'p1' })).rejects.toThrow(
+            /already in flight/,
+        );
+    });
+
+    it('refuses an agent with nothing to run', async () => {
+        await expect(agentTestsService.runSuite('agent-coder', { project_id: 'p1' })).rejects.toThrow(
+            /no tests to run/,
+        );
+    });
+
+    // Migration 021 — a fixture is agent-scoped until something names a
+    // project. Guessing one would spend an issue key where nobody asked.
+    it('refuses to run a fixture that is bound to no project', async () => {
+        mockDistinctSpawns();
+        const t = await makeTest({ name: 'unbound', project_id: null });
+        await expect(agentTestsService.run(t.id)).rejects.toThrow(/not bound to a project/);
+    });
+
+    it('runs an unbound fixture in the project the caller names', async () => {
+        mockDistinctSpawns();
+        const t = await makeTest({ name: 'unbound', project_id: null });
+        const batch = await agentTestsService.run(t.id, { project_id: 'p1' });
+        expect(batch.n_runs).toBe(1);
+        expect(await testDb.selectFrom('items').select('project_id').executeTakeFirstOrThrow()).toMatchObject({
+            project_id: 'p1',
+        });
+    });
+});

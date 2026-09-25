@@ -553,3 +553,51 @@ export interface StarterTest {
     /** What this test catches. The part that makes a starter test teach. */
     notes: string;
 }
+
+/**
+ * Whether an agent's suite says it does its job — and whether that is still
+ * true of the agent as it is configured right now.
+ *
+ * Per-agent counts, never a fleet percentage. ADR 0023's rule against ranking
+ * agents on pass@1 stands: a reviewer that correctly rejects would sort worst
+ * on any average. What makes a per-agent verdict safe is that a fixture
+ * declares what a pass IS, so a reviewer's fixture expects `rejected`.
+ */
+export type QualificationVerdict =
+    | 'no_tests'
+    | 'never_run'
+    | 'failing'
+    | 'blocked'
+    | 'stale'
+    | 'qualified';
+
+interface QualificationFixture {
+    agent_test_id: string;
+    name: string;
+    provenance: 'catalog' | 'edited' | 'owner';
+    pass_at_1: boolean | null;
+    pass_at_k: boolean | null;
+    consistency: number | null;
+    flaky: boolean;
+    n_runs: number;
+    last_run_at: string | null;
+    failures: string[];
+}
+
+export interface AgentQualification {
+    agent_id: string;
+    verdict: QualificationVerdict;
+    fixtures: number;
+    never_run: number;
+    passed_at_1: number;
+    passed_at_k: number;
+    failed: number;
+    flaky: number;
+    blocked: number;
+    last_run_at: string | null;
+    cost_usd: number;
+    stale: boolean;
+    stale_reason: string | null;
+    ran_at_config: { model: string | null; effort: string | null; prompt_version: number | null } | null;
+    per_fixture: QualificationFixture[];
+}

@@ -21,6 +21,8 @@ interface MountOpts {
     estimate?: Record<string, unknown>;
     starters?: unknown[];
     repos?: unknown[];
+    /** The suite verdict the header renders. Omitted ⇒ the panel is absent. */
+    qualification?: Record<string, unknown> | null;
     failWrites?: boolean;
     onWrite?: (kind: string, payload: unknown) => void;
 }
@@ -57,9 +59,46 @@ function aBatch(samples: Array<Record<string, unknown>>, over: Record<string, un
     };
 }
 
-function mount({ tests = [], runs, batches, estimate, starters = [], repos = [], failWrites = false, onWrite }: MountOpts = {}) {
+/** What `GET /agent-qualification?agent_id=` returns for one agent. */
+function aQualification(over: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        agent_id: 'agent-coder',
+        verdict: 'qualified',
+        fixtures: 3,
+        never_run: 0,
+        passed_at_1: 3,
+        passed_at_k: 3,
+        failed: 0,
+        flaky: 0,
+        blocked: 0,
+        last_run_at: '2026-09-24T00:00:00Z',
+        cost_usd: 0.84,
+        stale: false,
+        stale_reason: null,
+        ran_at_config: { model: 'claude-sonnet-5', effort: 'medium', prompt_version: 4 },
+        per_fixture: [],
+        ...over,
+    };
+}
+
+function mount({
+    tests = [],
+    runs,
+    batches,
+    estimate,
+    starters = [],
+    repos = [],
+    qualification = null,
+    failWrites = false,
+    onWrite,
+}: MountOpts = {}) {
     const history = batches ?? (runs ? [aBatch(runs)] : []);
     server.use(
+        http.get(`${BASE}/agent-qualification`, () => HttpResponse.json(qualification ? [qualification] : [])),
+        http.post(`${BASE}/agents/agent-coder/test-suite/runs`, async ({ request }) => {
+            onWrite?.('run-suite', await request.json());
+            return HttpResponse.json([], { status: 202 });
+        }),
         http.post(`${BASE}/agents/agent-coder/tests`, async ({ request }) => {
             onWrite?.('create', await request.json());
             if (failWrites) return HttpResponse.json({ error: 'that project has no repos' }, { status: 400 });
@@ -512,4 +551,130 @@ describe('TestsTabContent', () => {
             expect(await screen.findByRole('button', { name: 'New test' })).toBeInTheDocument();
         });
     });
+});
+
+// The Owner's actual question: "how do I know ABC Agent does what it is
+// supposed to?" — and the half that makes the first half worth anything.
+describe('TestsTabContent — qualification', () => {
+    it('says the suite is qualified, on which configuration, and what it cost', async () => {
+        mount({ tests: [aTest()], qualification: aQualification() });
+        expect(await screen.findByText('QUALIFIED')).toBeInTheDocument();
+        expect(screen.getByText('3 of 3 fixtures')).toBeInTheDocument();
+        expect(screen.getByText(/claude-sonnet-5.*prompt v4/)).toBeInTheDocument();
+    });
+
+    // A green suite proven on a model the agent no longer runs is not a green
+    // suite, and the badge has to say which field moved or it is decoration.
+    it('names the field that went stale', async () => {
+        mount({
+            tests: [aTest()],
+            qualification: aQualification({
+                verdict: 'stale',
+                stale: true,
+                stale_reason: 'the model changed from claude-sonnet-5 to haiku since the last run',
+            }),
+        });
+        expect(await screen.findByText('STALE')).toBeInTheDocument();
+        expect(screen.getByText(/changed from claude-sonnet-5 to haiku/)).toBeInTheDocument();
+    });
+
+    it('does not call a never-run suite passing', async () => {
+        mount({
+            tests: [aTest()],
+            qualification: aQualification({ verdict: 'never_run', never_run: 3, passed_at_1: 0, passed_at_k: 0 }),
+        });
+        expect(await screen.findByText('NEVER RUN')).toBeInTheDocument();
+        expect(screen.queryByText('QUALIFIED')).not.toBeInTheDocument();
+    });
+
+    it('runs the whole suite in the project the header names', async () => {
+        const writes: Array<{ kind: string; payload: unknown }> = [];
+        mount({
+            tests: [aTest()],
+            qualification: aQualification(),
+            onWrite: (kind, payload) => writes.push({ kind, payload }),
+        });
+        // Pick the project first: a suite run makes real items, so it is never
+        // dispatched against a project the Owner did not choose.
+        await userEvent.click(await screen.findByRole('combobox', { name: 'Run in' }));
+        await userEvent.click(await screen.findByRole('option', { name: 'Sandbox' }));
+        await userEvent.click(await screen.findByRole('button', { name: /Run all 3/ }));
+
+        await waitFor(() => expect(writes.some((w) => w.kind === 'run-suite')).toBe(true));
+        expect(writes.find((w) => w.kind === 'run-suite')?.payload).toMatchObject({ project_id: 'p1' });
+    });
+
+    it('says whether a fixture came from the bundle or from you', async () => {
+        const test = aTest();
+        mount({
+            tests: [test],
+            qualification: aQualification({
+                per_fixture: [{ agent_test_id: (test as { id: string }).id, provenance: 'catalog' }],
+            }),
+        });
+        expect(await screen.findByText('Ships with this agent · upgrades with it')).toBeInTheDocument();
+    });
+});
+
+describe('TestsTabContent — qualification edges', () => {
+    it('offers no suite run when the agent has no fixtures', async () => {
+        mount({ qualification: aQualification({ verdict: 'no_tests', fixtures: 0, passed_at_1: 0, passed_at_k: 0 }) });
+        expect(await screen.findByText('NO TESTS')).toBeInTheDocument();
+        expect(screen.getByText(/Nothing here has been proven/)).toBeInTheDocument();
+        // Nothing to run, so the button that spends money is not offered.
+        expect(screen.queryByRole('button', { name: /Run all/ })).not.toBeInTheDocument();
+    });
+
+    it('counts the flaky fixtures beside pass@k', async () => {
+        mount({
+            tests: [aTest()],
+            qualification: aQualification({ flaky: 2, passed_at_1: 1, passed_at_k: 3 }),
+        });
+        expect(await screen.findByText(/3 of 3.*2 flaky/)).toBeInTheDocument();
+    });
+
+    it('says how many have never run when the rest have passed', async () => {
+        mount({
+            tests: [aTest()],
+            qualification: aQualification({ verdict: 'stale', never_run: 1, passed_at_1: 2, passed_at_k: 2 }),
+        });
+        expect(await screen.findByText('1 of 3 have never run.')).toBeInTheDocument();
+    });
+
+    // Multi-repo projects (ADR 0018) have nothing sensible to default to, so
+    // the picker only appears when the choice is real.
+    it('asks for a repo only when the project has more than one', async () => {
+        mount({
+            tests: [aTest()],
+            qualification: aQualification(),
+            repos: [
+                { id: 'r1', name: 'api' },
+                { id: 'r2', name: 'web' },
+            ],
+        });
+        await userEvent.click(await screen.findByRole('combobox', { name: 'Run in' }));
+        await userEvent.click(await screen.findByRole('option', { name: 'Sandbox' }));
+        expect(await screen.findByRole('combobox', { name: 'Repo' })).toBeInTheDocument();
+    });
+});
+
+// A private window, or site data cleared, throws on access. The picker is a
+// convenience; the page must render without it.
+it('renders when localStorage is unavailable', async () => {
+    const store = Object.getOwnPropertyDescriptor(window, 'localStorage');
+    Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        get() {
+            throw new Error('site data blocked');
+        },
+    });
+    try {
+        mount({ tests: [aTest()], qualification: aQualification() });
+        expect(await screen.findByText('QUALIFIED')).toBeInTheDocument();
+        await userEvent.click(await screen.findByRole('combobox', { name: 'Run in' }));
+        await userEvent.click(await screen.findByRole('option', { name: 'Sandbox' }));
+        expect(await screen.findByRole('button', { name: /Run all 3/ })).toBeEnabled();
+    } finally {
+        if (store) Object.defineProperty(window, 'localStorage', store);
+    }
 });

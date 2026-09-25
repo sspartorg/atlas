@@ -442,7 +442,9 @@ Table `run_gate_results`: `id, workflow_run_id (FK → workflow_runs, ON DELETE 
 
 ### Starter tests (ADR 0023 phase 4, no migration)
 
-**Why there is no table.** `agent_tests.project_id` is NOT NULL and `repo_id` references `project_repos`; a catalog bundle has neither, and `marketplaceService.install` never sees a project — so there is no valid row to insert at install time. Relaxing `project_id` would mean shipping tests that cannot be run, displayed as if they could.
+**Why there was no table, and why there is now (migration 021).** `agent_tests.project_id` was NOT NULL, a catalog bundle has no project, and `marketplaceService.install` never sees one — so a shipped fixture could only be a template the Owner adopted by hand. The consequence was the thing the Owner actually saw: 8 of 24 agents shipped a fixture, nobody had clicked Add, and every agent page read "No tests yet", which is indistinguishable from no testing at all.
+
+`project_id` is now nullable. A fixture belongs to the agent at rest and binds to a project when it runs — body first, then the fixture's own pin, then a 400. Never a default: a run materialises a REAL item that takes an `ATL-nnn` from the project counter, so choosing where to spend that is the Owner's. `source_test_id` + `source_hash` make adoption idempotent and edit-preserving (see `agent-starter-tests.ts`).
 
 So an agent's tests ship as `catalog/agent-*/tests.json`, read from disk by `loadCatalog()` and adopted through the ordinary create form. `tests.json` is in `catalog-lock.ts`'s `BUNDLE_FILES` and in the loader's `hashEntry` projection — **both, or the loader's `content_hash` and the lock's `bundleHash` disagree about what a bundle is** — so editing a shipped test without bumping its version fails the lock test.
 
@@ -455,7 +457,9 @@ So an agent's tests ship as `catalog/agent-*/tests.json`, read from disk by `loa
 
 **Why a test owns an item template rather than a prompt.** The `Test Run` tab (deleted) fired an ad-hoc prompt at an agent and was never usable as a test, for a structural reason: PO Writer refuses anything that is not a Task (its kind guard), Coder needs a sub-task with a repo and a spec, Release Reviewer needs a whole branch. A bare prompt cannot exercise any of them. A test therefore carries the item it wants the agent to act on — which is exactly what a golden fixture already is, and why these are one primitive rather than two features.
 
-Table `agent_tests`: `id, agent_id (FK → agents, CASCADE, **nullable** since migration 019), workflow_id (FK → workflows, CASCADE, nullable), suite, project_id (FK → projects, CASCADE), repo_id (FK → project_repos, SET NULL — nullable: an agent that touches no repo still deserves a test), name, item_template jsonb, expectations jsonb, created_at, updated_at`.
+Each shipped fixture carries a `kind` — `job` (it does its work, judged), `contract` (it asks or refuses when the input is not what it needs), `trace` (it stayed in its lane). Three per agent, one of each, enforced by `catalog-contract.test.ts`; before that every shipped fixture was a `contract` case and nothing asserted that an agent does its job.
+
+Table `agent_tests`: `id, agent_id (FK → agents, CASCADE, **nullable** since migration 019), workflow_id (FK → workflows, CASCADE, nullable), suite, project_id (FK → projects, CASCADE, **nullable** since migration 021), source_test_id, source_hash (migration 021), repo_id (FK → project_repos, SET NULL — nullable: an agent that touches no repo still deserves a test), name, item_template jsonb, expectations jsonb, created_at, updated_at`.
 
 **One primitive, two ways to run it (migration 019, ADR 0023 phase 3, ATL-173).** `CHECK ((agent_id IS NOT NULL) <> (workflow_id IS NOT NULL))`: run a fixture through one agent and it qualifies that agent; run the same fixture through a workflow and it is the end-to-end eval `evals/` does from a terminal today. What differs is one branch in `run()` and four expectation keys; what is identical is the expectations jsonb, the verdict enum, the failures array, batching, sampling, the judge and the tab UI. **No `target_kind` column** — a discriminator beside two nullable FKs is a third source of truth that can disagree with them, whereas the CHECK cannot lie.
 

@@ -41,7 +41,8 @@ export interface AgentTestRow {
     id: string;
     /** Null when this fixture targets a workflow instead (migration 019). */
     agent_id: string | null;
-    project_id: string;
+    /** Migration 021 — null when the fixture binds to a project at run time. */
+    project_id: string | null;
     repo_id: string | null;
     name: string;
     item_template: AgentTestItemTemplate;
@@ -83,7 +84,7 @@ export function asTest(r: Record<string, unknown>): AgentTestRow {
     return {
         id: r['id'] as string,
         agent_id: (r['agent_id'] as string) ?? null,
-        project_id: r['project_id'] as string,
+        project_id: (r['project_id'] as string | null) ?? null,
         repo_id: (r['repo_id'] as string) ?? null,
         name: r['name'] as string,
         item_template: r['item_template'] as AgentTestItemTemplate,

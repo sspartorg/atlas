@@ -48,6 +48,41 @@ export interface RunTestOptions {
     n_runs?: number | undefined;
     /** Free-text tag, e.g. `before-prompt-diet`, for comparing two batches. */
     label?: string | undefined;
+    /**
+     * Where the throwaway item is made (migration 021).
+     *
+     * A fixture is agent-scoped at rest, so the project comes from the caller,
+     * falls back to the fixture's own, and is otherwise an error. Never a
+     * default: the item consumes a real issue key from whatever project it
+     * lands in, and picking that for the Owner spends their key count in a
+     * place they did not choose.
+     */
+    project_id?: string | undefined;
+    repo_id?: string | null | undefined;
+}
+
+/** Thrown when a fixture has no project to run in. The route turns it into a 400. */
+export class AgentTestUnboundError extends Error {
+    constructor() {
+        super('this fixture is not bound to a project; pick one to run it in');
+        this.name = 'AgentTestUnboundError';
+    }
+}
+
+/** A suite run while one is already in flight would double the bill. 409. */
+export class AgentTestSuiteBusyError extends Error {
+    constructor() {
+        super('a run of this suite is already in flight');
+        this.name = 'AgentTestSuiteBusyError';
+    }
+}
+
+/** Nothing to run. A 400 rather than an empty 202 that looks like success. */
+export class AgentTestSuiteEmptyError extends Error {
+    constructor() {
+        super('this agent has no tests to run');
+        this.name = 'AgentTestSuiteEmptyError';
+    }
 }
 
 export interface CreateAgentTestInput {
@@ -55,7 +90,8 @@ export interface CreateAgentTestInput {
     agent_id?: string | null | undefined;
     workflow_id?: string | null | undefined;
     suite?: string | null | undefined;
-    project_id: string;
+    /** Migration 021 — optional: a fixture can bind to a project at run time. */
+    project_id?: string | null | undefined;
     repo_id?: string | null | undefined;
     name: string;
     item_template: AgentTestItemTemplate;
@@ -65,6 +101,7 @@ export interface CreateAgentTestInput {
 /** `Partial<CreateAgentTestInput>` will not do: under `exactOptionalPropertyTypes`
  *  it forbids the explicit `undefined` a zod-parsed patch body carries. */
 export interface UpdateAgentTestInput {
+    project_id?: string | null | undefined;
     repo_id?: string | null | undefined;
     suite?: string | null | undefined;
     name?: string | undefined;
@@ -97,7 +134,7 @@ export const agentTestsService = {
                 agent_id: input.agent_id ?? null,
                 workflow_id: input.workflow_id ?? null,
                 suite: input.suite ?? null,
-                project_id: input.project_id,
+                project_id: input.project_id ?? null,
                 repo_id: input.repo_id ?? null,
                 name: input.name,
                 item_template: JSON.stringify(input.item_template) as never,
@@ -172,6 +209,12 @@ export const agentTestsService = {
     async run(testId: string, opts: RunTestOptions = {}): Promise<AgentTestBatch> {
         const test = await this.get(testId);
         if (!test) throw new Error(`Agent test ${testId} not found`);
+        // Migration 021 — caller first, then the fixture's own pin, then an
+        // error. No default project: this materialises a real item.
+        const projectId = opts.project_id ?? test.project_id;
+        if (!projectId) throw new AgentTestUnboundError();
+        const repoId = opts.repo_id !== undefined ? opts.repo_id : test.repo_id;
+        const binding = { projectId, repoId };
         const samples = Math.min(MAX_SAMPLES, Math.max(1, Math.trunc(opts.n_runs ?? 1)));
         const batchId = randomUUID();
         const label = opts.label?.trim() || null;
@@ -182,15 +225,52 @@ export const agentTestsService = {
         // would have them fighting over it.
         const rows: AgentTestRunRow[] = [];
         if (test.workflow_id) {
-            for (let i = 0; i < samples; i++) rows.push(await runOneSample(test, batchId, i, label));
+            for (let i = 0; i < samples; i++) rows.push(await runOneSample(test, batchId, i, label, binding));
         } else {
             rows.push(
                 ...(await Promise.all(
-                    Array.from({ length: samples }, (_, i) => runOneSample(test, batchId, i, label)),
+                    Array.from({ length: samples }, (_, i) => runOneSample(test, batchId, i, label, binding)),
                 )),
             );
         }
         return summariseBatch(batchId, rows);
+    },
+
+    /**
+     * Every fixture this agent has, in one press, under one label.
+     *
+     * Sequential across fixtures and parallel within one, which is exactly what
+     * `run` already does and for the reason its comment gives: agent tests take
+     * no project git lock, but firing every fixture at once would multiply the
+     * in-flight dispatches by the suite size rather than by `n_runs`.
+     *
+     * The label is what makes it a suite run. `WHERE label = 'suite-<iso>'` is
+     * "the suite run of 14:32" — no table, no new row kind, and directly
+     * comparable with a second labelled run after a prompt change, which is
+     * what migration 018 added `label` for.
+     */
+    async runSuite(agentId: string, opts: RunTestOptions = {}): Promise<AgentTestBatch[]> {
+        const tests = await this.list(agentId);
+        if (tests.length === 0) throw new AgentTestSuiteEmptyError();
+
+        const inFlight = await db
+            .selectFrom('agent_test_runs')
+            .select('id')
+            .where(
+                'agent_test_id',
+                'in',
+                tests.map((t) => t.id),
+            )
+            .where('verdict', '=', 'running')
+            .executeTakeFirst();
+        if (inFlight) throw new AgentTestSuiteBusyError();
+
+        const label = opts.label?.trim() || `suite-${new Date().toISOString()}`;
+        const batches: AgentTestBatch[] = [];
+        for (const t of tests) {
+            batches.push(await this.run(t.id, { ...opts, label }));
+        }
+        return batches;
     },
 
     /**
@@ -332,6 +412,7 @@ async function runOneSample(
     batchId: string,
     sampleIndex: number,
     label: string | null,
+    binding: { projectId: string; repoId: string | null },
 ): Promise<AgentTestRunRow> {
     const t = test.item_template;
     const suffix = `[test] ${test.name}`;
@@ -340,11 +421,11 @@ async function runOneSample(
         // A sub-task needs a parent. The test owns a throwaway Task for it
         // so the agent sees the shape it expects rather than an orphan.
         const parent = await tasksService.create({
-            project_id: test.project_id,
+            project_id: binding.projectId,
             title: `${t.title} ${suffix}`,
             description: t.description ?? '',
             is_test: true,
-            ...(test.repo_id ? { repo_ids: [test.repo_id] } : {}),
+            ...(binding.repoId ? { repo_ids: [binding.repoId] } : {}),
         });
         const sub = await subTasksService.create({
             task_id: parent.id,
@@ -357,13 +438,13 @@ async function runOneSample(
         itemId = sub.id;
     } else {
         const task = await tasksService.create({
-            project_id: test.project_id,
+            project_id: binding.projectId,
             title: `${t.title} ${suffix}`,
             description: t.description ?? '',
             acceptance_criteria: t.acceptance_criteria ?? '',
             labels: t.labels ?? [],
             is_test: true,
-            ...(test.repo_id ? { repo_ids: [test.repo_id] } : {}),
+            ...(binding.repoId ? { repo_ids: [binding.repoId] } : {}),
         });
         itemId = task.id;
     }
@@ -395,7 +476,7 @@ async function runOneSample(
                 agentId: test.agent_id as string,
                 issueType: t.issue_type,
                 issueId: itemId,
-                projectId: test.project_id,
+                projectId: binding.projectId,
             });
             await db.updateTable('agent_test_runs').set({ agent_run_id: runId } as never).where('id', '=', id).execute();
         }

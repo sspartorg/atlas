@@ -1,0 +1,65 @@
+[
+  {
+    "id": "scopes-to-the-configured-jurisdictions",
+    "kind": "job",
+    "name": "Stays inside the configured jurisdictions",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Run the weekly regulator scan",
+      "description": "Produce this week's regulator scan for the configured project type and regions.",
+      "acceptance_criteria": "Given each item, when it is read, then it cites the regulator publication it came from and falls inside the configured scope."
+    },
+    "expectations": {
+      "required_checklist_all_passed": true,
+      "judge_criteria": [
+        "Every item in the summary names the regulator publication it came from.",
+        "The summary does not characterise anything as legal advice."
+      ],
+      "max_cost_usd": 2.5
+    },
+    "needs_repo": false,
+    "notes": "The second criterion is not decoration: this agent reports on regulation to a single owner with no counsel in the loop, and its own checklist forbids advising."
+  },
+  {
+    "id": "asks-without-a-jurisdiction",
+    "kind": "contract",
+    "name": "Asks rather than choosing a jurisdiction",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Regulation update",
+      "description": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 0.6
+    },
+    "needs_repo": false,
+    "notes": "Scope is the whole product here. An agent that picks its own jurisdictions produces a scan whose silence means nothing."
+  },
+  {
+    "id": "reports-without-writing",
+    "kind": "trace",
+    "name": "Reports without writing to the repo",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Run the weekly regulator scan",
+      "description": "Produce this week's scan for the configured scope.",
+      "acceptance_criteria": "Given the scan, when it is delivered, then no file in any repository changed."
+    },
+    "expectations": {
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 2.0
+    },
+    "needs_repo": false,
+    "notes": "A regulator scan is a notification. Committing it would put quoted regulatory text into a repository with no review step between."
+  }
+]

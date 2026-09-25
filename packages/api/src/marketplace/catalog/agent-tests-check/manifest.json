@@ -17,6 +17,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Finds the command that runs this project's suite, and coverage if it declares a threshold.",
-  "version": 1,
+  "version": 2,
   "published_at": "2026-09-25T00:00:00Z"
 }

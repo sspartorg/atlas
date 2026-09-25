@@ -17,6 +17,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Weekly regulator-news scan scoped to your project_type + regions.",
-  "version": 3,
+  "version": 4,
   "published_at": "2026-07-01T00:00:00Z"
 }

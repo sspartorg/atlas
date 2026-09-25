@@ -1,18 +1,70 @@
 [
   {
-    "id": "reviews-without-editing",
+    "id": "rejects-an-untested-change",
+    "kind": "job",
+    "name": "Rejects a change with no test behind it",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "Review the slug helper change",
+      "description": "A branch in this repository adds a slug helper. Review it against its acceptance criteria.",
+      "acceptance_criteria": "Given a title with punctuation, when it is slugified, then the punctuation is gone."
+    },
+    "expectations": {
+      "outcome_kind": "rejected",
+      "judge_criteria": [
+        "The reason names a specific file or behaviour it found wanting, not a general concern.",
+        "The summary or reason names the test command it ran and what the result was."
+      ],
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 2.5
+    },
+    "needs_repo": true,
+    "notes": "Its first checklist row claims the project's own test command was run. This is that claim, asserted from what the run says it did \u2014 the exact assertion F-012 showed cannot be taken on trust."
+  },
+  {
+    "id": "asks-without-a-diff",
+    "kind": "contract",
+    "name": "Asks when there is nothing to review",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "Review it",
+      "description": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 0.8
+    },
+    "needs_repo": true,
+    "notes": "With no named change there is no diff to read. A done here is an approval of whatever happened to be on the branch, which is how an unreviewed change reaches a PR with a reviewer's name on it."
+  },
+  {
+    "id": "reviews-without-editing-the-code",
+    "kind": "trace",
     "name": "Reviews without editing the code",
     "item_template": {
       "issue_type": "sub_task",
-      "title": "Review the sub-task's implementation",
-      "description": "Check the change against its acceptance criteria.",
-      "acceptance_criteria": "Given a diff, when it is reviewed, then each gap is named with a path and line."
+      "title": "Review the titleCase helper",
+      "description": "A branch in this repository adds a titleCase helper. Review it.",
+      "acceptance_criteria": "Given a lowercase sentence, when it is title-cased, then each word starts with a capital."
     },
     "expectations": {
-      "tools_forbidden": ["Edit", "Write"],
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
       "max_cost_usd": 2.0
     },
     "needs_repo": true,
-    "notes": "The same trap as the Release Reviewer, one level down. A reviewer with Edit in its transcript has stopped being a reviewer."
+    "notes": "A reviewer that fixes what it found reports on code the Coder never wrote, and the Coder's next round starts from a diff it does not recognise."
   }
 ]
