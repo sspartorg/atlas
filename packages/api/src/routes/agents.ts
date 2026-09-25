@@ -23,7 +23,7 @@ import {
 } from '../services/agent-tests.js';
 import { agentPerformance } from '../services/agent-scorecard.js';
 import { agentQualification } from '../services/agent-qualification.js';
-import { loadCatalog, starterTests } from '../marketplace/catalog-loader.js';
+import { starterTests } from '../marketplace/catalog-loader.js';
 import {
     AgentChecklistsPutSchema,
     AgentMemoryUpdateSchema,
