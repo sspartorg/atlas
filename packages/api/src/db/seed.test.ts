@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import { GUARDRAIL_SCRIPT_SEEDS, runSeed } from './seed.js';
 import { db } from './kysely-client.js';

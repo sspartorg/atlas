@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 
-import type { IssueType } from '@atlas/shared';
 
 import { db } from '../db/kysely-client.js';
 import type { AgentTestExpectations } from './agent-tests-evaluate.js';

@@ -33,7 +33,6 @@ import {
     type AgentScore,
     type RoutedStep,
 } from '../services/agent-scorecard.js';
-import type { IRunOutcome } from '@atlas/shared';
 
 // Anchor output at the repo root, not at packages/api/ — pnpm --filter changes
 // CWD into the package, which would otherwise write evals/ under packages/api/.
