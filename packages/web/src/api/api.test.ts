@@ -590,10 +590,6 @@ describe('api.agents (extended)', () => {
         captureMethod('post', '/agents/a1/prompt-versions/1/revert', {});
         await api.agents.revertPrompt('a1', 1);
     });
-    it('dry run', async () => {
-        captureMethod('post', '/agents/a1/dry-run', { dryRunId: 'd1', model: 'm', cli: 'claude', promptLen: 100 });
-        await api.agents.startDryRun('a1', null);
-    });
     it('compile prompt', async () => {
         captureMethod('post', '/agents/a1/compile-prompt', { prompt: '', filename: '', length: 0, agent: { id: '', name: '', cli: '', model: '' }, issue: null, guardrails_count: 0, sections: [] });
         await api.agents.compilePrompt('a1', 'sub_task', 'S1');

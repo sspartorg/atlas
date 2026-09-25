@@ -25,7 +25,6 @@ import { AgentHero } from './agents/AgentHero.js';
 import { AgentSidebar } from './agents/AgentSidebar.js';
 import { OverviewTab } from './agents/OverviewTab.js';
 import { PromptTab } from './agents/PromptTab.js';
-import { TestRunTab } from './agents/TestRunTab.js';
 import { RunsTab } from './agents/RunsTab.js';
 import { MemoryTab } from './agents/MemoryTab.js';
 import { RunNowDialog } from './agents/RunNowDialog.js';
@@ -38,7 +37,7 @@ import { TestsTabContent } from './agents/TestsTabContent.js';
 import { PerformanceTabContent } from './agents/PerformanceTabContent.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 
-const TAB_KEYS = ['overview', 'prompt', 'tests', 'performance', 'test', 'runs', 'memory'] as const;
+const TAB_KEYS = ['overview', 'prompt', 'tests', 'performance', 'runs', 'memory'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 export function AgentDetail() {
@@ -290,21 +289,6 @@ export function AgentDetail() {
                                 iconPosition="start"
                             />
                             <Tab
-                                value="test"
-                                label="Test Run"
-                                icon={
-                                    <Box
-                                        component="span"
-                                        className="material-symbols-rounded"
-                                        aria-hidden="true"
-                                        sx={{ fontSize: 16 }}
-                                    >
-                                        terminal
-                                    </Box>
-                                }
-                                iconPosition="start"
-                            />
-                            <Tab
                                 value="runs"
                                 label="Runs"
                                 icon={
@@ -341,7 +325,6 @@ export function AgentDetail() {
                     {tab === 'prompt' && <PromptTab agent={agent} />}
                     {tab === 'tests' && <TestsTabContent agent={agent} />}
                     {tab === 'performance' && <PerformanceTabContent agent={agent} />}
-                    {tab === 'test' && <TestRunTab agent={agent} view={view} />}
                     {tab === 'runs' && <RunsTab agent={agent} runs={runs ?? []} />}
                     {tab === 'memory' && <MemoryTab agent={agent} memory={memory} />}
                 </Box>

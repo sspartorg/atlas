@@ -165,9 +165,10 @@ Each agent is a CLI (`claude`, `copilot`, `ollama`), a model, an effort level an
 
 ![Agent detail — Architect](images/doc-10-agent-detail.png)
 
-Agent Detail has five tabs: **Overview** (role, CLI, model, effort, quality checklist), **Prompt**
-(edit with version history and revert), **Test Run** (a dry run that streams output without touching a
-repo), **Runs** (history), and **Memory** (procedural memory the agent accumulates).
+Agent Detail has six tabs: **Overview** (role, CLI, model, effort, quality checklist), **Prompt**
+(edit with version history and revert), **Tests** (saved fixtures with expectations, run and scored),
+**Performance** (what its real workflow steps cost and how they went), **Runs** (history), and
+**Memory** (procedural memory the agent accumulates).
 
 An agent's **checklist** matters more than it looks: a workflow step routes on it. An agent that
 reports `done` with a required checklist row unsatisfied takes the failure edge instead.
