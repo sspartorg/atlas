@@ -385,6 +385,8 @@ export interface AgentTestExpectations {
     max_tool_calls?: number;
     files_touched?: string[];
     files_untouched?: string[];
+    /** Pass criteria in your own words, graded by a cheap fixed model. Off unless set. */
+    judge_criteria?: string[];
 }
 
 export interface AgentTest {

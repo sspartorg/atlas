@@ -48,6 +48,15 @@ export interface AgentTestExpectations {
     /** Substrings; nothing it touched may contain any of them. */
     files_untouched?: string[] | undefined;
 
+    /**
+     * Pass criteria in your own words, graded by a cheap fixed model.
+     *
+     * One binary question per entry, not a paragraph — a vague paragraph is
+     * the single largest source of judge variance. Off unless set: no
+     * criteria, no spawn, no cost, no non-determinism.
+     */
+    judge_criteria?: string[] | undefined;
+
     // ── Workflow evals only (ADR 0023 phase 3) ────────────────────────────
     //
     // The same fixture run through a whole workflow instead of one agent. These

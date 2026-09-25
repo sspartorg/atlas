@@ -484,6 +484,19 @@ Table `agent_test_runs`: `id, agent_test_id (FK, CASCADE), agent_run_id (FK → 
 - `label` is a free-text tag on the run request (`before-prompt-diet`), for comparing two batches without a versions table.
 - `judge_verdict` / `judge_reason` / `judge_cost_usd` are per-sample. The judge's cost is deliberately apart from `cost_usd` so an expensive judge can never fail a `max_cost_usd` expectation that is about the **agent**.
 
+**Custom LLM-as-a-Judge (`services/agent-tests-judge.ts`).** Pass criteria in the Owner's own words, for the things a string comparison cannot ask — "did it explain *why* it rejected the work, or only that it did?". It is the only non-deterministic piece in the evaluation path, so six things hold it in place:
+
+1. **Deterministic input** — the outcome summary, the reason and the trace JSON. Never the repo, never the diff, never the raw transcript. Same bytes in, same question out.
+2. **Binary questions, not a paragraph** — `judge_criteria` is a list capped at 200 characters an entry by the route schema. A vague paragraph is the single largest source of judge variance.
+3. **A fixed cheap model** — `haiku`, hardcoded. The judge is not the agent; changing an agent's model must not change its grade.
+4. **Judged once, cached** — written at evaluation and never recomputed, so re-reading a run cannot change what it scored.
+5. **Off by default** — no criteria, no spawn, no cost, no non-determinism.
+6. **Measured, not assumed** — with more than one sample the judge's own agreement is visible beside the agent's.
+
+**How it fails is the part that matters.** A judge that could not run, timed out, answered unreadably, or would not commit makes the run **`errored`** — never a pass, and never the agent's fault. Blaming an agent for a missing binary is the mistake `agent-tests-evaluate.ts` already refuses to make about the dispatch itself. Only a judge that read the block and said `rejected` produces a **failure**, and every judge-authored failure string carries a `judge:` prefix so a reader can always tell which assertion was machine-graded.
+
+Its structured output reuses the `atlas-outcome` block the whole product already speaks (`done` → pass, `rejected` → fail, `asked_question` → abstained) rather than a bespoke JSON contract, which would be a second parser to write, cover and keep honest. Its cost goes through `parseClaudeCostFromOutput` directly rather than `agent-runner.ts`'s dispatcher — the runner imports the evaluator which imports the judge, so reaching back into it would close a cycle.
+
 ### IPublishedWorkflow (migration 041)
 A workflow the Owner published to the Marketplace (builder **Publish**). Table `published_workflows`: `id, name, description, source_workflow_id (UNIQUE, FK → workflows, SET NULL), bundle (bytea — the export zip), version (migration 007, bumped on every republish so a consumer can tell the entry moved — republishing overwrites the bundle in place), published_at, updated_at`. One entry per source workflow; publishing again replaces it. The API reads `input_kind, trigger, push_code, raises_pr, push_to_default, agent_ids` from the bundle; `IPublishedWorkflowDetail` adds `graph` + `sub_workflows {ref, name}`. Not tied to a project — "Use in a project" imports the bundle into one.
 

@@ -61,6 +61,9 @@ const AgentTestExpectationsSchema = z.object({
     max_tool_calls: z.number().int().positive().optional(),
     files_touched: z.array(z.string().min(1).max(300)).max(20).optional(),
     files_untouched: z.array(z.string().min(1).max(300)).max(20).optional(),
+    // One binary question per entry. The 200-char cap is the contract: a
+    // vague paragraph is the single largest source of judge variance.
+    judge_criteria: z.array(z.string().trim().min(1).max(200)).max(10).optional(),
 });
 
 const AgentTestBodySchema = z.object({

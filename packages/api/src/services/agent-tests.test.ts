@@ -7,6 +7,9 @@ vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
 // finishes. Spawning a real CLI would test the runner, not this.
 const spawnAgentRun = vi.hoisted(() => vi.fn(async () => 'run-1'));
 vi.mock('./agent-runner.js', () => ({ spawnAgentRun }));
+// The judge spawns a CLI; what matters here is how its answer lands on a run.
+const judgeAgentTestRun = vi.hoisted(() => vi.fn(async () => null));
+vi.mock('./agent-tests-judge.js', () => ({ judgeAgentTestRun }));
 
 import { agentTestsService } from './agent-tests.js';
 import { tasksService } from './tasks.js';
@@ -63,6 +66,8 @@ beforeEach(async () => {
     await insertProject('p1', 'ATL');
     await insertAgent({ id: 'agent-coder' });
     spawnAgentRun.mockReset();
+    judgeAgentTestRun.mockReset();
+    judgeAgentTestRun.mockResolvedValue(null);
     // The real `spawnAgentRun` INSERTs the `agent_runs` row; `agent_test_runs`
     // has a foreign key to it, so a mock that only returns an id would pass a
     // constraint the product relies on.
@@ -217,6 +222,69 @@ describe('agentTestsService', () => {
             const run = (await agentTestsService.run(test.id)).runs[0]!;
             expect(run.verdict).toBe('errored');
             expect(run.failures[0]).toContain('command not found');
+        });
+    });
+
+    // Custom LLM-as-a-Judge (ADR 0023). The only non-deterministic piece in
+    // the evaluation path, so how it fails matters more than how it passes.
+    describe('the judge', () => {
+        async function runJudged(judge: unknown, expectations: Record<string, unknown> = {}) {
+            judgeAgentTestRun.mockResolvedValue(judge as never);
+            const test = await makeTest({
+                expectations: { outcome_kind: 'done', judge_criteria: ['did it say why?'], ...expectations },
+            });
+            await agentTestsService.run(test.id);
+            await finishRun();
+            const [run] = await agentTestsService.listRuns(test.id);
+            return run!;
+        }
+
+        it('passes a run the judge agreed with, and records what it said', async () => {
+            const run = await runJudged({ verdict: 'pass', reason: 'it named the row', cost_usd: 0.004 });
+            expect(run.verdict).toBe('passed');
+            expect(run.judge_verdict).toBe('pass');
+            expect(run.judge_reason).toBe('it named the row');
+        });
+
+        // Every judge-authored failure is prefixed, so a reader can always
+        // tell which assertion was machine-graded.
+        it('fails a run the judge rejected, and says the judge said so', async () => {
+            const run = await runJudged({ verdict: 'fail', reason: 'it never said which row', cost_usd: 0.004 });
+            expect(run.verdict).toBe('failed');
+            expect(run.failures[0]).toBe('judge: it never said which row');
+            expect(run.judge_verdict).toBe('fail');
+        });
+
+        // A judge that would not commit has not found anything about the
+        // agent. Calling that a pass would be inventing a verdict.
+        it('errors rather than passing when the judge abstained', async () => {
+            const run = await runJudged({ verdict: 'abstained', reason: 'the judge timed out', cost_usd: null });
+            expect(run.verdict).toBe('errored');
+            expect(run.failures[0]).toContain('could not decide');
+        });
+
+        // The question was never asked, so it certainly was not answered yes.
+        it('errors when there are criteria to grade but no AI to grade them', async () => {
+            const run = await runJudged(null);
+            expect(run.verdict).toBe('errored');
+            expect(run.failures[0]).toContain('AI is not enabled');
+        });
+
+        // An expensive judge must never be able to fail a `max_cost_usd`
+        // ceiling that is about the AGENT.
+        it('keeps the judge’s spend apart from the agent’s', async () => {
+            const run = await runJudged({ verdict: 'pass', reason: 'ok', cost_usd: 0.9 }, { max_cost_usd: 0.5 });
+            expect(run.judge_cost_usd).toBe(0.9);
+            expect(run.cost_usd).toBe(0.25);
+            expect(run.verdict).toBe('passed');
+        });
+
+        it('does not call the judge at all when a test asked for none', async () => {
+            const test = await makeTest({ expectations: { outcome_kind: 'done' } });
+            await agentTestsService.run(test.id);
+            await finishRun();
+            await agentTestsService.listRuns(test.id);
+            expect(judgeAgentTestRun).not.toHaveBeenCalled();
         });
     });
 
