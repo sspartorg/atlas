@@ -1338,3 +1338,51 @@ describe('agent tests over HTTP', () => {
         });
     });
 });
+
+// ── Agent qualification + suite runs (migration 021) ───────────────────────
+
+describe('GET /api/agent-qualification', () => {
+    it('answers for one agent, and 404s for an id that is not installed', async () => {
+        await insertAgent({ id: 'agent-coder' });
+        const res = await app.inject({ method: 'GET', url: '/api/agent-qualification?agent_id=agent-coder' });
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.body) as Array<{ agent_id: string; verdict: string }>;
+        expect(body).toHaveLength(1);
+        // No fixtures in this fixture-less DB, and that is its own state —
+        // never "qualified".
+        expect(body[0]).toMatchObject({ agent_id: 'agent-coder', verdict: 'no_tests' });
+
+        const missing = await app.inject({ method: 'GET', url: '/api/agent-qualification?agent_id=nope' });
+        expect(missing.statusCode).toBe(404);
+    });
+
+    it('answers for the whole fleet when no agent is named', async () => {
+        await insertAgent({ id: 'agent-coder' });
+        await insertAgent({ id: 'agent-reviewer' });
+        const res = await app.inject({ method: 'GET', url: '/api/agent-qualification' });
+        expect(res.statusCode).toBe(200);
+        expect(JSON.parse(res.body)).toHaveLength(2);
+    });
+});
+
+describe('POST /api/agents/:id/test-suite/runs', () => {
+    it('400s when the agent has nothing to run', async () => {
+        await insertAgent({ id: 'agent-coder' });
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/agents/agent-coder/test-suite/runs',
+            payload: { project_id: 'p1' },
+        });
+        expect(res.statusCode).toBe(400);
+        expect(JSON.parse(res.body).error).toContain('no tests');
+    });
+
+    it('404s for an agent that is not installed', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/agents/no-such-agent/test-suite/runs',
+            payload: {},
+        });
+        expect(res.statusCode).toBe(404);
+    });
+});

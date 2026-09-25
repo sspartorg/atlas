@@ -1,6 +1,28 @@
 [
   {
+    "id": "specs-the-sub-tasks",
+    "kind": "job",
+    "name": "Writes a spec with a change list per sub-task",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Add a per-project CSV export",
+      "description": "Owners want the current report view as a CSV. The sub-tasks for this are already created.",
+      "acceptance_criteria": "Given a report with rows, when Export is clicked, then a CSV downloads with every visible row."
+    },
+    "expectations": {
+      "outcome_kind": "done",
+      "judge_criteria": [
+        "The summary names the spec file it wrote and where it put it.",
+        "The summary says every acceptance criterion has at least one test scenario."
+      ],
+      "max_cost_usd": 3.0
+    },
+    "needs_repo": true,
+    "notes": "Asserts the artefact exists and is complete rather than that it reads well. A spec whose scenarios do not cover every criterion sends the Coder off with a gap nobody agreed to."
+  },
+  {
     "id": "asks-without-sub-tasks",
+    "kind": "contract",
     "name": "Asks when there is nothing to spec",
     "item_template": {
       "issue_type": "task",
@@ -10,9 +32,35 @@
     },
     "expectations": {
       "outcome_kind": "asked_question",
-      "max_cost_usd": 1.5
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 0.8
     },
     "needs_repo": true,
-    "notes": "A spec with no sub-tasks to spec is a document about nothing. Asking is cheaper than writing one and finding out at the Coder."
+    "notes": "Asserts it ends asked_question on a Task with no sub-tasks and no criteria. A done here means it specced work nobody described."
+  },
+  {
+    "id": "specs-without-implementing",
+    "kind": "trace",
+    "name": "Specs without implementing",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Cache the reports query",
+      "description": "The reports query is slow on repeat views. Specify a cache.",
+      "acceptance_criteria": "Given the same report twice, when it is requested again, then the second request is served without re-querying."
+    },
+    "expectations": {
+      "files_untouched": [
+        "src/",
+        "app/",
+        "lib/"
+      ],
+      "max_cost_usd": 2.0
+    },
+    "needs_repo": true,
+    "notes": "Asserts the source tree is untouched. An Architect that writes the code removes the review step the spec exists to enable, and the Coder then reviews its own design."
   }
 ]

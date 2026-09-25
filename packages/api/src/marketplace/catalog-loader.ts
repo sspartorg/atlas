@@ -49,8 +49,18 @@ interface CatalogEntryChecklist {
  * better answer: the Owner's adopted copy is theirs and a bundle upgrade can
  * never clobber it.
  */
-interface CatalogEntryStarterTest {
+export interface CatalogEntryStarterTest {
     id: string;
+    /**
+     * What this fixture is for.
+     *
+     * In the data rather than inferred from the expectations, because the
+     * contract test asserts one of each per agent and a guess cannot gate
+     * anything. `job` — it does its actual work, judged. `contract` — it asks
+     * or refuses when the input is not what it needs. `trace` — it stayed in
+     * its lane, asserted from what the run DID.
+     */
+    kind: 'job' | 'contract' | 'trace';
     name: string;
     item_template: {
         issue_type: 'task' | 'sub_task';
@@ -147,4 +157,14 @@ export function loadCatalog(root: string = CATALOG_ROOT): CatalogEntry[] {
 
     entries.sort((a, b) => a.manifest.sort_order - b.manifest.sort_order);
     return entries;
+}
+
+/**
+ * The fixtures one catalog entry ships, by catalog id.
+ *
+ * The install path and the starter-tests route both need this lookup, and one
+ * of them used to inline `loadCatalog().find(...)`. One copy.
+ */
+export function starterTests(catalogId: string, root: string = CATALOG_ROOT): CatalogEntryStarterTest[] {
+    return loadCatalog(root).find((e) => e.manifest.id === catalogId)?.tests ?? [];
 }

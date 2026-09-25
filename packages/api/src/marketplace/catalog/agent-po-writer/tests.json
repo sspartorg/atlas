@@ -1,36 +1,70 @@
 [
   {
+    "id": "slices-a-task-into-sub-tasks",
+    "kind": "job",
+    "name": "Slices a Task into end-to-end sub-tasks",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Let owners export a report as CSV",
+      "description": "The reports page shows rows on screen. Owners want the current view as a CSV file they can open in a spreadsheet.",
+      "acceptance_criteria": "Given a report with rows, when Export is clicked, then a CSV downloads containing every visible row.\nGiven an empty report, when the page loads, then Export is disabled."
+    },
+    "expectations": {
+      "outcome_kind": "done",
+      "required_checklist_all_passed": true,
+      "judge_criteria": [
+        "The summary names each sub-task it created, not just how many.",
+        "The summary says each sub-task is an end-to-end slice rather than a front-end-only or back-end-only half.",
+        "The summary does not claim any code was written or any test was run."
+      ],
+      "max_cost_usd": 2.5
+    },
+    "needs_repo": true,
+    "notes": "The job. The third criterion is the discriminator: PO Writer scopes work and writes nothing, so a summary that reports code is a summary about a different agent's job."
+  },
+  {
     "id": "refuses-a-sub-task",
+    "kind": "contract",
     "name": "Refuses work that is not a Task",
     "item_template": {
       "issue_type": "sub_task",
-      "title": "Add a loading spinner to the settings page",
-      "description": "The page flashes blank while data loads.",
-      "acceptance_criteria": "Given the page is loading, when it renders, then a spinner is shown."
+      "title": "Add a spinner to the export button"
     },
     "expectations": {
       "outcome_kind": "asked_question",
-      "summary_contains": ["Task"],
-      "tools_forbidden": ["Edit", "Write"],
+      "summary_contains": [
+        "Task"
+      ],
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
       "max_cost_usd": 0.6
     },
     "needs_repo": false,
-    "notes": "PO Writer's kind guard: it scopes Tasks and refuses anything else. A `done` here means the guard is gone and it has started slicing sub-tasks off a sub-task."
+    "notes": "The kind guard. A done here means the guard is gone and it has started slicing sub-tasks off a sub-task, which produces a tree nothing downstream can run."
   },
   {
-    "id": "asks-rather-than-inventing",
-    "name": "Asks rather than inventing a feature",
+    "id": "scopes-without-writing-code",
+    "kind": "trace",
+    "name": "Scopes without touching the repo",
     "item_template": {
       "issue_type": "task",
-      "title": "Make the app better",
-      "description": "It should be nicer to use.",
-      "acceptance_criteria": "Users are happier."
+      "title": "Add pagination to the reports page",
+      "description": "Reports with thousands of rows are slow to read. Page them.",
+      "acceptance_criteria": "Given more rows than fit one page, when the page loads, then only the first page renders and a control moves between pages."
     },
     "expectations": {
-      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_turns": 40,
       "max_cost_usd": 1.5
     },
     "needs_repo": true,
-    "notes": "The `ambiguous-must-escalate` trap, as a single-agent test. `done` is the FAILING result: an agent that scopes a feature out of this invented it. A framework that can only assert success cannot express that."
+    "notes": "The lane. A PO Writer that edits the repo has started implementing what it was supposed to describe, and the Coder that follows inherits work it cannot see in the spec."
   }
 ]

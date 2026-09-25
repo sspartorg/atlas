@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 import { db } from '../db/kysely-client.js';
 import { agentsService, assertModelInRegistry } from './agents.js';
 import { packAgentBundle, type AgentBundle } from './agent-bundle.js';
+import { adoptStarterTests } from './agent-starter-tests.js';
 import type {
     AgentCategory,
     AgentKindSlug,
@@ -348,7 +349,7 @@ export const marketplaceService = {
         // agentsService.create / update already guard the same way.
         await assertModelInRegistry(m.cli, m.model);
 
-        return await db.transaction().execute(async (trx) => {
+        const installed = await db.transaction().execute(async (trx) => {
             await trx
                 .insertInto('agents')
                 .values({
@@ -423,6 +424,12 @@ export const marketplaceService = {
                 .executeTakeFirstOrThrow();
             return row as unknown as IAgent;
         });
+        // Migration 021 — the fixtures this agent ships with become real rows
+        // now, not templates waiting for a click. Outside the transaction: a
+        // fixture that fails to adopt must not roll back the install, and the
+        // boot-time sync adopts it on the next start.
+        await adoptStarterTests(targetId, catalogId);
+        return installed;
     },
 
     async diff(catalogId: string, localAgentId: string): Promise<IMarketplaceUpgradeDiff> {
@@ -547,6 +554,10 @@ export const marketplaceService = {
                 .where('id', '=', localAgentId)
                 .execute();
         });
+        // An upgrade that added or reworded a fixture lands it now rather than
+        // at the next boot. Untouched rows follow the bundle; edited ones do
+        // not (`adoptStarterTests`).
+        await adoptStarterTests(localAgentId, agent.marketplace_source_id);
         const refreshed = await agentsService.get(localAgentId);
         return refreshed!;
     },

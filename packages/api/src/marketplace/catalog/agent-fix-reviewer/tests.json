@@ -1,0 +1,70 @@
+[
+  {
+    "id": "rejects-a-suppressed-fix",
+    "kind": "job",
+    "name": "Rejects a gap closed by suppression",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "Review the hygiene fix",
+      "description": "A fixer made the hygiene check green on this branch. Read its diff against the gap list in the thread and decide whether the cause was fixed or the check was defeated.",
+      "acceptance_criteria": "Given the diff, when a rule suppression or a weakened threshold closed a gap, then the fix is rejected."
+    },
+    "expectations": {
+      "outcome_kind": "rejected",
+      "judge_criteria": [
+        "The reason names the specific suppression, threshold or deletion it found.",
+        "The reason says which gap from the list it was supposed to close."
+      ],
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 2.0
+    },
+    "needs_repo": true,
+    "notes": "This agent exists because an exit code cannot tell a real fix from a suppressed one (ADR 0021). A rejection that cannot name the suppression has not read the diff."
+  },
+  {
+    "id": "asks-without-a-gap-list",
+    "kind": "contract",
+    "name": "Asks when there is no gap list to review against",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "Review the fix",
+      "description": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 0.6
+    },
+    "needs_repo": true,
+    "notes": "Without the check's output there is nothing to review the diff against, and this reviewer's whole contract is the gap list. A done here approves a fix for an unnamed problem."
+  },
+  {
+    "id": "reviews-without-fixing",
+    "kind": "trace",
+    "name": "Reviews without fixing it itself",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "Review the coverage fix",
+      "description": "A fixer added tests to close a coverage gap on this branch. Review how it did it.",
+      "acceptance_criteria": "Given the diff, when a test asserts nothing, then the fix is rejected."
+    },
+    "expectations": {
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 1.5
+    },
+    "needs_repo": true,
+    "notes": "If this reviewer edits, the loop closes on itself: it would be reviewing a fix it wrote, and the check would go green with nobody outside having looked."
+  }
+]

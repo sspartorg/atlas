@@ -1,0 +1,65 @@
+[
+  {
+    "id": "cites-every-claim",
+    "kind": "job",
+    "name": "Cites the page behind every claim",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Run the weekly competitor watch",
+      "description": "Produce this week's pricing and positioning watch for the configured competitors.",
+      "acceptance_criteria": "Given each claim, when it is read, then it cites the page it came from."
+    },
+    "expectations": {
+      "required_checklist_all_passed": true,
+      "judge_criteria": [
+        "Every pricing or positioning claim in the summary names the page it came from.",
+        "The summary does not state a price it says it could not verify this run."
+      ],
+      "max_cost_usd": 2.5
+    },
+    "needs_repo": false,
+    "notes": "Recalled pricing is the failure that matters here: it is confidently wrong and expensive to act on. The assertion is that each claim carries a source, which is checkable from the summary alone."
+  },
+  {
+    "id": "asks-without-a-competitor-set",
+    "kind": "contract",
+    "name": "Asks rather than choosing who to watch",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Competitor research",
+      "description": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 0.6
+    },
+    "needs_repo": false,
+    "notes": "Picking the competitor set is the decision the report rests on. An agent that chooses it silently produces a watch of whoever it happened to think of."
+  },
+  {
+    "id": "reports-without-writing",
+    "kind": "trace",
+    "name": "Reports without writing to the repo",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Run the weekly competitor watch",
+      "description": "Produce this week's watch for the configured competitors.",
+      "acceptance_criteria": "Given the report, when it is delivered, then no file in any repository changed."
+    },
+    "expectations": {
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 2.0
+    },
+    "needs_repo": false,
+    "notes": "Competitor copy is somebody else's text. A scout that commits it has put unreviewed third-party content into a repository that ships."
+  }
+]

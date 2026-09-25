@@ -265,3 +265,24 @@ describe('AgentCard', () => {
         expect(screen.getByText('CLI missing')).toBeInTheDocument();
     });
 });
+
+// "I am unable to judge what's done or what's pending." The chip is the fleet
+// answer to that; the tooltip is the sentence behind it.
+describe('AgentCard — qualification chip', () => {
+    it('flags an agent whose tests have never run', () => {
+        renderWithProviders(<AgentCard agent={makeAgent()} qualification="never_run" />);
+        expect(screen.getByText('Untested')).toBeInTheDocument();
+    });
+
+    it('flags one whose suite is failing', () => {
+        renderWithProviders(<AgentCard agent={makeAgent()} qualification="failing" />);
+        expect(screen.getByText('Failing')).toBeInTheDocument();
+    });
+
+    // A chip on every card is noise. The interesting state is the one that
+    // needs something doing.
+    it('shows nothing for a qualified agent', () => {
+        renderWithProviders(<AgentCard agent={makeAgent()} qualification="qualified" />);
+        expect(screen.queryByText('Qualified')).not.toBeInTheDocument();
+    });
+});

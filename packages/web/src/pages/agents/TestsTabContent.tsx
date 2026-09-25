@@ -6,22 +6,33 @@ import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Collapse from '@mui/material/Collapse';
 import Tooltip from '@mui/material/Tooltip';
-import CircularProgress from '@mui/material/CircularProgress';
+import Skeleton from '@mui/material/Skeleton';
 import type { IAgent } from '@atlas/shared';
 
 import {
     useAgentCostEstimate,
+    useAgentQualification,
     useAgentTestBatches,
     useAgentTests,
     useStarterTests,
     useCreateAgentTest,
     useDeleteAgentTest,
+    useRunAgentSuite,
     useRunAgentTest,
 } from '../../hooks/useAgentTests.js';
 import { useProjects } from '../../hooks/useProjects.js';
 import { useProjectRepos } from '../../hooks/useProjectRepos.js';
 import { useToast } from '../../hooks/useToast.js';
-import type { AgentTest, AgentTestBatch, AgentTestRun, StarterTest } from '../../api/types.js';
+import type {
+    AgentQualification,
+    AgentTest,
+    AgentTestBatch,
+    AgentTestRun,
+    QualificationVerdict,
+    StarterTest,
+} from '../../api/types.js';
+import { EmptyState } from '../../components/EmptyState.js';
+import { InfoPanel, InfoRow } from '../../components/InfoPanel.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { formatCostUsd } from '../../utils/formatCost.js';
 import { relativeTime } from '../../utils/time.js';
@@ -93,14 +104,14 @@ function BatchVerdict({ batch }: { batch: AgentTestBatch }) {
                 {judged > 1 ? `${batch.passed}/${judged} passed` : batch.passed === 1 ? 'passed' : 'failed'}
             </Typography>
             {batch.flaky && (
-                <Tooltip title="It passed sometimes. A verdict from one run would have been a coin flip.">
+                <Tooltip title="Passed in some samples, failed in others.">
                     <Typography sx={{ fontSize: 12, fontWeight: 700, color: ATLAS_PALETTE.amber }}>
                         · flaky
                     </Typography>
                 </Tooltip>
             )}
             {batch.errored > 0 && (
-                <Tooltip title="Dispatches that never started — a broken environment, not a wrong answer. They are left out of the score.">
+                <Tooltip title="Dispatches that never started. Not counted in the score.">
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.amber }}>
                         · {batch.errored} could not run
                     </Typography>
@@ -203,7 +214,136 @@ function expectationSummary(e: AgentTest['expectations']): string[] {
     return out;
 }
 
-function TestCard({ test, agentId }: { test: AgentTest; agentId: string }) {
+/**
+ * The suite verdict, in the Owner's words.
+ *
+ * Six states rather than a percentage, because the useful answers are not
+ * points on one scale: "never run" is not a low score, and "passing, on a model
+ * you have since changed" is not a pass. Deliberately per-agent — ADR 0023
+ * forbids ranking agents on pass@1, and nothing here averages across them.
+ */
+const VERDICT_LABEL: Record<QualificationVerdict, { label: string; color: string }> = {
+    qualified: { label: 'QUALIFIED', color: ATLAS_PALETTE.greenDark },
+    failing: { label: 'FAILING', color: ATLAS_PALETTE.red },
+    // Amber, not red: nothing is known to be wrong, it is that nothing is known.
+    stale: { label: 'STALE', color: ATLAS_PALETTE.amber },
+    blocked: { label: 'BLOCKED', color: ATLAS_PALETTE.amber },
+    never_run: { label: 'NEVER RUN', color: ATLAS_PALETTE.slate60 },
+    no_tests: { label: 'NO TESTS', color: ATLAS_PALETTE.slate60 },
+};
+
+function Qualification({
+    q,
+    agentId,
+    projectId,
+    repoId,
+}: {
+    q: AgentQualification;
+    agentId: string;
+    projectId: string;
+    repoId: string;
+}) {
+    const runSuite = useRunAgentSuite(agentId);
+    const { data: estimate } = useAgentCostEstimate(agentId, q.fixtures);
+    const toast = useToast();
+    const v = VERDICT_LABEL[q.verdict];
+
+    return (
+        <InfoPanel
+            label="Qualification"
+            mb={2.5}
+            headerRight={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: v.color, letterSpacing: '0.04em' }}>
+                        {v.label}
+                    </Typography>
+                    {q.fixtures > 0 && (
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={runSuite.isPending || !projectId}
+                            onClick={() =>
+                                runSuite.mutate(
+                                    { project_id: projectId, repo_id: repoId || null },
+                                    {
+                                        onSuccess: () => toast.show({ message: `${q.fixtures} tests started` }),
+                                        onError: (e) => toast.show({ message: (e as Error).message }),
+                                    },
+                                )
+                            }
+                        >
+                            {runSuite.isPending
+                                ? 'Starting…'
+                                : estimate?.estimated_total_usd != null
+                                  ? `Run all ${q.fixtures} · ~${formatCostUsd(estimate.estimated_total_usd)}`
+                                  : `Run all ${q.fixtures}`}
+                        </Button>
+                    )}
+                </Box>
+            }
+        >
+            {q.fixtures === 0 ? (
+                <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
+                    Nothing here has been proven. A test runs this agent on a throwaway item and checks the
+                    outcome.
+                </Typography>
+            ) : (
+                <>
+                    <InfoRow label="pass@1">
+                        {q.passed_at_1} of {q.fixtures} fixtures
+                    </InfoRow>
+                    <InfoRow label="pass@k">
+                        {q.passed_at_k} of {q.fixtures}
+                        {q.flaky > 0 ? ` · ${q.flaky} flaky` : ''}
+                    </InfoRow>
+                    <InfoRow label="Last run">
+                        {q.last_run_at ? relativeTime(q.last_run_at) : 'never'}
+                        {q.cost_usd > 0 ? ` · ${formatCostUsd(q.cost_usd)}` : ''}
+                    </InfoRow>
+                    {q.ran_at_config && (
+                        <InfoRow label="Proven on">
+                            {q.ran_at_config.model ?? 'unrecorded'} · {q.ran_at_config.effort ?? 'unrecorded'} ·
+                            prompt v{q.ran_at_config.prompt_version ?? '?'}
+                        </InfoRow>
+                    )}
+                    {/* The actionable half of a stale badge. "Something changed"
+                        is a shrug; naming the field is a next step. */}
+                    {q.stale_reason && (
+                        <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.amber, mt: 1.5 }}>
+                            {q.stale_reason} — re-run to re-qualify.
+                        </Typography>
+                    )}
+                    {q.never_run > 0 && !q.stale_reason && (
+                        <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>
+                            {q.never_run} of {q.fixtures} have never run.
+                        </Typography>
+                    )}
+                </>
+            )}
+        </InfoPanel>
+    );
+}
+
+/** Where an adopted fixture stands relative to the bundle it came from. */
+const PROVENANCE: Record<string, string> = {
+    catalog: 'Ships with this agent · upgrades with it',
+    edited: 'Edited by you · upgrades will not change it',
+    owner: 'Yours',
+};
+
+function TestCard({
+    test,
+    agentId,
+    projectId,
+    repoId,
+    provenance,
+}: {
+    test: AgentTest;
+    agentId: string;
+    projectId: string;
+    repoId: string;
+    provenance: string | undefined;
+}) {
     const [open, setOpen] = useState(false);
     const [samples, setSamples] = useState(1);
     // Always fetched, not only while expanded: the headline verdict is the
@@ -216,7 +356,15 @@ function TestCard({ test, agentId }: { test: AgentTest; agentId: string }) {
 
     const last = batches?.[0];
     return (
-        <Box sx={{ border: `1px solid ${ATLAS_PALETTE.slate12}`, borderRadius: 1, p: 2, mb: 1.5 }}>
+        <Box
+            sx={{
+                background: ATLAS_PALETTE.white,
+                border: `1px solid ${ATLAS_PALETTE.slate10}`,
+                borderRadius: '12px',
+                p: 2.5,
+                mb: 1.5,
+            }}
+        >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
                 <Typography sx={{ fontSize: 14, fontWeight: 600, flex: 1 }}>{test.name}</Typography>
                 {last && <BatchVerdict batch={last} />}
@@ -245,7 +393,12 @@ function TestCard({ test, agentId }: { test: AgentTest; agentId: string }) {
                     onClick={() => {
                         setOpen(true);
                         runTest.mutate(
-                            { testId: test.id, n_runs: samples },
+                            {
+                                testId: test.id,
+                                n_runs: samples,
+                                ...(projectId ? { project_id: projectId } : {}),
+                                ...(repoId ? { repo_id: repoId } : {}),
+                            },
                             {
                                 onSuccess: () =>
                                     toast.show({
@@ -286,13 +439,21 @@ function TestCard({ test, agentId }: { test: AgentTest; agentId: string }) {
                     Checks: {expectationSummary(test.expectations).join(' · ')}
                 </Typography>
             )}
+            {/* Whose fixture this is. It decides whether an upgrade may rewrite
+                it, so the card has to say which — the Owner can no longer
+                assume "mine, frozen" the way adopted templates used to be. */}
+            {provenance && (
+                <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate40, mt: 0.25 }}>
+                    {PROVENANCE[provenance] ?? provenance}
+                </Typography>
+            )}
             {/* The strip under the headline, so a flaky result is visible
                 without opening the history. */}
             {last && !open && <SampleStrip batch={last} />}
             <Collapse in={open}>
                 <Box sx={{ mt: 1 }}>
                     {!batches ? (
-                        <CircularProgress size={16} />
+                        <Skeleton variant="rounded" height={56} />
                     ) : batches.length === 0 ? (
                         <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
                             Never run.
@@ -330,29 +491,24 @@ function StarterTests({
     if (available.length === 0) return null;
 
     return (
-        <Box
-            sx={{
-                border: `1px dashed ${ATLAS_PALETTE.slate12}`,
-                borderRadius: 1,
-                p: 2,
-                mb: 2.5,
-            }}
-        >
-            <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 0.5 }}>
-                Tests this agent ships with
-            </Typography>
+        <InfoPanel label="Ships with this agent" mb={2.5}>
             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mb: 1.5 }}>
-                Each one catches something specific. Add one and it becomes yours — an upgrade to this agent
-                will never change it.
+                Add makes your own copy. Upgrades never change it.
             </Typography>
             <Box sx={{ display: 'grid', gap: 1.25 }}>
                 {available.map((t) => (
                     <Box key={t.id} sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
                         <Box sx={{ flex: 1 }}>
                             <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{t.name}</Typography>
-                            {/* What it catches. Without this a red verdict is
-                                a puzzle rather than a finding. */}
-                            <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>{t.notes}</Typography>
+                            {/* What it asserts, not why it exists. The rationale
+                                is a hover: it is a caption, and an essay here is
+                                a layout bug. */}
+                            <Typography
+                                title={t.notes}
+                                sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}
+                            >
+                                {expectationSummary(t.expectations).join(' · ')}
+                            </Typography>
                         </Box>
                         <Button size="small" variant="outlined" onClick={() => onAdopt(t)} sx={{ flexShrink: 0 }}>
                             Add
@@ -360,16 +516,50 @@ function StarterTests({
                     </Box>
                 ))}
             </Box>
-        </Box>
+        </InfoPanel>
     );
+}
+
+/**
+ * Where this agent's fixtures run.
+ *
+ * Remembered in `localStorage` rather than on the fixture, because it is a
+ * property of how the Owner works rather than of the test: the same suite is
+ * usually pointed at one qualification project and left there.
+ *
+ * ponytail: per-browser. To make a fixture always run somewhere specific, PATCH
+ * its `project_id` — the column is still there.
+ */
+const SUITE_PROJECT_KEY = 'atlas.agent-tests.project';
+const SUITE_REPO_KEY = 'atlas.agent-tests.repo';
+
+function remembered(key: string): string {
+    try {
+        return localStorage.getItem(key) ?? '';
+    } catch {
+        return '';
+    }
+}
+
+function remember(key: string, value: string): void {
+    try {
+        localStorage.setItem(key, value);
+    } catch {
+        /* a private window is not a reason to break the page */
+    }
 }
 
 export function TestsTabContent({ agent }: { agent: IAgent }) {
     const { data: tests, isLoading } = useAgentTests(agent.id);
     const { data: starters = [] } = useStarterTests(agent.id);
     const { data: projects } = useProjects();
+    const { data: qualification } = useAgentQualification(agent.id);
     const createTest = useCreateAgentTest(agent.id);
     const toast = useToast();
+
+    const [suiteProject, setSuiteProject] = useState(() => remembered(SUITE_PROJECT_KEY));
+    const [suiteRepo, setSuiteRepo] = useState(() => remembered(SUITE_REPO_KEY));
+    const { data: suiteRepos } = useProjectRepos(suiteProject);
 
     const [adding, setAdding] = useState(false);
     const [name, setName] = useState('');
@@ -437,40 +627,98 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
     const canSubmit = Boolean(name.trim() && title.trim() && projectId && (!needsRepo || repoId));
 
     return (
-        <Box sx={{ px: { xs: 3, md: 4 }, py: 3 }}>
-            {/* `alignItems: flex-start` and a real gap: the description is two
-                lines, so centring the button against it looks misaligned, and
-                without the gap the text runs flush into the button. */}
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 3, mb: 2 }}>
-                <Box sx={{ flex: 1, maxWidth: 680 }}>
-                    <Typography sx={{ fontSize: 15, fontWeight: 600 }}>Tests</Typography>
-                    <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                        Give this agent a realistic item to act on and say what should happen. Unlike a Test
-                        Run, a test is saved, judged and kept — so you can tell whether the agent still works
-                        after you change its prompt.
-                    </Typography>
-                </Box>
-                <Button
-                    variant="contained"
-                    sx={{ flexShrink: 0 }}
-                    onClick={() => {
-                        setAdopted(null);
-                        setAdding((v) => !v);
+        // No padding of its own: `AgentDetail` already pads the tab column, and
+        // a second layer indents this panel past every sibling tab.
+        <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3, flexWrap: 'wrap' }}>
+                <Typography
+                    sx={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: ATLAS_PALETTE.slate60,
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
                     }}
                 >
-                    {adding ? 'Cancel' : 'New test'}
-                </Button>
+                    Tests
+                </Typography>
+                <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate40 }}>
+                    · {(tests ?? []).length}
+                </Typography>
+                <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    {/* Where a run makes its throwaway item. It takes a real
+                        issue key from whatever project it lands in, so this is
+                        never defaulted for the Owner. */}
+                    <TextField
+                        select
+                        size="small"
+                        label="Run in"
+                        value={suiteProject}
+                        onChange={(e) => {
+                            setSuiteProject(e.target.value);
+                            setSuiteRepo('');
+                            remember(SUITE_PROJECT_KEY, e.target.value);
+                            remember(SUITE_REPO_KEY, '');
+                        }}
+                        sx={{ minWidth: 180 }}
+                    >
+                        {(projects ?? []).map((p) => (
+                            <MenuItem key={p.id} value={p.id}>
+                                {p.name}
+                            </MenuItem>
+                        ))}
+                    </TextField>
+                    {(suiteRepos ?? []).length > 1 && (
+                        <TextField
+                            select
+                            size="small"
+                            label="Repo"
+                            value={suiteRepo}
+                            onChange={(e) => {
+                                setSuiteRepo(e.target.value);
+                                remember(SUITE_REPO_KEY, e.target.value);
+                            }}
+                            sx={{ minWidth: 140 }}
+                        >
+                            {(suiteRepos ?? []).map((r) => (
+                                <MenuItem key={r.id} value={r.id}>
+                                    {r.name}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    )}
+                    <Button
+                        variant="contained"
+                        // The project picker sits beside it; without this the
+                        // label wraps to two lines at the narrow column width.
+                        sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+                        onClick={() => {
+                            setAdopted(null);
+                            setAdding((v) => !v);
+                        }}
+                    >
+                        {adding ? 'Cancel' : 'New test'}
+                    </Button>
+                </Box>
             </Box>
 
-            <StarterTests starters={starters} existing={tests ?? []} onAdopt={adopt} />
+            {qualification?.[0] && (
+                <Qualification
+                    q={qualification[0]}
+                    agentId={agent.id}
+                    projectId={suiteProject}
+                    repoId={suiteRepo}
+                />
+            )}
 
             <Collapse in={adding}>
                 <Box
                     sx={{
-                        border: `1px solid ${ATLAS_PALETTE.slate12}`,
-                        borderRadius: 1,
-                        p: 2,
-                        mb: 2,
+                        background: ATLAS_PALETTE.white,
+                        border: `1px solid ${ATLAS_PALETTE.slate10}`,
+                        borderRadius: '12px',
+                        p: 2.5,
+                        mb: 2.5,
                         display: 'grid',
                         gap: 1.5,
                     }}
@@ -487,7 +735,7 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                         label="Project"
                         value={projectId}
                         onChange={(e) => setProjectId(e.target.value)}
-                        helperText="The throwaway item is created here, and its repos are what the agent works in."
+                        helperText="The throwaway item is created in this project."
                     >
                         {(projects ?? []).map((p) => (
                             <MenuItem key={p.id} value={p.id}>
@@ -508,7 +756,7 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                         disabled={!projectId}
                         helperText={
                             repos && repos.length > 1
-                                ? 'The repo the agent works in. Required when the project has more than one.'
+                                ? 'Required when the project has more than one repo.'
                                 : 'The repo the agent works in.'
                         }
                     >
@@ -524,7 +772,7 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                         label="Item kind"
                         value={issueType}
                         onChange={(e) => setIssueType(e.target.value as 'task')}
-                        helperText="Most agents refuse the wrong kind — PO Writer only scopes Tasks, Coder only builds sub-tasks."
+                        helperText="Most agents accept one kind. PO Writer takes Tasks, Coder takes sub-tasks."
                     >
                         <MenuItem value="task">Task</MenuItem>
                         <MenuItem value="sub_task">Sub-task</MenuItem>
@@ -549,7 +797,7 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                         label="Expected outcome"
                         value={outcome}
                         onChange={(e) => setOutcome(e.target.value)}
-                        helperText="An agent that asks rather than guessing has succeeded — expect asked_question when that is the right answer."
+                        helperText="asked_question is a pass. Pick it when asking is the right answer."
                     >
                         {OUTCOMES.map((o) => (
                             <MenuItem key={o.value} value={o.value}>
@@ -566,15 +814,50 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
             </Collapse>
 
             {isLoading ? (
-                <CircularProgress size={20} />
+                <>
+                    <Skeleton variant="rounded" height={88} sx={{ mb: 1.5 }} />
+                    <Skeleton variant="rounded" height={88} />
+                </>
             ) : (tests ?? []).length === 0 ? (
-                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                    No tests yet. Without one there is no way to tell whether this agent works, or whether it
-                    still works after its prompt changes.
-                </Typography>
+                // No action button: "New test" is already in the header row
+                // above, and a second control with the same accessible name
+                // makes `getByRole('button', { name: 'New test' })' ambiguous.
+                <Box sx={{ mb: 2.5 }}>
+                    <EmptyState
+                        variant="dashed"
+                        icon={
+                            <Box
+                                component="span"
+                                className="material-symbols-rounded"
+                                aria-hidden="true"
+                                sx={{ fontSize: 32 }}
+                            >
+                                science
+                            </Box>
+                        }
+                        title="No tests yet"
+                        description="A test runs this agent on a throwaway item and checks the outcome. Run it again after a prompt change to see what broke."
+                    />
+                </Box>
             ) : (
-                (tests ?? []).map((t) => <TestCard key={t.id} test={t} agentId={agent.id} />)
+                (tests ?? []).map((t) => (
+                    <TestCard
+                        key={t.id}
+                        test={t}
+                        agentId={agent.id}
+                        projectId={suiteProject}
+                        repoId={suiteRepo}
+                        provenance={
+                            qualification?.[0]?.per_fixture.find((f) => f.agent_test_id === t.id)?.provenance
+                        }
+                    />
+                ))
             )}
+
+            {/* Below the list: once every shipped test is adopted this strip
+                disappears, and an empty tab should lead with its own empty
+                state rather than two stacked boxes. */}
+            <StarterTests starters={starters} existing={tests ?? []} onAdopt={adopt} />
         </Box>
     );
 }

@@ -16,9 +16,15 @@ import {
 } from '../services/marketplace.js';
 import { unpackAgentBundle, AgentBundleParseError } from '../services/agent-bundle.js';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
-import { agentTestsService } from '../services/agent-tests.js';
+import {
+    agentTestsService,
+    AgentTestUnboundError,
+    AgentTestSuiteBusyError,
+    AgentTestSuiteEmptyError,
+} from '../services/agent-tests.js';
 import { agentPerformance } from '../services/agent-scorecard.js';
-import { loadCatalog } from '../marketplace/catalog-loader.js';
+import { agentQualification } from '../services/agent-qualification.js';
+import { loadCatalog, starterTests } from '../marketplace/catalog-loader.js';
 import {
     AgentChecklistsPutSchema,
     AgentMemoryUpdateSchema,
@@ -67,7 +73,10 @@ const AgentTestExpectationsSchema = z.object({
 });
 
 const AgentTestBodySchema = z.object({
-    project_id: z.string().min(1),
+    // Migration 021 — optional. A fixture belongs to the agent and binds to a
+    // project when it runs, which is what lets a shipped one exist before the
+    // Owner has chosen where to spend an issue key on it.
+    project_id: z.string().min(1).nullable().optional(),
     repo_id: z.string().min(1).nullable().optional(),
     name: z.string().trim().min(1).max(200),
     item_template: AgentTestItemTemplateSchema,
@@ -82,10 +91,28 @@ const AgentTestRunBodySchema = z
     .object({
         n_runs: z.number().int().min(1).max(10).optional(),
         label: z.string().trim().max(120).optional(),
+        // Where the throwaway item is made. Falls back to the fixture's own
+        // pin; with neither, the run is a 400 rather than a guess.
+        project_id: z.string().min(1).optional(),
+        repo_id: z.string().min(1).nullable().optional(),
     })
     .strict();
 
+/** A whole suite in one press. Same binding rules, one shared `label`. */
+const SuiteRunBodySchema = z
+    .object({
+        n_runs: z.number().int().min(1).max(10).optional(),
+        label: z.string().trim().max(120).optional(),
+        project_id: z.string().min(1).optional(),
+        repo_id: z.string().min(1).nullable().optional(),
+    })
+    .strict();
+
+const QualificationQuerySchema = z.object({ agent_id: z.string().min(1).optional() }).strict();
+
 const AgentTestPatchSchema = z.object({
+    /** Pin a fixture to a project, so running it stops asking. */
+    project_id: z.string().min(1).nullable().optional(),
     repo_id: z.string().min(1).nullable().optional(),
     name: z.string().trim().min(1).max(200).optional(),
     item_template: AgentTestItemTemplateSchema.optional(),
@@ -363,9 +390,7 @@ export async function agentsRoutes(app: FastifyInstance) {
         const { id } = req.params as { id: string };
         const agent = await agentsService.get(id);
         if (!agent) return reply.status(404).send({ error: 'Agent not found' });
-        const source = agent.marketplace_source_id ?? id;
-        const entry = loadCatalog().find((e) => e.manifest.id === source);
-        return reply.send(entry?.tests ?? []);
+        return reply.send(starterTests(agent.marketplace_source_id ?? id));
     });
 
     app.get('/api/agents/:id/performance', async (req, reply) => {
@@ -430,12 +455,72 @@ export async function agentsRoutes(app: FastifyInstance) {
         // 202: the dispatches are asynchronous. Verdicts land when each run
         // finishes (`evaluateAgentTestRun`), so the batch comes back with
         // every sample still `running`.
-        return reply.status(202).send(
-            await agentTestsService.run(testId, {
-                ...(body.n_runs !== undefined ? { n_runs: body.n_runs } : {}),
-                ...(body.label !== undefined ? { label: body.label } : {}),
-            }),
-        );
+        try {
+            return reply.status(202).send(
+                await agentTestsService.run(testId, {
+                    ...(body.n_runs !== undefined ? { n_runs: body.n_runs } : {}),
+                    ...(body.label !== undefined ? { label: body.label } : {}),
+                    ...(body.project_id !== undefined ? { project_id: body.project_id } : {}),
+                    ...(body.repo_id !== undefined ? { repo_id: body.repo_id } : {}),
+                }),
+            );
+        } catch (err) {
+            if (err instanceof AgentTestUnboundError) return reply.status(400).send({ error: err.message });
+            throw err;
+        }
+    });
+
+    /**
+     * Run every fixture this agent has, as one labelled batch set.
+     *
+     * No new table and no new row kind: a suite run IS N batches sharing a
+     * `label`, which is what migration 018 added `label` for. A suite table
+     * earns itself when a suite run needs its own lifecycle; it does not have
+     * one.
+     *
+     * 409 rather than a second spend if anything of this agent's is already
+     * running. This is money.
+     */
+    app.post('/api/agents/:id/test-suite/runs', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id } = req.params as { id: string };
+        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        const body = SuiteRunBodySchema.parse(req.body ?? {});
+        try {
+            return reply.status(202).send(
+                await agentTestsService.runSuite(id, {
+                    ...(body.n_runs !== undefined ? { n_runs: body.n_runs } : {}),
+                    ...(body.label !== undefined ? { label: body.label } : {}),
+                    ...(body.project_id !== undefined ? { project_id: body.project_id } : {}),
+                    ...(body.repo_id !== undefined ? { repo_id: body.repo_id } : {}),
+                }),
+            );
+        } catch (err) {
+            if (err instanceof AgentTestUnboundError) return reply.status(400).send({ error: err.message });
+            if (err instanceof AgentTestSuiteBusyError) return reply.status(409).send({ error: err.message });
+            if (err instanceof AgentTestSuiteEmptyError) return reply.status(400).send({ error: err.message });
+            throw err;
+        }
+    });
+
+    /**
+     * Is this agent qualified — and is that still true of the agent as it is
+     * now?
+     *
+     * With `agent_id` it is one suite (the Tests tab header); without one it is
+     * every installed agent, which is the answer to "what is done and what is
+     * pending" across the fleet. One fold, one route.
+     *
+     * **No ranking.** Per-agent counts only, never a fleet percentage, for the
+     * reason `/performance` gives: a reviewer that correctly rejects would sort
+     * worst on any average. A fixture declares what a pass is, which is what
+     * makes a per-agent verdict safe where a cross-agent number is not.
+     */
+    app.get('/api/agent-qualification', async (req, reply) => {
+        const q = QualificationQuerySchema.parse(req.query ?? {});
+        if (q.agent_id && !(await agentsService.get(q.agent_id))) {
+            return reply.status(404).send({ error: 'Agent not found' });
+        }
+        return reply.send(await agentQualification(q.agent_id));
     });
 
     app.post(

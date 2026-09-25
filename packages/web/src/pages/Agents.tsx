@@ -22,6 +22,7 @@ import { AccentColorPicker } from './settings/AccentColorPicker.js';
 import { useAgents, useUpdateAgent } from '../hooks/useAgents.js';
 import { useAgentFavorites } from '../hooks/useAgentFavorites.js';
 import { useQueueDepthByAgent } from '../hooks/useQueueDepthByAgent.js';
+import { useAgentQualification } from '../hooks/useAgentTests.js';
 import { useToast } from '../hooks/useToast.js';
 import {
     cliUnavailableMessage,
@@ -98,6 +99,14 @@ export function Agents() {
         }
         return map;
     }, [marketplaceQuery.data]);
+    // One read for the whole fleet — "which of my agents is unproven" was
+    // otherwise 24 page visits. The list order never changes because of it
+    // (see the comment at the chip in `AgentCard`).
+    const { data: qualifications } = useAgentQualification();
+    const qualificationByAgentId = useMemo(
+        () => new Map((qualifications ?? []).map((q) => [q.agent_id, q.verdict])),
+        [qualifications],
+    );
     const upgradeByAgentId = useMemo(() => {
         const map = new Map<string, boolean>();
         for (const a of agents ?? []) {
@@ -443,6 +452,7 @@ export function Agents() {
                                 menuActions={handleCardMenu(w)}
                                 runtimeError={!!runsQuery.error}
                                 upgradeAvailable={upgradeByAgentId.get(w.id) === true}
+                                qualification={qualificationByAgentId.get(w.id)}
                                 cliWarning={cliWarningFor(w.cli)}
                             />
                         ))}
@@ -473,6 +483,7 @@ export function Agents() {
                             menuActions={handleCardMenu(w)}
                             runtimeError={!!runsQuery.error}
                             upgradeAvailable={upgradeByAgentId.get(w.id) === true}
+                            qualification={qualificationByAgentId.get(w.id)}
                             cliWarning={cliWarningFor(w.cli)}
                         />
                     ))}

@@ -1,0 +1,65 @@
+[
+  {
+    "id": "imports-without-duplicating",
+    "kind": "job",
+    "name": "Imports assigned issues as draft Tasks, deduplicated",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Import my assigned Jira issues",
+      "description": "Pull the issues assigned to the Owner within the configured JQL scope into Atlas as draft Tasks.",
+      "acceptance_criteria": "Given an issue already imported, when the import runs again, then no second Task is created for it."
+    },
+    "expectations": {
+      "required_checklist_all_passed": true,
+      "judge_criteria": [
+        "The summary says how many issues it imported and how many it skipped as already present.",
+        "The summary says each created Task records the Jira key it came from."
+      ],
+      "max_cost_usd": 2.0
+    },
+    "needs_repo": false,
+    "notes": "Deduplication is the whole risk: a second run that re-imports everything doubles the backlog silently. A summary that reports only a created count cannot say whether it happened."
+  },
+  {
+    "id": "asks-without-a-scope",
+    "kind": "contract",
+    "name": "Asks rather than importing everything",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Import from Jira",
+      "description": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 0.6
+    },
+    "needs_repo": false,
+    "notes": "With no JQL scope the only options are to ask or to import a whole instance. Its own checklist says nothing outside the configured scope is read or written."
+  },
+  {
+    "id": "writes-no-files",
+    "kind": "trace",
+    "name": "Imports without touching a repository",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Import my assigned Jira issues",
+      "description": "Pull the configured Jira scope into Atlas as draft Tasks.",
+      "acceptance_criteria": "Given the import, when it finishes, then no file in any repository changed."
+    },
+    "expectations": {
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 1.5
+    },
+    "needs_repo": false,
+    "notes": "An importer's output is rows, not commits. A file written here would be imported issue text landing in a repository nobody reviewed it into."
+  }
+]

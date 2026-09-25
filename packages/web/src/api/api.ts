@@ -96,6 +96,7 @@ import type {
     AgentPerformance,
     ParkedFixture,
     StarterTest,
+    AgentQualification,
     AgentCostEstimate,
     AgentTestItemTemplate,
     AgentTestExpectations,
@@ -1207,8 +1208,30 @@ export const api = {
             },
         ) => post<AgentTest>(`/agents/${agentId}/tests`, body),
         remove: (testId: string) => del(`/agent-tests/${testId}`),
-        run: (testId: string, body: { n_runs?: number; label?: string } = {}) =>
-            post<AgentTestBatch>(`/agent-tests/${testId}/run`, body),
+        run: (
+            testId: string,
+            body: {
+                n_runs?: number;
+                label?: string;
+                project_id?: string;
+                repo_id?: string | null;
+            } = {},
+        ) => post<AgentTestBatch>(`/agent-tests/${testId}/run`, body),
+        /** Every fixture this agent has, in one press, under one label. */
+        runSuite: (
+            agentId: string,
+            body: {
+                n_runs?: number;
+                label?: string;
+                project_id?: string;
+                repo_id?: string | null;
+            } = {},
+        ) => post<AgentTestBatch[]>(`/agents/${agentId}/test-suite/runs`, body),
+        /** Is this agent qualified, and is that still true of the agent as it is now? */
+        qualification: (agentId?: string) =>
+            get<AgentQualification[]>(
+                agentId ? `/agent-qualification?agent_id=${encodeURIComponent(agentId)}` : '/agent-qualification',
+            ),
         runs: (testId: string) => get<AgentTestRun[]>(`/agent-tests/${testId}/runs`),
         /** The same runs, folded into the batches the Owner actually pressed. */
         batches: (testId: string) => get<AgentTestBatch[]>(`/agent-tests/${testId}/batches`),

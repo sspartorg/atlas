@@ -17,6 +17,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Closes the lint and typecheck gaps the hygiene check reported.",
-  "version": 5,
+  "version": 6,
   "published_at": "2026-09-24T00:00:00Z"
 }

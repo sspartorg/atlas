@@ -173,3 +173,47 @@ as a pass matters as much as `done`.** It is now contract-tested at the fleet
 level — at least one shipped starter test must make asking the passing result,
 because a starter set that can only express success cannot say that an agent
 which asked rather than inventing a feature has succeeded.
+
+## Amendment (2026-09-25) — fixtures are rows, and the suite has a verdict
+
+Three phases shipped and the Owner still reported "I asked for tests for agents,
+and I see 0 tests for any agent." Both halves of that were true.
+
+**Zero was literal.** A shipped fixture could not be a row — `project_id` was
+`NOT NULL` and a catalog bundle has no project — so `tests.json` arrived as a
+template the Owner adopts by hand. Eight agents shipped one, nobody had clicked
+Add, and every agent page read "No tests yet". Migration 021 makes `project_id`
+nullable: a fixture belongs to the agent at rest and binds to a project when it
+runs (body first, then the fixture's own pin, then a 400 — never a default,
+because a run materialises a real item that spends a real issue key).
+`adoptStarterTests` writes them at install, on every boot and on upgrade;
+untouched rows follow the bundle, edited ones are frozen, and the card says
+which. That reverses this ADR's "an upgrade will never change it", deliberately:
+a frozen fixture set never improves.
+
+**And what existed tested the wrong thing.** Every one of the nine shipped
+fixtures asserted what the agent must NOT do — refuses, does not edit, does not
+claim green. Not one asserted that it does its job. The fleet is now three per
+agent, in the data as `kind`: a **job** case (judged), a **contract** case (asks
+or refuses when the input is not what it needs), and a **trace** case (stayed in
+its lane). 84 fixtures across 28 agents, enforced by `catalog-contract.test.ts`,
+which also rejects an expectation key the evaluator does not understand, a
+`files_touched` assertion that cannot hold across repos, a judge criterion about
+evidence the judge cannot see, and a worst-case fleet bill over $150.
+
+**The verdict.** `GET /api/agent-qualification` folds fixtures × runs into one of
+six states, most-honest-first: `no_tests` → `never_run` → `failing` → `blocked`
+→ `stale` → `qualified`. A never-run suite is never `qualified`, and an
+all-errored batch is `blocked` rather than `failing` — ADR 0020's distinction at
+suite level. `stale` is the answer to "does it still work after I changed it":
+each run is compared against the cli/model/effort/prompt_version `agent_runs`
+already snapshots, so a passing suite proven on a model the agent no longer runs
+says so and names the field.
+
+**This is not the ranking this ADR forbids.** A cross-agent pass@1 average would
+still recommend culling `agent-release-reviewer` for rejecting four times. What
+makes a per-agent verdict safe is structural: a fixture declares what a pass IS,
+so that reviewer's fixture expects `rejected` and rejecting correctly passes. The
+payload carries per-agent counts and no fleet percentage, and the fleet view
+groups by state instead of sorting by score — with a comment at the sort site
+saying why.

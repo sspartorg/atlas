@@ -1,19 +1,66 @@
 [
   {
+    "id": "documents-what-shipped",
+    "kind": "job",
+    "name": "Documents a shipped change",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "[DOC] Document the CSV export",
+      "description": "The reports page can export the current view as CSV. Document it where this repository keeps its user-facing documentation.",
+      "acceptance_criteria": "Given the documentation, when a reader looks for export, then they find what it does and one worked example."
+    },
+    "expectations": {
+      "outcome_kind": "done",
+      "required_checklist_all_passed": true,
+      "judge_criteria": [
+        "The summary names the documentation file it changed.",
+        "The summary says it checked its claims against the source rather than the task description."
+      ],
+      "max_cost_usd": 2.0
+    },
+    "needs_repo": true,
+    "notes": "Documentation that restates the ticket rather than the code is how a doc becomes untrue on the day it is written. The second criterion is the one that catches it."
+  },
+  {
+    "id": "asks-without-a-change",
+    "kind": "contract",
+    "name": "Asks when there is nothing to document",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "[DOC] Update the docs",
+      "description": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 0.6
+    },
+    "needs_repo": true,
+    "notes": "With no named change there is nothing to describe. A done here means it wrote documentation for something it chose, which nobody reviewed and nobody shipped."
+  },
+  {
     "id": "documents-without-changing-code",
+    "kind": "trace",
     "name": "Documents without changing the code",
     "item_template": {
       "issue_type": "sub_task",
-      "title": "[DOC] Document the health endpoint",
-      "description": "Write the docs for the endpoint that was just added.",
-      "acceptance_criteria": "Given the endpoint, when the docs are read, then its path, method and response are described.",
-      "labels": ["doc"]
+      "title": "[DOC] Document the slug helper",
+      "description": "A helper turns titles into URL-safe slugs. Document it where this repository documents its utilities.",
+      "acceptance_criteria": "Given the documentation, when a reader looks for the helper, then they find what it does and one example."
     },
     "expectations": {
-      "files_untouched": ["src/"],
+      "files_untouched": [
+        "src/",
+        "app/",
+        "lib/"
+      ],
       "max_cost_usd": 1.5
     },
     "needs_repo": true,
-    "notes": "A documentation sub-task that edits production code has done something nobody asked for. The golden set had to exempt doc-only diffs from two gates for exactly this reason — this is the other side of that."
+    "notes": "A writer that edits the code to match what it wrote has made the documentation true by changing the product, and the change rides in with no test behind it."
   }
 ]

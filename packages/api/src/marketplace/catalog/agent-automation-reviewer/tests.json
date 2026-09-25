@@ -1,0 +1,70 @@
+[
+  {
+    "id": "rejects-a-test-that-cannot-fail",
+    "kind": "job",
+    "name": "Rejects a test that cannot go red",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "[QA] Review the automated slug tests",
+      "description": "A branch in this repository adds automated tests for the slug helper. Review whether each one would fail if the behaviour broke.",
+      "acceptance_criteria": "Given each automation-yes case, when the suite runs, then a test exists that exercises that behaviour."
+    },
+    "expectations": {
+      "outcome_kind": "rejected",
+      "judge_criteria": [
+        "The reason names a specific test and says what it fails to assert.",
+        "The summary or reason says the suite was executed, not only read."
+      ],
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 2.5
+    },
+    "needs_repo": true,
+    "notes": "An assertion-free test parses, passes and proves nothing, which is invisible unless the reviewer names the test. Its checklist says the tests execute green rather than merely parse; this is that claim."
+  },
+  {
+    "id": "asks-without-tests-to-review",
+    "kind": "contract",
+    "name": "Asks when there are no tests to review",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "[QA] Review automation",
+      "description": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 0.6
+    },
+    "needs_repo": true,
+    "notes": "With no named tests and no CSV there is nothing to check a row against. A done here approves an empty automation round."
+  },
+  {
+    "id": "reviews-without-fixing-the-tests",
+    "kind": "trace",
+    "name": "Reviews without fixing the tests",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "[QA] Review one automated test",
+      "description": "A branch in this repository adds one automated test. Review it.",
+      "acceptance_criteria": "Given the test, when the suite runs, then it asserts the behaviour it names."
+    },
+    "expectations": {
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 2.0
+    },
+    "needs_repo": true,
+    "notes": "A reviewer that rewrites a weak test has approved its own assertion, and the Automation Engineer ships the same weak test next time."
+  }
+]

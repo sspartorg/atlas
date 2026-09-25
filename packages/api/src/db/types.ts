@@ -821,9 +821,18 @@ export interface AgentTestsTable {
     id: string;
     /** Migration 019 — null when this fixture targets a workflow instead. */
     agent_id: StrN;
-    project_id: string;
+    /**
+     * Migration 021 — nullable. A fixture belongs to the agent and binds to a
+     * project when it runs; a shipped one has no project to belong to at
+     * install time, which is what kept every agent page reading "No tests yet".
+     */
+    project_id: StrN;
     repo_id: StrN;
     name: string;
+    /** Migration 021 — the `tests.json` entry this was adopted from; null when the Owner wrote it. */
+    source_test_id: StrN;
+    /** Migration 021 — the bundle's body at adoption. Differs from a re-hash ⇒ the Owner edited it. */
+    source_hash: StrN;
     item_template: unknown;
     expectations: unknown;
     // Migration 019 — exactly one of `agent_id` / `workflow_id` is set, by

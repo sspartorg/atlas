@@ -1,0 +1,70 @@
+[
+  {
+    "id": "rejects-a-spec-with-a-gap",
+    "kind": "job",
+    "name": "Rejects a spec that misses a criterion",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Review the export spec",
+      "description": "A spec for the CSV export exists in this repository. One acceptance criterion has no test scenario behind it.",
+      "acceptance_criteria": "Given a report with rows, when Export is clicked, then a CSV downloads with every row.\nGiven an empty report, when the page loads, then Export is disabled."
+    },
+    "expectations": {
+      "outcome_kind": "rejected",
+      "judge_criteria": [
+        "The reason names the specific section or criterion that is missing or unmapped.",
+        "The reason says it read the spec file from disk rather than the task description."
+      ],
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 2.0
+    },
+    "needs_repo": true,
+    "notes": "Its checklist claims the spec was read from disk. A reviewer that reviews the ticket instead approves specs it never opened, and only the second criterion can tell the difference."
+  },
+  {
+    "id": "asks-when-the-spec-is-missing",
+    "kind": "contract",
+    "name": "Asks when there is no spec file",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Review the spec",
+      "description": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 0.6
+    },
+    "needs_repo": true,
+    "notes": "No spec file means nothing to check the six required sections against. Approving here would pass a spec that does not exist."
+  },
+  {
+    "id": "reviews-without-writing-the-spec",
+    "kind": "trace",
+    "name": "Reviews without writing the spec itself",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Review the pagination spec",
+      "description": "A spec for report pagination exists in this repository.",
+      "acceptance_criteria": "Given more rows than fit a page, when the page loads, then only the first page renders."
+    },
+    "expectations": {
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 1.5
+    },
+    "needs_repo": true,
+    "notes": "The pairing only works while the writer and the reviewer are two agents. A reviewer that fixes the spec it is reviewing has approved its own text."
+  }
+]

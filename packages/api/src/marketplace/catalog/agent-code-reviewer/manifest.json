@@ -6,8 +6,8 @@
   "model": "claude-sonnet-5",
   "effort": "medium",
   "framework": "review",
-  "description": "Dedicated reviewer paired with `agent-coder`. Confirms the sub-task's commits cover its contract, scans them for anti-patterns, and re-runs the project's typecheck/lint/test gate on the Task's branch. Reports via the `atlas-outcome` block (done \u2192 next workflow step, rejected \u2192 back to Coder for revision, asked_question \u2192 Owner).",
-  "designation": "Code \u2014 Reviewer",
+  "description": "Dedicated reviewer paired with `agent-coder`. Confirms the sub-task's commits cover its contract, scans them for anti-patterns, and re-runs the project's typecheck/lint/test gate on the Task's branch. Reports via the `atlas-outcome` block (done → next workflow step, rejected → back to Coder for revision, asked_question → Owner).",
+  "designation": "Code — Reviewer",
   "accent_color": "#1D8348",
   "sort_order": 9,
   "glyph": "fact_check",
@@ -17,6 +17,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Dedicated reviewer paired with `agent-coder`.",
-  "version": 4,
+  "version": 5,
   "published_at": "2026-07-01T00:00:00Z"
 }

@@ -1,18 +1,70 @@
 [
   {
-    "id": "reviews-without-editing",
-    "name": "Reviews the branch without editing it",
+    "id": "reads-the-whole-change",
+    "kind": "job",
+    "name": "Reads the whole branch before the PR",
     "item_template": {
       "issue_type": "task",
-      "title": "Review the current branch before release",
-      "description": "Read the change as one change and say whether it is safe to merge.",
-      "acceptance_criteria": "Given a branch, when it is reviewed, then every acceptance criterion is matched to the commit and test that satisfies it."
+      "title": "Review the export delivery",
+      "description": "Every sub-task of this Task is built on this branch. Read the whole change once, as one change, before it becomes a pull request.",
+      "acceptance_criteria": "Given the branch, when it is read end to end, then every acceptance criterion points at a commit and a test that satisfies it."
     },
     "expectations": {
-      "tools_forbidden": ["Edit", "Write", "NotebookEdit"],
-      "max_cost_usd": 5.0
+      "required_checklist_all_passed": true,
+      "judge_criteria": [
+        "The summary or reason refers to at least two different sub-tasks or files, so it read the branch rather than one commit.",
+        "The summary or reason says something about the seams between sub-tasks \u2014 a shared helper, an interface, a migration \u2014 rather than only the last change."
+      ],
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 3.0
     },
     "needs_repo": true,
-    "notes": "A reviewer that edited the code under review was not reviewing it — it was writing it and approving its own work. No self-reported summary was ever going to admit that, which is why this asserts on the transcript instead."
+    "notes": "Deliberately does not fix outcome_kind: this reviewer's rejections are the most valuable thing it produces (ADR 0023), so both verdicts pass and the judge asks whether it actually read the whole branch."
+  },
+  {
+    "id": "asks-with-nothing-delivered",
+    "kind": "contract",
+    "name": "Asks when the branch has nothing on it",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Release review",
+      "description": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 0.8
+    },
+    "needs_repo": true,
+    "notes": "An empty Task has no acceptance criteria to trace to commits. A done here is the approval that puts an unread change in front of the Owner."
+  },
+  {
+    "id": "reviews-without-committing",
+    "kind": "trace",
+    "name": "Reviews without touching the branch",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Review the pagination delivery",
+      "description": "The pagination sub-tasks are built on this branch. Read the whole change.",
+      "acceptance_criteria": "Given the branch, when it is read, then nothing outside the Task's scope is in the diff."
+    },
+    "expectations": {
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 2.5
+    },
+    "needs_repo": true,
+    "notes": "The last read before the Owner sees the PR has to be a read. A release reviewer that commits has changed the thing it is certifying, after every other check already passed on the old version."
   }
 ]

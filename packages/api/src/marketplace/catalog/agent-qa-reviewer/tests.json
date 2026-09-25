@@ -1,0 +1,70 @@
+[
+  {
+    "id": "rejects-a-plan-with-an-uncovered-criterion",
+    "kind": "job",
+    "name": "Rejects a plan that leaves a criterion uncovered",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "[QA] Review the export test plan",
+      "description": "A QA plan CSV for the CSV export exists on this branch. One acceptance criterion has no scenario.",
+      "acceptance_criteria": "Given a report with rows, when Export is clicked, then a CSV downloads with every row.\nGiven an empty report, when the page loads, then Export is disabled."
+    },
+    "expectations": {
+      "outcome_kind": "rejected",
+      "judge_criteria": [
+        "The reason names the acceptance criterion that has no scenario behind it.",
+        "The reason refers to the CSV's own rows rather than to the task description."
+      ],
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 2.0
+    },
+    "needs_repo": true,
+    "notes": "The per-criterion coverage floor is this reviewer's whole job. A rejection that cannot name which criterion is uncovered has not checked the floor, it has guessed."
+  },
+  {
+    "id": "asks-without-a-csv",
+    "kind": "contract",
+    "name": "Asks when there is no plan to review",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "[QA] Review the plan",
+      "description": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 0.6
+    },
+    "needs_repo": true,
+    "notes": "No CSV means no header to check and no rows to count. Approving here passes a plan that was never written."
+  },
+  {
+    "id": "reviews-without-editing-the-plan",
+    "kind": "trace",
+    "name": "Reviews without editing the plan",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "[QA] Review the slug test plan",
+      "description": "A QA plan CSV for the slug helper exists on this branch.",
+      "acceptance_criteria": "Given a title with punctuation, when it is slugified, then the punctuation is gone."
+    },
+    "expectations": {
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 1.5
+    },
+    "needs_repo": true,
+    "notes": "A reviewer that fills in the missing scenarios has approved a plan it wrote, and the QA Writer never learns what was missing."
+  }
+]

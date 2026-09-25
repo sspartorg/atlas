@@ -332,9 +332,47 @@ describe('workflow templates', () => {
 // what ships has to be worth pressing.
 
 describe('starter tests', () => {
+    // Every expectation the evaluator understands. A typo'd key asserts
+    // nothing and passes — campaign finding F-012, one level up — so the list
+    // is repeated here rather than inferred. It duplicates the Zod schema in
+    // `routes/agents.ts`, which is the cheaper half of the trade: ten lines in
+    // a test against a shipped fixture that silently checks nothing.
+    const AGENT_EXPECTATION_KEYS = new Set([
+        'outcome_kind',
+        'required_checklist_all_passed',
+        'summary_contains',
+        'summary_omits',
+        'max_cost_usd',
+        'max_duration_s',
+        'tools_required',
+        'tools_forbidden',
+        'max_turns',
+        'max_tool_calls',
+        'files_touched',
+        'files_untouched',
+        'judge_criteria',
+    ]);
+    // Set on a workflow fixture, meaningless on an agent one: `evaluateAgentTest`
+    // returns `errored` for these, so a shipped test carrying one can never pass.
+    const WORKFLOW_ONLY_KEYS = ['terminal_status', 'min_sub_tasks', 'requires_pr', 'gate_verdicts_all_pass'];
+    /**
+     * Evidence the judge cannot see: it gets the summary, the reason and the
+     * trace, and nothing else. Word-bounded, because "different" contains
+     * "diff" and a substring match would fail honest criteria.
+     */
+    const UNJUDGEABLE = [/\bthe diff\b/, /\bcompiles?\b/, /\bscreenshots?\b/, /\bline numbers?\b/, /\bcoverage report\b/];
+    const CEILING: Record<string, number> = { job: 3.0, contract: 1.0, trace: 2.5 };
+
     for (const { manifest, tests } of catalog) {
-        if (tests.length === 0) continue;
         describe(manifest.id, () => {
+            // The floor the Owner asked for, and the reason it is a gate: eight
+            // agents shipping one fixture each looked, from every agent page,
+            // exactly like no testing at all.
+            it('ships three tests — one job, one contract, one trace', () => {
+                expect(tests.length, `${manifest.id} ships ${tests.length} tests, not 3`).toBe(3);
+                expect(tests.map((t) => t.kind).sort()).toEqual(['contract', 'job', 'trace']);
+            });
+
             it('gives every test an id, a name and something to act on', () => {
                 for (const t of tests) {
                     expect(t.id, `${manifest.id}: every test needs an id`).toMatch(/^[a-z0-9-]+$/);
@@ -356,20 +394,81 @@ describe('starter tests', () => {
                 }
             });
 
-            // One run of an agent is cents, but a shipped test that can run
-            // away is not shippable: the Owner pressed a button, not a blank
-            // cheque.
-            it('puts a cost ceiling on every test', () => {
+            it('only uses expectations the evaluator understands', () => {
                 for (const t of tests) {
-                    expect(t.expectations['max_cost_usd'], `${t.id} has no max_cost_usd`).toBeTypeOf('number');
+                    for (const key of Object.keys(t.expectations)) {
+                        expect(AGENT_EXPECTATION_KEYS.has(key), `${t.id}: unknown expectation \`${key}\``).toBe(true);
+                    }
+                    for (const key of WORKFLOW_ONLY_KEYS) {
+                        expect(key in t.expectations, `${t.id}: \`${key}\` only means something on a workflow fixture`).toBe(false);
+                    }
+                    // A catalog fixture binds to whatever repo the Owner picked,
+                    // so a path that must CHANGE only holds in one repo.
+                    // `files_untouched` is fine: "leave package.json alone" is
+                    // true everywhere.
+                    expect('files_touched' in t.expectations, `${t.id}: files_touched cannot hold across repos`).toBe(false);
                 }
             });
 
-            // What a starter test catches is the part that teaches. Without
-            // it a red verdict is a puzzle rather than a finding.
-            it('says what each test catches', () => {
+            // One run of an agent is cents, but a shipped test that can run
+            // away is not shippable: the Owner pressed a button, not a blank
+            // cheque. The per-kind ceilings keep a refusal case from costing
+            // what a delivery case does.
+            it('puts a cost ceiling on every test, sized to its kind', () => {
+                for (const t of tests) {
+                    const max = t.expectations['max_cost_usd'];
+                    expect(max, `${t.id} has no max_cost_usd`).toBeTypeOf('number');
+                    expect(max as number, `${t.id} (${t.kind}) exceeds its ceiling`).toBeLessThanOrEqual(
+                        CEILING[t.kind] as number,
+                    );
+                }
+            });
+
+            // The three kinds answer three different questions, and a fleet of
+            // one kind answers only that one. Before this, every shipped
+            // fixture asserted what the agent must NOT do — not one asserted
+            // that it does its job.
+            it('asks the right shape of question per kind', () => {
+                const job = tests.find((t) => t.kind === 'job')!;
+                expect((job.expectations['judge_criteria'] as string[] | undefined)?.length ?? 0).toBeGreaterThan(0);
+
+                const contract = tests.find((t) => t.kind === 'contract')!;
+                const outcome = contract.expectations['outcome_kind'];
+                expect(['asked_question', 'rejected', 'done'], `${contract.id}: a contract case needs an outcome`).toContain(outcome);
+
+                const trace = tests.find((t) => t.kind === 'trace')!;
+                const traceKeys = ['tools_forbidden', 'files_untouched', 'max_turns', 'max_tool_calls'];
+                expect(
+                    traceKeys.some((k) => k in trace.expectations),
+                    `${trace.id}: a trace case must assert on what the run DID`,
+                ).toBe(true);
+                expect('judge_criteria' in trace.expectations, `${trace.id}: a trace case is answered by the trace, not a judge`).toBe(false);
+            });
+
+            // The judge sees the summary, the reason and the trace. A criterion
+            // about anything else cannot be answered, and an unanswerable
+            // criterion is a coin flip dressed as a check.
+            it('writes judge criteria the judge can actually answer', () => {
+                for (const t of tests) {
+                    const criteria = (t.expectations['judge_criteria'] as string[] | undefined) ?? [];
+                    expect(criteria.length, `${t.id}: at most 3 criteria`).toBeLessThanOrEqual(3);
+                    for (const c of criteria) {
+                        expect(c.length, `${t.id}: "${c}" is too vague to be binary`).toBeGreaterThan(24);
+                        expect(c.length, `${t.id}: "${c}" is too long for one question`).toBeLessThanOrEqual(200);
+                        for (const re of UNJUDGEABLE) {
+                            expect(re.test(c.toLowerCase()), `${t.id}: the judge cannot see that — "${c}"`).toBe(false);
+                        }
+                    }
+                }
+            });
+
+            // What a test catches is the part that teaches. Without it a red
+            // verdict is a puzzle rather than a finding — and with too much of
+            // it, the card it renders on becomes an essay.
+            it('says what each test catches, in a caption', () => {
                 for (const t of tests) {
                     expect(t.notes.length, `${t.id} does not say what it catches`).toBeGreaterThan(40);
+                    expect(t.notes.length, `${t.id}: notes too long to render`).toBeLessThanOrEqual(400);
                 }
             });
         });
@@ -384,9 +483,17 @@ describe('starter tests', () => {
         expect(kinds).toContain('asked_question');
     });
 
-    it('ships tests for a meaningful part of the fleet', () => {
-        const withTests = catalog.filter((e) => e.tests.length > 0);
-        expect(withTests.length).toBeGreaterThanOrEqual(8);
+    // The worst case of pressing Run on everything, printed so it cannot drift
+    // upward one fixture at a time. Actual spend is far lower — the ceilings
+    // are guards, and the cheapest read-only agents come in around $0.20 a
+    // dispatch — but the guard is what the Owner is exposed to.
+    it('keeps the whole fleet affordable to run once', () => {
+        const total = catalog.reduce(
+            (sum, e) => sum + e.tests.reduce((n, t) => n + ((t.expectations['max_cost_usd'] as number) ?? 0), 0),
+            0,
+        );
+        const fixtures = catalog.reduce((n, e) => n + e.tests.length, 0);
+        expect(total, `${fixtures} fixtures, worst case $${total.toFixed(2)}`).toBeLessThanOrEqual(150);
     });
 });
 

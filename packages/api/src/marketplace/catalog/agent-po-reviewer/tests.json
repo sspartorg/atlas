@@ -1,0 +1,70 @@
+[
+  {
+    "id": "rejects-an-untestable-spec",
+    "kind": "job",
+    "name": "Rejects sub-tasks with untestable criteria",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Improve onboarding",
+      "description": "Onboarding should feel faster and more pleasant.",
+      "acceptance_criteria": "Users are happier.\nOnboarding feels quick."
+    },
+    "expectations": {
+      "outcome_kind": "rejected",
+      "judge_criteria": [
+        "The reason names at least one acceptance criterion and says why it cannot be verified.",
+        "The reason proposes something measurable rather than only objecting."
+      ],
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 1.5
+    },
+    "needs_repo": false,
+    "notes": "A reviewer's rejections are its product (ADR 0023), so rejected is the PASS here. The judge is what separates naming the defect from rejecting on reflex, which scores identically on outcome_kind alone."
+  },
+  {
+    "id": "asks-when-there-is-no-spec",
+    "kind": "contract",
+    "name": "Asks when there is nothing to review",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Onboarding rework"
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_cost_usd": 0.5
+    },
+    "needs_repo": false,
+    "notes": "An empty Task is not a bad spec, it is no spec. Rejecting would be a review of nothing and done would be an approval of nothing; a reviewer that cannot tell those apart rubber-stamps blanks."
+  },
+  {
+    "id": "reviews-without-rewriting",
+    "kind": "trace",
+    "name": "Reviews without rewriting the work",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Add CSV export to the reports page",
+      "description": "Owners need the current report view as a CSV.",
+      "acceptance_criteria": "Given a report with rows, when Export is clicked, then a CSV downloads with every visible row."
+    },
+    "expectations": {
+      "tools_forbidden": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ],
+      "max_tool_calls": 40,
+      "max_cost_usd": 1.5
+    },
+    "needs_repo": false,
+    "notes": "A reviewer with Edit in its transcript has become the writer, and the review it then reports is a review of its own work. The tool-call ceiling catches the other failure: crawling the whole repo to review one spec."
+  }
+]

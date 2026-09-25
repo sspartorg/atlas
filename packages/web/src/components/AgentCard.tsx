@@ -3,7 +3,27 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
 import type { IAgent, IAgentRun } from '@atlas/shared';
+import type { QualificationVerdict } from '../api/types.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
+
+/** Short enough for a chip; the tooltip carries the sentence. */
+const QUALIFICATION_CHIP: Record<QualificationVerdict, string> = {
+    qualified: 'Qualified',
+    failing: 'Failing',
+    stale: 'Stale',
+    blocked: 'Blocked',
+    never_run: 'Untested',
+    no_tests: 'No tests',
+};
+
+const QUALIFICATION_HINT: Record<QualificationVerdict, string> = {
+    qualified: 'Every test passed, on this configuration',
+    failing: 'A test failed the last time it ran',
+    stale: 'Passing, but on a configuration this agent no longer runs',
+    blocked: 'The last run judged nothing — a broken environment, not a wrong answer',
+    never_run: 'It has tests, and none has ever been run',
+    no_tests: 'Nothing here has been proven',
+};
 import { AgentCardMenu, type AgentCardMenuActions } from '../pages/agents/AgentCardMenu.js';
 import {
     agentStatusColor,
@@ -31,6 +51,12 @@ interface Props {
      *  Driven by the parent which compares marketplace_pulled_version against
      *  the catalog's current version. */
     upgradeAvailable?: boolean;
+    /**
+     * The suite verdict for this agent, if one has been fetched.
+     *
+     * A chip, never a sort key — see the comment at the render site.
+     */
+    qualification?: QualificationVerdict | undefined;
     /** Set by the parent when this agent's CLI binary isn't installed. */
     cliWarning?: string | null;
 }
@@ -55,6 +81,7 @@ export function AgentCard({
     focused = false,
     runtimeError = false,
     upgradeAvailable = false,
+    qualification,
     cliWarning = null,
 }: Props) {
     const view = useMemo(() => getAgentView(agent), [agent]);
@@ -180,6 +207,44 @@ export function AgentCard({
                                     }}
                                 >
                                     Upgrade
+                                </Box>
+                            </Tooltip>
+                        )}
+                        {/* What this agent's own tests say. It is here because
+                            "which of my 24 agents is unproven" was otherwise a
+                            24-page click-through.
+
+                            **Never sort the list by this.** ADR 0023: a
+                            reviewer that correctly rejects scores worst on any
+                            cross-agent average, and `3/3` beside `1/3` is one
+                            small change away from being a ranking. The order is
+                            the Owner's (favourites, then category, then name)
+                            and stays that way. */}
+                        {qualification && qualification !== 'qualified' && (
+                            <Tooltip title={QUALIFICATION_HINT[qualification]} arrow>
+                                <Box
+                                    sx={{
+                                        flexShrink: 0,
+                                        px: 1,
+                                        height: 18,
+                                        borderRadius: '9px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        bgcolor:
+                                            qualification === 'failing'
+                                                ? ATLAS_PALETTE.dangerSoft
+                                                : ATLAS_PALETTE.slate06,
+                                        color:
+                                            qualification === 'failing'
+                                                ? ATLAS_PALETTE.red
+                                                : ATLAS_PALETTE.slate60,
+                                        fontSize: 10,
+                                        fontWeight: 600,
+                                        letterSpacing: '0.04em',
+                                        textTransform: 'uppercase',
+                                    }}
+                                >
+                                    {QUALIFICATION_CHIP[qualification]}
                                 </Box>
                             </Tooltip>
                         )}

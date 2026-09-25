@@ -6,8 +6,8 @@
   "model": "claude-sonnet-5",
   "effort": "medium",
   "framework": "review",
-  "description": "Dedicated reviewer paired with `agent-automation`. Confirms the worktree is on the Task's branch, walks the diff for `automation-yes` coverage from the QA test-plan CSV + `not automated:` roll-up comments for `automation-no` rows, scans new tests for anti-patterns (sleeps, brittle selectors, dangling promises), and verifies typecheck + lint. Reports via the `atlas-outcome` block (done \u2192 next workflow step, rejected \u2192 back to Automation Engineer for revision, asked_question \u2192 Owner).",
-  "designation": "Automation Engineer \u2014 Reviewer",
+  "description": "Dedicated reviewer paired with `agent-automation`. Confirms the worktree is on the Task's branch, walks the diff for `automation-yes` coverage from the QA test-plan CSV + `not automated:` roll-up comments for `automation-no` rows, scans new tests for anti-patterns (sleeps, brittle selectors, dangling promises), and verifies typecheck + lint. Reports via the `atlas-outcome` block (done → next workflow step, rejected → back to Automation Engineer for revision, asked_question → Owner).",
+  "designation": "Automation Engineer — Reviewer",
   "accent_color": "#0B7A4B",
   "sort_order": 11,
   "glyph": "fact_check",
@@ -17,6 +17,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Dedicated reviewer paired with `agent-automation`.",
-  "version": 1,
+  "version": 2,
   "published_at": "2026-07-01T00:00:00Z"
 }

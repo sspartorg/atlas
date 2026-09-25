@@ -1,0 +1,66 @@
+[
+  {
+    "id": "fills-a-gap-it-found",
+    "kind": "job",
+    "name": "Adds a document for a gap it found in the repo",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Curate the knowledge base for this project",
+      "description": "Read the repository you are given and add one reference document for something it does not yet explain.",
+      "acceptance_criteria": "Given the document, when it is read, then it describes THIS repository and cites where in the code it was verified."
+    },
+    "expectations": {
+      "outcome_kind": "done",
+      "required_checklist_all_passed": true,
+      "judge_criteria": [
+        "The summary names the document it added and the gap it fills.",
+        "The summary names something specific to this repository \u2014 a module, a script, a directory \u2014 that it verified the document against."
+      ],
+      "max_cost_usd": 3.0
+    },
+    "needs_repo": true,
+    "notes": "A knowledge base of plausible generalities is worse than none, because it reads as authoritative. The second criterion is what separates a document from a template."
+  },
+  {
+    "id": "asks-without-a-repo",
+    "kind": "contract",
+    "name": "Asks rather than writing from memory",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Write some docs",
+      "description": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write"
+      ],
+      "max_cost_usd": 0.8
+    },
+    "needs_repo": false,
+    "notes": "With no repository there is nothing to verify a claim against, and this agent's output is claims about a codebase."
+  },
+  {
+    "id": "stays-in-the-skills-folder",
+    "kind": "trace",
+    "name": "Curates without changing the product",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Add one reference document",
+      "description": "Add one reference document to the knowledge base of the repository you are given.",
+      "acceptance_criteria": "Given the diff, when it is read, then only documentation changed."
+    },
+    "expectations": {
+      "files_untouched": [
+        "src/",
+        "app/",
+        "lib/",
+        "package.json"
+      ],
+      "max_cost_usd": 2.5
+    },
+    "needs_repo": true,
+    "notes": "A curator that edits the code to match its description has made the documentation true by changing the product, with no test and no reviewer behind it."
+  }
+]

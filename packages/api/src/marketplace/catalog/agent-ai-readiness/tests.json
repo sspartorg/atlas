@@ -1,0 +1,66 @@
+[
+  {
+    "id": "bootstraps-the-scaffold",
+    "kind": "job",
+    "name": "Scaffolds AI-readiness docs for this repo",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Make this repository AI-ready",
+      "description": "Walk the repository you are given and bootstrap its AI-readiness scaffold.",
+      "acceptance_criteria": "Given the scaffold, when a reader opens each document, then it describes THIS repository rather than a generic template."
+    },
+    "expectations": {
+      "outcome_kind": "done",
+      "required_checklist_all_passed": true,
+      "judge_criteria": [
+        "The summary names the documents it created.",
+        "The summary quotes something specific to this repository \u2014 a package name, a script, a directory \u2014 rather than generic scaffold prose."
+      ],
+      "max_cost_usd": 3.0
+    },
+    "needs_repo": true,
+    "notes": "A scaffold that could have been written without reading the repo is the whole failure mode. The second criterion is what separates a walk from a template."
+  },
+  {
+    "id": "asks-without-a-repo-to-read",
+    "kind": "contract",
+    "name": "Asks rather than scaffolding blind",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Do the AI thing",
+      "description": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": [
+        "Edit",
+        "Write"
+      ],
+      "max_cost_usd": 0.8
+    },
+    "needs_repo": false,
+    "notes": "With no repository and no brief there is nothing to describe. A done here means it produced the generic template this agent exists to avoid."
+  },
+  {
+    "id": "stays-inside-the-scaffold",
+    "kind": "trace",
+    "name": "Writes only its own scaffold paths",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Refresh the AI-readiness scaffold",
+      "description": "Refresh the scaffold in the repository you are given.",
+      "acceptance_criteria": "Given the refresh, when the diff is read, then only scaffold documents changed."
+    },
+    "expectations": {
+      "files_untouched": [
+        "src/",
+        "app/",
+        "lib/",
+        "package.json"
+      ],
+      "max_cost_usd": 2.0
+    },
+    "needs_repo": true,
+    "notes": "This agent runs on repositories nobody has reviewed it against. Its own checklist says nothing outside the scaffold is modified; this is that claim, asserted from the trace instead of from its word."
+  }
+]
