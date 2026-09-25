@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
+    Panel,
     ReactFlowProvider,
     applyEdgeChanges,
     applyNodeChanges,
@@ -11,6 +12,7 @@ import {
     type OnSelectionChangeFunc,
 } from '@xyflow/react';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Alert from '@mui/material/Alert';
@@ -56,6 +58,7 @@ import {
     type WfEdge,
     type WfNode,
 } from './graph.js';
+import { tidyGraph } from './layout.js';
 
 const TAB_KEYS = ['builder', 'runs'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -109,7 +112,7 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
     const toast = useToast();
     const theme = useTheme();
     const phone = useMediaQuery(theme.breakpoints.down('sm'));
-    const { screenToFlowPosition } = useReactFlow<WfNode, WfEdge>();
+    const { screenToFlowPosition, fitView } = useReactFlow<WfNode, WfEdge>();
     const canvasRef = useRef<HTMLDivElement>(null);
     const [tab, setTab] = useTabParam<TabKey>(TAB_KEYS, 'builder');
 
@@ -128,6 +131,8 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
     const [serverErrors, setServerErrors] = useState<IWorkflowGraphError[]>([]);
     const [runOpen, setRunOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
+    /** Positions from before the last Tidy up, so one press puts them back. */
+    const [preTidy, setPreTidy] = useState<WfNode[] | null>(null);
 
     const graph = useMemo(() => toGraph(nodes, edges), [nodes, edges]);
     const draft = useMemo(() => ({ ...settings, graph }), [settings, graph]);
@@ -222,6 +227,24 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
         },
         [screenToFlowPosition]
     );
+
+    // Tidy up is a button and only a button: never on load, never on save.
+    // Rearranging an Owner's own layout behind their back would be worse than
+    // the mess it fixes, so it is one deliberate press with one undo.
+    const tidy = useCallback(() => {
+        const at = new Map(tidyGraph(toGraph(nodes, edges)).nodes.map((n) => [n.id, n.position]));
+        setPreTidy(nodes);
+        setNodes((ns) => ns.map((n) => ({ ...n, position: at.get(n.id) ?? n.position })));
+        // After the positions land, so the viewport frames the new layout.
+        requestAnimationFrame(() => void fitView({ padding: 0.2, maxZoom: 1.1 }));
+    }, [nodes, edges, fitView]);
+
+    const undoTidy = useCallback(() => {
+        if (!preTidy) return;
+        setNodes(preTidy);
+        setPreTidy(null);
+        requestAnimationFrame(() => void fitView({ padding: 0.2, maxZoom: 1.1 }));
+    }, [preTidy, fitView]);
 
     const onDrop = useCallback(
         (e: DragEvent<HTMLDivElement>) => {
@@ -393,7 +416,23 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
                                 onConnect={onConnect}
                                 onSelectionChange={onSelectionChange}
                                 onDrop={onDrop}
-                            />
+                            >
+                                {!phone && (
+                                    <Panel position="top-right">
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            onClick={preTidy ? undoTidy : tidy}
+                                            sx={{
+                                                background: ATLAS_PALETTE.white,
+                                                textTransform: 'none',
+                                            }}
+                                        >
+                                            {preTidy ? 'Undo tidy' : 'Tidy up'}
+                                        </Button>
+                                    </Panel>
+                                )}
+                            </WorkflowCanvas>
                         </Box>
                         {!phone && (
                             <Box

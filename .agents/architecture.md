@@ -245,6 +245,24 @@ Off-switches: set the workflow `inactive` (dispatch skips it), take the Task off
 
 ---
 
+## Workflow graph layout (Tidy up)
+
+`packages/web/src/pages/workflows/layout.ts`. Pure, ~O(V+E), **no dependency** — dagre is ~25KB gz and elkjs 100KB+ against a total bundle budget with ~20KB of headroom, and neither is needed.
+
+`validateWorkflowGraph` guarantees exactly one outgoing pass edge per node and no pass cycle, which is stronger than a DAG, so the usual Sugiyama pipeline collapses to three passes:
+
+1. **Back edges** — depth-first from Start, **pass edges before fail**, marking any edge to a node on the current stack. A repair loop (gate → fail → fixer → pass → reviewer → pass → gate) is a real cycle, so something has to be named the edge that goes backwards; walking pass first names the *return*, which is how the loop reads.
+2. **Rows** — longest forward path from Start, so a node always sits below everything that leads to it. Plus the **detour rule**: for a loop return `u → v`, the node the trunk goes to after `v` must clear `u`. Without it, four gates one row apart each owe their branch two rows, and the four repair loops land on top of each other. The rule applies **only when `col(u) > col(v)`** — a return out of a branch. A retry between two trunk nodes (`release-review --fail--> build` re-runs a third of Delivery) is the main line looping back on itself; reserving rows for it would push the trunk below its own tail and close a cycle the row walk cannot resolve.
+3. **Columns** — fewest fail-hops from Start by 0-1 BFS (pass costs 0, fail costs 1). Trunk is column 0; a gate's fixer is column 1; the fixer's reviewer inherits column 1 through its own pass edge, so the pair stacks vertically instead of sitting on one row with a U-turn between them.
+
+Then `x = col * 320`, `y = row * 140` (a card is 216 x 64, leaving a 104px gutter for edge lanes and ~76px of vertical air). Same-cell collisions sort by id and push right. Nodes Start cannot reach each get their own column past the rest rather than stacking at the origin — an invalid graph still has to be visible to be fixed.
+
+On `delivery.json` this turns 23 nodes spread over 3 columns with 6px of clearance into 23 rows x 2 columns: a straight trunk, and each gate's repair loop a clean rectangle in the column beside it.
+
+`tidyGraph` returns a new graph and mutates nothing, which is what lets the builder keep the previous positions for **Undo tidy**. It is never run on load or on save.
+
+---
+
 ## SSE flow (real-time updates)
 
 ```

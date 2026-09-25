@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { DragEvent, ReactNode } from 'react';
 import {
     Background,
@@ -13,9 +14,9 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/base.css';
 import Box from '@mui/material/Box';
-import { ATLAS_PALETTE, ELEVATION } from '../../theme/tokens.js';
+import { ATLAS_PALETTE, ELEVATION, MOTION, MOTION_EASING } from '../../theme/tokens.js';
 import { CanvasContext, NODE_TYPES, type ICanvasContext } from './WorkflowNodes.js';
-import type { WfEdge, WfNode } from './graph.js';
+import { routeEdges, type WfEdge, type WfNode } from './graph.js';
 
 interface Props {
     nodes: WfNode[];
@@ -46,6 +47,11 @@ export function WorkflowCanvas({
     height = '100%',
     children,
 }: Props) {
+    // Target handles and lane offsets are derived from where the nodes are
+    // right now, not from where they were when the graph was loaded — so a
+    // dragged node redraws its edges immediately instead of at next reload.
+    const routed = useMemo(() => routeEdges(nodes, edges), [nodes, edges]);
+
     return (
         <CanvasContext.Provider value={context}>
             <Box
@@ -65,12 +71,31 @@ export function WorkflowCanvas({
                     background: ATLAS_PALETTE.pageBg,
                     overflow: 'hidden',
                     '& .react-flow__edge-path': { strokeWidth: 2 },
-                    '& .wf-edge-pass .react-flow__edge-path': { stroke: ATLAS_PALETTE.success },
-                    '& .wf-edge-fail .react-flow__edge-path': {
+                    // Qualified with `.react-flow__edge` to outrank base.css's
+                    // `.selected` rule, which otherwise greys out whichever
+                    // edge you click — the one you are trying to follow.
+                    '& .react-flow__edge.wf-edge-pass .react-flow__edge-path': {
+                        stroke: ATLAS_PALETTE.success,
+                    },
+                    '& .react-flow__edge.wf-edge-fail .react-flow__edge-path': {
                         stroke: ATLAS_PALETTE.error,
                         strokeDasharray: '6 4',
                     },
                     '& .react-flow__edge.selected .react-flow__edge-path': { strokeWidth: 3.5 },
+                    // Follow one line at a time. Lanes stop edges from being
+                    // drawn on top of each other; this is what lets you tell
+                    // which of two lines running side by side is which.
+                    // base.css already gives an edge a 20px transparent
+                    // interaction stroke, so the hit target is forgiving.
+                    '& .react-flow__edge': {
+                        transition: `opacity ${MOTION.hover}ms ${MOTION_EASING.standard}`,
+                    },
+                    '&:has(.react-flow__edge:hover) .react-flow__edge:not(:hover)': {
+                        opacity: 0.12,
+                    },
+                    '&:has(.react-flow__edge.selected) .react-flow__edge:not(.selected)': {
+                        opacity: 0.12,
+                    },
                     '& .react-flow__controls': {
                         boxShadow: ELEVATION.low,
                         borderRadius: '8px',
@@ -107,7 +132,7 @@ export function WorkflowCanvas({
             >
                 <ReactFlow<WfNode, WfEdge>
                     nodes={nodes}
-                    edges={edges}
+                    edges={routed}
                     nodeTypes={NODE_TYPES}
                     connectionLineType={ConnectionLineType.SmoothStep}
                     // Positions anchor a node's top centre, so a column of
@@ -116,6 +141,8 @@ export function WorkflowCanvas({
                     fitView
                     fitViewOptions={{ padding: 0.2, maxZoom: 1.1 }}
                     minZoom={0.2}
+                    // Off by default, which draws a selected edge under its neighbours.
+                    elevateEdgesOnSelect
                     nodesDraggable={!readOnly}
                     nodesConnectable={!readOnly}
                     elementsSelectable={!readOnly}

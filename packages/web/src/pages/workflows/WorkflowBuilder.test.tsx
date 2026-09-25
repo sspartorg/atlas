@@ -600,3 +600,41 @@ describe('WorkflowBuilder', () => {
         }
     });
 });
+
+// Tidy up (ATL-175). The fix for a graph nobody can follow is a layout that
+// leaves edges room — but rearranging an Owner's own positions behind their
+// back would be worse than the mess it fixes, so it is one press and one undo.
+describe('Tidy up', () => {
+    /** The fixture is a straight Start → Coder ⇄ Reviewer → End chain. */
+    function messyWorkflow(): IWorkflow {
+        const wf = makeWorkflow();
+        // All four on top of each other: the worst case a drag can produce.
+        for (const n of wf.graph.nodes) n.position = { x: 0, y: 0 };
+        return wf;
+    }
+
+    it('lays the graph out, and puts it back', async () => {
+        const wf = messyWorkflow();
+        mount(wf);
+        const tidy = await screen.findByRole('button', { name: 'Tidy up' });
+
+        await userEvent.click(tidy);
+        // The button becomes its own undo, and the draft is now dirty.
+        expect(await screen.findByRole('button', { name: 'Undo tidy' })).toBeInTheDocument();
+        expect(await screen.findByText('Unsaved changes')).toBeInTheDocument();
+
+        await userEvent.click(screen.getByRole('button', { name: 'Undo tidy' }));
+        expect(await screen.findByRole('button', { name: 'Tidy up' })).toBeInTheDocument();
+        // Back to the saved positions, so nothing is left to save.
+        await waitFor(() => expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument());
+    });
+
+    // It must never run on load: a workflow the Owner has not touched is not
+    // dirty, and would otherwise be nagging them to save a layout they never
+    // asked for.
+    it('does nothing until it is pressed', async () => {
+        mount(messyWorkflow());
+        await screen.findByRole('button', { name: 'Tidy up' });
+        expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+    });
+});
