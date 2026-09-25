@@ -8,10 +8,6 @@ vi.mock('../routes/events.js', () => ({
     broadcastSSE: vi.fn(),
 }));
 
-vi.mock('../services/dry-run.js', () => ({
-    startDryRun: vi.fn().mockResolvedValue({ runId: 'dry-run-1', status: 'queued' }),
-}));
-
 const spawnAgentRunMock = vi.hoisted(() => vi.fn(async () => 'spawned-run-1'));
 vi.mock('../services/agent-runner.js', async (orig) => ({
     ...(await orig<Record<string, unknown>>()),
@@ -483,30 +479,6 @@ describe('POST /api/agents/:id/compile-prompt', () => {
     });
 });
 
-describe('POST /api/agents/:id/dry-run', () => {
-    it('returns 202 with mocked dry-run result for existing agent', async () => {
-        await insertAgent({ id: 'agent-coder' });
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/agents/agent-coder/dry-run',
-            payload: {},
-        });
-        expect(res.statusCode).toBe(202);
-        const body = JSON.parse(res.body) as { runId: string; status: string };
-        expect(body.runId).toBe('dry-run-1');
-        expect(body.status).toBe('queued');
-    });
-
-    it('returns 404 when agent does not exist', async () => {
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/agents/no-such-agent/dry-run',
-            payload: {},
-        });
-        expect(res.statusCode).toBe(404);
-    });
-});
-
 describe('POST /api/agents/:id/prompt-versions/:version/revert', () => {
     it('returns 400 for an invalid (non-integer) version', async () => {
         await insertAgent({ id: 'agent-coder' });
@@ -925,21 +897,6 @@ describe('POST /api/agents/import — valid zip bundle', () => {
         const body = JSON.parse(res.body) as { kind: string; details: { code: string } };
         expect(body.kind).toBe('conflict');
         expect(body.details.code).toBe('SLUG_TAKEN');
-    });
-});
-
-// ── POST /api/agents/:id/dry-run — non-null extra_prompt (line 232 branch) ─
-
-describe('POST /api/agents/:id/dry-run — extra_prompt branch', () => {
-    it('passes extra_prompt string to startDryRun when provided', async () => {
-        await insertAgent({ id: 'agent-dry-extra' });
-        const res = await app.inject({
-            method: 'POST',
-            url: '/api/agents/agent-dry-extra/dry-run',
-            payload: { extra_prompt: 'add context here' },
-        });
-        expect(res.statusCode).toBe(202);
-        // The mock still returns the canned value; just verify 202 is returned.
     });
 });
 

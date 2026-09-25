@@ -454,11 +454,6 @@ export const api = {
             ),
         revertPrompt: (id: string, version: number) =>
             post<IAgent>(`/agents/${id}/prompt-versions/${version}/revert`, {}),
-        startDryRun: (id: string, extra_prompt: string | null) =>
-            post<{ dryRunId: string; model: string; cli: string; promptLen: number }>(
-                `/agents/${id}/dry-run`,
-                { extra_prompt }
-            ),
         compilePrompt: (
             id: string,
             issue_type: IssueType | null,

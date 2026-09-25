@@ -2,13 +2,13 @@ import { test, expect } from '@playwright/test';
 import { goto } from '../helpers/nav.js';
 
 // Tab key → URL param value (from TAB_KEYS in AgentDetail.tsx)
-// "test" is the URL key for the "Test Run" tab.
 const TABS = [
-    { label: 'Overview', key: 'overview' },
-    { label: 'Prompt',   key: 'prompt'   },
-    { label: 'Test Run', key: 'test'     },
-    { label: 'Runs',     key: 'runs'     },
-    { label: 'Memory',   key: 'memory'   },
+    { label: 'Overview',    key: 'overview'    },
+    { label: 'Prompt',      key: 'prompt'      },
+    { label: 'Tests',       key: 'tests'       },
+    { label: 'Performance', key: 'performance' },
+    { label: 'Runs',        key: 'runs'        },
+    { label: 'Memory',      key: 'memory'      },
 ] as const;
 
 /** Navigate to /agents, click the PO Writer card, return the resolved URL. */
@@ -22,7 +22,7 @@ async function gotoPoWriter(page: Parameters<typeof goto>[0]): Promise<string> {
 }
 
 test.describe('/agents/:id tabs', () => {
-    test('all 5 tabs are reachable, selected', async ({ page }) => {
+    test('every tab is reachable, selected', async ({ page }) => {
         const baseUrl = await gotoPoWriter(page);
         // Strip any existing ?tab= so we start from a clean base URL
         const agentUrl = baseUrl.split('?')[0];
@@ -38,21 +38,13 @@ test.describe('/agents/:id tabs', () => {
         }
     });
 
-    test('Test Run tab does not auto-fire a run on mount', async ({ page }) => {
+    test('a stale ?tab=test bookmark lands on Overview', async ({ page }) => {
         const baseUrl = await gotoPoWriter(page);
         const agentUrl = baseUrl.split('?')[0];
 
+        // The Test Run tab was deleted; an old bookmark must not render blank.
         await goto(page, `${agentUrl}?tab=test`);
-
-        // "Run test" button must be present and enabled (idle state).
-        const runBtn = page.getByRole('button', { name: /run test/i });
-        await expect(runBtn).toBeVisible();
-        await expect(runBtn).toBeEnabled();
-
-        // No lines should appear in the terminal panel — it starts empty.
-        // The placeholder text is shown when there is no output yet.
-        await expect(
-            page.getByText(/press "run test" to invoke/i),
-        ).toBeVisible();
+        const overview = page.getByRole('tab').filter({ hasText: 'Overview' }).first();
+        await expect(overview).toHaveAttribute('aria-selected', 'true');
     });
 });

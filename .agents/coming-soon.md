@@ -12,8 +12,6 @@ When a stub is shipped (or removed), delete its row here AND update the page doc
 |---|---|---|---|---|---|
 | **SSH key credential** | `CredentialModal.tsx:415-432` | [`20-credentials`](pages/20-credentials.md) | Kind picker radio (disabled) | Add an SSH key as a credential kind | Backend support for ssh kind |
 | **Prompt formatting toolbar** | `PromptTab.tsx:157-183` | [`16-agent-detail`](pages/16-agent-detail.md) | Toolbar icons not wired | Markdown formatting actions in the prompt editor | Editor library decision |
-| **Save as run (Test Run tab)** | `TestRunTab.tsx:438-439` | [`16-agent-detail`](pages/16-agent-detail.md) | "Save as run" link â†’ toast "Save as run coming soon" | Persist a test run output as a real `agent_runs` row | Run-from-test API |
-| **Test Run â€” full sandboxed prompt** | `TestRunTab.tsx` + `services/dry-run.ts` | [`16-agent-detail`](pages/16-agent-detail.md) | Currently sends only the workspace constitution + a 3-line verification ask via `POST /api/agents/:id/dry-run`. Real CLI launches; output streams; no DB write. | Also ship `agent.prompt_md`, handoff checklist, and a fixture issue context in a sandboxed mode that still skips `agent_runs` insert / status auto-advance / external notification. | Decide sandboxing semantics (separate code path vs. `test` flag on `agent-runner`); fixture-issue picker |
 | **Search → "Create from search"** | `Search.tsx:138-140` (`createType`) | [`14-search`](pages/14-search.md) | Empty state's **Create a Task / Sub-task** button → toast "Create from search is not wired up yet." | One-click create with prefilled fields | New item creation from search |
 
 ---

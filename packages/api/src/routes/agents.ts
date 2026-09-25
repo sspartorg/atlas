@@ -7,7 +7,6 @@ import {
     RoleNotInCatalogError,
 } from '../services/agents.js';
 import { agentMemoryService } from '../services/agent-memory.js';
-import { startDryRun } from '../services/dry-run.js';
 import { compilePromptFor } from '../services/compile-prompt.js';
 import {
     marketplaceService,
@@ -290,19 +289,6 @@ export async function agentsRoutes(app: FastifyInstance) {
         } catch (err) {
             return reply.status(404).send({ error: (err as Error).message });
         }
-    });
-
-    app.post('/api/agents/:id/dry-run', async (req, reply) => {
-        const { id } = req.params as { id: string };
-        const agent = await agentsService.get(id);
-        if (!agent) return reply.status(404).send({ error: 'Agent not found' });
-
-        /* v8 ignore next */
-        const body = (req.body ?? {}) as { extra_prompt?: string | null };
-        const extra = typeof body.extra_prompt === 'string' ? body.extra_prompt : null;
-
-        const result = await startDryRun(agent, extra);
-        return reply.status(202).send(result);
     });
 
     // ── Agent tests (ADR 0023) ─────────────────────────────────────────────

@@ -31,14 +31,14 @@ test('flow: Tasks list → Task detail → Sub-task detail', async ({ page }) =>
     await expect(page.getByText('E2E seeded sub-task').first()).toBeVisible();
 });
 
-test('flow: Agents list renders + all 5 tabs visible on detail page', async ({ page }) => {
+test('flow: Agents list renders + every tab visible on detail page', async ({ page }) => {
     await goto(page, '/agents');
     await expect(page.getByRole('heading', { name: /Agents/i }).first()).toBeVisible();
 
     // The seed installs PO Writer via marketplace.install — navigate to its
-    // detail page and verify the 5 tab cluster renders.
+    // detail page and verify the tab cluster renders.
     await goto(page, '/agents/agent-po-writer');
-    const tabs = ['Overview', 'Prompt', 'Test Run', 'Runs', 'Memory'];
+    const tabs = ['Overview', 'Prompt', 'Tests', 'Performance', 'Runs', 'Memory'];
     for (const label of tabs) {
         await expect(page.getByRole('tab', { name: new RegExp(label) })).toBeVisible({
             timeout: 10_000,

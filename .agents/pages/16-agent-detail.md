@@ -3,7 +3,7 @@
 **Route:** `/agents/:id` • **Component:** `packages/web/src/pages/AgentDetail.tsx` • **Slug:** `agents`
 
 ## Purpose
-Edit an agent's configuration, prompt, quality checklist, procedural memory, and inspect its runs and a test-run sandbox. 5 tabs via `?tab=` query param. Schedules, handoff rules, round caps and git-delivery flags moved to workflows (ADR 0014) — agents no longer carry them. Per-agent Allowed Tools picker was removed by B14 (`d3cc9bf`) — spawned CLIs inherit Owner's user-level MCP config; the constitution carries `FORBIDDEN_TOOLS_SECTION` as the safety net.
+Edit an agent's configuration, prompt, quality checklist, procedural memory, and inspect its tests, measured performance and runs. 6 tabs via `?tab=` query param. Schedules, handoff rules, round caps and git-delivery flags moved to workflows (ADR 0014) — agents no longer carry them. Per-agent Allowed Tools picker was removed by B14 (`d3cc9bf`) — spawned CLIs inherit Owner's user-level MCP config; the constitution carries `FORBIDDEN_TOOLS_SECTION` as the safety net.
 
 ## States
 - **Loading**: centered spinner
@@ -22,13 +22,12 @@ Edit an agent's configuration, prompt, quality checklist, procedural memory, and
 - `AgentCardMenu` (more actions) — Duplicate (opens modal), Delete (mutation)
 
 ## Why these affordances exist
-- **5 tabs (Overview / Prompt / Test Run / Runs / Memory)** — Each tab is a distinct authoring lifecycle (config vs. prompt vs. validation vs. observability vs. self-corrections); tabs let each own its full width. The Handoffs tab was removed by ADR 0014; routing lives in the workflow graph.
+- **6 tabs (Overview / Prompt / Tests / Performance / Runs / Memory)** — Each tab is a distinct authoring lifecycle (config vs. prompt vs. qualification vs. measurement vs. observability vs. self-corrections); tabs let each own its full width. The Handoffs tab was removed by ADR 0014; routing lives in the workflow graph. The Test Run tab was removed with the agent-qualification work: it fired an ad-hoc CLI ping and kept nothing, which is the gap the Tests tab exists to close.
 - **Memory tab** — Procedural memory captures "what went wrong last time" without polluting the prompt body. Splitting it out means the Owner can correct a regression in seconds (edit one paragraph in memory.md) instead of bumping the prompt version. Server-side storage means the corrections survive across machines, unlike the localStorage-only prompt history.
 - **Run now dialog** — Starts a no-item run straight from the agent page; the success navigation drops directly into the run detail. The dialog's **Preview prompt** sibling answers "what is the agent actually being told?" without burning a real run — the same `buildPrompt()` call the runner makes, rendered + downloadable as `.md`.
 - **Pause/Resume in hero** — Pausing without leaving the page prevents wasted runs while the prompt is being re-drafted.
 - **Prompt version history** — Prompt edits regress agent behavior often; a localStorage trail is the cheapest "undo" pathway, with "Make active" for one-click revert.
 - **Quality checklist** — The agent reports each check in its `atlas-outcome`; a failed required check sends the work down the workflow's fail edge, so the Owner decides what failure means before runs hit it.
-- **Test Run tab** — Validates the CLI wiring (binary on PATH, credentials valid, model accepted, output streams) before any real issue is queued. Sends a one-line ping ("reply with the single word OK") to the configured CLI + model; the verdict line ("[test] connection ok · 2.3s") is composed server-side. The constitution and any agent prompt are deliberately NOT included — this is a connection test, not a prompt-assembly smoke test.
 
 ## Marketplace upgrade banner
 
@@ -61,11 +60,11 @@ Tab switching is plain `useTabParam(tabSlug)`. (The legacy `LinearProgress` mid-
 
 ### Tests (`TestsTabContent`) — ADR 0023 phase 1
 
-**Not the same thing as Test Run.** Test Run fires an ad-hoc prompt and keeps nothing; a test owns a realistic input item, asserts something about the outcome, and keeps its history.
+**A test is not a monitored run.** It owns a realistic input item, asserts something about the outcome, and keeps its history — which is why the ad-hoc Test Run tab that kept nothing was deleted rather than kept alongside it.
 
-**Why a test carries an item rather than a prompt.** PO Writer refuses anything that is not a Task (its kind guard), Coder needs a sub-task with a repo and a spec, Release Reviewer needs a whole branch. A bare prompt cannot exercise any of them — which is why Test Run has never been usable as a test.
+**Why a test carries an item rather than a prompt.** PO Writer refuses anything that is not a Task (its kind guard), Coder needs a sub-task with a repo and a spec, Release Reviewer needs a whole branch. A bare prompt cannot exercise any of them.
 
-- **Tests this agent ships with** — the catalog bundle's `tests.json` (`GET /api/agents/:id/starter-tests`), each with what it catches. **Add** prefills the create form rather than creating blind, because a test needs a project to make its throwaway item in and a repo for the agent to work in, neither of which a bundle can know. Every assertion the shipped test made is carried across, not just the outcome the form can show. The strip disappears once all of them have been adopted.
+- **Ships with this agent** — the catalog bundle's `tests.json` (`GET /api/agents/:id/starter-tests`). Each row names what it **asserts** (`ends asked_question · under $1.50`, from `expectationSummary`), with the bundle's `notes` as the hover title: a caption is not the place for a paragraph. **Add** prefills the create form rather than creating blind, because a test needs a project to make its throwaway item in and a repo for the agent to work in, neither of which a bundle can know. Every assertion the shipped test made is carried across, not just the outcome the form can show. The strip disappears once all of them have been adopted.
 - **New test** → `POST /api/agents/:id/tests`: a name, an item template (`issue_type`, title, description, acceptance criteria, labels), a project, a repo (the picker only appears when the project has more than one), and expectations.
 - **Expectations**: outcome kind (`done` / `rejected` / `asked_question`), every required checklist row passed, summary contains / omits given text, cost and duration ceilings. `asked_question` is a **passing** expectation, not a fallback — an agent that asks rather than inventing a feature from an unanswerable Task has succeeded.
 - **Run** → `POST /api/agent-tests/:testId/run` (202), with a **Runs** selector (1 / 3× / 5× / 10×). Each sample materialises a **fresh throwaway item** from the template — a test pointing at a live item gives a different answer whenever the repo moves under it, and a second dispatch against an item the first already changed measures something else. Items are flagged `is_test` (migration 016), so they never reach the Task list, search, the queue, counts, label facets or analytics, and they go when the test does.
@@ -78,15 +77,12 @@ Tab switching is plain `useTabParam(tabSlug)`. (The legacy `LinearProgress` mid-
 
 What this agent's runs already prove. 515 `agent_runs` rows have carried cli, model, effort, token counts, cost and outcome since ADR 0014 — snapshotted explicitly so configurations could be compared — and until now the only reader was a CLI writing markdown into a gitignored directory.
 
-- **How its first attempts went** — `applied` / `sent back` / `asked you`, as one bar with counts. **No pass rate appears anywhere on this page.** `agent-release-reviewer` scored 64% on the v4 set because it rejected four times, and those rejections were the run's most valuable output; a page that ranked on that number would recommend culling the best reviewer in the fleet. A rejection is never drawn in the error colour.
+- **First attempt** — `applied` / `sent back` / `asked you`, as one bar with counts. **No pass rate appears anywhere on this page.** `agent-release-reviewer` scored 64% on the v4 set because it rejected four times, and those rejections were the run's most valuable output; a page that ranked on that number would recommend culling the best reviewer in the fleet. A rejection is never drawn in the error colour.
 - Beside it: **steps**, **loops** (dispatches beyond the first on the same step), and **gate catches** — the one quality signal an agent cannot author about itself (ADR 0020).
 - **Cost** (total, per step, cache hit) and **Latency** (median, p95, time to first token).
-- **What it reaches for** — the tool profile from migration 017 traces, always with the denominator stated (`From 1 of 24 runs`), because a percentage over an unstated one is the dishonest kind of number. Says so plainly when no run has a trace.
-- **Measured at** — per `(model, effort)` slice, so a config change reads as a break in the series rather than a smear across it (ATL-140's fourth criterion).
+- **Tools** — the tool profile from migration 017 traces, always with the denominator stated (`From 1 of 24 runs`), because a percentage over an unstated one is the dishonest kind of number. Says so plainly when no run has a trace.
+- **By model** — per `(model, effort)` slice, so a config change reads as a break in the series rather than a smear across it (ATL-140's fourth criterion).
 - Ad-hoc runs and agent test runs are **not** counted: a step is a position in a workflow graph and neither has one. Test quality lives on the Tests tab.
-
-### Test Run (`TestRunTab`)
-Live CLI connection test, not a real `agent_runs` row. **Run test** → `POST /api/agents/:id/dry-run` (route name kept for back-compat) with the optional extra-prompt line; the API spawns the agent's configured CLI (`agent.cli`) with `--print --model {agent.model}` and pipes a one-line ping prompt via stdin (`"Reply with the single word OK and nothing else."`). stdout/stderr stream into the dark terminal panel via the `dry_run_*` SSE events (filtered by `dryRunId`). On close the server emits a verdict line `[test] connection ok · 2.3s` (or `connection failed · exit=N · 2.3s`) as the final event output; the UI prints it in green/orange. **Stop** closes the SSE locally (server may still finish). **Copy log** copies the timestamped output. No DB writes, no constitution, no agent prompt, no MCP, no issue context — this only verifies the CLI binary, credentials, and model can complete an LLM round-trip.
 
 ### Runs (`RunsTab`)
 No-runs hero with **Run now**. Recent 50 runs table (status / issue id / relative time / run id). Rows are clickable — they navigate to `/agents/:id/runs/:runId` for the full run detail (log viewer + Re-run / Copy log / Download log).
@@ -125,7 +121,6 @@ Procedural-memory editor backed by the `agent_memory` table.
 - `GET /api/run?agent_id=…`, `POST /api/run` (Run now dialog)
 - `GET /api/cli/availability` (CLI not-installed warnings)
 - `POST /api/agents/:id/compile-prompt` (Run now dialog — Preview prompt button)
-- `POST /api/agents/:id/dry-run` (Test Run tab — live CLI smoke-test)
 - `GET /api/agents/:id/tests`, `POST /api/agents/:id/tests` (Tests tab)
 - `GET /api/agents/:id/performance` (Performance tab)
 - `GET /api/agents/:id/cost-estimate` (Tests tab — spend before the click)
@@ -137,8 +132,6 @@ Procedural-memory editor backed by the `agent_memory` table.
 
 ## Edge cases / quirks
 - Prompt version history is **localStorage only** today; reloading on a different machine loses history.
-- Test Run **does** exercise the real CLI now (via `POST /api/agents/:id/dry-run`), but it deliberately ships **only** the workspace constitution + verification ask — no agent prompt, no MCP, no issue context. So a successful dry-run proves "CLI + model + guardrails fetch wired correctly", not "this agent will produce useful output on a Task".
-- Test Run **never** writes to `agent_runs`. Closing the panel / navigating away does not abort the server-side CLI process — only the client SSE stream stops.
 - Description save is local-only.
 
 ## Connectivity
@@ -147,4 +140,4 @@ Procedural-memory editor backed by the `agent_memory` table.
 - **Entities**: `agent`, `agent_checklist_item`, `agent_run`, `cli_model`.
 
 ## Coming soon on this page
-- Save as run, formatting toolbar wiring — see [coming-soon.md](../coming-soon.md). (Test Run real execution shipped 2026-05-18 as a guardrails-only smoke-test — full prompt in sandboxed mode still pending.)
+- Save as run, formatting toolbar wiring — see [coming-soon.md](../coming-soon.md).
