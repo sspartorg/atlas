@@ -325,6 +325,71 @@ describe('workflow templates', () => {
 // shipped against `version: 1` bundles and reached nobody. It surfaced only
 // because a golden-set run was about to measure the old prompts and report
 // them as the new ones.
+// ── Starter tests (ADR 0023 phase 4) ─────────────────────────────────────
+//
+// A customer installing an agent from the marketplace does it on trust. These
+// are what make "does this work?" something they can press on day one — so
+// what ships has to be worth pressing.
+
+describe('starter tests', () => {
+    for (const { manifest, tests } of catalog) {
+        if (tests.length === 0) continue;
+        describe(manifest.id, () => {
+            it('gives every test an id, a name and something to act on', () => {
+                for (const t of tests) {
+                    expect(t.id, `${manifest.id}: every test needs an id`).toMatch(/^[a-z0-9-]+$/);
+                    expect(t.name.length, `${t.id}: needs a name`).toBeGreaterThan(0);
+                    expect(t.item_template.title.length, `${t.id}: needs an item to act on`).toBeGreaterThan(0);
+                    expect(['task', 'sub_task']).toContain(t.item_template.issue_type);
+                }
+            });
+
+            it('has unique ids', () => {
+                expect(new Set(tests.map((t) => t.id)).size).toBe(tests.length);
+            });
+
+            // A test that asserts nothing passes vacuously — the shape of
+            // campaign finding F-012, one level up.
+            it('asserts at least one thing per test', () => {
+                for (const t of tests) {
+                    expect(Object.keys(t.expectations).length, `${t.id} asserts nothing`).toBeGreaterThan(0);
+                }
+            });
+
+            // One run of an agent is cents, but a shipped test that can run
+            // away is not shippable: the Owner pressed a button, not a blank
+            // cheque.
+            it('puts a cost ceiling on every test', () => {
+                for (const t of tests) {
+                    expect(t.expectations['max_cost_usd'], `${t.id} has no max_cost_usd`).toBeTypeOf('number');
+                }
+            });
+
+            // What a starter test catches is the part that teaches. Without
+            // it a red verdict is a puzzle rather than a finding.
+            it('says what each test catches', () => {
+                for (const t of tests) {
+                    expect(t.notes.length, `${t.id} does not say what it catches`).toBeGreaterThan(40);
+                }
+            });
+        });
+    }
+
+    // ADR 0023: "`asked_question` as a pass matters as much as `done`." A
+    // starter set that can only express success cannot say that an agent
+    // which asked rather than inventing a feature has SUCCEEDED — which is
+    // the single most valuable thing these tests exist to check.
+    it('ships at least one test where asking or refusing is the pass', () => {
+        const kinds = catalog.flatMap((e) => e.tests.map((t) => t.expectations['outcome_kind']));
+        expect(kinds).toContain('asked_question');
+    });
+
+    it('ships tests for a meaningful part of the fleet', () => {
+        const withTests = catalog.filter((e) => e.tests.length > 0);
+        expect(withTests.length).toBeGreaterThanOrEqual(8);
+    });
+});
+
 describe('catalog lock', () => {
     const onDisk = catalogLockEntries();
     const locked = readCatalogLock();

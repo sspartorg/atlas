@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 
 const CATALOG_DIR = join(dirname(fileURLToPath(import.meta.url)), 'catalog');
 /** The files a customer actually receives. */
-const BUNDLE_FILES = ['manifest.json', 'prompt.md', 'memory.md', 'checklists.json'] as const;
+const BUNDLE_FILES = ['manifest.json', 'prompt.md', 'memory.md', 'checklists.json', 'tests.json'] as const;
 
 export interface ICatalogLockEntry {
     version: number;
@@ -38,11 +38,17 @@ export interface ICatalogLockEntry {
 function bundleHash(dir: string): string {
     const h = createHash('sha256');
     for (const file of BUNDLE_FILES) {
-        let body = '';
+        let body: string;
         try {
             body = readFileSync(join(dir, file), 'utf8');
         } catch {
-            body = ''; // memory.md is optional in a bundle
+            // An absent optional file contributes NOTHING, rather than an
+            // empty body. It used to feed `name + '' ` into the hash, which
+            // meant adding a new optional file to this list changed the hash
+            // of every bundle that did not have one — 24 version bumps to
+            // ship a file 8 bundles carry. All four original files exist in
+            // every bundle, so this leaves their hashes byte-identical.
+            continue;
         }
         if (file === 'manifest.json') {
             const { version: _version, ...rest } = JSON.parse(body) as Record<string, unknown>;

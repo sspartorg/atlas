@@ -39,12 +39,41 @@ interface CatalogEntryChecklist {
     required: boolean;
 }
 
+/**
+ * A test an agent ships with (ADR 0023 phase 4).
+ *
+ * A **template**, not a row. `agent_tests.project_id` is NOT NULL and
+ * `repo_id` references `project_repos`; a catalog bundle has neither, and
+ * `marketplaceService.install` never sees a project — so there is no valid
+ * `agent_tests` row to insert at install time. Shipping templates is also the
+ * better answer: the Owner's adopted copy is theirs and a bundle upgrade can
+ * never clobber it.
+ */
+interface CatalogEntryStarterTest {
+    id: string;
+    name: string;
+    item_template: {
+        issue_type: 'task' | 'sub_task';
+        title: string;
+        description?: string;
+        acceptance_criteria?: string;
+        labels?: string[];
+    };
+    expectations: Record<string, unknown>;
+    /** Whether adopting it has to name a repo. */
+    needs_repo: boolean;
+    /** What this test catches. The part that makes a starter test teach. */
+    notes: string;
+}
+
 export interface CatalogEntry {
     manifest: IAgentBundleManifest;
     prompt_md: string;
     memory_md: string;
     checklists: CatalogEntryChecklist[];
-    /** Hash over a canonical JSON projection of all four files. Used to
+    /** ADR 0023 phase 4 — the tests this agent ships with. */
+    tests: CatalogEntryStarterTest[];
+    /** Hash over a canonical JSON projection of every bundle file. Used to
      *  decide whether to bump marketplace_agents.version on re-seed. */
     content_hash: string;
 }
@@ -68,6 +97,7 @@ function hashEntry(parts: {
     prompt_md: string;
     memory_md: string;
     checklists: CatalogEntryChecklist[];
+    tests: CatalogEntryStarterTest[];
 }): string {
     // Canonical projection excludes the version field so that the FIRST
     // bump can only happen via an actual content change. Sort checklists
@@ -80,6 +110,10 @@ function hashEntry(parts: {
         prompt_md: parts.prompt_md,
         memory_md: parts.memory_md,
         checklists: sortedChecklists,
+        // In the projection AND in `catalog-lock.ts`'s BUNDLE_FILES, or the
+        // loader's `content_hash` and the lock's `bundleHash` would disagree
+        // about what a bundle is.
+        tests: [...parts.tests].sort((a, b) => a.id.localeCompare(b.id)),
     });
     return createHash('sha256').update(canonical).digest('hex');
 }
@@ -101,8 +135,14 @@ export function loadCatalog(root: string = CATALOG_ROOT): CatalogEntry[] {
         const checklists = existsSync(join(dir, 'checklists.json'))
             ? readJson<CatalogEntryChecklist[]>(join(dir, 'checklists.json'))
             : [];
-        const content_hash = hashEntry({ manifest, prompt_md, memory_md, checklists });
-        entries.push({ manifest, prompt_md, memory_md, checklists, content_hash });
+        // ADR 0023 phase 4 — the tests an agent ships with. A customer
+        // installing from the marketplace does it on trust; these are what
+        // turn "does this work?" into something they can press.
+        const tests = existsSync(join(dir, 'tests.json'))
+            ? readJson<CatalogEntryStarterTest[]>(join(dir, 'tests.json'))
+            : [];
+        const content_hash = hashEntry({ manifest, prompt_md, memory_md, checklists, tests });
+        entries.push({ manifest, prompt_md, memory_md, checklists, tests, content_hash });
     }
 
     entries.sort((a, b) => a.manifest.sort_order - b.manifest.sort_order);

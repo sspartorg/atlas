@@ -18,6 +18,7 @@ interface MountOpts {
     runs?: Array<Record<string, unknown>>;
     batches?: unknown[];
     estimate?: Record<string, unknown>;
+    starters?: unknown[];
     repos?: unknown[];
     onWrite?: (kind: string, payload: unknown) => void;
 }
@@ -54,7 +55,7 @@ function aBatch(samples: Array<Record<string, unknown>>, over: Record<string, un
     };
 }
 
-function mount({ tests = [], runs, batches, estimate, repos = [], onWrite }: MountOpts = {}) {
+function mount({ tests = [], runs, batches, estimate, starters = [], repos = [], onWrite }: MountOpts = {}) {
     const history = batches ?? (runs ? [aBatch(runs)] : []);
     server.use(
         http.post(`${BASE}/agents/agent-coder/tests`, async ({ request }) => {
@@ -83,6 +84,7 @@ function mount({ tests = [], runs, batches, estimate, repos = [], onWrite }: Mou
             });
         }),
         http.get(`${BASE}/agent-tests/:id/batches`, () => HttpResponse.json(history)),
+        http.get(`${BASE}/agents/agent-coder/starter-tests`, () => HttpResponse.json(starters)),
         http.get(`${BASE}/projects`, () => HttpResponse.json([{ id: 'p1', name: 'Sandbox' }])),
         http.get(`${BASE}/projects/:id/repos`, () => HttpResponse.json(repos)),
     );
@@ -201,6 +203,61 @@ describe('TestsTabContent', () => {
             // Twice over: once as the card's headline, once in the batch block.
             await waitFor(() => expect(screen.getAllByText('could not run')).toHaveLength(2));
             expect(screen.queryByText('failed')).not.toBeInTheDocument();
+        });
+    });
+
+    // "I don't see already pre-built tests for agent to evaluate work" — a
+    // customer installing an agent from the marketplace does it on trust, and
+    // these are what make "does this work?" pressable on day one.
+    describe('tests the agent ships with', () => {
+        const starter = {
+            id: 'refuses-a-sub-task',
+            name: 'Refuses work that is not a Task',
+            item_template: { issue_type: 'sub_task', title: 'Add a spinner' },
+            expectations: { outcome_kind: 'asked_question', tools_forbidden: ['Edit'], max_cost_usd: 0.6 },
+            needs_repo: false,
+            notes: "PO Writer's kind guard. A `done` here means the guard is gone.",
+        };
+
+        it('lists them with what each one catches', async () => {
+            mount({ starters: [starter] });
+            expect(await screen.findByText('Tests this agent ships with')).toBeInTheDocument();
+            expect(screen.getByText(/kind guard/)).toBeInTheDocument();
+        });
+
+        // A permanent strip of things you have already done is noise.
+        it('stops offering one that has already been added', async () => {
+            mount({ starters: [starter], tests: [aTest({ name: starter.name })] });
+            await screen.findByText(starter.name);
+            expect(screen.queryByText('Tests this agent ships with')).not.toBeInTheDocument();
+        });
+
+        // Through the form, not a one-click create: a test needs a project to
+        // make its throwaway item in, which a catalog bundle cannot know.
+        it('prefills the form rather than creating it blind', async () => {
+            mount({ starters: [starter] });
+            await userEvent.click(await screen.findByRole('button', { name: 'Add' }));
+            expect(screen.getByLabelText('Test name')).toHaveValue(starter.name);
+            expect(screen.getByLabelText('Item title')).toHaveValue('Add a spinner');
+            expect(screen.getByRole('button', { name: 'Create test' })).toBeDisabled();
+        });
+
+        // The form can only show the outcome. Dropping the rest on adoption
+        // would make the adopted copy weaker than the one it came from.
+        it('keeps every assertion the shipped test made, not just the outcome', async () => {
+            const writes: Array<[string, unknown]> = [];
+            mount({ starters: [starter], onWrite: (k, p) => writes.push([k, p]) });
+            await userEvent.click(await screen.findByRole('button', { name: 'Add' }));
+            await userEvent.click(screen.getByLabelText('Project'));
+            await userEvent.click(await screen.findByRole('option', { name: 'Sandbox' }));
+            await userEvent.click(screen.getByRole('button', { name: 'Create test' }));
+
+            await waitFor(() => expect(writes).toHaveLength(1));
+            expect((writes[0]?.[1] as { expectations: unknown }).expectations).toEqual({
+                outcome_kind: 'asked_question',
+                tools_forbidden: ['Edit'],
+                max_cost_usd: 0.6,
+            });
         });
     });
 

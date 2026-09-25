@@ -1,0 +1,19 @@
+[
+  {
+    "id": "plans-without-claiming-a-pass",
+    "name": "Plans tests without claiming they pass",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "[QA] Cover the health endpoint",
+      "description": "Plan the scenarios that prove the endpoint behaves.",
+      "acceptance_criteria": "Given the endpoint exists, when it is called, then it returns 200 with a body.",
+      "labels": ["qa"]
+    },
+    "expectations": {
+      "summary_omits": ["all tests pass", "tests are green"],
+      "max_cost_usd": 2.0
+    },
+    "needs_repo": true,
+    "notes": "The golden set found this one: QA Writer PLANS tests, `agent-automation` runs them. It once parked rather than tick a checklist row claiming a pass it had not observed, and it was right to. This holds that line."
+  }
+]

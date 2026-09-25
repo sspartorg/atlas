@@ -8,8 +8,8 @@
     "hash": "c2a9f78d4a4f0924"
   },
   "agent-architect": {
-    "version": 2,
-    "hash": "f8b13a392ebb5975"
+    "version": 3,
+    "hash": "ae10a92035a8c111"
   },
   "agent-architect-reviewer": {
     "version": 1,
@@ -24,12 +24,12 @@
     "hash": "39747032cecf09a5"
   },
   "agent-code-reviewer": {
-    "version": 2,
-    "hash": "c86d14a5dbe4b9bc"
+    "version": 3,
+    "hash": "bd816113840b84f6"
   },
   "agent-coder": {
-    "version": 2,
-    "hash": "8e703cc338515d2d"
+    "version": 3,
+    "hash": "f075ae809e0e5a19"
   },
   "agent-coverage-fixer": {
     "version": 2,
@@ -40,16 +40,16 @@
     "hash": "a06ea1e744460147"
   },
   "agent-doc-writer": {
-    "version": 1,
-    "hash": "b48498dc3b1e2f98"
+    "version": 2,
+    "hash": "8840d933e797c3bd"
   },
   "agent-fix-reviewer": {
     "version": 1,
     "hash": "e8f2edcedac809e0"
   },
   "agent-hygiene-fixer": {
-    "version": 2,
-    "hash": "5c928395c315938a"
+    "version": 3,
+    "hash": "488bad0d502f3609"
   },
   "agent-jira-to-epic": {
     "version": 2,
@@ -72,24 +72,24 @@
     "hash": "70c5f43bf26582f3"
   },
   "agent-po-writer": {
-    "version": 2,
-    "hash": "6b5c50ab513afe19"
+    "version": 3,
+    "hash": "b275354c89ee3b25"
   },
   "agent-qa-reviewer": {
     "version": 1,
     "hash": "5fc9f0ea8ef74f6b"
   },
   "agent-qa-writer": {
-    "version": 2,
-    "hash": "d6a56505e5936070"
+    "version": 3,
+    "hash": "d498dfd606dd198c"
   },
   "agent-regulations": {
     "version": 2,
     "hash": "d4bf3f6d48979a34"
   },
   "agent-release-reviewer": {
-    "version": 2,
-    "hash": "40f5b6886ccf38dd"
+    "version": 3,
+    "hash": "f0c88d3295fae2a8"
   },
   "agent-visual-reviewer": {
     "version": 2,

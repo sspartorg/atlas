@@ -1,0 +1,18 @@
+[
+  {
+    "id": "asks-without-sub-tasks",
+    "name": "Asks when there is nothing to spec",
+    "item_template": {
+      "issue_type": "task",
+      "title": "Spec the work",
+      "description": "",
+      "acceptance_criteria": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "max_cost_usd": 1.5
+    },
+    "needs_repo": true,
+    "notes": "A spec with no sub-tasks to spec is a document about nothing. Asking is cheaper than writing one and finding out at the Coder."
+  }
+]

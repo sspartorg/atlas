@@ -1,0 +1,18 @@
+[
+  {
+    "id": "reviews-without-editing",
+    "name": "Reviews without editing the code",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "Review the sub-task's implementation",
+      "description": "Check the change against its acceptance criteria.",
+      "acceptance_criteria": "Given a diff, when it is reviewed, then each gap is named with a path and line."
+    },
+    "expectations": {
+      "tools_forbidden": ["Edit", "Write"],
+      "max_cost_usd": 2.0
+    },
+    "needs_repo": true,
+    "notes": "The same trap as the Release Reviewer, one level down. A reviewer with Edit in its transcript has stopped being a reviewer."
+  }
+]

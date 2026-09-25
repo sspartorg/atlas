@@ -439,6 +439,16 @@ Table `run_gate_results`: `id, workflow_run_id (FK → workflow_runs, ON DELETE 
 - Deleting a test deletes the items its runs made (`agentTestsService.remove`): `agent_test_runs.item_id` is `ON DELETE SET NULL`, so the cascade would otherwise leave them behind with nothing pointing at them.
 - **Ceiling**: a test item still consumes the project issue counter, so the `ATL-nnn` sequence has gaps. Cosmetic once the rows are invisible; a separate namespace would mean a second allocation path against `items.id` as an FK target in a dozen tables.
 
+### Starter tests (ADR 0023 phase 4, no migration)
+
+**Why there is no table.** `agent_tests.project_id` is NOT NULL and `repo_id` references `project_repos`; a catalog bundle has neither, and `marketplaceService.install` never sees a project — so there is no valid row to insert at install time. Relaxing `project_id` would mean shipping tests that cannot be run, displayed as if they could.
+
+So an agent's tests ship as `catalog/agent-*/tests.json`, read from disk by `loadCatalog()` and adopted through the ordinary create form. `tests.json` is in `catalog-lock.ts`'s `BUNDLE_FILES` and in the loader's `hashEntry` projection — **both, or the loader's `content_hash` and the lock's `bundleHash` disagree about what a bundle is** — so editing a shipped test without bumping its version fails the lock test.
+
+- `bundleHash` now **skips a file that is absent** rather than feeding an empty body into the digest. The old behaviour meant adding any new optional file to `BUNDLE_FILES` changed the hash of every bundle that did not have one: 24 version bumps to ship a file 8 bundles carry. All four original files exist in every bundle, so their hashes are unchanged by this.
+- Adoption writes an ordinary `agent_tests` row. It is then the Owner's, and a bundle upgrade never touches it — which is why "what happens to a customer's edited copy on upgrade" is not a question this design has to answer.
+- Contract-tested per bundle (unique ids, ≥1 expectation, a `max_cost_usd` ceiling, notes that say what it catches) and fleet-wide: **at least one shipped test must make `asked_question` the pass.** A starter set that can only express success cannot say that an agent which asked rather than inventing a feature has succeeded, which is the most valuable thing these tests check.
+
 ### IAgentTest / IAgentTestRun (ADR 0023 phase 1, migration 014)
 **Why these entities exist**: Atlas ships a fleet of agents and lets customers install more, edit them and write their own, and had no way for anyone to find out whether one works. The measurement that existed was `evals/` — fixtures in the repo, a CLI runner, a CLI scorer, a gitignored markdown file — all of it local and none of it reachable by a customer.
 

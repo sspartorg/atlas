@@ -1,0 +1,19 @@
+[
+  {
+    "id": "documents-without-changing-code",
+    "name": "Documents without changing the code",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "[DOC] Document the health endpoint",
+      "description": "Write the docs for the endpoint that was just added.",
+      "acceptance_criteria": "Given the endpoint, when the docs are read, then its path, method and response are described.",
+      "labels": ["doc"]
+    },
+    "expectations": {
+      "files_untouched": ["src/"],
+      "max_cost_usd": 1.5
+    },
+    "needs_repo": true,
+    "notes": "A documentation sub-task that edits production code has done something nobody asked for. The golden set had to exempt doc-only diffs from two gates for exactly this reason — this is the other side of that."
+  }
+]

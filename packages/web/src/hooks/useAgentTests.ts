@@ -89,3 +89,12 @@ export function useAgentPerformance(agentId: string) {
         enabled: Boolean(agentId),
     });
 }
+
+/** ADR 0023 phase 4 — the tests this agent ships with, as templates. */
+export function useStarterTests(agentId: string) {
+    return useQuery({
+        queryKey: ['agent-starter-tests', agentId],
+        queryFn: () => api.agentTests.starter(agentId),
+        enabled: Boolean(agentId),
+    });
+}

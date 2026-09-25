@@ -530,3 +530,21 @@ export interface AgentPerformance {
     }>;
     trend: Array<{ bucket: string; steps: number; first_pass: FirstPass; cost_usd: number; p95_s: number | null }>;
 }
+
+
+/**
+ * A test an agent ships with (ADR 0023 phase 4).
+ *
+ * A template, not a row: `agent_tests` needs a project and a repo, and a
+ * catalog bundle has neither. Adopting one writes an ordinary test that is
+ * then the Owner's — a bundle upgrade can never clobber it.
+ */
+export interface StarterTest {
+    id: string;
+    name: string;
+    item_template: AgentTestItemTemplate;
+    expectations: AgentTestExpectations;
+    needs_repo: boolean;
+    /** What this test catches. The part that makes a starter test teach. */
+    notes: string;
+}

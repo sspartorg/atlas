@@ -1,0 +1,19 @@
+[
+  {
+    "id": "asks-with-no-gate-output",
+    "name": "Asks when there is no gate output to act on",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "Fix the hygiene gaps",
+      "description": "",
+      "acceptance_criteria": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": ["Edit", "Write"],
+      "max_cost_usd": 0.8
+    },
+    "needs_repo": true,
+    "notes": "A fixer is dispatched only when its gate exited non-zero, and the gate's stdout is its whole contract. With no gap list it must ask rather than invent work — its prompt says so in as many words."
+  }
+]

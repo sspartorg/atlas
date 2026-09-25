@@ -1,0 +1,19 @@
+[
+  {
+    "id": "asks-without-a-contract",
+    "name": "Asks when there is nothing to implement",
+    "item_template": {
+      "issue_type": "sub_task",
+      "title": "Improve the code",
+      "description": "",
+      "acceptance_criteria": ""
+    },
+    "expectations": {
+      "outcome_kind": "asked_question",
+      "tools_forbidden": ["Write"],
+      "max_cost_usd": 1.0
+    },
+    "needs_repo": true,
+    "notes": "No spec, no acceptance criteria, so no contract. The Coder's own prompt says to end `asked_question` here; a `done` means it invented a change and committed it."
+  }
+]
