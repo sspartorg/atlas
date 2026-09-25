@@ -76,6 +76,23 @@ describe.skipIf(!pwsh)('PowerShell guardrail bodies, executed', () => {
         });
     });
 
+    describe('architect-spec-md', () => {
+        // The one script here whose PowerShell half does real parsing: it
+        // walks `specs/**` and checks six headers. Verified against
+        // PowerShell 7.4 before it was written down.
+        it('names every section a partial spec is missing', () => {
+            const dir = repoWith({
+                'specs/1-thing/spec.md': '# Spec\n\n## Feasibility\nok\n',
+            });
+            const r = runGate('architect-spec-md', dir);
+            expect(r.code).toBe(1);
+            expect(r.out).toContain('missing section: ## Test scenarios');
+            // The one it HAS must not be reported, or the check is just a
+            // list of every header it knows about.
+            expect(r.out).not.toContain('missing section: ## Feasibility');
+        });
+    });
+
     describe('prereqs', () => {
         // A dirty worktree is the one state every later script misreads: the
         // diff it inspects is not the diff that will be pushed.
