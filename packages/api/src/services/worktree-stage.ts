@@ -37,7 +37,6 @@ import { assembleConstitution } from './constitution-assembler.js';
 import { assembleTemplates } from './templates-assembler.js';
 import { assembleCommands } from './commands-assembler.js';
 import { writeChangedFiles } from './changed-files.js';
-import { assembleProbes } from './probes-assembler.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeCurrentTask } from './current-task-writer.js';
@@ -117,10 +116,6 @@ export async function stageCliWorktree(
     // with a few hundred tokens. Best-effort — a repo with no remote stages
     // nothing and the agent explores as before.
     await writeChangedFiles(opts.worktreePath);
-
-    // Atlas's own perf and visual harnesses, for projects that ship no such
-    // tooling of their own. The gate scripts decide whether to invoke them.
-    assembleProbes(opts.worktreePath);
 
     if (opts.includeOutcome) {
         const atlasDir = join(opts.worktreePath, '.atlas');

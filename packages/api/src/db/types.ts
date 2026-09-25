@@ -264,6 +264,8 @@ export interface ProjectReposTable {
     >;
     setup_sh_body: Str;
     setup_ps1_body: Str;
+    /** ADR 0024 — what the pre-push gate runs here. Empty means not set. */
+    verify_command: Str;
     position: Int;
     created_at: CreatedAt;
 }
@@ -803,6 +805,13 @@ export interface RunGateResultsTable {
     verdict: GateVerdict;
     exit_code: IntN;
     output_tail: StrN;
+    /**
+     * ADR 0024 — the command Atlas actually ran. Null on rows written before
+     * migration 020, when a gate executed a script body instead. Also the
+     * memo: the newest row for (workflow_run_id, node_id, repo_id) carrying a
+     * command is what a fixer loop-back re-runs without a second dispatch.
+     */
+    command: StrN;
     created_at: CreatedAt;
 }
 

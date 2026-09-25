@@ -118,6 +118,21 @@ export interface IRunOutcome {
     reason?: string;
     /** Per-required-checklist-row pass/fail report. Populated when the agent has required rows. */
     checklist?: IRunOutcomeChecklistItem[];
+    /**
+     * Gate checkers only (ADR 0024): does this concern apply to THIS project?
+     *
+     * Absent is not `false`. A checker that never answered produced no
+     * evidence, and the engine parks rather than reading silence as "nothing
+     * to check here" — the same rule ADR 0020 applies to a gate that could
+     * not run.
+     */
+    applies?: boolean;
+    /**
+     * Gate checkers only (ADR 0024): the command that proves the concern, in
+     * the repo the checker inspected. Atlas runs this and believes the exit
+     * code; it never composes one itself.
+     */
+    command?: string;
 }
 
 export type CredentialHost = 'github';
@@ -324,6 +339,14 @@ export interface IProjectRepo {
     clone_status: CloneStatus;
     setup_sh_body: string;
     setup_ps1_body: string;
+    /**
+     * ADR 0024 — the command Atlas runs in this repo before pushing, and
+     * believes the exit code of. Empty means nothing is set: the run parks
+     * rather than pushing unverified, because Atlas does not guess a stack's
+     * test command. `agent-tests-check` fills it in on the first delivery run
+     * and never overwrites an Owner value.
+     */
+    verify_command: string;
 }
 
 export interface ICredential {

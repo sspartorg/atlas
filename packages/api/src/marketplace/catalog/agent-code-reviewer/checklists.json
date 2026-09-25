@@ -1,6 +1,6 @@
 [
   {
-    "label": "Full project test suite green \u2014 ran check-coder-tests-green.sh <itemId> --run-tests",
+    "label": "Full project test suite green - ran this project's own declared test command",
     "sort_order": 0,
     "required": true
   },

@@ -119,6 +119,21 @@ describe('gate_catch', () => {
         expect(perf.quality.gate_catch).toBe(1);
     });
 
+    // ADR 0024 — the gate's own checker reports `done` moments before the
+    // command it named runs, so it is always the most recent "the work is
+    // fine". Blaming it would make the one signal an agent cannot author about
+    // itself into one that every checker authors about itself, every time.
+    it('does not blame the checker for the gate it just named the command for', async () => {
+        await insertAgent({ id: 'agent-tests-check', status: 'active' });
+        await workflowRun();
+        await step({ node: 'n1', agent: 'agent-coder', outcome: 'done', seconds: 60 });
+        await step({ node: 'cov', agent: 'agent-tests-check', outcome: 'done', seconds: 10 });
+        await gate({ verdict: 'fail', script: 'agent-tests-check', at: new Date(Date.UTC(2026, 8, 21, 13, 0, 0)) });
+
+        expect((await agentPerformance('agent-tests-check')).quality.gate_catch).toBe(0);
+        expect((await agentPerformance('agent-coder')).quality.gate_catch).toBe(1);
+    });
+
     // A gate that went red before the agent ran cannot be its doing.
     it('does not blame an agent that had not finished when the gate ran', async () => {
         await workflowRun();

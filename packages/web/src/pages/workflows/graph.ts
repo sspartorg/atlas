@@ -33,8 +33,6 @@ export interface IWfNodeData extends Record<string, unknown> {
     agent_id?: string | undefined;
     sub_workflow_id?: string | undefined;
     label?: string | undefined;
-    /** Gate steps (ADR 0021): the guardrail script the step executes. */
-    script_id?: string | undefined;
 }
 export type WfNode = Node<IWfNodeData, WorkflowNodeType>;
 /** `pathOptions` is a render-time lane assignment (see `routeEdges`); `toGraph` drops it. */
@@ -164,7 +162,6 @@ export function toFlow(graph: IWorkflowGraph): { nodes: WfNode[]; edges: WfEdge[
                 ...(n.agent_id ? { agent_id: n.agent_id } : {}),
                 ...(n.sub_workflow_id ? { sub_workflow_id: n.sub_workflow_id } : {}),
                 ...(n.label ? { label: n.label } : {}),
-                ...(n.script_id ? { script_id: n.script_id } : {}),
             },
             deletable: n.type !== 'start',
         })),
@@ -181,7 +178,6 @@ export function toGraph(nodes: WfNode[], edges: WfEdge[]): IWorkflowGraph {
             ...(n.data.agent_id ? { agent_id: n.data.agent_id } : {}),
             ...(n.data.sub_workflow_id ? { sub_workflow_id: n.data.sub_workflow_id } : {}),
             ...(n.data.label?.trim() ? { label: n.data.label.trim() } : {}),
-            ...(n.data.script_id?.trim() ? { script_id: n.data.script_id.trim() } : {}),
         })),
         edges: edges.map((e) => ({
             id: e.id,

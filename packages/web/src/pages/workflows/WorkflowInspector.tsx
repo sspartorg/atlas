@@ -9,7 +9,6 @@ import type { IAgent, IProject, IWorkflow } from '@atlas/shared';
 import { SelectableCard } from '../../components/SchedulePresetFields.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { SectionLabel, StartInspector } from './StartInspector.js';
-import { useGuardrailScripts } from '../../hooks/useGuardrails.js';
 import type { IWfNodeData, WfNode } from './graph.js';
 
 interface Props {
@@ -159,43 +158,53 @@ function AgentPanel({
     );
 }
 
-function GatePanel({ node, onNodeData }: Pick<Props, 'onNodeData'> & { node: WfNode }) {
-    const { data: scripts } = useGuardrailScripts();
-    const all = scripts ?? [];
-    const picked = all.find((g) => g.id === node.data.script_id);
-    // Same reasoning as the Sub-tasks panel: a script id that no longer exists
-    // is not the same as no id. At run time it resolves to `unavailable`, which
-    // ADR 0020 turns into a parked run rather than a failure — so it looks like
-    // a stuck workflow, not a typo. Say so here, where it can be fixed.
-    const dangling = node.data.script_id != null && !picked;
+function GatePanel({
+    node,
+    agents,
+    onNodeData,
+}: Pick<Props, 'agents' | 'onNodeData'> & { node: WfNode }) {
+    const agent = agents.find((a) => a.id === node.data.agent_id);
+    // Same reasoning as the Sub-tasks panel: an agent id that is not installed
+    // is not the same as no id. At run time the step parks rather than failing,
+    // so it looks like a stuck workflow instead of a typo. Say so here, where
+    // it can be fixed.
+    const dangling = node.data.agent_id != null && !agent;
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <TextField
                 select
-                label="Guardrail script"
+                label="Checker agent"
                 size="small"
                 error={dangling}
-                value={picked ? picked.id : ''}
-                onChange={(e) => onNodeData({ script_id: e.target.value || undefined })}
+                value={agent ? agent.id : ''}
+                onChange={(e) => onNodeData({ agent_id: e.target.value || undefined })}
                 helperText={
                     dangling
-                        ? 'This gate points at a script that no longer exists — pick one.'
-                        : 'Runs once per repo the Task touches'
+                        ? "This gate points at an agent that isn't installed — pick one."
+                        : 'Reads the repo and names the command this project already trusts'
                 }
                 fullWidth
             >
-                {all.map((g) => (
-                    <MenuItem key={g.id} value={g.id}>
-                        {g.name}
+                {agents.map((a) => (
+                    <MenuItem key={a.id} value={a.id}>
+                        {a.name}
                     </MenuItem>
                 ))}
             </TextField>
+            {agent && agent.status !== 'active' && (
+                <Explain>
+                    {agent.name} is paused, so a run will wait here until you enable it.
+                </Explain>
+            )}
             <Explain>
-                A gate runs this script and routes on its exit code — no agent, no tokens. Exit 0
-                takes the pass connection. Anything else takes the fail connection, with the
-                script&apos;s own output handed to whatever is on the other end as its brief. A
-                script that cannot run at all pauses the run and comes back to you, rather than
-                counting as a failure.
+                The checker looks at this project and answers two things: does this check apply
+                here, and what one command proves it. Atlas then runs that command itself, once per
+                repo, and believes the exit code — an agent cannot report green. Exit 0 takes the
+                pass connection; anything else takes the fail connection, with the command&apos;s own
+                output handed to whatever is on the other end as its brief. A check that cannot run,
+                or a checker that names no command, pauses the run and comes back to you rather than
+                counting as a failure. A project with no such tooling is recorded as skipped, not as
+                a pass.
             </Explain>
         </Box>
     );
@@ -383,7 +392,7 @@ export function WorkflowInspector(props: Props) {
                 />
             )}
             {type === 'gate' && props.node && (
-                <GatePanel node={props.node} onNodeData={props.onNodeData} />
+                <GatePanel node={props.node} agents={props.agents} onNodeData={props.onNodeData} />
             )}
             {type === 'end' && <EndPanel workflow={props.workflow} onChange={props.onChange} />}
         </Box>

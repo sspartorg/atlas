@@ -22,7 +22,6 @@ const renderOutcomeMock = vi.fn().mockResolvedValue('# Run Outcome Contract');
 const renderMemoryMock = vi.fn().mockResolvedValue('');
 const writeFileSyncMock = vi.fn();
 const mkdirSyncMock = vi.fn();
-const assembleProbesMock = vi.fn(() => []);
 
 vi.mock('./constitution-assembler.js', () => ({
     assembleConstitution: assembleConstitutionMock,
@@ -35,9 +34,6 @@ vi.mock('./commands-assembler.js', () => ({
 }));
 vi.mock('./current-task-writer.js', () => ({
     writeCurrentTask: writeCurrentTaskMock,
-}));
-vi.mock('./probes-assembler.js', () => ({
-    assembleProbes: assembleProbesMock,
 }));
 vi.mock('./prompt-builder.js', () => ({
     renderRunOutcomeContract: renderOutcomeMock,
@@ -78,9 +74,6 @@ describe('stageCliWorktree', () => {
             worktreePath: WORKTREE,
             projectId: PROJECT_ID,
         });
-        // Unconditional: gate-perf and gate-visual fall through to these when
-        // the project declares no perf or visual tooling of its own.
-        expect(assembleProbesMock).toHaveBeenCalledWith(WORKTREE);
         expect(result.constitutionMarkdown).toBe('constitution body');
         expect(result.currentTaskPath).toBeNull();
         expect(result.copilotUserAgentPath).toBeUndefined();

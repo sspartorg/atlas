@@ -90,14 +90,21 @@ describe('SetupTab', () => {
             })
         );
         renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
-        const editors = await screen.findAllByRole('textbox');
-        fireEvent.change(editors[0]!, { target: { value: 'echo saved' } });
+        fireEvent.change(await screen.findByLabelText('Bash setup script'), {
+            target: { value: 'echo saved' },
+        });
+        // ADR 0024 — the repo's verify command saves with the scripts, from the
+        // same form, because it is the same kind of per-repo execution material.
+        fireEvent.change(screen.getByLabelText('Verify command'), {
+            target: { value: 'pnpm -r test' },
+        });
         const saveBtn = screen.getByRole('button', { name: /Save/i });
         fireEvent.click(saveBtn);
         await waitFor(() => expect(patched).toHaveBeenCalled());
         expect(patched).toHaveBeenCalledWith({
             setup_sh_body: 'echo saved',
             setup_ps1_body: '',
+            verify_command: 'pnpm -r test',
         });
     });
 
@@ -124,12 +131,17 @@ describe('SetupTab', () => {
         fireEvent.click(await screen.findByRole('option', { name: 'web' }));
         expect(await screen.findByDisplayValue('echo web')).toBeInTheDocument();
 
-        const editors = screen.getAllByRole('textbox');
-        fireEvent.change(editors[0]!, { target: { value: 'echo web edited' } });
+        fireEvent.change(screen.getByLabelText('Bash setup script'), {
+            target: { value: 'echo web edited' },
+        });
         fireEvent.click(screen.getByRole('button', { name: /Save/i }));
 
         await waitFor(() => expect(patchedUrl).toBe(`/api/projects/${PROJECT_ID}/repos/r-web`));
-        expect(patchedBody).toEqual({ setup_sh_body: 'echo web edited', setup_ps1_body: '' });
+        expect(patchedBody).toEqual({
+            setup_sh_body: 'echo web edited',
+            setup_ps1_body: '',
+            verify_command: '',
+        });
     });
 
     it('shows error Alert when PATCH fails (update.isError branch)', async () => {

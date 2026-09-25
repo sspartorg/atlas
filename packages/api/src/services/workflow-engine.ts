@@ -39,7 +39,9 @@ import { externalLinks, parseGithubPrUrl, fetchGithubPrTitle } from './external-
 import { commentsService } from './comments.js';
 import { assertDepsAllDoneForDispatch } from './dependency-guard.js';
 import { decideRunRouting } from './agent-runner-outcome-routing.js';
-import { GATE_SCRIPT_ID, runGuardrailScript, runVerificationGate } from './verification-gate.js';
+import { runNamedCommand } from './verification-gate.js';
+import { decideCheckCommand } from './gate-check-routing.js';
+import { parseRunOutcome } from './run-outcome-parser.js';
 import { recordGateResult } from './run-gate-results.js';
 import {
     WORKTREE_BRANCH_RE,
@@ -393,32 +395,114 @@ async function goTo(run: RunRow, nodeId: string, why?: string): Promise<void> {
 }
 
 /**
- * A gate step: run a guardrail script and route on what it says. No agent is
- * spawned and no tokens are spent — the whole point is that coverage, lint,
- * performance and visual checks are exit codes, and an LLM should only be woken
- * when one of them says no.
+ * The checker whose answer also becomes the repo's pre-push verify command.
  *
- * Runs once per repo the Task touches (ADR 0017), same as the pre-push gate,
- * and stops at the first repo that fails so the fixer gets one problem to solve
- * rather than a pile.
+ * Every project's "is the suite green" question is the same question the
+ * pre-push gate asks, so the tests checker's command is written to
+ * `project_repos.verify_command` the first time it names one. That is what
+ * keeps ADR 0020's guarantee without a second dispatch per run, and without
+ * Atlas guessing a stack's test command.
+ */
+const TESTS_CHECKER_AGENT_ID = 'agent-tests-check';
+
+/**
+ * A gate step, ADR 0024: dispatch a checker agent, then run the command it
+ * named and route on that exit code.
  *
- * `unavailable` parks rather than fails, exactly as ADR 0020 requires: a script
- * that could not run is absence of evidence, and treating it as a red result
- * would convert an unenforced gate into one that blocks every delivery.
+ * Two entries per gate. The first finds no command recorded for this node and
+ * dispatches the checker; `onStepFinished` routes back here through
+ * `finishGateNode` once it reports. Every later entry — a fixer looping back —
+ * finds the command in `run_gate_results` and re-runs it with no dispatch at
+ * all, which is what keeps the repair loop at one checker dispatch per gate per
+ * run rather than one per traversal.
+ *
+ * ponytail: the memo is the audit row, not a cache table — the newest
+ * `run_gate_results` row for this (run, node) carrying a command. It means the
+ * Owner can see exactly what was re-run. If a fixer ever ADDS the tooling the
+ * checker said was absent, the stale answer survives to the end of the run;
+ * the next run re-discovers it. Give the memo an invalidation hook if that ever
+ * bites.
  */
 async function runGateNode(run: RunRow, node: IWorkflowNode): Promise<void> {
-    const scriptId = node.script_id;
-    /* v8 ignore start -- unreachable by construction: `startWorkflowRun`
-       validates the graph before the first step, `validateWorkflowGraph`
-       rejects a gate with no `script_id`, and the run then routes off the
-       frozen `graph_snapshot`, so no later edit can introduce one. The guard
-       stays because `script_id` is optional on the type and parking is the
-       right answer if a future call path ever reaches here without one. */
-    if (!scriptId) {
-        await park(run, node.id, 'This gate step has no script configured');
+    const memo = await db
+        .selectFrom('run_gate_results')
+        .select('command')
+        .where('workflow_run_id', '=', run.id)
+        .where('node_id', '=', node.id)
+        .where('command', 'is not', null)
+        .orderBy('created_at', 'desc')
+        .limit(1)
+        .executeTakeFirst();
+
+    if (memo?.command) {
+        await executeGateCheck(run, node, memo.command);
         return;
     }
-    /* v8 ignore stop */
+    // No answer yet for this gate: ask the checker. `spawnNode` sets
+    // `current_node_id`, assigns the item and parks on a missing agent.
+    await spawnNode(run, node);
+}
+
+/**
+ * The checker reported. Decide what that means, then run what it named.
+ *
+ * `decideCheckCommand` is pure and lives in its own file; everything that can
+ * park, write or execute is here. The bias is ADR 0020's: a checker that named
+ * no proof produced no evidence, and absence of evidence parks with the Owner
+ * rather than taking the pass edge.
+ */
+async function finishGateNode(run: RunRow, node: IWorkflowNode, outcome: IRunOutcome | null): Promise<void> {
+    const decision = decideCheckCommand(outcome);
+
+    if (decision.kind === 'park') {
+        await park(run, node.id, `This check could not be determined: ${decision.why}`);
+        return;
+    }
+
+    if (decision.kind === 'skip') {
+        // Recorded, not silent. "There is nothing here to check" is a claim the
+        // Owner should be able to audit, and `gate_verdicts_all_pass` counts a
+        // run where every gate skipped as unchecked rather than green.
+        const { repos } = await runRepos(run);
+        for (const { repo } of repos) {
+            await recordGateResult({
+                workflow_run_id: run.id,
+                node_id: node.id,
+                repo_id: repo.id,
+                script_id: node.agent_id ?? node.id,
+                verdict: 'skipped',
+                output_tail: decision.why,
+            });
+        }
+        const pass = nextNodeId(run.graph_snapshot, node.id, 'pass');
+        /* v8 ignore next 4 -- every non-end node needs exactly one pass
+           connection to validate at all, and the run walks a frozen snapshot
+           that was validated before the first step. */
+        if (!pass) {
+            await park(run, node.id, 'No pass connection from this gate');
+            return;
+        }
+        await goTo(run, pass);
+        return;
+    }
+
+    await executeGateCheck(run, node, decision.command);
+}
+
+/**
+ * Run the checker's command in every repo the Task touches (ADR 0017) and route
+ * on the first repo that fails, so the fixer gets one problem rather than a
+ * pile.
+ *
+ * `unavailable` parks rather than fails, exactly as ADR 0020 requires: a check
+ * that could not run is absence of evidence, and treating it as red would
+ * convert an unenforced gate into one that blocks every delivery.
+ *
+ * ponytail: one command, run in each repo — the same shape the scripts had. It
+ * will be wrong for the first genuinely mixed-stack multi-repo Task; that wants
+ * a command per repo, which wants the checker to answer per repo.
+ */
+async function executeGateCheck(run: RunRow, node: IWorkflowNode, command: string): Promise<void> {
     await db
         .updateTable('workflow_runs')
         .set({ current_node_id: node.id, updated_at: new Date().toISOString() })
@@ -428,23 +512,22 @@ async function runGateNode(run: RunRow, node: IWorkflowNode): Promise<void> {
     const item = run.item_id ? await loadItem(run.item_id) : undefined;
     const { repos, workspace } = await runRepos(run);
     if (repos.length === 0) {
-        await park(run, node.id, `The gate '${scriptId}' had no repo to run in`);
+        await park(run, node.id, `The check \`${command}\` had no repo to run in`);
         return;
     }
 
     for (const { repo, path } of repos) {
         const tag = workspace ? `${repo.name}: ` : '';
-        const result = await runGuardrailScript({
-            repoPath: path,
-            projectId: repo.project_id,
-            scriptId,
-            itemId: item?.id ?? run.id,
-        });
+        const result = await runNamedCommand({ repoPath: path, projectId: repo.project_id, command });
         await recordGateResult({
             workflow_run_id: run.id,
             node_id: node.id,
             repo_id: repo.id,
-            script_id: scriptId,
+            // The checker's id, where the script id used to go: it is what the
+            // scorecard groups a gate's verdicts by, and it stays stable across
+            // projects in a way the command string never could.
+            script_id: node.agent_id ?? node.id,
+            command,
             verdict: result.kind,
             ...(result.kind === 'fail' || result.kind === 'needs_review'
                 ? { exit_code: result.exitCode ?? null, output_tail: result.output }
@@ -456,11 +539,23 @@ async function runGateNode(run: RunRow, node: IWorkflowNode): Promise<void> {
             ...(result.kind === 'unavailable' ? { output_tail: result.reason } : {}),
         });
 
+        // The pre-push gate asks this repo the same question (ADR 0020), so the
+        // answer is kept. `where verify_command = ''` and nothing else: an
+        // Owner value is authoritative and is never overwritten by an agent.
+        if (node.agent_id === TESTS_CHECKER_AGENT_ID && result.kind !== 'unavailable') {
+            await db
+                .updateTable('project_repos')
+                .set({ verify_command: command })
+                .where('id', '=', repo.id)
+                .where('verify_command', '=', '')
+                .execute();
+        }
+
         if (result.kind === 'unavailable') {
             await park(
                 run,
                 node.id,
-                `${tag}The gate '${scriptId}' could not run (${result.reason}), so nothing was checked. ` +
+                `${tag}The check \`${command}\` could not run (${result.reason}), so nothing was checked. ` +
                     `This is not a failure — resume the run to retry.`,
             );
             return;
@@ -482,7 +577,7 @@ async function runGateNode(run: RunRow, node: IWorkflowNode): Promise<void> {
             }
             await db.updateTable('workflow_runs').set({ loop_count: loops }).where('id', '=', run.id).execute();
             run.loop_count = loops;
-            // The script's own output IS the fixer's contract, so it is posted
+            // The command's own output IS the fixer's contract, so it is posted
             // on the item the way a rejecting reviewer's `reason` is — the next
             // step reads it from `.atlas/current-task.md`.
             if (run.item_id) {
@@ -492,20 +587,21 @@ async function runGateNode(run: RunRow, node: IWorkflowNode): Promise<void> {
                         agent_id: null,
                         issue_type: item?.type as IssueType,
                         issue_id: run.item_id,
-                        body: `**${scriptId}** did not pass.\n\n\`\`\`\n${detail}\n\`\`\``,
+                        body: `\`${command}\` did not pass.\n\n\`\`\`\n${detail}\n\`\`\``,
                     });
                 } catch {
                     /* the park reason and the gate row already carry the signal */
                 }
             }
-            await goTo(run, failTarget, `${scriptId} did not pass`);
+            await goTo(run, failTarget, `${command} did not pass`);
             return;
         }
     }
 
     const pass = nextNodeId(run.graph_snapshot, node.id, 'pass');
-    /* v8 ignore next 4 -- same reason as the `script_id` guard above: every
-       non-end node needs exactly one pass connection to validate at all. */
+    /* v8 ignore next 4 -- unreachable by construction: every non-end node needs
+       exactly one pass connection to validate, and the run walks the frozen
+       snapshot that was validated before the first step. */
     if (!pass) {
         await park(run, node.id, 'No pass connection from this gate');
         return;
@@ -664,6 +760,25 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
               ...(step.outcome_checklist ? { checklist: step.outcome_checklist } : {}),
           }
         : null;
+    // A gate's checker does not route through `decideRunRouting`: its answer is
+    // a command to run, not a verdict on the work (ADR 0024).
+    //
+    // Re-parsed from `output_text` rather than read from the `outcome_*`
+    // columns, because `applies` and `command` have no columns — and giving
+    // them two would add a migration and a write path for two keys only this
+    // branch reads. The parse is the same one `completeRun` already ran, over
+    // bytes that are already stored.
+    const finishedNode = nodeById(run.graph_snapshot, step.node_id);
+    if (finishedNode?.type === 'gate') {
+        const raw = await db
+            .selectFrom('agent_runs')
+            .select('output_text')
+            .where('id', '=', agentRunId)
+            .executeTakeFirst();
+        await finishGateNode(run, finishedNode, parseRunOutcome(raw?.output_text) ?? outcome);
+        return;
+    }
+
     const checklistRows = await db
         .selectFrom('agent_checklists')
         .select(['id', 'label'])
@@ -929,32 +1044,49 @@ async function deliver(run: RunRow, opts: { openPr: boolean }): Promise<Delivery
             // ADR 0020 — the verification gate. Every reviewer up to this point
             // reported green by asserting it; this is the one place Atlas finds
             // out for itself, and it runs in the repo that is about to be
-            // pushed so a red sibling cannot block a clean one. `unavailable`
-            // means the gate could not run at all, which is not evidence of a
-            // red suite and must not be treated as one — it parks with the
-            // Owner through the same failure path as a push error.
-            const gate = await runVerificationGate({
-                repoPath: path,
-                projectId: repo.project_id,
-                itemId: item?.id ?? run.id,
-            });
+            // pushed so a red sibling cannot block a clean one.
+            //
+            // ADR 0024 — the command is the repo's own, set by the Owner or
+            // written back by `agent-tests-check` on its first run. An empty
+            // one is `unavailable`, not a pass: Atlas will not guess a stack's
+            // test command, and it will not push what it could not verify.
+            const gate =
+                repo.verify_command.trim() === ''
+                    ? ({
+                          kind: 'unavailable',
+                          reason: 'this repo has no verify command — set one in the project\'s Setup tab',
+                      } as const)
+                    : await runNamedCommand({
+                          repoPath: path,
+                          projectId: repo.project_id,
+                          command: repo.verify_command,
+                      });
             // Migration 011 — the verdict becomes a row, not just a log line.
             // `node_id` is null: this gate belongs to delivery, not to a node.
             await recordGateResult({
                 workflow_run_id: run.id,
                 repo_id: repo.id,
-                script_id: GATE_SCRIPT_ID,
+                // A stable key across projects, so the scorecard can still group
+                // pre-push verdicts; the command itself goes in `command`.
+                script_id: 'pre-push',
+                ...(gate.kind === 'unavailable' ? {} : { command: repo.verify_command }),
                 verdict: gate.kind,
+                ...(gate.kind === 'fail' || gate.kind === 'needs_review'
+                    ? { exit_code: gate.exitCode ?? null }
+                    : {}),
                 output_tail:
-                    gate.kind === 'fail' || gate.kind === 'skipped'
+                    gate.kind === 'fail' || gate.kind === 'skipped' || gate.kind === 'needs_review'
                         ? gate.output
                         : gate.kind === 'unavailable'
                           ? gate.reason
                           : null,
             });
-            if (gate.kind === 'fail') {
+            // `needs_review` lands here with `fail` on purpose. Before a push,
+            // "a check could not conclude" is not permission to ship — and
+            // until this line existed it fell through and was logged as a pass.
+            if (gate.kind === 'fail' || gate.kind === 'needs_review') {
                 log.push(`${tag}verification gate FAILED\n${gate.output}`);
-                result.failure ??= `${tag}The verification gate failed — the project's own typecheck, lint or test script did not pass, whatever the reviewer reported. Fix it on the branch, then resume the run.\n\n${gate.output}`;
+                result.failure ??= `${tag}The verification gate failed — \`${repo.verify_command}\` did not pass, whatever the reviewer reported. Fix it on the branch, then resume the run.\n\n${gate.output}`;
                 continue;
             }
             if (gate.kind === 'unavailable') {

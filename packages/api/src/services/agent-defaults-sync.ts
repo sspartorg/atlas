@@ -1,4 +1,6 @@
 import { db } from '../db/kysely-client.js';
+import type { IWorkflowGraph } from '@atlas/shared';
+import { marketplaceService } from './marketplace.js';
 
 // Per-boot reconciliation of installed agent prompts. `runSeed` in db/seed.ts
 // only syncs the marketplace catalog into `marketplace_agents` — it never
@@ -85,7 +87,56 @@ export async function syncAgentDefaults(): Promise<void> {
         }
     }
 
-    if (stats.prompts_updated > 0) {
-        console.log(`[catalog-sync] applied: ${stats.prompts_updated} prompt(s).`);
+    const installed = await installAgentsWorkflowsNeed();
+    if (stats.prompts_updated > 0 || installed > 0) {
+        console.log(
+            `[catalog-sync] applied: ${stats.prompts_updated} prompt(s), ${installed} agent(s) installed.`,
+        );
     }
+}
+
+/**
+ * Install catalog agents that an ALREADY-INSTALLED workflow names.
+ *
+ * `createFromTemplate` installs the agents a template needs at install time, so
+ * this only ever fires when a workflow gained a step after the Owner installed
+ * it. ADR 0024 is the case it was written for: migration 020 rewrote every
+ * saved `gate` node to name a checker agent, and without this the Owner's
+ * existing Delivery would park on its first gate with "agent-tests-check is
+ * missing or inactive".
+ *
+ * Deliberately narrow. It installs only ids the catalog publishes and only ids
+ * a workflow already refers to by name — never the whole catalog — so it
+ * completes a migration rather than making a decision the Owner did not.
+ */
+async function installAgentsWorkflowsNeed(): Promise<number> {
+    const [workflows, agents, catalog] = await Promise.all([
+        db.selectFrom('workflows').select('graph').execute(),
+        db.selectFrom('agents').select('id').execute(),
+        db.selectFrom('marketplace_agents').select('id').execute(),
+    ]);
+    const have = new Set(agents.map((a) => a.id));
+    const publishable = new Set(catalog.map((c) => c.id));
+
+    const wanted = new Set<string>();
+    for (const row of workflows) {
+        const graph = (typeof row.graph === 'string' ? JSON.parse(row.graph) : row.graph) as IWorkflowGraph;
+        for (const n of graph?.nodes ?? []) {
+            if (n.agent_id && !have.has(n.agent_id) && publishable.has(n.agent_id)) wanted.add(n.agent_id);
+        }
+    }
+
+    let installed = 0;
+    for (const id of wanted) {
+        try {
+            await marketplaceService.install(id);
+            installed += 1;
+        } catch (err) {
+            // Boot must not fail over this. A model the Owner pruned from the
+            // registry is the realistic case, and the run parks with a clear
+            // message if the agent is still missing when the step is reached.
+            console.warn(`[catalog-sync] could not install ${id}:`, (err as Error).message);
+        }
+    }
+    return installed;
 }

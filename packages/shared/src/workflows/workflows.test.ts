@@ -86,7 +86,7 @@ describe('validateWorkflowGraph', () => {
         graph.nodes[1] = node('coder', 'agent', { sub_workflow_id: 'wf-x' });
         graph.nodes[2] = node('review', 'agent', { agent_id: 'agent-reviewer', label: 'qa' });
         expect(errorsOf(graph)).toEqual([
-            'start: Only agent nodes reference an agent',
+            'start: Only agent and gate steps reference an agent',
             'coder: Choose an agent for this node',
             'coder: Only Sub-tasks steps take a sub-workflow or label',
             'review: Only Sub-tasks steps take a sub-workflow or label',
@@ -123,13 +123,13 @@ describe('validateWorkflowGraph', () => {
 
     describe('gate steps', () => {
         // Start -> gate -> End, with the gate failing to a fixer that loops back.
-        // This shape is the entire point of the node type: the script decides,
-        // and an agent is dispatched only when it says no.
+        // This shape is the entire point of the node type: the checker names the
+        // command, Atlas runs it, and the fixer is dispatched only when it says no.
         function gateGraph(): IWorkflowGraph {
             return {
                 nodes: [
                     node('start', 'start'),
-                    node('cov', 'gate', { script_id: 'gate-coverage' }),
+                    node('cov', 'gate', { agent_id: 'agent-tests-check' }),
                     node('fixer', 'agent', { agent_id: 'agent-coverage-fixer' }),
                     node('end', 'end'),
                 ],
@@ -149,16 +149,17 @@ describe('validateWorkflowGraph', () => {
             expect(errorsOf(gateGraph())).toEqual([]);
         });
 
-        it('requires a script on a gate step', () => {
+        it('requires a checker agent on a gate step', () => {
             const graph = gateGraph();
             graph.nodes[1] = node('cov', 'gate');
-            expect(errorsOf(graph)).toEqual(['cov: Choose the script for this gate']);
+            expect(errorsOf(graph)).toEqual(['cov: Choose the checker agent for this gate']);
         });
 
-        it('rejects a script on any step that is not a gate', () => {
-            const graph = devGraph();
-            graph.nodes[1] = node('coder', 'agent', { agent_id: 'agent-coder', script_id: 'gate-coverage' });
-            expect(errorsOf(graph)).toEqual(['coder: Only gate steps take a script']);
+        it('still rejects an agent_id on a step that can carry neither', () => {
+            const graph = gateGraph();
+            graph.nodes.push(node('ask', 'owner', { agent_id: 'agent-coder' }));
+            graph.edges.push(edge('ask', 'end'));
+            expect(errorsOf(graph)).toContain('ask: Only agent and gate steps reference an agent');
         });
 
         it('allows a gate at most one fail connection', () => {
@@ -179,10 +180,15 @@ describe('validateWorkflowGraph', () => {
             expect(parsed.success).toBe(true);
         });
 
-        it('rejects a script_id longer than 64 characters', () => {
-            const graph = gateGraph();
-            graph.nodes[1] = node('cov', 'gate', { script_id: 'g'.repeat(65) });
-            expect(WorkflowGraphSchema.safeParse(graph).success).toBe(false);
+        // ADR 0024 deleted the field. A saved graph that still carries one is
+        // rewritten by migration 020; anything else is a graph Atlas never
+        // wrote, and the schema drops the key rather than honouring it.
+        it('does not carry a script_id through the schema any more', () => {
+            const graph = gateGraph() as IWorkflowGraph & { nodes: Array<Record<string, unknown>> };
+            graph.nodes[1] = { ...graph.nodes[1], script_id: 'gate-coverage' } as never;
+            const parsed = WorkflowGraphSchema.safeParse(graph);
+            expect(parsed.success).toBe(true);
+            expect(parsed.success && 'script_id' in parsed.data.nodes[1]!).toBe(false);
         });
     });
 

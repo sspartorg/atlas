@@ -302,6 +302,11 @@ export async function scoreAgents(scope: ScorecardScope = {}): Promise<Scorecard
             const rTree = rootOf.get(r.workflow_run_id ?? '') ?? r.workflow_run_id;
             if (rTree !== tree) continue;
             if ((r.completed_at ?? '') > gate.created_at) break;
+            // ADR 0024 — a gate's own checker reports `done` immediately before
+            // the command it named runs, so without this it would always be the
+            // most recent "the work is fine" and would catch itself. The gate
+            // row names its checker in `script_id`, which is how we know.
+            if (r.agent_id === gate.script_id) continue;
             culprit = r;
         }
         if (culprit) {

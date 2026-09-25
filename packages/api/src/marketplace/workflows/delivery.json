@@ -1,428 +1,428 @@
 {
-    "id": "delivery",
-    "name": "Delivery",
-    "description": "PO Writer splits a Task into sub-tasks and the Architect specs them. Every dev sub-task is built, every [QA] sub-task tested and every [DOC] sub-task documented, one at a time on the Task's branch. Four deterministic gates then check hygiene, coverage, performance and visuals - each costs nothing when green, and when one goes red a specialist fixes it and a reviewer checks the fix was made at the cause rather than by defeating the check. A release reviewer reads the whole change before it becomes one pull request; a gap it finds becomes a fix sub-task that is built and re-verified without waking you. Unclear Tasks come back to you.",
-    "version": 4,
-    "input_kind": "item",
-    "trigger": "item_ready",
-    "use_worktree": true,
-    "push_code": true,
-    "raises_pr": true,
-    "max_loops": 12,
-    "graph": {
-        "nodes": [
-            {
-                "id": "start",
-                "type": "start",
-                "position": {
-                    "x": 0,
-                    "y": 0
-                }
-            },
-            {
-                "id": "po-writer",
-                "type": "agent",
-                "agent_id": "agent-po-writer",
-                "position": {
-                    "x": 0,
-                    "y": 140
-                }
-            },
-            {
-                "id": "po-review",
-                "type": "agent",
-                "agent_id": "agent-po-reviewer",
-                "position": {
-                    "x": 0,
-                    "y": 420
-                }
-            },
-            {
-                "id": "owner",
-                "type": "owner",
-                "position": {
-                    "x": 320,
-                    "y": 280
-                }
-            },
-            {
-                "id": "architect",
-                "type": "agent",
-                "agent_id": "agent-architect",
-                "position": {
-                    "x": 0,
-                    "y": 560
-                }
-            },
-            {
-                "id": "architect-review",
-                "type": "agent",
-                "agent_id": "agent-architect-reviewer",
-                "position": {
-                    "x": 0,
-                    "y": 700
-                }
-            },
-            {
-                "id": "build",
-                "type": "subtasks",
-                "sub_workflow_id": "template:build",
-                "position": {
-                    "x": 0,
-                    "y": 840
-                }
-            },
-            {
-                "id": "test",
-                "type": "subtasks",
-                "sub_workflow_id": "template:test",
-                "label": "qa",
-                "position": {
-                    "x": 0,
-                    "y": 980
-                }
-            },
-            {
-                "id": "docs",
-                "type": "subtasks",
-                "sub_workflow_id": "template:docs",
-                "label": "doc",
-                "position": {
-                    "x": 0,
-                    "y": 1120
-                }
-            },
-            {
-                "id": "gate-hygiene",
-                "type": "gate",
-                "script_id": "gate-hygiene",
-                "position": {
-                    "x": 0,
-                    "y": 1260
-                }
-            },
-            {
-                "id": "fix-hygiene",
-                "type": "agent",
-                "agent_id": "agent-hygiene-fixer",
-                "position": {
-                    "x": 320,
-                    "y": 1400
-                }
-            },
-            {
-                "id": "review-fix-hygiene",
-                "type": "agent",
-                "agent_id": "agent-fix-reviewer",
-                "position": {
-                    "x": 320,
-                    "y": 1540
-                }
-            },
-            {
-                "id": "gate-coverage",
-                "type": "gate",
-                "script_id": "gate-coverage",
-                "position": {
-                    "x": 0,
-                    "y": 1680
-                }
-            },
-            {
-                "id": "fix-coverage",
-                "type": "agent",
-                "agent_id": "agent-coverage-fixer",
-                "position": {
-                    "x": 320,
-                    "y": 1820
-                }
-            },
-            {
-                "id": "review-fix-coverage",
-                "type": "agent",
-                "agent_id": "agent-fix-reviewer",
-                "position": {
-                    "x": 320,
-                    "y": 1960
-                }
-            },
-            {
-                "id": "gate-perf",
-                "type": "gate",
-                "script_id": "gate-perf",
-                "position": {
-                    "x": 0,
-                    "y": 2100
-                }
-            },
-            {
-                "id": "fix-perf",
-                "type": "agent",
-                "agent_id": "agent-perf-fixer",
-                "position": {
-                    "x": 320,
-                    "y": 2240
-                }
-            },
-            {
-                "id": "review-fix-perf",
-                "type": "agent",
-                "agent_id": "agent-fix-reviewer",
-                "position": {
-                    "x": 320,
-                    "y": 2380
-                }
-            },
-            {
-                "id": "gate-visual",
-                "type": "gate",
-                "script_id": "gate-visual",
-                "position": {
-                    "x": 0,
-                    "y": 2520
-                }
-            },
-            {
-                "id": "fix-visual",
-                "type": "agent",
-                "agent_id": "agent-visual-reviewer",
-                "position": {
-                    "x": 320,
-                    "y": 2660
-                }
-            },
-            {
-                "id": "review-fix-visual",
-                "type": "agent",
-                "agent_id": "agent-fix-reviewer",
-                "position": {
-                    "x": 320,
-                    "y": 2800
-                }
-            },
-            {
-                "id": "release-review",
-                "type": "agent",
-                "agent_id": "agent-release-reviewer",
-                "position": {
-                    "x": 0,
-                    "y": 2940
-                }
-            },
-            {
-                "id": "end",
-                "type": "end",
-                "position": {
-                    "x": 0,
-                    "y": 3080
-                }
-            }
-        ],
-        "edges": [
-            {
-                "id": "e-start-pass-po-writer",
-                "source": "start",
-                "target": "po-writer",
-                "kind": "pass"
-            },
-            {
-                "id": "e-po-writer-pass-po-review",
-                "source": "po-writer",
-                "target": "po-review",
-                "kind": "pass"
-            },
-            {
-                "id": "e-po-writer-fail-owner",
-                "source": "po-writer",
-                "target": "owner",
-                "kind": "fail"
-            },
-            {
-                "id": "e-owner-pass-po-writer",
-                "source": "owner",
-                "target": "po-writer",
-                "kind": "pass"
-            },
-            {
-                "id": "e-po-review-pass-architect",
-                "source": "po-review",
-                "target": "architect",
-                "kind": "pass"
-            },
-            {
-                "id": "e-po-review-fail-po-writer",
-                "source": "po-review",
-                "target": "po-writer",
-                "kind": "fail"
-            },
-            {
-                "id": "e-architect-pass-architect-review",
-                "source": "architect",
-                "target": "architect-review",
-                "kind": "pass"
-            },
-            {
-                "id": "e-architect-review-pass-build",
-                "source": "architect-review",
-                "target": "build",
-                "kind": "pass"
-            },
-            {
-                "id": "e-architect-review-fail-architect",
-                "source": "architect-review",
-                "target": "architect",
-                "kind": "fail"
-            },
-            {
-                "id": "e-build-pass-test",
-                "source": "build",
-                "target": "test",
-                "kind": "pass"
-            },
-            {
-                "id": "e-test-pass-docs",
-                "source": "test",
-                "target": "docs",
-                "kind": "pass"
-            },
-            {
-                "id": "e-docs-pass-gate-hygiene",
-                "source": "docs",
-                "target": "gate-hygiene",
-                "kind": "pass"
-            },
-            {
-                "id": "e-gate-hygiene-fail-fix-hygiene",
-                "source": "gate-hygiene",
-                "target": "fix-hygiene",
-                "kind": "fail"
-            },
-            {
-                "id": "e-fix-hygiene-pass-review-fix-hygiene",
-                "source": "fix-hygiene",
-                "target": "review-fix-hygiene",
-                "kind": "pass"
-            },
-            {
-                "id": "e-gate-hygiene-pass-gate-coverage",
-                "source": "gate-hygiene",
-                "target": "gate-coverage",
-                "kind": "pass"
-            },
-            {
-                "id": "e-gate-coverage-fail-fix-coverage",
-                "source": "gate-coverage",
-                "target": "fix-coverage",
-                "kind": "fail"
-            },
-            {
-                "id": "e-fix-coverage-pass-review-fix-coverage",
-                "source": "fix-coverage",
-                "target": "review-fix-coverage",
-                "kind": "pass"
-            },
-            {
-                "id": "e-gate-coverage-pass-gate-perf",
-                "source": "gate-coverage",
-                "target": "gate-perf",
-                "kind": "pass"
-            },
-            {
-                "id": "e-gate-perf-fail-fix-perf",
-                "source": "gate-perf",
-                "target": "fix-perf",
-                "kind": "fail"
-            },
-            {
-                "id": "e-fix-perf-pass-review-fix-perf",
-                "source": "fix-perf",
-                "target": "review-fix-perf",
-                "kind": "pass"
-            },
-            {
-                "id": "e-gate-perf-pass-gate-visual",
-                "source": "gate-perf",
-                "target": "gate-visual",
-                "kind": "pass"
-            },
-            {
-                "id": "e-gate-visual-fail-fix-visual",
-                "source": "gate-visual",
-                "target": "fix-visual",
-                "kind": "fail"
-            },
-            {
-                "id": "e-fix-visual-pass-review-fix-visual",
-                "source": "fix-visual",
-                "target": "review-fix-visual",
-                "kind": "pass"
-            },
-            {
-                "id": "e-gate-visual-pass-release-review",
-                "source": "gate-visual",
-                "target": "release-review",
-                "kind": "pass"
-            },
-            {
-                "id": "e-release-review-pass-end",
-                "source": "release-review",
-                "target": "end",
-                "kind": "pass"
-            },
-            {
-                "id": "e-release-review-fail-build",
-                "source": "release-review",
-                "target": "build",
-                "kind": "fail"
-            },
-            {
-                "id": "e-review-fix-hygiene-pass-gate-hygiene",
-                "source": "review-fix-hygiene",
-                "target": "gate-hygiene",
-                "kind": "pass"
-            },
-            {
-                "id": "e-review-fix-hygiene-fail-fix-hygiene",
-                "source": "review-fix-hygiene",
-                "target": "fix-hygiene",
-                "kind": "fail"
-            },
-            {
-                "id": "e-review-fix-coverage-pass-gate-coverage",
-                "source": "review-fix-coverage",
-                "target": "gate-coverage",
-                "kind": "pass"
-            },
-            {
-                "id": "e-review-fix-coverage-fail-fix-coverage",
-                "source": "review-fix-coverage",
-                "target": "fix-coverage",
-                "kind": "fail"
-            },
-            {
-                "id": "e-review-fix-perf-pass-gate-perf",
-                "source": "review-fix-perf",
-                "target": "gate-perf",
-                "kind": "pass"
-            },
-            {
-                "id": "e-review-fix-perf-fail-fix-perf",
-                "source": "review-fix-perf",
-                "target": "fix-perf",
-                "kind": "fail"
-            },
-            {
-                "id": "e-review-fix-visual-pass-gate-visual",
-                "source": "review-fix-visual",
-                "target": "gate-visual",
-                "kind": "pass"
-            },
-            {
-                "id": "e-review-fix-visual-fail-fix-visual",
-                "source": "review-fix-visual",
-                "target": "fix-visual",
-                "kind": "fail"
-            }
-        ]
-    }
+  "id": "delivery",
+  "name": "Delivery",
+  "description": "PO Writer splits a Task into sub-tasks and the Architect specs them. Every dev sub-task is built, every [QA] sub-task tested and every [DOC] sub-task documented, one at a time on the Task's branch. Four checks then cover hygiene, tests, performance and visuals: a checker agent reads the repo and names the command this project already trusts, Atlas runs it and believes the exit code, and when one goes red a specialist fixes it and a reviewer checks the fix was made at the cause rather than by defeating the check. A project that has no such tooling is told so plainly rather than given a number Atlas invented. A release reviewer reads the whole change before it becomes one pull request; a gap it finds becomes a fix sub-task that is built and re-verified without waking you. Unclear Tasks come back to you.",
+  "version": 5,
+  "input_kind": "item",
+  "trigger": "item_ready",
+  "use_worktree": true,
+  "push_code": true,
+  "raises_pr": true,
+  "max_loops": 12,
+  "graph": {
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "position": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": "po-writer",
+        "type": "agent",
+        "agent_id": "agent-po-writer",
+        "position": {
+          "x": 0,
+          "y": 140
+        }
+      },
+      {
+        "id": "po-review",
+        "type": "agent",
+        "agent_id": "agent-po-reviewer",
+        "position": {
+          "x": 0,
+          "y": 420
+        }
+      },
+      {
+        "id": "owner",
+        "type": "owner",
+        "position": {
+          "x": 320,
+          "y": 280
+        }
+      },
+      {
+        "id": "architect",
+        "type": "agent",
+        "agent_id": "agent-architect",
+        "position": {
+          "x": 0,
+          "y": 560
+        }
+      },
+      {
+        "id": "architect-review",
+        "type": "agent",
+        "agent_id": "agent-architect-reviewer",
+        "position": {
+          "x": 0,
+          "y": 700
+        }
+      },
+      {
+        "id": "build",
+        "type": "subtasks",
+        "sub_workflow_id": "template:build",
+        "position": {
+          "x": 0,
+          "y": 840
+        }
+      },
+      {
+        "id": "test",
+        "type": "subtasks",
+        "sub_workflow_id": "template:test",
+        "label": "qa",
+        "position": {
+          "x": 0,
+          "y": 980
+        }
+      },
+      {
+        "id": "docs",
+        "type": "subtasks",
+        "sub_workflow_id": "template:docs",
+        "label": "doc",
+        "position": {
+          "x": 0,
+          "y": 1120
+        }
+      },
+      {
+        "id": "gate-hygiene",
+        "type": "gate",
+        "agent_id": "agent-hygiene-check",
+        "position": {
+          "x": 0,
+          "y": 1260
+        }
+      },
+      {
+        "id": "fix-hygiene",
+        "type": "agent",
+        "agent_id": "agent-hygiene-fixer",
+        "position": {
+          "x": 320,
+          "y": 1400
+        }
+      },
+      {
+        "id": "review-fix-hygiene",
+        "type": "agent",
+        "agent_id": "agent-fix-reviewer",
+        "position": {
+          "x": 320,
+          "y": 1540
+        }
+      },
+      {
+        "id": "gate-tests",
+        "type": "gate",
+        "agent_id": "agent-tests-check",
+        "position": {
+          "x": 0,
+          "y": 1680
+        }
+      },
+      {
+        "id": "fix-coverage",
+        "type": "agent",
+        "agent_id": "agent-coverage-fixer",
+        "position": {
+          "x": 320,
+          "y": 1820
+        }
+      },
+      {
+        "id": "review-fix-coverage",
+        "type": "agent",
+        "agent_id": "agent-fix-reviewer",
+        "position": {
+          "x": 320,
+          "y": 1960
+        }
+      },
+      {
+        "id": "gate-perf",
+        "type": "gate",
+        "agent_id": "agent-perf-check",
+        "position": {
+          "x": 0,
+          "y": 2100
+        }
+      },
+      {
+        "id": "fix-perf",
+        "type": "agent",
+        "agent_id": "agent-perf-fixer",
+        "position": {
+          "x": 320,
+          "y": 2240
+        }
+      },
+      {
+        "id": "review-fix-perf",
+        "type": "agent",
+        "agent_id": "agent-fix-reviewer",
+        "position": {
+          "x": 320,
+          "y": 2380
+        }
+      },
+      {
+        "id": "gate-visual",
+        "type": "gate",
+        "agent_id": "agent-visual-check",
+        "position": {
+          "x": 0,
+          "y": 2520
+        }
+      },
+      {
+        "id": "fix-visual",
+        "type": "agent",
+        "agent_id": "agent-visual-reviewer",
+        "position": {
+          "x": 320,
+          "y": 2660
+        }
+      },
+      {
+        "id": "review-fix-visual",
+        "type": "agent",
+        "agent_id": "agent-fix-reviewer",
+        "position": {
+          "x": 320,
+          "y": 2800
+        }
+      },
+      {
+        "id": "release-review",
+        "type": "agent",
+        "agent_id": "agent-release-reviewer",
+        "position": {
+          "x": 0,
+          "y": 2940
+        }
+      },
+      {
+        "id": "end",
+        "type": "end",
+        "position": {
+          "x": 0,
+          "y": 3080
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-start-pass-po-writer",
+        "source": "start",
+        "target": "po-writer",
+        "kind": "pass"
+      },
+      {
+        "id": "e-po-writer-pass-po-review",
+        "source": "po-writer",
+        "target": "po-review",
+        "kind": "pass"
+      },
+      {
+        "id": "e-po-writer-fail-owner",
+        "source": "po-writer",
+        "target": "owner",
+        "kind": "fail"
+      },
+      {
+        "id": "e-owner-pass-po-writer",
+        "source": "owner",
+        "target": "po-writer",
+        "kind": "pass"
+      },
+      {
+        "id": "e-po-review-pass-architect",
+        "source": "po-review",
+        "target": "architect",
+        "kind": "pass"
+      },
+      {
+        "id": "e-po-review-fail-po-writer",
+        "source": "po-review",
+        "target": "po-writer",
+        "kind": "fail"
+      },
+      {
+        "id": "e-architect-pass-architect-review",
+        "source": "architect",
+        "target": "architect-review",
+        "kind": "pass"
+      },
+      {
+        "id": "e-architect-review-pass-build",
+        "source": "architect-review",
+        "target": "build",
+        "kind": "pass"
+      },
+      {
+        "id": "e-architect-review-fail-architect",
+        "source": "architect-review",
+        "target": "architect",
+        "kind": "fail"
+      },
+      {
+        "id": "e-build-pass-test",
+        "source": "build",
+        "target": "test",
+        "kind": "pass"
+      },
+      {
+        "id": "e-test-pass-docs",
+        "source": "test",
+        "target": "docs",
+        "kind": "pass"
+      },
+      {
+        "id": "e-docs-pass-gate-hygiene",
+        "source": "docs",
+        "target": "gate-hygiene",
+        "kind": "pass"
+      },
+      {
+        "id": "e-gate-hygiene-fail-fix-hygiene",
+        "source": "gate-hygiene",
+        "target": "fix-hygiene",
+        "kind": "fail"
+      },
+      {
+        "id": "e-fix-hygiene-pass-review-fix-hygiene",
+        "source": "fix-hygiene",
+        "target": "review-fix-hygiene",
+        "kind": "pass"
+      },
+      {
+        "id": "e-gate-hygiene-pass-gate-tests",
+        "source": "gate-hygiene",
+        "target": "gate-tests",
+        "kind": "pass"
+      },
+      {
+        "id": "e-gate-tests-fail-fix-coverage",
+        "source": "gate-tests",
+        "target": "fix-coverage",
+        "kind": "fail"
+      },
+      {
+        "id": "e-fix-coverage-pass-review-fix-coverage",
+        "source": "fix-coverage",
+        "target": "review-fix-coverage",
+        "kind": "pass"
+      },
+      {
+        "id": "e-gate-tests-pass-gate-perf",
+        "source": "gate-tests",
+        "target": "gate-perf",
+        "kind": "pass"
+      },
+      {
+        "id": "e-gate-perf-fail-fix-perf",
+        "source": "gate-perf",
+        "target": "fix-perf",
+        "kind": "fail"
+      },
+      {
+        "id": "e-fix-perf-pass-review-fix-perf",
+        "source": "fix-perf",
+        "target": "review-fix-perf",
+        "kind": "pass"
+      },
+      {
+        "id": "e-gate-perf-pass-gate-visual",
+        "source": "gate-perf",
+        "target": "gate-visual",
+        "kind": "pass"
+      },
+      {
+        "id": "e-gate-visual-fail-fix-visual",
+        "source": "gate-visual",
+        "target": "fix-visual",
+        "kind": "fail"
+      },
+      {
+        "id": "e-fix-visual-pass-review-fix-visual",
+        "source": "fix-visual",
+        "target": "review-fix-visual",
+        "kind": "pass"
+      },
+      {
+        "id": "e-gate-visual-pass-release-review",
+        "source": "gate-visual",
+        "target": "release-review",
+        "kind": "pass"
+      },
+      {
+        "id": "e-release-review-pass-end",
+        "source": "release-review",
+        "target": "end",
+        "kind": "pass"
+      },
+      {
+        "id": "e-release-review-fail-build",
+        "source": "release-review",
+        "target": "build",
+        "kind": "fail"
+      },
+      {
+        "id": "e-review-fix-hygiene-pass-gate-hygiene",
+        "source": "review-fix-hygiene",
+        "target": "gate-hygiene",
+        "kind": "pass"
+      },
+      {
+        "id": "e-review-fix-hygiene-fail-fix-hygiene",
+        "source": "review-fix-hygiene",
+        "target": "fix-hygiene",
+        "kind": "fail"
+      },
+      {
+        "id": "e-review-fix-coverage-pass-gate-tests",
+        "source": "review-fix-coverage",
+        "target": "gate-tests",
+        "kind": "pass"
+      },
+      {
+        "id": "e-review-fix-coverage-fail-fix-coverage",
+        "source": "review-fix-coverage",
+        "target": "fix-coverage",
+        "kind": "fail"
+      },
+      {
+        "id": "e-review-fix-perf-pass-gate-perf",
+        "source": "review-fix-perf",
+        "target": "gate-perf",
+        "kind": "pass"
+      },
+      {
+        "id": "e-review-fix-perf-fail-fix-perf",
+        "source": "review-fix-perf",
+        "target": "fix-perf",
+        "kind": "fail"
+      },
+      {
+        "id": "e-review-fix-visual-pass-gate-visual",
+        "source": "review-fix-visual",
+        "target": "gate-visual",
+        "kind": "pass"
+      },
+      {
+        "id": "e-review-fix-visual-fail-fix-visual",
+        "source": "review-fix-visual",
+        "target": "fix-visual",
+        "kind": "fail"
+      }
+    ]
+  }
 }

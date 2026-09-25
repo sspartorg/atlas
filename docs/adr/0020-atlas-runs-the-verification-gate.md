@@ -94,3 +94,20 @@ worktree already torn down — parks the run with the Owner. It is never a fail.
 - The guardrail scripts keep their existing role as material staged into the
   worktree for the agent to run. This ADR adds a second consumer, it does not
   retire the first.
+
+## Amendment (2026-09-25) — the command is the repo's, not Atlas's
+
+[ADR 0024](0024-agent-decides-atlas-executes.md) replaced `coder-tests-green`
+with `project_repos.verify_command`: Owner-set, or written back by
+`agent-tests-check` the first time it names one. The guarantee this ADR exists
+for is unchanged — Atlas runs the command itself, in the repo about to be
+pushed, and a non-zero exit blocks the push — but the lockfile sniffing and
+`has_script` probing that decided *what* to run are gone. A repo with no command
+parks; it is never pushed unverified.
+
+Two bugs in the original implementation surfaced while replacing it, both in the
+same block. `deliver()` special-cased `fail` and `unavailable` and **not**
+`needs_review`, so that verdict fell through, logged "verification gate passed"
+and pushed. And the `output_tail` ternary covered `fail | skipped | unavailable`
+only, so a `needs_review` was stored with a null tail — which is why the first
+bug was invisible. Fixed together, with the test that would have caught them.

@@ -2,12 +2,13 @@ import { z } from 'zod';
 import type { AgentCli, AgentEffort, ITask, RunOutcomeKind, RunStatus, SchedulePreset } from '../types/index.js';
 import { SchedulePresetSchema } from '../schemas/index.js';
 
-// `gate` runs a guardrail script and routes on its exit code — no agent, no
-// tokens. Coverage, lint, security, perf and visual are exit codes rather than
-// judgement calls, and running them as agent steps cost a full dispatch to
-// learn what bash already knew, while leaving the verdict self-reported
-// (campaign finding F-012, ADR 0020). A gate's fail edge is where an LLM
-// finally gets dispatched, with the script's own output as its contract.
+// `gate` dispatches a CHECKER agent, then runs the command that agent named
+// and routes on its exit code (ADR 0024). The checker decides whether the
+// concern applies to this project and what command proves it; Atlas decides
+// nothing about anyone's stack, and the agent still cannot type "green" and be
+// believed — the verdict is an exit code from a real process (campaign finding
+// F-012, ADR 0020). A gate's fail edge is where the fixer gets dispatched, with
+// the command's own output as its contract.
 export const WORKFLOW_NODE_TYPES = ['start', 'agent', 'owner', 'subtasks', 'gate', 'end'] as const;
 export type WorkflowNodeType = (typeof WORKFLOW_NODE_TYPES)[number];
 
@@ -36,8 +37,8 @@ export interface IWorkflowNode {
      * Unset → the sub-tasks no other Sub-tasks step in the graph claims.
      */
     label?: string | undefined;
-    /** Gate only: the `guardrail_scripts.id` to execute, project override first. */
-    script_id?: string | undefined;
+    // A gate carries an `agent_id` like an agent step does: the checker it
+    // dispatches to decide what this project's check actually is.
     position: { x: number; y: number };
 }
 
@@ -153,7 +154,6 @@ export const WorkflowGraphSchema: z.ZodType<IWorkflowGraph> = z.object({
                 agent_id: ID.optional(),
                 sub_workflow_id: ID.optional(),
                 label: z.string().trim().min(1).max(40).optional(),
-                script_id: z.string().trim().min(1).max(64).optional(),
                 position: z.object({ x: z.number(), y: z.number() }),
             }),
         )
@@ -418,16 +418,16 @@ export function validateWorkflowGraph(graph: IWorkflowGraph, inputKind?: Workflo
         const out = graph.edges.filter((e) => e.source === n.id);
         const passCount = out.filter((e) => e.kind === 'pass').length;
         const failCount = out.length - passCount;
-        if (n.type !== 'agent' && n.agent_id) errors.push({ node_id: n.id, message: 'Only agent nodes reference an agent' });
+        // A gate names an agent too (ADR 0024): its checker.
+        if (n.type !== 'agent' && n.type !== 'gate' && n.agent_id) {
+            errors.push({ node_id: n.id, message: 'Only agent and gate steps reference an agent' });
+        }
         if (n.type === 'agent' && !n.agent_id) errors.push({ node_id: n.id, message: 'Choose an agent for this node' });
+        if (n.type === 'gate' && !n.agent_id) {
+            errors.push({ node_id: n.id, message: 'Choose the checker agent for this gate' });
+        }
         if (n.type !== 'subtasks' && (n.sub_workflow_id || n.label)) {
             errors.push({ node_id: n.id, message: 'Only Sub-tasks steps take a sub-workflow or label' });
-        }
-        if (n.type !== 'gate' && n.script_id) {
-            errors.push({ node_id: n.id, message: 'Only gate steps take a script' });
-        }
-        if (n.type === 'gate' && !n.script_id) {
-            errors.push({ node_id: n.id, message: 'Choose the script for this gate' });
         }
         if (n.type === 'subtasks') {
             if (!n.sub_workflow_id) errors.push({ node_id: n.id, message: 'Choose the sub-workflow for these sub-tasks' });

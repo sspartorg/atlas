@@ -1,7 +1,7 @@
 # 0021. Gate nodes run deterministic checks
 
 **Date:** 2026-09-24
-**Status:** Accepted
+**Status:** Accepted — partly superseded by [0024](0024-agent-decides-atlas-executes.md)
 
 ## Context
 
@@ -236,3 +236,29 @@ row and a `skipped` row are indistinguishable to anything reading
 `run_gate_results.verdict`. Distinguishing them is tracked separately, and
 until it is done, "N of M red" should be read alongside how many of the M could
 run at all.
+
+## Amendment (2026-09-25) — superseded in part by ADR 0024
+
+The node type, the `needs_review` sentinel, the fail-edge-to-a-fixer topology
+and "a gate that skips is not a gate" all stand. What does not is the mechanism
+underneath them: a gate no longer runs a `guardrail_scripts` body.
+
+Three sections above are now historical rather than current:
+
+- **"Why the scripts delegate"** — they delegated by *guessing*: a package
+  manager from a lockfile, a UI from a file-extension list, a coverage floor
+  Atlas picked. A checker agent reads the repo and names the command instead
+  (ADR 0024).
+- **"The probes"** — `perf-probe.mjs` and `visual-probe.mjs` are deleted with
+  their assembler. They were Atlas's opinion about viewports and budgets, and a
+  project that ships no such tooling now records `skipped` rather than being
+  measured against numbers nobody agreed to.
+- **"Why gate state is in `atlas-gate/` and not `.atlas/`"** — correct while it
+  lasted, and now moot: there is no Atlas-owned gate state left to place. A
+  threshold lives in the project's own tool config, where a human reviews it in
+  a diff.
+
+The cost property this ADR was built on also changed, deliberately: a green
+branch no longer spends *zero* tokens on checking. It spends one cheap checker
+dispatch per gate per run (+\$0.80 per delivery run, measured), and in exchange
+the checks run on projects that Atlas's scripts silently skipped entirely.

@@ -1,0 +1,22 @@
+{
+  "id": "agent-visual-check",
+  "name": "Visual Check",
+  "category": "software-dev",
+  "cli": "claude",
+  "model": "haiku",
+  "effort": "low",
+  "framework": "review",
+  "description": "Gate checker. Decides whether this project has visual regression tooling of its own - Playwright or Cypress snapshots, Storybook test-runner, Percy, Chromatic, Loki - and names the command that runs it against its committed baselines. Atlas runs it; a real pixel diff routes to the Visual Reviewer, which can look at the images. Atlas ships no screenshot harness of its own.",
+  "designation": "Visual Check",
+  "accent_color": "#7C3AED",
+  "sort_order": 17,
+  "glyph": "visibility",
+  "role_id": "designer",
+  "status": "active",
+  "kind_slug": "custom",
+  "settings_json": {},
+  "memory_cadence": 1,
+  "summary": "Finds this project's own screenshot or visual-regression command, or says it has none.",
+  "version": 1,
+  "published_at": "2026-09-25T00:00:00Z"
+}

@@ -14,7 +14,7 @@ The workflow has provisioned one git worktree for the whole Task on its branch (
 - `specs/<n>-<slug>/spec.md` — Architect's spec for the Task, when the workflow has an Architect step. Its File-level change list has one `### <subTaskId> — <title>` group per sub-task; **your group is your contract**. Without a spec, your sub-task's description + acceptance criteria are the contract
 - `.atlas/templates/plan.md` — the implementation-plan shape (you derive this from your contract before writing code)
 - `.atlas/templates/tasks.md` — the per-file task breakdown shape; one task per file in your group of the change list
-- `.atlas/scripts/bash/check-coder-tests-green.sh` (or `powershell/check-coder-tests-green.ps1` on Windows) — the validator that gates your `outcome: done` (typecheck + lint green; at least one test file added or modified on the branch)
+- The project's own declared scripts — whatever `package.json`, the `Makefile`, `pyproject.toml` or the CI workflow says this repo runs for typecheck, lint and test. They are the same commands Atlas runs before it pushes, so they are what gates your `outcome: done`
 
 ## Workflow
 
@@ -41,7 +41,7 @@ The workflow has provisioned one git worktree for the whole Task on its branch (
 
 4. **Verify the build.** Run the project's `typecheck` and `lint` scripts with the package manager its lockfile implies (`pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, otherwise npm), skipping any script `package.json` does not declare. Every script you run must exit 0 before you exit. If either is red, fix on this branch — a red gate is a stop-the-line event; do NOT advance to step 5 while red. (Per `.atlas/constitution.md` you do NOT run the full test suite — that's reserved for the verification gate the Code Reviewer runs.)
 
-5. **Validate, then report.** Run `bash ./.atlas/scripts/bash/check-coder-tests-green.sh <itemId>` (or the PowerShell sibling). If it exits non-zero, treat its stdout as a numbered gap list and fix it on this branch. End with the `atlas-outcome` block described in `.atlas/outcome.md`: `done` with the structured `**What I did** / **What I verified** / **Open questions / next steps**` shape as `summary` (list your commits in **What I did**; cite each typecheck / lint script you ran as `<script>: green` in **What I verified**; any gap you could not close goes under **Open questions / next steps** with its checklist row `passed: false`), or `asked_question` with the exact question when the contract is too unclear to implement.
+5. **Validate, then report.** Run this project's own typecheck and lint commands, and its tests if you changed behaviour. If one is red, fix it on this branch — Atlas runs the project's verify command itself before any push, and a red suite stops the delivery whatever you report. End with the `atlas-outcome` block described in `.atlas/outcome.md`: `done` with the structured `**What I did** / **What I verified** / **Open questions / next steps**` shape as `summary` (list your commits in **What I did**; cite each typecheck / lint script you ran as `<script>: green` in **What I verified**; any gap you could not close goes under **Open questions / next steps** with its checklist row `passed: false`), or `asked_question` with the exact question when the contract is too unclear to implement.
 
 ## What you never do
 

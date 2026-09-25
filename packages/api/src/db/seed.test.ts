@@ -125,7 +125,6 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
         'prereqs',
         'po-writer-output',
         'architect-spec-md',
-        'coder-tests-green',
         'qa-writer-csv',
         // 2026-06-09 — Automation Engineer gate added (the prompt referenced
         // this script for months, but the seed was missing it; both
@@ -133,14 +132,13 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
         // substituting `pnpm typecheck + pnpm lint`).
         'check-automation-tests',
         'commit-discipline',
-        // 2026-09-24 — the four `gate` node scripts. These are not run by an
-        // agent at all: a gate step executes them and routes on the exit code,
-        // so a green branch spends no tokens on them and a fixer agent is
-        // dispatched only when one goes red.
-        'gate-hygiene',
-        'gate-coverage',
-        'gate-perf',
-        'gate-visual',
+        // 2026-09-25 (ADR 0024) — `coder-tests-green` and the four `gate-*`
+        // scripts were deleted. Each of them guessed at the customer's stack:
+        // a UI file-extension allowlist, a 95% coverage floor Atlas invented,
+        // 100ms/200ms budgets, package-manager detection by lockfile. A gate
+        // node now dispatches a checker agent that reads the repo and names
+        // the command, and the engine runs that. Everything still in this list
+        // checks an ATLAS artifact and assumes nothing about the project.
     ] as const;
 
     it('exports every seed with the canonical ids', () => {
@@ -168,168 +166,7 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
         }
     });
 
-    describe.skipIf(process.platform === 'win32')('gate-hygiene tells residue from identifiers', () => {
-        const seed = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === 'gate-hygiene');
 
-        function repoWithDiff(added: string): number {
-            const dir = mkdtempSync(join(tmpdir(), 'hygiene-gate-'));
-            const sh = (cmd: string) => execSync(cmd, { cwd: dir, stdio: 'pipe' });
-            sh('git init -q -b main && git config user.email t@t && git config user.name t');
-            writeFileSync(join(dir, 'package.json'), '{"scripts":{}}');
-            writeFileSync(join(dir, 'a.js'), 'const base = 1;\n');
-            sh('git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD');
-            writeFileSync(join(dir, 'a.js'), `const base = 1;\n${added}\n`);
-            sh('git add -A && git commit -qm change');
-            writeFileSync(join(dir, 'gate.sh'), seed?.body_sh ?? '');
-            try {
-                execSync('bash gate.sh X', { cwd: dir, stdio: 'pipe' });
-                return 0;
-            } catch (err) {
-                return (err as { status: number }).status;
-            }
-        }
-
-        // The first live run of delivery v2 spent a whole fixer dispatch
-        // renaming `HTTP_TODOS` and rewording `TODO_FILE` because the pattern
-        // was `TODO[^(]`, which matches any identifier that merely starts with
-        // those four letters. On a todo app that is every other line.
-        it.each([
-            ['const TODO_FILE = process.env.TODO_FILE;', 'an env var named TODO_FILE'],
-            ['const HTTP_TODOS = [];', 'a fixture named HTTP_TODOS'],
-            ['const STATS_TODOS = [];', 'a fixture named STATS_TODOS'],
-            ['// TODO(ATL-12): tracked and allowed', 'a tracked TODO marker'],
-        ])('passes %s (%s)', (line) => {
-            expect(repoWithDiff(line)).toBe(0);
-        });
-
-        it.each([
-            ['// TODO come back to this', 'a bare TODO'],
-            ['// FIXME broken', 'a bare FIXME'],
-            ['console.log("debug");', 'a console.log'],
-            ['debugger;', 'a debugger statement'],
-        ])('fails on %s (%s)', (line) => {
-            expect(repoWithDiff(line)).toBe(1);
-        });
-
-        // `console.log` is debug residue in a library and the PRODUCT'S stdout
-        // in a CLI. Flagging it everywhere told a CLI project its own
-        // user-facing output was residue, and the fixer rightly refused to
-        // rewrite spec-mandated output as `process.stdout.write` to appease a
-        // script. Entry points are exempt; everything else still is not.
-        function repoWithCliDiff(): { code: number; out: string } {
-            const dir = mkdtempSync(join(tmpdir(), 'hygiene-cli-'));
-            const sh = (cmd: string) => execSync(cmd, { cwd: dir, stdio: 'pipe' });
-            sh('git init -q -b main && git config user.email t@t && git config user.name t');
-            mkdirSync(join(dir, 'src'), { recursive: true });
-            writeFileSync(join(dir, 'package.json'), '{"bin":{"todo":"src/cli.js"},"scripts":{}}');
-            writeFileSync(join(dir, 'src/cli.js'), 'const a = 1;\n');
-            writeFileSync(join(dir, 'src/lib.js'), 'const b = 1;\n');
-            sh('git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD');
-            writeFileSync(join(dir, 'src/cli.js'), 'const a = 1;\nconsole.log("user facing");\n');
-            writeFileSync(join(dir, 'src/lib.js'), 'const b = 1;\nconsole.log("debug left behind");\n');
-            sh('git add -A && git commit -qm change');
-            writeFileSync(join(dir, 'gate.sh'), seed?.body_sh ?? '');
-            try {
-                const out = execSync('bash gate.sh X', { cwd: dir, stdio: 'pipe' }).toString();
-                return { code: 0, out };
-            } catch (err) {
-                const e = err as { status: number; stdout: Buffer };
-                return { code: e.status, out: e.stdout.toString() };
-            }
-        }
-
-        it('exempts a declared bin from the console.log check but not a library file', () => {
-            const r = repoWithCliDiff();
-            expect(r.code).toBe(1);
-            expect(r.out).toContain('src/lib.js');
-            expect(r.out).not.toContain('src/cli.js');
-        });
-    });
-
-    describe.skipIf(process.platform === 'win32')('coder-tests-green runs on non-pnpm projects', () => {
-        const seed = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === 'coder-tests-green');
-
-        function repoWith(files: Record<string, string>, changed: Record<string, string>): string {
-            const dir = mkdtempSync(join(tmpdir(), 'coder-gate-'));
-            const sh = (cmd: string) => execSync(cmd, { cwd: dir, stdio: 'pipe' });
-            sh('git init -q -b main && git config user.email t@t && git config user.name t');
-            const write = (p: string, body: string) => {
-                // Nested paths (specs/…, tests/qa/…) need their parent; a no-op
-                // for the flat filenames the other cases use.
-                mkdirSync(dirname(join(dir, p)), { recursive: true });
-                writeFileSync(join(dir, p), body);
-            };
-            for (const [p, body] of Object.entries(files)) write(p, body);
-            sh('git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD');
-            for (const [p, body] of Object.entries(changed)) write(p, body);
-            sh('git add -A && git commit -qm change');
-            writeFileSync(join(dir, 'gate.sh'), seed?.body_sh ?? '');
-            return dir;
-        }
-
-        function gateExit(dir: string, flag = ''): number {
-            try {
-                execSync(`bash gate.sh X ${flag}`, { cwd: dir, stdio: 'pipe' });
-                return 0;
-            } catch (err) {
-                return (err as { status: number }).status;
-            }
-        }
-
-        it('passes a plain npm + JS project with a changed *.test.js and no typecheck/lint scripts', () => {
-            const dir = repoWith(
-                { 'package.json': '{"scripts":{"test":"node --test"}}' },
-                { 'a.test.js': 'x' },
-            );
-            expect(gateExit(dir)).toBe(0);
-        });
-
-        it('still fails when a declared typecheck script fails', () => {
-            const dir = repoWith(
-                { 'package.json': '{"scripts":{"typecheck":"exit 1"}}' },
-                { 'a.test.ts': 'x' },
-            );
-            expect(gateExit(dir)).toBe(1);
-        });
-
-        it('runs the declared test script only with --run-tests', () => {
-            const dir = repoWith({ 'package.json': '{"scripts":{"test":"exit 1"}}' }, { 'a.test.js': 'x' });
-            expect(gateExit(dir)).toBe(0);
-            expect(gateExit(dir, '--run-tests')).toBe(1);
-        });
-
-        it('still fails when no test file changed', () => {
-            const dir = repoWith({ 'package.json': '{"scripts":{}}' }, { 'a.js': 'x' });
-            expect(gateExit(dir)).toBe(1);
-        });
-
-        // A multi-repo Task stages its Task-wide artefacts — the Architect's
-        // spec and the QA plan — into the FIRST repo (ADR 0017/0018). When that
-        // repo receives no product code, a changed-test requirement there can
-        // never be satisfied and the run parks at End forever. Found by running
-        // a Jira Story through the real Delivery workflow: the artefact repo
-        // blocked delivery of a sibling that was entirely green.
-        it('passes a repo whose only changes are Task-wide artefacts', () => {
-            const dir = repoWith(
-                { 'package.json': '{"scripts":{}}' },
-                {
-                    'specs/2-add-count/spec.md': '# spec',
-                    'tests/qa/ATL-11.csv': 'Summary,Description\\nx,y',
-                },
-            );
-            expect(gateExit(dir, '--run-tests')).toBe(0);
-        });
-
-        // The other half of the rule, and the one that matters: artefacts must
-        // not excuse untested code sitting beside them.
-        it('still fails when artefacts ship alongside untested code', () => {
-            const dir = repoWith(
-                { 'package.json': '{"scripts":{}}' },
-                { 'specs/2-add-count/spec.md': '# spec', 'src.js': 'export const f = 1;' },
-            );
-            expect(gateExit(dir, '--run-tests')).toBe(1);
-        });
-    });
 
     // Async exec: the fake Atlas API below lives in THIS process, so a sync
     // exec would block the event loop the server needs to answer curl.
@@ -509,70 +346,37 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
     });
 
     // The budget exists so an embedded shell script cannot quietly become a
-    // program. `gate-hygiene` is the one carve-out: it runs five declared
-    // tools, standalone secretlint, a dependency audit and three diff scans,
-    // which is ~12 lines per check rather than one bloated check. Anything
-    // that grows past ITS ceiling belongs in `marketplace/probes/` as a real
-    // `.mjs` file, the way `gate-perf` and `gate-visual` did.
-    // `gate-coverage` measures coverage, ratchets the floor, AND runs the suite
-    // when no coverage script is declared (ATL-149). The prose was trimmed twice
-    // before this number moved; what is left is the logic.
-    const LINE_BUDGET: Record<string, number> = { 'gate-hygiene': 120, 'gate-coverage': 90 };
-    const DEFAULT_LINE_BUDGET = 80;
+    // program. Since ADR 0024 every script left here checks an Atlas artifact,
+    // and none of them has a reason to grow: a check that needs branching over
+    // what the project happens to use belongs in a checker agent's prompt,
+    // where it can read the repo instead of guessing.
+    const LINE_BUDGET = 80;
 
     it('each script body is within its line budget', () => {
         for (const seed of GUARDRAIL_SCRIPT_SEEDS) {
-            const budget = LINE_BUDGET[seed.id] ?? DEFAULT_LINE_BUDGET;
             const shLines = seed.body_sh.split('\n').length;
             const psLines = seed.body_ps1.split('\n').length;
-            expect(shLines, `${seed.id} bash lines`).toBeLessThanOrEqual(budget);
-            expect(psLines, `${seed.id} powershell lines`).toBeLessThanOrEqual(budget);
+            expect(shLines, `${seed.id} bash lines`).toBeLessThanOrEqual(LINE_BUDGET);
+            expect(psLines, `${seed.id} powershell lines`).toBeLessThanOrEqual(LINE_BUDGET);
         }
     });
 
-    // A Windows project must not silently get a weaker gate than a Unix one.
-    // The ps1 for gate-hygiene ran only lint and typecheck while the bash ran
-    // nine checks, and nothing caught it because no test compared them.
-    //
-    // Comments are stripped first, and every token below is one that can only
-    // appear in an executable position. Matching prose would let a script pass
-    // this by DESCRIBING a check it does not run — which is the same trick
-    // `agent-fix-reviewer` exists to catch in a fixer's diff.
+    // A Windows project must not silently get a weaker check than a Unix one.
+    // The ps1 for one script ran two of the nine checks its bash sibling ran,
+    // and nothing caught it because no test compared them. Parity is asserted
+    // on executable tokens rather than prose, so a script cannot pass by
+    // DESCRIBING a check it does not run.
     const withoutComments = (body: string) =>
         body
             .split('\n')
             .filter((l) => !l.trim().startsWith('#'))
             .join('\n');
 
-    it('gate-hygiene runs the same checks on both platforms', () => {
-        const seed = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === 'gate-hygiene');
-        expect(seed).toBeDefined();
-        const sh = withoutComments(seed!.body_sh);
-        const ps = withoutComments(seed!.body_ps1);
-        for (const token of [
-            'knip', // the declared-script loop
-            '--maskSecrets', // standalone secretlint over the diff
-            'audit-level', // dependency advisories
-            'TODO\\(\\.agents\\)', // stale-marker regex, not the prose in the gap message
-            'debugger;', // debug residue
-        ]) {
-            expect(sh, `bash does not run ${token}`).toContain(token);
-            expect(ps, `powershell does not run ${token}`).toContain(token);
+    it('every script body is non-trivial on both platforms', () => {
+        for (const seed of GUARDRAIL_SCRIPT_SEEDS) {
+            expect(withoutComments(seed.body_sh).trim().length, `${seed.id} bash`).toBeGreaterThan(40);
+            expect(withoutComments(seed.body_ps1).trim().length, `${seed.id} powershell`).toBeGreaterThan(40);
         }
-    });
-
-    // Template literals eat a single backslash. A `\+` written as one in the TS
-    // source reaches PowerShell as a bare `+`, which is an invalid quantifier,
-    // and `TODO\(\.agents\)` becomes a capture group that matches the wrong
-    // thing. Both happened; neither is visible by reading the TS.
-    it('powershell regex literals survive the template literal', () => {
-        const seed = GUARDRAIL_SCRIPT_SEEDS.find((s) => s.id === 'gate-hygiene');
-        for (const line of seed!.body_ps1.split('\n')) {
-            if (line.trim().startsWith('#')) continue;
-            expect(line, 'bare ^+ is an invalid quantifier').not.toMatch(/-(not)?match '\^\+/);
-        }
-        expect(seed!.body_ps1).toContain('TODO\\(\\.agents\\)');
-        expect(seed!.body_ps1).toContain('package\\.json');
     });
 
     describe('runSeed seeds guardrail_scripts rows', () => {
@@ -580,7 +384,7 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
             await truncateAll();
         });
 
-        it('inserts all 6 rows on a fresh DB', async () => {
+        it('inserts every canonical row on a fresh DB', async () => {
             await runSeed();
             const rows = await db
                 .selectFrom('guardrail_scripts')
@@ -632,151 +436,20 @@ describe('GUARDRAIL_SCRIPT_SEEDS — Phase 3 per-agent validators', () => {
     });
 });
 
-// The golden set's `frontend-only` fixture is the one that exists to exercise
-// `gate-visual`, and on the first v4 run the gate SKIPPED it: the sandbox is a
-// server-rendered Express app that builds its HTML in `src/render.js`, and the
-// detection was an extension list — tsx|jsx|vue|svelte|css|scss|less|html — that
-// no `.js` file can ever match. Every server-rendered app (Express templates,
-// EJS, Pug, Go templates, Rails, PHP) therefore had no visual checking at all,
-// silently, while the gate reported a pass.
-describe.skipIf(process.platform === 'win32')('gate-visual decides what counts as a UI change', () => {
-    function repoWithChange(files: Record<string, string>): string {
-        const dir = mkdtempSync(join(tmpdir(), 'visual-gate-'));
-        const sh = (cmd: string) => execSync(cmd, { cwd: dir, stdio: 'pipe' });
-        sh('git init -q -b main && git config user.email t@t && git config user.name t');
-        writeFileSync(join(dir, 'package.json'), '{"scripts":{}}');
-        writeFileSync(join(dir, 'seed.txt'), 'base\n');
-        sh('git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD');
-        for (const [name, body] of Object.entries(files)) {
-            mkdirSync(join(dir, name, '..'), { recursive: true });
-            writeFileSync(join(dir, name), body);
-        }
-        sh('git add -A && git commit -qm change');
-        return dir;
-    }
-
-    function run(dir: string): string {
-        const body = GUARDRAIL_SCRIPT_SEEDS.find((x) => x.id === 'gate-visual')?.body_sh ?? '';
-        writeFileSync(join(dir, 'gate.sh'), body);
-        try {
-            return execSync('bash gate.sh ATL-1', { cwd: dir, encoding: 'utf8', stdio: 'pipe' });
-        } catch (err) {
-            return String((err as { stdout?: Buffer }).stdout ?? '');
-        }
-    }
-
-    it('runs for server-rendered markup inside a .js file', () => {
-        const out = run(
-            repoWithChange({
-                'src/render.js': "export const row = (t) => `<li class=\"todo\"><span>${t.title}</span></li>`;\n",
-            }),
-        );
-        expect(out, 'a server-rendered page is a UI change').not.toContain('skipped - no UI files changed');
-    });
-
-    it('runs for a style rule added in any file', () => {
-        const out = run(
-            repoWithChange({ 'src/page.js': "const css = 'body{margin:0}'; const el = '<div style=\"width:300px\">x</div>';\n" }),
-        );
-        expect(out).not.toContain('skipped - no UI files changed');
-    });
-
-    it('still runs on a plain .css file', () => {
-        const out = run(repoWithChange({ 'styles/app.css': '.todo { color: red; }\n' }));
-        expect(out).not.toContain('skipped - no UI files changed');
-    });
-
-    // The other half: widening the trigger must not make every backend change
-    // pay for starting the app and driving three viewports in two themes.
-    it('skips a backend change that renders nothing', () => {
-        const out = run(
-            repoWithChange({
-                'src/cache.js': 'export function load(f) { return JSON.parse(readFileSync(f)); }\n',
-                'test/cache.test.js': "it('caches', () => { expect(load(f)).toEqual([]); });\n",
-            }),
-        );
-        expect(out).toContain('skipped - no UI files changed and no markup added');
-    });
-});
-
-// A gate that skips is not a gate. `gate-coverage` looked for a COVERAGE script
-// only, and finding none skipped the measurement AND the test run. The sandbox
-// declares `"test": "node --test"` - it has tests, and the gate never ran them.
+// Why no `gate-*` script is tested here any more (ADR 0024).
 //
-// On ATL-110 a doc sub-task rewrote a README line a sibling sub-task's test
-// asserted on. The suite went red at HEAD and all four gates reported pass; an
-// LLM reviewer caught it, not the deterministic chain built for exactly that.
-// ADR 0020's "absence of evidence is not a failure" covers the measurement,
-// which genuinely cannot be taken without coverage tooling. It does not cover
-// tests the project already has.
-describe.skipIf(process.platform === 'win32')('gate-coverage runs the suite it can run', () => {
-    function repo(pkg: Record<string, unknown>, files: Record<string, string> = {}): string {
-        const dir = mkdtempSync(join(tmpdir(), 'cov-gate-'));
-        writeFileSync(join(dir, 'package.json'), JSON.stringify(pkg));
-        for (const [name, body] of Object.entries(files)) {
-            mkdirSync(join(dir, name, '..'), { recursive: true });
-            writeFileSync(join(dir, name), body);
-        }
-        return dir;
-    }
-
-    function run(dir: string): { code: number; out: string } {
-        const body = GUARDRAIL_SCRIPT_SEEDS.find((x) => x.id === 'gate-coverage')?.body_sh ?? '';
-        writeFileSync(join(dir, 'gate.sh'), body);
-        try {
-            return { code: 0, out: execSync('bash gate.sh ATL-1', { cwd: dir, encoding: 'utf8', stdio: 'pipe' }) };
-        } catch (err) {
-            const e = err as { status: number; stdout: Buffer };
-            return { code: e.status, out: String(e.stdout ?? '') };
-        }
-    }
-
-    const PASSING = "const assert = require('node:assert');\nassert.equal(1, 1);\n";
-    const FAILING = "const assert = require('node:assert');\nassert.equal(1, 2);\n";
-
-    it('runs the declared test script when no coverage script exists', () => {
-        const r = run(repo({ scripts: { test: 'node t.js' } }, { 't.js': PASSING }));
-        expect(r.code).toBe(0);
-        expect(r.out).toContain('tests pass, coverage not measured');
-    });
-
-    it('FAILS on a red suite even though coverage cannot be measured', () => {
-        const r = run(repo({ scripts: { test: 'node t.js' } }, { 't.js': FAILING }));
-        expect(r.code).toBe(1);
-        expect(r.out).toContain('the test suite failed');
-    });
-
-    it('still skips, and never fails, when there is no test script either', () => {
-        const r = run(repo({ scripts: {} }));
-        expect(r.code).toBe(0);
-        expect(r.out).toContain('no coverage script and no test script declared');
-    });
-
-    // The fallback must not shadow the real path: a project WITH coverage
-    // tooling keeps its floor and its ratchet untouched.
-    it('leaves a declared coverage script on its original path', () => {
-        const r = run(
-            repo(
-                { scripts: { 'test:coverage': 'node c.js', test: 'node t.js' } },
-                {
-                    'c.js': "require('fs').mkdirSync('coverage',{recursive:true});require('fs').writeFileSync('coverage/coverage-summary.json',JSON.stringify({total:{statements:{pct:99}}}));",
-                    't.js': FAILING,
-                },
-            ),
-        );
-        // The coverage script ran and passed the floor; the failing `test`
-        // script was never invoked, exactly as before.
-        expect(r.code).toBe(0);
-        expect(r.out).not.toContain('the test suite failed');
-    });
-
-    it('checks the same things on both platforms', () => {
-        const seed = GUARDRAIL_SCRIPT_SEEDS.find((x) => x.id === 'gate-coverage');
-        const strip = (b: string) =>
-            b.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
-        for (const token of ['the test suite failed', 'coverage not measured', 'no test script declared']) {
-            expect(strip(seed!.body_sh), `bash is missing ${token}`).toContain(token);
-            expect(strip(seed!.body_ps1), `powershell is missing ${token}`).toContain(token);
-        }
-    });
-});
+// The golden set's `frontend-only` fixture existed to exercise `gate-visual`,
+// and on the first v4 run the gate SKIPPED it: the sandbox is a server-rendered
+// Express app that builds its HTML in `src/render.js`, and the detection was an
+// extension list — tsx|jsx|vue|svelte|css|scss|less|html — that no `.js` file
+// can ever match. Every server-rendered app had no visual checking at all,
+// silently, while the gate reported a pass. `gate-coverage` looked for a
+// COVERAGE script only and, finding none, skipped the measurement AND the test
+// run, on a sandbox that declares `"test": "node --test"`.
+//
+// Both were fixed, and both fixes were more guessing: a wider regex, a second
+// script-name list. The fix that holds is to stop guessing — a checker agent
+// reads the repo and names the command. What used to be tested here as bash
+// behaviour is now tested as routing (`gate-check-routing.test.ts`) and as
+// engine behaviour (`workflow-engine.integration.test.ts`), because that is
+// where the remaining logic lives.

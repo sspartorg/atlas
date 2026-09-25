@@ -17,7 +17,7 @@ The **autonomous SDLC swarm** is Atlas's long-term fleet vision: one agent per p
 | External work ingest (Jira) | **Catalog, inactive** — Atlassian MCP poll, dedup via `Source: <KEY>`; needs a scheduled no-item workflow |
 | AI-readiness audit (per-project) | **Template** — `ai-readiness` workflow (one node, no item, push + PR); started by "Generate AI scaffold" |
 | Documentation | **Template** — `docs` sub-workflow runs every `[DOC]` twin inside the Task's run |
-| Performance, coverage, hygiene, visual | **Template** — four `gate` steps in `delivery` v4, each with a paired fixer and a Fix Reviewer on its fail edge (ADR 0021) |
+| Performance, tests, hygiene, visual | **Template** — four `gate` steps in `delivery` v5, each dispatching a checker agent that names this project's own command, with a paired fixer and a Fix Reviewer on the fail edge (ADR 0021, 0024) |
 | Reading the whole change | **Template** — Release Reviewer, the only step that sees the branch as one change |
 | Exploratory bug-finding | **Disabled** — the `tester` role now has a row (migration 012) and backs the coverage fixer, but no exploratory-testing agent ships |
 | Knowledge base | **Catalog, inactive** — `agent-knowledge-base`, per-project `skills/` folder via PR; needs a no-item workflow |
@@ -51,7 +51,7 @@ Each has `role_id` pointing at a row in [`role-catalog.md`](role-catalog.md). Ag
 
 | Template | Input / trigger | Graph | Delivery |
 |---|---|---|---|
-| `delivery` ("Delivery") v4 | Task (`item`) / `item_ready` | PO Writer ⇄ PO Reviewer → Architect ⇄ Architect Reviewer → **Sub-tasks** (`template:build`, no label — the catch-all) → **Sub-tasks** (`template:test`, `qa`) → **Sub-tasks** (`template:docs`, `doc`) → four **gate** steps (hygiene, coverage, perf, visual), each failing to its fixer → **Fix Reviewer** → back to the gate → Release Reviewer → End. PO Writer fail → Owner → PO Writer. **Release Reviewer fail → the build step directly**: it files a `dev`-labelled fix sub-task per gap, the build step picks it up because it is the only open one, and everything downstream re-verifies — no Owner in the loop. It reaches the Owner only via `asked_question`, which is for decisions rather than work. `max_loops: 12` — one `loop_count` is shared by every fail edge | worktree, push + one PR per Task; the PR body lists every sub-task. Creating it also creates the project's Build / Test sub-task workflows when missing |
+| `delivery` ("Delivery") v5 | Task (`item`) / `item_ready` | PO Writer ⇄ PO Reviewer → Architect ⇄ Architect Reviewer → **Sub-tasks** (`template:build`, no label — the catch-all) → **Sub-tasks** (`template:test`, `qa`) → **Sub-tasks** (`template:docs`, `doc`) → four **gate** steps (hygiene, tests, perf, visual — each dispatches a checker that names this project's own command, and Atlas runs it), each failing to its fixer → **Fix Reviewer** → back to the gate → Release Reviewer → End. PO Writer fail → Owner → PO Writer. **Release Reviewer fail → the build step directly**: it files a `dev`-labelled fix sub-task per gap, the build step picks it up because it is the only open one, and everything downstream re-verifies — no Owner in the loop. It reaches the Owner only via `asked_question`, which is for decisions rather than work. `max_loops: 12` — one `loop_count` is shared by every fail edge | worktree, push + one PR per Task; the PR body lists every sub-task. Creating it also creates the project's Build / Test sub-task workflows when missing |
 | `build` ("Build sub-task") | `sub_task` / `manual` | Coder → Code Reviewer → End; reviewer fail → Coder | none of its own — the sub-task goes to `in_review` and the Task run continues |
 | `test` ("Test sub-task") | `sub_task` / `manual` | QA Writer → QA Reviewer → Automation → Automation Reviewer → End; reviewer fails loop back | none of its own |
 | `docs` ("Docs sub-task") | `sub_task` / `manual` | Doc Writer ⇄ Doc Reviewer → End | none of its own |
@@ -61,20 +61,29 @@ Each has `role_id` pointing at a row in [`role-catalog.md`](role-catalog.md). Ag
 
 **Sub-task order:** `delivery`'s first Sub-tasks step (no label) builds every sub-task not labelled `qa`, oldest first; the second tests every `qa` sub-task, so each `[QA]` twin runs after all the code is built on the branch. A sub-task created mid-run (e.g. a fix a reviewer asked for) is picked up by its step, or the End gate sends the run back to that step.
 
-### Gate fixers (4) and the Fix Reviewer (ADR 0021)
+### Gate checkers (4), gate fixers (4) and the Fix Reviewer (ADR 0021, 0024)
 
-A `gate` step runs a `guardrail_scripts` body and routes on its exit code — no agent, no tokens. These four are dispatched **only** on a gate's fail edge, with the script's own output as their contract, and their pass edge goes back to the gate. **For a fixer, the gate is the reviewer**: re-running a script is deterministic, free, and cannot be talked into passing, which makes it a strictly better check than a second LLM for anything an exit code can express.
+A `gate` step dispatches a **checker agent**, then runs the command that agent named and routes on its exit code. The checker reads the repo — manifests, tool config, the CI workflow — and answers two things: does this concern apply to THIS project, and what one command proves it. Atlas ships no file-extension list, no coverage floor and no latency budget of its own; if the project declares none, the checker answers `applies: false` and the run records `skipped`, which is honest about "nobody checked" rather than green.
+
+| Checker | Role | Model | Answers |
+|---|---|---|---|
+| `agent-hygiene-check` | `security` | haiku | The project's own lint / typecheck command, from its scripts, its linter config or its CI job |
+| `agent-tests-check` | `tester` | haiku | The project's own test command — with coverage only where the project declares its own threshold. Its answer is also written to `project_repos.verify_command`, which is what the pre-push gate runs (ADR 0020) |
+| `agent-perf-check` | `devops` | haiku | A benchmark or budget command with a committed threshold, or `applies: false` |
+| `agent-visual-check` | `designer` | haiku | The project's own snapshot tooling against its committed baselines, or `applies: false` |
+
+The fixers are dispatched **only** on a gate's fail edge, with the command's own output as their contract, and their pass edge goes back to the gate. **For a fixer, the check is the reviewer**: re-running a command is deterministic and cannot be talked into passing, which makes it a strictly better check than a second LLM for anything an exit code can express. The loop-back re-runs the command without a second checker dispatch — the memo is the newest `run_gate_results` row for that node.
 
 | Agent | Role | Gate | Dispatched when |
 |---|---|---|---|
-| `agent-hygiene-fixer` | `security` | `gate-hygiene` | Declared lint / typecheck / format / knip / secretlint failed, the diff carries `console.log` / `debugger` / an untracked TODO / a stale `TODO(.agents)` marker, or a touched manifest brought a high+ advisory |
-| `agent-coverage-fixer` | `tester` | `gate-coverage` | Statements fell below the floor or the branch's own ratcheted number — **or** the suite is red on a project that declares `test` but no coverage script, where the gate runs the tests and reports what failed rather than skipping both |
-| `agent-perf-fixer` | `devops` | `gate-perf` | A touched route's p95 breached its budget — 100ms for an API route, 200ms for a page |
-| `agent-visual-reviewer` | `designer` | `gate-visual` | A diff against a committed baseline on any installed engine, or `ATLAS_GATE_NEEDS_REVIEW` — captured with no baseline to compare against |
+| `agent-hygiene-fixer` | `security` | `gate-hygiene` | The project's own lint or typecheck command came back red |
+| `agent-coverage-fixer` | `tester` | `gate-tests` | The project's own suite is red, or below a threshold the project itself declares |
+| `agent-perf-fixer` | `devops` | `gate-perf` | The project's own benchmark or budget command reported a breach |
+| `agent-visual-reviewer` | `designer` | `gate-visual` | A diff against a committed baseline, or `ATLAS_GATE_NEEDS_REVIEW` — captured with no baseline to compare against |
 
-The visual one is an agent rather than a script for a reason the others are not: a screen with no baseline has nothing to diff, so the judgement is "does this look right", which needs eyes.
+The visual fixer is the reviewer agent itself for a reason the others are not: a screen with no baseline has nothing to diff, so the judgement is "does this look right", which needs eyes.
 
-**The one thing a gate cannot check is how it was made green.** `eslint-disable`, an assertion-free test, a widened perf budget, a blessed-but-unseen baseline — each turns a gate green and leaves the codebase worse, and the script has no way to tell that from a real fix. So every fixer's pass edge goes to **`agent-fix-reviewer`** (one agent, four nodes) before the gate re-runs: it reads the gate's gap list against the fixer's diff and rejects suppression, faked evidence and scope creep. Rejected → back to the fixer. Passed → the gate re-runs and has the final say. The gate is still the reviewer for *whether* the check passes; the Fix Reviewer is the reviewer for *why*.
+**The one thing a check cannot tell you is how it was made green.** `eslint-disable`, an assertion-free test, a widened budget, a blessed-but-unseen baseline — each turns a command green and leaves the codebase worse, and an exit code cannot tell that from a real fix. So every fixer's pass edge goes to **`agent-fix-reviewer`** (one agent, four nodes) before the check re-runs: it reads the gap list against the fixer's diff and rejects suppression, faked evidence and scope creep. Rejected → back to the fixer. Passed → the command re-runs and has the final say. The command is still the reviewer for *whether* the check passes; the Fix Reviewer is the reviewer for *why*.
 
 ### Autonomous catalog agents (6, inactive)
 
