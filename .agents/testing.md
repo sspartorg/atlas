@@ -110,12 +110,12 @@ Some api files are intentionally excluded from `coverage.include`:
 ## CI
 
 **Build only, since 2026-09-28.** The Owner removed `gate.yml` (typecheck, lint,
-unit, api coverage, PowerShell, e2e) and `lighthouse.yml`; every test suite is
+unit, api coverage, PowerShell, e2e), `lighthouse.yml` and the bundle-budget step; every test suite is
 now local-only.
 
 | Workflow | Trigger | What it runs |
 |---|---|---|
-| `.github/workflows/build.yml` | push (main) · PR | `pnpm -r build` → `pnpm -F @atlas/web bundle:check` |
+| `.github/workflows/build.yml` | push (main) · PR | `pnpm -r build` |
 
 The Build check is not a *required* status check — `main`'s protection has none configured.
 
@@ -126,7 +126,7 @@ two serialised runs. Do not "optimise" the local gate by re-parallelising it. Th
 
 **`scripts/bootstrap.sh`** (the macOS/Linux one-command installer) is exercised by `packages/api/tests/bootstrap-sh.test.ts`, so it runs with the api tests. It executes the real script against a throwaway repo with a PATH holding only stubs plus a few real coreutils (appending the real PATH would make "tool missing" branches unreachable on a runner that has git/docker/gh in `/usr/bin`), and asserts the `--dry-run` plan for macOS, Debian, Fedora and Arch, that a configured machine prints `keep:` for every step, a real (non-dry) token write that a re-run leaves byte-identical, and the failed-step resume message. Its last case runs `shellcheck`, which ships on GitHub's ubuntu runners; dev machines without it skip that case. `scripts/bootstrap.ps1` still has no automated run.
 
-The only remote check is the **web bundle budget** (`bundle:check` in `build.yml`), which fails the Build workflow on every push and PR.
+The web bundle budget (`pnpm -F @atlas/web bundle:check`) is local-only too; `pnpm gate` still runs it.
 
 ## What's deferred
 
