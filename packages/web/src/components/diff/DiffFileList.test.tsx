@@ -47,6 +47,14 @@ describe('DiffFileList', () => {
         expect(screen.getAllByText('src/')).toHaveLength(2);
     });
 
+    // The row truncates from the left with `direction: rtl`; without an
+    // isolated LTR run the bidi algorithm drew `.gitignore` as `gitignore.`.
+    it('keeps each path an isolated left-to-right run', () => {
+        renderList({ files: [file({ path: '.gitignore' })], selected: {}, activePath: null });
+        const base = screen.getByText('.gitignore');
+        expect(base.closest('bdi')?.getAttribute('dir')).toBe('ltr');
+    });
+
     it('renders a status letter per file', () => {
         renderList();
         expect(screen.getByText('M')).toBeInTheDocument();

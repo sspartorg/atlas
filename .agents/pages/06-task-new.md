@@ -19,7 +19,7 @@ Single-page form to draft a Task and either save it as a draft or submit it. Sub
 **Form fields**
 - **Title** — required, autoFocus; inline error on blur / submit.
 - **Description** — multiline, required.
-- **Project** — Select, required; pre-filled from `?project=`.
+- **Project** — Select, required; pre-filled from `?project=<id or name>` once projects load (derived, not seeded into state — a fresh load used to leave it empty). Nothing in the app links with it today; it is for bookmarks and external links.
 - **Repos** — shown whenever the picked project has any repo (ADR 0018): `RepoSelect` multi-select, the project's **first** repo preselected, order = pick order, helper "First repo holds specs and other Task-wide files." Always sent as `repo_ids`. With a project selected and nothing picked, Save/Submit are disabled; a project with no repos shows an info alert pointing at its Repos tab instead of the picker.
 - **Priority** — `low | normal | high | urgent`; default `low`.
 - **Workflow** — Select, always shown: **None — save for later** + every `input_kind='item'` workflow that is global or the picked project's (the rule the API enforces). Preselects the project's `default_workflow_id` (set on Project Detail → Setup) when it is still one of the options; changing the project resets it to that project's default. The preselection is the **only** place the default is applied — the server never falls back to it, so Jira imports keep their source's workflow (ADR 0016).

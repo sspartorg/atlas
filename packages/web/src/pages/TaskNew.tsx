@@ -66,16 +66,20 @@ export function TaskNew() {
     const transitionTask = useTransitionTask();
     const toast = useToast();
 
-    const projectByName = useMemo(() => new Map(projects.map((p) => [p.name, p])), [projects]);
+    // `?project=` takes an id or a name. Derived rather than seeded into state:
+    // on a fresh load the projects arrive after the first render, and a value
+    // copied into useState then stayed '' for good.
     const defaultProjectId = defaultProjectName
-        ? (projectByName.get(defaultProjectName)?.id ?? '')
+        ? (projects.find((p) => p.id === defaultProjectName || p.name === defaultProjectName)?.id ?? '')
         : '';
 
     const activeAgents = useMemo(() => agents.filter((w) => w.status === 'active'), [agents]);
 
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
-    const [projectId, setProjectId] = useState(defaultProjectId);
+    // null = untouched: the `?project=` project, once projects have loaded.
+    const [projectChoice, setProjectId] = useState<string | null>(null);
+    const projectId = projectChoice ?? defaultProjectId;
     const [priority, setPriority] = useState<IssuePriority>('low');
     const { data: repos = [] } = useProjectRepos(projectId);
     // ADR 0018 — null = untouched: the project's first repo, preselected.

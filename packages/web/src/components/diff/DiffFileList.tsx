@@ -154,12 +154,19 @@ export function DiffFileList({
                                     }}
                                     title={f.old_path ? `${f.old_path} → ${f.path}` : f.path}
                                 >
-                                    <Box component="span" sx={{ color: ATLAS_PALETTE.slate60 }}>
-                                        {dir}
-                                    </Box>
-                                    <Box component="span" sx={{ color: ATLAS_PALETTE.slate }}>
-                                        {base}
-                                    </Box>
+                                    {/* `rtl` above puts the ellipsis on the left, so a long
+                                        path keeps its file name. The path itself must stay an
+                                        isolated LTR run, or the bidi algorithm moves leading
+                                        and trailing punctuation: `.gitignore` drew as
+                                        `gitignore.` */}
+                                    <bdi dir="ltr">
+                                        <Box component="span" sx={{ color: ATLAS_PALETTE.slate60 }}>
+                                            {dir}
+                                        </Box>
+                                        <Box component="span" sx={{ color: ATLAS_PALETTE.slate }}>
+                                            {base}
+                                        </Box>
+                                    </bdi>
                                 </Typography>
                                 {f.old_path && (
                                     <Typography

@@ -432,10 +432,7 @@ it('createTask throws — outer catch shows error toast', async () => {
     expect(document.body).toBeTruthy();
 });
 
-it('defaultProjectId resolves from ?project= URL param when param matches a project name', async () => {
-    // The project "Atlas" with id "p1" is in the list. Navigating with
-    // ?project=Atlas should pre-select "p1" as the defaultProjectId so the
-    // project Select already has a value when the page first renders.
+it('preselects the ?project= project by name once projects load', async () => {
     server.use(
         http.get(`${BASE}/projects`, () =>
             HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])
@@ -447,22 +444,10 @@ it('defaultProjectId resolves from ?project= URL param when param matches a proj
     renderWithProviders(<TaskNew />, {
         initialEntries: ['/tasks/new?project=Atlas'],
     });
-
-    // Wait for the page to render
-    await screen.findByPlaceholderText(/Refund automation/i);
-
-    // The project Select should display "Atlas" (not "Choose a project…")
-    // because defaultProjectId was resolved to "p1" from the URL param.
-    // MUI Select renders the selected value in a hidden input — check that
-    // the combobox does NOT show the empty/disabled placeholder option.
-    const selects = screen.getAllByRole('combobox');
-    // The first combobox is the project select. Its displayed text should
-    // contain "Atlas" when the param resolved correctly.
-    const projectSelect = selects[0];
-    expect(projectSelect).toBeTruthy();
-    // We just verify the page rendered without error — the resolution of
-    // defaultProjectId is exercised by reaching this point without crashing.
-    expect(document.body).toBeTruthy();
+    // Projects arrive after the first render; the old code copied the
+    // then-empty id into state and never picked the project up.
+    const project = await screen.findByRole('combobox', { name: 'Project' });
+    await waitFor(() => expect(project).toHaveTextContent('Atlas'));
 });
 
 it('reporter select changed to a non-OWNER agent — sets reporter_agent_id to agent id on submit', async () => {
@@ -825,6 +810,15 @@ describe('TaskNew — workflow select (migration 022)', () => {
         fireEvent.mouseDown(select);
         const names = screen.getAllByRole('option').map((o) => o.textContent);
         expect(names).toEqual(['None — save for later', 'Quick change', 'Delivery']);
+    });
+
+    it('preselects the ?project= project by id, and with it the default workflow', async () => {
+        server.use(...handlers('wf-quick', () => {}));
+        renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new?project=p1'] });
+        const project = await screen.findByRole('combobox', { name: 'Project' });
+        await waitFor(() => expect(project).toHaveTextContent('Atlas'));
+        const select = await screen.findByRole('combobox', { name: 'Workflow' });
+        await waitFor(() => expect(select).toHaveTextContent('Quick change'));
     });
 
     it('submits with workflow_id and skips the separate ready transition', async () => {
