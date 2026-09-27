@@ -36,8 +36,9 @@ function payload(over: Partial<FleetPayload> = {}): FleetPayload {
             prs_opened: 5,
             prs_merged: 3,
             merge_rate: 0.6,
+            tasks_merged: 3,
             merged_cost_usd: 35.25,
-            cost_per_merged_pr_usd: 11.75,
+            cost_per_merged_task_usd: 11.75,
             median_s_to_pr: 5400,
             interventions: { parked: 3, tasks: 4, per_task: 0.75, since: '2026-09-27T10:00:00Z' },
         },
@@ -73,6 +74,8 @@ describe('FleetPerformance', () => {
         expect(await screen.findByText('PRs merged')).toBeInTheDocument();
         expect(screen.getByText('of 5 opened')).toBeInTheDocument();
         expect(screen.getByText('$11.75')).toBeInTheDocument();
+        expect(screen.getByText('Cost per merged Task')).toBeInTheDocument();
+        expect(screen.getByText(/3 delivered/)).toBeInTheDocument();
         expect(screen.getByText('1.5h')).toBeInTheDocument();
         expect(screen.getByText('0.8')).toBeInTheDocument();
         // The intervention series starts at migration 024, and says so.
@@ -148,8 +151,9 @@ describe('FleetPerformance', () => {
                     prs_opened: 0,
                     prs_merged: 0,
                     merge_rate: null,
+                    tasks_merged: 0,
                     merged_cost_usd: 0,
-                    cost_per_merged_pr_usd: null,
+                    cost_per_merged_task_usd: null,
                     median_s_to_pr: null,
                     interventions: { parked: 0, tasks: 0, per_task: null, since: null },
                 },
@@ -171,8 +175,9 @@ describe('FleetPerformance', () => {
                     prs_opened: 0,
                     prs_merged: 0,
                     merge_rate: null,
+                    tasks_merged: 0,
                     merged_cost_usd: 0,
-                    cost_per_merged_pr_usd: null,
+                    cost_per_merged_task_usd: null,
                     median_s_to_pr: null,
                     interventions: { parked: 0, tasks: 0, per_task: null, since: null },
                 },

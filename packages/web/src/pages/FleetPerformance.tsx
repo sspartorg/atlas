@@ -69,11 +69,11 @@ function DeliveryTiles({ d }: { d: FleetDelivery }) {
                 captionTitle="Merged as last checked on GitHub. Agent-test Tasks are not counted."
             />
             <KpiTile
-                label="Cost per merged PR"
+                label="Cost per merged Task"
                 dotColor={ATLAS_PALETTE.brandBlue}
-                value={d.cost_per_merged_pr_usd === null ? '—' : formatCostUsd(d.cost_per_merged_pr_usd)}
-                caption="every step, failed ones too"
-                captionTitle="What the merged runs spent — every step of the Task run and its sub-task runs, including failed ones — divided by the PRs merged."
+                value={d.cost_per_merged_task_usd === null ? '—' : formatCostUsd(d.cost_per_merged_task_usd)}
+                caption={`${d.tasks_merged} delivered · every step, failed ones too`}
+                captionTitle="What the delivered Tasks spent — every step of the Task run and its sub-task runs, including failed ones — divided by the Tasks whose every PR merged. A multi-repo Task's PRs count as one delivery."
             />
             <KpiTile
                 label="Median time to PR"

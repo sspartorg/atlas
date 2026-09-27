@@ -3,7 +3,7 @@
 **Route:** `/agents/performance` • **Component:** `packages/web/src/pages/FleetPerformance.tsx` • **Slug:** `agents`
 
 ## Purpose
-Every agent that took a workflow step in the window, side by side, plus what the fleet delivered: PRs merged, cost per merged PR, time to PR and how often a Task needed the Owner. The per-agent numbers are the Performance tab's ([Agent Detail](16-agent-detail.md)), computed by the same code (`shapeAgent` in `services/agent-scorecard.ts`).
+Every agent that took a workflow step in the window, side by side, plus what the fleet delivered: PRs merged, cost per merged Task, time to PR and how often a Task needed the Owner. The per-agent numbers are the Performance tab's ([Agent Detail](16-agent-detail.md)), computed by the same code (`shapeAgent` in `services/agent-scorecard.ts`).
 
 **A comparison, not a leaderboard.** ADR 0023 rules out ranking agents on first-attempt success: a reviewer whose job is to send work back sorts worst on any such number. Rows are sorted by agent name (server-side), no pass rate appears anywhere, and **Sent back** is the same brand blue as on the tab — never the error colour.
 
@@ -22,7 +22,7 @@ Every agent that took a workflow step in the window, side by side, plus what the
 
 **Delivery tiles** (`KpiTile` ×4)
 - **PRs merged** — `prs_merged`, caption `of {prs_opened} opened`. Merged = the PR link's last polled GitHub state.
-- **Cost per merged PR** — `cost_per_merged_pr_usd` or `—`; caption "every step, failed ones too" (tooltip explains: the merged runs' every step, Task run and sub-task runs, failed ones included, ÷ PRs merged).
+- **Cost per merged Task** — `cost_per_merged_task_usd` or `—`; caption "<tasks_merged> delivered · every step, failed ones too" (tooltip: every step of the delivered Tasks' runs, Task run and sub-task runs, failed ones included, ÷ Tasks whose every PR merged). Per Task, not per PR: a multi-repo Task opens one PR per repo, and dividing by PRs halved the price of every two-repo delivery.
 - **Median time to PR** — `median_s_to_pr` as `45s` / `12m` / `1.5h` / `3.0d`, or `—`; caption "from run start".
 - **Owner interventions per Task** — `per_task` to one decimal, or `—`; caption `{parked} over {tasks} Tasks since {date}` where the date is when park history began (migration 024), or "not recorded yet". Runs that started before that date are left out rather than counted as zero.
 

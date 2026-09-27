@@ -134,7 +134,7 @@ describe('GET /api/agents/performance', () => {
             prs_opened: 0,
             prs_merged: 0,
             merge_rate: null,
-            cost_per_merged_pr_usd: null,
+            cost_per_merged_task_usd: null,
             median_s_to_pr: null,
             interventions: { parked: 0, tasks: 0, per_task: null },
         });
@@ -200,11 +200,38 @@ describe('GET /api/agents/performance', () => {
         expect(delivery.runs).toBe(3);
         expect(delivery.prs_opened).toBe(2);
         expect(delivery.prs_merged).toBe(1);
+        expect(delivery.tasks_merged).toBe(1);
         expect(delivery.merge_rate).toBe(0.5);
         expect(delivery.merged_cost_usd).toBe(10);
-        expect(delivery.cost_per_merged_pr_usd).toBe(10);
+        expect(delivery.cost_per_merged_task_usd).toBe(10);
         // 20 min to PR 1 and 40 to PR 2; the lower median.
         expect(delivery.median_s_to_pr).toBe(1200);
+    });
+
+    // ADR 0017: a multi-repo Task opens one PR per repo, and they only make
+    // sense merged together. Dividing by PRs halved the price of every
+    // two-repo delivery; the unit is the Task.
+    it('prices a multi-repo Task once, and only when every one of its PRs merged', async () => {
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1' });
+        const both = ['https://github.com/o/api/pull/1', 'https://github.com/o/web/pull/1'];
+        await run({ id: 'wr-1', item: 'ATL-1', prs: both, startedMinAgo: 60 });
+        await step({ run: 'wr-1', cost: 12 });
+        await prLink('ATL-1', both[0]!, 'merged', 40);
+        await prLink('ATL-1', both[1]!, 'merged', 40);
+        // Half merged: its merged PR counts, the Task is not delivered yet.
+        const half = ['https://github.com/o/api/pull/2', 'https://github.com/o/web/pull/2'];
+        await run({ id: 'wr-2', item: 'ATL-2', prs: half, startedMinAgo: 60 });
+        await step({ run: 'wr-2', cost: 50 });
+        await prLink('ATL-2', half[0]!, 'merged', 40);
+        await prLink('ATL-2', half[1]!, 'open', 40);
+
+        const { delivery } = await fleet();
+        expect(delivery.prs_opened).toBe(4);
+        expect(delivery.prs_merged).toBe(3);
+        expect(delivery.tasks_merged).toBe(1);
+        expect(delivery.merged_cost_usd).toBe(12);
+        expect(delivery.cost_per_merged_task_usd).toBe(12);
     });
 
     // A run whose link write failed still opened its PR right before finishing.

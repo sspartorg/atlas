@@ -565,8 +565,9 @@ export interface FleetDelivery {
     prs_opened: number;
     prs_merged: number;
     merge_rate: number | null;
+    tasks_merged: number;
     merged_cost_usd: number;
-    cost_per_merged_pr_usd: number | null;
+    cost_per_merged_task_usd: number | null;
     median_s_to_pr: number | null;
     interventions: {
         parked: number;

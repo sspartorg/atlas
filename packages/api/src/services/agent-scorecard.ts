@@ -651,9 +651,15 @@ interface FleetDelivery {
     /** PRs whose last observed GitHub state is `merged`. */
     prs_merged: number;
     merge_rate: number | null;
-    /** Everything the merged runs spent: every step of the run and its sub-task runs, failed ones included. */
+    /**
+     * Task runs whose every PR merged. A multi-repo Task opens one PR per repo
+     * (ADR 0017) that only make sense merged together, so it is one delivery,
+     * not two — and one half-merged is not delivered yet.
+     */
+    tasks_merged: number;
+    /** Everything the merged Task runs spent: every step of the run and its sub-task runs, failed ones included. */
     merged_cost_usd: number;
-    cost_per_merged_pr_usd: number | null;
+    cost_per_merged_task_usd: number | null;
     median_s_to_pr: number | null;
     interventions: {
         /** Times a Task run stopped and waited for the Owner. */
@@ -721,6 +727,7 @@ async function fleetDelivery(card: Scorecard): Promise<FleetDelivery> {
 
     let opened = 0;
     let merged = 0;
+    let tasksMerged = 0;
     let mergedCost = 0;
     const toPr: number[] = [];
     for (const run of live) {
@@ -728,8 +735,9 @@ async function fleetDelivery(card: Scorecard): Promise<FleetDelivery> {
         if (urls.length === 0) continue;
         opened += urls.length;
         const m = urls.filter((u) => links.get(u)?.pr_state === 'merged').length;
-        if (m > 0) {
-            merged += m;
+        merged += m;
+        if (m === urls.length) {
+            tasksMerged += 1;
             mergedCost += treeCost.get(run.id) ?? 0;
         }
         // The link row is written the moment the PR opens; a run whose link
@@ -771,8 +779,9 @@ async function fleetDelivery(card: Scorecard): Promise<FleetDelivery> {
         prs_opened: opened,
         prs_merged: merged,
         merge_rate: opened === 0 ? null : round(merged / opened, 3),
+        tasks_merged: tasksMerged,
         merged_cost_usd: round(mergedCost),
-        cost_per_merged_pr_usd: merged === 0 ? null : round(mergedCost / merged),
+        cost_per_merged_task_usd: tasksMerged === 0 ? null : round(mergedCost / tasksMerged),
         median_s_to_pr: percentile(
             toPr.sort((a, b) => a - b),
             0.5,
