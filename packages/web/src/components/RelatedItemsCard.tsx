@@ -4,11 +4,13 @@ import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import Tooltip from '@mui/material/Tooltip';
 import AddRounded from '@mui/icons-material/AddRounded';
 import LinkOffRounded from '@mui/icons-material/LinkOffRounded';
 import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
 import { useNavigate } from 'react-router-dom';
 import type {
+    ExternalCiState,
     ExternalPrState,
     IIssueLinkRow,
     IItemExternalLink,
@@ -64,6 +66,22 @@ const PR_STATE_CHIP: Record<ExternalPrState, { label: string; bg: string; fg: st
     merged: { label: 'Merged', bg: ATLAS_PALETTE.accentSoft, fg: ATLAS_PALETTE.accentFg },
     closed: { label: 'Closed', bg: ATLAS_PALETTE.dangerSoft, fg: ATLAS_PALETTE.dangerFg },
 };
+
+// CI on the PR's head commit (migration 023). No chip at all when the API saw
+// no CI — a repo without checks must not read as green.
+const CI_CHIP: Record<ExternalCiState, { label: string; bg: string; fg: string }> = {
+    success: { label: 'CI passed', bg: ATLAS_PALETTE.successSoft, fg: ATLAS_PALETTE.successFg },
+    pending: { label: 'CI running', bg: ATLAS_PALETTE.warnSoft, fg: ATLAS_PALETTE.warnFg },
+    failure: { label: 'CI failed', bg: ATLAS_PALETTE.dangerSoft, fg: ATLAS_PALETTE.dangerFg },
+};
+
+function ciTooltip(l: IItemExternalLink): string {
+    if (l.ci_state === 'success') return 'All checks passed on the latest commit';
+    if (l.ci_state === 'pending') return 'Checks are still running on the latest commit';
+    const failing = l.ci_failing_checks ?? [];
+    if (failing.length === 0) return 'A check failed on the latest commit';
+    return `Failing: ${failing.map((c) => (c.detail ? `${c.name} (${c.detail})` : c.name)).join('; ')}`;
+}
 
 export function RelatedItemsCard({
     issueType,
@@ -460,6 +478,21 @@ export function RelatedItemsCard({
                                         color: PR_STATE_CHIP[l.pr_state].fg,
                                     }}
                                 />
+                            )}
+                            {l.ci_state && (
+                                <Tooltip title={ciTooltip(l)}>
+                                    <Chip
+                                        size="small"
+                                        label={CI_CHIP[l.ci_state].label}
+                                        sx={{
+                                            height: 20,
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                            bgcolor: CI_CHIP[l.ci_state].bg,
+                                            color: CI_CHIP[l.ci_state].fg,
+                                        }}
+                                    />
+                                </Tooltip>
                             )}
                             <IconButton
                                 size="small"

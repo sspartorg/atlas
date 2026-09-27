@@ -4,7 +4,9 @@ import { db } from '../db/kysely-client.js';
 import { eventsLog } from './events-log.js';
 import { credentialsService } from './credentials.js';
 import { broadcastSSE } from '../routes/events.js';
-import type { ExternalLinkKind, ExternalPrState, IItemExternalLink } from '@atlas/shared';
+import { combineCi, type CiResult, type GithubCheckRun, type GithubCommitStatus } from './ci-routing.js';
+import type { RedPr } from './ci-follow-through.js';
+import type { ExternalLinkKind, ExternalPrState, IExternalCiCheck, IItemExternalLink } from '@atlas/shared';
 
 const execFileP = promisify(execFile);
 
@@ -48,40 +50,76 @@ export async function fetchGithubPrTitle(
     }
 }
 
-// Current state of a GitHub PR via the REST API (GET /repos/{o}/{r}/pulls/{n}).
-// REST rather than `gh` like fetchGithubPrTitle: this runs on the read path
-// against the project credential's token, so it must not depend on a local
-// `gh` install or the developer's own `gh auth login`. Null on any failure.
-export async function fetchGithubPrState(
-    url: string,
-    token: string,
-): Promise<ExternalPrState | null> {
-    const pr = parseGithubPrUrl(url);
-    if (!pr) return null;
+const GITHUB_HEADERS = (token: string) => ({
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'atlas/external-links',
+    Authorization: `Bearer ${token}`,
+});
+
+// GET one GitHub REST path as JSON; null on any failure (non-2xx, network,
+// timeout, bad JSON). Every GitHub read here is best-effort.
+async function githubGet(path: string, token: string): Promise<unknown> {
     try {
-        const r = await fetch(
-            `https://api.github.com/repos/${encodeURIComponent(pr.owner)}/${encodeURIComponent(pr.repo)}/pulls/${pr.number}`,
-            {
-                headers: {
-                    Accept: 'application/vnd.github+json',
-                    'X-GitHub-Api-Version': '2022-11-28',
-                    'User-Agent': 'atlas/external-links',
-                    Authorization: `Bearer ${token}`,
-                },
-                signal: AbortSignal.timeout(10_000),
-            },
-        );
+        const r = await fetch(`https://api.github.com${path}`, {
+            headers: GITHUB_HEADERS(token),
+            signal: AbortSignal.timeout(10_000),
+        });
         if (!r.ok) {
             // Drain so undici releases the socket.
             await r.text().catch(() => '');
             return null;
         }
-        const body = (await r.json()) as { state?: unknown; merged_at?: unknown };
-        if (body.merged_at) return 'merged';
-        return body.state === 'closed' ? 'closed' : 'open';
+        return (await r.json()) as unknown;
     } catch {
         return null;
     }
+}
+
+// Current state of a GitHub PR via the REST API (GET /repos/{o}/{r}/pulls/{n}),
+// plus its head commit — the sha CI results hang off (migration 023).
+// REST rather than `gh` like fetchGithubPrTitle: this runs on the read path
+// against the project credential's token, so it must not depend on a local
+// `gh` install or the developer's own `gh auth login`. Null on any failure.
+export async function fetchGithubPr(
+    url: string,
+    token: string,
+): Promise<{ state: ExternalPrState; headSha: string | null } | null> {
+    const pr = parseGithubPrUrl(url);
+    if (!pr) return null;
+    const body = (await githubGet(
+        `/repos/${encodeURIComponent(pr.owner)}/${encodeURIComponent(pr.repo)}/pulls/${pr.number}`,
+        token,
+    )) as { state?: unknown; merged_at?: unknown; head?: { sha?: unknown } } | null;
+    if (!body) return null;
+    const state: ExternalPrState = body.merged_at ? 'merged' : body.state === 'closed' ? 'closed' : 'open';
+    return { state, headSha: typeof body.head?.sha === 'string' ? body.head.sha : null };
+}
+
+export async function fetchGithubPrState(url: string, token: string): Promise<ExternalPrState | null> {
+    return (await fetchGithubPr(url, token))?.state ?? null;
+}
+
+/**
+ * CI on one commit: check runs (Actions and other apps) and legacy commit
+ * statuses, folded by `combineCi`. Null when either lookup failed — half the
+ * picture could hide the one red check, so nothing is better than a guess.
+ */
+export async function fetchGithubCi(url: string, sha: string, token: string): Promise<CiResult | null> {
+    const pr = parseGithubPrUrl(url);
+    if (!pr) return null;
+    const base = `/repos/${encodeURIComponent(pr.owner)}/${encodeURIComponent(pr.repo)}/commits/${encodeURIComponent(sha)}`;
+    // ponytail: first page only (100 check runs / 100 statuses); a repo with
+    // more checks than that per commit needs Link-header pagination here.
+    const [runs, status] = await Promise.all([
+        githubGet(`${base}/check-runs?per_page=100`, token) as Promise<{ check_runs?: unknown } | null>,
+        githubGet(`${base}/status?per_page=100`, token) as Promise<{ statuses?: unknown } | null>,
+    ]);
+    if (!runs || !status) return null;
+    return combineCi(
+        Array.isArray(runs.check_runs) ? (runs.check_runs as GithubCheckRun[]) : [],
+        Array.isArray(status.statuses) ? (status.statuses as GithubCommitStatus[]) : [],
+    );
 }
 
 const PR_STATE_TTL_MS = 5 * 60_000;
@@ -150,20 +188,50 @@ async function syncPrStates(itemId: string, onlyStale: boolean): Promise<void> {
     };
     let changed = false;
     let newlyMerged = false;
+    const red: RedPr[] = [];
     for (const row of due) {
         const token = await tokenFor(row.url);
         if (!token) continue;
-        const state = await fetchGithubPrState(row.url, token);
+        const pr = await fetchGithubPr(row.url, token);
+        const state = pr?.state ?? null;
+        // CI only matters while the PR is open: a merged or closed PR's last
+        // CI reading stays as it was.
+        const ci = state === 'open' && pr?.headSha ? await fetchGithubCi(row.url, pr.headSha, token) : null;
+        const now = new Date().toISOString();
         await db
             .updateTable('item_external_links')
             .set({
-                pr_state_checked_at: new Date().toISOString(),
+                pr_state_checked_at: now,
                 ...(state ? { pr_state: state } : {}),
+                ...(ci
+                    ? {
+                          ci_state: ci.state,
+                          ci_head_sha: pr?.headSha ?? null,
+                          ci_summary: JSON.stringify(ci.failing),
+                          ci_checked_at: now,
+                      }
+                    : {}),
             })
             .where('id', '=', row.id)
             .execute();
         if (state && state !== row.pr_state) changed = true;
+        if (ci && ci.state !== row.ci_state) changed = true;
         if (state === 'merged' && row.pr_state !== 'merged') newlyMerged = true;
+        // Cheap pre-filter; the full decision (status, cap, live run) is
+        // ci-routing's, made once per red PR below.
+        if (ci?.state === 'failure' && pr?.headSha && pr.headSha !== row.ci_handled_sha) {
+            red.push({ linkId: Number(row.id), url: row.url, headSha: pr.headSha, handledSha: row.ci_handled_sha, failing: ci.failing });
+        }
+    }
+    if (red.length > 0 && item.type === 'task') {
+        // Dynamic: ci-follow-through imports workflow-engine, which imports
+        // this module. Best-effort — polling must never throw on it.
+        try {
+            const { followThroughRedCi } = await import('./ci-follow-through.js');
+            for (const pr of red) await followThroughRedCi(itemId, pr);
+        } catch {
+            /* the chip still shows red; the next new sha tries again */
+        }
     }
     // One PR per repo (ADR 0017): the Task closes once the last of them merges.
     if (newlyMerged && item.type === 'task') {
@@ -368,6 +436,9 @@ interface ExternalLinkRow {
     created_by_run_id: string | null;
     pr_state: ExternalPrState | null;
     pr_state_checked_at: string | Date | null;
+    ci_state: 'pending' | 'success' | 'failure' | null;
+    ci_summary: IExternalCiCheck[] | null;
+    ci_handled_sha: string | null;
 }
 
 function rowToShared(row: ExternalLinkRow): IItemExternalLink {
@@ -395,5 +466,7 @@ function rowToShared(row: ExternalLinkRow): IItemExternalLink {
                 : (row.created_at as string),
         created_by_run_id: row.created_by_run_id,
         pr_state: row.pr_state,
+        ci_state: row.ci_state,
+        ci_failing_checks: row.ci_summary ?? [],
     };
 }

@@ -851,6 +851,19 @@ export const EXTERNAL_LINK_KINDS: ExternalLinkKind[] = ['pull_request'];
 /** GitHub PR lifecycle as last observed by the API (null = not yet checked or lookup failed). */
 export type ExternalPrState = 'open' | 'merged' | 'closed';
 
+/**
+ * Combined CI result for a PR's head commit (GitHub check-runs + legacy
+ * statuses), as last observed by the API. Absent/null = no CI seen — never
+ * read as success.
+ */
+export type ExternalCiState = 'pending' | 'success' | 'failure';
+
+/** One failing CI check: its name and the short title/description GitHub gave it. */
+export interface IExternalCiCheck {
+    name: string;
+    detail: string | null;
+}
+
 export interface IItemExternalLink {
     id: number;
     item_id: string;
@@ -864,6 +877,10 @@ export interface IItemExternalLink {
     created_by_run_id: string | null;
     /** Pull-request links only: last observed GitHub state; null when unknown. */
     pr_state?: ExternalPrState | null;
+    /** Pull-request links only: CI on the PR's head commit; null when no CI was observed. */
+    ci_state?: ExternalCiState | null;
+    /** The checks that failed on that commit (empty unless ci_state is 'failure'). */
+    ci_failing_checks?: IExternalCiCheck[];
 }
 
 /**

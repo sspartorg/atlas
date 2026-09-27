@@ -350,6 +350,63 @@ describe('RelatedItemsCard', () => {
             expect(document.querySelectorAll('.MuiChip-root')).toHaveLength(3);
         });
 
+        it('shows a CI chip next to the PR state, and none when no CI was seen', () => {
+            server.use(...defaultHandlers);
+            renderWithProviders(
+                <RelatedItemsCard
+                    issueType="task"
+                    issueId="S1"
+                    relatedLinks={[]}
+                    externalLinks={[
+                        makeExtLink({ id: 1, external_ref: '1', pr_state: 'open', ci_state: 'success' }),
+                        makeExtLink({ id: 2, external_ref: '2', pr_state: 'open', ci_state: 'pending' }),
+                        makeExtLink({ id: 3, external_ref: '3', pr_state: 'open', ci_state: 'failure', ci_failing_checks: [] }),
+                        makeExtLink({ id: 4, external_ref: '4', pr_state: 'open', ci_state: null }),
+                    ]}
+                    agents={[]}
+                    onOpenPicker={vi.fn()}
+                />
+            );
+            expect(screen.getByText('CI passed')).toBeInTheDocument();
+            expect(screen.getByText('CI running')).toBeInTheDocument();
+            expect(screen.getByText('CI failed')).toBeInTheDocument();
+            // Four PR-state chips + three CI chips; the null row adds none.
+            expect(document.querySelectorAll('.MuiChip-root')).toHaveLength(7);
+            expect(screen.getByLabelText('All checks passed on the latest commit')).toBeInTheDocument();
+            expect(screen.getByLabelText('Checks are still running on the latest commit')).toBeInTheDocument();
+            expect(screen.getByLabelText('A check failed on the latest commit')).toBeInTheDocument();
+        });
+
+        it('lists the failing checks in the CI chip tooltip', async () => {
+            server.use(...defaultHandlers);
+            renderWithProviders(
+                <RelatedItemsCard
+                    issueType="task"
+                    issueId="S1"
+                    relatedLinks={[]}
+                    externalLinks={[
+                        makeExtLink({
+                            id: 1,
+                            pr_state: 'open',
+                            ci_state: 'failure',
+                            ci_failing_checks: [
+                                { name: 'test', detail: '3 failed' },
+                                { name: 'lint', detail: null },
+                            ],
+                        }),
+                        makeExtLink({ id: 2, url: 'https://github.com/foo/bar/pull/2', pr_state: 'open', ci_state: 'failure' }),
+                    ]}
+                    agents={[]}
+                    onOpenPicker={vi.fn()}
+                />
+            );
+            const chip = screen.getByLabelText('Failing: test (3 failed); lint');
+            fireEvent.mouseOver(chip);
+            expect(await screen.findByRole('tooltip')).toHaveTextContent('Failing: test (3 failed); lint');
+            // An older API response without the list still gets an honest tooltip.
+            expect(screen.getByLabelText('A check failed on the latest commit')).toBeInTheDocument();
+        });
+
         it('renders each PR row with #number, title, and an external-tab anchor', () => {
             server.use(...defaultHandlers);
             const links = [
