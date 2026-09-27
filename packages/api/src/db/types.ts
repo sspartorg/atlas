@@ -777,6 +777,18 @@ export interface WorkflowRunsTable {
     finished_at: TSn;
 }
 
+// Migration 024 — every park and resume of a workflow run. `park_reason` holds
+// only the current wait and is nulled on resume; this keeps the history.
+export interface WorkflowRunEventsTable {
+    id: string;
+    workflow_run_id: string;
+    item_id: StrN;
+    kind: 'parked' | 'resumed';
+    node_id: StrN;
+    reason: StrN;
+    created_at: CreatedAt;
+}
+
 // Migration 041 — workflows published to the Marketplace. `bundle` is the
 // export zip (bytea selects as a Buffer).
 export interface PublishedWorkflowsTable {
@@ -881,6 +893,7 @@ export interface DB {
     settings: SettingsTable;
     workflows: WorkflowsTable;
     workflow_runs: WorkflowRunsTable;
+    workflow_run_events: WorkflowRunEventsTable;
     published_workflows: PublishedWorkflowsTable;
     run_gate_results: RunGateResultsTable;
     agent_tests: AgentTestsTable;

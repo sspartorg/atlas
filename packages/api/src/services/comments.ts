@@ -4,6 +4,7 @@ import type { DB } from '../db/types.js';
 import type { IComment, IssueType } from '@atlas/shared';
 import { eventsLog } from './events-log.js';
 import { broadcastSSE } from '../routes/events.js';
+import { recordRunEvent } from './workflow-run-events.js';
 
 const RESUME_DETAIL = 'resumed_by_owner_reply';
 
@@ -180,6 +181,9 @@ export const commentsService = {
         if (resumedRunId) {
             broadcastSSE({ type: 'counts_changed', issueType: type, issueId: data.issue_id });
             const runId = resumedRunId;
+            // After the commit, not inside it: a failed history insert inside
+            // the transaction would abort the Owner's reply with it.
+            await recordRunEvent(runId, 'resumed');
             // Dynamic import: the engine imports this service for its park
             // comments. Not awaited — the reply is saved; the step spawns in
             // the background.
