@@ -1,114 +1,114 @@
 {
   "agent-ai-news": {
-    "version": 4,
+    "version": 1,
     "hash": "2a49fa2d6620e594"
   },
   "agent-ai-readiness": {
-    "version": 4,
+    "version": 1,
     "hash": "4f3e438b792a7745"
   },
   "agent-architect": {
-    "version": 4,
+    "version": 1,
     "hash": "2cd227da0d34774d"
   },
   "agent-architect-reviewer": {
-    "version": 2,
+    "version": 1,
     "hash": "37a0327c1c4bf4e0"
   },
   "agent-automation": {
-    "version": 3,
+    "version": 1,
     "hash": "1ba1eb96b838cd21"
   },
   "agent-automation-reviewer": {
-    "version": 2,
+    "version": 1,
     "hash": "21614b2e70431d7c"
   },
   "agent-code-reviewer": {
-    "version": 6,
+    "version": 1,
     "hash": "f9389f4f27434c81"
   },
   "agent-coder": {
-    "version": 6,
+    "version": 1,
     "hash": "d84f7dd1dbce459c"
   },
   "agent-coverage-fixer": {
-    "version": 5,
+    "version": 1,
     "hash": "65006fedf260c244"
   },
   "agent-doc-reviewer": {
-    "version": 2,
+    "version": 1,
     "hash": "00f7c8fa184e215c"
   },
   "agent-doc-writer": {
-    "version": 3,
+    "version": 1,
     "hash": "52a0555cc7362cb9"
   },
   "agent-fix-reviewer": {
-    "version": 2,
+    "version": 1,
     "hash": "2d1b0f05c8851e13"
   },
   "agent-hygiene-check": {
-    "version": 2,
+    "version": 1,
     "hash": "eae5ce87a3d976d2"
   },
   "agent-hygiene-fixer": {
-    "version": 6,
+    "version": 1,
     "hash": "0e00f562b4f26662"
   },
   "agent-jira-to-epic": {
-    "version": 4,
+    "version": 1,
     "hash": "7f4c5b2523dd8024"
   },
   "agent-knowledge-base": {
-    "version": 4,
+    "version": 1,
     "hash": "8717114a410aa76a"
   },
   "agent-market-research": {
-    "version": 4,
+    "version": 1,
     "hash": "10baac1dfbe35d06"
   },
   "agent-perf-check": {
-    "version": 2,
+    "version": 1,
     "hash": "e74363b479116c68"
   },
   "agent-perf-fixer": {
-    "version": 5,
+    "version": 1,
     "hash": "a4651d0dd86e0457"
   },
   "agent-po-reviewer": {
-    "version": 2,
+    "version": 1,
     "hash": "e80cdd224915d1f6"
   },
   "agent-po-writer": {
-    "version": 4,
+    "version": 1,
     "hash": "cf241e06ff57eec4"
   },
   "agent-qa-reviewer": {
-    "version": 2,
+    "version": 1,
     "hash": "e7aaf32a4c6129fd"
   },
   "agent-qa-writer": {
-    "version": 4,
+    "version": 1,
     "hash": "e341863697283a25"
   },
   "agent-regulations": {
-    "version": 4,
+    "version": 1,
     "hash": "ffa009038544f859"
   },
   "agent-release-reviewer": {
-    "version": 5,
+    "version": 1,
     "hash": "5e3f393244a3278c"
   },
   "agent-tests-check": {
-    "version": 2,
+    "version": 1,
     "hash": "23d8b829147b3648"
   },
   "agent-visual-check": {
-    "version": 2,
+    "version": 1,
     "hash": "0d04010ef9aa067d"
   },
   "agent-visual-reviewer": {
-    "version": 5,
+    "version": 1,
     "hash": "0238cee18e24b557"
   }
 }

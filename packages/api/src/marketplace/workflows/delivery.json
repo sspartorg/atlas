@@ -2,7 +2,7 @@
   "id": "delivery",
   "name": "Delivery",
   "description": "PO Writer splits a Task into sub-tasks and the Architect specs them. Every dev sub-task is built, every [QA] sub-task tested and every [DOC] sub-task documented, one at a time on the Task's branch. Four checks then cover hygiene, tests, performance and visuals: a checker agent reads the repo and names the command this project already trusts, Atlas runs it and believes the exit code, and when one goes red a specialist fixes it and a reviewer checks the fix was made at the cause rather than by defeating the check. A project that has no such tooling is told so plainly rather than given a number Atlas invented. A release reviewer reads the whole change before it becomes one pull request; a gap it finds becomes a fix sub-task that is built and re-verified without waking you. Unclear Tasks come back to you.",
-  "version": 5,
+  "version": 1,
   "input_kind": "item",
   "trigger": "item_ready",
   "use_worktree": true,

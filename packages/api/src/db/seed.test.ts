@@ -24,7 +24,7 @@ describe('baseline SQL guardrails', () => {
         expect(BASELINE_SQL).toContain("'seed-net-no-test-execution'");
         expect(BASELINE_SQL).toContain("'side_effects_network'");
         expect(BASELINE_SQL).toMatch(
-            /seed-net-no-test-execution.*side_effects_network.*Never execute the project''s test suite/s,
+            /seed-net-no-test-execution.*side_effects_network.*Run the project test suite only inside the worktree Atlas provisioned/s,
         );
         // Severity must be `block`, not `warn` or `ask_owner` — the rule is
         // categorical, not negotiable.

@@ -129,7 +129,7 @@ For full MUI/data-fetching/status-display patterns, see `packages/web/AGENTS.md`
 
 ## Agents & Seed Data
 - No agents are seeded. Agent definitions live in the marketplace catalog (`packages/api/src/marketplace/catalog/<id>/`: `manifest.json`, `prompt.md`, `checklists.json`); `db/seed.ts` only syncs it into `marketplace_agents`, and the Owner installs from there — never hardcode agent info in components
-- 16 catalog agents (10 SDLC performers + reviewers, 6 autonomous) with categories: `software-dev` | `marketing` | `content` | `design`
+- 28 catalog agents (SDLC performers, reviewers, gate checks, fixers, autonomous), all at `version: 1` since ADR 0025, with categories: `software-dev` | `marketing` | `content` | `design`
 - Starter workflow templates (`delivery`, `quick`, `build`, `test`, `docs`, `ai-readiness`) live in `packages/api/src/marketplace/workflows/*.json`; `build`, `test` and `docs` are sub-workflows that `delivery`'s Sub-tasks steps run. `quick` ("Quick change") is the short path for small Tasks: Coder → Code Reviewer → tests gate (coverage fixer + fix reviewer on red) → one PR, no sub-tasks. Creating a workflow from a template installs the agents it references (and creates the sub-workflows it names). Agents carry no schedule, routing or git flags — workflows do
 - Each agent has an `accent_color` from the Atlas palette — use it for agent chips and avatars
 - CLI values: `claude` | `copilot` | `ollama` — these map to real CLI tools wired in Phase 5. `ollama` is not a separate binary: it runs Claude Code against Ollama's Anthropic-compatible API. Branch on `CLI_DIALECT` from `@atlas/shared`, never on the raw `cli` value

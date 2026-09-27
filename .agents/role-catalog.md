@@ -98,7 +98,7 @@ The runner *never* consults the role catalog at dispatch time. The catalog is se
 1. Append the slug to `SdlcRole` in `packages/shared/src/types/index.ts`.
 2. Append an entry to `SDLC_ROLES`, `SDLC_ROLE_LABELS`, and `SDLC_ROLE_DEFAULT_STATUS` in `packages/shared/src/constants/index.ts`.
 3. Extend the `SdlcRoleSchema` enum in `packages/shared/src/schemas/index.ts`.
-4. Author a new numbered migration that inserts the `roles` row with its curated `default_prompt_md` (the five existing rows live in `001_baseline.sql`).
+4. Author a new numbered migration that inserts the `roles` row with its curated `default_prompt_md` (the ten existing rows live in `001_baseline.sql`).
 5. Optionally add a catalog agent for it under `packages/api/src/marketplace/catalog/`.
 6. Update this doc's table.
 

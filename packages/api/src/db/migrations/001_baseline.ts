@@ -3,8 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Knex } from 'knex';
 
-// Baseline schema, squashed from migrations 001-045 on 2026-09-20 (ADR 0019).
-// Supersedes the 2026-06-03 squash of 001-068 (ADR 0002). The DDL lives in the
+// Baseline schema, squashed from migrations 001-024 on 2026-09-28 (ADR 0025).
+// Supersedes the 2026-09-20 squash of 001-045 (ADR 0019). The DDL lives in the
 // sibling `001_baseline.sql` so future schema diffs are readable SQL rather
 // than a JS template literal.
 //
@@ -33,9 +33,9 @@ import type { Knex } from 'knex';
 //
 // Pass 2 is not optional. `--schema-only` emits no rows, and a baseline
 // without them installs with no CLI models, no roles, no guard-rail rules and
-// no settings singleton to onboard into. The 2026-09-20 regeneration carried
-// 39 rows (19 cli_models, 14 guardrail_rules, 5 roles, 1 settings) - the
-// cli_models count had grown from 16 since the previous squash.
+// no settings singleton to onboard into. The 2026-09-28 regeneration carried
+// 48 rows (23 cli_models, 14 guardrail_rules, 10 roles, 1 settings) - up from
+// 39 after the Claude 5 models and the five SDLC roles landed.
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

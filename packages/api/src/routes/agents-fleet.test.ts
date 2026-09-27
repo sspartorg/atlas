@@ -95,7 +95,7 @@ async function fleet(query = ''): Promise<FleetPerformance> {
 }
 
 beforeAll(async () => {
-    await sql`UPDATE _knex_migrations SET migration_time = now() - interval '1 day' WHERE name LIKE '024\_%'`.execute(testDb);
+    await sql`UPDATE _knex_migrations SET migration_time = now() - interval '1 day' WHERE name = '001_baseline.ts'`.execute(testDb);
 });
 
 beforeEach(async () => {

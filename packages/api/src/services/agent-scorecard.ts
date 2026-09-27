@@ -750,7 +750,7 @@ async function fleetDelivery(card: Scorecard): Promise<FleetDelivery> {
     }
 
     const migrated = await sql<{ migration_time: unknown }>`
-        SELECT migration_time FROM _knex_migrations WHERE name LIKE '024\\_%' LIMIT 1
+        SELECT migration_time FROM _knex_migrations WHERE name = '001_baseline.ts' LIMIT 1
     `.execute(db);
     const since = iso(migrated.rows[0]?.migration_time ?? null);
     // Only Task runs that started after recording began can be counted
