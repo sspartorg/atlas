@@ -97,6 +97,7 @@ import type {
     AgentPerformance,
     FleetPerformance,
     FleetWindowDays,
+    ProjectHealth,
     ParkedFixture,
     StarterTest,
     AgentQualification,
@@ -521,6 +522,8 @@ export const api = {
                 `/projects/paged?page=${params.page}&limit=${params.limit}`,
             ),
         get: (id: string) => get<IProject>(`/projects/${id}`),
+        /** The Health card: 30 days of this project's workflow runs. */
+        health: (id: string) => get<ProjectHealth>(`/projects/${id}/health`),
         create: (data: Partial<IProject>) => post<IProject>('/projects', data),
         update: (id: string, data: Partial<IProject>) => patch<IProject>(`/projects/${id}`, data),
         delete: (id: string) => del(`/projects/${id}`),

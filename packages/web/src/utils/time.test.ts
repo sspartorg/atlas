@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { formatAbsolute, formatDate, formatDurationSec, relativeTime } from './time.js';
+import { formatAbsolute, formatDate, formatDurationSec, formatSpan, relativeTime } from './time.js';
 
 describe('relativeTime', () => {
     beforeEach(() => {
@@ -100,5 +100,15 @@ describe('formatDurationSec', () => {
 
     it('formats exactly 60 as 1m 0s', () => {
         expect(formatDurationSec(60)).toBe('1m 0s');
+    });
+});
+
+describe('formatSpan', () => {
+    it('scales its unit from seconds to days', () => {
+        expect(formatSpan(null)).toBe('—');
+        expect(formatSpan(45)).toBe('45s');
+        expect(formatSpan(1800)).toBe('30m');
+        expect(formatSpan(3 * 3600 + 1800)).toBe('3.5h');
+        expect(formatSpan(3 * 86_400)).toBe('3.0d');
     });
 });

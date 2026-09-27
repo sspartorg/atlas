@@ -48,6 +48,18 @@ export function useProject(id: string) {
     });
 }
 
+/**
+ * The Health card's numbers. A project's runs move slowly and the card is a
+ * glance, not a monitor, so it rides the default cache rather than SSE.
+ */
+export function useProjectHealth(id: string) {
+    return useQuery({
+        queryKey: ['projects', id, 'health'],
+        queryFn: () => api.projects.health(id),
+        enabled: Boolean(id),
+    });
+}
+
 export function useCreateProject() {
     const qc = useQueryClient();
     return useMutation({

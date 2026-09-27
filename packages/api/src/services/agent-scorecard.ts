@@ -664,6 +664,8 @@ interface FleetDelivery {
     interventions: {
         /** Times a Task run stopped and waited for the Owner. */
         parked: number;
+        /** Distinct Tasks that stopped for the Owner at least once. */
+        parked_tasks: number;
         tasks: number;
         per_task: number | null;
         /**
@@ -761,10 +763,13 @@ async function fleetDelivery(card: Scorecard): Promise<FleetDelivery> {
     // for the Task run it holds (`waitOnChild`), and the Owner answered once.
     const parkedRow =
         counted.length === 0
-            ? { n: 0 }
+            ? { n: 0, items: 0 }
             : await db
                   .selectFrom('workflow_run_events')
-                  .select((eb) => eb.fn.countAll<string>().as('n'))
+                  .select((eb) => [
+                      eb.fn.countAll<string>().as('n'),
+                      eb.fn.count<string>('item_id').distinct().as('items'),
+                  ])
                   .where('kind', '=', 'parked')
                   .where(
                       'workflow_run_id',
@@ -773,6 +778,7 @@ async function fleetDelivery(card: Scorecard): Promise<FleetDelivery> {
                   )
                   .executeTakeFirstOrThrow();
     const parked = Number(parkedRow.n);
+    const parkedTasks = Number(parkedRow.items);
 
     return {
         runs: live.length,
@@ -786,7 +792,13 @@ async function fleetDelivery(card: Scorecard): Promise<FleetDelivery> {
             toPr.sort((a, b) => a - b),
             0.5,
         ),
-        interventions: { parked, tasks, per_task: tasks === 0 ? null : round(parked / tasks, 2), since },
+        interventions: {
+            parked,
+            parked_tasks: parkedTasks,
+            tasks,
+            per_task: tasks === 0 ? null : round(parked / tasks, 2),
+            since,
+        },
     };
 }
 
@@ -836,5 +848,79 @@ export async function fleetPerformance(scope: ScorecardScope = {}): Promise<Flee
         window: { since: scope.since ?? null, until: scope.until ?? null },
         agents,
         delivery: await fleetDelivery(card),
+    };
+}
+
+/**
+ * The catalog agent whose first verdict on a run is "was the spec accepted".
+ * Matched on the install's catalog id too, so a renamed or re-imported copy
+ * still counts. ponytail: the stock reviewer only — a project that reviews
+ * specs with an agent of its own reports "no specs reviewed" rather than a
+ * guess. Make it a workflow setting if that ever matters.
+ */
+const SPEC_REVIEWER_ID = 'agent-architect-reviewer';
+
+export interface ProjectHealth {
+    window: { since: string | null };
+    runs: number;
+    prs_opened: number;
+    prs_merged: number;
+    tasks_merged: number;
+    median_s_to_pr: number | null;
+    /**
+     * Runs whose spec reached the Architect Reviewer, and how many of those it
+     * approved on its first look. Counts, never a percentage: a rejected spec
+     * is the reviewer doing its job (ADR 0023), and the denominator is what
+     * keeps "1 of 1" from reading like "40 of 40".
+     */
+    specs: { reviewed: number; accepted_first_try: number };
+    /** Tasks that stopped for the Owner, over the runs `since` covers. */
+    escalations: { items: number; pauses: number; since: string | null };
+}
+
+/**
+ * The Project page's Health card: the fleet page's delivery maths, scoped to
+ * one project, plus the one number only a project view asks for.
+ */
+export async function projectHealth(projectId: string, since: string): Promise<ProjectHealth> {
+    const card = await scoreAgents({ project_id: projectId, since });
+    const delivery = await fleetDelivery(card);
+
+    const reviewers = new Set(
+        (
+            await db
+                .selectFrom('agents')
+                .select('id')
+                .where((eb) => eb.or([eb('id', '=', SPEC_REVIEWER_ID), eb('marketplace_source_id', '=', SPEC_REVIEWER_ID)]))
+                .execute()
+        ).map((a) => a.id),
+    );
+    // `routed` is in creation order, so the first review seen per run tree is
+    // the first look. A later one (after a rejection, or the Owner's reply) is
+    // exactly what "first try" excludes.
+    const firstReview = new Map<string, RoutedStep>();
+    for (const r of card.routed) {
+        if (!reviewers.has(r.agent_id)) continue;
+        const root = card.rootOf.get(r.workflow_run_id ?? '') ?? '';
+        if (!firstReview.has(root)) firstReview.set(root, r);
+    }
+    const reviews = [...firstReview.values()];
+
+    return {
+        window: { since },
+        runs: delivery.runs,
+        prs_opened: delivery.prs_opened,
+        prs_merged: delivery.prs_merged,
+        tasks_merged: delivery.tasks_merged,
+        median_s_to_pr: delivery.median_s_to_pr,
+        specs: {
+            reviewed: reviews.length,
+            accepted_first_try: reviews.filter((r) => r.routing === 'apply_on_pass').length,
+        },
+        escalations: {
+            items: delivery.interventions.parked_tasks,
+            pauses: delivery.interventions.parked,
+            since: delivery.interventions.since,
+        },
     };
 }

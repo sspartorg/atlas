@@ -43,6 +43,7 @@ All three **Edit guard-rails** affordances (header badge, actions menu, right-ra
 | History | `history` | `HistoryTab` — newest-first list of every agent run that touched any item in this project (Tasks and sub-tasks). Each row: status dot + agent chip + linked item id + run-status pill + relative timestamp. The item id links to `/tasks/:id` or `/sub-tasks/:id`; "in progress / completed / error" link to the run detail page. Empty state when no runs have happened yet. |
 
 **Right rail (`ProjectRightRail`)** — hidden on the guardrails tab.
+- **Health · 30 d** (`GET /api/projects/:id/health`, `useProjectHealth`) — the fleet page's delivery maths scoped to this project: **PRs merged** "`merged` of `opened`", **Specs accepted first try** "`accepted` of `reviewed`" (runs whose first Architect Reviewer look approved the spec), **Median time to PR** (`formatSpan`, run start → PR), **Tasks that needed you** (distinct Tasks with a recorded park; `—` until migration 024 has a start). Counts carry denominators and nothing is a percentage (ADR 0023). A zero denominator shows `—`, not "0 of 0". Caption: "From N workflow runs started in the last 30 days." / "No workflow runs in the last 30 days." / "Could not load: …". Replaced the old "stubbed" card.
 - `activeAgents` list — agents assigned to any not-`done` Task or sub-task in this project
 - `guardrailsMd` summary
 

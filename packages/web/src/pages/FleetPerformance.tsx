@@ -20,6 +20,7 @@ import { TrendSparkline } from '../components/TrendSparkline.js';
 import { useFleetPerformance } from '../hooks/useAgentTests.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 import { formatCostUsd } from '../utils/formatCost.js';
+import { formatSpan } from '../utils/time.js';
 import { formatDate } from '../utils/time.js';
 import { OUTCOMES, OutcomeBar } from './agents/PerformanceTabContent.js';
 
@@ -42,13 +43,6 @@ function secs(v: number | null): string {
     return v === null ? '—' : v < 60 ? `${Math.round(v)}s` : `${Math.round(v / 60)}m`;
 }
 
-/** Time to a PR runs from minutes to days, so it scales its unit. */
-function span(v: number | null): string {
-    if (v === null) return '—';
-    if (v < 3600) return secs(v);
-    if (v < 172_800) return `${(v / 3600).toFixed(1)}h`;
-    return `${(v / 86_400).toFixed(1)}d`;
-}
 
 function DeliveryTiles({ d }: { d: FleetDelivery }) {
     const iv = d.interventions;
@@ -78,7 +72,7 @@ function DeliveryTiles({ d }: { d: FleetDelivery }) {
             <KpiTile
                 label="Median time to PR"
                 dotColor={ATLAS_PALETTE.slate40}
-                value={span(d.median_s_to_pr)}
+                value={formatSpan(d.median_s_to_pr)}
                 caption="from run start"
             />
             <KpiTile
