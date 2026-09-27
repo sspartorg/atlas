@@ -43,7 +43,8 @@ export function DefaultWorkflowCard({ project }: Props) {
             await update.mutateAsync({ id: project.id, data: { default_workflow_id: next || null } });
             toast.show({ message: 'Default workflow saved' });
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Could not save the default workflow');
+            // api.ts always throws an Error carrying the API's message.
+            setError((e as Error).message);
         }
     }
 

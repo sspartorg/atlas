@@ -544,58 +544,6 @@ it('reporter select changed to a non-OWNER agent — sets reporter_agent_id to a
     expect(document.body).toBeTruthy();
 });
 
-it('subtitle IIFE agent-found branch (line 193 truthy): AgentSelect picks PO Writer → subtitle shows agent name', async () => {
-    // This test exercises line 189 false branch (assigneeId !== 'OWNER') and
-    // line 193 truthy branch (a = activeAgents.find(...) succeeds).
-    server.use(
-        http.get(`${BASE}/projects`, () =>
-            HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])
-        ),
-        http.get(`${BASE}/agents`, () =>
-            HttpResponse.json([
-                makeAgent({ id: 'agent-po-writer', name: 'PO Writer', status: 'active' }),
-            ])
-        ),
-        http.get(`${BASE}/projects/:id/labels`, () => HttpResponse.json({ labels: [] })),
-        ...defaultHandlers
-    );
-    renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new'] });
-    await screen.findByPlaceholderText(/Refund automation/i);
-
-    // The AgentSelect Autocomplete renders with placeholder "Search by name or designation…"
-    // Find the input inside the assignee Autocomplete.
-    const autocompleteInputs = screen.queryAllByPlaceholderText(/Search by name or designation/i);
-    const autocompleteInput = autocompleteInputs[0];
-    if (autocompleteInput) {
-        // Type the agent name to filter options
-        fireEvent.change(autocompleteInput, { target: { value: 'PO Writer' } });
-        // Options should appear — click the first listbox option
-        const options = screen.queryAllByRole('option');
-        const poWriterOpt = options.find((o) => (o.textContent ?? '').includes('PO Writer'));
-        if (poWriterOpt) {
-            fireEvent.click(poWriterOpt);
-            // Now assigneeId = 'agent-po-writer'; subtitle IIFE takes the false branch
-            // at line 189 and finds `a` in activeAgents → line 193 truthy branch
-            await waitFor(
-                () => {
-                    const subtitleEls = screen.queryAllByText((_, el) =>
-                        (el?.textContent ?? '').includes('will pick this up once you submit')
-                    );
-                    // If the subtitle updated, we covered the agent-found branch
-                    if (subtitleEls.length > 0) {
-                        expect(subtitleEls.length).toBeGreaterThan(0);
-                    } else {
-                        // AgentSelect may not have updated in jsdom — still count as coverage attempt
-                        expect(document.body).toBeTruthy();
-                    }
-                },
-                { timeout: 2000 }
-            );
-        }
-    }
-    expect(document.body).toBeTruthy();
-});
-
 it('AgentSelect onChange v-falsy path (line 430 binary-expr false): clearing assignee falls back to OWNER', async () => {
     // This exercises `v || 'OWNER'` where v = '' (falsy).
     // AgentSelect with ownerName set has disableClearable=true, so we fire a
@@ -620,7 +568,6 @@ it('AgentSelect onChange v-falsy path (line 430 binary-expr false): clearing ass
         // Simulate clearing the input — v = '' → `v || 'OWNER'` returns 'OWNER'
         fireEvent.change(autocompleteInput, { target: { value: '' } });
     }
-    // The subtitle should still say 'will route this' (OWNER mode)
     expect(document.body).toBeTruthy();
 });
 
