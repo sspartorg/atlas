@@ -164,11 +164,11 @@ export function useWorkflowRun(runId: string) {
     });
 }
 
-export function useWorkflowRunDiff(runId: string) {
+export function useWorkflowRunDiff(runId: string, enabled = true) {
     return useQuery({
         queryKey: ['workflow-run-diff', runId],
         queryFn: () => api.workflowRuns.diff(runId),
-        enabled: Boolean(runId),
+        enabled: enabled && Boolean(runId),
         retry: false,
     });
 }

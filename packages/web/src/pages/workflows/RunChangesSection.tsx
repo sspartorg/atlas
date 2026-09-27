@@ -69,10 +69,25 @@ function RepoBody({ runId, repo }: { runId: string; repo: WorkflowRunRepoDiff })
 }
 
 export function RunChangesSection({ runId }: { runId: string }) {
-    const { data, isLoading, error } = useWorkflowRunDiff(runId);
-    const [repoId, setRepoId] = useState<string | null>(null);
     const ref = useRef<HTMLElement>(null);
     const { hash } = useLocation();
+    // The diff costs several git processes per repo, and the section sits
+    // below a tall canvas most visits never scroll past. Fetch it once the
+    // section is near the viewport (or linked to directly), not on every view.
+    const [near, setNear] = useState(hash === '#changes' || typeof IntersectionObserver === 'undefined');
+    useEffect(() => {
+        if (near || !ref.current) return;
+        const io = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((e) => e.isIntersecting)) setNear(true);
+            },
+            { rootMargin: '200px' },
+        );
+        io.observe(ref.current);
+        return () => io.disconnect();
+    }, [near]);
+    const { data, isLoading, error } = useWorkflowRunDiff(runId, near);
+    const [repoId, setRepoId] = useState<string | null>(null);
 
     // The Task page links here as `#changes`; the router does not scroll to
     // hashes, and this section renders after the run loads.
@@ -84,7 +99,7 @@ export function RunChangesSection({ runId }: { runId: string }) {
     const active = repos.find((r) => r.repo_id === repoId) ?? repos[0] ?? null;
 
     let body: React.ReactNode;
-    if (isLoading) {
+    if (!near || isLoading) {
         body = (
             <Stack spacing={1} sx={{ p: 2 }}>
                 <Skeleton variant="rectangular" height={24} />

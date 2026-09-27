@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, screen, fireEvent, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import type { CliSessionDiffSummaryResponse, WorkflowRunDiffResponse, WorkflowRunRepoDiff } from '@atlas/shared';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
@@ -74,6 +74,39 @@ const runDiff = (repos: WorkflowRunRepoDiff[]): WorkflowRunDiffResponse => ({
     run_id: 'run-1',
     branch: 'atlas/wf/ATL-7',
     repos,
+});
+
+// The section fetches only once it nears the viewport. By default every
+// observed element reports itself visible straight away; `holdVisibility`
+// keeps it off-screen until the test calls `reveal`.
+let observerCallbacks: IntersectionObserverCallback[] = [];
+let autoReveal = true;
+function reveal() {
+    act(() => {
+        for (const cb of observerCallbacks) {
+            cb([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+        }
+    });
+}
+beforeEach(() => {
+    observerCallbacks = [];
+    autoReveal = true;
+    vi.stubGlobal(
+        'IntersectionObserver',
+        class {
+            constructor(private cb: IntersectionObserverCallback) {
+                observerCallbacks.push(cb);
+            }
+            observe() {
+                if (autoReveal) this.cb([{ isIntersecting: true } as IntersectionObserverEntry], this as never);
+            }
+            disconnect() {}
+            unobserve() {}
+            takeRecords() {
+                return [];
+            }
+        },
+    );
 });
 
 afterEach(() => {
@@ -153,5 +186,23 @@ describe('RunChangesSection', () => {
         stub(runDiff([]));
         renderWithProviders(<RunChangesSection runId="run-1" />, { initialEntries: ['/w/runs/run-1#changes'] });
         await waitFor(() => expect(scroll).toHaveBeenCalled());
+    });
+
+    it('does not fetch the diff until the section nears the viewport', async () => {
+        autoReveal = false;
+        let calls = 0;
+        server.use(
+            http.get(`${BASE}/workflow-runs/run-1/diff`, () => {
+                calls += 1;
+                return HttpResponse.json(runDiff([repo()]));
+            })
+        );
+        renderWithProviders(<RunChangesSection runId="run-1" />);
+        expect(screen.getByRole('region', { name: 'Changes' })).toBeInTheDocument();
+        await new Promise((r) => setTimeout(r, 50));
+        expect(calls).toBe(0);
+        reveal();
+        expect(await screen.findByText('src/done.ts')).toBeInTheDocument();
+        expect(calls).toBe(1);
     });
 });
