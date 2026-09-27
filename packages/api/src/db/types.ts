@@ -1,6 +1,7 @@
 import type { ColumnType, Generated } from 'kysely';
 import type {
     AgentCli,
+    IExternalCiCheck,
     IWorkflowGraph,
     SchedulePreset,
     WorkflowInputKind,
@@ -527,6 +528,17 @@ export interface ItemExternalLinksTable {
         'open' | 'merged' | 'closed' | null | undefined
     >;
     pr_state_checked_at: TSn;
+    // Migration 023 — CI on the PR's head commit, and the auto-fix bookkeeping.
+    ci_state: ColumnType<
+        'pending' | 'success' | 'failure' | null,
+        'pending' | 'success' | 'failure' | null | undefined,
+        'pending' | 'success' | 'failure' | null | undefined
+    >;
+    ci_head_sha: StrN;
+    ci_summary: ColumnType<IExternalCiCheck[] | null, string | null | undefined, string | null | undefined>;
+    ci_checked_at: TSn;
+    ci_handled_sha: StrN;
+    ci_fix_attempts: ColumnType<number, number | undefined, number>;
 }
 
 /** Shape written by `services/run-trace-parser.ts`. Declared here so the column is typed, not `unknown`. */
