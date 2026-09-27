@@ -6,6 +6,7 @@ import type {
     ISubTask,
     ITask,
     ITaskListItem,
+    IWorkflow,
     IWorkflowQueue,
 } from '@atlas/shared';
 import { makeProjectRepo } from './factories.js';
@@ -52,6 +53,8 @@ export const defaultHandlers = [
     http.get(`${BASE}/agents/:id/checklists`, () => HttpResponse.json([])),
     // The Queue page.
     http.get(`${BASE}/workflow-queue`, ok<IWorkflowQueue>({ workflows: [], unassigned: [] })),
+    // New Task's Workflow select and Project Detail's default-workflow card.
+    http.get(`${BASE}/workflows`, ok<IWorkflow[]>([])),
     // New Task, the Task rail and Project Detail read a project's repos
     // (ADR 0018). Default to the one repo the project factory describes;
     // tests that need several override via server.use(...).

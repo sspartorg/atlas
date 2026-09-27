@@ -197,6 +197,8 @@ export const UpdateProjectSchema = z
         description: z.string().optional(),
         status: z.string().min(1).optional(),
         guardrails_md: z.string().optional(),
+        // null clears it. Must name an item-workflow of this project or a global one.
+        default_workflow_id: z.string().min(1).nullable().optional(),
     })
     .strict();
 
@@ -226,6 +228,9 @@ export const CreateTaskSchema = z
         assignee_agent_id: z.string().nullable().default(null),
         labels: ItemLabelsSchema,
         repo_ids: TaskRepoIdsSchema.default([]),
+        // Queue the new Task on this workflow (draft → ready), exactly as the
+        // detail rail's Workflow select does. Omitted leaves it unqueued.
+        workflow_id: z.string().min(1).optional(),
     })
     .strict();
 

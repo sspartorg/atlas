@@ -155,7 +155,9 @@ The autonomous catalog entries (`agent-ai-news`, `agent-market-research`, `agent
 ### IProject
 **Why this entity exists**: Projects are the top-level work container â€” every issue tunnels through `project_id`. **ADR 0018:** a project is a *container*, not a repo — it holds 0..N repos, all equal, and the git fields it used to carry moved onto them (migration 045).
 
-Fields: `id, name, issue_key_prefix, description, status, guardrails_md, created_at, updated_at, last_activity_at`
+Fields: `id, name, issue_key_prefix, description, status, guardrails_md, default_workflow_id, created_at, updated_at, last_activity_at`
+
+- `default_workflow_id` (FK → `workflows`, SET NULL; migration 022) — the Task workflow `/tasks/new` preselects for this project. Must be `input_kind='item'` and global or this project's. **Read only by the create form** — the server never applies it, so a Jira import or any create without `workflow_id` stays an unqueued draft (ADR 0016).
 
 - `guardrails_md` is free-form markdown (project guardrails are a separate table â€” see below)
 - Env secrets, guardrails and the constitution stay project-level and are staged into every repo.
@@ -182,7 +184,7 @@ Fields (`ITask`): `id, project_id, title, description, status, assignee_agent_id
   - The list is validated against the project, and changing it returns 409 while a workflow run (running or parked) holds the Task.
   - With several repos, the run works them side by side in one workspace and opens one PR per changed repo, all listed as `item_external_links`. `pr_url` is the first PR, and the Task closes when the **last** PR merges.
 
-- `workflow_id` (FK → `workflows`, SET NULL; migration 035) — the Task workflow it is queued for (`PUT /api/items/:id/workflow`, Tasks only).
+- `workflow_id` (FK → `workflows`, SET NULL; migration 035) — the Task workflow it is queued for (`PUT /api/items/:id/workflow`, Tasks only, or `workflow_id` on `POST /api/tasks`).
 - `spec_md` — the Architect step's spec for the whole Task; `pr_url` — the one PR its run opened (also an `item_external_links` row).
 - `worktree_branch` — the run branch (`atlas/wf/<taskId>` unless the Owner points it at a valid existing branch); `worktree_path` stays null for workflow runs (the path lives on `workflow_runs`).
 - `id` is `<project issue_key_prefix>-<seq>` (e.g. `SDB-12`), shared counter with sub-tasks.
@@ -538,6 +540,7 @@ Workflow 1 --- n WorkflowRun 1 --- n AgentRun n --- 1 Agent
 Project (FK CASCADE; nullable for no-item, no-worktree workflows)
 
 Task.workflow_id -------------------> Workflow     (queued for; Tasks only)
+Project.default_workflow_id --------> Workflow     (create-form preselection only)
 WorkflowRun.item_id ----------------> Task | Sub-task (one live run per item)
 WorkflowRun.parent_workflow_run_id -> WorkflowRun  (a sub-task's run -> its Task run; CASCADE)
 AgentRun.item_id -------------------> Task | Sub-task

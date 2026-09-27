@@ -23,6 +23,7 @@ export function makeProject(overrides: Partial<IProject> = {}): IProject {
         description: '',
         status: 'active',
         guardrails_md: '',
+        default_workflow_id: null,
         created_at: ISO,
         updated_at: ISO,
         last_activity_at: ISO,

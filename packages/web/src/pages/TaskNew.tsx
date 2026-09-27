@@ -9,13 +9,14 @@ import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
-import type { IAgent, IssuePriority } from '@atlas/shared';
+import type { IssuePriority } from '@atlas/shared';
 import { Breadcrumb } from '../components/index.js';
 import { AgentSelect } from '../components/AgentSelect.js';
 import { RepoSelect } from '../components/RepoSelect.js';
 import { useCreateTask, useTransitionTask } from '../hooks/useTasks.js';
 import { useProjects } from '../hooks/useProjects.js';
 import { useProjectRepos } from '../hooks/useProjectRepos.js';
+import { useWorkflows } from '../hooks/useWorkflows.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useToast } from '../hooks/useToast.js';
@@ -31,38 +32,22 @@ const PRIORITY_OPTIONS: Array<{ value: IssuePriority; label: string }> = [
     { value: 'urgent', label: 'Urgent' },
 ];
 
-export interface TaskNewBannerCopyInput {
-    /** `'OWNER'` sentinel or an agent id from the Assignee picker. */
-    assigneeId: string;
-    activeAgents: IAgent[];
-}
-
 /**
- * A03 — dynamic copy for the tips banner above the New Task form. Names
- * the picked agent verbatim when one is selected, falls back to generic
- * "the agent you assign" wording when the Owner is the default (or the
- * id no longer resolves — a stale dropdown id shouldn't crash the page).
- * Pure function so the test asserts on the strings directly without
- * driving the AgentSelect custom dropdown.
- *
- * Copy stays workflow-agnostic — only PO Writer's chain decomposes the
- * task into sub-tasks, and the same banner renders for any assignee, so
- * we don't promise downstream behaviour the picked agent may not do.
+ * Copy for the tips banner above the New Task form. It names the workflow
+ * because the workflow is what runs: agents never pick items up on their own
+ * (ADR 0014), so the old "<assignee> will pick this up" promised something
+ * that did not happen. Pure function so the test asserts the strings directly.
  */
-export function taskNewBannerCopy(input: TaskNewBannerCopyInput): string {
-    const picked =
-        input.assigneeId !== 'OWNER'
-            ? input.activeAgents.find((a) => a.id === input.assigneeId)
-            : null;
-    if (picked) {
+export function taskNewBannerCopy(workflowName: string | null): string {
+    if (workflowName) {
         return (
-            `Write a rough goal — even one line is fine. ${picked.name} will pick this up ` +
-            `once you save. You'll see comments as each agent finishes its run.`
+            `Write a rough goal — even one line is fine. ${workflowName} starts as soon as you ` +
+            `submit, and you'll see comments as each agent finishes its run.`
         );
     }
     return (
-        `Write a rough goal — even one line is fine. The agent you assign will pick this ` +
-        `up. You'll see comments as each agent finishes its run.`
+        `Write a rough goal — even one line is fine. With no workflow picked, nothing runs ` +
+        `until you queue the Task for one from its page.`
     );
 }
 
@@ -76,6 +61,7 @@ export function TaskNew() {
     const { data: projects = [] } = useProjects();
     const { data: agents = [] } = useAgents();
     const { data: settings } = useSettings();
+    const { data: workflows = [] } = useWorkflows();
     const createTask = useCreateTask();
     const transitionTask = useTransitionTask();
     const toast = useToast();
@@ -95,6 +81,18 @@ export function TaskNew() {
     // ADR 0018 — null = untouched: the project's first repo, preselected.
     const [repoChoice, setRepoChoice] = useState<string[] | null>(null);
     const repoIds = repoChoice ?? repos.slice(0, 1).map((r) => r.id);
+    // Workflows that can take this project's Tasks — the rule the API enforces.
+    const taskWorkflows = workflows.filter(
+        (w) => w.input_kind === 'item' && (!w.project_id || w.project_id === projectId)
+    );
+    // null = untouched: the project's default workflow (migration 022), when
+    // it is still one of the options. Applied here and only here — the server
+    // never falls back to it, so Jira imports keep their source's workflow.
+    const [workflowChoice, setWorkflowChoice] = useState<string | null>(null);
+    const projectDefault = projects.find((p) => p.id === projectId)?.default_workflow_id;
+    const workflowId =
+        workflowChoice ?? taskWorkflows.find((w) => w.id === projectDefault)?.id ?? '';
+    const workflow = taskWorkflows.find((w) => w.id === workflowId) ?? null;
     const [reporterId, setReporterId] = useState<string>('OWNER');
     // The PO Writer is the agent that breaks an task down, so it is the default
     // when installed and active; otherwise the Owner routes it. Derived rather
@@ -146,8 +144,13 @@ export function TaskNew() {
                 reporter_agent_id: reporterId === 'OWNER' ? null : reporterId,
                 assignee_agent_id: assigneeId === 'OWNER' ? null : assigneeId,
                 repo_ids: repoIds,
+                // The API queues it (draft → ready) in the same request, so
+                // there is no separate transition to fail half-way.
+                ...(mode === 'submit' && workflow ? { workflow_id: workflow.id } : {}),
             });
-            if (mode === 'submit') {
+            if (mode === 'submit' && workflow) {
+                toast.show({ message: `Submitted — ${workflow.name} is starting` });
+            } else if (mode === 'submit') {
                 try {
                     await transitionTask.mutateAsync({ id: created.id, status: 'ready' });
                     toast.show({ message: `Submitted — ${created.title}` });
@@ -203,15 +206,9 @@ export function TaskNew() {
                     Draft a new task
                 </Typography>
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                    {(() => {
-                        if (assigneeId === 'OWNER') {
-                            return `${ownerName} will route this once you submit`;
-                        }
-                        const a = activeAgents.find((w) => w.id === assigneeId);
-                        return a
-                            ? `${a.name} will pick this up once you submit`
-                            : 'Pick an assignee to set up the handoff';
-                    })()}
+                    {workflow
+                        ? `${workflow.name} will start once you submit`
+                        : 'Nothing runs until the Task is queued for a workflow'}
                 </Typography>
             </Box>
 
@@ -246,7 +243,7 @@ export function TaskNew() {
                     <Typography
                         sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate80, lineHeight: 1.6 }}
                     >
-                        {taskNewBannerCopy({ assigneeId, activeAgents })}
+                        {taskNewBannerCopy(workflow?.name ?? null)}
                     </Typography>
                 </Box>
 
@@ -359,6 +356,7 @@ export function TaskNew() {
                                 onChange={(e) => {
                                     setProjectId(e.target.value);
                                     setRepoChoice(null);
+                                    setWorkflowChoice(null);
                                     touch('project');
                                 }}
                                 onBlur={() => touch('project')}
@@ -444,6 +442,43 @@ export function TaskNew() {
                         before creating a Task for it.
                     </Alert>
                 )}
+
+                <Box sx={{ mb: 4 }}>
+                    <Typography
+                        sx={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: ATLAS_PALETTE.slate60,
+                            mb: 1.5,
+                        }}
+                    >
+                        Workflow{' '}
+                        <Box
+                            component="span"
+                            sx={{ color: ATLAS_PALETTE.slate40, fontWeight: 400 }}
+                        >
+                            — starts on Submit; Save as draft never starts it
+                        </Box>
+                    </Typography>
+                    <FormControl fullWidth>
+                        <Select
+                            inputProps={{ 'aria-label': 'Workflow' }}
+                            value={workflowId}
+                            onChange={(e) => setWorkflowChoice(e.target.value)}
+                            displayEmpty
+                            sx={{ background: ATLAS_PALETTE.white, fontSize: 13 }}
+                        >
+                            <MenuItem value="" sx={{ fontSize: 13 }}>
+                                None — save for later
+                            </MenuItem>
+                            {taskWorkflows.map((w) => (
+                                <MenuItem key={w.id} value={w.id} sx={{ fontSize: 13 }}>
+                                    {w.name}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </Box>
 
                 <Box
                     sx={{

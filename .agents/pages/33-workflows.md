@@ -36,7 +36,7 @@ Card list of every workflow (ADR 0014, ADR 0015). A workflow is a graph of agent
 - What an import does (see `api-surface.md` → Workflow bundles): creates the bundle's sub-workflows then the workflow in the chosen project, installs agents you don't have from the bundle (activated), reuses agents you do have untouched, suffixes a clashing name with ` (imported)` / ` (imported 2)`, and rolls everything back if any step fails.
 
 ## Why these affordances exist
-- **Templates first-class in the create dialog** — templates (`delivery`, `build`, `test`, `ai-readiness`) are the starting points for the SDLC chain; see `swarm-architecture.md`.
+- **Templates first-class in the create dialog** — templates (`delivery`, `quick`, `build`, `test`, `docs`, `ai-readiness`) are the starting points for the SDLC chain; see `swarm-architecture.md`.
 - **Project picked up front** — every Task workflow belongs to one project's repository and Tasks, and a Sub-tasks step may only name a sub-workflow of the same project.
 - **Import** — the Owner's ask: "similar to export and import agent … so that people can reuse the content." Bundles come from a builder's **Export** or a marketplace workflow's **Export** (starter or published). Publishing a workflow to the Marketplace stores the same bundle, and its **Use in a project** runs the same import.
 

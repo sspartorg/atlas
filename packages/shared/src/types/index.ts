@@ -314,6 +314,12 @@ export interface IProject {
     description: string;
     status: string;
     guardrails_md: string;
+    /**
+     * The item-workflow /tasks/new preselects for this project, so submitting a
+     * Task starts it. Only the form reads it — the server never applies it on a
+     * transition, so Jira imports keep their source's workflow (ADR 0016).
+     */
+    default_workflow_id: string | null;
     created_at: string;
     updated_at: string;
     // Most recent timestamp across the project row and any of its children

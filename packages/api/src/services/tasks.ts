@@ -12,6 +12,7 @@ import {
 } from './items.js';
 import { eventsLog } from './events-log.js';
 import { projectReposService } from './project-repos.js';
+import { workflowsService } from './workflows.js';
 import { ApiError } from '../utils/errors.js';
 
 interface CreateInput {
@@ -26,6 +27,8 @@ interface CreateInput {
     repo_ids?: string[];
     /** Migration 016 — the throwaway item an agent test run acts on. */
     is_test?: boolean;
+    /** Queue the new Task on this workflow, as the detail rail would. */
+    workflow_id?: string | undefined;
 }
 
 interface UpdateInput {
@@ -99,6 +102,10 @@ export const tasksService = {
 
     async create(data: CreateInput, actorAgentId: string | null = null): Promise<ITask> {
         const repoIds = await resolveRepoIds(data.project_id, data.repo_ids);
+        // Checked before the insert so a bad workflow never leaves a stray draft
+        // behind a 400/404. `resolveRepoIds` already refused a Task with no
+        // repos, so `setItemWorkflow`'s 409 cannot fire below.
+        if (data.workflow_id) await workflowsService.assertTakesTasks(data.workflow_id, data.project_id);
         const row = await createItem({
             project_id: data.project_id,
             type: 'task',
@@ -121,7 +128,9 @@ export const tasksService = {
             to_value: data.title,
         });
         broadcastSSE({ type: 'counts_changed' });
-        return task;
+        if (!data.workflow_id) return task;
+        await workflowsService.setItemWorkflow(task.id, data.workflow_id);
+        return (await this.get(task.id))!;
     },
 
     async update(id: string, data: UpdateInput, actorAgentId: string | null = null): Promise<ITask> {
