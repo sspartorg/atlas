@@ -66,6 +66,7 @@ import type {
     CliSessionDiffScopeName,
     CliSessionDiffSummaryResponse,
     CliSessionFilePatchResponse,
+    WorkflowRunDiffResponse,
     ICliSessionTranscriptResponse,
 } from '@atlas/shared';
 import type {
@@ -1258,6 +1259,20 @@ export const api = {
         // Gate nodes spawn no agent, so they have no `agent_runs` row and no
         // place on the steps list. Their verdicts come from their own route.
         gateResults: (id: string) => get<GateResultRow[]>(`/workflow-runs/${id}/gate-results`),
+        // The run's code changes per repo, then one file's patch on demand.
+        diff: (id: string) => get<WorkflowRunDiffResponse>(`/workflow-runs/${id}/diff`),
+        diffFile: (
+            id: string,
+            q: { repoId: string; scope: CliSessionDiffScopeName; path: string; context: number },
+        ) => {
+            const params = new URLSearchParams({
+                repo_id: q.repoId,
+                scope: q.scope,
+                path: q.path,
+                context: String(q.context),
+            });
+            return get<CliSessionFilePatchResponse>(`/workflow-runs/${id}/diff/file?${params.toString()}`);
+        },
     },
 
     // What each workflow is running and has queued (the /queue page).

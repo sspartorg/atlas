@@ -35,6 +35,11 @@ interface Props {
     onViewModeChange: (next: DiffViewMode) => void;
     wrap: boolean;
     onWrapChange: (next: boolean) => void;
+    /**
+     * Read-only review of a workflow run's repo (the run page's Changes
+     * section): no staging checkboxes, and patches come from the run.
+     */
+    runRepo?: { runId: string; repoId: string } | undefined;
 }
 
 export function StopSessionReviewPanel({
@@ -51,6 +56,7 @@ export function StopSessionReviewPanel({
     onViewModeChange,
     wrap,
     onWrapChange,
+    runRepo,
 }: Props) {
     const theme = useTheme();
     const isNarrow = useMediaQuery(theme.breakpoints.down('md'));
@@ -148,7 +154,7 @@ export function StopSessionReviewPanel({
                 >
                     <DiffFileList
                         files={files}
-                        selectable={scope === 'uncommitted'}
+                        selectable={scope === 'uncommitted' && !runRepo}
                         selected={selected}
                         onToggle={onToggle}
                         onToggleAll={onToggleAll}
@@ -176,6 +182,7 @@ export function StopSessionReviewPanel({
                         viewMode={isNarrow ? 'unified' : viewMode}
                         wrap={wrap}
                         onBack={isNarrow ? () => setActivePath(null) : undefined}
+                        runRepo={runRepo}
                     />
                 </Box>
             </Box>

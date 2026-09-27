@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateWorkflowInput, UpdateWorkflowInput } from '@atlas/shared';
+import type { CliSessionDiffScopeName, CreateWorkflowInput, UpdateWorkflowInput } from '@atlas/shared';
 import { api } from '../api/api.js';
 
 // Every workflow query sits under ['workflows'] so one prefix invalidation
@@ -161,6 +161,31 @@ export function useWorkflowRun(runId: string) {
         queryKey: ['workflow-run', runId],
         queryFn: () => api.workflowRuns.get(runId),
         enabled: Boolean(runId),
+    });
+}
+
+export function useWorkflowRunDiff(runId: string) {
+    return useQuery({
+        queryKey: ['workflow-run-diff', runId],
+        queryFn: () => api.workflowRuns.diff(runId),
+        enabled: Boolean(runId),
+        retry: false,
+    });
+}
+
+export function useWorkflowRunFilePatch(
+    runId: string,
+    repoId: string,
+    scope: CliSessionDiffScopeName,
+    path: string | null,
+    context: number,
+    enabled: boolean,
+) {
+    return useQuery({
+        queryKey: ['workflow-run-diff-patch', runId, repoId, scope, path, context],
+        queryFn: () => api.workflowRuns.diffFile(runId, { repoId, scope, path: path as string, context }),
+        enabled: enabled && Boolean(runId) && Boolean(path),
+        retry: false,
     });
 }
 

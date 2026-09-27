@@ -133,6 +133,15 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
                             </Typography>
                         </Link>
                     )}
+                    {latest?.branch && (
+                        <Link
+                            component={RouterLink}
+                            to={`/workflows/${latest.workflow_id}/runs/${latest.id}#changes`}
+                            sx={{ fontSize: 12 }}
+                        >
+                            Changes
+                        </Link>
+                    )}
                     {workflowId && !live && (
                         <Button
                             size="small"
