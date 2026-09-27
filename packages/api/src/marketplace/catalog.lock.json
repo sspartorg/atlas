@@ -24,12 +24,12 @@
     "hash": "21614b2e70431d7c"
   },
   "agent-code-reviewer": {
-    "version": 5,
-    "hash": "c17f8936a7177e4f"
+    "version": 6,
+    "hash": "f9389f4f27434c81"
   },
   "agent-coder": {
-    "version": 5,
-    "hash": "8511dec78869b717"
+    "version": 6,
+    "hash": "d84f7dd1dbce459c"
   },
   "agent-coverage-fixer": {
     "version": 5,

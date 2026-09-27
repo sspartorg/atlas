@@ -20,6 +20,8 @@ import {
 } from '../services/workflow-engine.js';
 import { DependenciesNotReadyError } from '../services/dependency-guard.js';
 import { listGateResultsForRun } from '../services/run-gate-results.js';
+import { WorkflowRunDiffNotFound, getWorkflowRunDiff, getWorkflowRunFilePatch } from '../services/workflow-run-diff.js';
+import { WorktreeDiffError } from '../services/worktree-diff.js';
 import {
     exportTemplateBundle,
     exportWorkflowBundle,
@@ -48,6 +50,24 @@ function mapStartError(err: unknown): never {
     if (err instanceof DependenciesNotReadyError) {
         throw new ApiError('conflict', 'This item depends on items that are not done yet', 409, { blockers: err.blockers });
     }
+    throw err;
+}
+
+// Same bounds as the terminal session's diff/file query (routes/cli-sessions.ts).
+const RunDiffFileQuerySchema = z.object({
+    repo_id: z.string().min(1).max(200),
+    path: z.string().min(1).max(1024),
+    scope: z.enum(['uncommitted', 'committed']),
+    context: z.coerce.number().int().min(0).max(25).default(3),
+});
+
+function mapDiffError(err: unknown): never {
+    if (err instanceof WorkflowRunDiffNotFound) throw new ApiError('not_found', err.message, 404);
+    if (err instanceof WorktreeDiffError) {
+        const invalid = err.code === 'invalid_path';
+        throw new ApiError(invalid ? 'validation_error' : 'conflict', err.message, invalid ? 400 : 409, { code: err.code });
+    }
+    /* v8 ignore next -- anything else is a real 500 for the global handler */
     throw err;
 }
 
@@ -228,6 +248,30 @@ export async function workflowsRoutes(app: FastifyInstance) {
         const { id } = req.params as { id: string };
         if (!(await workflowsService.getRun(id))) throw new ApiError('not_found', 'Workflow run not found', 404);
         return reply.send(await listGateResultsForRun(id));
+    });
+
+    // The run's code changes, per repo — read-only GETs, so no write token.
+    // Patch bodies are fetched one file at a time, like the Stop modal's.
+    app.get('/api/workflow-runs/:id/diff', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const diff = await getWorkflowRunDiff(id).catch(mapDiffError);
+        if (!diff) throw new ApiError('not_found', 'Workflow run not found', 404);
+        return reply.send(diff);
+    });
+
+    app.get('/api/workflow-runs/:id/diff/file', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const parsed = RunDiffFileQuerySchema.safeParse(req.query ?? {});
+        if (!parsed.success) throw new ApiError('validation_error', 'Invalid query', 400, { issues: parsed.error.issues });
+        const q = parsed.data;
+        const patch = await getWorkflowRunFilePatch({
+            runId: id,
+            repoId: q.repo_id,
+            scope: q.scope,
+            path: q.path,
+            context: q.context,
+        }).catch(mapDiffError);
+        return reply.send(patch);
     });
 
     app.post('/api/workflow-runs/:id/stop', { preHandler: requireMcpToken }, async (req, reply) => {

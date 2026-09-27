@@ -54,6 +54,13 @@ export async function goto(
         if (/fonts\.gstatic\.com.*woff2?/.test(summary) && /ERR_ABORTED|net::ERR_/.test(summary)) {
             return;
         }
+        // A workflow run's Changes section reads its diff (several git
+        // processes) once it nears the viewport. A spec that navigates on
+        // right after its assertion aborts that read-only GET mid-flight —
+        // the same benign navigation abort as the two cases above.
+        if (/\/api\/workflow-runs\/[^/]+\/diff\b/.test(summary) && /ERR_ABORTED/.test(summary)) {
+            return;
+        }
         if (allow.some((r) => r.test(summary))) return;
         networkFailures.push(summary);
     };

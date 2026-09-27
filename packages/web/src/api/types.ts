@@ -529,11 +529,62 @@ export interface AgentPerformance {
     by_config: Array<{
         model: string | null;
         effort: string | null;
+        cli: string | null;
+        /** The agent's prompt version at dispatch. A prompt edit is a new configuration. */
+        prompt_version: number | null;
         steps: number;
         first_pass: FirstPass;
         cost_usd: number;
     }>;
-    trend: Array<{ bucket: string; steps: number; first_pass: FirstPass; cost_usd: number; p95_s: number | null }>;
+    trend: TrendBucket[];
+}
+
+/** One ISO week of an agent's first attempts. `bucket` is the week's Monday. */
+export interface TrendBucket {
+    bucket: string;
+    steps: number;
+    first_pass: FirstPass;
+    cost_usd: number;
+    p95_s: number | null;
+}
+
+/** GET /api/agents/performance — one row per agent that took a workflow step. Sorted by name, never by success. */
+export interface FleetAgentRow {
+    agent_id: string;
+    name: string;
+    accent_color: string | null;
+    quality: AgentPerformance['quality'];
+    cost: { total_usd: number; per_step_usd: number | null };
+    latency: { p95_s: number | null };
+    trend: TrendBucket[];
+}
+
+/** What the fleet delivered. Agent-test items are excluded. */
+export interface FleetDelivery {
+    runs: number;
+    prs_opened: number;
+    prs_merged: number;
+    merge_rate: number | null;
+    tasks_merged: number;
+    merged_cost_usd: number;
+    cost_per_merged_task_usd: number | null;
+    median_s_to_pr: number | null;
+    interventions: {
+        parked: number;
+        tasks: number;
+        per_task: number | null;
+        /** When park history began (migration 024). Nothing earlier survived. */
+        since: string | null;
+    };
+}
+
+/** The windows the fleet page offers; the API refuses any other. */
+export type FleetWindowDays = 30 | 90;
+
+export interface FleetPerformance {
+    window: { since: string | null; until: string | null };
+    agents: FleetAgentRow[];
+    delivery: FleetDelivery;
 }
 
 

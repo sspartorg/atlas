@@ -25,6 +25,13 @@
 //     `git config diff.external <exe>` or a `.gitattributes` textconv driver
 //     would otherwise get executed by this process on every diff.
 //
+//   * A workflow run's diff (routes/workflows.ts) reuses this module against
+//     the repo's own clone once delivery has removed the run's worktree. The
+//     caller then passes an explicit `headRef` (`refs/remotes/origin/<branch>`
+//     or `refs/heads/<branch>`): the committed scope is measured from that ref
+//     instead of HEAD, and the uncommitted scope is empty — the clone's own
+//     working tree is not the run's work and must never be reported as such.
+//
 //   * This module never touches the network. A stale `origin/main` is fine —
 //     same posture as `commitsAhead` in routes/cli-sessions.ts.
 
@@ -419,9 +426,28 @@ async function resolveBaseRef(
     return null;
 }
 
-/** `HEAD` normally; the empty tree when HEAD is unborn (no commits yet). */
-async function resolveHeadRef(worktreePath: string): Promise<string> {
+/**
+ * `HEAD` normally; the empty tree when HEAD is unborn (no commits yet). An
+ * explicit ref (the branch-ref mode above) is taken as given — the caller
+ * resolved it with `resolveBranchHead`, which already proved it exists.
+ */
+async function resolveHeadRef(worktreePath: string, explicit?: string): Promise<string> {
+    if (explicit) return explicit;
     return (await refExists(worktreePath, 'HEAD')) ? 'HEAD' : EMPTY_TREE_SHA;
+}
+
+/**
+ * The ref holding `branch`'s work in a repo clone whose worktree is gone, or
+ * null. Local first: it exists only when cleanup kept it (a failed push, a
+ * cancelled run), and then it is the newest copy — it may hold commits the
+ * remote never received. `origin/<branch>` survives a delivered run until the
+ * remote branch is deleted and a later `fetch --prune` drops it.
+ */
+export async function resolveBranchHead(repoPath: string, branch: string): Promise<string | null> {
+    for (const ref of [`refs/heads/${branch}`, `refs/remotes/origin/${branch}`]) {
+        if (await refExists(repoPath, ref)) return ref;
+    }
+    return null;
 }
 
 function assertWorktree(worktreePath: string): void {
@@ -445,8 +471,9 @@ interface ScopeRefs {
 async function committedRefs(
     worktreePath: string,
     defaultBranch: string | null,
+    explicitHead?: string,
 ): Promise<{ baseRef: string | null; refs: ScopeRefs }> {
-    const headRef = await resolveHeadRef(worktreePath);
+    const headRef = await resolveHeadRef(worktreePath, explicitHead);
     const baseRef = await resolveBaseRef(worktreePath, defaultBranch);
     if (!baseRef || headRef === EMPTY_TREE_SHA) {
         return { baseRef: null, refs: { baseSha: null, headRef } };
@@ -462,9 +489,15 @@ async function committedRefs(
 export async function getWorktreeDiffSummary(opts: {
     worktreePath: string;
     defaultBranch: string | null;
+    /** Branch-ref mode (see the header): diff this ref, not the working tree. */
+    headRef?: string | undefined;
 }): Promise<CliSessionDiffSummaryResponse> {
     const { worktreePath, defaultBranch } = opts;
     assertWorktree(worktreePath);
+    if (opts.headRef) {
+        const branch = opts.headRef.replace(/^refs\/(heads|remotes\/origin)\//, '');
+        return committedSummary(worktreePath, defaultBranch, emptyScope(), opts.headRef, branch);
+    }
 
     const headRef = await resolveHeadRef(worktreePath);
 
@@ -501,7 +534,23 @@ export async function getWorktreeDiffSummary(opts: {
         if (!uncommittedMap.has(u.path)) uncommittedMap.set(u.path, u);
     }
 
-    const { baseRef, refs } = await committedRefs(worktreePath, defaultBranch);
+    return committedSummary(
+        worktreePath,
+        defaultBranch,
+        finalizeScope([...uncommittedMap.values()]),
+        undefined,
+        branchRes.stdout.toString('utf8').trim(),
+    );
+}
+
+async function committedSummary(
+    worktreePath: string,
+    defaultBranch: string | null,
+    uncommitted: CliSessionDiffScope,
+    explicitHead: string | undefined,
+    currentBranch: string,
+): Promise<CliSessionDiffSummaryResponse> {
+    const { baseRef, refs } = await committedRefs(worktreePath, defaultBranch, explicitHead);
     let committed = emptyScope();
     let commitsAhead = 0;
     if (baseRef && refs.baseSha) {
@@ -528,9 +577,9 @@ export async function getWorktreeDiffSummary(opts: {
     }
 
     return {
-        uncommitted: finalizeScope([...uncommittedMap.values()]),
+        uncommitted,
         committed,
-        current_branch: branchRes.stdout.toString('utf8').trim(),
+        current_branch: currentBranch,
         base_ref: baseRef,
         base_sha: refs.baseSha,
         commits_ahead_of_base: commitsAhead,
@@ -543,8 +592,11 @@ async function findInScope(
     defaultBranch: string | null,
     scope: CliSessionDiffScopeName,
     path: string,
+    explicitHead: string | undefined,
 ): Promise<{ file: CliSessionDiffFile; refs: ScopeRefs } | null> {
-    const headRef = await resolveHeadRef(worktreePath);
+    // Branch-ref mode has no uncommitted scope, so nothing in it is "changed".
+    if (scope === 'uncommitted' && explicitHead) return null;
+    const headRef = await resolveHeadRef(worktreePath, explicitHead);
     if (scope === 'uncommitted') {
         const [nameStatusRes, porcelainRes] = await Promise.all([
             runGit(worktreePath, [
@@ -587,7 +639,7 @@ async function findInScope(
         return null;
     }
 
-    const { baseRef, refs } = await committedRefs(worktreePath, defaultBranch);
+    const { baseRef, refs } = await committedRefs(worktreePath, defaultBranch, explicitHead);
     if (!baseRef || !refs.baseSha) return null;
     const nameStatusRes = await runGit(worktreePath, [
         '--no-pager', 'diff', ...DIFF_FLAGS, '--name-status', '-z', '--find-renames',
@@ -649,12 +701,14 @@ export async function getWorktreeFilePatch(opts: {
     scope: CliSessionDiffScopeName;
     path: string;
     context: number;
+    /** Branch-ref mode (see the header). */
+    headRef?: string | undefined;
 }): Promise<CliSessionFilePatchResponse | null> {
     const { worktreePath, defaultBranch, scope, context } = opts;
     assertWorktree(worktreePath);
     const path = normalizeRelPath(opts.path);
 
-    const found = await findInScope(worktreePath, defaultBranch, scope, path);
+    const found = await findInScope(worktreePath, defaultBranch, scope, path, opts.headRef);
     if (!found) return null;
     const { file, refs } = found;
 

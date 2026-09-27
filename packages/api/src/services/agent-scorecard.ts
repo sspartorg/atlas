@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import { db } from '../db/kysely-client.js';
 import { decideRunRouting } from './agent-runner-outcome-routing.js';
 import type { IRunOutcome } from '@atlas/shared';
@@ -98,8 +99,10 @@ export type RoutedStep = {
     node_id: string | null;
     workflow_run_id: string | null;
     status: string;
+    cli: string | null;
     model: string | null;
     effort: string | null;
+    prompt_version: number | null;
     total_cost_usd: number | null;
     input_tokens: number | null;
     output_tokens: number | null;
@@ -123,6 +126,7 @@ interface ScoredRun {
     loop_count: number | null;
     gate_rounds: number | null;
     park_reason: string | null;
+    pr_url: string | null;
     pr_urls: unknown;
 }
 
@@ -198,7 +202,7 @@ export async function scoreAgents(scope: ScorecardScope = {}): Promise<Scorecard
         .selectFrom('agent_runs')
         .select([
             'id', 'agent_id', 'node_id', 'workflow_run_id', 'status',
-            'outcome_kind', 'outcome_checklist', 'cli', 'model', 'effort',
+            'outcome_kind', 'outcome_checklist', 'cli', 'model', 'effort', 'prompt_version',
             'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_creation_tokens',
             'total_cost_usd', 'started_at', 'completed_at', 'created_at',
         ])
@@ -354,6 +358,9 @@ interface FirstPass {
 interface ConfigSlice {
     model: string | null;
     effort: string | null;
+    cli: string | null;
+    /** `agent_prompt_versions.version` at dispatch — a prompt edit is a new configuration. */
+    prompt_version: number | null;
     steps: number;
     first_pass: FirstPass;
     cost_usd: number;
@@ -442,27 +449,13 @@ function round(n: number, places = 4): number {
 }
 
 /**
- * Everything one agent's own runs already prove.
+ * The part of one agent's numbers that needs nothing but the scorecard.
  *
- * "A route and a view, not new maths" — the aggregation above does the work;
- * this reshapes one agent's slice of it for a page, and adds the three things
- * a scorecard markdown file never had to care about: latency percentiles, the
- * tool profile from migration 017, and a trend over time.
+ * Split out of `agentPerformance` so the fleet page can shape every agent from
+ * ONE `scoreAgents` pass instead of re-running the whole scorecard per agent —
+ * and so the tab and the fleet table cannot drift: they are the same code.
  */
-export async function agentPerformance(
-    agentId: string,
-    scope: ScorecardScope = {},
-): Promise<AgentPerformance> {
-    const card = await scoreAgents(scope);
-    const score = card.agents.find((a) => a.agent_id === agentId) ?? emptyScore(agentId);
-    const mine = card.routed.filter((r) => r.agent_id === agentId);
-
-    const roleRow = await db
-        .selectFrom('agents')
-        .select('role_id')
-        .where('id', '=', agentId)
-        .executeTakeFirst();
-
+function shapeAgent(score: AgentScore, mine: RoutedStep[]) {
     // First dispatches only: a step's retries are `loops`, not fresh attempts.
     const firstByStep = new Map<string, RoutedStep>();
     for (const r of mine) {
@@ -477,6 +470,92 @@ export async function agentPerformance(
         .map((r) => seconds(r.started_at, r.completed_at))
         .filter((n) => n > 0)
         .sort((a, b) => a - b);
+
+    // Attribution (ATL-140): a model, CLI or prompt change reads as a break in
+    // the series rather than a smear across it. `prompt_version` is part of the
+    // key because a prompt edit changes the agent as much as a model swap does;
+    // before it was, two prompts' numbers were summed under one row.
+    const configKey = (r: RoutedStep) =>
+        `${r.model ?? '?'}::${r.effort ?? '?'}::${r.cli ?? '?'}::${r.prompt_version ?? '?'}`;
+    const configs = new Map<string, ConfigSlice>();
+    for (const r of firsts) {
+        const key = configKey(r);
+        const slice = configs.get(key) ?? {
+            model: r.model,
+            effort: r.effort,
+            cli: r.cli,
+            prompt_version: r.prompt_version,
+            steps: 0,
+            first_pass: emptyFirstPass(),
+            cost_usd: 0,
+        };
+        slice.steps += 1;
+        addFirstPass(slice.first_pass, r.routing, undefined);
+        configs.set(key, slice);
+    }
+    for (const r of mine) {
+        const slice = configs.get(configKey(r));
+        if (slice) slice.cost_usd = round(slice.cost_usd + (r.total_cost_usd ?? 0));
+    }
+
+    const buckets = new Map<string, { steps: number; first_pass: FirstPass; cost_usd: number; durations: number[] }>();
+    for (const r of firsts) {
+        const key = weekOf(r.completed_at ?? r.created_at);
+        const b = buckets.get(key) ?? { steps: 0, first_pass: emptyFirstPass(), cost_usd: 0, durations: [] };
+        b.steps += 1;
+        addFirstPass(b.first_pass, r.routing, undefined);
+        b.cost_usd = round(b.cost_usd + (r.total_cost_usd ?? 0));
+        const d = seconds(r.started_at, r.completed_at);
+        if (d > 0) b.durations.push(d);
+        buckets.set(key, b);
+    }
+
+    return {
+        durations,
+        quality: {
+            steps: score.steps,
+            dispatches: score.dispatches,
+            first_pass,
+            loops: score.loops,
+            gate_catch: score.gate_catch,
+        },
+        per_step_usd: score.steps === 0 ? null : round(score.cost_usd / score.steps),
+        by_config: [...configs.values()].sort((a, b) => b.steps - a.steps),
+        trend: [...buckets.entries()]
+            .map(([bucket, b]) => ({
+                bucket,
+                steps: b.steps,
+                first_pass: b.first_pass,
+                cost_usd: b.cost_usd,
+                p95_s: percentile([...b.durations].sort((x, y) => x - y), 0.95),
+            }))
+            .sort((a, b) => a.bucket.localeCompare(b.bucket)),
+    };
+}
+
+/**
+ * Everything one agent's own runs already prove.
+ *
+ * "A route and a view, not new maths" — the aggregation above does the work;
+ * this reshapes one agent's slice of it for a page, and adds the three things
+ * a scorecard markdown file never had to care about: latency percentiles, the
+ * tool profile from migration 017, and a trend over time.
+ */
+export async function agentPerformance(
+    agentId: string,
+    scope: ScorecardScope = {},
+): Promise<AgentPerformance> {
+    const card = await scoreAgents(scope);
+    const score = card.agents.find((a) => a.agent_id === agentId) ?? emptyScore(agentId);
+    const mine = card.routed.filter((r) => r.agent_id === agentId);
+    const shaped = shapeAgent(score, mine);
+    const durations = shaped.durations;
+
+    const roleRow = await db
+        .selectFrom('agents')
+        .select('role_id')
+        .where('id', '=', agentId)
+        .executeTakeFirst();
 
     // The tool profile comes from the traces, which exist only from migration
     // 017 on — hence the explicit denominator rather than a bare percentage.
@@ -506,56 +585,15 @@ export async function agentPerformance(
         .filter((n): n is number => typeof n === 'number')
         .sort((a, b) => a - b);
 
-    // Attribution (ATL-140): a model or prompt change reads as a break in the
-    // series rather than a smear across it.
-    const configs = new Map<string, ConfigSlice>();
-    for (const r of firsts) {
-        const key = `${r.model ?? '?'}::${r.effort ?? '?'}`;
-        const slice = configs.get(key) ?? {
-            model: r.model,
-            effort: r.effort,
-            steps: 0,
-            first_pass: emptyFirstPass(),
-            cost_usd: 0,
-        };
-        slice.steps += 1;
-        addFirstPass(slice.first_pass, r.routing, undefined);
-        configs.set(key, slice);
-    }
-    for (const r of mine) {
-        const slice = configs.get(`${r.model ?? '?'}::${r.effort ?? '?'}`);
-        if (slice) slice.cost_usd = round(slice.cost_usd + (r.total_cost_usd ?? 0));
-    }
-
-    const buckets = new Map<string, { steps: number; first_pass: FirstPass; cost_usd: number; durations: number[] }>();
-    for (const r of firsts) {
-        const at = r.completed_at ?? r.created_at;
-        if (!at) continue;
-        const key = weekOf(at);
-        const b = buckets.get(key) ?? { steps: 0, first_pass: emptyFirstPass(), cost_usd: 0, durations: [] };
-        b.steps += 1;
-        addFirstPass(b.first_pass, r.routing, undefined);
-        b.cost_usd = round(b.cost_usd + (r.total_cost_usd ?? 0));
-        const d = seconds(r.started_at, r.completed_at);
-        if (d > 0) b.durations.push(d);
-        buckets.set(key, b);
-    }
-
     const cacheable = score.input_tokens + score.cache_read_tokens;
     return {
         agent_id: agentId,
         role_id: roleRow?.role_id ?? null,
         window: { since: scope.since ?? null, until: scope.until ?? null },
-        quality: {
-            steps: score.steps,
-            dispatches: score.dispatches,
-            first_pass,
-            loops: score.loops,
-            gate_catch: score.gate_catch,
-        },
+        quality: shaped.quality,
         cost: {
             total_usd: round(score.cost_usd),
-            per_step_usd: score.steps === 0 ? null : round(score.cost_usd / score.steps),
+            per_step_usd: shaped.per_step_usd,
             input_tokens: score.input_tokens,
             output_tokens: score.output_tokens,
             cache_read_tokens: score.cache_read_tokens,
@@ -579,15 +617,224 @@ export async function agentPerformance(
             avg_tool_calls:
                 traces.length === 0 ? null : round(traces.reduce((n, t) => n + t.tool_calls, 0) / traces.length, 1),
         },
-        by_config: [...configs.values()].sort((a, b) => b.steps - a.steps),
-        trend: [...buckets.entries()]
-            .map(([bucket, b]) => ({
-                bucket,
-                steps: b.steps,
-                first_pass: b.first_pass,
-                cost_usd: b.cost_usd,
-                p95_s: percentile([...b.durations].sort((x, y) => x - y), 0.95),
-            }))
-            .sort((a, b) => a.bucket.localeCompare(b.bucket)),
+        by_config: shaped.by_config,
+        trend: shaped.trend,
+    };
+}
+
+// ── The fleet ─────────────────────────────────────────────────────────────
+
+/**
+ * One agent's row in the fleet comparison. The same numbers as its tab, fewer
+ * of them — and still no single success number to sort by (ADR 0023).
+ */
+interface FleetAgentRow {
+    agent_id: string;
+    name: string;
+    accent_color: string | null;
+    quality: AgentPerformance['quality'];
+    cost: { total_usd: number; per_step_usd: number | null };
+    latency: { p95_s: number | null };
+    trend: TrendBucket[];
+}
+
+/**
+ * What the fleet delivered, rather than how its agents behaved.
+ *
+ * Agent-test items (`items.is_test`, migration 016) are left out: a fixture's
+ * throwaway Task is not a delivery, and its PR (if any) is not a merge.
+ */
+interface FleetDelivery {
+    /** Top-level runs in the window, agent tests excluded. */
+    runs: number;
+    prs_opened: number;
+    /** PRs whose last observed GitHub state is `merged`. */
+    prs_merged: number;
+    merge_rate: number | null;
+    /**
+     * Task runs whose every PR merged. A multi-repo Task opens one PR per repo
+     * (ADR 0017) that only make sense merged together, so it is one delivery,
+     * not two — and one half-merged is not delivered yet.
+     */
+    tasks_merged: number;
+    /** Everything the merged Task runs spent: every step of the run and its sub-task runs, failed ones included. */
+    merged_cost_usd: number;
+    cost_per_merged_task_usd: number | null;
+    median_s_to_pr: number | null;
+    interventions: {
+        /** Times a Task run stopped and waited for the Owner. */
+        parked: number;
+        tasks: number;
+        per_task: number | null;
+        /**
+         * When migration 024 started recording parks. Nothing before it
+         * survived (`park_reason` is nulled on resume), so both counts only
+         * cover runs started from here on — a stated start, not a silent zero.
+         */
+        since: string | null;
+    };
+}
+
+export interface FleetPerformance {
+    window: { since: string | null; until: string | null };
+    agents: FleetAgentRow[];
+    delivery: FleetDelivery;
+}
+
+function urlsOf(run: ScoredRun): string[] {
+    const urls = Array.isArray(run.pr_urls)
+        ? (run.pr_urls as unknown[]).filter((u): u is string => typeof u === 'string')
+        : [];
+    return urls.length > 0 ? urls : run.pr_url ? [run.pr_url] : [];
+}
+
+async function fleetDelivery(card: Scorecard): Promise<FleetDelivery> {
+    const itemIds = [...new Set(card.roots.map((r) => r.item_id).filter((v): v is string => v !== null))];
+    const testItems = new Set(
+        itemIds.length === 0
+            ? []
+            : (
+                  await db
+                      .selectFrom('items')
+                      .select('id')
+                      .where('id', 'in', itemIds)
+                      .where('is_test', '=', true)
+                      .execute()
+              ).map((r) => r.id),
+    );
+    const live = card.roots.filter((r) => !(r.item_id && testItems.has(r.item_id)));
+
+    // A run's cost is its whole tree: the Task run's steps plus every sub-task
+    // run's, whatever status each step ended in. A failed step was still paid
+    // for, and a cost per merge that left it out would flatter the fleet.
+    const treeCost = new Map<string, number>();
+    for (const r of card.routed) {
+        const root = card.rootOf.get(r.workflow_run_id ?? '') ?? '';
+        treeCost.set(root, (treeCost.get(root) ?? 0) + (r.total_cost_usd ?? 0));
+    }
+
+    const allUrls = live.flatMap(urlsOf);
+    const links = new Map<string, { pr_state: string | null; created_at: string | null }>();
+    if (allUrls.length > 0) {
+        const rows = await db
+            .selectFrom('item_external_links')
+            .select(['url', 'pr_state', 'created_at'])
+            .where('link_kind', '=', 'pull_request')
+            .where('url', 'in', allUrls)
+            .execute();
+        for (const row of rows) links.set(row.url, { pr_state: row.pr_state, created_at: iso(row.created_at) });
+    }
+
+    let opened = 0;
+    let merged = 0;
+    let tasksMerged = 0;
+    let mergedCost = 0;
+    const toPr: number[] = [];
+    for (const run of live) {
+        const urls = urlsOf(run);
+        if (urls.length === 0) continue;
+        opened += urls.length;
+        const m = urls.filter((u) => links.get(u)?.pr_state === 'merged').length;
+        merged += m;
+        if (m === urls.length) {
+            tasksMerged += 1;
+            mergedCost += treeCost.get(run.id) ?? 0;
+        }
+        // The link row is written the moment the PR opens; a run whose link
+        // write failed still finished right after opening it.
+        const openedAt = links.get(urls[0] ?? '')?.created_at ?? iso(run.finished_at);
+        const s = seconds(iso(run.started_at), openedAt);
+        if (s > 0) toPr.push(s);
+    }
+
+    const migrated = await sql<{ migration_time: unknown }>`
+        SELECT migration_time FROM _knex_migrations WHERE name LIKE '024\\_%' LIMIT 1
+    `.execute(db);
+    const since = iso(migrated.rows[0]?.migration_time ?? null);
+    // Only Task runs that started after recording began can be counted
+    // honestly: an older run may have parked with nothing written down.
+    const counted = live.filter(
+        (r) => r.item_id !== null && since !== null && (iso(r.started_at) ?? '') >= since,
+    );
+    const tasks = new Set(counted.map((r) => r.item_id)).size;
+    // Top-level runs only: a sub-task that asks writes a park for itself AND
+    // for the Task run it holds (`waitOnChild`), and the Owner answered once.
+    const parkedRow =
+        counted.length === 0
+            ? { n: 0 }
+            : await db
+                  .selectFrom('workflow_run_events')
+                  .select((eb) => eb.fn.countAll<string>().as('n'))
+                  .where('kind', '=', 'parked')
+                  .where(
+                      'workflow_run_id',
+                      'in',
+                      counted.map((r) => r.id),
+                  )
+                  .executeTakeFirstOrThrow();
+    const parked = Number(parkedRow.n);
+
+    return {
+        runs: live.length,
+        prs_opened: opened,
+        prs_merged: merged,
+        merge_rate: opened === 0 ? null : round(merged / opened, 3),
+        tasks_merged: tasksMerged,
+        merged_cost_usd: round(mergedCost),
+        cost_per_merged_task_usd: tasksMerged === 0 ? null : round(mergedCost / tasksMerged),
+        median_s_to_pr: percentile(
+            toPr.sort((a, b) => a - b),
+            0.5,
+        ),
+        interventions: { parked, tasks, per_task: tasks === 0 ? null : round(parked / tasks, 2), since },
+    };
+}
+
+/**
+ * Every agent that took a workflow step in the window, side by side, plus what
+ * the fleet delivered.
+ *
+ * One `scoreAgents` pass shapes every row — the per-agent tab's maths, not a
+ * second copy of it. Rows are sorted by agent name: the page is a comparison,
+ * and ADR 0023 rules out ordering it by success.
+ */
+export async function fleetPerformance(scope: ScorecardScope = {}): Promise<FleetPerformance> {
+    const card = await scoreAgents(scope);
+    const byAgent = new Map<string, RoutedStep[]>();
+    for (const r of card.routed) {
+        const list = byAgent.get(r.agent_id) ?? [];
+        list.push(r);
+        byAgent.set(r.agent_id, list);
+    }
+    const ids = card.agents.map((a) => a.agent_id);
+    const meta = new Map(
+        (ids.length === 0
+            ? []
+            : await db.selectFrom('agents').select(['id', 'name', 'accent_color']).where('id', 'in', ids).execute()
+        ).map((a) => [a.id, a]),
+    );
+
+    const agents = card.agents
+        .map((score): FleetAgentRow => {
+            const shaped = shapeAgent(score, byAgent.get(score.agent_id) ?? []);
+            const m = meta.get(score.agent_id);
+            return {
+                agent_id: score.agent_id,
+                // Deleting an agent cascades its runs, so a row always has its
+                // agent; the fallback only satisfies the Map lookup's type.
+                name: m?.name ?? score.agent_id,
+                accent_color: m?.accent_color ?? null,
+                quality: shaped.quality,
+                cost: { total_usd: round(score.cost_usd), per_step_usd: shaped.per_step_usd },
+                latency: { p95_s: percentile(shaped.durations, 0.95) },
+                trend: shaped.trend,
+            };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+        window: { since: scope.since ?? null, until: scope.until ?? null },
+        agents,
+        delivery: await fleetDelivery(card),
     };
 }

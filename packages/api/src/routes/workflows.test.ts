@@ -169,7 +169,39 @@ describe('workflow CRUD', () => {
     it('lists the shipped templates with valid graphs', async () => {
         const res = await app.inject({ method: 'GET', url: '/api/workflows/templates' });
         const ids = (res.json() as Array<{ id: string }>).map((t) => t.id).sort();
-        expect(ids).toEqual(['ai-readiness', 'build', 'delivery', 'docs', 'test']);
+        expect(ids).toEqual(['ai-readiness', 'build', 'delivery', 'docs', 'quick', 'test']);
+    });
+
+    // Quick change is the short path: no PO Writer, no spec, no Sub-tasks
+    // steps — the Coder works the Task itself and one gate guards the push.
+    it('creates Quick change as a Task workflow with one tests gate and its fixer trio', async () => {
+        const agents = workflowsService.templateAgentIds('quick');
+        expect([...agents].sort()).toEqual([
+            'agent-code-reviewer',
+            'agent-coder',
+            'agent-coverage-fixer',
+            'agent-fix-reviewer',
+            'agent-tests-check',
+        ]);
+        for (const a of agents.filter((x) => x !== 'agent-coder')) await insertAgent({ id: a, status: 'active' });
+
+        const res = await app.inject({ method: 'POST', url: '/api/workflows/from-template', payload: { template_id: 'quick', project_id: 'p1' } });
+        expect(res.statusCode).toBe(201);
+        const wf = res.json() as IWorkflow;
+        expect(wf).toMatchObject({
+            name: 'Quick change',
+            input_kind: 'item',
+            trigger: 'item_ready',
+            use_worktree: true,
+            push_code: true,
+            raises_pr: true,
+            marketplace_source_id: 'quick',
+        });
+        expect(wf.graph.nodes.some((n) => n.type === 'subtasks')).toBe(false);
+        expect(wf.graph.nodes.filter((n) => n.type === 'gate').map((n) => n.agent_id)).toEqual(['agent-tests-check']);
+        // It creates no sub-workflows: nothing besides itself lands in the project.
+        const all = (await app.inject({ method: 'GET', url: '/api/workflows?project_id=p1' })).json() as IWorkflow[];
+        expect(all.map((w) => w.name)).toEqual(['Quick change']);
     });
 
     it('creates Delivery with its Sub-tasks steps pointing at this project’s Build and Test sub-workflows', async () => {

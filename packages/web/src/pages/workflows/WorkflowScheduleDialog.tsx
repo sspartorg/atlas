@@ -30,7 +30,7 @@ export function WorkflowScheduleDialog({ open, workflow, onChange, onClose }: Pr
                 <DialogContentText sx={{ fontSize: 13, mb: 3 }}>
                     A scheduled run takes the Tasks that were ready at its last fire, up to
                     its Tasks-in-parallel limit; later ones wait for the next fire. On item
-                    ready starts a Task within a minute of it becoming ready.
+                    ready starts a Task as soon as it becomes ready, if a slot is free.
                 </DialogContentText>
                 <WorkflowTriggerFields workflow={workflow} onChange={onChange} />
             </DialogContent>

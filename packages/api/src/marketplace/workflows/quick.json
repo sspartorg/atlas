@@ -1,0 +1,33 @@
+{
+    "id": "quick",
+    "name": "Quick change",
+    "description": "For small changes that need no breakdown: the Coder implements the Task itself on its branch, the Code Reviewer approves it, and the tests check runs the project's own test command — a red suite goes to a coverage fixer and a reviewer who checks the fix was made at the cause. Then one pull request. No sub-tasks, no spec, no docs pass; use Delivery when the Task needs those.",
+    "version": 1,
+    "input_kind": "item",
+    "trigger": "item_ready",
+    "use_worktree": true,
+    "push_code": true,
+    "raises_pr": true,
+    "graph": {
+        "nodes": [
+            { "id": "start", "type": "start", "position": { "x": 0, "y": 0 } },
+            { "id": "coder", "type": "agent", "agent_id": "agent-coder", "position": { "x": 0, "y": 140 } },
+            { "id": "code-review", "type": "agent", "agent_id": "agent-code-reviewer", "position": { "x": 0, "y": 280 } },
+            { "id": "gate-tests", "type": "gate", "agent_id": "agent-tests-check", "position": { "x": 0, "y": 420 } },
+            { "id": "fix-coverage", "type": "agent", "agent_id": "agent-coverage-fixer", "position": { "x": 320, "y": 560 } },
+            { "id": "review-fix-coverage", "type": "agent", "agent_id": "agent-fix-reviewer", "position": { "x": 320, "y": 700 } },
+            { "id": "end", "type": "end", "position": { "x": 0, "y": 840 } }
+        ],
+        "edges": [
+            { "id": "e-start-pass-coder", "source": "start", "target": "coder", "kind": "pass" },
+            { "id": "e-coder-pass-code-review", "source": "coder", "target": "code-review", "kind": "pass" },
+            { "id": "e-code-review-pass-gate-tests", "source": "code-review", "target": "gate-tests", "kind": "pass" },
+            { "id": "e-code-review-fail-coder", "source": "code-review", "target": "coder", "kind": "fail" },
+            { "id": "e-gate-tests-pass-end", "source": "gate-tests", "target": "end", "kind": "pass" },
+            { "id": "e-gate-tests-fail-fix-coverage", "source": "gate-tests", "target": "fix-coverage", "kind": "fail" },
+            { "id": "e-fix-coverage-pass-review-fix-coverage", "source": "fix-coverage", "target": "review-fix-coverage", "kind": "pass" },
+            { "id": "e-review-fix-coverage-pass-gate-tests", "source": "review-fix-coverage", "target": "gate-tests", "kind": "pass" },
+            { "id": "e-review-fix-coverage-fail-fix-coverage", "source": "review-fix-coverage", "target": "fix-coverage", "kind": "fail" }
+        ]
+    }
+}

@@ -6,6 +6,7 @@ import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { TaskNew, taskNewBannerCopy } from './TaskNew.js';
 import { makeAgent, makeProject, makeProjectRepo, makeTask } from '../test-utils/factories.js';
+import { makeWorkflow } from '../test-utils/workflowFixtures.js';
 
 const BASE = 'http://localhost:3000/api';
 
@@ -363,107 +364,28 @@ it('fills form and submits but transition fails — exercises the catch-toast br
     expect(document.body).toBeTruthy();
 });
 
-it('defaults the assignee to an installed, active PO Writer and names it in the subtitle', async () => {
-    // Provide an agent with status=active so the activeAgents filter includes it
-    server.use(
-        http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
-        http.get(`${BASE}/agents`, () =>
-            HttpResponse.json([
-                makeAgent({ id: 'agent-po-writer', name: 'PO Writer', status: 'active' }),
-            ])
-        ),
-        http.get(`${BASE}/projects/:id/labels`, () => HttpResponse.json({ labels: [] })),
-        ...defaultHandlers
-    );
+it('says plainly that nothing runs when no workflow is picked', async () => {
+    server.use(...baseHandlers());
     renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new'] });
     expect(
-        await screen.findByText('PO Writer will pick this up once you submit')
+        await screen.findByText('Nothing runs until the Task is queued for a workflow')
     ).toBeInTheDocument();
+    // The old copy promised an agent would "pick this up" — agents never pick
+    // items up on their own (ADR 0014), so it must not come back.
+    expect(document.body.textContent).not.toMatch(/will pick this up|will route this/);
     expect(document.body.textContent).not.toMatch(/estimated/i);
 });
 
-it('defaults the assignee to the Owner when the PO Writer is not installed', async () => {
-    server.use(
-        http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
-        http.get(`${BASE}/agents`, () =>
-            HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'Coder', status: 'active' })])
-        ),
-        http.get(`${BASE}/projects/:id/labels`, () => HttpResponse.json({ labels: [] })),
-        ...defaultHandlers
-    );
-    renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new'] });
-    expect(await screen.findByText('Owner will route this once you submit')).toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/estimated/i);
-});
-
-// taskNewBannerCopy pure-function tests retained from previous version — they
-// exercise the side-effect-free banner copy permutations.
 describe('taskNewBannerCopy', () => {
-    it('returns generic Owner-default copy when assigneeId is OWNER', () => {
-        const out = taskNewBannerCopy({
-            assigneeId: 'OWNER',
-            activeAgents: [makeAgent({ id: 'agent-po-writer', name: 'PO Writer' })],
-        });
-        expect(out.toLowerCase()).toContain('the agent you assign');
+    it('names the workflow that starts on submit', () => {
+        const out = taskNewBannerCopy('Quick change');
+        expect(out).toContain('Quick change starts as soon as you submit');
         expect(out).toContain('comments');
-        expect(out.toLowerCase()).not.toContain('sub-tasks');
-        expect(out.toLowerCase()).not.toContain('break');
-        expect(out).not.toContain('PO Writer');
     });
 
-    it('names the picked agent when assigneeId resolves to one of the active agents', () => {
-        const out = taskNewBannerCopy({
-            assigneeId: 'agent-po-writer',
-            activeAgents: [makeAgent({ id: 'agent-po-writer', name: 'PO Writer' })],
-        });
-        expect(out).toContain('PO Writer will pick this up');
-        expect(out.toLowerCase()).not.toContain('the agent you assign');
+    it('says nothing runs until the Task is queued when no workflow is picked', () => {
+        expect(taskNewBannerCopy(null)).toContain('nothing runs until you queue the Task');
     });
-
-    it('renders the chosen agent name verbatim — Coder gets named, not PO Writer', () => {
-        const out = taskNewBannerCopy({
-            assigneeId: 'agent-coder',
-            activeAgents: [
-                makeAgent({ id: 'agent-po-writer', name: 'PO Writer' }),
-                makeAgent({ id: 'agent-coder', name: 'Coder' }),
-            ],
-        });
-        expect(out).toContain('Coder will pick this up');
-        expect(out).not.toContain('PO Writer');
-    });
-
-    it('falls back to the generic copy when assigneeId references a non-existent agent', () => {
-        const out = taskNewBannerCopy({
-            assigneeId: 'agent-stranger',
-            activeAgents: [makeAgent({ id: 'agent-po-writer', name: 'PO Writer' })],
-        });
-        expect(out.toLowerCase()).toContain('the agent you assign');
-    });
-});
-
-it('subtitle IIFE: non-OWNER assigneeId that does not match any active agent shows fallback text', async () => {
-    // Load agents but with a different id so the assignee lookup fails
-    server.use(
-        http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
-        http.get(`${BASE}/agents`, () =>
-            HttpResponse.json([
-                makeAgent({ id: 'agent-po-writer', name: 'PO Writer', status: 'active' }),
-            ])
-        ),
-        http.get(`${BASE}/projects/:id/labels`, () => HttpResponse.json({ labels: [] })),
-        ...defaultHandlers
-    );
-    renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new'] });
-    // Wait for page to load then open the assignee select and pick a non-existent-in-agents value
-    await screen.findByPlaceholderText(/Refund automation/i);
-    // The subtitle starts as OWNER text. We cannot easily drive AgentSelect to pick
-    // a stale id through the UI, so we verify the IIFE logic through the pure
-    // taskNewBannerCopy helper which is already exercised for the found-branch.
-    // This test covers the subtitle render path for OWNER (default state) — the
-    // non-OWNER + agent-not-found branch is the same logic tested in taskNewBannerCopy.
-    expect(
-        screen.getAllByText((_, el) => (el?.textContent ?? '').includes('will route this')).length
-    ).toBeGreaterThan(0);
 });
 
 it('createTask throws — outer catch shows error toast', async () => {
@@ -510,10 +432,7 @@ it('createTask throws — outer catch shows error toast', async () => {
     expect(document.body).toBeTruthy();
 });
 
-it('defaultProjectId resolves from ?project= URL param when param matches a project name', async () => {
-    // The project "Atlas" with id "p1" is in the list. Navigating with
-    // ?project=Atlas should pre-select "p1" as the defaultProjectId so the
-    // project Select already has a value when the page first renders.
+it('preselects the ?project= project by name once projects load', async () => {
     server.use(
         http.get(`${BASE}/projects`, () =>
             HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])
@@ -525,22 +444,10 @@ it('defaultProjectId resolves from ?project= URL param when param matches a proj
     renderWithProviders(<TaskNew />, {
         initialEntries: ['/tasks/new?project=Atlas'],
     });
-
-    // Wait for the page to render
-    await screen.findByPlaceholderText(/Refund automation/i);
-
-    // The project Select should display "Atlas" (not "Choose a project…")
-    // because defaultProjectId was resolved to "p1" from the URL param.
-    // MUI Select renders the selected value in a hidden input — check that
-    // the combobox does NOT show the empty/disabled placeholder option.
-    const selects = screen.getAllByRole('combobox');
-    // The first combobox is the project select. Its displayed text should
-    // contain "Atlas" when the param resolved correctly.
-    const projectSelect = selects[0];
-    expect(projectSelect).toBeTruthy();
-    // We just verify the page rendered without error — the resolution of
-    // defaultProjectId is exercised by reaching this point without crashing.
-    expect(document.body).toBeTruthy();
+    // Projects arrive after the first render; the old code copied the
+    // then-empty id into state and never picked the project up.
+    const project = await screen.findByRole('combobox', { name: 'Project' });
+    await waitFor(() => expect(project).toHaveTextContent('Atlas'));
 });
 
 it('reporter select changed to a non-OWNER agent — sets reporter_agent_id to agent id on submit', async () => {
@@ -622,58 +529,6 @@ it('reporter select changed to a non-OWNER agent — sets reporter_agent_id to a
     expect(document.body).toBeTruthy();
 });
 
-it('subtitle IIFE agent-found branch (line 193 truthy): AgentSelect picks PO Writer → subtitle shows agent name', async () => {
-    // This test exercises line 189 false branch (assigneeId !== 'OWNER') and
-    // line 193 truthy branch (a = activeAgents.find(...) succeeds).
-    server.use(
-        http.get(`${BASE}/projects`, () =>
-            HttpResponse.json([makeProject({ id: 'p1', name: 'Atlas' })])
-        ),
-        http.get(`${BASE}/agents`, () =>
-            HttpResponse.json([
-                makeAgent({ id: 'agent-po-writer', name: 'PO Writer', status: 'active' }),
-            ])
-        ),
-        http.get(`${BASE}/projects/:id/labels`, () => HttpResponse.json({ labels: [] })),
-        ...defaultHandlers
-    );
-    renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new'] });
-    await screen.findByPlaceholderText(/Refund automation/i);
-
-    // The AgentSelect Autocomplete renders with placeholder "Search by name or designation…"
-    // Find the input inside the assignee Autocomplete.
-    const autocompleteInputs = screen.queryAllByPlaceholderText(/Search by name or designation/i);
-    const autocompleteInput = autocompleteInputs[0];
-    if (autocompleteInput) {
-        // Type the agent name to filter options
-        fireEvent.change(autocompleteInput, { target: { value: 'PO Writer' } });
-        // Options should appear — click the first listbox option
-        const options = screen.queryAllByRole('option');
-        const poWriterOpt = options.find((o) => (o.textContent ?? '').includes('PO Writer'));
-        if (poWriterOpt) {
-            fireEvent.click(poWriterOpt);
-            // Now assigneeId = 'agent-po-writer'; subtitle IIFE takes the false branch
-            // at line 189 and finds `a` in activeAgents → line 193 truthy branch
-            await waitFor(
-                () => {
-                    const subtitleEls = screen.queryAllByText((_, el) =>
-                        (el?.textContent ?? '').includes('will pick this up once you submit')
-                    );
-                    // If the subtitle updated, we covered the agent-found branch
-                    if (subtitleEls.length > 0) {
-                        expect(subtitleEls.length).toBeGreaterThan(0);
-                    } else {
-                        // AgentSelect may not have updated in jsdom — still count as coverage attempt
-                        expect(document.body).toBeTruthy();
-                    }
-                },
-                { timeout: 2000 }
-            );
-        }
-    }
-    expect(document.body).toBeTruthy();
-});
-
 it('AgentSelect onChange v-falsy path (line 430 binary-expr false): clearing assignee falls back to OWNER', async () => {
     // This exercises `v || 'OWNER'` where v = '' (falsy).
     // AgentSelect with ownerName set has disableClearable=true, so we fire a
@@ -698,7 +553,6 @@ it('AgentSelect onChange v-falsy path (line 430 binary-expr false): clearing ass
         // Simulate clearing the input — v = '' → `v || 'OWNER'` returns 'OWNER'
         fireEvent.change(autocompleteInput, { target: { value: '' } });
     }
-    // The subtitle should still say 'will route this' (OWNER mode)
     expect(document.body).toBeTruthy();
 });
 
@@ -787,8 +641,6 @@ it('submit happy-path with non-OWNER assignee (line 130 cond-expr false + line 1
 });
 
 it('ownerName falls back to "Owner" when settings returns null owner_name (L104 ?? false branch)', async () => {
-    // Override settings to omit owner_name so `settings?.owner_name ?? 'Owner'` takes
-    // the nullish-coalescing false branch and returns the literal string 'Owner'.
     server.use(
         http.get(`${BASE}/settings`, () =>
             HttpResponse.json({ id: 1, owner_name: null, onboarding_complete: 1 })
@@ -798,16 +650,8 @@ it('ownerName falls back to "Owner" when settings returns null owner_name (L104 
         http.get(`${BASE}/projects/:id/labels`, () => HttpResponse.json({ labels: [] }))
     );
     renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new'] });
-    await screen.findByPlaceholderText(/Refund automation/i);
-
-    // The subtitle renders "[ownerName] will route this". With owner_name=null
-    // the fallback 'Owner' is used, so the text should contain 'Owner'.
-    const ownerEls = screen.queryAllByText(
-        (_, el) =>
-            (el?.textContent ?? '').includes('Owner') &&
-            (el?.textContent ?? '').includes('will route this')
-    );
-    expect(ownerEls.length).toBeGreaterThan(0);
+    const reporter = await screen.findByRole('combobox', { name: 'Reporter' });
+    expect(reporter).toHaveTextContent('Owner (Owner)');
 });
 
 it('assignee picker lists PO-role agents first under "Suggested"', async () => {
@@ -920,5 +764,119 @@ describe('TaskNew — repo picker (ADR 0018)', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /Save as draft/i }));
         await waitFor(() => expect(body.repo_ids).toEqual(['p1', 'r-web']));
+    });
+});
+
+describe('TaskNew — workflow select (migration 022)', () => {
+    const QUICK = makeWorkflow({ id: 'wf-quick', name: 'Quick change', project_id: 'p1' });
+    const GLOBAL = makeWorkflow({ id: 'wf-global', name: 'Delivery', project_id: null });
+    const OTHER = makeWorkflow({ id: 'wf-other', name: 'Elsewhere', project_id: 'p2' });
+    const SUB = makeWorkflow({ id: 'wf-sub', name: 'Build sub-task', input_kind: 'sub_task' });
+
+    function handlers(defaultWorkflowId: string | null, capture: (b: Record<string, unknown>) => void) {
+        return [
+            http.get(`${BASE}/projects`, () =>
+                HttpResponse.json([makeProject({ default_workflow_id: defaultWorkflowId })])
+            ),
+            http.get(`${BASE}/workflows`, () => HttpResponse.json([QUICK, GLOBAL, OTHER, SUB])),
+            http.post(`${BASE}/tasks`, async ({ request }) => {
+                capture((await request.json()) as Record<string, unknown>);
+                return HttpResponse.json(makeTask({ id: 'ATL-50', title: 'Queued' }));
+            }),
+            ...baseHandlers(),
+        ];
+    }
+
+    async function fillAndPickProject() {
+        fireEvent.change(await screen.findByLabelText('Title'), { target: { value: 'Queued' } });
+        fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'desc' } });
+        const project = await screen.findByRole('combobox', { name: 'Project' });
+        await waitFor(() => expect(project).not.toHaveAttribute('aria-disabled'));
+        fireEvent.mouseDown(project);
+        fireEvent.click(await screen.findByRole('option', { name: 'Atlas' }));
+        // Save / Submit stay disabled until the project's repos load.
+        await screen.findByRole('combobox', { name: 'Repos' });
+    }
+
+    it("preselects the project's default and lists only workflows that take its Tasks", async () => {
+        server.use(...handlers('wf-quick', () => {}));
+        renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new'] });
+        await fillAndPickProject();
+
+        const select = await screen.findByRole('combobox', { name: 'Workflow' });
+        await waitFor(() => expect(select).toHaveTextContent('Quick change'));
+        expect(screen.getByText('Quick change will start once you submit')).toBeInTheDocument();
+
+        fireEvent.mouseDown(select);
+        const names = screen.getAllByRole('option').map((o) => o.textContent);
+        expect(names).toEqual(['None — save for later', 'Quick change', 'Delivery']);
+    });
+
+    it('preselects the ?project= project by id, and with it the default workflow', async () => {
+        server.use(...handlers('wf-quick', () => {}));
+        renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new?project=p1'] });
+        const project = await screen.findByRole('combobox', { name: 'Project' });
+        await waitFor(() => expect(project).toHaveTextContent('Atlas'));
+        const select = await screen.findByRole('combobox', { name: 'Workflow' });
+        await waitFor(() => expect(select).toHaveTextContent('Quick change'));
+    });
+
+    it('submits with workflow_id and skips the separate ready transition', async () => {
+        let body: Record<string, unknown> = {};
+        let transitioned = false;
+        server.use(
+            http.patch(`${BASE}/tasks/:id/status`, () => {
+                transitioned = true;
+                return HttpResponse.json(makeTask({ id: 'ATL-50', status: 'ready' }));
+            }),
+            ...handlers('wf-quick', (b) => (body = b))
+        );
+        renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new'] });
+        await fillAndPickProject();
+        await waitFor(() =>
+            expect(screen.getByRole('combobox', { name: 'Workflow' })).toHaveTextContent('Quick change')
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /^Submit$/i }));
+        await waitFor(() => expect(body['workflow_id']).toBe('wf-quick'));
+        // The API queued it in the create request; a second status call would
+        // be a draft → ready transition racing the one the server already made.
+        await new Promise((r) => setTimeout(r, 50));
+        expect(transitioned).toBe(false);
+    });
+
+    it('never queues on Save as draft, even with a workflow picked', async () => {
+        let body: Record<string, unknown> | null = null;
+        server.use(...handlers('wf-quick', (b) => (body = b)));
+        renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new'] });
+        await fillAndPickProject();
+        await waitFor(() =>
+            expect(screen.getByRole('combobox', { name: 'Workflow' })).toHaveTextContent('Quick change')
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /Save as draft/i }));
+        await waitFor(() => expect(body).not.toBeNull());
+        expect(body).not.toHaveProperty('workflow_id');
+    });
+
+    it('lets the Owner pick None, and ignores a default that no longer takes Tasks', async () => {
+        let body: Record<string, unknown> | null = null;
+        // A default naming a sub-task workflow is not offered, so it falls to None.
+        server.use(...handlers('wf-sub', (b) => (body = b)));
+        renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new'] });
+        await fillAndPickProject();
+        const select = await screen.findByRole('combobox', { name: 'Workflow' });
+        expect(select).toHaveTextContent('None — save for later');
+
+        fireEvent.mouseDown(select);
+        fireEvent.click(await screen.findByRole('option', { name: 'Delivery' }));
+        expect(select).toHaveTextContent('Delivery');
+        fireEvent.mouseDown(select);
+        fireEvent.click(await screen.findByRole('option', { name: 'None — save for later' }));
+        expect(select).toHaveTextContent('None — save for later');
+
+        fireEvent.click(screen.getByRole('button', { name: /^Submit$/i }));
+        await waitFor(() => expect(body).not.toBeNull());
+        expect(body).not.toHaveProperty('workflow_id');
     });
 });

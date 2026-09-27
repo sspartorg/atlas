@@ -66,6 +66,7 @@ import type {
     CliSessionDiffScopeName,
     CliSessionDiffSummaryResponse,
     CliSessionFilePatchResponse,
+    WorkflowRunDiffResponse,
     ICliSessionTranscriptResponse,
 } from '@atlas/shared';
 import type {
@@ -94,6 +95,8 @@ import type {
     AgentTestRun,
     AgentTestBatch,
     AgentPerformance,
+    FleetPerformance,
+    FleetWindowDays,
     ParkedFixture,
     StarterTest,
     AgentQualification,
@@ -1232,6 +1235,8 @@ export const api = {
         batches: (testId: string) => get<AgentTestBatch[]>(`/agent-tests/${testId}/batches`),
         /** ATL-140 — what this agent's own runs already prove. */
         performance: (agentId: string) => get<AgentPerformance>(`/agents/${agentId}/performance`),
+        /** Every agent side by side, plus what the fleet delivered. */
+        fleetPerformance: (days: FleetWindowDays) => get<FleetPerformance>(`/agents/performance?days=${days}`),
         /** ADR 0023 phase 4 — the tests this agent ships with. */
         starter: (agentId: string) => get<StarterTest[]>(`/agents/${agentId}/starter-tests`),
         /** ADR 0023 phase 3 — fixtures pointed at a whole workflow. */
@@ -1258,6 +1263,20 @@ export const api = {
         // Gate nodes spawn no agent, so they have no `agent_runs` row and no
         // place on the steps list. Their verdicts come from their own route.
         gateResults: (id: string) => get<GateResultRow[]>(`/workflow-runs/${id}/gate-results`),
+        // The run's code changes per repo, then one file's patch on demand.
+        diff: (id: string) => get<WorkflowRunDiffResponse>(`/workflow-runs/${id}/diff`),
+        diffFile: (
+            id: string,
+            q: { repoId: string; scope: CliSessionDiffScopeName; path: string; context: number },
+        ) => {
+            const params = new URLSearchParams({
+                repo_id: q.repoId,
+                scope: q.scope,
+                path: q.path,
+                context: String(q.context),
+            });
+            return get<CliSessionFilePatchResponse>(`/workflow-runs/${id}/diff/file?${params.toString()}`);
+        },
     },
 
     // What each workflow is running and has queued (the /queue page).

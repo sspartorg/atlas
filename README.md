@@ -8,7 +8,7 @@ ties together the projects you're working on, the agents that act on them, and
 the conversation history that keeps everyone aligned.
 
 This README gets a teammate from a fresh clone to a running app in 10–15
-minutes on Windows, macOS, or Linux.
+minutes on Windows, macOS, or Linux — one command on each (see below).
 
 ---
 
@@ -51,6 +51,44 @@ sign in to the CLIs the script can't drive interactively:
 claude login         # Anthropic sign-in
 gh auth login        # GitHub sign-in (also unlocks `gh copilot`)
 ```
+
+---
+
+## One-command install (macOS / Linux)
+
+The same setup as the Windows script, for macOS (Homebrew), Debian/Ubuntu
+(apt), Fedora/RHEL (dnf) and Arch (pacman):
+
+```bash
+# From the repo root, as your normal user (it calls sudo where it needs to):
+bash scripts/bootstrap.sh
+```
+
+`scripts/bootstrap.sh` installs whatever is missing: Git, Node.js ≥ 20
+(Homebrew on macOS, NodeSource on apt/dnf), pnpm ≥ 9 (via corepack), Docker
+(Docker Desktop on macOS; Docker Engine + Compose plugin on Linux, adding you
+to the `docker` group), and optionally GitHub CLI, the GitHub Copilot CLI
+extension and Claude Code CLI (`npm install -g @anthropic-ai/claude-code`). On
+macOS without Homebrew it offers to install Homebrew first. Then it copies
+`.env` / `.env.prod` from their examples, generates a random
+`ATLAS_MCP_TOKEN`, runs `pnpm install`, brings Postgres up and migrates it,
+registers `atlas` with Claude Code CLI (the same `claude mcp add-json` call as
+the Windows script) and Copilot CLI, and finishes with `pnpm doctor`.
+
+It is idempotent: every step checks first and prints `keep:` when there is
+nothing to do, so re-running on a configured machine changes nothing. If a
+step fails, the script names it — fix the cause and re-run; finished steps are
+skipped. Other distros get a list of the manual steps instead.
+
+Flags:
+
+- `--skip-optional-clis` — skip gh / Copilot / Claude installs.
+- `--non-interactive` — take the default for every prompt (install what is
+  missing, keep what exists).
+- `--dry-run` — print every command it would run and change nothing.
+
+If it added you to the `docker` group, log out and back in (or run
+`newgrp docker`) before `pnpm dev`. Then sign in to `claude` / `gh` as above.
 
 ---
 

@@ -43,6 +43,7 @@ import { runNamedCommand } from './verification-gate.js';
 import { decideCheckCommand } from './gate-check-routing.js';
 import { parseRunOutcome } from './run-outcome-parser.js';
 import { recordGateResult } from './run-gate-results.js';
+import { recordRunEvent } from './workflow-run-events.js';
 import {
     WORKTREE_BRANCH_RE,
     ensureWorktree,
@@ -54,6 +55,7 @@ import { buildGitAuth, cleanupGitConfig } from './git-credentials.js';
 import { gitInvokeEnv } from './git-env.js';
 import { runRepos } from './run-repos.js';
 import { spawnAgentRun, cancelRun } from './agent-runner.js';
+import { isRetryableStepError } from './step-error-retry.js';
 
 const exec = promisify(execFile);
 
@@ -61,6 +63,11 @@ const exec = promisify(execFile);
 // orphaned (API restart, a terminal path that never reported back). Longer
 // than the worst End push + PR so delivery isn't mistaken for a hang.
 export const WORKFLOW_RECONCILE_AFTER_MS = 10 * 60 * 1000;
+
+// How long a crashed step waits before its one automatic retry. Long enough
+// for a dropped connection or a restarting API to come back; far inside the
+// reconcile window above, so the waiting run is never mistaken for an orphan.
+export const STEP_RETRY_BACKOFF_MS = 30 * 1000;
 
 export type WorkflowStartErrorCode = 'not_found' | 'invalid' | 'conflict';
 
@@ -661,7 +668,7 @@ async function runNextSubtask(run: RunRow, node: IWorkflowNode): Promise<void> {
     }
 }
 
-async function spawnNode(run: RunRow, node: IWorkflowNode): Promise<void> {
+async function spawnNode(run: RunRow, node: IWorkflowNode, retryOf?: string): Promise<void> {
     const agent = node.agent_id
         ? await db.selectFrom('agents').select(['id', 'name', 'status']).where('id', '=', node.agent_id).executeTakeFirst()
         : undefined;
@@ -692,6 +699,7 @@ async function spawnNode(run: RunRow, node: IWorkflowNode): Promise<void> {
                 worktreePath: run.worktree_path,
                 branch: run.branch,
                 skipSetup: run.setup_done,
+                ...(retryOf ? { retryOf } : {}),
             },
         });
     } catch (err) {
@@ -716,6 +724,7 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
             'outcome_summary',
             'outcome_reason',
             'outcome_checklist',
+            'parent_run_id',
         ])
         .where('id', '=', agentRunId)
         .executeTakeFirst();
@@ -742,7 +751,17 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
             .reverse()
             .find((l) => l.startsWith('[ERROR]') || l.startsWith('[watchdog]'));
         const detail = line?.replace(/^\[ERROR\]\s*/, '').slice(0, 300);
-        await park(run, step.node_id, detail ? `The agent step errored: ${detail}` : 'The agent step errored');
+        // One automatic retry per visit to the node. The retry carries the
+        // crashed step in `parent_run_id`, so a step that has one IS the
+        // retry: it parks. A later visit (a fail loop, the Owner's reply)
+        // spawns a fresh step with no parent, and gets its own retry.
+        const retried = step.parent_run_id !== null;
+        if (!retried && isRetryableStepError(row?.output_text)) {
+            await scheduleStepRetry(run, step.node_id, agentRunId);
+            return;
+        }
+        const what = retried ? 'The agent step errored again after an automatic retry' : 'The agent step errored';
+        await park(run, step.node_id, detail ? `${what}: ${detail}` : what);
         return;
     }
     if (step.status !== 'completed') return;
@@ -819,6 +838,52 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
     await goTo(run, failTarget, decision.detail ?? 'the step failed');
 }
 
+/**
+ * A crashed step gets one more try before the Owner hears about it. Nothing
+ * is posted to the item: the only traces are a line on the crashed step's own
+ * log and the retry itself — another `agent_runs` row on the same node, which
+ * the run page already lists as the next step.
+ *
+ * ponytail: an in-process timer. An API restart during the 30 s loses it and
+ * the run sits with no live step until reconcile parks it ten minutes later —
+ * the same outcome as before retries existed. Persist a `retry_at` if that
+ * window ever matters.
+ */
+async function scheduleStepRetry(run: RunRow, nodeId: string, crashedStepId: string): Promise<void> {
+    const at = new Date(Date.now() + STEP_RETRY_BACKOFF_MS).toISOString();
+    await db
+        .updateTable('agent_runs')
+        .set({ output_text: sql`coalesce(output_text, '') || ${`\n[atlas] Retrying this step automatically at ${at}.`}` as never })
+        .where('id', '=', crashedStepId)
+        .execute();
+    // Reconcile parks a running run with no live step once `updated_at` is
+    // ten minutes old — and a long step leaves it that old. Stamp it so the
+    // backoff window starts fresh.
+    await db.updateTable('workflow_runs').set({ updated_at: new Date().toISOString() }).where('id', '=', run.id).execute();
+    setTimeout(() => {
+        void retryStep(run.id, nodeId, crashedStepId).catch((err: unknown) => {
+            console.warn(`[workflow-retry] ${run.id}: ${(err as Error).message}`);
+        });
+    }, STEP_RETRY_BACKOFF_MS).unref();
+}
+
+/** Exported for tests: what the backoff timer runs. */
+export async function retryStep(runId: string, nodeId: string, crashedStepId: string): Promise<void> {
+    // The Owner may have stopped the run meanwhile, or a stale report moved
+    // it on; either way this retry is no longer wanted.
+    const run = await loadRun(runId);
+    if (!run || run.status !== 'running' || run.current_node_id !== nodeId) return;
+    const live = await db
+        .selectFrom('agent_runs')
+        .select('id')
+        .where('workflow_run_id', '=', runId)
+        .where('status', 'in', ['queued', 'in_progress'])
+        .executeTakeFirst();
+    if (live) return;
+    const node = nodeById(run.graph_snapshot, nodeId);
+    if (node) await spawnNode(run, node, crashedStepId);
+}
+
 // ─── Park / resume ──────────────────────────────────────────────────────────
 
 async function park(run: RunRow, nodeId: string | null, reason: string, stepPostedReason = false): Promise<void> {
@@ -828,6 +893,7 @@ async function park(run: RunRow, nodeId: string | null, reason: string, stepPost
         .where('id', '=', run.id)
         .execute();
     run.status = 'waiting_for_owner';
+    await recordRunEvent(run.id, 'parked', reason);
     broadcastRun(run, 'waiting_for_owner', nodeId);
     const workflow = await loadWorkflow(run.workflow_id);
     const name = workflow?.name ?? 'Workflow';
@@ -872,6 +938,7 @@ async function waitOnChild(child: RunRow, reason: string): Promise<void> {
         .set({ status: 'waiting_for_owner', parked_node_id: child.parent_node_id, current_node_id: child.parent_node_id, park_reason: why })
         .where('id', '=', parent.id)
         .execute();
+    await recordRunEvent(parent.id, 'parked', why);
     broadcastRun(parent, 'waiting_for_owner', child.parent_node_id);
     if (parent.item_id) {
         await setItemStatus(parent.item_id, 'waiting_for_info', `workflow_parked: ${why}`.slice(0, 280), { clearAssignee: true });
@@ -889,6 +956,7 @@ export async function resumeWorkflowRun(runId: string): Promise<void> {
     if (Number(updated.numUpdatedRows ?? 0) === 0) {
         throw new WorkflowStartError('conflict', 'Only a run that is waiting for you can be resumed');
     }
+    await recordRunEvent(runId, 'resumed');
     const run = (await loadRun(runId)) as RunRow;
     if (run.item_id) await setItemStatus(run.item_id, 'in_progress', 'workflow_resumed');
     await continueResumedRun(runId);
@@ -907,6 +975,7 @@ export async function continueResumedRun(runId: string): Promise<void> {
             .executeTakeFirst();
         const parent = await loadRun(run.parent_workflow_run_id);
         if (parent && Number(reopened.numUpdatedRows ?? 0) > 0) {
+            await recordRunEvent(parent.id, 'resumed');
             broadcastRun(parent, 'running', parent.current_node_id);
             if (parent.item_id) await setItemStatus(parent.item_id, 'in_progress', 'workflow_resumed');
         }
@@ -951,6 +1020,7 @@ export async function continueResumedRun(runId: string): Promise<void> {
             .returning(['id', 'item_id'])
             .executeTakeFirst();
         if (waiting) {
+            await recordRunEvent(waiting.id, 'resumed');
             if (waiting.item_id) await setItemStatus(waiting.item_id, 'in_progress', 'workflow_resumed');
             await continueResumedRun(waiting.id);
             return;
@@ -1516,7 +1586,11 @@ async function oldestReadyItem(workflowId: string, readyByLastFire: boolean): Pr
  * question doesn't stall every other Task. Sub-task runs are started by their
  * Task run, never here.
  */
-export async function tickWorkflowDispatch(now: Date = new Date()): Promise<number> {
+export function tickWorkflowDispatch(now: Date = new Date()): Promise<number> {
+    return enqueueDispatch(() => dispatchPass(now));
+}
+
+async function dispatchPass(now: Date): Promise<number> {
     const workflows = await db
         .selectFrom('workflows')
         .selectAll()
@@ -1614,16 +1688,35 @@ async function reportDispatchFailure(
     });
 }
 
-let kickPending = false;
+// Every dispatch pass — the minute tick and each kick — runs one after
+// another. Two overlapping passes could both pick the same ready Task; the
+// loser's insert then hits the one-live-run index and is reported to the Owner
+// as a failed dispatch.
+let dispatchChain: Promise<unknown> = Promise.resolve();
+// The kick waiting behind the current pass, if any. It has not started, so it
+// will see everything queued until it does: later kicks just join it.
+let queuedKick: Promise<void> | null = null;
 
-async function kickWorkflowDispatch(_reason: string): Promise<void> {
-    if (kickPending) return;
-    kickPending = true;
-    try {
-        await tickWorkflowDispatch();
-    } catch (err) {
-        console.warn(`[workflow-dispatch] kick failed: ${(err as Error).message}`);
-    } finally {
-        kickPending = false;
-    }
+function enqueueDispatch<T>(pass: () => Promise<T>): Promise<T> {
+    const next = dispatchChain.then(pass);
+    dispatchChain = next.catch(() => undefined);
+    return next;
+}
+
+/**
+ * Start whatever is dispatchable now instead of waiting for the minute tick:
+ * called when a Task is queued, becomes Ready, loses its last blocker, or a
+ * run frees a slot. Fire-and-forget — it never throws, so a request that
+ * queued a Task never fails because dispatch did. The tick stays the fallback.
+ */
+export function kickWorkflowDispatch(reason: string): Promise<void> {
+    queuedKick ??= enqueueDispatch(async () => {
+        queuedKick = null;
+        try {
+            await dispatchPass(new Date());
+        } catch (err) {
+            console.warn(`[workflow-dispatch] kick (${reason}) failed: ${(err as Error).message}`);
+        }
+    });
+    return queuedKick;
 }

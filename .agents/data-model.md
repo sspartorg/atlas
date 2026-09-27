@@ -155,7 +155,9 @@ The autonomous catalog entries (`agent-ai-news`, `agent-market-research`, `agent
 ### IProject
 **Why this entity exists**: Projects are the top-level work container â€” every issue tunnels through `project_id`. **ADR 0018:** a project is a *container*, not a repo — it holds 0..N repos, all equal, and the git fields it used to carry moved onto them (migration 045).
 
-Fields: `id, name, issue_key_prefix, description, status, guardrails_md, created_at, updated_at, last_activity_at`
+Fields: `id, name, issue_key_prefix, description, status, guardrails_md, default_workflow_id, created_at, updated_at, last_activity_at`
+
+- `default_workflow_id` (FK → `workflows`, SET NULL; migration 022) — the Task workflow `/tasks/new` preselects for this project. Must be `input_kind='item'` and global or this project's. **Read only by the create form** — the server never applies it, so a Jira import or any create without `workflow_id` stays an unqueued draft (ADR 0016).
 
 - `guardrails_md` is free-form markdown (project guardrails are a separate table â€” see below)
 - Env secrets, guardrails and the constitution stay project-level and are staged into every repo.
@@ -182,7 +184,7 @@ Fields (`ITask`): `id, project_id, title, description, status, assignee_agent_id
   - The list is validated against the project, and changing it returns 409 while a workflow run (running or parked) holds the Task.
   - With several repos, the run works them side by side in one workspace and opens one PR per changed repo, all listed as `item_external_links`. `pr_url` is the first PR, and the Task closes when the **last** PR merges.
 
-- `workflow_id` (FK → `workflows`, SET NULL; migration 035) — the Task workflow it is queued for (`PUT /api/items/:id/workflow`, Tasks only).
+- `workflow_id` (FK → `workflows`, SET NULL; migration 035) — the Task workflow it is queued for (`PUT /api/items/:id/workflow`, Tasks only, or `workflow_id` on `POST /api/tasks`).
 - `spec_md` — the Architect step's spec for the whole Task; `pr_url` — the one PR its run opened (also an `item_external_links` row).
 - `worktree_branch` — the run branch (`atlas/wf/<taskId>` unless the Owner points it at a valid existing branch); `worktree_path` stays null for workflow runs (the path lives on `workflow_runs`).
 - `id` is `<project issue_key_prefix>-<seq>` (e.g. `SDB-12`), shared counter with sub-tasks.
@@ -222,10 +224,12 @@ Since 2026-09-12 `create()` resolves a missing `agent_id` from the item's live r
 ### IItemExternalLink
 Off-platform URL attached to an item: `link_kind='pull_request'`, or `'jira_issue'` (migration 042; written only by the Jira bridge, with `external_ref` = the Jira key and `title` = its summary). Table `item_external_links` (migration 020), UNIQUE `(item_id, url)`, cascades on item delete. `EXTERNAL_LINK_KINDS` (what the UI and MCP may add by hand) stays `['pull_request']`.
 
-Fields: `id, item_id, link_kind, url, title, external_ref, created_at, created_by_run_id, pr_state`.
+Fields: `id, item_id, link_kind, url, title, external_ref, created_at, created_by_run_id, pr_state, ci_state, ci_failing_checks`.
 
 - `pr_state` ∈ `'open' | 'merged' | 'closed' | null` (migration 033, CHECK constraint) — last GitHub state observed for a PR link; null until the first successful lookup, and forever on a project with no credential.
 - `pr_state_checked_at` (DB only, not on the wire) — stamped on every lookup attempt, success or failure. Reading the links (`GET …/external-links`, every `/full` envelope) refreshes PR links older than 5 min in the background; `POST /api/issues/:type/:id/external-links/refresh` refreshes synchronously.
+- `ci_state` ∈ `'pending' | 'success' | 'failure' | null` (migration 023, CHECK) — CI on an **open** PR's head commit (check runs + legacy statuses, see `ci-routing.ts`). Null = no CI observed (a repo without checks, or never read), not success. `ci_failing_checks` = `ci_summary` jsonb `[{name, detail}]`, `[]` unless failing.
+- DB only: `ci_head_sha`, `ci_checked_at`, `ci_handled_sha` (head commit Atlas already acted on), `ci_fix_attempts` (automatic fix runs started). A Task in review whose PR goes red on a new commit gets a comment + `needs_you` notification and, at most twice per Task and never over a live run, a fix run (a "Fix failing CI" sub-task continued from the Sub-tasks step, else a restart on the same branch) — `ci-follow-through.ts`.
 
 ### IJiraConfig / jira_sources / jira_issues (ADR 0016, migrations 042 + 044 + 010)
 `jira_config` is a singleton row holding the Jira bridge config. `IJiraConfig` returns every column except the token, and adds `api_token_set: boolean`:
@@ -324,7 +328,7 @@ Fields: `id, agent_id, issue_type, issue_id, project_id, status, started_at, end
 - **The live set is `queued` + `in_progress`**, which is what the partial unique index `agent_runs_one_live_per_item` (migration `003`) constrains to one row per `item_id`. `setup_failed` sits deliberately outside it so a retry isn't blocked (see migration `005`'s header).
 - **Promotion is guarded, not unconditional.** `spawnAgentRun` flips `queued → in_progress` from a 200ms `setTimeout`, and by the time that timer fires the row may have left the live set (Owner cancelled, `failOrphanedRuns` swept it, the item was deleted) with a replacement run already holding the slot. So the UPDATE carries `WHERE status = 'queued'` and checks `numUpdatedRows`: zero rows means the run is no longer ours to start, and the runner returns instead of spawning. Without the predicate the stale row re-entered the live set behind the replacement's back and raised 23505 as an unhandled rejection — the run silently never started and the reason lived only in the API log. Its regression test (`agent-dispatcher.integration.test.ts`) was deleted with the dispatcher; nothing asserts this against the real index today.
 
-**Two-persona columns:** `persona`, `review_outcome` and `review_reason` were removed with the in-agent reviewer persona; only `parent_run_id` (self-FK, ON DELETE CASCADE) remains.
+**Two-persona columns:** `persona`, `review_outcome` and `review_reason` were removed with the in-agent reviewer persona; only `parent_run_id` (self-FK, ON DELETE CASCADE) remains. The workflow engine writes it on a crashed step's one automatic retry (the retry's `parent_run_id` = the errored step), which is how `onStepFinished` knows the retry was spent.
 
 **Workflow + config snapshot columns (migration 035):** `workflow_run_id` (FK → `workflow_runs`, ON DELETE SET NULL) and `node_id` tie a run to a workflow step. `cli`, `model`, `effort`, `prompt_version` record the agent config the run spawned with. `spawnAgentRun` writes them on both write paths. `IAgentRun` exposes `workflow_run_id` + `node_id` (`GET /api/run/:id`, `GET /api/run`, `GET /api/agents/:id/runs`); `cli` / `model` / `effort` reach the web through `IWorkflowRunStep`; `prompt_version` is DB-only.
 
@@ -392,7 +396,7 @@ Fields: `id, project_id, name, description, status, graph, input_kind, trigger, 
 
 - `graph` JSONB: `{ nodes: [{id, type: start|agent|owner|subtasks|end, agent_id?, sub_workflow_id?, label?, position}], edges: [{id, source, target, kind: pass|fail}] }` (≤100 nodes, ≤300 edges). `validateWorkflowGraph(graph, inputKind?)` rules: unique node ids; exactly one Start with nothing connecting into it; at least one End with no outgoing edges; edges point at existing nodes; `agent_id` only (and required) on agent nodes; `sub_workflow_id` (required) and `label` (optional, ≤40 chars) only on **Sub-tasks** nodes, and Sub-tasks nodes only when `inputKind = 'item'` (so a sub-workflow can't nest another — one level deep); every non-End node has exactly one pass edge; only agent nodes have a fail edge (at most one); every node reachable from Start; pass edges acyclic (loops only through fail edges, so `loop_count` bounds them). Saving also checks every `agent_id` exists and every `sub_workflow_id` is an `input_kind='sub_task'` workflow of the same project.
 - `input_kind` ∈ `item | none | sub_task` (migration 038 added `sub_task`). `item` — a **Task workflow**: one run per Task queued via `items.workflow_id`. `none` — a project-level run. `sub_task` — a **sub-workflow**: runs only as a child of a Task run's Sub-tasks step, on one sub-task, in the Task's worktree; must be `trigger='manual'`, is never dispatched, and its End never delivers.
-- `trigger` ∈ `manual | schedule | item_ready`. `item_ready`: the dispatch tick starts the oldest `ready` queued Tasks while the workflow has fewer than `max_parallel_runs` top-level runs `running`. `schedule`: fires on `cron_expr` (materialised from `schedule_preset` ∈ `hourly | every_4h | daily | weekly | custom` + `schedule_time_of_day` + `schedule_weekday`, same `materializeCron` as `IProjectSchedule`, evaluated in `settings.quiet_hours_timezone`).
+- `trigger` ∈ `manual | schedule | item_ready`. `item_ready`: dispatch (a kick the moment a Task is queued or turns ready, or the minute tick) starts the oldest `ready` queued Tasks while the workflow has fewer than `max_parallel_runs` top-level runs `running`. `schedule`: fires on `cron_expr` (materialised from `schedule_preset` ∈ `hourly | every_4h | daily | weekly | custom` + `schedule_time_of_day` + `schedule_weekday`, same `materializeCron` as `IProjectSchedule`, evaluated in `settings.quiet_hours_timezone`).
 - `use_worktree` / `push_code` / `raises_pr` (defaults true; `raises_pr` defaults to `!push_to_default`) — End delivery. `push_to_default` (migration 038, default false) — End pushes `HEAD` straight to the project's default branch and opens no PR; requires `push_code` on and `raises_pr` off. The builder offers four combinations: Push + PR, Push branch, Push to the default branch, Keep local. End removes the worktree and deletes the run branch only after a successful push; with push off ("keep local") both stay on disk.
 - `max_loops` 1–20, default 3: fail-edge traversals — and End-gate returns to a Sub-tasks step — allowed before the run parks.
 - `max_parallel_runs` 1–10, default 1 (migration 038): how many Task runs of this workflow run at once, each in its own worktree. Sub-tasks inside one Task always run one at a time.
@@ -417,6 +421,17 @@ Fields: `id, workflow_id, item_id, project_id, status, graph_snapshot, parent_wo
 - **Child runs (ADR 0015, migration 038):** `parent_workflow_run_id` (FK → `workflow_runs`, ON DELETE CASCADE) + `parent_node_id` mark a sub-task's run, started by the parent Task run's Sub-tasks node. At most one child is live per Task run (sub-tasks run one at a time). A child's End commits leftovers and sets the sub-task `in_review` — it never pushes; a parked child parks the parent at the Sub-tasks node; stopping either cancels the Task run and its live children. `GET /api/workflow-runs/:id` returns them as `children`.
 - Each step is an ordinary `agent_runs` row with `workflow_run_id` + `node_id` set.
 - **End gate (Task runs with Sub-tasks steps):** the run completes only when every sub-task is `in_review` or `done`. A still-open sub-task that a Sub-tasks node claims sends the run back to that node (counted against `max_loops`); one no node claims parks the run at End. End-node child routing (`child_workflow_id`, `test_child_workflow_id`, `routeChildren`) was removed by ADR 0015.
+
+### Workflow run event (migration 024)
+**Why this entity exists**: `workflow_runs.park_reason` holds only the current wait and every resume nulls it, so a finished run kept no trace of having stopped for the Owner. The fleet page's "Owner interventions per Task" needs that history.
+
+Table `workflow_run_events`: `id, workflow_run_id (FK → workflow_runs, ON DELETE CASCADE), item_id, kind, node_id, reason, created_at`.
+
+- `kind` ∈ `parked | resumed` (CHECK). `parked` is written by `park()` (with its reason) and `waitOnChild()` (the Task run held by a parked sub-task, reason `Sub-task <id> is waiting for you: …`); `resumed` by `resumeWorkflowRun`, `continueResumedRun` (parent reopen, Sub-tasks child resume) and an Owner reply (`comments.ts`, after its transaction commits).
+- `item_id` / `node_id` are copied from the run at the moment of the event (`node_id` = `COALESCE(parked_node_id, current_node_id)`). `item_id` is deliberately not an FK so the row outlives a deleted item.
+- A sub-task that asks writes **two** `parked` rows (its own run and its Task run). Counting interventions per Task reads top-level runs only, so the Owner's one answer is counted once.
+- No backfill: nothing survived to backfill from. Consumers state the migration's run time as the start of the series.
+- Writes are **best-effort** (`services/workflow-run-events.ts`), like gate results.
 
 ### Gate result (migration 011)
 **Why this entity exists**: ADR 0020 moved the test-suite verdict from the agent's own `atlas-outcome` checklist to Atlas's exit code, but the answer was never stored. `deliver()` turns a failure into prose in `workflow_runs.park_reason` and a pass into a line in the delivery log, so the one quality signal an agent cannot author about itself — a machine check going red AFTER that agent reported `done` — could not be queried. The agent scorecard (`evals/`, `src/scripts/eval-score.ts`) reads this table for its `gate_catch` metric.
@@ -536,8 +551,10 @@ Workflow 1 --- n WorkflowRun 1 --- n AgentRun n --- 1 Agent
 Project (FK CASCADE; nullable for no-item, no-worktree workflows)
 
 Task.workflow_id -------------------> Workflow     (queued for; Tasks only)
+Project.default_workflow_id --------> Workflow     (create-form preselection only)
 WorkflowRun.item_id ----------------> Task | Sub-task (one live run per item)
 WorkflowRun.parent_workflow_run_id -> WorkflowRun  (a sub-task's run -> its Task run; CASCADE)
+WorkflowRunEvent.workflow_run_id -> WorkflowRun  (park / resume history; CASCADE — migration 024)
 AgentRun.item_id -------------------> Task | Sub-task
 Agent 1 --- n AgentChecklist / AgentPromptVersion; 1 --- 1 AgentMemory
 
@@ -588,7 +605,7 @@ While a workflow run is `running`, `PATCH …/status` and `…/assign` on its it
 
 ### Workflow dispatch
 
-No agent auto-dispatch exists. `tickWorkflowDispatch` (one-minute tick in `agent-schedule-registry.ts`, plus a kick at every End / stop) starts runs for active `item_ready` workflows (the oldest `ready` Tasks with that `workflow_id`, up to `max_parallel_runs` running top-level runs) and `schedule` workflows (when `next_run_at` is due). Setting a Task `ready` without a `workflow_id` starts nothing; sub-tasks are never dispatched — their runs start from the Task run's Sub-tasks steps. Within a run, steps and sub-task runs chain immediately with no tick wait. See `api-surface.md` (`services/agent-schedule-registry.ts`).
+No agent auto-dispatch exists. `tickWorkflowDispatch` (one-minute tick in `agent-schedule-registry.ts`, plus `kickWorkflowDispatch` right away when a Task is queued, a queued Task turns `ready`, a Task reaches `done`, a workflow is switched on / re-triggered / given more slots, and at every End / stop) starts runs for active `item_ready` workflows (the oldest `ready` Tasks with that `workflow_id`, up to `max_parallel_runs` running top-level runs) and `schedule` workflows (when `next_run_at` is due). Setting a Task `ready` without a `workflow_id` starts nothing; sub-tasks are never dispatched — their runs start from the Task run's Sub-tasks steps. Within a run, steps and sub-task runs chain immediately with no tick wait. See `api-surface.md` (`services/agent-schedule-registry.ts`).
 
 ---
 

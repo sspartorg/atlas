@@ -7,6 +7,8 @@ import {
     parseGithubPrUrl,
     fetchGithubPrTitle,
     fetchGithubPrState,
+    fetchGithubPr,
+    fetchGithubCi,
 } from './external-links.js';
 import { broadcastSSE } from '../routes/events.js';
 import { credentialsService } from './credentials.js';
@@ -588,5 +590,139 @@ describe('PR state refresh', () => {
             .execute();
         await externalLinks.list('ATL-1');
         await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    });
+});
+
+describe('CI on a PR (migration 023)', () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+    });
+
+    // Routes by path so the PR, check-runs and status reads each get their own body.
+    function stubRoutes(routes: Record<string, unknown>) {
+        const fetchMock = vi.fn(async (u: string) => {
+            const hit = Object.entries(routes).find(([needle]) => String(u).includes(needle));
+            if (!hit || hit[1] === 500) return new Response('{}', { status: 500 });
+            return new Response(JSON.stringify(hit[1]), { status: 200 });
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        return fetchMock;
+    }
+
+    it('fetchGithubPr returns the head sha alongside the state', async () => {
+        stubRoutes({ '/pulls/1': { state: 'open', merged_at: null, head: { sha: 'abc' } } });
+        expect(await fetchGithubPr('https://github.com/foo/bar/pull/1', 'tok')).toEqual({ state: 'open', headSha: 'abc' });
+        stubRoutes({ '/pulls/1': { state: 'open', merged_at: null } });
+        expect(await fetchGithubPr('https://github.com/foo/bar/pull/1', 'tok')).toEqual({ state: 'open', headSha: null });
+    });
+
+    it('fetchGithubCi reads check-runs and statuses for the commit and folds them', async () => {
+        const fetchMock = stubRoutes({
+            '/check-runs': { check_runs: [{ name: 'test', status: 'completed', conclusion: 'failure', output: { title: '2 failed' } }] },
+            '/status': { state: 'pending', statuses: [] },
+        });
+        expect(await fetchGithubCi('https://github.com/foo/bar/pull/1', 'abc', 'tok')).toEqual({
+            state: 'failure',
+            failing: [{ name: 'test', detail: '2 failed' }],
+        });
+        const urls = fetchMock.mock.calls.map(([u]) => String(u));
+        expect(urls).toContain('https://api.github.com/repos/foo/bar/commits/abc/check-runs?per_page=100');
+        expect(urls).toContain('https://api.github.com/repos/foo/bar/commits/abc/status?per_page=100');
+    });
+
+    it('fetchGithubCi tolerates missing arrays, and is null when either lookup fails or the URL is not a PR', async () => {
+        stubRoutes({ '/check-runs': {}, '/status': {} });
+        expect(await fetchGithubCi('https://github.com/foo/bar/pull/1', 'abc', 'tok')).toEqual({ state: null, failing: [] });
+        stubRoutes({ '/check-runs': { check_runs: [] }, '/status': 500 });
+        expect(await fetchGithubCi('https://github.com/foo/bar/pull/1', 'abc', 'tok')).toBeNull();
+        expect(await fetchGithubCi('https://github.com/foo/bar/issues/1', 'abc', 'tok')).toBeNull();
+    });
+
+    describe('during the PR refresh', () => {
+        const url = 'https://github.com/foo/bar/pull/5';
+
+        beforeEach(async () => {
+            vi.mocked(broadcastSSE).mockClear();
+            await testDb
+                .insertInto('credentials')
+                .values({
+                    id: 'cred-1',
+                    label: 'GH PAT',
+                    host: 'github',
+                    kind: 'pat',
+                    username: 'octocat',
+                    token_encrypted: 'enc',
+                    token_fingerprint: 'fp',
+                    scope: 'repo',
+                    expires_at: null,
+                })
+                .execute();
+            await testDb
+                .updateTable('project_repos')
+                .set({ credential_id: 'cred-1', git_url: 'https://github.com/foo/bar.git' })
+                .where('id', '=', 'p1')
+                .execute();
+            vi.spyOn(credentialsService, 'getToken').mockResolvedValue('tok');
+            await externalLinks.create({ itemId: 'ATL-1', url, linkKind: 'pull_request' });
+        });
+
+        it('persists CI for an open PR and exposes it on the link', async () => {
+            stubRoutes({
+                '/pulls/5': { state: 'open', merged_at: null, head: { sha: 'sha1' } },
+                '/check-runs': { check_runs: [{ name: 'lint', status: 'completed', conclusion: 'failure' }] },
+                '/status': { statuses: [] },
+            });
+            const [link] = await externalLinks.refreshPrStates('ATL-1');
+            expect(link?.ci_state).toBe('failure');
+            expect(link?.ci_failing_checks).toEqual([{ name: 'lint', detail: null }]);
+            const row = await testDb.selectFrom('item_external_links').selectAll().executeTakeFirstOrThrow();
+            expect(row.ci_head_sha).toBe('sha1');
+            expect(row.ci_checked_at).not.toBeNull();
+            // A sub-task has no PR of its own to follow through on.
+            expect(row.ci_handled_sha).toBeNull();
+            expect(broadcastSSE).toHaveBeenCalled();
+        });
+
+        it('broadcasts when only the CI changed', async () => {
+            const routes: Record<string, unknown> = {
+                '/pulls/5': { state: 'open', merged_at: null, head: { sha: 'sha1' } },
+                '/check-runs': { check_runs: [{ name: 'a', status: 'in_progress' }] },
+                '/status': { statuses: [] },
+            };
+            stubRoutes(routes);
+            await externalLinks.refreshPrStates('ATL-1');
+            vi.mocked(broadcastSSE).mockClear();
+            routes['/check-runs'] = { check_runs: [{ name: 'a', status: 'completed', conclusion: 'success' }] };
+            const [link] = await externalLinks.refreshPrStates('ATL-1');
+            expect(link?.ci_state).toBe('success');
+            expect(broadcastSSE).toHaveBeenCalledTimes(1);
+        });
+
+        it('keeps the last CI reading when the CI lookup fails, and skips CI for a merged PR', async () => {
+            const routes: Record<string, unknown> = {
+                '/pulls/5': { state: 'open', merged_at: null, head: { sha: 'sha1' } },
+                '/check-runs': { check_runs: [{ name: 'a', status: 'completed', conclusion: 'success' }] },
+                '/status': { statuses: [] },
+            };
+            const fetchMock = stubRoutes(routes);
+            await externalLinks.refreshPrStates('ATL-1');
+            routes['/status'] = 500;
+            expect((await externalLinks.refreshPrStates('ATL-1'))[0]?.ci_state).toBe('success');
+
+            routes['/pulls/5'] = { state: 'closed', merged_at: '2026-09-01T00:00:00Z', head: { sha: 'sha1' } };
+            fetchMock.mockClear();
+            const [link] = await externalLinks.refreshPrStates('ATL-1');
+            expect(link?.pr_state).toBe('merged');
+            expect(link?.ci_state).toBe('success');
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        });
+
+        it('a link never checked for CI reads as no CI', async () => {
+            stubRoutes({});
+            const [link] = await externalLinks.list('ATL-1');
+            expect(link?.ci_state).toBeNull();
+            expect(link?.ci_failing_checks).toEqual([]);
+        });
     });
 });

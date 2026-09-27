@@ -314,6 +314,12 @@ export interface IProject {
     description: string;
     status: string;
     guardrails_md: string;
+    /**
+     * The item-workflow /tasks/new preselects for this project, so submitting a
+     * Task starts it. Only the form reads it — the server never applies it on a
+     * transition, so Jira imports keep their source's workflow (ADR 0016).
+     */
+    default_workflow_id: string | null;
     created_at: string;
     updated_at: string;
     // Most recent timestamp across the project row and any of its children
@@ -851,6 +857,19 @@ export const EXTERNAL_LINK_KINDS: ExternalLinkKind[] = ['pull_request'];
 /** GitHub PR lifecycle as last observed by the API (null = not yet checked or lookup failed). */
 export type ExternalPrState = 'open' | 'merged' | 'closed';
 
+/**
+ * Combined CI result for a PR's head commit (GitHub check-runs + legacy
+ * statuses), as last observed by the API. Absent/null = no CI seen — never
+ * read as success.
+ */
+export type ExternalCiState = 'pending' | 'success' | 'failure';
+
+/** One failing CI check: its name and the short title/description GitHub gave it. */
+export interface IExternalCiCheck {
+    name: string;
+    detail: string | null;
+}
+
 export interface IItemExternalLink {
     id: number;
     item_id: string;
@@ -864,6 +883,10 @@ export interface IItemExternalLink {
     created_by_run_id: string | null;
     /** Pull-request links only: last observed GitHub state; null when unknown. */
     pr_state?: ExternalPrState | null;
+    /** Pull-request links only: CI on the PR's head commit; null when no CI was observed. */
+    ci_state?: ExternalCiState | null;
+    /** The checks that failed on that commit (empty unless ci_state is 'failure'). */
+    ci_failing_checks?: IExternalCiCheck[];
 }
 
 /**
@@ -1596,6 +1619,34 @@ export interface CliSessionFilePatchResponse {
     truncated: boolean;
     /** Byte size of the patch git produced, even when `patch` is null. */
     byte_size: number;
+}
+
+/**
+ * Where a workflow run's changes for one repo were read from.
+ *   worktree    — the run's live checkout (running, parked or cancelled run).
+ *   branch      — the repo's own clone, at the run's branch (local or
+ *                 `origin/<branch>`), after delivery removed the worktree.
+ *   unavailable — neither exists any more; `reason` says why.
+ */
+export type WorkflowRunDiffSource = 'worktree' | 'branch' | 'unavailable';
+
+/** One repo of a run in GET /api/workflow-runs/:id/diff. */
+export interface WorkflowRunRepoDiff {
+    repo_id: string;
+    repo_name: string;
+    source: WorkflowRunDiffSource;
+    /** Set when `source` is `unavailable`; else null. */
+    reason: string | null;
+    /** Null when `source` is `unavailable`. `uncommitted` is empty for `branch`. */
+    summary: CliSessionDiffSummaryResponse | null;
+}
+
+/** GET /api/workflow-runs/:id/diff */
+export interface WorkflowRunDiffResponse {
+    run_id: string;
+    branch: string | null;
+    /** Empty when the run has no project or branch (nothing was checked out). */
+    repos: WorkflowRunRepoDiff[];
 }
 
 // W4 — Typed API error envelope. Every non-2xx response from @atlas/api

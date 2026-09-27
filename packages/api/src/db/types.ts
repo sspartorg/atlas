@@ -1,6 +1,7 @@
 import type { ColumnType, Generated } from 'kysely';
 import type {
     AgentCli,
+    IExternalCiCheck,
     IWorkflowGraph,
     SchedulePreset,
     WorkflowInputKind,
@@ -277,6 +278,8 @@ export interface ProjectsTable {
     description: Str;
     status: Str;
     guardrails_md: Str;
+    // Migration 022 — preselected by /tasks/new only (never applied server-side).
+    default_workflow_id: StrN;
     created_at: CreatedAt;
     updated_at: UpdatedAt;
 }
@@ -527,6 +530,17 @@ export interface ItemExternalLinksTable {
         'open' | 'merged' | 'closed' | null | undefined
     >;
     pr_state_checked_at: TSn;
+    // Migration 023 — CI on the PR's head commit, and the auto-fix bookkeeping.
+    ci_state: ColumnType<
+        'pending' | 'success' | 'failure' | null,
+        'pending' | 'success' | 'failure' | null | undefined,
+        'pending' | 'success' | 'failure' | null | undefined
+    >;
+    ci_head_sha: StrN;
+    ci_summary: ColumnType<IExternalCiCheck[] | null, string | null | undefined, string | null | undefined>;
+    ci_checked_at: TSn;
+    ci_handled_sha: StrN;
+    ci_fix_attempts: ColumnType<number, number | undefined, number>;
 }
 
 /** Shape written by `services/run-trace-parser.ts`. Declared here so the column is typed, not `unknown`. */
@@ -777,6 +791,18 @@ export interface WorkflowRunsTable {
     finished_at: TSn;
 }
 
+// Migration 024 — every park and resume of a workflow run. `park_reason` holds
+// only the current wait and is nulled on resume; this keeps the history.
+export interface WorkflowRunEventsTable {
+    id: string;
+    workflow_run_id: string;
+    item_id: StrN;
+    kind: 'parked' | 'resumed';
+    node_id: StrN;
+    reason: StrN;
+    created_at: CreatedAt;
+}
+
 // Migration 041 — workflows published to the Marketplace. `bundle` is the
 // export zip (bytea selects as a Buffer).
 export interface PublishedWorkflowsTable {
@@ -881,6 +907,7 @@ export interface DB {
     settings: SettingsTable;
     workflows: WorkflowsTable;
     workflow_runs: WorkflowRunsTable;
+    workflow_run_events: WorkflowRunEventsTable;
     published_workflows: PublishedWorkflowsTable;
     run_gate_results: RunGateResultsTable;
     agent_tests: AgentTestsTable;

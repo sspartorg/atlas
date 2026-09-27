@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../api/api.js';
-import type { AgentTestExpectations, AgentTestItemTemplate } from '../api/types.js';
+import type { AgentTestExpectations, AgentTestItemTemplate, FleetWindowDays } from '../api/types.js';
 
 // Agent tests (ADR 0023). A customer installing an agent from the marketplace
 // does it on trust, and one they wrote themselves cannot be qualified at all —
@@ -104,6 +104,14 @@ export function useAgentPerformance(agentId: string) {
         queryKey: ['agent-performance', agentId],
         queryFn: () => api.agentTests.performance(agentId),
         enabled: Boolean(agentId),
+    });
+}
+
+/** The fleet page: every agent side by side, plus what the fleet delivered. */
+export function useFleetPerformance(days: FleetWindowDays) {
+    return useQuery({
+        queryKey: ['fleet-performance', days],
+        queryFn: () => api.agentTests.fleetPerformance(days),
     });
 }
 
