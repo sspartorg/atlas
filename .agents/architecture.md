@@ -191,7 +191,7 @@ Before the handler, a global `preHandler` (`services/workflow-lock.ts`) returns 
 Agents never start themselves and never route items (ADR 0014, `docs/adr/0014-workflows-replace-agent-handoffs.md`). A **workflow** (`workflows` row: graph of Start / Agent / Owner / Sub-tasks / End nodes joined by pass and fail connections) starts a **workflow run**, and `services/workflow-engine.ts` drives it. Since ADR 0015 (`docs/adr/0015-one-task-one-pr.md`) the item is a **Task**: its run does everything, including its sub-tasks, in one worktree on one branch, and delivers once.
 
 ```
-start (manual POST /api/workflows/:id/runs, dispatch tick, End kick, generate-ai-scaffold)
+start (manual POST /api/workflows/:id/runs, dispatch kick or tick, generate-ai-scaffold)
    │  startWorkflowRun: deps gate once · insert workflow_runs (graph_snapshot, one live run per item)
    │  Task → in_progress · ensureWorktree({item:null, branch}) once when use_worktree
    ▼
@@ -204,6 +204,8 @@ goTo(node after Start)
    │        binding check is the verification gate at End, not this block.
    │        rejected / checklist failed        → fail connection, loop_count+1 (past max_loops → park)
    │        asked_question / no outcome / error → park
+   │        error that looks transient, first try at this visit → retry the same node once after 30 s
+   │          (retry row carries parent_run_id = crashed step; its error parks "…again after an automatic retry")
    │        cancelled                          → cancel run
    ├─ owner node → park
    ├─ subtasks node → runNextSubtask: oldest open sub-task of the Task matching the node's label
@@ -233,6 +235,10 @@ stop   → POST /api/workflow-runs/:id/stop, or stop / delete of a step run (a c
 ```
 
 **The one-minute tick** (`services/agent-schedule-registry.ts`, started from `main.ts`) only *starts* runs and repairs them: stuck-run watchdog → reminders → GitHub App token refresh → `reconcileWorkflowRuns` (parks a `running` run with no live step for 10 min) → `tickWorkflowDispatch`. Dispatch starts, per active workflow, the oldest `ready` Tasks queued for it (`items.workflow_id`, `trigger='item_ready'`) until `max_parallel_runs` top-level runs are `running` — each Task in its own worktree — or a scheduled fire (`trigger='schedule'`, croner on `cron_expr`). Parked runs don't hold a slot. Sub-workflows (`input_kind='sub_task'`) are never dispatched; reconcile skips a Task run whose child is `running`.
+
+**Instant start.** `kickWorkflowDispatch(reason)` runs a dispatch pass right away, fire-and-forget (it never throws into the caller): when a Task is queued (`workflowsService.setItemWorkflow` with a workflow), a queued Task turns `ready` or any Task reaches `done` (`tasksService.transition` — a `done` may be the last `depends_on` blocker), a workflow's `status` / `trigger` / `max_parallel_runs` changes (`workflowsService.update`), and at every End / stop. All passes — the minute tick and every kick — run one after another on one promise chain, so two passes never race for the same Task; a kick that arrives during a pass queues exactly one more pass after it, and kicks that arrive before that queued pass starts share it. The tick stays as the fallback.
+
+**Crashed-step retry.** A step that ends `error` gets one automatic retry before the run parks, unless `isRetryableStepError` (`services/step-error-retry.ts`) calls it permanent: CLI not installed / spawn ENOENT, not signed in / bad key / expired token, no credit, agent missing or inactive. The engine appends `[atlas] Retrying this step automatically at <time>.` to the crashed step's log, stamps `workflow_runs.updated_at` (so reconcile's 10-minute window starts fresh), and after `STEP_RETRY_BACKOFF_MS` (30 s, an unref'd in-process timer) respawns the node with `parent_run_id` = the crashed step — only if the run is still `running` at that node with no live step (a stop during the backoff wins). Nothing is posted to the Owner. A step that already has a `parent_run_id` is the retry: its error parks with `The agent step errored again after an automatic retry: …`. A later visit to the node (fail loop, Owner reply) spawns a fresh step and gets its own retry. An API restart during the backoff loses the timer; reconcile then parks the run as before.
 
 **Failure paths that bypass `completeRun`** all report the step so the run can't hang: `sweepStuckRuns`, the `setup_failed` branch, `POST /api/run/:id/stop`, `DELETE /api/run/:id`, and the `main.ts` orphan reaper (`failOrphanedRuns` flips dead runs to `error`, then `onStepFinished`; it no longer pushes or deletes worktrees). `reconcileWorkflowRuns` is the backstop for anything else, including an API restart between steps.
 

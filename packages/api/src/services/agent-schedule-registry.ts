@@ -14,7 +14,9 @@ import { onStepFinished, reconcileWorkflowRuns, tickWorkflowDispatch } from './w
 // engine starts runs for `item_ready` workflows whenever a ready item waits
 // and for `schedule` workflows when their cron fires. Consecutive steps of a
 // workflow run never wait for this tick — the engine chains them directly;
-// the tick only starts new runs.
+// the tick only starts new runs, and even that is the fallback: queueing a
+// Task, a Task turning Ready or Done, End and stop each kick a dispatch pass
+// straight away (`kickWorkflowDispatch`).
 //
 // Logging posture: silent on uninteresting ticks.
 

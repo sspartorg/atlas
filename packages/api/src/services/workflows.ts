@@ -22,7 +22,7 @@ import { sql } from 'kysely';
 import { db } from '../db/kysely-client.js';
 import { ApiError } from '../utils/errors.js';
 import { materializeCron } from './cron-materializer.js';
-import { computeNextWorkflowFire } from './workflow-engine.js';
+import { computeNextWorkflowFire, kickWorkflowDispatch } from './workflow-engine.js';
 import { marketplaceService } from './marketplace.js';
 import { eventsLog } from './events-log.js';
 import { broadcastSSE } from '../routes/events.js';
@@ -351,6 +351,11 @@ export const workflowsService = {
             .where('id', '=', id)
             .execute();
         broadcastWorkflowsChanged();
+        // Switched on, made self-starting, or given more slots: its queue may
+        // start now rather than at the next tick.
+        if (patch.status !== undefined || patch.trigger !== undefined || patch.max_parallel_runs !== undefined) {
+            void kickWorkflowDispatch('workflow_updated');
+        }
         return (await this.get(id)) as IWorkflow;
     },
 
@@ -724,6 +729,9 @@ export const workflowsService = {
             });
         }
         broadcastSSE({ type: 'counts_changed', issueType: item.type as IssueType, issueId: itemId });
+        // Start it now if its workflow picks up Ready Tasks, instead of up to
+        // a minute later on the tick.
+        if (workflowId) void kickWorkflowDispatch('task_queued');
     },
 
     /** Delete guard: a workflow a Sub-tasks step runs cannot be deleted. */

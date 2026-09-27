@@ -13,6 +13,7 @@ import {
 import { eventsLog } from './events-log.js';
 import { projectReposService } from './project-repos.js';
 import { ApiError } from '../utils/errors.js';
+import { kickWorkflowDispatch } from './workflow-engine.js';
 
 interface CreateInput {
     project_id: string;
@@ -180,6 +181,11 @@ export const tasksService = {
             detail: detail ?? (override ? 'override' : null),
         });
         broadcastSSE({ type: 'counts_changed', issueType: 'task', issueId: id });
+        // A queued Task that turns Ready can start now; a Task reaching Done
+        // may be the last blocker a Ready Task was waiting on.
+        if ((newStatus === 'ready' && task.workflow_id) || newStatus === 'done') {
+            void kickWorkflowDispatch(`task_${newStatus}`);
+        }
         return (await this.get(id))!;
     },
 
