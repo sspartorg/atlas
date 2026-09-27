@@ -154,6 +154,8 @@ a 60s hook timeout fires: api took 1273s and failed, versus 293s and 286s across
 two serialised runs. CI is unaffected — `api` and `web` are separate jobs on
 separate runners — but do not "optimise" the local gate by re-parallelising it. The practical consequence: coverage and test regressions are invisible until someone runs them by hand, which is exactly how the api package drifted below its own floor (see the table above). Run `pnpm -w run gate` before pushing anything non-trivial — it is the only thing standing in for CI.
 
+**`scripts/bootstrap.sh`** (the macOS/Linux one-command installer) is exercised by `packages/api/tests/bootstrap-sh.test.ts`, so it runs in the `api` job. It executes the real script against a throwaway repo with a PATH holding only stubs plus a few real coreutils (appending the real PATH would make "tool missing" branches unreachable on a runner that has git/docker/gh in `/usr/bin`), and asserts the `--dry-run` plan for macOS, Debian, Fedora and Arch, that a configured machine prints `keep:` for every step, a real (non-dry) token write that a re-run leaves byte-identical, and the failed-step resume message. Its last case runs `shellcheck`, which ships on GitHub's ubuntu runners; dev machines without it skip that case. `scripts/bootstrap.ps1` still has no automated run.
+
 The one gate that IS enforced remotely is the **web bundle budget** (`bundle:check` in `build.yml`), which fails the Build workflow on every push and PR.
 
 ## What's deferred
