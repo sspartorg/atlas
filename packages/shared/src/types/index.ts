@@ -1598,6 +1598,34 @@ export interface CliSessionFilePatchResponse {
     byte_size: number;
 }
 
+/**
+ * Where a workflow run's changes for one repo were read from.
+ *   worktree    — the run's live checkout (running, parked or cancelled run).
+ *   branch      — the repo's own clone, at the run's branch (local or
+ *                 `origin/<branch>`), after delivery removed the worktree.
+ *   unavailable — neither exists any more; `reason` says why.
+ */
+export type WorkflowRunDiffSource = 'worktree' | 'branch' | 'unavailable';
+
+/** One repo of a run in GET /api/workflow-runs/:id/diff. */
+export interface WorkflowRunRepoDiff {
+    repo_id: string;
+    repo_name: string;
+    source: WorkflowRunDiffSource;
+    /** Set when `source` is `unavailable`; else null. */
+    reason: string | null;
+    /** Null when `source` is `unavailable`. `uncommitted` is empty for `branch`. */
+    summary: CliSessionDiffSummaryResponse | null;
+}
+
+/** GET /api/workflow-runs/:id/diff */
+export interface WorkflowRunDiffResponse {
+    run_id: string;
+    branch: string | null;
+    /** Empty when the run has no project or branch (nothing was checked out). */
+    repos: WorkflowRunRepoDiff[];
+}
+
 // W4 — Typed API error envelope. Every non-2xx response from @atlas/api
 // SHOULD carry an ApiErrorBody. Legacy callers that send `{ error: '…' }`
 // alone are still tolerated; the web client defaults `kind` to

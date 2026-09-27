@@ -26,6 +26,7 @@ import { formatCostUsd } from '../../utils/formatCost.js';
 import { formatAbsolute, relativeTime } from '../../utils/time.js';
 import { WorkflowCanvas } from './WorkflowCanvas.js';
 import { WorkflowRunStatusChip } from './WorkflowRunStatusChip.js';
+import { RunChangesSection } from './RunChangesSection.js';
 import { nodeRunStates, toFlow } from './graph.js';
 import { durationLabel, itemPathIn } from './labels.js';
 
@@ -553,6 +554,7 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
                     )}
                 </Box>
             </Box>
+            <RunChangesSection runId={run.id} />
         </Box>
     );
 }

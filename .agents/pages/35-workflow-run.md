@@ -3,7 +3,7 @@
 **Route:** `/workflows/:id/runs/:runId` • **Component:** `packages/web/src/pages/workflows/WorkflowRunDetail.tsx` • **Slug:** `workflows`
 
 ## Purpose
-Watch one workflow run move node-by-node: the run's `graph_snapshot` on a read-only canvas with per-node state, a step timeline, the sub-task runs a Task run started, and Stop / Resume. A sub-task's run (ADR 0015) opens on this same page.
+Watch one workflow run move node-by-node: the run's `graph_snapshot` on a read-only canvas with per-node state, a step timeline, the sub-task runs a Task run started, Stop / Resume, and a **Changes** section to review the run's code without going to GitHub. A sub-task's run (ADR 0015) opens on this same page.
 
 ## States
 - **Loading**: centered spinner.
@@ -34,6 +34,13 @@ Watch one workflow run move node-by-node: the run's `graph_snapshot` on a read-o
 - Row click → `/agents/:agentId/runs/:runId` (existing run detail with the event viewer / live tail).
 - A Task run's own steps don't include its sub-tasks' steps. Below them, **Sub-tasks · X of Y done** lists `run.children` (`ChildRow`: sub-task id, title, run status chip), oldest first; a row opens that child run's view.
 
+**Changes** (`RunChangesSection.tsx`, below the canvas; anchor `#changes`)
+- `GET /api/workflow-runs/:id/diff`. Loading → skeletons; error → "Could not load the changes. …"; no repos → "This run has no repository checkout, so there are no code changes to review."
+- Multi-repo run → a repo tab per repo (first selected); switching resets scope and file.
+- A repo whose `source` is `unavailable` → info alert with the server's `reason` (e.g. branch merged and deleted).
+- Otherwise a caption says where it read from ("Read from the run's checkout." / "Read from the run's branch — its checkout was removed after delivery.") and the base ref, then the Stop modal's two-pane panel (`StopSessionReviewPanel` with `runRepo`) read-only: **Uncommitted (N)** / **Committed on branch (N)** tabs (defaults to Committed; Uncommitted is 0 in `branch` mode), file list without checkboxes, file pane that lazy-loads one patch per file via `GET /api/workflow-runs/:id/diff/file`, split/unified + wrap toggles persisted in `diffViewPrefs` (shared with the Stop modal).
+- The Task / Sub-task rail's **Changes** link (`ItemWorkflowPanel`, when the latest run has a branch) opens `…/runs/:runId#changes`; the section scrolls itself into view.
+
 ## Why these affordances exist
 - **Snapshot, not the live graph** — the run follows the graph as it was when it started; editing the workflow mid-run must not redraw history.
 - **Resume button besides reply-to-continue** — project-level runs have no item to comment on; the API resume endpoint is their only way forward.
@@ -41,11 +48,14 @@ Watch one workflow run move node-by-node: the run's `graph_snapshot` on a read-o
 ## Hooks used
 - `useWorkflowRun(runId)` — `['workflow-run', runId]`; `useSSE` invalidates it on `workflow_run_updated` (also under `parentWorkflowRunId`, so a Task run's view follows its sub-task runs) and on every `agent_status` / `run_completed` / `run_error` (step statuses).
 - `useStopWorkflowRun`, `useResumeWorkflowRun` — write the returned detail into the cache.
+- `useWorkflowRunDiff(runId)` — `['workflow-run-diff', runId]`; `useWorkflowRunFilePatch` — `['workflow-run-diff-patch', runId, repoId, scope, path, context]`, enabled only for the selected file.
 - `useWorkflows(projectId)` (End delivery label + Sub-tasks node titles), `useAgents`, `useIssues({projectId})` (item link).
 
 ## API endpoints touched
 - `GET /api/workflow-runs/:id` — `IWorkflowRunDetail`: summary (incl. `parent_workflow_run_id` / `parent_node_id`) + `steps` + `children`
 - `POST /api/workflow-runs/:id/stop`, `POST /api/workflow-runs/:id/resume`
+- `GET /api/workflow-runs/:id/gate-results`
+- `GET /api/workflow-runs/:id/diff`, `GET /api/workflow-runs/:id/diff/file` (Changes)
 - `GET /api/workflows?project_id=`, `GET /api/agents`, `GET /api/issues/tree?project_id=`
 
 ## Permissions / guards

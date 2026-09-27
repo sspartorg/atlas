@@ -9,6 +9,7 @@ import Typography from '@mui/material/Typography';
 import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded';
 import type { CliSessionDiffFile, CliSessionDiffScopeName } from '@atlas/shared';
 import { useCliSessionFilePatch } from '../../hooks/useCliSessions.js';
+import { useWorkflowRunFilePatch } from '../../hooks/useWorkflows.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { parseUnifiedDiff } from './parseUnifiedDiff.js';
 import { buildSplitRows, buildUnifiedRows } from './diffRows.js';
@@ -36,9 +37,14 @@ interface Props {
     wrap: boolean;
     /** Mobile master/detail — shows a back button when provided. */
     onBack?: (() => void) | undefined;
+    /**
+     * Read the patch from a workflow run's repo instead of a terminal session
+     * (the run page's Changes section); `sessionId` is then ignored.
+     */
+    runRepo?: { runId: string; repoId: string } | undefined;
 }
 
-export function DiffFilePane({ sessionId, scope, file, viewMode, wrap, onBack }: Props) {
+export function DiffFilePane({ sessionId, scope, file, viewMode, wrap, onBack, runRepo }: Props) {
     const [contextStep, setContextStep] = useState(0);
     const [largeConfirmed, setLargeConfirmed] = useState<string | null>(null);
 
@@ -48,7 +54,18 @@ export function DiffFilePane({ sessionId, scope, file, viewMode, wrap, onBack }:
     const fetchable = file !== null && !file.binary && !file.too_large && !gated;
 
     const context = CONTEXT_STEPS[contextStep] ?? CONTEXT_STEPS[0];
-    const query = useCliSessionFilePatch(sessionId, scope, file?.path ?? null, context, fetchable);
+    // Both hooks always run (rules of hooks); only the one for this pane's
+    // source is enabled, so only one request is ever made.
+    const sessionQuery = useCliSessionFilePatch(sessionId, scope, file?.path ?? null, context, fetchable && !runRepo);
+    const runQuery = useWorkflowRunFilePatch(
+        runRepo?.runId ?? '',
+        runRepo?.repoId ?? '',
+        scope,
+        file?.path ?? null,
+        context,
+        fetchable && Boolean(runRepo),
+    );
+    const query = runRepo ? runQuery : sessionQuery;
 
     const parsed = useMemo(() => {
         const text = query.data?.patch;

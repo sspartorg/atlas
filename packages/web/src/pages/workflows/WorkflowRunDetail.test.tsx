@@ -18,6 +18,9 @@ function mount(run: IWorkflowRunDetail, gates: unknown[] = []) {
     server.use(
         http.get(`${BASE}/workflow-runs/${run.id}`, () => HttpResponse.json(run)),
         http.get(`${BASE}/workflow-runs/${run.id}/gate-results`, () => HttpResponse.json(gates)),
+        http.get(`${BASE}/workflow-runs/${run.id}/diff`, () =>
+            HttpResponse.json({ run_id: run.id, branch: run.branch, repos: [] })
+        ),
         http.get(`${BASE}/workflows`, () => HttpResponse.json([])),
         http.get(`${BASE}/agents`, () =>
             HttpResponse.json([makeAgent({ id: 'agent-coder', name: 'Coder' })])
