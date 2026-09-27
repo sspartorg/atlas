@@ -235,7 +235,7 @@ describe('workflow CRUD', () => {
             'agent-perf-check',
             'agent-visual-check',
         ]);
-        expect(res.json().max_loops).toBe(templateVersion('delivery') > 1 ? 12 : 3);
+        expect(res.json().max_loops).toBe(12);
 
         // A sub-workflow a Sub-tasks step uses can't be deleted from under it.
         const del = await app.inject({ method: 'DELETE', url: `/api/workflows/${byName('Build sub-task')?.id ?? ''}` });

@@ -201,6 +201,7 @@ CREATE TABLE public.agent_runs (
     model text,
     effort text,
     prompt_version integer,
+    trace_summary jsonb,
     CONSTRAINT agent_runs_outcome_kind_check CHECK (((outcome_kind IS NULL) OR ((outcome_kind)::text = ANY (ARRAY[('done'::character varying)::text, ('rejected'::character varying)::text, ('asked_question'::character varying)::text])))),
     CONSTRAINT agent_runs_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'in_progress'::text, 'completed'::text, 'error'::text, 'cancelled'::text, 'setup_failed'::text])))
 );
@@ -217,6 +218,55 @@ CREATE TABLE public.agent_templates (
     description text NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: agent_test_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.agent_test_runs (
+    id text NOT NULL,
+    agent_test_id text NOT NULL,
+    agent_run_id text,
+    item_id text,
+    verdict text DEFAULT 'running'::text NOT NULL,
+    failures jsonb DEFAULT '[]'::jsonb NOT NULL,
+    cost_usd numeric(12,6),
+    duration_s integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    evaluated_at timestamp with time zone,
+    batch_id text NOT NULL,
+    sample_index integer DEFAULT 0 NOT NULL,
+    label text,
+    judge_verdict text,
+    judge_reason text,
+    judge_cost_usd numeric(12,6),
+    workflow_run_id text,
+    CONSTRAINT agent_test_runs_judge_verdict_check CHECK (((judge_verdict IS NULL) OR (judge_verdict = ANY (ARRAY['pass'::text, 'fail'::text, 'abstained'::text])))),
+    CONSTRAINT agent_test_runs_verdict_check CHECK ((verdict = ANY (ARRAY['running'::text, 'passed'::text, 'failed'::text, 'errored'::text])))
+);
+
+
+--
+-- Name: agent_tests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.agent_tests (
+    id text NOT NULL,
+    agent_id text,
+    project_id text,
+    repo_id text,
+    name text NOT NULL,
+    item_template jsonb NOT NULL,
+    expectations jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    workflow_id text,
+    suite text,
+    source_test_id text,
+    source_hash text,
+    CONSTRAINT agent_tests_one_target_check CHECK (((agent_id IS NOT NULL) <> (workflow_id IS NOT NULL)))
 );
 
 
@@ -248,6 +298,7 @@ CREATE TABLE public.agents (
     marketplace_source_id text,
     marketplace_pulled_version integer,
     effort character varying(255) DEFAULT 'medium'::character varying NOT NULL,
+    marketplace_upgradable_hash text,
     CONSTRAINT agents_category_check CHECK ((category = ANY (ARRAY['software-dev'::text, 'marketing'::text, 'content'::text, 'design'::text]))),
     CONSTRAINT agents_cli_check CHECK ((cli = ANY (ARRAY['claude'::text, 'copilot'::text, 'ollama'::text]))),
     CONSTRAINT agents_effort_check CHECK (((effort)::text = ANY (ARRAY[('none'::character varying)::text, ('low'::character varying)::text, ('medium'::character varying)::text, ('high'::character varying)::text, ('xhigh'::character varying)::text, ('max'::character varying)::text]))),
@@ -532,6 +583,13 @@ CREATE TABLE public.item_external_links (
     created_by_run_id text,
     pr_state text,
     pr_state_checked_at timestamp with time zone,
+    ci_state text,
+    ci_head_sha text,
+    ci_summary jsonb,
+    ci_checked_at timestamp with time zone,
+    ci_handled_sha text,
+    ci_fix_attempts integer DEFAULT 0 NOT NULL,
+    CONSTRAINT item_external_links_ci_state_check CHECK ((ci_state = ANY (ARRAY['pending'::text, 'success'::text, 'failure'::text]))),
     CONSTRAINT item_external_links_link_kind_check CHECK ((link_kind = ANY (ARRAY['pull_request'::text, 'jira_issue'::text]))),
     CONSTRAINT item_external_links_pr_state_check CHECK ((pr_state = ANY (ARRAY['open'::text, 'merged'::text, 'closed'::text])))
 );
@@ -620,10 +678,46 @@ CREATE TABLE public.items (
     workflow_id text,
     sort_order integer,
     repo_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
+    is_test boolean DEFAULT false NOT NULL,
     CONSTRAINT items_parent_type_check CHECK (((parent_type IS NULL) OR (parent_type = 'task'::text))),
     CONSTRAINT items_priority_check CHECK (((priority IS NULL) OR (priority = ANY (ARRAY['low'::text, 'normal'::text, 'high'::text, 'urgent'::text])))),
     CONSTRAINT items_type_check CHECK ((type = ANY (ARRAY['task'::text, 'sub_task'::text])))
 );
+
+
+--
+-- Name: items_live; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.items_live AS
+ SELECT id,
+    project_id,
+    type,
+    parent_id,
+    parent_type,
+    title,
+    description,
+    status,
+    assignee_agent_id,
+    reporter_agent_id,
+    priority,
+    spec_md,
+    pr_url,
+    points,
+    acceptance_criteria,
+    started_at,
+    created_at,
+    updated_at,
+    search_tsv,
+    worktree_branch,
+    worktree_path,
+    labels,
+    workflow_id,
+    sort_order,
+    repo_ids,
+    is_test
+   FROM public.items
+  WHERE (NOT is_test);
 
 
 --
@@ -642,7 +736,6 @@ CREATE TABLE public.jira_config (
     last_sync_ok boolean,
     last_sync_message text,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    sources jsonb DEFAULT '[]'::jsonb NOT NULL,
     CONSTRAINT jira_config_id_check CHECK ((id = 1)),
     CONSTRAINT jira_config_poll_interval_minutes_check CHECK ((poll_interval_minutes >= 5))
 );
@@ -667,6 +760,40 @@ CREATE TABLE public.jira_issues (
     done_synced_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+
+--
+-- Name: jira_sources; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.jira_sources (
+    id integer NOT NULL,
+    project_id text NOT NULL,
+    jql text NOT NULL,
+    workflow_id text,
+    repo_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: jira_sources_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.jira_sources_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: jira_sources_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.jira_sources_id_seq OWNED BY public.jira_sources.id;
 
 
 --
@@ -897,6 +1024,7 @@ CREATE TABLE public.project_repos (
     setup_ps1_body text DEFAULT ''::text NOT NULL,
     "position" integer DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    verify_command text DEFAULT ''::text NOT NULL,
     CONSTRAINT project_repos_clone_status_check CHECK ((clone_status = ANY (ARRAY['pending'::text, 'cloning'::text, 'ready'::text, 'error'::text]))),
     CONSTRAINT project_repos_name_check CHECK ((name ~ '^[a-z0-9][a-z0-9-]{0,39}$'::text))
 );
@@ -943,6 +1071,7 @@ CREATE TABLE public.projects (
     guardrails_md text DEFAULT ''::text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    default_workflow_id text,
     CONSTRAINT projects_issue_key_prefix_check CHECK ((issue_key_prefix ~ '^[A-Z]{3}$'::text))
 );
 
@@ -958,7 +1087,8 @@ CREATE TABLE public.published_workflows (
     source_workflow_id text,
     bundle bytea NOT NULL,
     published_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    version integer DEFAULT 1 NOT NULL
 );
 
 
@@ -1036,6 +1166,25 @@ CREATE TABLE public.roles (
 
 
 --
+-- Name: run_gate_results; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.run_gate_results (
+    id text NOT NULL,
+    workflow_run_id text NOT NULL,
+    node_id text,
+    repo_id text,
+    script_id text NOT NULL,
+    verdict text NOT NULL,
+    exit_code integer,
+    output_tail text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    command text,
+    CONSTRAINT run_gate_results_verdict_check CHECK ((verdict = ANY (ARRAY['pass'::text, 'fail'::text, 'skipped'::text, 'unavailable'::text, 'needs_review'::text])))
+);
+
+
+--
 -- Name: scratch_pad; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1094,6 +1243,22 @@ CREATE TABLE public.tool_catalog (
 
 
 --
+-- Name: workflow_run_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.workflow_run_events (
+    id text NOT NULL,
+    workflow_run_id text NOT NULL,
+    item_id text,
+    kind text NOT NULL,
+    node_id text,
+    reason text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT workflow_run_events_kind_check CHECK ((kind = ANY (ARRAY['parked'::text, 'resumed'::text])))
+);
+
+
+--
 -- Name: workflow_runs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1118,6 +1283,7 @@ CREATE TABLE public.workflow_runs (
     parent_workflow_run_id text,
     parent_node_id text,
     gate_rounds integer DEFAULT 0 NOT NULL,
+    pr_urls jsonb DEFAULT '[]'::jsonb NOT NULL,
     CONSTRAINT workflow_runs_status_check CHECK ((status = ANY (ARRAY['running'::text, 'waiting_for_owner'::text, 'completed'::text, 'cancelled'::text, 'error'::text])))
 );
 
@@ -1149,6 +1315,9 @@ CREATE TABLE public.workflows (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     max_parallel_runs integer DEFAULT 1 NOT NULL,
     push_to_default boolean DEFAULT false NOT NULL,
+    marketplace_source_id text,
+    marketplace_pulled_version integer,
+    marketplace_pulled_at timestamp with time zone,
     CONSTRAINT workflows_input_kind_check CHECK ((input_kind = ANY (ARRAY['item'::text, 'none'::text, 'sub_task'::text]))),
     CONSTRAINT workflows_max_loops_check CHECK (((max_loops >= 1) AND (max_loops <= 20))),
     CONSTRAINT workflows_max_parallel_runs_check CHECK (((max_parallel_runs >= 1) AND (max_parallel_runs <= 10))),
@@ -1206,6 +1375,13 @@ ALTER TABLE ONLY public.item_external_links ALTER COLUMN id SET DEFAULT nextval(
 --
 
 ALTER TABLE ONLY public.item_links ALTER COLUMN id SET DEFAULT nextval('public.item_links_id_seq'::regclass);
+
+
+--
+-- Name: jira_sources id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.jira_sources ALTER COLUMN id SET DEFAULT nextval('public.jira_sources_id_seq'::regclass);
 
 
 --
@@ -1282,6 +1458,22 @@ ALTER TABLE ONLY public.agent_runs
 
 ALTER TABLE ONLY public.agent_templates
     ADD CONSTRAINT agent_templates_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: agent_test_runs agent_test_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_test_runs
+    ADD CONSTRAINT agent_test_runs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: agent_tests agent_tests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_tests
+    ADD CONSTRAINT agent_tests_pkey PRIMARY KEY (id);
 
 
 --
@@ -1453,6 +1645,14 @@ ALTER TABLE ONLY public.jira_issues
 
 
 --
+-- Name: jira_sources jira_sources_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.jira_sources
+    ADD CONSTRAINT jira_sources_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: marketplace_agent_checklists marketplace_agent_checklists_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1605,6 +1805,14 @@ ALTER TABLE ONLY public.roles
 
 
 --
+-- Name: run_gate_results run_gate_results_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.run_gate_results
+    ADD CONSTRAINT run_gate_results_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: scratch_pad scratch_pad_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1626,6 +1834,14 @@ ALTER TABLE ONLY public.settings
 
 ALTER TABLE ONLY public.tool_catalog
     ADD CONSTRAINT tool_catalog_pkey PRIMARY KEY (tool_name);
+
+
+--
+-- Name: workflow_run_events workflow_run_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_run_events
+    ADD CONSTRAINT workflow_run_events_pkey PRIMARY KEY (id);
 
 
 --
@@ -1656,6 +1872,62 @@ CREATE UNIQUE INDEX agent_runs_one_live_per_item ON public.agent_runs USING btre
 --
 
 CREATE INDEX agent_runs_workflow_run_id_idx ON public.agent_runs USING btree (workflow_run_id) WHERE (workflow_run_id IS NOT NULL);
+
+
+--
+-- Name: agent_test_runs_agent_run_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX agent_test_runs_agent_run_idx ON public.agent_test_runs USING btree (agent_run_id) WHERE (agent_run_id IS NOT NULL);
+
+
+--
+-- Name: agent_test_runs_batch_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX agent_test_runs_batch_idx ON public.agent_test_runs USING btree (batch_id, sample_index);
+
+
+--
+-- Name: agent_test_runs_test_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX agent_test_runs_test_idx ON public.agent_test_runs USING btree (agent_test_id, created_at DESC);
+
+
+--
+-- Name: agent_test_runs_workflow_run_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX agent_test_runs_workflow_run_idx ON public.agent_test_runs USING btree (workflow_run_id) WHERE (workflow_run_id IS NOT NULL);
+
+
+--
+-- Name: agent_tests_agent_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX agent_tests_agent_idx ON public.agent_tests USING btree (agent_id, created_at DESC);
+
+
+--
+-- Name: agent_tests_source_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX agent_tests_source_idx ON public.agent_tests USING btree (agent_id, source_test_id) WHERE (source_test_id IS NOT NULL);
+
+
+--
+-- Name: agent_tests_suite_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX agent_tests_suite_idx ON public.agent_tests USING btree (suite) WHERE (suite IS NOT NULL);
+
+
+--
+-- Name: agent_tests_workflow_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX agent_tests_workflow_idx ON public.agent_tests USING btree (workflow_id, created_at DESC);
 
 
 --
@@ -1995,6 +2267,13 @@ CREATE INDEX idx_items_updated_at ON public.items USING btree (updated_at DESC);
 
 
 --
+-- Name: idx_jira_sources_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_jira_sources_project_id ON public.jira_sources USING btree (project_id);
+
+
+--
 -- Name: idx_marketplace_agent_checklists_marketplace_agent_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2114,6 +2393,20 @@ CREATE INDEX idx_reminders_next_fire_active ON public.reminders USING btree (nex
 
 
 --
+-- Name: idx_run_gate_results_run; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_run_gate_results_run ON public.run_gate_results USING btree (workflow_run_id, created_at);
+
+
+--
+-- Name: idx_run_gate_results_script; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_run_gate_results_script ON public.run_gate_results USING btree (script_id, created_at);
+
+
+--
 -- Name: idx_scratch_pad_updated_at; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2128,6 +2421,13 @@ CREATE INDEX idx_tool_catalog_group ON public.tool_catalog USING btree (group_na
 
 
 --
+-- Name: idx_workflows_marketplace_source_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_workflows_marketplace_source_id ON public.workflows USING btree (marketplace_source_id);
+
+
+--
 -- Name: items_labels_gin; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2135,10 +2435,31 @@ CREATE INDEX items_labels_gin ON public.items USING gin (labels jsonb_path_ops);
 
 
 --
+-- Name: items_not_test_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX items_not_test_idx ON public.items USING btree (project_id, type) WHERE (NOT is_test);
+
+
+--
+-- Name: items_repo_ids_gin; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX items_repo_ids_gin ON public.items USING gin (repo_ids jsonb_path_ops);
+
+
+--
 -- Name: items_workflow_status_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX items_workflow_status_idx ON public.items USING btree (workflow_id, status) WHERE (workflow_id IS NOT NULL);
+
+
+--
+-- Name: workflow_run_events_run_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX workflow_run_events_run_idx ON public.workflow_run_events USING btree (workflow_run_id, created_at);
 
 
 --
@@ -2311,6 +2632,70 @@ ALTER TABLE ONLY public.agent_runs
 
 
 --
+-- Name: agent_test_runs agent_test_runs_agent_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_test_runs
+    ADD CONSTRAINT agent_test_runs_agent_run_id_fkey FOREIGN KEY (agent_run_id) REFERENCES public.agent_runs(id) ON DELETE SET NULL;
+
+
+--
+-- Name: agent_test_runs agent_test_runs_agent_test_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_test_runs
+    ADD CONSTRAINT agent_test_runs_agent_test_id_fkey FOREIGN KEY (agent_test_id) REFERENCES public.agent_tests(id) ON DELETE CASCADE;
+
+
+--
+-- Name: agent_test_runs agent_test_runs_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_test_runs
+    ADD CONSTRAINT agent_test_runs_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE SET NULL;
+
+
+--
+-- Name: agent_test_runs agent_test_runs_workflow_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_test_runs
+    ADD CONSTRAINT agent_test_runs_workflow_run_id_fkey FOREIGN KEY (workflow_run_id) REFERENCES public.workflow_runs(id) ON DELETE SET NULL;
+
+
+--
+-- Name: agent_tests agent_tests_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_tests
+    ADD CONSTRAINT agent_tests_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: agent_tests agent_tests_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_tests
+    ADD CONSTRAINT agent_tests_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: agent_tests agent_tests_repo_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_tests
+    ADD CONSTRAINT agent_tests_repo_id_fkey FOREIGN KEY (repo_id) REFERENCES public.project_repos(id) ON DELETE SET NULL;
+
+
+--
+-- Name: agent_tests agent_tests_workflow_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_tests
+    ADD CONSTRAINT agent_tests_workflow_id_fkey FOREIGN KEY (workflow_id) REFERENCES public.workflows(id) ON DELETE CASCADE;
+
+
+--
 -- Name: agents agents_cli_model_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2479,6 +2864,22 @@ ALTER TABLE ONLY public.jira_issues
 
 
 --
+-- Name: jira_sources jira_sources_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.jira_sources
+    ADD CONSTRAINT jira_sources_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: jira_sources jira_sources_workflow_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.jira_sources
+    ADD CONSTRAINT jira_sources_workflow_id_fkey FOREIGN KEY (workflow_id) REFERENCES public.workflows(id) ON DELETE SET NULL;
+
+
+--
 -- Name: marketplace_agent_checklists marketplace_agent_checklists_marketplace_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2575,11 +2976,35 @@ ALTER TABLE ONLY public.project_schedules
 
 
 --
+-- Name: projects projects_default_workflow_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.projects
+    ADD CONSTRAINT projects_default_workflow_id_fkey FOREIGN KEY (default_workflow_id) REFERENCES public.workflows(id) ON DELETE SET NULL;
+
+
+--
 -- Name: published_workflows published_workflows_source_workflow_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.published_workflows
     ADD CONSTRAINT published_workflows_source_workflow_id_fkey FOREIGN KEY (source_workflow_id) REFERENCES public.workflows(id) ON DELETE SET NULL;
+
+
+--
+-- Name: run_gate_results run_gate_results_workflow_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.run_gate_results
+    ADD CONSTRAINT run_gate_results_workflow_run_id_fkey FOREIGN KEY (workflow_run_id) REFERENCES public.workflow_runs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: workflow_run_events workflow_run_events_workflow_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_run_events
+    ADD CONSTRAINT workflow_run_events_workflow_run_id_fkey FOREIGN KEY (workflow_run_id) REFERENCES public.workflow_runs(id) ON DELETE CASCADE;
 
 
 --
@@ -2615,17 +3040,18 @@ ALTER TABLE ONLY public.workflows
 
 
 --
--- Reference data. pg_dump --schema-only does not emit these; they are
--- dumped separately with --column-inserts and appended here. A baseline
--- without them produces an install with no CLI models, roles or
--- guard-rail rules, and no settings singleton to onboard into.
+-- PostgreSQL database dump
 --
 
-INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-opus-4-7', 'claude', 'claude-opus-4-7', 'Strongest reasoning. Best for plans, designs, complex refactors.', 1, '2026-06-02 16:51:18.805809+00');
-INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-opus-4-7-1m', 'claude', 'claude-opus-4-7[1m]', 'Opus 4.7 with 1M context. Pick for very large repos or long histories.', 2, '2026-06-02 16:51:18.805809+00');
-INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-opus-4-6', 'claude', 'claude-opus-4-6', 'Previous-gen Opus. Capable but superseded by 4-7.', 3, '2026-06-02 16:51:18.805809+00');
-INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-sonnet-4-6', 'claude', 'claude-sonnet-4-6', 'Fast and accurate at code. Default for the Coder agent.', 4, '2026-06-02 16:51:18.805809+00');
-INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-haiku', 'claude', 'haiku', 'Cheapest and fastest. Short, well-scoped tasks only.', 5, '2026-06-02 16:51:18.805809+00');
+
+-- Dumped from database version 16.14 (Debian 16.14-1.pgdg12+1)
+-- Dumped by pg_dump version 16.14 (Debian 16.14-1.pgdg12+1)
+
+
+--
+-- Data for Name: cli_models; Type: TABLE DATA; Schema: public; Owner: -
+--
+
 INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-copilot-sonnet-4-6', 'copilot', 'claude-sonnet-4.6', 'Balanced. Reliable for everyday code edits.', 1, '2026-06-02 16:51:18.805809+00');
 INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-copilot-sonnet-4-5', 'copilot', 'claude-sonnet-4.5', 'Older Sonnet. Solid fallback when 4.6 is unavailable.', 2, '2026-06-02 16:51:18.805809+00');
 INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-copilot-haiku-4-5', 'copilot', 'claude-haiku-4.5', 'Lightweight Claude. Trivial tasks at low cost.', 3, '2026-06-02 16:51:18.805809+00');
@@ -2640,6 +3066,21 @@ INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at
 INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-ollama-qwen3-5', 'ollama', 'qwen3.5', 'Local. Ollama’s default coding pick — set a 64k+ context window for large repos.', 1, '2026-09-20 07:32:01.238202+00');
 INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-ollama-kimi-k2-7-code', 'ollama', 'kimi-k2.7-code:cloud', 'Cloud. Code-tuned; runs without downloading weights.', 2, '2026-09-20 07:32:01.238202+00');
 INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-ollama-gemma4', 'ollama', 'gemma4:cloud', 'Cloud. General-purpose; good for research and non-code work.', 3, '2026-09-20 07:32:01.238202+00');
+INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-opus-4-7', 'claude', 'claude-opus-4-7', 'Strongest reasoning. Best for plans, designs, complex refactors.', 5, '2026-06-02 16:51:18.805809+00');
+INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-opus-4-7-1m', 'claude', 'claude-opus-4-7[1m]', 'Opus 4.7 with 1M context. Pick for very large repos or long histories.', 6, '2026-06-02 16:51:18.805809+00');
+INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-opus-4-6', 'claude', 'claude-opus-4-6', 'Previous-gen Opus. Capable but superseded by 4-7.', 7, '2026-06-02 16:51:18.805809+00');
+INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-sonnet-4-6', 'claude', 'claude-sonnet-4-6', 'Fast and accurate at code. Default for the Coder agent.', 8, '2026-06-02 16:51:18.805809+00');
+INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-haiku', 'claude', 'haiku', 'Cheapest and fastest. Short, well-scoped tasks only.', 9, '2026-06-02 16:51:18.805809+00');
+INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-opus-5', 'claude', 'claude-opus-5', 'Strongest general model. Best default for plans, designs and complex refactors.', 1, '2026-09-27 19:51:27.112667+00');
+INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-opus-5[1m]', 'claude', 'claude-opus-5[1m]', 'Opus 5 with 1M context. Pick for very large repos or long histories.', 2, '2026-09-27 19:51:27.112667+00');
+INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-sonnet-5', 'claude', 'claude-sonnet-5', 'Faster and cheaper than Opus 5. Good for routine sub-tasks and reviewers.', 3, '2026-09-27 19:51:27.112667+00');
+INSERT INTO public.cli_models (id, cli, model_name, note, sort_order, created_at) VALUES ('seed-claude-fable-5-1', 'claude', 'claude-fable-5-1', 'Most capable, and the most expensive. For the hardest reasoning and long-horizon work.', 4, '2026-09-27 19:51:27.112667+00');
+
+
+--
+-- Data for Name: guardrail_rules; Type: TABLE DATA; Schema: public; Owner: -
+--
+
 INSERT INTO public.guardrail_rules (id, category, rule_text, detail, severity, sort_order, created_at, updated_at) VALUES ('seed-fs-stay-in-cwd', 'file_system', 'Never touch anything outside the project working directory.', 'Refuse even when prompted. Forbidden surfaces include: paths that escape the working tree (parent traversal, absolute paths); OS files and system locations (C:\Windows\, C:\System32\, /etc/, /usr/, /System/, ~/.ssh/, the system registry, global config); destructive shell commands (rm -rf /, format, del /f /s /q, recursive deletes outside the working tree).', 'block', 1, '2026-06-02 16:51:18.805809+00', '2026-06-02 16:51:18.805809+00');
 INSERT INTO public.guardrail_rules (id, category, rule_text, detail, severity, sort_order, created_at, updated_at) VALUES ('seed-fs-out-of-tree-edit', 'file_system', 'Editing files outside the directory tree of the assigned issue surfaces a warning.', 'Soft signal - the edit may be legitimate (cross-cutting refactor), but it should be visible in review.', 'warn', 5, '2026-06-02 16:51:18.805809+00', '2026-06-02 16:51:18.805809+00');
 INSERT INTO public.guardrail_rules (id, category, rule_text, detail, severity, sort_order, created_at, updated_at) VALUES ('seed-sec-no-exfiltrate', 'secrets_credentials', 'Never send credentials or secret material to external endpoints, including documented APIs.', 'Crucial. Even when an API expects an auth token, the request URL, body, and any telemetry must not include the secret in plain form.', 'block', 2, '2026-06-02 16:51:18.805809+00', '2026-06-02 16:51:18.805809+00');
@@ -2650,10 +3091,16 @@ INSERT INTO public.guardrail_rules (id, category, rule_text, detail, severity, s
 INSERT INTO public.guardrail_rules (id, category, rule_text, detail, severity, sort_order, created_at, updated_at) VALUES ('seed-net-no-exfiltrate-cwd', 'side_effects_network', 'Never send working-directory contents to external hosts outside the Allowed Tools matrix.', 'Exfiltration risk. Includes uploads to pastebins, cloud storage, public gists, and any documented endpoint not on the allowlist.', 'block', 1, '2026-06-02 16:51:18.805809+00', '2026-06-02 16:51:18.805809+00');
 INSERT INTO public.guardrail_rules (id, category, rule_text, detail, severity, sort_order, created_at, updated_at) VALUES ('seed-net-no-background-process', 'side_effects_network', 'Never start a long-running background process, daemon, or port-bound listener.', 'Agents must complete and exit. No forever, pm2, systemctl start, or port-binding servers from an agent run.', 'block', 2, '2026-06-02 16:51:18.805809+00', '2026-06-02 16:51:18.805809+00');
 INSERT INTO public.guardrail_rules (id, category, rule_text, detail, severity, sort_order, created_at, updated_at) VALUES ('seed-net-outbound-http', 'side_effects_network', 'Outbound HTTP to hosts not on the Allowed Tools matrix requires Owner confirmation per run.', 'Restrict network egress to documented integrations. New hosts pause for approval.', 'ask_owner', 5, '2026-06-02 16:51:18.805809+00', '2026-06-02 16:51:18.805809+00');
-INSERT INTO public.guardrail_rules (id, category, rule_text, detail, severity, sort_order, created_at, updated_at) VALUES ('seed-net-no-test-execution', 'side_effects_network', 'Never execute the project''s test suite. CI gates every merge; local test runs burn tokens without adding signal.', 'Bans every test runner: pnpm test, pnpm test:e2e, vitest, jest, mocha, playwright test, cypress, pytest, go test, cargo test, rspec, phpunit, and any other invocation that runs the project test suite. Verify your work with typecheck + lint only. The merge gate lives in .github/workflows/test.yml.', 'block', 6, '2026-06-03 00:00:00+00', '2026-06-03 00:00:00+00');
 INSERT INTO public.guardrail_rules (id, category, rule_text, detail, severity, sort_order, created_at, updated_at) VALUES ('seed-esc-owner-only', 'escalation_scope', 'Agents escalate ONLY to the Owner. Never reassign or hand off work to another agent.', 'Single point of human control. Prevents cyclic agent-to-agent handoffs.', 'block', 1, '2026-06-02 16:51:18.805809+00', '2026-06-02 16:51:18.805809+00');
 INSERT INTO public.guardrail_rules (id, category, rule_text, detail, severity, sort_order, created_at, updated_at) VALUES ('seed-esc-scope-expansion', 'escalation_scope', 'Expanding the run scope beyond the assigned issue requires Owner confirmation.', 'An agent on Story X must not silently address Story Y. If the change scope grows, pause and ask.', 'ask_owner', 3, '2026-06-02 16:51:18.805809+00', '2026-06-02 16:51:18.805809+00');
 INSERT INTO public.guardrail_rules (id, category, rule_text, detail, severity, sort_order, created_at, updated_at) VALUES ('seed-esc-spec-discrepancy', 'escalation_scope', 'If a Coder agent finds a Spec discrepancy, it must pause and ask the Owner - never silently rewrite the Spec.', 'Spec ownership belongs to the Spec Writer / Owner, not to Coder.', 'ask_owner', 4, '2026-06-02 16:51:18.805809+00', '2026-06-02 16:51:18.805809+00');
+INSERT INTO public.guardrail_rules (id, category, rule_text, detail, severity, sort_order, created_at, updated_at) VALUES ('seed-net-no-test-execution', 'side_effects_network', 'Run the project test suite only inside the worktree Atlas provisioned for the item you are working on. Never run it anywhere else, and never treat a local pass as the merge gate.', 'Test runners (pnpm test, vitest, jest, mocha, playwright test, cypress, pytest, go test, cargo test, rspec, phpunit) are ALLOWED inside your own item worktree, so a reviewer can confirm tests execute green rather than merely parse. They stay BLOCKED everywhere else: never against the main checkout, another item worktree, or any deployed environment. A local pass is evidence for your checklist, not the merge gate - that remains .github/workflows/test.yml.', 'block', 6, '2026-06-03 00:00:00+00', '2026-09-27 19:51:27.112667+00');
+
+
+--
+-- Data for Name: roles; Type: TABLE DATA; Schema: public; Owner: -
+--
+
 INSERT INTO public.roles (id, label, description, default_prompt_md, default_status, sort_order, created_at, updated_at) VALUES ('po', 'Product Owner', 'Decomposes Epics into independently-shippable Stories. Owns the brainstorm-before-scope discipline.', '# PO Writer
 You take an Epic and break it into Stories that each deliver one **end-to-end user-shippable capability**. Your output is **rows in the database**, not text in the run log.
 ## You are agent `agent-po-writer`
@@ -3151,7 +3598,24 @@ Your VERY LAST step on every performer-persona run is to call `mcp__atlas__perfo
 `run_id` is the id of this performer run. The runner injects it as the `ATLAS_RUN_ID` env var; it''s also passed in your prompt as a fallback.
 If you exit without calling this tool, the orchestrator treats the run as the `performer_did_not_signal_outcome` error path: the item lands in `waiting_for_info` with the Owner, no reviewer spawns, and the failure surfaces in the activity log. Always call the tool — silence is not a safe default.
 ', 'active', 7, '2026-06-02 16:51:18.805809+00', '2026-06-02 16:51:18.805809+00');
+INSERT INTO public.roles (id, label, description, default_prompt_md, default_status, sort_order, created_at, updated_at) VALUES ('tester', 'Exploratory Tester', 'Closes measured coverage gaps with tests that would fail if the behaviour broke.', '', 'active', 6, '2026-09-27 19:51:27.112667+00', '2026-09-27 19:51:27.112667+00');
+INSERT INTO public.roles (id, label, description, default_prompt_md, default_status, sort_order, created_at, updated_at) VALUES ('devops', 'DevOps Engineer', 'Brings touched routes back inside their performance budget without trading correctness.', '', 'active', 8, '2026-09-27 19:51:27.112667+00', '2026-09-27 19:51:27.112667+00');
+INSERT INTO public.roles (id, label, description, default_prompt_md, default_status, sort_order, created_at, updated_at) VALUES ('security', 'Security Review Lead', 'Lint, types, secrets and debug residue: the hygiene a branch must clear before it ships.', '', 'active', 9, '2026-09-27 19:51:27.112667+00', '2026-09-27 19:51:27.112667+00');
+INSERT INTO public.roles (id, label, description, default_prompt_md, default_status, sort_order, created_at, updated_at) VALUES ('designer', 'UX/Visual Designer', 'Reads captured screens across viewports and themes, and owns the visual baseline.', '', 'active', 10, '2026-09-27 19:51:27.112667+00', '2026-09-27 19:51:27.112667+00');
+INSERT INTO public.roles (id, label, description, default_prompt_md, default_status, sort_order, created_at, updated_at) VALUES ('docs', 'Technical Writer', 'Documents what a branch actually shipped, verified against the diff rather than the request.', '', 'active', 11, '2026-09-27 19:51:27.112667+00', '2026-09-27 19:51:27.112667+00');
+
+
+--
+-- Data for Name: settings; Type: TABLE DATA; Schema: public; Owner: -
+--
+
 INSERT INTO public.settings (id, owner_name, workspace_path, constitution_md, external_notification_token, onboarding_complete, external_notification_chat_id, accent_color, external_notification_event_toggles, quiet_hours_from, quiet_hours_to, quiet_hours_timezone, external_notification_last_test_ok, external_notification_endpoint_label, guardrails_published_at, created_at, updated_at, quiet_hours_enabled, vapid_public_key, vapid_private_key, external_notification_provider, external_notification_webhook_url, terminal_idle_notify_seconds) VALUES (1, 'Owner', '', '', NULL, 0, NULL, '#2E2E2E', '{}', NULL, NULL, NULL, NULL, NULL, NULL, '2026-09-20 07:32:01.238202+00', '2026-09-20 07:32:01.238202+00', 0, NULL, NULL, 'telegram', NULL, 300);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
 
 
 --

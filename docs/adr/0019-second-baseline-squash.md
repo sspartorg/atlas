@@ -1,7 +1,7 @@
 # 0019. Second Baseline Squash
 
 **Date:** 2026-09-20
-**Status:** Accepted. Supersedes [ADR 0002](0002-single-baseline-migration-squash.md).
+**Status:** Superseded by [ADR 0025](0025-third-baseline-squash-and-catalog-v1.md). Supersedes [ADR 0002](0002-single-baseline-migration-squash.md).
 
 ## Context
 
