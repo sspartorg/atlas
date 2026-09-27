@@ -20,6 +20,8 @@ async function step(over: {
     cost?: number;
     model?: string;
     effort?: string;
+    cli?: string;
+    prompt_version?: number;
     seconds?: number;
     trace?: unknown;
 }): Promise<string> {
@@ -39,6 +41,8 @@ async function step(over: {
             total_cost_usd: over.cost ?? 1,
             model: over.model ?? 'claude-opus-5',
             effort: over.effort ?? 'high',
+            cli: over.cli ?? 'claude',
+            prompt_version: over.prompt_version ?? 1,
             started_at: started.toISOString(),
             completed_at: finished.toISOString(),
             ...(over.trace ? { trace_summary: JSON.stringify(over.trace) } : {}),
@@ -185,7 +189,7 @@ describe('the shapes real rows come in', () => {
         expect(perf.cost.total_usd).toBe(0);
         // Neither start nor finish recorded, so there is no duration to report.
         expect(perf.latency.p50_s).toBeNull();
-        expect(perf.by_config[0]).toMatchObject({ model: null, effort: null });
+        expect(perf.by_config[0]).toMatchObject({ model: null, effort: null, cli: null, prompt_version: null });
     });
 
     // F-012 again, from the other side: a `done` with every required row
@@ -375,6 +379,25 @@ describe('agentPerformance', () => {
         const opus = perf.by_config.find((c) => c.model === 'claude-opus-5');
         expect(opus).toMatchObject({ effort: 'xhigh', steps: 1, cost_usd: 5 });
         expect(opus?.first_pass).toEqual({ applied: 0, rejected: 1, parked: 0 });
+    });
+
+    // A prompt edit changes the agent as much as a model swap does; summing two
+    // prompts' numbers under one row would hide exactly the change to look for.
+    it('splits the same model by CLI and prompt version', async () => {
+        await workflowRun();
+        await step({ node: 'n1', prompt_version: 1, outcome: 'rejected', cost: 1 });
+        await step({ node: 'n2', prompt_version: 2, outcome: 'done', cost: 2 });
+        await step({ node: 'n3', prompt_version: 2, cli: 'copilot', outcome: 'done', cost: 4 });
+
+        const perf = await agentPerformance('agent-coder');
+        expect(perf.by_config).toHaveLength(3);
+        expect(perf.by_config.find((c) => c.prompt_version === 1)).toMatchObject({
+            cli: 'claude',
+            steps: 1,
+            cost_usd: 1,
+            first_pass: { applied: 0, rejected: 1, parked: 0 },
+        });
+        expect(perf.by_config.find((c) => c.prompt_version === 2 && c.cli === 'copilot')).toMatchObject({ cost_usd: 4 });
     });
 
     // Traces exist only from migration 017 on, so a tool profile over an

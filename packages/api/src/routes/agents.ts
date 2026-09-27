@@ -21,7 +21,7 @@ import {
     AgentTestSuiteBusyError,
     AgentTestSuiteEmptyError,
 } from '../services/agent-tests.js';
-import { agentPerformance } from '../services/agent-scorecard.js';
+import { agentPerformance, fleetPerformance } from '../services/agent-scorecard.js';
 import { agentQualification } from '../services/agent-qualification.js';
 import { starterTests } from '../marketplace/catalog-loader.js';
 import {
@@ -121,9 +121,13 @@ const AgentTestPatchSchema = z.object({
 /** 90 days. Long enough to show a prompt change landing, short enough to stay cheap. */
 const PERFORMANCE_WINDOW_DAYS = 90;
 
-function defaultSince(): string {
-    return new Date(Date.now() - PERFORMANCE_WINDOW_DAYS * 86_400_000).toISOString();
+function defaultSince(days = PERFORMANCE_WINDOW_DAYS): string {
+    return new Date(Date.now() - days * 86_400_000).toISOString();
 }
+
+// The fleet page offers 30 and 90 days. Anything else is refused rather than
+// clamped, so a URL can never claim a window the numbers were not taken over.
+const FleetQuerySchema = z.object({ days: z.enum(['30', '90']).default('90') }).strict();
 
 export async function agentsRoutes(app: FastifyInstance) {
     app.get('/api/agents', async (_req, reply) => reply.send(await agentsService.list()));
@@ -377,6 +381,12 @@ export async function agentsRoutes(app: FastifyInstance) {
         const agent = await agentsService.get(id);
         if (!agent) return reply.status(404).send({ error: 'Agent not found' });
         return reply.send(starterTests(agent.marketplace_source_id ?? id));
+    });
+
+    // Registered as a static path, so Fastify matches it ahead of `/api/agents/:id`.
+    app.get('/api/agents/performance', async (req, reply) => {
+        const { days } = FleetQuerySchema.parse(req.query ?? {});
+        return reply.send(await fleetPerformance({ since: defaultSince(Number(days)) }));
     });
 
     app.get('/api/agents/:id/performance', async (req, reply) => {

@@ -81,7 +81,9 @@ What this agent's runs already prove. 515 `agent_runs` rows have carried cli, mo
 - Beside it: **steps**, **loops** (dispatches beyond the first on the same step), and **gate catches** — the one quality signal an agent cannot author about itself (ADR 0020).
 - **Cost** (total, per step, cache hit) and **Latency** (median, p95, time to first token).
 - **Tools** — the tool profile from migration 017 traces, always with the denominator stated (`From 1 of 24 runs`), because a percentage over an unstated one is the dishonest kind of number. Says so plainly when no run has a trace.
-- **By model** — per `(model, effort)` slice, so a config change reads as a break in the series rather than a smear across it (ATL-140's fourth criterion).
+- **Weekly trend** — the scorecard's Monday-keyed `trend` buckets, drawn: sparklines for **steps**, **cost** and **p95** (`TrendSparkline`, fixed-size recharts line, each with a screen-reader label listing every value) and a **first attempt** row of 100%-stacked weekly columns in the same three colours as the bar above. Below two weeks it says "Only one week in this window so far. A trend needs at least two." instead of drawing a dot.
+- **By configuration** — per `(model, effort, cli, prompt_version)` slice (`claude-opus-5 · xhigh · claude · prompt v3`, `unrecorded` / `prompt unrecorded` for runs that never snapshotted one), so a model, CLI or prompt change reads as a break in the series rather than a smear across it (ATL-140's fourth criterion). Each slice's thin bar is the shared `OutcomeBar`.
+- The fleet-wide comparison of every agent lives on [Fleet performance](36-fleet-performance.md); its row click opens this tab.
 - Ad-hoc runs and agent test runs are **not** counted: a step is a position in a workflow graph and neither has one. Test quality lives on the Tests tab.
 
 ### Runs (`RunsTab`)

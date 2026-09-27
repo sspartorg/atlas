@@ -43,6 +43,7 @@ import { runNamedCommand } from './verification-gate.js';
 import { decideCheckCommand } from './gate-check-routing.js';
 import { parseRunOutcome } from './run-outcome-parser.js';
 import { recordGateResult } from './run-gate-results.js';
+import { recordRunEvent } from './workflow-run-events.js';
 import {
     WORKTREE_BRANCH_RE,
     ensureWorktree,
@@ -892,6 +893,7 @@ async function park(run: RunRow, nodeId: string | null, reason: string, stepPost
         .where('id', '=', run.id)
         .execute();
     run.status = 'waiting_for_owner';
+    await recordRunEvent(run.id, 'parked', reason);
     broadcastRun(run, 'waiting_for_owner', nodeId);
     const workflow = await loadWorkflow(run.workflow_id);
     const name = workflow?.name ?? 'Workflow';
@@ -936,6 +938,7 @@ async function waitOnChild(child: RunRow, reason: string): Promise<void> {
         .set({ status: 'waiting_for_owner', parked_node_id: child.parent_node_id, current_node_id: child.parent_node_id, park_reason: why })
         .where('id', '=', parent.id)
         .execute();
+    await recordRunEvent(parent.id, 'parked', why);
     broadcastRun(parent, 'waiting_for_owner', child.parent_node_id);
     if (parent.item_id) {
         await setItemStatus(parent.item_id, 'waiting_for_info', `workflow_parked: ${why}`.slice(0, 280), { clearAssignee: true });
@@ -953,6 +956,7 @@ export async function resumeWorkflowRun(runId: string): Promise<void> {
     if (Number(updated.numUpdatedRows ?? 0) === 0) {
         throw new WorkflowStartError('conflict', 'Only a run that is waiting for you can be resumed');
     }
+    await recordRunEvent(runId, 'resumed');
     const run = (await loadRun(runId)) as RunRow;
     if (run.item_id) await setItemStatus(run.item_id, 'in_progress', 'workflow_resumed');
     await continueResumedRun(runId);
@@ -971,6 +975,7 @@ export async function continueResumedRun(runId: string): Promise<void> {
             .executeTakeFirst();
         const parent = await loadRun(run.parent_workflow_run_id);
         if (parent && Number(reopened.numUpdatedRows ?? 0) > 0) {
+            await recordRunEvent(parent.id, 'resumed');
             broadcastRun(parent, 'running', parent.current_node_id);
             if (parent.item_id) await setItemStatus(parent.item_id, 'in_progress', 'workflow_resumed');
         }
@@ -1015,6 +1020,7 @@ export async function continueResumedRun(runId: string): Promise<void> {
             .returning(['id', 'item_id'])
             .executeTakeFirst();
         if (waiting) {
+            await recordRunEvent(waiting.id, 'resumed');
             if (waiting.item_id) await setItemStatus(waiting.item_id, 'in_progress', 'workflow_resumed');
             await continueResumedRun(waiting.id);
             return;

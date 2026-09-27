@@ -14,6 +14,7 @@ Grid of all agent cards, grouped by category. Per-card actions: open, edit, paus
 
 ## UI elements
 **Header**
+- **Fleet performance** (outlined, operational tier, `AgentListHeader`) → `/agents/performance` ([Fleet performance](36-fleet-performance.md)); visible at every width
 - **Add Agent** button (line 256) → opens Add-Agent dialog (lines 426-531)
 
 **Filters (`AgentFilterChips`)**

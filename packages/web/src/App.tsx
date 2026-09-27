@@ -71,6 +71,7 @@ const WorkflowRunDetail = lazyNamed(
     'WorkflowRunDetail'
 );
 const McpTools = lazyNamed(() => import('./pages/McpTools.js'), 'McpTools');
+const FleetPerformance = lazyNamed(() => import('./pages/FleetPerformance.js'), 'FleetPerformance');
 const Guardrails = lazyNamed(() => import('./pages/Guardrails.js'), 'Guardrails');
 const Notifications = lazyNamed(() => import('./pages/Notifications.js'), 'Notifications');
 const Reminders = lazyNamed(() => import('./pages/Reminders.js'), 'Reminders');
@@ -414,6 +415,14 @@ export function App() {
                                 element={
                                     <Wrap name="MCP Tools">
                                         <McpTools />
+                                    </Wrap>
+                                }
+                            />
+                            <Route
+                                path="/agents/performance"
+                                element={
+                                    <Wrap name="Fleet performance">
+                                        <FleetPerformance />
                                     </Wrap>
                                 }
                             />

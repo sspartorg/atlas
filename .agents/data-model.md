@@ -422,6 +422,17 @@ Fields: `id, workflow_id, item_id, project_id, status, graph_snapshot, parent_wo
 - Each step is an ordinary `agent_runs` row with `workflow_run_id` + `node_id` set.
 - **End gate (Task runs with Sub-tasks steps):** the run completes only when every sub-task is `in_review` or `done`. A still-open sub-task that a Sub-tasks node claims sends the run back to that node (counted against `max_loops`); one no node claims parks the run at End. End-node child routing (`child_workflow_id`, `test_child_workflow_id`, `routeChildren`) was removed by ADR 0015.
 
+### Workflow run event (migration 024)
+**Why this entity exists**: `workflow_runs.park_reason` holds only the current wait and every resume nulls it, so a finished run kept no trace of having stopped for the Owner. The fleet page's "Owner interventions per Task" needs that history.
+
+Table `workflow_run_events`: `id, workflow_run_id (FK → workflow_runs, ON DELETE CASCADE), item_id, kind, node_id, reason, created_at`.
+
+- `kind` ∈ `parked | resumed` (CHECK). `parked` is written by `park()` (with its reason) and `waitOnChild()` (the Task run held by a parked sub-task, reason `Sub-task <id> is waiting for you: …`); `resumed` by `resumeWorkflowRun`, `continueResumedRun` (parent reopen, Sub-tasks child resume) and an Owner reply (`comments.ts`, after its transaction commits).
+- `item_id` / `node_id` are copied from the run at the moment of the event (`node_id` = `COALESCE(parked_node_id, current_node_id)`). `item_id` is deliberately not an FK so the row outlives a deleted item.
+- A sub-task that asks writes **two** `parked` rows (its own run and its Task run). Counting interventions per Task reads top-level runs only, so the Owner's one answer is counted once.
+- No backfill: nothing survived to backfill from. Consumers state the migration's run time as the start of the series.
+- Writes are **best-effort** (`services/workflow-run-events.ts`), like gate results.
+
 ### Gate result (migration 011)
 **Why this entity exists**: ADR 0020 moved the test-suite verdict from the agent's own `atlas-outcome` checklist to Atlas's exit code, but the answer was never stored. `deliver()` turns a failure into prose in `workflow_runs.park_reason` and a pass into a line in the delivery log, so the one quality signal an agent cannot author about itself — a machine check going red AFTER that agent reported `done` — could not be queried. The agent scorecard (`evals/`, `src/scripts/eval-score.ts`) reads this table for its `gate_catch` metric.
 
@@ -543,6 +554,7 @@ Task.workflow_id -------------------> Workflow     (queued for; Tasks only)
 Project.default_workflow_id --------> Workflow     (create-form preselection only)
 WorkflowRun.item_id ----------------> Task | Sub-task (one live run per item)
 WorkflowRun.parent_workflow_run_id -> WorkflowRun  (a sub-task's run -> its Task run; CASCADE)
+WorkflowRunEvent.workflow_run_id -> WorkflowRun  (park / resume history; CASCADE — migration 024)
 AgentRun.item_id -------------------> Task | Sub-task
 Agent 1 --- n AgentChecklist / AgentPromptVersion; 1 --- 1 AgentMemory
 
