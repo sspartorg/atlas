@@ -628,7 +628,7 @@ export async function agentPerformance(
  * One agent's row in the fleet comparison. The same numbers as its tab, fewer
  * of them — and still no single success number to sort by (ADR 0023).
  */
-export interface FleetAgentRow {
+interface FleetAgentRow {
     agent_id: string;
     name: string;
     accent_color: string | null;
@@ -644,7 +644,7 @@ export interface FleetAgentRow {
  * Agent-test items (`items.is_test`, migration 016) are left out: a fixture's
  * throwaway Task is not a delivery, and its PR (if any) is not a merge.
  */
-export interface FleetDelivery {
+interface FleetDelivery {
     /** Top-level runs in the window, agent tests excluded. */
     runs: number;
     prs_opened: number;
