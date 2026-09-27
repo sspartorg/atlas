@@ -60,7 +60,7 @@ None.
 
 ## Edge cases / quirks
 - Queued lists Tasks blocked by a `depends_on` target too, in `updated_at` order; dispatch skips them until the target is done, so the next one to start may not be #1.
-- A queued Task on an active `item_ready` workflow with a free slot normally starts within a dispatch tick; **Start now** matters for manual, scheduled and paused workflows.
+- A queued Task on an active `item_ready` workflow with a free slot starts as soon as it is queued or turns Ready (`kickWorkflowDispatch`; the minute tick is the fallback); **Start now** matters for manual, scheduled and paused workflows.
 - The sidenav **Queue** badge (`GET /api/counts` → `queue`) counts the same queued + running Tasks this page lists, across all projects.
 
 ## Connectivity

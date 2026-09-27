@@ -13,7 +13,7 @@ import type { IssueStatus, IWorkflowGraph, RunOutcomeKind, RunStatus } from '@at
 // step row, the way the real runner's INSERT does.
 const spawned: Array<{ agentId: string; nodeId: string; runId: string; skipSetup: boolean }> = [];
 vi.mock('./agent-runner.js', () => ({
-    spawnAgentRun: vi.fn(async (opts: { agentId: string; issueId?: string | null; workflowRun?: { id: string; nodeId: string; skipSetup?: boolean } | null }) => {
+    spawnAgentRun: vi.fn(async (opts: { agentId: string; issueId?: string | null; workflowRun?: { id: string; nodeId: string; skipSetup?: boolean; retryOf?: string } | null }) => {
         const { testDb } = await import('../../tests/_pg-db.js');
         const id = randomUUID();
         await testDb
@@ -25,6 +25,7 @@ vi.mock('./agent-runner.js', () => ({
                 status: 'in_progress',
                 workflow_run_id: opts.workflowRun?.id ?? null,
                 node_id: opts.workflowRun?.nodeId ?? null,
+                parent_run_id: opts.workflowRun?.retryOf ?? null,
                 started_at: new Date().toISOString(),
             })
             .execute();
@@ -67,14 +68,20 @@ import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertItem, insertProject } from '../../tests/_items.js';
 import {
     cancelWorkflowRun,
+    kickWorkflowDispatch,
     onStepFinished,
     reconcileWorkflowRuns,
     resumeWorkflowRun,
+    retryStep,
     startWorkflowRun,
+    STEP_RETRY_BACKOFF_MS,
     tickWorkflowDispatch,
     WorkflowStartError,
 } from './workflow-engine.js';
 import { commentsService } from './comments.js';
+import { spawnAgentRun } from './agent-runner.js';
+import { workflowsService } from './workflows.js';
+import { tasksService } from './tasks.js';
 
 const node = (id: string, type: 'start' | 'agent' | 'owner' | 'subtasks' | 'gate' | 'end', extra: Record<string, string> = {}) => ({
     id,
@@ -405,15 +412,113 @@ describe('workflow engine — loops and parking', () => {
         expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'coder', setup_done: false });
     });
 
-    it('an errored step parks with the error line the reaper left', async () => {
-        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
-        const step = spawned.at(-1)!; // reason: startWorkflowRun spawned the first node above
-        await testDb.updateTable('agent_runs').set({ output_text: '{"type":"system"}\n[ERROR] API restarted before run completed' }).where('id', '=', step.runId).execute();
+});
+
+describe('workflow engine — a crashed step is retried once', () => {
+    const crash = async (output: string): Promise<string> => {
+        const step = spawned.at(-1)!; // reason: every caller spawned a step first
+        await testDb.updateTable('agent_runs').set({ output_text: output }).where('id', '=', step.runId).execute();
         await finishStep('error', null);
+        return step.runId;
+    };
+    const RESTART = '{"type":"system"}\n[ERROR] API restarted before run completed';
+
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('waits out the backoff, retries the same node quietly, and carries on when the retry succeeds', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        const crashed = await crash(RESTART);
+
+        // Nothing reaches the Owner while the retry is pending.
+        expect(await runOf(runId)).toMatchObject({ status: 'running', current_node_id: 'coder', park_reason: null });
+        expect(await itemOf('ATL-2')).toMatchObject({ status: 'in_progress' });
+        expect(await parkComments()).toHaveLength(0);
+        const log = await testDb.selectFrom('agent_runs').select('output_text').where('id', '=', crashed).executeTakeFirstOrThrow();
+        expect(log.output_text).toMatch(/\[atlas\] Retrying this step automatically at /);
+        expect(spawned).toHaveLength(1);
+
+        await vi.advanceTimersByTimeAsync(STEP_RETRY_BACKOFF_MS);
+        await vi.waitFor(() => expect(spawned).toHaveLength(2));
+        expect(spawned[1]).toMatchObject({ nodeId: 'coder', agentId: 'agent-coder' });
+        const retry = await testDb.selectFrom('agent_runs').select('parent_run_id').where('id', '=', spawned[1]!.runId).executeTakeFirstOrThrow(); // reason: length asserted above
+        expect(retry.parent_run_id).toBe(crashed);
+
+        await finishStep('completed', 'done');
+        expect(spawned.at(-1)?.nodeId).toBe('review');
+    });
+
+    it('parks, saying it retried, when the retry crashes too', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        await crash(RESTART);
+        await vi.advanceTimersByTimeAsync(STEP_RETRY_BACKOFF_MS);
+        await vi.waitFor(() => expect(spawned).toHaveLength(2));
+
+        await crash('[ERROR] CLI exited with code 1\n\nsocket hang up');
         expect(await runOf(runId)).toMatchObject({
             status: 'waiting_for_owner',
-            park_reason: 'The agent step errored: API restarted before run completed',
+            parked_node_id: 'coder',
+            park_reason: 'The agent step errored again after an automatic retry: CLI exited with code 1',
         });
+        expect(await parkComments()).toHaveLength(1);
+    });
+
+    it('parks at once on an error a retry cannot fix', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        await crash('[ERROR] [error-kind:cli_not_installed:{"binary":"claude"}] Failed to spawn claude: spawn claude ENOENT');
+        expect(await runOf(runId)).toMatchObject({
+            status: 'waiting_for_owner',
+            park_reason: expect.stringMatching(/^The agent step errored: \[error-kind:cli_not_installed/),
+        });
+        await vi.advanceTimersByTimeAsync(STEP_RETRY_BACKOFF_MS);
+        expect(spawned).toHaveLength(1);
+    });
+
+    it('does not respawn a run the Owner stopped during the backoff', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        const crashed = await crash(RESTART);
+        await cancelWorkflowRun(runId);
+        await vi.advanceTimersByTimeAsync(STEP_RETRY_BACKOFF_MS);
+        // The timer's own call raced the assertion; this one is awaited.
+        await retryStep(runId, 'coder', crashed);
+        expect(spawned).toHaveLength(1);
+        expect(await runOf(runId)).toMatchObject({ status: 'cancelled' });
+    });
+
+    it('does not respawn when a step is already live on the run', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        const crashed = await crash(RESTART);
+        await testDb.updateTable('agent_runs').set({ status: 'in_progress' }).where('id', '=', crashed).execute();
+        await retryStep(runId, 'coder', crashed);
+        expect(spawned).toHaveLength(1);
+    });
+
+    it('stamps the run so reconcile does not park it during the backoff', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        const old = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+        await testDb.updateTable('workflow_runs').set({ updated_at: old }).where('id', '=', runId).execute();
+        await crash(RESTART);
+        expect(await reconcileWorkflowRuns(new Date())).toBe(0);
+        expect(await runOf(runId)).toMatchObject({ status: 'running' });
+    });
+
+    it('a later visit to the node gets its own retry', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        await crash(RESTART);
+        await vi.advanceTimersByTimeAsync(STEP_RETRY_BACKOFF_MS);
+        await vi.waitFor(() => expect(spawned).toHaveLength(2));
+        await finishStep('completed', 'done'); // the retry worked -> review
+        await finishStep('completed', 'rejected', 'needs work'); // review -> back to coder
+        expect(spawned.at(-1)?.nodeId).toBe('coder');
+
+        await crash(RESTART);
+        expect(await runOf(runId)).toMatchObject({ status: 'running' });
+        await vi.advanceTimersByTimeAsync(STEP_RETRY_BACKOFF_MS);
+        await vi.waitFor(() => expect(spawned).toHaveLength(5));
     });
 });
 
@@ -468,6 +573,62 @@ describe('workflow engine — stop, reconcile, dispatch', () => {
         expect(await tickWorkflowDispatch()).toBe(1);
         const live = await testDb.selectFrom('workflow_runs').select('item_id').execute();
         expect(live.map((r) => r.item_id)).toEqual(['ATL-4']);
+    });
+
+    it('queuing a Task starts it right away, without waiting for the tick', async () => {
+        await testDb.updateTable('workflows').set({ trigger: 'item_ready' }).where('id', '=', 'wf-dev').execute();
+        await testDb.updateTable('items').set({ status: 'draft' }).where('id', '=', 'ATL-2').execute();
+        await workflowsService.setItemWorkflow('ATL-2', 'wf-dev');
+        await vi.waitFor(() => expect(spawned.map((s) => s.nodeId)).toEqual(['coder']));
+        expect(await itemOf('ATL-2')).toMatchObject({ status: 'in_progress' });
+    });
+
+    it('a queued Task turning Ready, and its last blocker reaching Done, each start it right away', async () => {
+        await testDb.updateTable('workflows').set({ trigger: 'item_ready' }).where('id', '=', 'wf-dev').execute();
+        await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'Blocker', status: 'in_review' });
+        await testDb.updateTable('items').set({ status: 'draft', workflow_id: 'wf-dev' }).where('id', '=', 'ATL-2').execute();
+        await testDb.insertInto('item_links').values({ from_id: 'ATL-2', to_id: 'ATL-3', relation_type: 'depends_on' }).execute();
+
+        await tasksService.transition('ATL-2', 'ready');
+        await kickWorkflowDispatch('settle'); // joins or follows the transition's pass
+        expect(spawned).toHaveLength(0); // still blocked
+
+        await tasksService.transition('ATL-3', 'done', true);
+        await vi.waitFor(() => expect(spawned).toHaveLength(1));
+    });
+
+    it('switching a workflow on starts its queue right away', async () => {
+        await testDb.updateTable('workflows').set({ trigger: 'item_ready', status: 'inactive' }).where('id', '=', 'wf-dev').execute();
+        await testDb.updateTable('items').set({ workflow_id: 'wf-dev' }).where('id', '=', 'ATL-2').execute();
+        await workflowsService.update('wf-dev', { status: 'active' });
+        await vi.waitFor(() => expect(spawned).toHaveLength(1));
+    });
+
+    it('a kick during a pass runs one more pass after it, and kicks before it starts share it', async () => {
+        await testDb.updateTable('workflows').set({ trigger: 'item_ready', max_parallel_runs: 2 }).where('id', '=', 'wf-dev').execute();
+        await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'Second', status: 'ready' });
+        await testDb.updateTable('items').set({ workflow_id: 'wf-dev' }).where('id', '=', 'ATL-2').execute();
+        // Hold the first pass inside its spawn, so the second kick lands mid-pass.
+        let release!: () => void;
+        const held = new Promise<void>((r) => (release = r));
+        const real = vi.mocked(spawnAgentRun).getMockImplementation()!; // reason: the module mock above defines it
+        vi.mocked(spawnAgentRun).mockImplementationOnce(async (opts) => {
+            await held;
+            return real(opts);
+        });
+
+        const first = kickWorkflowDispatch('a');
+        expect(kickWorkflowDispatch('b')).toBe(first);
+        await vi.waitFor(() => expect(vi.mocked(spawnAgentRun)).toHaveBeenCalledTimes(1));
+
+        // Queued while the first pass is already past its query for ready Tasks.
+        await testDb.updateTable('items').set({ workflow_id: 'wf-dev' }).where('id', '=', 'ATL-3').execute();
+        const second = kickWorkflowDispatch('c');
+        expect(second).not.toBe(first);
+        release();
+        await second;
+        const live = await testDb.selectFrom('workflow_runs').select('item_id').orderBy('started_at').execute();
+        expect(live.map((r) => r.item_id)).toEqual(['ATL-2', 'ATL-3']);
     });
 
     it('a scheduled project-level workflow starts when its cron fires', async () => {

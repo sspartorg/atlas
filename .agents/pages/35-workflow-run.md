@@ -64,6 +64,7 @@ Watch one workflow run move node-by-node: the run's `graph_snapshot` on a read-o
 ## Edge cases / quirks
 - The run summary has no `item_type`, so the item link is resolved through the project's issue tree; an item outside the tree (e.g. archived) renders as plain mono text.
 - Owner nodes have no steps; they only light up while parked.
+- **Automatic retry of a crashed step.** A step that errors for a reason that looks transient is retried once, on the same node, about 30 s later (`workflow-engine.ts`, `step-error-retry.ts`). Meanwhile the run stays `running` and the node keeps its `current` overlay (no warning banner, nothing posted to the item); the errored step stays in **Steps** with `[atlas] Retrying this step automatically at <time>.` at the end of its log, and the retry appears as the next step row on the same node (the node's visit count goes up by one). If the retry errors too, the run parks with `The agent step errored again after an automatic retry: …`. Errors a retry cannot fix (CLI not installed, not signed in, no credit, agent missing / inactive) park at once, as before. Stopping the run during the 30 s cancels the retry.
 
 ## Connectivity
 - **Pages**: [Workflow Detail](34-workflow-detail.md) — Runs tab rows, Run now; [Agent Run Detail](16a-agent-run-detail.md) — step rows; [Task Detail](07-task-detail.md) — the rail's Workflow run chip; [Sub-task Detail](10-sub-task-detail.md).

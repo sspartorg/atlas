@@ -1551,6 +1551,11 @@ export interface SpawnAgentRunOptions {
         branch: string | null;
         /** Project setup already ran for this workflow run. */
         skipSetup: boolean;
+        /**
+         * The errored step this one automatically retries — written to
+         * `parent_run_id`, which is how the engine knows the retry was spent.
+         */
+        retryOf?: string;
     } | null;
 }
 
@@ -1769,6 +1774,7 @@ export async function spawnAgentRun(
                     status: 'queued',
                     prompt_snapshot: fullPrompt,
                     started_at: now,
+                    parent_run_id: workflowRun?.retryOf ?? null,
                     ...runConfig,
                 })
                 .execute();
