@@ -42,7 +42,7 @@ function perf(over: Partial<AgentPerformance> = {}): AgentPerformance {
             avg_tool_calls: 45,
         },
         by_config: [
-            { model: 'claude-opus-5', effort: 'xhigh', steps: 20, first_pass: { applied: 7, rejected: 13, parked: 0 }, cost_usd: 54.68 },
+            { model: 'claude-opus-5', effort: 'xhigh', cli: 'claude', prompt_version: 3, steps: 20, first_pass: { applied: 7, rejected: 13, parked: 0 }, cost_usd: 54.68 },
         ],
         trend: [],
         ...over,
@@ -102,6 +102,47 @@ describe('PerformanceTabContent', () => {
         expect(await screen.findByText(/claude-opus-5 · xhigh/)).toBeInTheDocument();
     });
 
+    // A prompt edit changes the agent as much as a model swap, so it gets its own row.
+    it('names the CLI and prompt version too', async () => {
+        mount();
+        expect(await screen.findByText(/claude-opus-5 · xhigh · claude · prompt v3/)).toBeInTheDocument();
+    });
+
+    it('draws the weekly trend the scorecard computes', async () => {
+        const week = (bucket: string, steps: number, rejected: number) => ({
+            bucket,
+            steps,
+            first_pass: { applied: steps - rejected, rejected, parked: 0 },
+            cost_usd: steps * 2,
+            p95_s: 60 * steps,
+        });
+        mount(perf({ trend: [week('2026-09-07', 3, 1), week('2026-09-14', 5, 4), week('2026-09-21', 2, 0)] }));
+        expect(await screen.findByRole('img', { name: 'Steps by week: 3, 5, 2' })).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: 'Cost by week, USD: 6, 10, 4' })).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: 'p95 seconds by week: 180, 300, 120' })).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: /First attempt by week: 2026-09-07 Applied 2 Sent back 1/ })).toBeInTheDocument();
+        expect(screen.getByText(/3 weeks · 2026-09-07 to 2026-09-21/)).toBeInTheDocument();
+    });
+
+    it('says a single week is not a trend yet', async () => {
+        mount(perf({ trend: [{ bucket: '2026-09-21', steps: 2, first_pass: { applied: 2, rejected: 0, parked: 0 }, cost_usd: 1, p95_s: null }] }));
+        expect(await screen.findByText(/Only one week in this window so far/)).toBeInTheDocument();
+    });
+
+    // ADR 0023: a reviewer's rejections are its product. Drawing them in the
+    // failure colour would say the opposite.
+    it('never draws a rejection in the error colour', async () => {
+        const { container } = mount();
+        await screen.findByText('Sent back');
+        const segments = container.querySelectorAll('[data-outcome="rejected"]');
+        expect(segments.length).toBeGreaterThan(0);
+        for (const el of segments) {
+            const bg = getComputedStyle(el).background;
+            expect(bg).toMatch(/brandblue/i);
+            expect(bg).not.toMatch(/error/i);
+        }
+    });
+
     it('explains an agent with no steps instead of rendering empty charts', async () => {
         mount(perf({ quality: { steps: 0, dispatches: 0, first_pass: { applied: 0, rejected: 0, parked: 0 }, loops: 0, gate_catch: 0 } }));
         expect(await screen.findByText('Nothing to measure yet')).toBeInTheDocument();
@@ -138,9 +179,9 @@ describe('PerformanceTabContent', () => {
 
     it('names a configuration the run never recorded', async () => {
         mount(perf({
-            by_config: [{ model: null, effort: null, steps: 2, first_pass: { applied: 2, rejected: 0, parked: 0 }, cost_usd: 1 }],
+            by_config: [{ model: null, effort: null, cli: null, prompt_version: null, steps: 2, first_pass: { applied: 2, rejected: 0, parked: 0 }, cost_usd: 1 }],
         }));
-        expect(await screen.findByText(/unrecorded · unrecorded/)).toBeInTheDocument();
+        expect(await screen.findByText(/unrecorded · unrecorded · unrecorded · prompt unrecorded/)).toBeInTheDocument();
     });
 
     it('surfaces a failure to load rather than rendering nothing', async () => {

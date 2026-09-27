@@ -94,6 +94,8 @@ import type {
     AgentTestRun,
     AgentTestBatch,
     AgentPerformance,
+    FleetPerformance,
+    FleetWindowDays,
     ParkedFixture,
     StarterTest,
     AgentQualification,
@@ -1232,6 +1234,8 @@ export const api = {
         batches: (testId: string) => get<AgentTestBatch[]>(`/agent-tests/${testId}/batches`),
         /** ATL-140 — what this agent's own runs already prove. */
         performance: (agentId: string) => get<AgentPerformance>(`/agents/${agentId}/performance`),
+        /** Every agent side by side, plus what the fleet delivered. */
+        fleetPerformance: (days: FleetWindowDays) => get<FleetPerformance>(`/agents/performance?days=${days}`),
         /** ADR 0023 phase 4 — the tests this agent ships with. */
         starter: (agentId: string) => get<StarterTest[]>(`/agents/${agentId}/starter-tests`),
         /** ADR 0023 phase 3 — fixtures pointed at a whole workflow. */

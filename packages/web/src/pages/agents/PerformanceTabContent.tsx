@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import Skeleton from '@mui/material/Skeleton';
 import Tooltip from '@mui/material/Tooltip';
@@ -5,9 +6,10 @@ import Typography from '@mui/material/Typography';
 import type { IAgent } from '@atlas/shared';
 
 import { useAgentPerformance } from '../../hooks/useAgentTests.js';
-import type { AgentPerformance, FirstPass } from '../../api/types.js';
+import type { AgentPerformance, FirstPass, TrendBucket } from '../../api/types.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { InfoPanel } from '../../components/InfoPanel.js';
+import { TrendSparkline } from '../../components/TrendSparkline.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { formatCostUsd } from '../../utils/formatCost.js';
 
@@ -33,7 +35,9 @@ import { formatCostUsd } from '../../utils/formatCost.js';
 // are, and **a rejection is never drawn in the failure colour** — which is the
 // substance of the warning rather than its wording.
 
-const OUTCOMES = [
+// Exported: the fleet page draws the same three outcomes in the same colours,
+// so an agent reads the same in the table as on its own tab.
+export const OUTCOMES = [
     {
         key: 'applied' as const,
         label: 'Applied',
@@ -58,6 +62,94 @@ const OUTCOMES = [
 
 function total(fp: FirstPass): number {
     return fp.applied + fp.rejected + fp.parked;
+}
+
+/** The three outcomes as one thin bar, no counts. For rows, where space is short. */
+export function OutcomeBar({ fp, height = 6 }: { fp: FirstPass; height?: number }) {
+    const n = total(fp);
+    return (
+        <Box
+            role="img"
+            aria-label={OUTCOMES.map((o) => `${o.label} ${fp[o.key]}`).join(', ')}
+            sx={{ display: 'flex', height, borderRadius: `${height / 2}px`, overflow: 'hidden', background: ATLAS_PALETTE.slate10 }}
+        >
+            {OUTCOMES.map((o) =>
+                fp[o.key] === 0 ? null : (
+                    <Box key={o.key} data-outcome={o.key} sx={{ width: `${(fp[o.key] / n) * 100}%`, background: o.color }} />
+                ),
+            )}
+        </Box>
+    );
+}
+
+/**
+ * Each week's first attempts as one 100%-stacked column: the mix, not the
+ * volume (the steps line beside it carries that). Same colours as the bar
+ * above, so a rejection is never the failure colour here either.
+ */
+function WeeklyOutcomes({ trend }: { trend: TrendBucket[] }) {
+    return (
+        <Box
+            role="img"
+            aria-label={`First attempt by week: ${trend
+                .map((b) => `${b.bucket} ${OUTCOMES.map((o) => `${o.label} ${b.first_pass[o.key]}`).join(' ')}`)
+                .join('; ')}`}
+            sx={{ display: 'flex', gap: '2px', height: 24, alignItems: 'stretch' }}
+        >
+            {trend.map((b) => (
+                <Box key={b.bucket} sx={{ width: 6, display: 'flex', flexDirection: 'column-reverse', borderRadius: '2px', overflow: 'hidden' }}>
+                    {OUTCOMES.map((o) =>
+                        b.first_pass[o.key] === 0 ? null : (
+                            <Box key={o.key} sx={{ height: `${(b.first_pass[o.key] / total(b.first_pass)) * 100}%`, background: o.color }} />
+                        ),
+                    )}
+                </Box>
+            ))}
+        </Box>
+    );
+}
+
+function TrendCell({ label, children }: { label: string; children: ReactNode }) {
+    return (
+        <Box sx={{ display: 'grid', gap: 0.75, alignContent: 'start' }}>
+            <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                {label}
+            </Typography>
+            {children}
+        </Box>
+    );
+}
+
+/** The weekly series the scorecard always computed and nothing drew. */
+function WeeklyTrend({ trend }: { trend: TrendBucket[] }) {
+    if (trend.length < 2) {
+        return (
+            <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
+                Only one week in this window so far. A trend needs at least two.
+            </Typography>
+        );
+    }
+    return (
+        <>
+            <Box sx={{ display: 'grid', gap: 3, gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, max-content)' } }}>
+                <TrendCell label="steps">
+                    <TrendSparkline label="Steps by week" values={trend.map((b) => b.steps)} />
+                </TrendCell>
+                <TrendCell label="first attempt">
+                    <WeeklyOutcomes trend={trend} />
+                </TrendCell>
+                <TrendCell label="cost">
+                    <TrendSparkline label="Cost by week, USD" values={trend.map((b) => b.cost_usd)} />
+                </TrendCell>
+                <TrendCell label="p95">
+                    <TrendSparkline label="p95 seconds by week" values={trend.map((b) => b.p95_s)} />
+                </TrendCell>
+            </Box>
+            <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, mt: 1.5, fontFamily: TYPOGRAPHY.fontFamilyMono }}>
+                {trend.length} weeks · {trend[0]?.bucket} to {trend.at(-1)?.bucket}
+            </Typography>
+        </>
+    );
 }
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -94,7 +186,7 @@ function FirstPassBar({ fp }: { fp: FirstPass }) {
                 {OUTCOMES.map((o) =>
                     fp[o.key] === 0 ? null : (
                         <Tooltip key={o.key} title={`${o.label}: ${fp[o.key]} of ${n}`}>
-                            <Box sx={{ width: `${(fp[o.key] / n) * 100}%`, background: o.color }} />
+                            <Box data-outcome={o.key} sx={{ width: `${(fp[o.key] / n) * 100}%`, background: o.color }} />
                         </Tooltip>
                     ),
                 )}
@@ -201,6 +293,10 @@ export function PerformanceTabContent({ agent }: { agent: IAgent }) {
                 </InfoPanel>
             </Box>
 
+            <InfoPanel label="Weekly trend">
+                <WeeklyTrend trend={perf.trend} />
+            </InfoPanel>
+
             <InfoPanel label="Tools">
                 {perf.tools.runs_with_trace === 0 ? (
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
@@ -254,35 +350,24 @@ export function PerformanceTabContent({ agent }: { agent: IAgent }) {
             {/* ATL-140: the numbers must be attributable to the configuration
                 that produced them, so a model or prompt change reads as a break
                 in the series rather than a smear across it. */}
-            <InfoPanel label="By model">
+            <InfoPanel label="By configuration">
                 <Box sx={{ display: 'grid', gap: 1 }}>
                     {perf.by_config.map((c) => (
                         <Box
-                            key={`${c.model}-${c.effort}`}
+                            key={`${c.model}-${c.effort}-${c.cli}-${c.prompt_version}`}
                             sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}
                         >
                             <Typography
-                                sx={{ fontSize: 12, fontFamily: TYPOGRAPHY.fontFamilyMono, color: ATLAS_PALETTE.slate, minWidth: 220 }}
+                                sx={{ fontSize: 12, fontFamily: TYPOGRAPHY.fontFamilyMono, color: ATLAS_PALETTE.slate, minWidth: 320 }}
                             >
-                                {c.model ?? 'unrecorded'} · {c.effort ?? 'unrecorded'}
+                                {c.model ?? 'unrecorded'} · {c.effort ?? 'unrecorded'} · {c.cli ?? 'unrecorded'} ·{' '}
+                                {c.prompt_version === null ? 'prompt unrecorded' : `prompt v${c.prompt_version}`}
                             </Typography>
                             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
                                 {c.steps} steps · {formatCostUsd(c.cost_usd)}
                             </Typography>
                             <Box sx={{ flex: 1, minWidth: 160, maxWidth: 260 }}>
-                                <Box sx={{ display: 'flex', height: 6, borderRadius: '3px', overflow: 'hidden' }}>
-                                    {OUTCOMES.map((o) =>
-                                        c.first_pass[o.key] === 0 ? null : (
-                                            <Box
-                                                key={o.key}
-                                                sx={{
-                                                    width: `${(c.first_pass[o.key] / total(c.first_pass)) * 100}%`,
-                                                    background: o.color,
-                                                }}
-                                            />
-                                        ),
-                                    )}
-                                </Box>
+                                <OutcomeBar fp={c.first_pass} />
                             </Box>
                         </Box>
                     ))}

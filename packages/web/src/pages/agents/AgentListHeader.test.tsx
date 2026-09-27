@@ -73,3 +73,10 @@ describe('AgentListHeader', () => {
         expect(onImport).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('AgentListHeader — fleet link', () => {
+    it('links to the fleet performance page', () => {
+        renderWithProviders(<AgentListHeader installedCount={1} categoryCount={1} onAdd={vi.fn()} />);
+        expect(screen.getByRole('link', { name: /fleet performance/i })).toHaveAttribute('href', '/agents/performance');
+    });
+});
