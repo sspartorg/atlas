@@ -84,6 +84,7 @@ This folder is the **single source of truth for application behavior** — what 
 - [`pages/33-workflows.md`](pages/33-workflows.md) — `/workflows`
 - [`pages/34-workflow-detail.md`](pages/34-workflow-detail.md) — `/workflows/:id`
 - [`pages/35-workflow-run.md`](pages/35-workflow-run.md) — `/workflows/:id/runs/:runId`
+- [`pages/36-fleet-performance.md`](pages/36-fleet-performance.md) — `/agents/performance`
 
 ---
 
