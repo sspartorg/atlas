@@ -4,10 +4,11 @@ vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
 // A real run would provision a worktree and spawn an agent. Everything else
 // here — the link, the comment, the notification, the sub-task — is real rows.
 vi.mock('./workflow-engine.js', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('./workflow-engine.js')>()),
+    ...(await importOriginal<typeof WorkflowEngine>()),
     startWorkflowRun: vi.fn(async () => 'run-new'),
 }));
 
+import type * as WorkflowEngine from './workflow-engine.js';
 import { externalLinks } from './external-links.js';
 import { startWorkflowRun } from './workflow-engine.js';
 import { credentialsService } from './credentials.js';

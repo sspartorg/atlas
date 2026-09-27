@@ -222,10 +222,12 @@ Since 2026-09-12 `create()` resolves a missing `agent_id` from the item's live r
 ### IItemExternalLink
 Off-platform URL attached to an item: `link_kind='pull_request'`, or `'jira_issue'` (migration 042; written only by the Jira bridge, with `external_ref` = the Jira key and `title` = its summary). Table `item_external_links` (migration 020), UNIQUE `(item_id, url)`, cascades on item delete. `EXTERNAL_LINK_KINDS` (what the UI and MCP may add by hand) stays `['pull_request']`.
 
-Fields: `id, item_id, link_kind, url, title, external_ref, created_at, created_by_run_id, pr_state`.
+Fields: `id, item_id, link_kind, url, title, external_ref, created_at, created_by_run_id, pr_state, ci_state, ci_failing_checks`.
 
 - `pr_state` ∈ `'open' | 'merged' | 'closed' | null` (migration 033, CHECK constraint) — last GitHub state observed for a PR link; null until the first successful lookup, and forever on a project with no credential.
 - `pr_state_checked_at` (DB only, not on the wire) — stamped on every lookup attempt, success or failure. Reading the links (`GET …/external-links`, every `/full` envelope) refreshes PR links older than 5 min in the background; `POST /api/issues/:type/:id/external-links/refresh` refreshes synchronously.
+- `ci_state` ∈ `'pending' | 'success' | 'failure' | null` (migration 023, CHECK) — CI on an **open** PR's head commit (check runs + legacy statuses, see `ci-routing.ts`). Null = no CI observed (a repo without checks, or never read), not success. `ci_failing_checks` = `ci_summary` jsonb `[{name, detail}]`, `[]` unless failing.
+- DB only: `ci_head_sha`, `ci_checked_at`, `ci_handled_sha` (head commit Atlas already acted on), `ci_fix_attempts` (automatic fix runs started). A Task in review whose PR goes red on a new commit gets a comment + `needs_you` notification and, at most twice per Task and never over a live run, a fix run (a "Fix failing CI" sub-task continued from the Sub-tasks step, else a restart on the same branch) — `ci-follow-through.ts`.
 
 ### IJiraConfig / jira_sources / jira_issues (ADR 0016, migrations 042 + 044 + 010)
 `jira_config` is a singleton row holding the Jira bridge config. `IJiraConfig` returns every column except the token, and adds `api_token_set: boolean`:
