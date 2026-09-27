@@ -40,7 +40,7 @@ function payload(over: Partial<FleetPayload> = {}): FleetPayload {
             merged_cost_usd: 35.25,
             cost_per_merged_task_usd: 11.75,
             median_s_to_pr: 5400,
-            interventions: { parked: 3, tasks: 4, per_task: 0.75, since: '2026-09-27T10:00:00Z' },
+            interventions: { parked: 3, parked_tasks: 2, tasks: 4, per_task: 0.75, since: '2026-09-27T10:00:00Z' },
         },
         ...over,
     };
@@ -155,7 +155,7 @@ describe('FleetPerformance', () => {
                     merged_cost_usd: 0,
                     cost_per_merged_task_usd: null,
                     median_s_to_pr: null,
-                    interventions: { parked: 0, tasks: 0, per_task: null, since: null },
+                    interventions: { parked: 0, parked_tasks: 0, tasks: 0, per_task: null, since: null },
                 },
             }),
         );
@@ -179,7 +179,7 @@ describe('FleetPerformance', () => {
                     merged_cost_usd: 0,
                     cost_per_merged_task_usd: null,
                     median_s_to_pr: null,
-                    interventions: { parked: 0, tasks: 0, per_task: null, since: null },
+                    interventions: { parked: 0, parked_tasks: 0, tasks: 0, per_task: null, since: null },
                 },
             }),
         );

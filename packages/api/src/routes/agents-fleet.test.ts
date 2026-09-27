@@ -7,7 +7,7 @@ import { sql } from 'kysely';
 import { buildApp } from '../server.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertItem, insertProject } from '../../tests/_items.js';
-import type { FleetPerformance } from '../services/agent-scorecard.js';
+import type { FleetPerformance, ProjectHealth } from '../services/agent-scorecard.js';
 
 // GET /api/agents/performance — the fleet comparison and what it delivered.
 //
@@ -25,6 +25,7 @@ const minutesAgo = (m: number) => new Date(NOW - m * 60_000).toISOString();
 async function run(over: {
     id: string;
     item?: string | null;
+    project?: string;
     parent?: string;
     prs?: string[];
     startedMinAgo?: number;
@@ -35,7 +36,7 @@ async function run(over: {
         .values({
             id: over.id,
             workflow_id: 'wf-1',
-            project_id: 'p1',
+            project_id: over.project ?? 'p1',
             item_id: over.item ?? null,
             status: 'completed',
             graph_snapshot: JSON.stringify({ nodes: [], edges: [] }),
@@ -280,6 +281,81 @@ describe('GET /api/agents/performance', () => {
         await parkedEvent('wr-1c', null);
 
         const { delivery } = await fleet();
-        expect(delivery.interventions).toMatchObject({ parked: 3, tasks: 2, per_task: 1.5 });
+        expect(delivery.interventions).toMatchObject({ parked: 3, parked_tasks: 2, tasks: 2, per_task: 1.5 });
     });
 });
+
+// GET /api/projects/:id/health — the Project page's Health card. The delivery
+// maths is the fleet's (tested above); these pin the project scoping, the
+// 30-day window, and the one number only this card has.
+describe('GET /api/projects/:id/health', () => {
+    async function health(project = 'p1'): Promise<ProjectHealth> {
+        const res = await app.inject({ method: 'GET', url: `/api/projects/${project}/health` });
+        expect(res.statusCode).toBe(200);
+        return res.json<ProjectHealth>();
+    }
+
+    it('404s for an unknown project', async () => {
+        const res = await app.inject({ method: 'GET', url: '/api/projects/nope/health' });
+        expect(res.statusCode).toBe(404);
+    });
+
+    it('answers a quiet project with zeros and nulls', async () => {
+        expect(await health()).toMatchObject({
+            runs: 0,
+            prs_opened: 0,
+            prs_merged: 0,
+            tasks_merged: 0,
+            median_s_to_pr: null,
+            specs: { reviewed: 0, accepted_first_try: 0 },
+            escalations: { items: 0, pauses: 0 },
+        });
+    });
+
+    it('counts only this project, inside 30 days', async () => {
+        await insertProject('p2', 'OTH');
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1' });
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1' });
+        await insertItem({ id: 'OTH-1', type: 'task', project_id: 'p2' });
+        await run({ id: 'wr-1', item: 'ATL-1', prs: ['https://github.com/o/r/pull/1'] });
+        await prLink('ATL-1', 'https://github.com/o/r/pull/1', 'merged', 30);
+        await parkedEvent('wr-1', 'ATL-1');
+        await parkedEvent('wr-1', 'ATL-1');
+        // Another project's run, and this project's run from 45 days ago.
+        await run({ id: 'wr-o', item: 'OTH-1', project: 'p2', prs: ['https://github.com/o/r/pull/9'] });
+        await prLink('OTH-1', 'https://github.com/o/r/pull/9', 'merged', 30);
+        await run({ id: 'wr-old', item: 'ATL-2', startedMinAgo: 45 * 24 * 60 });
+
+        expect(await health()).toMatchObject({
+            runs: 1,
+            prs_opened: 1,
+            prs_merged: 1,
+            tasks_merged: 1,
+            median_s_to_pr: 1800,
+            escalations: { items: 1, pauses: 2 },
+        });
+    });
+
+    // A spec is "accepted first try" when the Architect Reviewer's FIRST look
+    // at it approves. A later approval after a rejection is not a first try.
+    it('counts specs by the Architect Reviewer’s first look, matched on its catalog id too', async () => {
+        await insertAgent({ id: 'my-spec-reviewer', name: 'Spec Reviewer', status: 'active' });
+        await testDb
+            .updateTable('agents')
+            .set({ marketplace_source_id: 'agent-architect-reviewer' })
+            .where('id', '=', 'my-spec-reviewer')
+            .execute();
+        for (const id of ['ATL-1', 'ATL-2', 'ATL-3']) await insertItem({ id, type: 'task', project_id: 'p1' });
+        await run({ id: 'wr-1', item: 'ATL-1' });
+        await step({ run: 'wr-1', agent: 'my-spec-reviewer', node: 'architect-review', outcome: 'done' });
+        await run({ id: 'wr-2', item: 'ATL-2' });
+        await step({ run: 'wr-2', agent: 'my-spec-reviewer', node: 'architect-review', outcome: 'rejected' });
+        await step({ run: 'wr-2', agent: 'my-spec-reviewer', node: 'architect-review', outcome: 'done' });
+        // No spec review at all: not in either count.
+        await run({ id: 'wr-3', item: 'ATL-3' });
+        await step({ run: 'wr-3', agent: 'agent-coder' });
+
+        expect((await health()).specs).toEqual({ reviewed: 2, accepted_first_try: 1 });
+    });
+});
+

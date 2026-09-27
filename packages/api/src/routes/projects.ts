@@ -5,6 +5,7 @@ import { workflowsService } from '../services/workflows.js';
 import { startWorkflowRun } from '../services/workflow-engine.js';
 import { projectsService, PrefixCollisionError } from '../services/projects.js';
 import { projectReposService } from '../services/project-repos.js';
+import { projectHealth } from '../services/agent-scorecard.js';
 import { GenerateAiScaffoldSchema, IssueKeyPrefixSchema } from '@atlas/shared';
 import type { IProjectRepo } from '@atlas/shared';
 import { settingsService } from '../services/settings.js';
@@ -32,6 +33,9 @@ import {
 } from '@atlas/shared';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
 
+/** The Health card's window; its label says "30 d". */
+const PROJECT_HEALTH_DAYS = 30;
+
 export async function projectsRoutes(app: FastifyInstance) {
     app.get('/api/projects', async (_req, reply) => reply.send(await projectsService.list()));
 
@@ -50,6 +54,15 @@ export async function projectsRoutes(app: FastifyInstance) {
         const project = await projectsService.get(id);
         if (!project) return reply.status(404).send({ error: 'Project not found' });
         return reply.send(project);
+    });
+
+    // The Project page's Health card: 30 days of this project's workflow runs,
+    // through the same delivery maths as the fleet page (`agent-scorecard.ts`).
+    app.get('/api/projects/:id/health', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        if (!(await projectsService.get(id))) return reply.status(404).send({ error: 'Project not found' });
+        const since = new Date(Date.now() - PROJECT_HEALTH_DAYS * 24 * 60 * 60 * 1000).toISOString();
+        return reply.send(await projectHealth(id, since));
     });
 
     app.post('/api/projects', { preHandler: requireMcpToken }, async (req, reply) => {

@@ -9,6 +9,7 @@ import type {
     IWorkflow,
     IWorkflowQueue,
 } from '@atlas/shared';
+import type { ProjectHealth } from '../api/types.js';
 import { makeProjectRepo } from './factories.js';
 
 const BASE = 'http://localhost:3000/api';
@@ -55,6 +56,19 @@ export const defaultHandlers = [
     http.get(`${BASE}/workflow-queue`, ok<IWorkflowQueue>({ workflows: [], unassigned: [] })),
     // New Task's Workflow select and Project Detail's default-workflow card.
     http.get(`${BASE}/workflows`, ok<IWorkflow[]>([])),
+    http.get(
+        `${BASE}/projects/:id/health`,
+        ok<ProjectHealth>({
+            window: { since: null },
+            runs: 0,
+            prs_opened: 0,
+            prs_merged: 0,
+            tasks_merged: 0,
+            median_s_to_pr: null,
+            specs: { reviewed: 0, accepted_first_try: 0 },
+            escalations: { items: 0, pauses: 0, since: null },
+        }),
+    ),
     // New Task, the Task rail and Project Detail read a project's repos
     // (ADR 0018). Default to the one repo the project factory describes;
     // tests that need several override via server.use(...).

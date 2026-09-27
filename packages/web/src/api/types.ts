@@ -571,6 +571,7 @@ export interface FleetDelivery {
     median_s_to_pr: number | null;
     interventions: {
         parked: number;
+        parked_tasks: number;
         tasks: number;
         per_task: number | null;
         /** When park history began (migration 024). Nothing earlier survived. */
@@ -651,4 +652,16 @@ export interface AgentQualification {
     stale_reason: string | null;
     ran_at_config: { model: string | null; effort: string | null; prompt_version: number | null } | null;
     per_fixture: QualificationFixture[];
+}
+
+/** GET /api/projects/:id/health — the Project page's Health card (30 days). */
+export interface ProjectHealth {
+    window: { since: string | null };
+    runs: number;
+    prs_opened: number;
+    prs_merged: number;
+    tasks_merged: number;
+    median_s_to_pr: number | null;
+    specs: { reviewed: number; accepted_first_try: number };
+    escalations: { items: number; pauses: number; since: string | null };
 }

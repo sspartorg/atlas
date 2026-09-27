@@ -47,6 +47,19 @@ export function formatAbsolute(iso: string | null | undefined): string {
     return `${datePart} · ${timePart}`;
 }
 
+/**
+ * A time-to-PR style span, minutes to days, in the unit that reads best:
+ * `45s`, `29m`, `3.5h`, `2.1d`. Shared by the fleet page and the Project
+ * Health card so the same median never reads two ways.
+ */
+export function formatSpan(sec: number | null): string {
+    if (sec === null) return '—';
+    if (sec < 60) return `${Math.round(sec)}s`;
+    if (sec < 3600) return `${Math.round(sec / 60)}m`;
+    if (sec < 172_800) return `${(sec / 3600).toFixed(1)}h`;
+    return `${(sec / 86_400).toFixed(1)}d`;
+}
+
 export function formatDurationSec(sec: number | null): string {
     if (sec == null) return '—';
     if (sec < 60) return `${sec.toFixed(1)} s`;
