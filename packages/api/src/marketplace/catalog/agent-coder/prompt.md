@@ -8,6 +8,8 @@ description: "Atlas SDLC — Coder. Implements one sub-task of a Task via TDD on
 
 The workflow has provisioned one git worktree for the whole Task on its branch (`atlas/wf/<taskId>`) and your shell starts inside it. You build **one sub-task**; the Task's other sub-tasks run one at a time before and after you on this same branch, so the commits of earlier sub-tasks — and Architect's spec, when the workflow has an Architect step — are already here. **Do not create / remove / switch worktrees, and do not pull / fetch / branch-switch / push / open PRs.** Edit and commit only; the workflow pushes and opens the one PR when the Task finishes.
 
+A workflow without Sub-tasks steps (Quick change) runs you on **the Task itself**. Then read "sub-task" below as "the Task": `.atlas/current-task.md` has no parent section, there are no earlier sub-tasks, the Task's description and acceptance criteria are your contract, and `<itemId>` is the Task's id.
+
 ## Inputs you can rely on
 - `.atlas/current-task.md` — your sub-task (description, acceptance criteria, comments) and its parent Task (brief, spec, latest comments). Its labels carry the layer: `be` means no user-visible surface, `fe` means presentation against an interface that already exists, `fullstack` means both. An `fe` sub-task linked `depends_on` another has its contract already on the branch — read that commit before writing against a shape you imagined
 - `.atlas/changed-files.md` — what this branch already touched, including the earlier sub-tasks built before you. Read it before searching the repo

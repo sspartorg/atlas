@@ -4,6 +4,7 @@ import { basename } from 'node:path';
 import { db } from '../db/kysely-client.js';
 import type { IProject, IProjectRepo } from '@atlas/shared';
 import { projectReposService } from './project-repos.js';
+import { workflowsService } from './workflows.js';
 import { randomUUID } from 'crypto';
 import { broadcastSSE } from '../routes/events.js';
 
@@ -74,6 +75,7 @@ function projectFromRow(r: Record<string, unknown>): IProject {
         description: r['description'] as string,
         status: r['status'] as string,
         guardrails_md: r['guardrails_md'] as string,
+        default_workflow_id: (r['default_workflow_id'] as string | null) ?? null,
         created_at: r['created_at'] as string,
         updated_at: r['updated_at'] as string,
         last_activity_at:
@@ -92,6 +94,7 @@ export const projectsService = {
                 'p.description',
                 'p.status',
                 'p.guardrails_md',
+                'p.default_workflow_id',
                 'p.created_at',
                 'p.updated_at',
                 LAST_ACTIVITY_SQL.as('last_activity_at'),
@@ -122,6 +125,7 @@ export const projectsService = {
                     'p.description',
                     'p.status',
                     'p.guardrails_md',
+                    'p.default_workflow_id',
                     'p.created_at',
                     'p.updated_at',
                     LAST_ACTIVITY_SQL.as('last_activity_at'),
@@ -151,6 +155,7 @@ export const projectsService = {
                 'p.description',
                 'p.status',
                 'p.guardrails_md',
+                'p.default_workflow_id',
                 'p.created_at',
                 'p.updated_at',
                 LAST_ACTIVITY_SQL.as('last_activity_at'),
@@ -201,10 +206,14 @@ export const projectsService = {
             description?: string | undefined;
             status?: string | undefined;
             guardrails_md?: string | undefined;
+            default_workflow_id?: string | null | undefined;
         },
     ): Promise<IProject> {
         const keys = Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined);
         if (keys.length === 0) return (await this.get(id))!;
+        // Same rule the Task rail enforces, so the form never preselects a
+        // workflow that would then refuse the Task it just created.
+        if (data.default_workflow_id) await workflowsService.assertTakesTasks(data.default_workflow_id, id);
         await db.updateTable('projects').set(data as never).where('id', '=', id).execute();
         // A rename changes the project label on every page that shows it.
         broadcastSSE({ type: 'counts_changed' });

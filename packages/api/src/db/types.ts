@@ -277,6 +277,8 @@ export interface ProjectsTable {
     description: Str;
     status: Str;
     guardrails_md: Str;
+    // Migration 022 — preselected by /tasks/new only (never applied server-side).
+    default_workflow_id: StrN;
     created_at: CreatedAt;
     updated_at: UpdatedAt;
 }

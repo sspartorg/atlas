@@ -681,6 +681,21 @@ export const workflowsService = {
     },
 
     /** Queue (or unqueue) an item for a workflow. */
+    /**
+     * A workflow a Task of `projectId` can be queued on: it exists, takes Tasks
+     * (`input_kind: 'item'`) and is global or this project's. Shared by the
+     * rail, Task create and a project's default workflow, so all three refuse
+     * the same workflows with the same errors.
+     */
+    async assertTakesTasks(workflowId: string, projectId: string): Promise<void> {
+        const wf = await this.get(workflowId);
+        if (!wf) throw new ApiError('not_found', 'Workflow not found', 404);
+        if (wf.input_kind !== 'item') throw new ApiError('validation_error', 'That workflow does not take Tasks', 400);
+        if (wf.project_id && wf.project_id !== projectId) {
+            throw new ApiError('validation_error', 'That workflow belongs to a different project', 400);
+        }
+    },
+
     async setItemWorkflow(itemId: string, workflowId: string | null): Promise<void> {
         const item = await db
             .selectFrom('items')
@@ -696,12 +711,7 @@ export const workflowsService = {
             }
             // Sub-tasks run inside their Task's workflow run (ADR 0015).
             if (item.type !== 'task') throw new ApiError('validation_error', 'Only Tasks are queued for workflows', 400);
-            const wf = await this.get(workflowId);
-            if (!wf) throw new ApiError('not_found', 'Workflow not found', 404);
-            if (wf.input_kind !== 'item') throw new ApiError('validation_error', 'That workflow does not take Tasks', 400);
-            if (wf.project_id && wf.project_id !== item.project_id) {
-                throw new ApiError('validation_error', 'That workflow belongs to a different project', 400);
-            }
+            await this.assertTakesTasks(workflowId, item.project_id);
         }
         // Assigning a draft Task queues it: dispatch only picks up Ready Tasks,
         // and "pick a workflow, then also set Ready" was one step too many.
