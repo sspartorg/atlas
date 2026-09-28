@@ -60,6 +60,19 @@ export function useCreateAgentTest(agentId: string) {
     });
 }
 
+export function useUpdateAgentTest(agentId: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ testId, body }: { testId: string; body: Parameters<typeof api.agentTests.update>[1] }) =>
+            api.agentTests.update(testId, body),
+        onSuccess: () => {
+            void qc.invalidateQueries({ queryKey: ['agent-tests', agentId] });
+            // An edited assertion can flip the verdict the header shows.
+            void qc.invalidateQueries({ queryKey: ['agent-qualification'] });
+        },
+    });
+}
+
 export function useDeleteAgentTest(agentId: string) {
     const qc = useQueryClient();
     return useMutation({

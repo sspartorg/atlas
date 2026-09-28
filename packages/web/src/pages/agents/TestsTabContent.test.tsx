@@ -105,6 +105,11 @@ function mount({
             if (failWrites) return HttpResponse.json({ error: 'that project has no repos' }, { status: 400 });
             return HttpResponse.json(aTest(), { status: 201 });
         }),
+        http.patch(`${BASE}/agent-tests/:id`, async ({ params, request }) => {
+            onWrite?.('update', { id: params['id'], body: await request.json() });
+            if (failWrites) return HttpResponse.json({ error: 'no such project' }, { status: 400 });
+            return HttpResponse.json(aTest());
+        }),
         http.delete(`${BASE}/agent-tests/:id`, ({ params }) => {
             onWrite?.('delete', params['id']);
             return new HttpResponse(null, { status: 204 });
@@ -688,4 +693,67 @@ it('renders when localStorage is unavailable', async () => {
     } finally {
         if (store) Object.defineProperty(window, 'localStorage', store);
     }
+});
+
+describe('TestsTabContent — edit', () => {
+    it('opens the form prefilled and saves a merged patch', async () => {
+        const writes: Array<{ kind: string; payload: unknown }> = [];
+        mount({
+            tests: [
+                aTest({
+                    expectations: { outcome_kind: 'asked_question', tools_forbidden: ['Write'], max_cost_usd: 1 },
+                }),
+            ],
+            onWrite: (kind, payload) => writes.push({ kind, payload }),
+        });
+        await userEvent.click(
+            await screen.findByRole('button', { name: 'Edit Asks rather than building a whole Task' }),
+        );
+        const nameField = screen.getByLabelText('Test name');
+        expect(nameField).toHaveValue('Asks rather than building a whole Task');
+        expect(screen.getByLabelText('Item title')).toHaveValue('Add a health endpoint');
+
+        await userEvent.clear(nameField);
+        await userEvent.type(nameField, 'Asks first');
+        await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+        await waitFor(() => expect(writes.find((w) => w.kind === 'update')).toBeDefined());
+        expect(writes.find((w) => w.kind === 'update')?.payload).toMatchObject({
+            id: 't1',
+            body: {
+                name: 'Asks first',
+                project_id: 'p1',
+                repo_id: 'r1',
+                // What the form never showed is kept, not dropped.
+                expectations: { outcome_kind: 'asked_question', tools_forbidden: ['Write'], max_cost_usd: 1 },
+            },
+        });
+        expect(await screen.findByText('Test saved')).toBeInTheDocument();
+    });
+
+    it('clears the outcome when "Any outcome" is chosen, and reports a failed save', async () => {
+        const writes: Array<{ kind: string; payload: unknown }> = [];
+        mount({
+            tests: [aTest({ project_id: null, repo_id: null })],
+            failWrites: true,
+            onWrite: (kind, payload) => writes.push({ kind, payload }),
+        });
+        await userEvent.click(
+            await screen.findByRole('button', { name: 'Edit Asks rather than building a whole Task' }),
+        );
+        await userEvent.click(screen.getByLabelText('Project'));
+        await userEvent.click(await screen.findByRole('option', { name: 'Sandbox' }));
+        await userEvent.click(screen.getByLabelText('Expected outcome'));
+        await userEvent.click(await screen.findByRole('option', { name: 'Any outcome' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+        await waitFor(() => expect(writes.find((w) => w.kind === 'update')).toBeDefined());
+        const body = (writes.find((w) => w.kind === 'update')?.payload as { body: { expectations: object } }).body;
+        expect(body.expectations).not.toHaveProperty('outcome_kind');
+        expect(await screen.findByText('no such project')).toBeInTheDocument();
+        // Cancel leaves edit mode behind.
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        await userEvent.click(screen.getByRole('button', { name: 'New test' }));
+        expect(screen.getByRole('button', { name: 'Create test' })).toBeInTheDocument();
+    });
 });

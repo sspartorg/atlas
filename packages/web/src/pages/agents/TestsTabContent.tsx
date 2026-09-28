@@ -16,6 +16,7 @@ import {
     useAgentTests,
     useStarterTests,
     useCreateAgentTest,
+    useUpdateAgentTest,
     useDeleteAgentTest,
     useRunAgentSuite,
     useRunAgentTest,
@@ -338,12 +339,14 @@ function TestCard({
     projectId,
     repoId,
     provenance,
+    onEdit,
 }: {
     test: AgentTest;
     agentId: string;
     projectId: string;
     repoId: string;
     provenance: string | undefined;
+    onEdit: (t: AgentTest) => void;
 }) {
     const [open, setOpen] = useState(false);
     const [samples, setSamples] = useState(1);
@@ -418,6 +421,9 @@ function TestCard({
                         : estimate?.estimated_total_usd != null
                           ? `Run · ~${formatCostUsd(estimate.estimated_total_usd)}`
                           : 'Run'}
+                </Button>
+                <Button size="small" onClick={() => onEdit(test)} aria-label={`Edit ${test.name}`}>
+                    Edit
                 </Button>
                 <Button
                     size="small"
@@ -556,6 +562,7 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
     const { data: projects } = useProjects();
     const { data: qualification } = useAgentQualification(agent.id);
     const createTest = useCreateAgentTest(agent.id);
+    const updateTest = useUpdateAgentTest(agent.id);
     const toast = useToast();
 
     const [suiteProject, setSuiteProject] = useState(() => remembered(SUITE_PROJECT_KEY));
@@ -572,6 +579,8 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
     const [outcome, setOutcome] = useState<string>('');
     /** Set when the form was opened by adopting a starter test. */
     const [adopted, setAdopted] = useState<StarterTest | null>(null);
+    /** Set when the form is editing an existing test rather than creating one. */
+    const [editing, setEditing] = useState<AgentTest | null>(null);
     const { data: repos } = useProjectRepos(projectId);
 
     /**
@@ -582,6 +591,7 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
      * to work in — neither of which a catalog bundle can know.
      */
     function adopt(t: StarterTest) {
+        setEditing(null);
         setAdopted(t);
         setName(t.name);
         setIssueType(t.item_template.issue_type);
@@ -591,7 +601,61 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
         setAdding(true);
     }
 
+    /** Open the same form on an existing test, prefilled from what it asserts now. */
+    function startEdit(t: AgentTest) {
+        setAdopted(null);
+        setEditing(t);
+        setName(t.name);
+        setProjectId(t.project_id ?? '');
+        setRepoId(t.repo_id ?? '');
+        setIssueType(t.item_template.issue_type);
+        setTitle(t.item_template.title);
+        setDescription(t.item_template.description ?? '');
+        setOutcome(t.expectations.outcome_kind ?? '');
+        setAdding(true);
+    }
+
+    function resetForm() {
+        setAdding(false);
+        setEditing(null);
+        setName('');
+        setTitle('');
+        setDescription('');
+        setRepoId('');
+    }
+
     function submit() {
+        if (editing) {
+            // Merge, never replace: the form shows only part of what a test can
+            // assert, and a save must not silently drop a tools_forbidden or a
+            // cost ceiling it never displayed. "Any outcome" clears the outcome.
+            const { outcome_kind: _cleared, ...kept } = editing.expectations;
+            updateTest.mutate(
+                {
+                    testId: editing.id,
+                    body: {
+                        name: name.trim(),
+                        project_id: projectId || null,
+                        repo_id: repoId || null,
+                        item_template: {
+                            ...editing.item_template,
+                            issue_type: issueType,
+                            title: title.trim(),
+                            description,
+                        },
+                        expectations: { ...kept, ...(outcome ? { outcome_kind: outcome as 'done' } : {}) },
+                    },
+                },
+                {
+                    onSuccess: () => {
+                        toast.show({ message: 'Test saved' });
+                        resetForm();
+                    },
+                    onError: (e) => toast.show({ message: (e as Error).message }),
+                },
+            );
+            return;
+        }
         createTest.mutate(
             {
                 project_id: projectId,
@@ -610,11 +674,7 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
             {
                 onSuccess: () => {
                     toast.show({ message: 'Test created' });
-                    setAdding(false);
-                    setName('');
-                    setTitle('');
-                    setDescription('');
-                    setRepoId('');
+                    resetForm();
                 },
                 onError: (e) => toast.show({ message: (e as Error).message }),
             },
@@ -695,7 +755,8 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                         sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
                         onClick={() => {
                             setAdopted(null);
-                            setAdding((v) => !v);
+                            if (adding) resetForm();
+                            else setAdding(true);
                         }}
                     >
                         {adding ? 'Cancel' : 'New test'}
@@ -807,8 +868,18 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                         ))}
                     </TextField>
                     <Box>
-                        <Button variant="contained" disabled={!canSubmit || createTest.isPending} onClick={submit}>
-                            {createTest.isPending ? 'Creating…' : 'Create test'}
+                        <Button
+                            variant="contained"
+                            disabled={!canSubmit || createTest.isPending || updateTest.isPending}
+                            onClick={submit}
+                        >
+                            {editing
+                                ? updateTest.isPending
+                                    ? 'Saving…'
+                                    : 'Save changes'
+                                : createTest.isPending
+                                  ? 'Creating…'
+                                  : 'Create test'}
                         </Button>
                     </Box>
                 </Box>
@@ -848,6 +919,7 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                         agentId={agent.id}
                         projectId={suiteProject}
                         repoId={suiteRepo}
+                        onEdit={startEdit}
                         provenance={
                             qualification?.[0]?.per_fixture.find((f) => f.agent_test_id === t.id)?.provenance
                         }
