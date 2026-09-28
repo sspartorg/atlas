@@ -903,6 +903,10 @@ export interface AgentTestRunsTable {
     judge_cost_usd: number | null;
     /** Migration 019 — the workflow run a workflow eval is judged on. */
     workflow_run_id: StrN;
+    /** Migration 003 — the throwaway checkout while the run is live; null once collected. */
+    worktree_path: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+    /** Migration 003 — what the run changed (`AgentTestEvidence`), collected when it finished. */
+    evidence: ColumnType<unknown, string | null | undefined, string | null | undefined>;
 }
 
 export interface DB {

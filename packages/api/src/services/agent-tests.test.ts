@@ -11,11 +11,13 @@ vi.mock('./agent-runner.js', () => ({ spawnAgentRun }));
 const judgeAgentTestRun = vi.hoisted(() => vi.fn(async () => null));
 vi.mock('./agent-tests-judge.js', () => ({ judgeAgentTestRun }));
 
-import { mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { agentTestsService } from './agent-tests.js';
+import { collectEvidence } from './agent-tests-evaluate-run.js';
 import { tasksService } from './tasks.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertProject } from '../../tests/_items.js';
@@ -403,6 +405,63 @@ describe('agentTestsService.runSuite', () => {
         await expect(agentTestsService.runSuite('agent-coder', { project_id: 'p1' })).rejects.toThrow(
             /no tests to run/,
         );
+    });
+
+    // Migration 003 — an agent-only test works in a real checkout, and what
+    // it changed is kept when the run finishes.
+    it('gives the agent a checkout of the repo and keeps its diff', async () => {
+        mockDistinctSpawns();
+        const repo = mkdtempSync(join(tmpdir(), 'atlas-checkout-'));
+        const g = (...args: string[]) =>
+            execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repo, encoding: 'utf8' });
+        g('init', '-q', '-b', 'main');
+        writeFileSync(join(repo, 'x.js'), '1\n');
+        g('add', '-A');
+        g('commit', '-q', '-m', 'init');
+        try {
+            await insertProject('p2', 'CHK', { git_path: repo });
+            const t = await makeTest({ name: 'edits', project_id: 'p2' });
+            const [sample] = (await agentTestsService.run(t.id)).runs;
+            const call = spawnAgentRun.mock.calls.at(-1)?.[0] as unknown as { workingDir?: string };
+            expect(call.workingDir).toMatch(/atlas-test-/);
+            expect(existsSync(call.workingDir!)).toBe(true);
+
+            // The agent edits a file, then the run finishes.
+            writeFileSync(join(call.workingDir!, 'x.js'), '2\n');
+            await testDb
+                .updateTable('agent_runs')
+                .set({ status: 'completed', outcome_kind: 'done', outcome_summary: 's' } as never)
+                .where('id', '=', sample!.agent_run_id!)
+                .execute();
+            await agentTestsService.listBatches(t.id);
+
+            const row = await testDb
+                .selectFrom('agent_test_runs')
+                .select(['worktree_path', 'evidence'])
+                .where('id', '=', sample!.id)
+                .executeTakeFirstOrThrow();
+            expect(row.worktree_path).toBeNull();
+            expect(row.evidence).toMatchObject({ files_changed: ['x.js'] });
+            expect(existsSync(call.workingDir!)).toBe(false);
+            // Collected once: a second read finds nothing left to collect.
+            expect(await collectEvidence(sample!.id)).toMatchObject({ files_changed: ['x.js'] });
+        } finally {
+            rmSync(repo, { recursive: true, force: true });
+        }
+    });
+
+    it('reports a repo that will not check out as errored, not failed', async () => {
+        mockDistinctSpawns();
+        const notARepo = mkdtempSync(join(tmpdir(), 'atlas-not-a-repo-'));
+        try {
+            await insertProject('p3', 'NRP', { git_path: notARepo });
+            const t = await makeTest({ name: 'no repo', project_id: 'p3' });
+            const [sample] = (await agentTestsService.run(t.id)).runs;
+            expect(sample?.verdict).toBe('errored');
+            expect(sample?.failures[0]).toMatch(/could not start the run/);
+        } finally {
+            rmSync(notARepo, { recursive: true, force: true });
+        }
     });
 
     // ADR 0023 amendment — a fixture bound to no project runs in the Tests

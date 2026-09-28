@@ -496,6 +496,8 @@ Table `agent_tests`: `id, agent_id (FK → agents, CASCADE, **nullable** since m
 
 Table `agent_test_runs`: `id, agent_test_id (FK, CASCADE), agent_run_id (FK → agent_runs, SET NULL), item_id (FK → items, SET NULL), verdict, failures jsonb, cost_usd numeric(12,6), duration_s, created_at, evaluated_at`.
 
+- `worktree_path`, `evidence jsonb` (migration 003, DB only): an agent-only test runs in a **detached checkout** of its Task's first repo (`agent-test-workspace.ts`) — at `origin/<default>` when that ref exists, else the local branch; no branch, no fetch, no push. `worktree_path` is set while the run is live; when it finishes, `collectEvidence` claims it atomically, stores `evidence = {base_sha, files_changed, diff (≤200k chars, diff_truncated), collect_error?}` — Atlas's own `.atlas/`, `.claude/commands/atlas-*` and `.github/prompts/atlas-*` excluded — and deletes the folder. A repo with no folder on disk falls back to the old empty temp dir; a repo that will not check out makes the sample `errored`.
+
 - `verdict` ∈ `running | passed | failed | errored`. **`errored` is not `failed`**: a dispatch that never started is a broken environment, not a failing agent — the same distinction ADR 0020 draws for a gate that could not run.
 - `failures` is the ordered list of expectations that did not hold; empty on a pass.
 - `item_id` records the throwaway item the run acted on, so a failure can be opened and read rather than guessed at.

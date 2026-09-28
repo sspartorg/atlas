@@ -1540,6 +1540,12 @@ export interface SpawnAgentRunOptions {
      */
     existingRunId?: string;
     /**
+     * Migration 003 — an agent test's checkout. The run works in it instead
+     * of an empty temp folder; the caller owns it and deletes it, so the
+     * runner never does. Ignored for a workflow step, which has its own.
+     */
+    workingDir?: string | null;
+    /**
      * ADR 0014 — the workflow step this run executes. The engine owns the
      * worktree (provisioned once per workflow run), item status and routing;
      * the runner only stages, spawns and reports back.
@@ -1569,6 +1575,7 @@ export async function spawnAgentRun(
         projectId = null,
         existingRunId,
         workflowRun = null,
+        workingDir = null,
     } = opts;
     const agent = await getAgent(agentId);
     if (!agent) throw new Error(`Agent ${agentId} not found`);
@@ -1609,14 +1616,17 @@ export async function spawnAgentRun(
     }
 
     // Only a workflow run provisions a worktree (once, shared by every step).
-    // Any other run executes in a throwaway dir with the same `.atlas/*`
-    // scaffolding, removed on finalize via `artefactTmpRoot`.
+    // An agent test brings its own checkout (`workingDir`). Any other run
+    // executes in a throwaway dir with the same `.atlas/*` scaffolding,
+    // removed on finalize via `artefactTmpRoot`.
     const worktreePath = workflowRun?.worktreePath ?? null;
     const worktreeBranch = worktreePath ? (workflowRun?.branch ?? null) : null;
     let cwd: string;
     let artefactTmpRoot: string | null = null;
     if (worktreePath) {
         cwd = worktreePath;
+    } else if (workingDir) {
+        cwd = workingDir;
     } else {
         artefactTmpRoot = mkdtempSync(join(tmpdir(), `atlas-run-${runId}-`));
         cwd = artefactTmpRoot;
