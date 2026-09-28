@@ -49,6 +49,28 @@ const AgentTestItemTemplateSchema = z.object({
     labels: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
 });
 
+/** Case-insensitive regexes. A bad one is a 400 here, not an `errored` run later. */
+const PatternList = z
+    .array(
+        z
+            .string()
+            .min(1)
+            .max(300)
+            .refine(
+                (p) => {
+                    try {
+                        new RegExp(p, 'i');
+                        return true;
+                    } catch {
+                        return false;
+                    }
+                },
+                { message: 'not a valid regular expression' },
+            ),
+    )
+    .max(20)
+    .optional();
+
 const AgentTestExpectationsSchema = z.object({
     outcome_kind: z.enum(['done', 'rejected', 'asked_question']).optional(),
     required_checklist_all_passed: z.boolean().optional(),
@@ -68,6 +90,13 @@ const AgentTestExpectationsSchema = z.object({
     // One binary question per entry. The 200-char cap is the contract: a
     // vague paragraph is the single largest source of judge variance.
     judge_criteria: z.array(z.string().trim().min(1).max(200)).max(10).optional(),
+    // Scope checks (ADR 0023 amendment): on what it said, ran and changed.
+    reply_must_match: PatternList,
+    reply_must_not_match: PatternList,
+    commands_forbidden: PatternList,
+    no_code_changes: z.boolean().optional(),
+    files_changed_only: z.array(z.string().min(1).max(300)).max(20).optional(),
+    script: z.object({ body_sh: z.string().trim().min(1).max(20_000) }).strict().optional(),
 });
 
 const AgentTestBodySchema = z.object({

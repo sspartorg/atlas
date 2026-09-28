@@ -4,6 +4,8 @@ import { db } from '../db/kysely-client.js';
 import type { AgentTestVerdict, JudgeVerdict } from '../db/types.js';
 import { judgeAgentTestRun, type JudgeResult } from './agent-tests-judge.js';
 import { collectTestWorkspace, type AgentTestEvidence } from './agent-test-workspace.js';
+import { runTestScript } from './agent-test-script.js';
+import { extractRunTranscript, type RunTranscript } from './run-trace-parser.js';
 import {
     evaluateAgentTest,
     type AgentTestExpectations,
@@ -255,12 +257,16 @@ export async function judgePendingRun(run: AgentTestRunRow, test: AgentTestRow):
             'completed_at',
             // Migration 017 — what the run did, for the expectations that ask.
             'trace_summary',
+            // The raw transcript, for the scope checks, the script and the judge.
+            'output_text',
+            'cli',
         ])
         .where('id', '=', run.agent_run_id)
         .executeTakeFirst();
     if (!ar || !TERMINAL.has(ar.status as string)) return run;
 
-    await collectEvidence(run.id);
+    const evidence = await collectEvidence(run.id);
+    const transcript = extractRunTranscript(ar.output_text, ar.cli as never);
 
     const outcome: IRunOutcome | null = ar.outcome_kind
         ? ({
@@ -288,6 +294,8 @@ export async function judgePendingRun(run: AgentTestRunRow, test: AgentTestRow):
     const evaluation = evaluateAgentTest(test.expectations, {
         outcome,
         trace: ar.trace_summary,
+        transcript,
+        files_changed: evidence?.files_changed ?? null,
         requiredChecklist: requiredChecklist.map((c) => ({ id: Number(c.id), label: c.label })),
         cost_usd: cost,
         duration_s: duration,
@@ -302,10 +310,12 @@ export async function judgePendingRun(run: AgentTestRunRow, test: AgentTestRow):
     // about the dispatch itself. Every judge-authored failure carries a
     // `judge:` prefix, so a reader can always tell which assertion was
     // machine-graded.
-    const judged = await runJudge(test, outcome, ar.trace_summary);
-    const failures = [...evaluation.failures, ...judged.failures];
+    const scripted =
+        evaluation.verdict === 'errored' ? { failures: [], errored: false } : await runScript(test, outcome, transcript, evidence);
+    const judged = await runJudge(test, outcome, ar.trace_summary, transcript);
+    const failures = [...evaluation.failures, ...scripted.failures, ...judged.failures];
     const verdict: typeof evaluation.verdict =
-        evaluation.verdict === 'errored' || judged.errored
+        evaluation.verdict === 'errored' || scripted.errored || judged.errored
             ? 'errored'
             : failures.length === 0
               ? 'passed'
@@ -376,11 +386,38 @@ export async function collectEvidence(testRunId: string): Promise<AgentTestEvide
     return evidence;
 }
 
+/**
+ * The Owner's script, when the test has one. A script that could not run is
+ * `errored` — never the agent's fault — and every failure it reports carries a
+ * `script:` prefix, as the judge's carry `judge:`.
+ */
+async function runScript(
+    test: AgentTestRow,
+    outcome: IRunOutcome | null,
+    transcript: RunTranscript,
+    evidence: AgentTestEvidence | null,
+): Promise<{ failures: string[]; errored: boolean }> {
+    const body = test.expectations.script?.body_sh;
+    if (!body?.trim()) return { failures: [], errored: false };
+    const result = await runTestScript(body, {
+        reply: transcript.reply,
+        commands: transcript.commands,
+        tool_calls: transcript.tool_calls,
+        files_changed: evidence?.files_changed ?? null,
+        diff: evidence?.diff ?? null,
+        outcome: { kind: outcome?.kind ?? null, summary: outcome?.summary ?? '', reason: outcome?.reason ?? null },
+    });
+    if (result.kind === 'passed') return { failures: [], errored: false };
+    if (result.kind === 'errored') return { failures: [`script: ${result.reason}`], errored: true };
+    return { failures: [`script: ${result.output}`], errored: false };
+}
+
 /** The judge's answer, in the shape the verdict above needs. */
 async function runJudge(
     test: AgentTestRow,
     outcome: IRunOutcome | null,
     trace: IRunTraceSummary | null,
+    transcript: RunTranscript,
 ): Promise<{ result: JudgeResult | null; failures: string[]; errored: boolean }> {
     const criteria = test.expectations.judge_criteria;
     if (!criteria || criteria.length === 0) return { result: null, failures: [], errored: false };
@@ -391,6 +428,8 @@ async function runJudge(
             summary: outcome?.summary ?? '',
             reason: outcome?.reason ?? null,
             trace,
+            reply: transcript.reply,
+            commands: transcript.commands,
         });
     } catch (err) {
         return { result: null, failures: [`judge: could not run (${(err as Error).message})`], errored: true };

@@ -7,6 +7,8 @@ import MenuItem from '@mui/material/MenuItem';
 import Collapse from '@mui/material/Collapse';
 import Tooltip from '@mui/material/Tooltip';
 import Skeleton from '@mui/material/Skeleton';
+import Switch from '@mui/material/Switch';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import type { IAgent } from '@atlas/shared';
 
 import {
@@ -37,6 +39,7 @@ import { InfoPanel, InfoRow } from '../../components/InfoPanel.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { formatCostUsd } from '../../utils/formatCost.js';
 import { relativeTime } from '../../utils/time.js';
+import { applyChecks, checksFrom, EMPTY_CHECKS, type ChecksForm } from './testChecks.js';
 
 // Agent tests (ADR 0023).
 //
@@ -209,6 +212,12 @@ function expectationSummary(e: AgentTest['expectations']): string[] {
     if (e.max_tool_calls != null) out.push(`≤ ${e.max_tool_calls} tool calls`);
     for (const f of e.files_touched ?? []) out.push(`touches ${f}`);
     for (const f of e.files_untouched ?? []) out.push(`leaves ${f} alone`);
+    for (const p of e.reply_must_match ?? []) out.push(`reply matches /${p}/`);
+    for (const p of e.reply_must_not_match ?? []) out.push(`reply avoids /${p}/`);
+    for (const p of e.commands_forbidden ?? []) out.push(`never runs /${p}/`);
+    if (e.no_code_changes) out.push('changes no code');
+    for (const f of e.files_changed_only ?? []) out.push(`changes only ${f}`);
+    if (e.script) out.push('passes your script');
     for (const c of e.judge_criteria ?? []) out.push(`judged: ${c}`);
     if (e.max_cost_usd != null) out.push(`under $${e.max_cost_usd}`);
     if (e.max_duration_s != null) out.push(`under ${e.max_duration_s}s`);
@@ -581,6 +590,9 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
     const [outcome, setOutcome] = useState<string>('');
     /** Set when the form was opened by adopting a starter test. */
     const [adopted, setAdopted] = useState<StarterTest | null>(null);
+    const [checks, setChecks] = useState<ChecksForm>(EMPTY_CHECKS);
+    const setCheck = <K extends keyof ChecksForm>(key: K, value: ChecksForm[K]) =>
+        setChecks((c) => ({ ...c, [key]: value }));
     /** Set when the form is editing an existing test rather than creating one. */
     const [editing, setEditing] = useState<AgentTest | null>(null);
     const { data: repos } = useProjectRepos(projectId);
@@ -600,6 +612,7 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
         setTitle(t.item_template.title);
         setDescription(t.item_template.description ?? '');
         setOutcome(t.expectations.outcome_kind ?? '');
+        setChecks(checksFrom(t.expectations));
         setAdding(true);
     }
 
@@ -614,12 +627,14 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
         setTitle(t.item_template.title);
         setDescription(t.item_template.description ?? '');
         setOutcome(t.expectations.outcome_kind ?? '');
+        setChecks(checksFrom(t.expectations));
         setAdding(true);
     }
 
     function resetForm() {
         setAdding(false);
         setEditing(null);
+        setChecks(EMPTY_CHECKS);
         setName('');
         setTitle('');
         setDescription('');
@@ -645,7 +660,10 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                             title: title.trim(),
                             description,
                         },
-                        expectations: { ...kept, ...(outcome ? { outcome_kind: outcome as 'done' } : {}) },
+                        expectations: applyChecks(
+                            { ...kept, ...(outcome ? { outcome_kind: outcome as 'done' } : {}) },
+                            checks,
+                        ),
                     },
                 },
                 {
@@ -668,10 +686,13 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                 // outcome the form can show: a tools_forbidden or a cost
                 // ceiling silently dropped on adoption would make the adopted
                 // copy weaker than the one it came from.
-                expectations: {
-                    ...(adopted?.expectations ?? {}),
-                    ...(outcome ? { outcome_kind: outcome as 'done' } : {}),
-                },
+                expectations: applyChecks(
+                    {
+                        ...(adopted?.expectations ?? {}),
+                        ...(outcome ? { outcome_kind: outcome as 'done' } : {}),
+                    },
+                    checks,
+                ),
             },
             {
                 onSuccess: () => {
@@ -877,6 +898,77 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                             </MenuItem>
                         ))}
                     </TextField>
+                    {/* Scope checks (ADR 0023 amendment): judged on what the agent
+                        actually said, ran and changed — not on its own summary. */}
+                    <Typography
+                        sx={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: ATLAS_PALETTE.slate60,
+                            letterSpacing: '0.06em',
+                            textTransform: 'uppercase',
+                            mt: 1,
+                        }}
+                    >
+                        Checks
+                    </Typography>
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                size="small"
+                                checked={checks.readOnly}
+                                onChange={(e) => setCheck('readOnly', e.target.checked)}
+                            />
+                        }
+                        label="Read-only agent — must not edit any file"
+                        slotProps={{ typography: { sx: { fontSize: 13 } } }}
+                    />
+                    <TextField
+                        size="small"
+                        multiline
+                        minRows={2}
+                        label="Reply must match"
+                        value={checks.replyMustMatch}
+                        onChange={(e) => setCheck('replyMustMatch', e.target.value)}
+                        helperText="One pattern per line, case-insensitive. Every line must match the agent's final reply, e.g. menu|order"
+                    />
+                    <TextField
+                        size="small"
+                        multiline
+                        minRows={2}
+                        label="Reply must not match"
+                        value={checks.replyMustNotMatch}
+                        onChange={(e) => setCheck('replyMustNotMatch', e.target.value)}
+                        helperText="Off-topic answers to catch, e.g. president|election"
+                    />
+                    <TextField
+                        size="small"
+                        multiline
+                        minRows={2}
+                        label="Forbidden shell commands"
+                        value={checks.commandsForbidden}
+                        onChange={(e) => setCheck('commandsForbidden', e.target.value)}
+                        helperText="One pattern per line; no command it runs may match, e.g. ^git push"
+                    />
+                    <TextField
+                        size="small"
+                        multiline
+                        minRows={2}
+                        label="Judge questions"
+                        value={checks.judgeCriteria}
+                        onChange={(e) => setCheck('judgeCriteria', e.target.value)}
+                        helperText="One yes/no question per line, graded by a small model on the agent's reply and what it ran."
+                    />
+                    <TextField
+                        size="small"
+                        multiline
+                        minRows={3}
+                        label="Check script (bash)"
+                        value={checks.script}
+                        onChange={(e) => setCheck('script', e.target.value)}
+                        slotProps={{ htmlInput: { sx: { fontFamily: '"JetBrains Mono", monospace', fontSize: 12 } } }}
+                        helperText="Runs in a folder with reply.txt, commands.txt, tool_calls.json, files_changed.txt, diff.patch and outcome.json. Exit 0 passes; what it prints on failure is the reason."
+                    />
                     <Box>
                         <Button
                             variant="contained"

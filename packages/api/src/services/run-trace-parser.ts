@@ -227,3 +227,70 @@ export function parseRunTrace(
     const guess = parseClaude(outputText, at);
     return guess.turns === 0 && guess.tool_calls === 0 ? empty('unknown') : { ...guess, source: 'unknown' };
 }
+
+/** A reply longer than this is cut: it feeds regex checks, a script and a judge prompt. */
+const REPLY_CAP = 20_000;
+/** Enough commands and tool calls for a check to find the one that matters. */
+const CALLS_CAP = 500;
+
+/** What the agent said at the end, and what it ran on the way (ADR 0023 amendment). */
+export interface RunTranscript {
+    /** The run's final answer. Null when the transcript has none. */
+    reply: string | null;
+    /** Every shell command it ran. Null where a CLI does not report tool arguments. */
+    commands: string[] | null;
+    /** Every tool call with its input. Null where a CLI does not report tool arguments. */
+    tool_calls: Array<{ name: string; input: Record<string, unknown> }> | null;
+}
+
+/**
+ * The parts of a transcript a custom check asserts on.
+ *
+ * Kept beside `parseRunTrace` rather than inside it: the summary is stored on
+ * every run and shipped to the web, while this is read only when a test judges
+ * one — and a reply can be long.
+ */
+export function extractRunTranscript(
+    outputText: string | null | undefined,
+    cli: AgentCli | null | undefined,
+): RunTranscript {
+    if (!outputText || outputText.trim().length === 0) return { reply: null, commands: null, tool_calls: null };
+    if (cli === 'copilot') {
+        // Copilot reports tool names but not their arguments (see above).
+        let reply: string | null = null;
+        eachLine(outputText, (event) => {
+            const data = (event['data'] ?? {}) as Record<string, unknown>;
+            if (event['type'] === 'assistant.message' && typeof data['content'] === 'string') reply = data['content'];
+        });
+        return { reply: reply === null ? null : (reply as string).slice(0, REPLY_CAP), commands: null, tool_calls: null };
+    }
+
+    let result: string | null = null;
+    let lastText: string | null = null;
+    const commands: string[] = [];
+    const calls: Array<{ name: string; input: Record<string, unknown> }> = [];
+    eachLine(outputText, (event) => {
+        if (event['type'] === 'result' && typeof event['result'] === 'string') {
+            result = event['result'];
+            return;
+        }
+        if (event['type'] !== 'assistant' || event['parent_tool_use_id']) return;
+        const texts: string[] = [];
+        for (const block of blocksOf(event)) {
+            if (block.type === 'text' && typeof (block as { text?: unknown }).text === 'string') {
+                texts.push((block as { text: string }).text);
+            }
+            if (block.type !== 'tool_use' || typeof block.name !== 'string') continue;
+            if (calls.length < CALLS_CAP) calls.push({ name: block.name, input: block.input ?? {} });
+            const command = block.input?.['command'];
+            if (block.name === 'Bash' && typeof command === 'string' && commands.length < CALLS_CAP) {
+                commands.push(command);
+            }
+        }
+        if (texts.length > 0) lastText = texts.join('\n');
+    });
+    // The `result` event is the CLI's own final answer; the last assistant
+    // text is the fallback for a run that died before writing one.
+    const reply = (result ?? lastText) as string | null;
+    return { reply: reply === null ? null : reply.slice(0, REPLY_CAP), commands, tool_calls: calls };
+}

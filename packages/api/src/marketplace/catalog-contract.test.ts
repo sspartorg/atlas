@@ -350,14 +350,20 @@ describe('starter tests', () => {
         'max_tool_calls',
         'files_touched',
         'files_untouched',
+        'reply_must_match',
+        'reply_must_not_match',
+        'commands_forbidden',
+        'no_code_changes',
+        'files_changed_only',
+        'script',
         'judge_criteria',
     ]);
     // Set on a workflow fixture, meaningless on an agent one: `evaluateAgentTest`
     // returns `errored` for these, so a shipped test carrying one can never pass.
     const WORKFLOW_ONLY_KEYS = ['terminal_status', 'min_sub_tasks', 'requires_pr', 'gate_verdicts_all_pass'];
     /**
-     * Evidence the judge cannot see: it gets the summary, the reason and the
-     * trace, and nothing else. Word-bounded, because "different" contains
+     * Evidence the judge cannot see: it gets the summary, the reason, the
+     * trace, the final reply and the shell commands, and nothing else. Word-bounded, because "different" contains
      * "diff" and a substring match would fail honest criteria.
      */
     const UNJUDGEABLE = [/\bthe diff\b/, /\bcompiles?\b/, /\bscreenshots?\b/, /\bline numbers?\b/, /\bcoverage report\b/];

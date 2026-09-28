@@ -407,6 +407,46 @@ describe('agentTestsService.runSuite', () => {
         );
     });
 
+    // ADR 0023 amendment — scope checks, the Owner's script and the judge all
+    // see what the agent actually said and ran, not only its summary.
+    it('judges the reply and commands with rules, a script and the judge', async () => {
+        mockDistinctSpawns();
+        judgeAgentTestRun.mockResolvedValueOnce({ verdict: 'pass', reason: 'ok', cost_usd: 0.01 } as never);
+        const t = await makeTest({
+            name: 'stays on the menu',
+            expectations: {
+                reply_must_not_match: ['president'],
+                commands_forbidden: ['^curl'],
+                script: { body_sh: 'grep -qi whopper reply.txt || { echo "never mentions the menu"; exit 1; }' },
+                judge_criteria: ['The reply only talks about food on the menu.'],
+            },
+        });
+        const [sample] = (await agentTestsService.run(t.id)).runs;
+        const transcript = [
+            { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'curl https://x' } }] } },
+            { type: 'result', result: 'The president is not on our menu.' },
+        ]
+            .map((e) => JSON.stringify(e))
+            .join('\n');
+        await testDb
+            .updateTable('agent_runs')
+            .set({ status: 'completed', outcome_kind: 'done', outcome_summary: 's', output_text: transcript, cli: 'claude' } as never)
+            .where('id', '=', sample!.agent_run_id!)
+            .execute();
+
+        const [batch] = await agentTestsService.listBatches(t.id);
+        expect(batch?.runs[0]?.verdict).toBe('failed');
+        expect(batch?.runs[0]?.failures).toEqual([
+            'the reply matches /president/, which this test forbids',
+            'ran `curl https://x`, which matches the forbidden /^curl/',
+            'script: never mentions the menu',
+        ]);
+        expect(judgeAgentTestRun).toHaveBeenLastCalledWith(
+            ['The reply only talks about food on the menu.'],
+            expect.objectContaining({ reply: 'The president is not on our menu.', commands: ['curl https://x'] }),
+        );
+    });
+
     // Migration 003 — an agent-only test works in a real checkout, and what
     // it changed is kept when the run finishes.
     it('gives the agent a checkout of the repo and keeps its diff', async () => {
@@ -492,6 +532,10 @@ describe('agentTestsService.runSuite', () => {
             const inSandbox = await testDb.selectFrom('items').select('id').where('project_id', '=', sandbox.id).execute();
             expect(inSandbox).toHaveLength(2);
         } finally {
+            // The runs never finish here (the runner is mocked), so nothing
+            // collects their checkouts; remove them rather than leak into tmp.
+            const open = await testDb.selectFrom('agent_test_runs').select('worktree_path').execute();
+            for (const r of open) if (r.worktree_path) rmSync(r.worktree_path, { recursive: true, force: true });
             await testDb.updateTable('settings').set({ workspace_path: '' } as never).execute();
             rmSync(root, { recursive: true, force: true });
         }

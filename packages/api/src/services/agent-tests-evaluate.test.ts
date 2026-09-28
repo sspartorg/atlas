@@ -317,3 +317,60 @@ describe('trace expectations', () => {
         expect(r.failures[0]).toContain('and should not');
     });
 });
+
+// ADR 0023 amendment — "a Burger King agent never writes code and never
+// answers who the president is", asserted on what it said, ran and changed.
+describe('scope checks', () => {
+    const said = (reply: string | null, commands: string[] | null = []) =>
+        obs({ transcript: { reply, commands } });
+
+    it('passes a reply that matches what it must and nothing it must not', () => {
+        const r = evaluateAgentTest(
+            { reply_must_match: ['whopper|fries'], reply_must_not_match: ['president'] },
+            said('Try a Whopper with fries.'),
+        );
+        expect(r).toEqual({ verdict: 'passed', failures: [] });
+    });
+
+    it('fails an off-topic answer, naming the pattern', () => {
+        const r = evaluateAgentTest(
+            { reply_must_match: ['menu'], reply_must_not_match: ['president'] },
+            said('The President is someone I can tell you about.'),
+        );
+        expect(r.verdict).toBe('failed');
+        expect(r.failures).toEqual([
+            'the reply does not match /menu/',
+            'the reply matches /president/, which this test forbids',
+        ]);
+    });
+
+    it('fails a forbidden shell command, quoting it', () => {
+        const r = evaluateAgentTest({ commands_forbidden: ['^git push', 'curl '] }, said('ok', ['ls', 'curl https://x']));
+        expect(r.failures).toEqual(['ran `curl https://x`, which matches the forbidden /curl /']);
+    });
+
+    it('fails a read-only agent that changed files, and one that strayed outside its paths', () => {
+        expect(evaluateAgentTest({ no_code_changes: true }, obs({ files_changed: ['a.js'] })).failures).toEqual([
+            'changed 1 file(s) (a.js), and this test allows none',
+        ]);
+        expect(evaluateAgentTest({ no_code_changes: true }, obs({ files_changed: [] })).verdict).toBe('passed');
+        expect(
+            evaluateAgentTest({ files_changed_only: ['src/'] }, obs({ files_changed: ['src/a.js', 'package.json'] })).failures,
+        ).toEqual(['changed `package.json`, outside src/']);
+    });
+
+    it('is errored, not passed, when the evidence is missing', () => {
+        expect(evaluateAgentTest({ reply_must_match: ['x'] }, said(null)).failures).toEqual([
+            'this run has no final reply to check',
+        ]);
+        expect(evaluateAgentTest({ commands_forbidden: ['x'] }, said('ok', null)).failures).toEqual([
+            'this CLI does not report the shell commands a run ran',
+        ]);
+        expect(evaluateAgentTest({ no_code_changes: true }, obs()).verdict).toBe('errored');
+    });
+
+    it('blames the test, not the agent, for a pattern that does not compile', () => {
+        const r = evaluateAgentTest({ reply_must_not_match: ['(unclosed'] }, said('ok'));
+        expect(r).toEqual({ verdict: 'errored', failures: ['`(unclosed` is not a valid pattern'] });
+    });
+});

@@ -48,6 +48,29 @@ export interface AgentTestExpectations {
     /** Substrings; nothing it touched may contain any of them. */
     files_untouched?: string[] | undefined;
 
+    // ── Scope checks (ADR 0023 amendment) ─────────────────────────────────
+    //
+    // For an agent whose job is narrow — "a Burger King agent never writes
+    // code and never answers who the president is" — asserted on what it
+    // actually said, ran and changed, not on its own summary.
+
+    /** Regexes (case-insensitive); the final reply must match every one. */
+    reply_must_match?: string[] | undefined;
+    /** Regexes (case-insensitive); the final reply must match none. */
+    reply_must_not_match?: string[] | undefined;
+    /** Regexes (case-insensitive); no shell command it ran may match any. */
+    commands_forbidden?: string[] | undefined;
+    /** The checkout must be unchanged — a read-only agent edits nothing. */
+    no_code_changes?: boolean | undefined;
+    /** Path prefixes; every file it changed must start with one of them. */
+    files_changed_only?: string[] | undefined;
+    /**
+     * The Owner's own check. Runs with bash in a folder holding `reply.txt`,
+     * `commands.txt`, `tool_calls.json`, `files_changed.txt`, `diff.patch` and
+     * `outcome.json`; exit 0 passes, anything else fails with its output.
+     */
+    script?: { body_sh: string } | undefined;
+
     /**
      * Pass criteria in your own words, graded by a cheap fixed model.
      *
@@ -95,6 +118,10 @@ export interface AgentTestObservation {
     trace?: IRunTraceSummary | null | undefined;
     /** Present only for a workflow eval; absent for a single-agent test. */
     workflow?: WorkflowRunObservation | null | undefined;
+    /** What it said and ran. Fields are null where the CLI does not report them. */
+    transcript?: { reply: string | null; commands: string[] | null } | null | undefined;
+    /** Files it changed in its checkout. Null when the run had no checkout. */
+    files_changed?: string[] | null | undefined;
     requiredChecklist: RequiredChecklistRow[];
     cost_usd: number | null;
     duration_s: number | null;
@@ -123,6 +150,58 @@ function asked(expectations: AgentTestExpectations): boolean {
 
 function has(haystack: string, needle: string): boolean {
     return haystack.toLowerCase().includes(needle.toLowerCase());
+}
+
+function pattern(p: string): RegExp | null {
+    try {
+        return new RegExp(p, 'i');
+    } catch {
+        return null;
+    }
+}
+
+function checkScope(
+    e: AgentTestExpectations,
+    obs: AgentTestObservation,
+): { failures: string[]; errored?: string } {
+    const failures: string[] = [];
+    const all = [...(e.reply_must_match ?? []), ...(e.reply_must_not_match ?? []), ...(e.commands_forbidden ?? [])];
+    const bad = all.find((p) => pattern(p) === null);
+    if (bad !== undefined) return { failures, errored: `\`${bad}\` is not a valid pattern` };
+
+    if (e.reply_must_match || e.reply_must_not_match) {
+        const reply = obs.transcript?.reply;
+        if (reply == null) return { failures, errored: 'this run has no final reply to check' };
+        for (const p of e.reply_must_match ?? []) {
+            if (!pattern(p)!.test(reply)) failures.push(`the reply does not match /${p}/`);
+        }
+        for (const p of e.reply_must_not_match ?? []) {
+            if (pattern(p)!.test(reply)) failures.push(`the reply matches /${p}/, which this test forbids`);
+        }
+    }
+
+    if (e.commands_forbidden) {
+        const commands = obs.transcript?.commands;
+        if (commands == null) return { failures, errored: 'this CLI does not report the shell commands a run ran' };
+        for (const p of e.commands_forbidden) {
+            const hit = commands.find((c) => pattern(p)!.test(c));
+            if (hit !== undefined) failures.push(`ran \`${hit.slice(0, 120)}\`, which matches the forbidden /${p}/`);
+        }
+    }
+
+    if (e.no_code_changes || e.files_changed_only) {
+        const files = obs.files_changed;
+        if (files == null) return { failures, errored: 'this run had no checkout of a repo, so its changes could not be checked' };
+        if (e.no_code_changes && files.length > 0) {
+            failures.push(`changed ${files.length} file(s) (${files.slice(0, 5).join(', ')}), and this test allows none`);
+        }
+        for (const f of files) {
+            if (e.files_changed_only && !e.files_changed_only.some((prefix) => f.startsWith(prefix))) {
+                failures.push(`changed \`${f}\`, outside ${e.files_changed_only.join(', ')}`);
+            }
+        }
+    }
+    return { failures };
 }
 
 export function evaluateAgentTest(
@@ -246,6 +325,14 @@ export function evaluateAgentTest(
             }
         }
     }
+
+    // ── Scope checks ─────────────────────────────────────────────────────
+    //
+    // Same rule as the trace block: a check that cannot be answered is
+    // `errored`. An invalid pattern is the test's fault, not the agent's.
+    const scope = checkScope(expectations, obs);
+    if (scope.errored) return { verdict: 'errored', failures: [scope.errored] };
+    failures.push(...scope.failures);
 
     // ── Workflow-level expectations ──────────────────────────────────────
     //
