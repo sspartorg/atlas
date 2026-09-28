@@ -1,10 +1,9 @@
-import { memo, useCallback, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { memo, useCallback, useMemo, useState, type ChangeEvent } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import AddRounded from '@mui/icons-material/AddRounded';
 import { useNavigate } from 'react-router-dom';
-import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import type { ITaskListItem, IProject, IAgent } from '@atlas/shared';
 import { StatusChip } from './StatusChip.js';
 import { ProjectTag } from './ProjectTag.js';
@@ -15,6 +14,7 @@ import { useIsMobile } from '../hooks/useIsMobile.js';
 import { MobileTaskList } from './MobileTaskList.js';
 import { relativeTime } from '../utils/time.js';
 import { TestItemTag } from './TestItemTag.js';
+import { useShellVirtualizer } from '../hooks/useShellVirtualizer.js';
 
 export type TaskTablePageSize = 20 | 50 | 100 | 'all';
 
@@ -115,7 +115,9 @@ interface TaskRowProps {
     ownerAccent: string;
     isLast: boolean;
     onOpen: (id: string) => void;
-    style?: React.CSSProperties;
+    /** Set in a virtualised body: the row's Y offset. A number, not a style
+     *  object, so the memo holds while the list scrolls. */
+    offsetY?: number | undefined;
 }
 
 const TaskRow = memo(function TaskRow({
@@ -127,12 +129,16 @@ const TaskRow = memo(function TaskRow({
     ownerAccent,
     isLast,
     onOpen,
-    style,
+    offsetY,
 }: TaskRowProps) {
     return (
         <Box
             onClick={() => onOpen(row.id)}
-            style={style}
+            style={
+                offsetY === undefined
+                    ? undefined
+                    : { position: 'absolute', top: 0, left: 0, right: 0, transform: `translateY(${offsetY}px)` }
+            }
             sx={{
                 display: 'grid',
                 gridTemplateColumns: GRID_TEMPLATE,
@@ -236,7 +242,7 @@ const TaskRow = memo(function TaskRow({
 });
 
 // Virtualised body — used only when rows.length >= VIRTUALIZE_THRESHOLD.
-// Window-scroll mode keeps the rest of the page chrome unaffected.
+// Scrolls with the app shell (`useShellVirtualizer`), not the window.
 interface VirtualBodyProps {
     rows: ITaskListItem[];
     projectsById: Map<string, IProject>;
@@ -254,23 +260,16 @@ function VirtualBody({
     ownerAccent,
     onOpen,
 }: VirtualBodyProps) {
-    const parentRef = useRef<HTMLDivElement | null>(null);
-    const virtualizer = useWindowVirtualizer({
-        count: rows.length,
-        estimateSize: () => ROW_HEIGHT_PX,
-        overscan: 8,
-        scrollMargin: parentRef.current?.offsetTop ?? 0,
-    });
+    const { parentRef, virtualizer, scrollMargin } = useShellVirtualizer(rows.length, ROW_HEIGHT_PX);
 
     const items = virtualizer.getVirtualItems();
     const totalHeight = virtualizer.getTotalSize();
-    const offsetTop = parentRef.current?.offsetTop ?? 0;
 
     return (
         <Box ref={parentRef} sx={{ position: 'relative', height: totalHeight, width: '100%' }}>
             {items.map((vi) => {
                 const row = rows[vi.index];
-                /* v8 ignore next -- useWindowVirtualizer only ever yields indices within [0, count), so rows[vi.index] is always defined; defensive guard against a future virtualizer version changing that invariant. */
+                /* v8 ignore next -- the virtualizer only ever yields indices within [0, count), so rows[vi.index] is always defined; defensive guard against a future virtualizer version changing that invariant. */
                 if (!row) return null;
                 return (
                     <TaskRow
@@ -291,13 +290,7 @@ function VirtualBody({
                         ownerAccent={ownerAccent}
                         isLast={vi.index === rows.length - 1}
                         onOpen={onOpen}
-                        style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            transform: `translateY(${vi.start - offsetTop}px)`,
-                        }}
+                        offsetY={vi.start - scrollMargin}
                     />
                 );
             })}

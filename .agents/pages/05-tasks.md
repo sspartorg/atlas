@@ -27,12 +27,13 @@ List every Task across all projects (ADR 0015: a Task is the top-level item; its
 
 **TaskTable**
 - Columns: ID, Task, Sub-tasks (`sub_task_count`), Reporter, Assignee, Status, Updated; ID / Task / Updated sortable
-- Row click → `/tasks/:id`; client-side pagination footer (default 20 rows)
+- Row click → `/tasks/:id`; client-side pagination footer (default 20 rows). **Rows: All** with 60+ rows virtualises against the app shell's scroller (`useShellVirtualizer`); until 2026-09-28 it listened to `window`, which never scrolls here, and everything past the first screen was blank.
 
 **Kanban view**
 - `WorkItemKanban`, one column per status; card = kind icon + Task id, title, assignee chip, live dot while `in_progress`
 - Drag to a valid next column → `useTransitionTask`. **There is no shift-drop override** — `WorkItemKanban.tsx:237-256` refuses an illegal drop outright with a toast naming the legal targets, and the only call is `onTransition(item, status, false)`. Override lives solely in `StatusPickerPopover`. *(corrected 2026-09-20 — campaign task-21.)*
 - Card click → `/tasks/:id`
+- A column draws its first 50 cards; **Show N more · M hidden** adds 100 at a time (the header count is the full total). A 2,000-Task kanban used to draw every card — 24k DOM nodes.
 
 **Mobile** — `PageFab` "New Task" replaces the header button; the table renders as `MobileTaskList`.
 

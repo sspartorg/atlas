@@ -255,16 +255,3 @@ export function resolveAgentStatusLabel(
     if (queuedCount > 0) return 'Queued';
     return 'Idle';
 }
-
-/** Ready + in-progress items per assignee agent. */
-export function countQueueDepthByAgent(
-    items: readonly { assignee_agent_id: string | null; status: string }[]
-): Map<string, number> {
-    const depth = new Map<string, number>();
-    for (const i of items) {
-        if (!i.assignee_agent_id) continue;
-        if (i.status !== 'ready' && i.status !== 'in_progress') continue;
-        depth.set(i.assignee_agent_id, (depth.get(i.assignee_agent_id) ?? 0) + 1);
-    }
-    return depth;
-}

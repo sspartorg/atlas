@@ -1,6 +1,7 @@
 import { useMemo, useState, type DragEvent } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
 import {
     ISSUE_STATUSES,
     STATUS_LABELS,
@@ -39,6 +40,13 @@ interface Props {
 }
 
 const COLUMN_ORDER: IssueStatus[] = [...ISSUE_STATUSES];
+
+/**
+ * Cards a column draws before "Show more". A kanban of 2,000 Tasks drew every
+ * card — 24k DOM nodes, and every scroll frame over budget. Nobody reads the
+ * 300th card in a column; the count in the header still says it is there.
+ */
+const COLUMN_PAGE = 50;
 
 function ColumnHeader({ status, count }: { status: IssueStatus; count: number }) {
     const cfg = STATUS_PALETTE[status];
@@ -203,6 +211,7 @@ export function WorkItemKanban({
     const agentsById = useMemo(() => new Map(agents.map((w) => [w.id, w])), [agents]);
     const [draggingId, setDraggingId] = useState<string | null>(null);
     const [dragOver, setDragOver] = useState<IssueStatus | null>(null);
+    const [shown, setShown] = useState<Partial<Record<IssueStatus, number>>>({});
 
     const byStatus = useMemo(() => {
         const map = new Map<IssueStatus, KanbanItem[]>();
@@ -272,6 +281,8 @@ export function WorkItemKanban({
         >
             {COLUMN_ORDER.map((status) => {
                 const list = byStatus.get(status) ?? [];
+                const cap = shown[status] ?? COLUMN_PAGE;
+                const hidden = list.length - cap;
                 const isOver = dragOver === status;
                 return (
                     <Box
@@ -293,7 +304,7 @@ export function WorkItemKanban({
                     >
                         <ColumnHeader status={status} count={list.length} />
                         <Box sx={{ p: 1.5, flex: 1 }}>
-                            {list.map((item) => (
+                            {list.slice(0, cap).map((item) => (
                                 <Box
                                     key={item.id}
                                     sx={{
@@ -312,6 +323,15 @@ export function WorkItemKanban({
                                     />
                                 </Box>
                             ))}
+                            {hidden > 0 && (
+                                <Button
+                                    size="small"
+                                    fullWidth
+                                    onClick={() => setShown((m) => ({ ...m, [status]: cap + COLUMN_PAGE * 2 }))}
+                                >
+                                    Show {Math.min(hidden, COLUMN_PAGE * 2)} more · {hidden} hidden
+                                </Button>
+                            )}
                             {list.length === 0 && (
                                 <Typography
                                     sx={{

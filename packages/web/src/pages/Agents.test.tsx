@@ -5,7 +5,7 @@ import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router-dom';
 import { server } from '../test-setup.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
-import { makeAgent, makeSubTask } from '../test-utils/factories.js';
+import { makeAgent } from '../test-utils/factories.js';
 import { defaultHandlers, handlers } from '../test-utils/mock-handlers.js';
 import { Agents } from './Agents.js';
 
@@ -1319,12 +1319,7 @@ describe('Agents page', () => {
         server.use(
             handlers.listAgents(agents),
             http.get(`${BASE}/run`, () => HttpResponse.json([])),
-            http.get(`${BASE}/sub-tasks`, () =>
-                HttpResponse.json([
-                    makeSubTask({ id: 'S1', assignee_agent_id: 'a2', status: 'ready' }),
-                    makeSubTask({ id: 'S2', assignee_agent_id: 'a2', status: 'in_progress' }),
-                ])
-            )
+            http.get(`${BASE}/counts/queue-by-agent`, () => HttpResponse.json({ a2: 2 }))
         );
         renderWithProviders(<Agents />);
         await waitFor(() => expect(screen.getByText('LowQueue')).toBeTruthy());

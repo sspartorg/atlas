@@ -253,6 +253,7 @@ export const api = {
         sidenav: () => get<SidenavCounts>('/counts'),
         dashboard: () => get<DashboardResponse>('/dashboard'),
         project: (id: string) => get<ProjectCounts>(`/counts/project/${id}`),
+        queueByAgent: () => get<Record<string, number>>('/counts/queue-by-agent'),
     },
 
     analytics: {

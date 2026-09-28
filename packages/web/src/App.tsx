@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import Box from '@mui/material/Box';
@@ -20,6 +20,7 @@ import { DraftGuardProvider } from './hooks/useDraftGuard.js';
 import { MOBILE_SHELL, ATLAS_PALETTE } from './theme/tokens.js';
 import { useSettings } from './hooks/useSettings.js';
 import { useSSE } from './hooks/useSSE.js';
+import { ShellScrollContext } from './hooks/useShellVirtualizer.js';
 
 // Route components are code-split: each page lands in its own chunk and is
 // fetched on first navigation. See `utils/lazyNamed.ts` for why the helper
@@ -110,6 +111,8 @@ function AppShell() {
     const [moreOpen, setMoreOpen] = useState(false);
     const isMobile = useIsMobile();
     const location = useLocation();
+    // The one element that scrolls. Long lists virtualise against it.
+    const scrollRef = useRef<HTMLDivElement | null>(null);
     useGlobalShortcuts({ onOpenShortcuts: () => setShortcutsOpen(true) });
 
     // Register the service worker once per mount. Silent failure is
@@ -149,6 +152,7 @@ function AppShell() {
                             <Topbar onShortcutsOpen={() => setShortcutsOpen(true)} />
                         )}
                         <Box
+                            ref={scrollRef}
                             sx={{
                                 flex: 1,
                                 overflow: 'auto',
@@ -158,9 +162,11 @@ function AppShell() {
                                     : 0,
                             }}
                         >
-                            <Suspense key={location.pathname} fallback={<BrandedFallback />}>
-                                <Outlet />
-                            </Suspense>
+                            <ShellScrollContext.Provider value={scrollRef}>
+                                <Suspense key={location.pathname} fallback={<BrandedFallback />}>
+                                    <Outlet />
+                                </Suspense>
+                            </ShellScrollContext.Provider>
                             <NavigationCurtain />
                         </Box>
                     </Box>

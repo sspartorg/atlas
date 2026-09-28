@@ -90,3 +90,22 @@ describe('GET /api/dashboard', () => {
         expect(Array.isArray(body.queue)).toBe(true);
     });
 });
+
+// The agent page's "Queue: N items". Counted here so the page no longer
+// downloads every Task and sub-task in the workspace to count them.
+describe('GET /api/counts/queue-by-agent', () => {
+    it('counts ready and in-progress Tasks and sub-tasks per assignee, and nothing else', async () => {
+        await insertProject('p1', 'ATL');
+        await insertAgent({ id: 'agent-coder' });
+        await insertAgent({ id: 'agent-writer' });
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'a', status: 'ready', assignee_agent_id: 'agent-coder' });
+        await insertItem({ id: 'ATL-2', type: 'sub_task', project_id: 'p1', parent_id: 'ATL-1', title: 'b', status: 'in_progress', assignee_agent_id: 'agent-coder' });
+        await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'c', status: 'in_review', assignee_agent_id: 'agent-coder' });
+        await insertItem({ id: 'ATL-4', type: 'task', project_id: 'p1', title: 'd', status: 'ready', assignee_agent_id: 'agent-writer' });
+        await insertItem({ id: 'ATL-5', type: 'task', project_id: 'p1', title: 'e', status: 'ready' });
+
+        const res = await app.inject({ method: 'GET', url: '/api/counts/queue-by-agent' });
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ 'agent-coder': 2, 'agent-writer': 1 });
+    });
+});

@@ -6,6 +6,10 @@ export async function countsRoutes(app: FastifyInstance) {
         return reply.send(await countsService.getSidenavCounts());
     });
 
+    app.get('/api/counts/queue-by-agent', async (_req, reply) => {
+        return reply.send(await countsService.getQueueDepthByAgent());
+    });
+
     app.get('/api/counts/project/:id', async (req, reply) => {
         const { id } = req.params as { id: string };
         return reply.send(await countsService.getProjectCounts(id));
