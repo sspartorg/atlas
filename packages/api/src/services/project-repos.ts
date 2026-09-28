@@ -155,11 +155,16 @@ async function update(
     repoId: string,
     patch: {
         default_branch?: string | undefined;
+        credential_id?: string | undefined;
         setup_sh_body?: string | undefined;
         setup_ps1_body?: string | undefined;
         verify_command?: string | undefined;
     }
 ): Promise<IProjectRepo> {
+    if (patch.credential_id !== undefined) {
+        const cred = await db.selectFrom('credentials').select('id').where('id', '=', patch.credential_id).executeTakeFirst();
+        if (!cred) throw new ApiError('validation_error', 'Credential not found', 400);
+    }
     const values = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const q = db.updateTable('project_repos').where('id', '=', repoId).where('project_id', '=', projectId);
     const row =

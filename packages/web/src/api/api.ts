@@ -586,6 +586,7 @@ export const api = {
             repoId: string,
             data: {
                 default_branch?: string;
+                credential_id?: string;
                 setup_sh_body?: string;
                 setup_ps1_body?: string;
                 verify_command?: string;

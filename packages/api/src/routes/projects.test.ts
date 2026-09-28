@@ -1192,6 +1192,20 @@ describe('project repos (ADR 0018)', () => {
             payload: { setup_sh_body: 'npm ci' },
         });
         expect(JSON.parse(patched.body).setup_sh_body).toBe('npm ci');
+        // The credential can be swapped; an unknown one is refused, not a 500.
+        await insertTestCredential('cred-2');
+        const swapped = await app.inject({
+            method: 'PATCH',
+            url: `/api/projects/p1/repos/${web.id}`,
+            payload: { credential_id: 'cred-2' },
+        });
+        expect(JSON.parse(swapped.body).credential_id).toBe('cred-2');
+        const unknown = await app.inject({
+            method: 'PATCH',
+            url: `/api/projects/p1/repos/${web.id}`,
+            payload: { credential_id: 'nope' },
+        });
+        expect(unknown.statusCode).toBe(400);
         // ADR 0018 — the project's own repo is an ordinary row: editable too.
         expect((await app.inject({ method: 'PATCH', url: '/api/projects/p1/repos/p1', payload: {} })).statusCode).toBe(200);
 
