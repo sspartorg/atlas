@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { agentTestsService } from './agent-tests.js';
+import { broadcastSSE } from '../routes/events.js';
 import { collectEvidence } from './agent-tests-evaluate-run.js';
 import { tasksService } from './tasks.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
@@ -30,6 +31,18 @@ async function makeTest(over: Record<string, unknown> = {}) {
         item_template: { issue_type: 'task', title: 'Add a stats endpoint', description: 'body' },
         ...over,
     } as never);
+}
+
+/**
+ * A read judges a finished run in the background and returns at once (a read
+ * must never wait on a script or a model). Read until nothing is pending.
+ */
+async function listJudged(testId: string) {
+    await vi.waitFor(async () => {
+        const rows = await agentTestsService.listRuns(testId);
+        expect(rows.some((r) => r.verdict === 'running')).toBe(false);
+    });
+    return agentTestsService.listRuns(testId);
 }
 
 /** Put the dispatch into a terminal state so the lazy evaluator will judge it. */
@@ -245,7 +258,7 @@ describe('agentTestsService', () => {
             });
             await agentTestsService.run(test.id);
             await finishRun();
-            const [run] = await agentTestsService.listRuns(test.id);
+            const [run] = await listJudged(test.id);
             return run!;
         }
 
@@ -293,7 +306,7 @@ describe('agentTestsService', () => {
             const test = await makeTest({ expectations: { outcome_kind: 'done' } });
             await agentTestsService.run(test.id);
             await finishRun();
-            await agentTestsService.listRuns(test.id);
+            await listJudged(test.id);
             expect(judgeAgentTestRun).not.toHaveBeenCalled();
         });
     });
@@ -319,6 +332,7 @@ describe('agentTestsService', () => {
                     .execute();
             }
 
+            await listJudged(test.id);
             const [summary] = await agentTestsService.listBatches(test.id);
             expect(summary?.n_runs).toBe(3);
             expect(summary?.passed).toBe(2);
@@ -331,13 +345,13 @@ describe('agentTestsService', () => {
         });
     });
 
-    describe('listRuns judges a finished dispatch', () => {
+    describe('a read judges a finished dispatch', () => {
         it('passes a run that met its expectations', async () => {
             const test = await makeTest({ expectations: { outcome_kind: 'done', summary_contains: ['sub-tasks'] } });
             await agentTestsService.run(test.id);
             await finishRun();
 
-            const [judged] = await agentTestsService.listRuns(test.id);
+            const [judged] = await listJudged(test.id);
             expect(judged!.verdict).toBe('passed');
             expect(judged!.failures).toEqual([]);
             expect(judged!.cost_usd).toBe(0.25);
@@ -349,7 +363,7 @@ describe('agentTestsService', () => {
             await agentTestsService.run(test.id);
             await finishRun();
 
-            const [judged] = await agentTestsService.listRuns(test.id);
+            const [judged] = await listJudged(test.id);
             expect(judged!.verdict).toBe('failed');
             expect(judged!.failures[0]).toContain('expected outcome `asked_question`');
         });
@@ -368,9 +382,69 @@ describe('agentTestsService', () => {
             await agentTestsService.run(test.id);
             await finishRun();
 
-            expect((await agentTestsService.listRuns(test.id))[0]!.verdict).toBe('passed');
+            expect((await listJudged(test.id))[0]!.verdict).toBe('passed');
             await testDb.updateTable('agent_runs').set({ outcome_kind: 'rejected' } as never).where('id', '=', 'run-1').execute();
             expect((await agentTestsService.listRuns(test.id))[0]!.verdict).toBe('passed');
+        });
+
+        // The Tests tab polls every 5s. A judge can take minutes, and the read
+        // used to wait on it — and start another one on every poll.
+        it('returns at once, and judges a run only once however often it is read', async () => {
+            let release: (v: null) => void = () => undefined;
+            judgeAgentTestRun.mockImplementation(() => new Promise((r) => (release = r)));
+            const test = await makeTest({ expectations: { judge_criteria: ['did it say why?'] } });
+            await agentTestsService.run(test.id);
+            await finishRun();
+
+            const reads = await Promise.all([1, 2, 3].map(() => agentTestsService.listRuns(test.id)));
+            expect(reads.map((r) => r[0]!.verdict)).toEqual(['running', 'running', 'running']);
+            await vi.waitFor(() => expect(judgeAgentTestRun).toHaveBeenCalledTimes(1));
+            await agentTestsService.listRuns(test.id);
+            expect(judgeAgentTestRun).toHaveBeenCalledTimes(1);
+
+            release(null);
+            // No AI here, so the criteria cannot be graded: errored, not passed.
+            expect((await listJudged(test.id))[0]!.verdict).toBe('errored');
+            // …and an open Tests tab hears about it rather than waiting to poll.
+            expect(broadcastSSE).toHaveBeenCalledWith({
+                type: 'agent_test_judged',
+                agentTestId: test.id,
+                agentId: 'agent-coder',
+            });
+        });
+    });
+
+    describe('reading less', () => {
+        async function batchesOf(testId: string, n: number) {
+            mockDistinctSpawns();
+            for (let i = 0; i < n; i++) {
+                await agentTestsService.run(testId, { label: `b${i}` });
+                // Distinct timestamps, so "newest" is well defined.
+                await new Promise((r) => setTimeout(r, 5));
+            }
+        }
+
+        it('limits history to the newest batches when asked', async () => {
+            const test = await makeTest();
+            await batchesOf(test.id, 3);
+            expect((await agentTestsService.listBatches(test.id)).map((b) => b.label)).toEqual(['b2', 'b1', 'b0']);
+            expect((await agentTestsService.listBatches(test.id, { batches: 2 })).map((b) => b.label)).toEqual([
+                'b2',
+                'b1',
+            ]);
+        });
+
+        it("gives each test its newest batch in one read, and none for a test that never ran", async () => {
+            const a = await makeTest({ name: 'a' });
+            const b = await makeTest({ name: 'b' });
+            const never = await makeTest({ name: 'never' });
+            await batchesOf(a.id, 2);
+            await batchesOf(b.id, 1);
+            const latest = await agentTestsService.latestBatches([a, b, never]);
+            expect(latest.get(a.id)?.label).toBe('b1');
+            expect(latest.get(b.id)?.label).toBe('b0');
+            expect(latest.has(never.id)).toBe(false);
+            expect(await agentTestsService.latestBatches([])).toEqual(new Map());
         });
     });
 });
@@ -434,6 +508,7 @@ describe('agentTestsService.runSuite', () => {
             .where('id', '=', sample!.agent_run_id!)
             .execute();
 
+        await listJudged(t.id);
         const [batch] = await agentTestsService.listBatches(t.id);
         expect(batch?.runs[0]?.verdict).toBe('failed');
         expect(batch?.runs[0]?.failures).toEqual([
@@ -473,7 +548,7 @@ describe('agentTestsService.runSuite', () => {
                 .set({ status: 'completed', outcome_kind: 'done', outcome_summary: 's' } as never)
                 .where('id', '=', sample!.agent_run_id!)
                 .execute();
-            await agentTestsService.listBatches(t.id);
+            await listJudged(t.id);
 
             const row = await testDb
                 .selectFrom('agent_test_runs')

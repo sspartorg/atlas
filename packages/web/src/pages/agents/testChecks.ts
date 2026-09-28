@@ -25,7 +25,7 @@ export const EMPTY_CHECKS: ChecksForm = {
 };
 
 /** The tools a read-only agent may not call. */
-export const WRITE_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'];
+const WRITE_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'];
 
 const lines = (s: string): string[] =>
     s

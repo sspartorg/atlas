@@ -119,7 +119,12 @@ function mount({
             if (failWrites) return HttpResponse.json({ error: 'the CLI is not installed' }, { status: 500 });
             return HttpResponse.json(aBatch([{ verdict: 'running' }]), { status: 202 });
         }),
-        http.get(`${BASE}/agents/agent-coder/tests`, () => HttpResponse.json(tests)),
+        // The list carries each row's newest batch (one request per tab).
+        http.get(`${BASE}/agents/agent-coder/tests`, () =>
+            HttpResponse.json(
+                (tests as Array<Record<string, unknown>>).map((t) => ({ latest_batch: history[0] ?? null, ...t })),
+            ),
+        ),
         http.get(`${BASE}/agents/agent-coder/cost-estimate`, ({ request }) => {
             const n = Number(new URL(request.url).searchParams.get('n') ?? '1');
             const base = estimate ?? { estimated_cost_usd: null, sample_size: 0 };
@@ -132,7 +137,10 @@ function mount({
                 estimated_range_usd: per === null ? null : [per * n, per * n],
             });
         }),
-        http.get(`${BASE}/agent-tests/:id/batches`, () => HttpResponse.json(history)),
+        http.get(`${BASE}/agent-tests/:id/batches`, () => {
+            onWrite?.('read-history', null);
+            return HttpResponse.json(history);
+        }),
         http.get(`${BASE}/agents/agent-coder/starter-tests`, () => HttpResponse.json(starters)),
         http.get(`${BASE}/projects`, () => HttpResponse.json([{ id: 'p1', name: 'Sandbox' }])),
         http.get(`${BASE}/projects/:id/repos`, () => HttpResponse.json(repos)),
@@ -178,6 +186,17 @@ const aRun = (over: Record<string, unknown> = {}) => ({
     judge_cost_usd: null,
     ...over,
 });
+
+const NAME = 'Asks rather than building a whole Task';
+
+/** A row opens its history on click; the ⋮ menu holds the rest. */
+async function openHistory(name = NAME) {
+    await userEvent.click(await screen.findByRole('button', { name: `Show history for ${name}` }));
+}
+async function menuAction(action: string | RegExp, name = NAME) {
+    await userEvent.click(await screen.findByRole('button', { name: `More actions for ${name}` }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: action }));
+}
 
 describe('TestsTabContent', () => {
     // Without a test there is no way to tell whether an agent works — the empty
@@ -245,6 +264,7 @@ describe('TestsTabContent', () => {
 
     it('shows the label a batch was run under', async () => {
         mount({ tests: [aTest()], batches: [aBatch([{}], { label: 'before-prompt-diet' })] });
+        await openHistory();
         expect(await screen.findByText('before-prompt-diet')).toBeInTheDocument();
     });
 
@@ -286,10 +306,40 @@ describe('TestsTabContent', () => {
         expect(btn).toBeInTheDocument();
     });
 
+    // The row's headline arrives with the list. Fetching every test's whole
+    // history just to draw one line per row is what made this tab slow.
+    it('does not read a test\'s history until its row is opened', async () => {
+        const writes: Array<[string, unknown]> = [];
+        mount({ tests: [aTest()], runs: [{}], onWrite: (k, p) => writes.push([k, p]) });
+        expect(await screen.findByText('passed')).toBeInTheDocument();
+        expect(writes).toEqual([]);
+        await openHistory();
+        await waitFor(() => expect(writes).toEqual([['read-history', null]]));
+    });
+
+    it('opens and closes a row from the keyboard and from its menu', async () => {
+        mount({ tests: [aTest()], runs: [{}] });
+        const row = await screen.findByRole('button', { name: `Show history for ${NAME}` });
+        row.focus();
+        await userEvent.keyboard('{Enter}');
+        expect(await screen.findByText('19s median')).toBeInTheDocument();
+        await menuAction('Hide history');
+        await waitFor(() => expect(screen.queryByText('19s median')).not.toBeInTheDocument());
+        await menuAction('History');
+        expect(await screen.findByText('19s median')).toBeInTheDocument();
+    });
+
+    it('says a test has never run rather than showing an empty verdict', async () => {
+        mount({ tests: [aTest()] });
+        expect(await screen.findByText('Never run')).toBeInTheDocument();
+        await openHistory();
+        expect(await screen.findByText('Never run.')).toBeInTheDocument();
+    });
+
     describe('history', () => {
         it('shows the verdict, cost, duration and the item the agent acted on', async () => {
             mount({ tests: [aTest()], runs: [{}] });
-            await userEvent.click(await screen.findByRole('button', { name: 'History' }));
+            await openHistory();
             await waitFor(() => expect(screen.getAllByText('passed').length).toBeGreaterThan(0));
             expect(screen.getByText('19s median')).toBeInTheDocument();
         });
@@ -300,7 +350,7 @@ describe('TestsTabContent', () => {
                 tests: [aTest()],
                 runs: [{ verdict: 'failed', failures: ['expected outcome `asked_question`, got `done`'] }],
             });
-            await userEvent.click(await screen.findByRole('button', { name: 'History' }));
+            await openHistory();
             expect(
                 await screen.findByText(/expected outcome `asked_question`, got `done`/),
             ).toBeInTheDocument();
@@ -310,7 +360,7 @@ describe('TestsTabContent', () => {
         // agent — the ADR 0020 distinction, carried into the UI.
         it('shows a dispatch that never ran as "could not run", not failed', async () => {
             mount({ tests: [aTest()], runs: [{ verdict: 'errored', failures: ['could not start the run'] }] });
-            await userEvent.click(await screen.findByRole('button', { name: 'History' }));
+            await openHistory();
             // Twice over: once as the card's headline, once in the batch block.
             await waitFor(() => expect(screen.getAllByText('could not run')).toHaveLength(2));
             expect(screen.queryByText('failed')).not.toBeInTheDocument();
@@ -415,10 +465,9 @@ describe('TestsTabContent', () => {
                 tests: [aTest()],
                 runs: [{ verdict: 'passed' }, { verdict: 'failed' }, { verdict: 'passed' }],
             });
-            // Twice: the card headline, and the batch block inside the
-            // collapsed history (MUI keeps Collapse children mounted).
-            await waitFor(() => expect(screen.getAllByText('2/3 passed')).toHaveLength(2));
-            expect(screen.getAllByText('· flaky')).toHaveLength(2);
+            // Once: the row's headline. The history is not mounted until opened.
+            await waitFor(() => expect(screen.getAllByText('2/3 passed')).toHaveLength(1));
+            expect(screen.getAllByText('· flaky')).toHaveLength(1);
         });
 
         // A batch that says "1 of 3 failed" is less useful than one that says
@@ -428,7 +477,7 @@ describe('TestsTabContent', () => {
                 tests: [aTest()],
                 runs: [{ verdict: 'passed' }, { verdict: 'failed', failures: ['summary does not mention "migration"'] }],
             });
-            await userEvent.click(await screen.findByRole('button', { name: 'History' }));
+            await openHistory();
             expect(
                 await screen.findByText(/1 of 2 runs: summary does not mention "migration"/),
             ).toBeInTheDocument();
@@ -440,8 +489,8 @@ describe('TestsTabContent', () => {
             mount({ tests: [aTest()], runs: [{ verdict: 'passed' }, { verdict: 'errored' }] });
             // One sample errored, so one was judged — and it passed. The
             // broken dispatch is reported beside the score, not inside it.
-            await waitFor(() => expect(screen.getAllByText('passed')).toHaveLength(2));
-            expect(screen.getAllByText('· 1 could not run')).toHaveLength(2);
+            await waitFor(() => expect(screen.getAllByText('passed')).toHaveLength(1));
+            expect(screen.getAllByText('· 1 could not run')).toHaveLength(1);
         });
 
         // `5×` silently costing five times over is exactly the surprise ADR
@@ -455,11 +504,9 @@ describe('TestsTabContent', () => {
             });
             expect(await screen.findByRole('button', { name: /Run · ~\$0\.20/ })).toBeInTheDocument();
 
-            await userEvent.click(screen.getByLabelText(/^Samples for/));
-            await userEvent.click(await screen.findByRole('option', { name: '5×' }));
-            expect(await screen.findByRole('button', { name: /Run · ~\$1\.00/ })).toBeInTheDocument();
-
-            await userEvent.click(screen.getByRole('button', { name: /^Run/ }));
+            await userEvent.click(await screen.findByRole('button', { name: `More actions for ${NAME}` }));
+            const five = await screen.findByRole('menuitem', { name: /Run 5× · ~\$1\.00/ });
+            await userEvent.click(five);
             await waitFor(() => expect(writes).toEqual([['run', { id: 't1', body: { n_runs: 5, sandbox: true } }]]));
         });
     });
@@ -499,9 +546,7 @@ describe('TestsTabContent', () => {
         it('deletes a test', async () => {
             const writes: Array<[string, unknown]> = [];
             mount({ tests: [aTest()], onWrite: (k, p) => writes.push([k, p]) });
-            await userEvent.click(
-                await screen.findByRole('button', { name: 'Delete Asks rather than building a whole Task' }),
-            );
+            await menuAction('Delete');
             await waitFor(() => expect(writes).toEqual([['delete', 't1']]));
         });
 
@@ -723,9 +768,7 @@ describe('TestsTabContent — edit', () => {
             ],
             onWrite: (kind, payload) => writes.push({ kind, payload }),
         });
-        await userEvent.click(
-            await screen.findByRole('button', { name: 'Edit Asks rather than building a whole Task' }),
-        );
+        await menuAction('Edit');
         const nameField = screen.getByLabelText('Test name');
         expect(nameField).toHaveValue('Asks rather than building a whole Task');
         expect(screen.getByLabelText('Item title')).toHaveValue('Add a health endpoint');
@@ -755,9 +798,7 @@ describe('TestsTabContent — edit', () => {
             failWrites: true,
             onWrite: (kind, payload) => writes.push({ kind, payload }),
         });
-        await userEvent.click(
-            await screen.findByRole('button', { name: 'Edit Asks rather than building a whole Task' }),
-        );
+        await menuAction('Edit');
         await userEvent.click(screen.getByLabelText('Project'));
         await userEvent.click(await screen.findByRole('option', { name: 'Sandbox' }));
         await userEvent.click(screen.getByLabelText('Expected outcome'));
@@ -820,7 +861,7 @@ describe('TestsTabContent — checks', () => {
             ],
         });
         expect(await screen.findByText(/reply avoids \/president\/.*never runs \/\^curl\/.*changes no code.*changes only src\/.*passes your script/)).toBeInTheDocument();
-        await userEvent.click(screen.getByRole('button', { name: 'Edit Asks rather than building a whole Task' }));
+        await menuAction('Edit');
         expect(screen.getByLabelText('Reply must not match')).toHaveValue('president');
         expect(screen.getByLabelText('Read-only agent — must not edit any file')).toBeChecked();
     });

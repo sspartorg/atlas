@@ -1191,6 +1191,8 @@ describe('agent tests over HTTP', () => {
 
         const listed = await app.inject({ method: 'GET', url: '/api/agents/agent-coder/tests' });
         expect(listed.json()).toHaveLength(1);
+        // Never run: the row's headline is empty, not missing.
+        expect(listed.json()[0].latest_batch).toBeNull();
 
         const patched = await app.inject({
             method: 'PATCH',
@@ -1271,6 +1273,13 @@ describe('agent tests over HTTP', () => {
         const batches = await app.inject({ method: 'GET', url: `/api/agent-tests/${id}/batches` });
         expect(batches.json()).toHaveLength(1);
         expect(batches.json()[0]).toMatchObject({ n_runs: 1, running: 1, consistency: null });
+        const limited = await app.inject({ method: 'GET', url: `/api/agent-tests/${id}/batches?limit=abc` });
+        expect(limited.json()).toHaveLength(1);
+
+        // The list carries each test's newest batch, so the tab needs no
+        // request per row.
+        const listed = await app.inject({ method: 'GET', url: '/api/agents/agent-coder/tests' });
+        expect(listed.json()[0].latest_batch).toMatchObject({ n_runs: 1, running: 1 });
     });
 
     // The cap is enforced at the boundary as well as in the service: a bad

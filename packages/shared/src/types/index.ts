@@ -1263,8 +1263,12 @@ export interface SSEEvent {
         | 'cli_session_status'
         | 'cli_session_closed'
         // ADR 0014 — a workflow run changed status or moved to another node.
-        | 'workflow_run_updated';
+        | 'workflow_run_updated'
+        // ADR 0023 — a test run got its verdict; carries `agentTestId`.
+        | 'agent_test_judged';
     agentId?: string;
+    /** Payload of `agent_test_judged`. */
+    agentTestId?: string;
     /** ADR 0014 — payload of `workflow_run_updated`. */
     workflowId?: string;
     workflowRunId?: string;

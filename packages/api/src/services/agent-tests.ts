@@ -6,7 +6,7 @@ import type { AgentTestExpectations } from './agent-tests-evaluate.js';
 import {
     asRun,
     asTest,
-    judgePendingRun,
+    judgePendingInBackground,
     type AgentTestItemTemplate,
     type AgentTestRow,
     type AgentTestRunRow,
@@ -45,6 +45,29 @@ export type { AgentTestRow, AgentTestRunRow };
  * click, and past ten the number stops being a decision anybody makes lightly.
  */
 const MAX_SAMPLES = 10;
+
+/**
+ * What a read of test runs returns. Not `selectAll()`: `evidence` holds the
+ * run's whole diff and nothing that lists runs shows it.
+ */
+const RUN_COLUMNS = [
+    'id',
+    'agent_test_id',
+    'agent_run_id',
+    'item_id',
+    'verdict',
+    'failures',
+    'cost_usd',
+    'duration_s',
+    'created_at',
+    'batch_id',
+    'sample_index',
+    'label',
+    'judge_verdict',
+    'judge_reason',
+    'judge_cost_usd',
+    'workflow_run_id',
+] as const;
 
 export interface RunTestOptions {
     /** Samples to take. 1 keeps the old behaviour exactly. */
@@ -276,28 +299,71 @@ export const agentTestsService = {
     },
 
     /**
-     * A test's runs, newest first, judging any that finished since last read.
+     * A test's runs, newest first, optionally only its latest `batches` batches.
+     *
+     * Returned as stored: a run that finished without being judged (the API
+     * crashed before the completion hook fired) is judged in the background,
+     * and the page hears `agent_test_judged` when it lands.
      */
-    async listRuns(testId: string): Promise<AgentTestRunRow[]> {
-        const rows = await db
+    async listRuns(testId: string, opts: { batches?: number | undefined } = {}): Promise<AgentTestRunRow[]> {
+        let q = db
             .selectFrom('agent_test_runs')
-            .selectAll()
+            .select(RUN_COLUMNS)
             .where('agent_test_id', '=', testId)
-            .orderBy('created_at', 'desc')
-            .execute();
-        const test = await this.get(testId);
-        const out: AgentTestRunRow[] = [];
-        for (const r of rows) {
-            out.push(
-                r.verdict === 'running' && test ? await judgePendingRun(asRun(r as never), test) : asRun(r as never),
-            );
+            .orderBy('created_at', 'desc');
+        if (opts.batches !== undefined) {
+            const newest = db
+                .selectFrom('agent_test_runs')
+                .select('batch_id')
+                .where('agent_test_id', '=', testId)
+                .groupBy('batch_id')
+                .orderBy((eb) => eb.fn.max('created_at'), 'desc')
+                .limit(opts.batches);
+            q = q.where('batch_id', 'in', newest);
         }
-        return out;
+        const rows = (await q.execute()).map((r) => asRun(r as never));
+        const test = await this.get(testId);
+        if (test) judgePendingInBackground(rows, new Map([[test.id, test]]));
+        return rows;
     },
 
     /** The same runs, folded into the batches the Owner actually pressed. */
-    async listBatches(testId: string): Promise<AgentTestBatch[]> {
-        return toBatches(await this.listRuns(testId));
+    async listBatches(testId: string, opts: { batches?: number | undefined } = {}): Promise<AgentTestBatch[]> {
+        return toBatches(await this.listRuns(testId, opts));
+    },
+
+    /**
+     * Each test's newest batch, in one query — the headline the Tests tab shows
+     * per row. Before this, every row fetched its whole history to show one line.
+     */
+    async latestBatches(tests: AgentTestRow[]): Promise<Map<string, AgentTestBatch>> {
+        const out = new Map<string, AgentTestBatch>();
+        if (tests.length === 0) return out;
+        const newest = db
+            .selectFrom('agent_test_runs')
+            .select('batch_id')
+            .distinctOn('agent_test_id')
+            .where(
+                'agent_test_id',
+                'in',
+                tests.map((t) => t.id),
+            )
+            .orderBy('agent_test_id')
+            .orderBy('created_at', 'desc');
+        const rows = (
+            await db
+                .selectFrom('agent_test_runs')
+                .select(RUN_COLUMNS)
+                .where('batch_id', 'in', newest)
+                .orderBy('created_at', 'desc')
+                .execute()
+        ).map((r) => asRun(r as never));
+        judgePendingInBackground(rows, new Map(tests.map((t) => [t.id, t])));
+        for (const b of toBatches(rows)) {
+            const testId = b.runs[0]?.agent_test_id;
+            if (testId) out.set(testId, b);
+        }
+        return out;
     },
 
     /** The fixtures pointed at one workflow (ADR 0023 phase 3). */

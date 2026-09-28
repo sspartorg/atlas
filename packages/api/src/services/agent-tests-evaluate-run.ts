@@ -1,6 +1,7 @@
 import type { IRunOutcome, IRunTraceSummary } from '@atlas/shared';
 
 import { db } from '../db/kysely-client.js';
+import { broadcastSSE } from '../routes/events.js';
 import type { AgentTestVerdict, JudgeVerdict } from '../db/types.js';
 import { judgeAgentTestRun, type JudgeResult } from './agent-tests-judge.js';
 import { collectTestWorkspace, type AgentTestEvidence } from './agent-test-workspace.js';
@@ -241,9 +242,13 @@ async function judgeWorkflowEval(run: AgentTestRunRow, test: AgentTestRow): Prom
     return { ...run, verdict: evaluation.verdict, failures: evaluation.failures, cost_usd: cost, duration_s: duration };
 }
 
-export async function judgePendingRun(run: AgentTestRunRow, test: AgentTestRow): Promise<AgentTestRunRow> {
+async function judgePendingRun(run: AgentTestRunRow, test: AgentTestRow): Promise<AgentTestRunRow> {
     if (run.workflow_run_id) return judgeWorkflowEval(run, test);
     if (!run.agent_run_id) return run;
+    // Status first: a still-running dispatch is the common case on every poll,
+    // and the transcript below can be megabytes.
+    const state = await db.selectFrom('agent_runs').select('status').where('id', '=', run.agent_run_id).executeTakeFirst();
+    if (!state || !TERMINAL.has(state.status as string)) return run;
     const ar = await db
         .selectFrom('agent_runs')
         .select([
@@ -263,7 +268,7 @@ export async function judgePendingRun(run: AgentTestRunRow, test: AgentTestRow):
         ])
         .where('id', '=', run.agent_run_id)
         .executeTakeFirst();
-    if (!ar || !TERMINAL.has(ar.status as string)) return run;
+    if (!ar) return run;
 
     const evidence = await collectEvidence(run.id);
     const transcript = extractRunTranscript(ar.output_text, ar.cli as never);
@@ -452,6 +457,50 @@ async function runJudge(
     return { result, failures: [], errored: false };
 }
 
+// ponytail: in-process claim — one API process. Move to a claim column on
+// agent_test_runs if the API ever runs as more than one process.
+const judging = new Map<string, Promise<AgentTestRunRow>>();
+
+/**
+ * Judge a pending run at most once at a time, and tell open pages when it lands.
+ *
+ * The completion hook and a read of the Tests tab can both reach the same
+ * pending run, and a judge can take minutes (a script, a model call). Without
+ * the claim every 5s poll started another one.
+ */
+function judgeOnce(run: AgentTestRunRow, test: AgentTestRow): Promise<AgentTestRunRow> {
+    const inFlight = judging.get(run.id);
+    if (inFlight) return inFlight;
+    const p = judgePendingRun(run, test)
+        .then((judged) => {
+            if (judged.verdict !== 'running') {
+                broadcastSSE({
+                    type: 'agent_test_judged',
+                    agentTestId: run.agent_test_id,
+                    ...(test.agent_id ? { agentId: test.agent_id } : {}),
+                });
+            }
+            return judged;
+        })
+        .finally(() => judging.delete(run.id));
+    judging.set(run.id, p);
+    return p;
+}
+
+/**
+ * The read-side fallback, off the request path: returns the rows as stored and
+ * judges any pending one in the background. A read must never wait on a judge.
+ */
+export function judgePendingInBackground(rows: AgentTestRunRow[], tests: Map<string, AgentTestRow>): void {
+    for (const r of rows) {
+        const test = tests.get(r.agent_test_id);
+        if (r.verdict !== 'running' || !test) continue;
+        judgeOnce(r, test).catch((err: unknown) =>
+            console.warn(`[agent-tests] judging ${r.id} failed: ${(err as Error).message}`),
+        );
+    }
+}
+
 /**
  * The completion hook: judge whatever test is waiting on this dispatch.
  *
@@ -472,5 +521,5 @@ export async function evaluateAgentTestRun(agentRunId: string): Promise<void> {
         .where('id', '=', row.agent_test_id)
         .executeTakeFirst();
     if (!test) return;
-    await judgePendingRun(asRun(row as never), asTest(test as never));
+    await judgeOnce(asRun(row as never), asTest(test as never));
 }

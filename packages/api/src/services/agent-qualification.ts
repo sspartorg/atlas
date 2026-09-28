@@ -155,6 +155,16 @@ export async function agentQualification(agentId?: string): Promise<AgentQualifi
     // was last read. A fleet read must not fire 72 judge passes and 72 writes;
     // the per-test route still self-heals, and a sample genuinely still running
     // renders as running, which is honest.
+    //
+    // Only each fixture's NEWEST batch: that is all the fold below reads, and
+    // the full history is every sample ever taken, for every agent.
+    const newestBatches = db
+        .selectFrom('agent_test_runs')
+        .select('batch_id')
+        .distinctOn('agent_test_id')
+        .where('agent_test_id', 'in', testIds.length ? testIds : [''])
+        .orderBy('agent_test_id')
+        .orderBy('created_at', 'desc');
     const runs = testIds.length
         ? await db
               .selectFrom('agent_test_runs as r')
@@ -181,7 +191,7 @@ export async function agentQualification(agentId?: string): Promise<AgentQualifi
                   'ar.effort as ran_effort',
                   'ar.prompt_version as ran_prompt_version',
               ])
-              .where('r.agent_test_id', 'in', testIds)
+              .where('r.batch_id', 'in', newestBatches)
               .orderBy('r.created_at', 'desc')
               .orderBy('r.sample_index', 'asc')
               .execute()

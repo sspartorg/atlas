@@ -1251,7 +1251,8 @@ export const api = {
             ),
         runs: (testId: string) => get<AgentTestRun[]>(`/agent-tests/${testId}/runs`),
         /** The same runs, folded into the batches the Owner actually pressed. */
-        batches: (testId: string) => get<AgentTestBatch[]>(`/agent-tests/${testId}/batches`),
+        batches: (testId: string, limit?: number) =>
+            get<AgentTestBatch[]>(`/agent-tests/${testId}/batches${limit ? `?limit=${limit}` : ''}`),
         /** ATL-140 — what this agent's own runs already prove. */
         performance: (agentId: string) => get<AgentPerformance>(`/agents/${agentId}/performance`),
         /** Every agent side by side, plus what the fleet delivered. */

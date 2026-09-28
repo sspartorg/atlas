@@ -146,6 +146,13 @@ export function useSSE() {
                 // Task status / workflow changes and paused workflows move the Queue page.
                 void queryClient.invalidateQueries({ queryKey: ['workflow-queue'] });
             }
+            if (event.type === 'agent_test_judged') {
+                if (event.agentId) void queryClient.invalidateQueries({ queryKey: ['agent-tests', event.agentId] });
+                if (event.agentTestId) {
+                    void queryClient.invalidateQueries({ queryKey: ['agent-test-batches', event.agentTestId] });
+                }
+                void queryClient.invalidateQueries({ queryKey: ['agent-qualification'] });
+            }
             if (event.type === 'notification_created') {
                 void queryClient.invalidateQueries({ queryKey: ['notifications'] });
                 void queryClient.invalidateQueries({ queryKey: ['sidenav-counts'] });
