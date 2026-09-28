@@ -1201,7 +1201,8 @@ export const api = {
         create: (
             agentId: string,
             body: {
-                project_id: string;
+                /** Null/absent: unpinned — runs in the Tests sandbox by default. */
+                project_id?: string | null;
                 repo_id?: string | null;
                 name: string;
                 item_template: AgentTestItemTemplate;
@@ -1226,6 +1227,8 @@ export const api = {
                 label?: string;
                 project_id?: string;
                 repo_id?: string | null;
+                /** Run in the Tests sandbox project, whatever the fixture is pinned to. */
+                sandbox?: boolean;
             } = {},
         ) => post<AgentTestBatch>(`/agent-tests/${testId}/run`, body),
         /** Every fixture this agent has, in one press, under one label. */
@@ -1236,6 +1239,8 @@ export const api = {
                 label?: string;
                 project_id?: string;
                 repo_id?: string | null;
+                /** Run in the Tests sandbox project, whatever the fixture is pinned to. */
+                sandbox?: boolean;
             } = {},
         ) => post<AgentTestBatch[]>(`/agents/${agentId}/test-suite/runs`, body),
         /** Is this agent qualified, and is that still true of the agent as it is now? */

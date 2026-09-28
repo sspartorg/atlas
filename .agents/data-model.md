@@ -157,6 +157,8 @@ The autonomous catalog entries (`agent-ai-news`, `agent-market-research`, `agent
 
 Fields: `id, name, issue_key_prefix, description, status, guardrails_md, default_workflow_id, created_at, updated_at, last_activity_at`
 
+- `is_test_sandbox` (migration 002, DB only; unique partial index — at most one): the **Tests** project agent tests run in by default (`services/test-project.ts`). Created on first use with prefix `TST` (next free `TSX`/`TSY`/`TSZ`/`TXT` if the Owner already uses it) and one local sample repo `atlas-test-sample` under the workspace root — no remote, no credential, `verify_command` `npm test` — so nothing a test agent does can be pushed.
+
 - `default_workflow_id` (FK → `workflows`, SET NULL; migration 022) — the Task workflow `/tasks/new` preselects for this project. Must be `input_kind='item'` and global or this project's. **Read only by the create form** — the server never applies it, so a Jira import or any create without `workflow_id` stays an unqueued draft (ADR 0016).
 
 - `guardrails_md` is free-form markdown (project guardrails are a separate table â€” see below)
@@ -189,7 +191,7 @@ Fields (`ITask`): `id, project_id, title, description, status, assignee_agent_id
 - `worktree_branch` — the run branch (`atlas/wf/<taskId>` unless the Owner points it at a valid existing branch); `worktree_path` stays null for workflow runs (the path lives on `workflow_runs`).
 - `id` is `<project issue_key_prefix>-<seq>` (e.g. `SDB-12`), shared counter with sub-tasks.
 - Closing (`→ done`) is refused with 422 while any sub-task isn't `done`, unless overridden (`assertChildrenDone`, `routes/tasks.ts`).
-- `is_test` (migration 016, **not on the wire**): the throwaway item an agent test run materialised. See `items_live` below.
+- `is_test` (migration 016; **on the wire** as optional `is_test` on `ITask`/`ISubTask` since migration 002): the item an agent test run materialised. **Visible everywhere** since migration 002; the web tags it "Test". See `items_live` below.
 
 > **All items carry a nullable `reporter_agent_id`** referencing `agents.id`. Agent-created items stamp the creating agent (the `x-atlas-agent-id` header / MCP `agent_id`); UI-created items stamp `null`, rendered as Owner. Agent narrative flows through the comments thread (the `proposed_plan_md` trio was dropped by migration 021).
 
@@ -444,7 +446,10 @@ Table `run_gate_results`: `id, workflow_run_id (FK → workflow_runs, ON DELETE 
 - `output_tail` is the same 4000-char tail `verification-gate.ts` already clips and secret-redacts. The full output stays in the run log.
 - Writes are **best-effort** (`services/run-gate-results.ts`): a gate verdict is evidence about the run, not part of it, so a failed audit write must never turn a green gate into a parked run.
 
-### `items_live` (migration 016)
+### `items_live` (migration 016, filter dropped by 002)
+
+**2026-09-28 — reversed (migration 002, ADR 0023 amendment).** The view no longer filters: test items appear in every list, count, search and aggregate, tagged "Test" in the web (`TestItemTag`). The Owner's reason: "the test created EXI-2 and I can't see it" is a bug, and test noise belongs in its own project rather than hidden inside a real one — so tests now default to the **Tests sandbox project** (`projects.is_test_sandbox`). The view keeps its name so its readers did not change; `is_test` still scopes the delete cleanup and keeps test PRs out of fleet delivery stats. The history below is why it was hidden.
+
 **Why this view exists**: `agentTestsService.run()` materialises the item its agent acts on through the normal item services, on purpose — an agent that behaved differently against a synthetic item would make the test worthless (migration 014). The cost is that the item is real in every other way too: it takes an `ATL-nnn` key from the project counter and appears in Tasks, search, the queue, counts, label facets and analytics. A `sub_task` template creates two of them, because the sub-task needs a throwaway parent. The only marker used to be a `[test]` suffix in the title, which nothing read.
 
 `CREATE VIEW items_live AS SELECT * FROM items WHERE NOT is_test`, plus a partial index `items (project_id, type) WHERE NOT is_test`.

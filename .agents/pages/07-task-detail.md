@@ -11,6 +11,8 @@ Full view of one Task (ADR 0015): its brief (description, acceptance criteria), 
 - **Populated**: shared `IssueDetailShell` (`pages/issues/IssueDetailShell.tsx`)
 
 ## UI elements
+- **Test tag** — a Task made by an agent test run (`is_test`) shows a `TEST` pill beside the `+` add-related menu.
+
 **Shell**
 - Breadcrumb: Tasks → Task id (mono) + `CopyLinkButton`.
 - `EditableTitle` → `PATCH /api/tasks/:id {title}`.

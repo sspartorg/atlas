@@ -423,6 +423,8 @@ export interface ITask {
     // until a workflow run provisions them.
     worktree_branch: string | null;
     worktree_path: string | null;
+    /** Made by an agent test run (ADR 0023). Shown, tagged "Test" — never hidden. */
+    is_test?: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -444,6 +446,8 @@ export interface ISubTask {
     started_at: string | null;
     /** A Sub-tasks workflow node picks the sub-tasks carrying its label (ADR 0015). */
     labels: string[];
+    /** Made by an agent test run (ADR 0023). Shown, tagged "Test" — never hidden. */
+    is_test?: boolean;
     created_at: string;
     updated_at: string;
 }

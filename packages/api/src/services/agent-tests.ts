@@ -16,12 +16,15 @@ import { startWorkflowRun } from './workflow-engine.js';
 import { summariseBatch, toBatches, type AgentTestBatch } from './agent-test-batches.js';
 import { subTasksService } from './sub-tasks.js';
 import { tasksService } from './tasks.js';
+import { projectReposService } from './project-repos.js';
+import { ensureTestProject } from './test-project.js';
 
 // Agent tests as product data (ADR 0023).
 //
 // The items a run materialises carry `is_test` (migration 016): real to the
-// agent in every way it can observe, invisible to every list, count, search and
-// aggregate the Owner looks at.
+// agent in every way it can observe, and — since migration 002 — visible to the
+// Owner too, tagged "Test". They land in the Tests sandbox project unless the
+// Owner picks another (`test-project.ts`).
 //
 // A test owns the item it wants the agent to act on, because a bare prompt
 // cannot exercise the agents Atlas ships — PO Writer refuses anything that is
@@ -48,25 +51,18 @@ export interface RunTestOptions {
     /** Free-text tag, e.g. `before-prompt-diet`, for comparing two batches. */
     label?: string | undefined;
     /**
-     * Where the throwaway item is made (migration 021).
+     * Where the test's item is made (migration 021).
      *
      * A fixture is agent-scoped at rest, so the project comes from the caller,
-     * falls back to the fixture's own, and is otherwise an error. Never a
-     * default: the item consumes a real issue key from whatever project it
-     * lands in, and picking that for the Owner spends their key count in a
-     * place they did not choose.
+     * falls back to the fixture's own, and otherwise to the Tests sandbox
+     * project — never to one of the Owner's real projects.
      */
     project_id?: string | undefined;
     repo_id?: string | null | undefined;
+    /** Run in the Tests sandbox project even if the fixture is pinned elsewhere. */
+    sandbox?: boolean | undefined;
 }
 
-/** Thrown when a fixture has no project to run in. The route turns it into a 400. */
-export class AgentTestUnboundError extends Error {
-    constructor() {
-        super('this fixture is not bound to a project; pick one to run it in');
-        this.name = 'AgentTestUnboundError';
-    }
-}
 
 /** A suite run while one is already in flight would double the bill. 409. */
 export class AgentTestSuiteBusyError extends Error {
@@ -209,11 +205,16 @@ export const agentTestsService = {
     async run(testId: string, opts: RunTestOptions = {}): Promise<AgentTestBatch> {
         const test = await this.get(testId);
         if (!test) throw new Error(`Agent test ${testId} not found`);
-        // Migration 021 — caller first, then the fixture's own pin, then an
-        // error. No default project: this materialises a real item.
-        const projectId = opts.project_id ?? test.project_id;
-        if (!projectId) throw new AgentTestUnboundError();
-        const repoId = opts.repo_id !== undefined ? opts.repo_id : test.repo_id;
+        // Caller first, then the fixture's own pin, then the Tests sandbox
+        // project (ADR 0023 amendment) — so a test only spends a real
+        // project's issue key when the Owner picks that project on purpose.
+        const projectId =
+            opts.project_id ?? (opts.sandbox ? null : test.project_id) ?? (await ensureTestProject());
+        const wanted = opts.repo_id !== undefined ? opts.repo_id : test.repo_id;
+        // A repo pinned in another project would fail the Task create; drop it
+        // and let `resolveRepoIds` pick this project's own.
+        const repoId =
+            wanted && (await projectReposService.list(projectId)).some((r) => r.id === wanted) ? wanted : null;
         const binding = { projectId, repoId };
         const samples = Math.min(MAX_SAMPLES, Math.max(1, Math.trunc(opts.n_runs ?? 1)));
         const batchId = randomUUID();

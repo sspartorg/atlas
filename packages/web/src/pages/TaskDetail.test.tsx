@@ -121,6 +121,12 @@ describe('TaskDetail page', () => {
         expect(screen.queryByRole('form', { name: 'Add sub-task' })).not.toBeInTheDocument();
     });
 
+    it('tags a Task an agent test run made', async () => {
+        stubTaskFull('T9', { task: makeTask({ id: 'T9', is_test: true }) });
+        renderTask('T9');
+        expect(await screen.findByRole('img', { name: 'Test item' })).toBeInTheDocument();
+    });
+
     it('renders the spec and the PR link when the task has them', async () => {
         stubTaskFull('T4', {
             task: makeTask({

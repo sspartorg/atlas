@@ -14,6 +14,7 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { MobileTaskList } from './MobileTaskList.js';
 import { relativeTime } from '../utils/time.js';
+import { TestItemTag } from './TestItemTag.js';
 
 export type TaskTablePageSize = 20 | 50 | 100 | 'all';
 
@@ -181,6 +182,7 @@ const TaskRow = memo(function TaskRow({
                 >
                     {row.title}
                 </Typography>
+                {row.is_test && <TestItemTag />}
                 {project && <ProjectTag projectId={project.id} name={project.name} clickable />}
             </Box>
 

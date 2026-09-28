@@ -11,6 +11,10 @@ vi.mock('./agent-runner.js', () => ({ spawnAgentRun }));
 const judgeAgentTestRun = vi.hoisted(() => vi.fn(async () => null));
 vi.mock('./agent-tests-judge.js', () => ({ judgeAgentTestRun }));
 
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { agentTestsService } from './agent-tests.js';
 import { tasksService } from './tasks.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
@@ -178,12 +182,12 @@ describe('agentTestsService', () => {
             )).runs[0]!;
 
             const flags = await testDb.selectFrom('items').select(['id', 'is_test']).execute();
-            // Three rows: the Task, the sub-task, and the sub-task's throwaway
-            // parent — all of them invisible, including the parent nothing
-            // records a reference to.
+            // Three rows: the Task, the sub-task, and the sub-task's parent —
+            // all tagged, and (since migration 002) all visible, including the
+            // parent nothing records a reference to.
             expect(flags).toHaveLength(3);
             expect(flags.every((f) => f.is_test)).toBe(true);
-            expect(await testDb.selectFrom('items_live').select('id').execute()).toEqual([]);
+            expect(await testDb.selectFrom('items_live').select('id').execute()).toHaveLength(3);
             expect([task.item_id, sub.item_id]).not.toContain(null);
         });
 
@@ -401,12 +405,37 @@ describe('agentTestsService.runSuite', () => {
         );
     });
 
-    // Migration 021 — a fixture is agent-scoped until something names a
-    // project. Guessing one would spend an issue key where nobody asked.
-    it('refuses to run a fixture that is bound to no project', async () => {
+    // ADR 0023 amendment — a fixture bound to no project runs in the Tests
+    // sandbox, never in one of the Owner's real projects.
+    it('runs a fixture bound to no project in the Tests sandbox project', async () => {
         mockDistinctSpawns();
-        const t = await makeTest({ name: 'unbound', project_id: null });
-        await expect(agentTestsService.run(t.id)).rejects.toThrow(/not bound to a project/);
+        const root = mkdtempSync(join(tmpdir(), 'atlas-sandbox-'));
+        await testDb.updateTable('settings').set({ workspace_path: root } as never).execute();
+        try {
+            await insertProject('p2', 'OTH');
+            const elsewhere = (await testDb.selectFrom('project_repos').select('id').where('project_id', '=', 'p2').executeTakeFirstOrThrow()).id;
+            const t = await makeTest({ name: 'unbound', project_id: null, repo_id: elsewhere });
+            await agentTestsService.run(t.id);
+            const item = await testDb.selectFrom('items').select(['project_id', 'repo_ids', 'is_test']).executeTakeFirstOrThrow();
+            const sandbox = await testDb
+                .selectFrom('projects')
+                .select(['id', 'issue_key_prefix'])
+                .where('is_test_sandbox', '=', true)
+                .executeTakeFirstOrThrow();
+            expect(sandbox.issue_key_prefix).toBe('TST');
+            expect(item).toMatchObject({ project_id: sandbox.id, repo_ids: [expect.any(String)], is_test: true });
+            // The pinned repo belonged to another project, so it was dropped.
+            expect(item.repo_ids).not.toContain(elsewhere);
+
+            // `sandbox: true` wins over a fixture pinned to a real project.
+            const pinned = await makeTest({ name: 'pinned to p1' });
+            await agentTestsService.run(pinned.id, { sandbox: true });
+            const inSandbox = await testDb.selectFrom('items').select('id').where('project_id', '=', sandbox.id).execute();
+            expect(inSandbox).toHaveLength(2);
+        } finally {
+            await testDb.updateTable('settings').set({ workspace_path: '' } as never).execute();
+            rmSync(root, { recursive: true, force: true });
+        }
     });
 
     it('runs an unbound fixture in the project the caller names', async () => {

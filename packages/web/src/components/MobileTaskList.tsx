@@ -7,6 +7,7 @@ import { StatusChip } from './StatusChip.js';
 import { AgentChip } from './AgentChip.js';
 import { ProjectTag } from './ProjectTag.js';
 import { LiveDot } from './LiveDot.js';
+import { TestItemTag } from './TestItemTag.js';
 import { ATLAS_PALETTE, TOUCH } from '../theme/tokens.js';
 
 interface Props {
@@ -125,6 +126,11 @@ export function MobileTaskList({ rows, projects, agents, ownerName, ownerAccent 
                                 >
                                     {row.title}
                                 </Typography>
+                                {row.is_test && (
+                                    <Box sx={{ pt: '3px' }}>
+                                        <TestItemTag />
+                                    </Box>
+                                )}
                                 {isLive && (
                                     <Box sx={{ pt: '6px', flexShrink: 0 }}>
                                         <LiveDot size={8} />

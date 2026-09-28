@@ -17,7 +17,6 @@ import { unpackAgentBundle, AgentBundleParseError } from '../services/agent-bund
 import { requireMcpToken } from '../plugins/mcp-auth.js';
 import {
     agentTestsService,
-    AgentTestUnboundError,
     AgentTestSuiteBusyError,
     AgentTestSuiteEmptyError,
 } from '../services/agent-tests.js';
@@ -94,6 +93,8 @@ const AgentTestRunBodySchema = z
         // pin; with neither, the run is a 400 rather than a guess.
         project_id: z.string().min(1).optional(),
         repo_id: z.string().min(1).nullable().optional(),
+        /** Run in the Tests sandbox project (ADR 0023 amendment). */
+        sandbox: z.boolean().optional(),
     })
     .strict();
 
@@ -104,6 +105,8 @@ const SuiteRunBodySchema = z
         label: z.string().trim().max(120).optional(),
         project_id: z.string().min(1).optional(),
         repo_id: z.string().min(1).nullable().optional(),
+        /** Run in the Tests sandbox project (ADR 0023 amendment). */
+        sandbox: z.boolean().optional(),
     })
     .strict();
 
@@ -451,19 +454,15 @@ export async function agentsRoutes(app: FastifyInstance) {
         // 202: the dispatches are asynchronous. Verdicts land when each run
         // finishes (`evaluateAgentTestRun`), so the batch comes back with
         // every sample still `running`.
-        try {
-            return reply.status(202).send(
-                await agentTestsService.run(testId, {
-                    ...(body.n_runs !== undefined ? { n_runs: body.n_runs } : {}),
-                    ...(body.label !== undefined ? { label: body.label } : {}),
-                    ...(body.project_id !== undefined ? { project_id: body.project_id } : {}),
-                    ...(body.repo_id !== undefined ? { repo_id: body.repo_id } : {}),
-                }),
-            );
-        } catch (err) {
-            if (err instanceof AgentTestUnboundError) return reply.status(400).send({ error: err.message });
-            throw err;
-        }
+        return reply.status(202).send(
+            await agentTestsService.run(testId, {
+                ...(body.n_runs !== undefined ? { n_runs: body.n_runs } : {}),
+                ...(body.label !== undefined ? { label: body.label } : {}),
+                ...(body.project_id !== undefined ? { project_id: body.project_id } : {}),
+                ...(body.repo_id !== undefined ? { repo_id: body.repo_id } : {}),
+                ...(body.sandbox !== undefined ? { sandbox: body.sandbox } : {}),
+            }),
+        );
     });
 
     /**
@@ -488,10 +487,10 @@ export async function agentsRoutes(app: FastifyInstance) {
                     ...(body.label !== undefined ? { label: body.label } : {}),
                     ...(body.project_id !== undefined ? { project_id: body.project_id } : {}),
                     ...(body.repo_id !== undefined ? { repo_id: body.repo_id } : {}),
+                ...(body.sandbox !== undefined ? { sandbox: body.sandbox } : {}),
                 }),
             );
         } catch (err) {
-            if (err instanceof AgentTestUnboundError) return reply.status(400).send({ error: err.message });
             if (err instanceof AgentTestSuiteBusyError) return reply.status(409).send({ error: err.message });
             if (err instanceof AgentTestSuiteEmptyError) return reply.status(400).send({ error: err.message });
             throw err;

@@ -217,3 +217,28 @@ so that reviewer's fixture expects `rejected` and rejecting correctly passes. Th
 payload carries per-agent counts and no fleet percentage, and the fleet view
 groups by state instead of sorting by score — with a comment at the sort site
 saying why.
+
+## Amendment — 2026-09-28: test items are visible, and tests run in a sandbox project
+
+**Reverses two rules above: "invisible to every list" (migration 016) and "never a
+default project" (migration 021).**
+
+The Owner ran a test, saw that it created EXI-2, and could not find EXI-2
+anywhere. Hiding a real item that took a real key from a real project reads as
+data loss, not tidiness — and the Owner may well want to open what the agent
+did. The fix for test noise is to keep it out of real projects, not to hide it
+inside them.
+
+- **Visible.** `items_live` no longer filters `is_test` (migration 002). Test
+  items appear in every list, count, search and aggregate, tagged "Test" in the
+  web. `is_test` stays: it scopes the cleanup when a test is deleted and keeps
+  test PRs out of fleet delivery stats, which measure real delivery.
+- **A default project after all.** "Never a default" existed because a run
+  spends an issue key wherever it lands. A dedicated project removes that cost:
+  `projects.is_test_sandbox` marks one **Tests** project (`TST`), created on
+  first use with a local sample repo that has no remote, so nothing a test
+  agent does can be pushed. Runs resolve `project_id` → the fixture's pin →
+  the sandbox; `sandbox: true` forces it. The Tests tab's "Run in" defaults to
+  it, and picking a real project is still one click for testing an agent
+  against real code.
+

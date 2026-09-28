@@ -35,6 +35,19 @@ describe('TaskTable', () => {
         expect(screen.getByText('Task')).toBeInTheDocument();
     });
 
+    it('tags an item an agent test run made', () => {
+        renderWithProviders(
+            <TaskTable
+                rows={[makeTaskListItem({ id: 'TST-1', title: 'Probe', is_test: true })]}
+                projects={[]}
+                agents={[]}
+                ownerName="Owner"
+                ownerAccent="#0A0A0A"
+            />
+        );
+        expect(screen.getByRole('img', { name: 'Test item' })).toBeInTheDocument();
+    });
+
     it('renders empty state with optional New Task button (onCreate branch)', async () => {
         const onCreate = vi.fn();
         renderWithProviders(

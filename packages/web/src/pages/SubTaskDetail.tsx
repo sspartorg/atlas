@@ -19,6 +19,7 @@ import {
     type AddRelatedMenuOption,
     type ParentLink,
 } from '../components/index.js';
+import { TestItemTag } from '../components/TestItemTag.js';
 import { useSubTaskFull, useDeleteSubTask } from '../hooks/useSubTasks.js';
 import { IssueDeleteAction } from '../components/ConfirmDeleteModal.js';
 import { useProjectLabels } from '../hooks/useProjectLabels.js';
@@ -178,7 +179,12 @@ export function SubTaskDetail() {
                 onTitleSave={(next) => patchSubTask({ title: next })}
                 titleSaving={saving}
                 issueType="sub_task"
-                headerExtras={<AddRelatedMenu options={addOptions} label="Add related item" />}
+                headerExtras={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {subTask.is_test && <TestItemTag />}
+                        <AddRelatedMenu options={addOptions} label="Add related item" />
+                    </Box>
+                }
                 actions={
                     <IssueDeleteAction
                         entityKind="sub_task"
