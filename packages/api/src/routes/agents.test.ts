@@ -1204,6 +1204,32 @@ describe('agent tests over HTTP', () => {
         expect((await app.inject({ method: 'GET', url: '/api/agents/agent-coder/tests' })).json()).toEqual([]);
     });
 
+    // Scope checks (ADR 0023 amendment): a pattern that does not compile is
+    // the author's mistake, caught at the form rather than as an errored run.
+    it('accepts scope checks and rejects a pattern that does not compile', async () => {
+        await seed();
+        const scoped = {
+            ...body,
+            expectations: {
+                reply_must_not_match: ['president'],
+                commands_forbidden: ['^git push'],
+                no_code_changes: true,
+                files_changed_only: ['src/'],
+                script: { body_sh: 'exit 0' },
+            },
+        };
+        const ok = await app.inject({ method: 'POST', url: '/api/agents/agent-coder/tests', payload: scoped });
+        expect(ok.statusCode).toBe(201);
+        expect(ok.json().expectations).toMatchObject({ no_code_changes: true, script: { body_sh: 'exit 0' } });
+
+        const bad = await app.inject({
+            method: 'POST',
+            url: '/api/agents/agent-coder/tests',
+            payload: { ...body, expectations: { reply_must_match: ['(unclosed'] } },
+        });
+        expect(bad.statusCode).toBe(400);
+    });
+
     it('404s every route for an agent or test that does not exist', async () => {
         await seed();
         for (const url of ['/api/agents/nope/tests', '/api/agents/nope/cost-estimate', '/api/agent-tests/nope/runs']) {

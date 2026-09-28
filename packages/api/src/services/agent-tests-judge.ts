@@ -23,9 +23,11 @@ import type { JudgeVerdict } from '../db/types.js';
 // It is the only non-deterministic piece in the whole evaluation path, so
 // everything here is arranged to keep it from becoming the thing that flakes:
 //
-//  1. **Deterministic input.** It sees the outcome summary, the reason and the
-//     trace JSON. Never the repo, never the diff, never the raw transcript.
-//     Same bytes in, same question out.
+//  1. **Deterministic input.** It sees the outcome summary, the reason, the
+//     trace JSON, the agent's final reply and the shell commands it ran — the
+//     last two so a scope criterion ("does not answer off-topic questions") is
+//     graded on what it said, not on its own summary. Never the repo, never the
+//     diff. Same bytes in, same question out.
 //  2. **Binary questions, not a paragraph.** `judge_criteria` is a list, each
 //     entry one question, capped at 200 characters by the route schema. A
 //     vague paragraph is the single largest source of judge variance.
@@ -52,7 +54,15 @@ export interface JudgeEvidence {
     summary: string;
     reason: string | null;
     trace: IRunTraceSummary | null;
+    /** What the agent actually answered — so a criterion about it is graded on it, not on the summary. */
+    reply?: string | null | undefined;
+    /** The shell commands it ran. */
+    commands?: string[] | null | undefined;
 }
+
+/** Enough of a reply to judge; the prompt is not the place for a whole transcript. */
+const REPLY_IN_PROMPT = 8_000;
+const COMMANDS_IN_PROMPT = 50;
 
 function buildPrompt(criteria: string[], evidence: JudgeEvidence): string {
     return [
@@ -71,6 +81,16 @@ function buildPrompt(criteria: string[], evidence: JudgeEvidence): string {
         '',
         '## What it actually did',
         evidence.trace ? JSON.stringify(evidence.trace) : '(no transcript was recorded for this run)',
+        '',
+        '## Its final reply',
+        evidence.reply ? evidence.reply.slice(0, REPLY_IN_PROMPT) : '(no final reply was recorded)',
+        '',
+        '## Shell commands it ran',
+        evidence.commands == null
+            ? '(this CLI does not report them)'
+            : evidence.commands.length === 0
+              ? '(none)'
+              : evidence.commands.slice(0, COMMANDS_IN_PROMPT).map((c) => `- ${c.slice(0, 300)}`).join('\n'),
         '',
         '## How to answer',
         'End your reply with exactly this block and nothing after it:',

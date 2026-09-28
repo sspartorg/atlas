@@ -774,3 +774,54 @@ describe('TestsTabContent — edit', () => {
         expect(screen.getByRole('button', { name: 'Create test' })).toBeInTheDocument();
     });
 });
+
+// ADR 0023 amendment — scope an agent in the form: read-only, what its reply
+// may say, what it may run, a judge question and the Owner's own script.
+describe('TestsTabContent — checks', () => {
+    it('sends every check the form collects, and summarises them on the card', async () => {
+        const writes: Array<[string, unknown]> = [];
+        mount({ onWrite: (k, p) => writes.push([k, p]) });
+        await userEvent.click(await screen.findByRole('button', { name: 'New test' }));
+        await userEvent.type(screen.getByLabelText('Test name'), 'stays on the menu');
+        await userEvent.type(screen.getByLabelText('Item title'), 'Who is the president?');
+        await userEvent.click(screen.getByLabelText('Read-only agent — must not edit any file'));
+        await userEvent.type(screen.getByLabelText('Reply must match'), 'menu');
+        await userEvent.type(screen.getByLabelText('Reply must not match'), 'president');
+        await userEvent.type(screen.getByLabelText('Forbidden shell commands'), '^curl');
+        await userEvent.type(screen.getByLabelText('Judge questions'), 'It declines politely.');
+        await userEvent.type(screen.getByLabelText('Check script (bash)'), 'exit 0');
+        await userEvent.click(screen.getByRole('button', { name: 'Create test' }));
+
+        await waitFor(() => expect(writes).toHaveLength(1));
+        expect((writes[0]?.[1] as { expectations: unknown }).expectations).toEqual({
+            reply_must_match: ['menu'],
+            reply_must_not_match: ['president'],
+            commands_forbidden: ['^curl'],
+            judge_criteria: ['It declines politely.'],
+            script: { body_sh: 'exit 0' },
+            no_code_changes: true,
+            tools_forbidden: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'],
+        });
+    });
+
+    it('prefills the checks when editing, and shows them on the card', async () => {
+        mount({
+            tests: [
+                aTest({
+                    expectations: {
+                        reply_must_not_match: ['president'],
+                        commands_forbidden: ['^curl'],
+                        no_code_changes: true,
+                        files_changed_only: ['src/'],
+                        reply_must_match: ['menu'],
+                        script: { body_sh: 'exit 0' },
+                    },
+                }),
+            ],
+        });
+        expect(await screen.findByText(/reply avoids \/president\/.*never runs \/\^curl\/.*changes no code.*changes only src\/.*passes your script/)).toBeInTheDocument();
+        await userEvent.click(screen.getByRole('button', { name: 'Edit Asks rather than building a whole Task' }));
+        expect(screen.getByLabelText('Reply must not match')).toHaveValue('president');
+        expect(screen.getByLabelText('Read-only agent — must not edit any file')).toBeChecked();
+    });
+});

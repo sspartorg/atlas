@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseRunTrace } from './run-trace-parser.js';
+import { extractRunTranscript, parseRunTrace } from './run-trace-parser.js';
 
 // Fixtures follow the real shapes on disk: `system/subtype:init` carries `cwd`
 // and no timestamp, assistant events carry `timestamp` and `parent_tool_use_id`,
@@ -220,5 +220,53 @@ describe('parseRunTrace — shapes that are not quite right', () => {
     it('ignores a copilot tool event with no name', () => {
         const t = parseRunTrace(line({ type: 'tool.execution_start', data: {} }), 'copilot')!;
         expect(t.tool_calls).toBe(0);
+    });
+});
+
+describe('extractRunTranscript', () => {
+    const lines = (...events: unknown[]) => events.map((e) => JSON.stringify(e)).join('\n');
+    const assistant = (content: unknown[], extra: Record<string, unknown> = {}) => ({
+        type: 'assistant',
+        message: { content },
+        ...extra,
+    });
+
+    it('takes the final answer from the result event, and every Bash command it ran', () => {
+        const out = lines(
+            assistant([{ type: 'text', text: 'thinking out loud' }, { type: 'tool_use', name: 'Bash', input: { command: 'ls' } }]),
+            // A sub-agent's calls are not the agent's own.
+            assistant([{ type: 'tool_use', name: 'Bash', input: { command: 'rm -rf x' } }], { parent_tool_use_id: 't1' }),
+            assistant([{ type: 'tool_use', name: 'Read', input: { file_path: 'a.js' } }]),
+            { type: 'result', result: 'Here is the menu.' },
+        );
+        expect(extractRunTranscript(out, 'claude')).toEqual({
+            reply: 'Here is the menu.',
+            commands: ['ls'],
+            tool_calls: [
+                { name: 'Bash', input: { command: 'ls' } },
+                { name: 'Read', input: { file_path: 'a.js' } },
+            ],
+        });
+    });
+
+    it('falls back to the last assistant text when the run died before a result', () => {
+        const out = lines(assistant([{ type: 'text', text: 'first' }]), assistant([{ type: 'text', text: 'last' }]), '[stderr] boom');
+        expect(extractRunTranscript(out, null).reply).toBe('last');
+    });
+
+    it('cuts a very long reply', () => {
+        const out = lines({ type: 'result', result: 'x'.repeat(30_000) });
+        expect(extractRunTranscript(out, 'claude').reply).toHaveLength(20_000);
+    });
+
+    it('reads copilot’s reply but not its commands, which it does not report', () => {
+        const out = lines({ type: 'assistant.message', data: { content: 'hello' } }, { type: 'tool.execution_start', data: { toolName: 'bash' } });
+        expect(extractRunTranscript(out, 'copilot')).toEqual({ reply: 'hello', commands: null, tool_calls: null });
+        expect(extractRunTranscript(lines({ type: 'tool.execution_start', data: {} }), 'copilot').reply).toBeNull();
+    });
+
+    it('has nothing to say about an empty transcript', () => {
+        expect(extractRunTranscript('', 'claude')).toEqual({ reply: null, commands: null, tool_calls: null });
+        expect(extractRunTranscript(lines(assistant([{ type: 'tool_use', name: 'Edit', input: {} }])), 'claude').reply).toBeNull();
     });
 });

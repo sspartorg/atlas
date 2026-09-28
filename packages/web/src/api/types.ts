@@ -390,6 +390,16 @@ export interface AgentTestExpectations {
     files_untouched?: string[];
     /** Pass criteria in your own words, graded by a cheap fixed model. Off unless set. */
     judge_criteria?: string[];
+    /** Scope checks (ADR 0023 amendment) — case-insensitive regexes on what it said and ran. */
+    reply_must_match?: string[];
+    reply_must_not_match?: string[];
+    commands_forbidden?: string[];
+    /** The checkout must be unchanged. */
+    no_code_changes?: boolean;
+    /** Path prefixes every changed file must start with. */
+    files_changed_only?: string[];
+    /** The Owner's own bash check, run over the evidence files. */
+    script?: { body_sh: string };
 }
 
 export interface AgentTest {
