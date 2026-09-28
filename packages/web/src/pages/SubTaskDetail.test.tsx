@@ -133,6 +133,22 @@ describe('SubTaskDetail page', () => {
         expect(container.firstChild).toBeInTheDocument();
     });
 
+    it('tags a sub-task an agent test run made', async () => {
+        server.use(
+            ...mountHandlers('T8', {
+                sub_task: makeSubTask({ id: 'T8', title: 'Probe', is_test: true }),
+                task: makeTask(),
+                project: makeProject(),
+                related_links: [],
+                external_links: [],
+                activity: [],
+                agents: [],
+            })
+        );
+        renderPage('T8');
+        expect(await screen.findByRole('img', { name: 'Test item' })).toBeInTheDocument();
+    });
+
     it('renders title, description and acceptance criteria', async () => {
         server.use(
             ...mountHandlers('T2', {

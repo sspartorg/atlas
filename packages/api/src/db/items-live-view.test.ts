@@ -4,7 +4,8 @@ import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { createItem } from '../services/items.js';
 import { insertProject } from '../../tests/_items.js';
 
-// `items_live` is `SELECT * FROM items WHERE NOT is_test` (migration 016), and
+// `items_live` was `SELECT * FROM items WHERE NOT is_test` (migration 016; the
+// filter was dropped by 002 but the view and its readers stay), and
 // Postgres resolves that `*` once, at creation. A later migration that adds a
 // column to `items` will NOT add it to the view, but `db/types.ts` types the
 // view with `ItemsTable` — so Kysely would happily generate SQL selecting a
@@ -31,17 +32,14 @@ describe('items_live', () => {
         expect(view).toEqual(table);
     });
 
-    it('hides a test item and keeps every other one', async () => {
+    it('keeps test items too (migration 002 stopped filtering them)', async () => {
         await truncateAll();
         await insertProject('p1');
         const real = await createItem({ project_id: 'p1', type: 'task', title: 'real work' });
         const test = await createItem({ project_id: 'p1', type: 'task', title: 'probe [test] t', is_test: true });
 
         const live = await testDb.selectFrom('items_live').select('id').execute();
-        expect(live.map((r) => r.id)).toEqual([real.id]);
-        // Still there, and still reachable by id — the run depends on it.
-        const all = await testDb.selectFrom('items').select('id').orderBy('id').execute();
-        expect(all.map((r) => r.id).sort()).toEqual([real.id, test.id].sort());
+        expect(live.map((r) => r.id).sort()).toEqual([real.id, test.id].sort());
     });
 
     it('defaults is_test to false so ordinary creates are unaffected', async () => {

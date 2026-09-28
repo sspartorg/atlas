@@ -12,6 +12,8 @@ List every Task across all projects (ADR 0015: a Task is the top-level item; its
 - **Populated**: `TaskTable` (`Tasks.tsx:297`) or `WorkItemKanban` (`Tasks.tsx:259`)
 
 ## UI elements
+- **Test tag** — a row made by an agent test run (`is_test`) shows a small `TEST` pill (science icon, tooltip "Created by an agent test run") after the title, in the table and the mobile list. Test items are listed, not hidden (migration 002).
+
 **Header**
 - "Tasks" title + subtitle: `N tasks` (all, or scoped to `?project=`) · project name · `M awaiting pickup` (ready Tasks, from `GET /api/tasks/stats`)
 - **Show archived** switch → `?include_archived=true` (done Tasks older than 7 days are hidden by default)

@@ -20,6 +20,7 @@ import {
     type AddRelatedMenuOption,
     type WorkItemTableRow,
 } from '../components/index.js';
+import { TestItemTag } from '../components/TestItemTag.js';
 import { LabelsFormField } from '../components/LabelsFormField.js';
 import { MarkdownPreview } from '../components/MarkdownPreview.js';
 import {
@@ -250,7 +251,12 @@ export function TaskDetail() {
                 }
                 titleSaving={updateTask.isPending}
                 issueType="task"
-                headerExtras={<AddRelatedMenu options={addOptions} label="Add related item" />}
+                headerExtras={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {task.is_test && <TestItemTag />}
+                        <AddRelatedMenu options={addOptions} label="Add related item" />
+                    </Box>
+                }
                 actions={
                     <IssueDeleteAction
                         entityKind="task"

@@ -280,6 +280,8 @@ export interface ProjectsTable {
     guardrails_md: Str;
     // Migration 022 — preselected by /tasks/new only (never applied server-side).
     default_workflow_id: StrN;
+    // Migration 002 — the one project agent tests default to (`test-project.ts`).
+    is_test_sandbox: ColumnType<boolean, boolean | undefined, boolean | undefined>;
     created_at: CreatedAt;
     updated_at: UpdatedAt;
 }
@@ -451,9 +453,9 @@ export interface ItemsTable {
     // Migration 040 — a sub-task's hand-set run order within its Task.
     sort_order: IntN;
 
-    // Migration 016 — the throwaway item an agent test run acts on. True keeps
-    // it out of every list, count, search and aggregate (`items_live`) while
-    // leaving it fetchable by id, which the run itself depends on.
+    // Migration 016 — the item an agent test run acts on. Visible everywhere
+    // since migration 002 (the web tags it "Test"); still scopes the cleanup
+    // when its test is deleted and keeps test PRs out of fleet delivery stats.
     is_test: ColumnType<boolean, boolean | undefined, boolean | undefined>;
 
     created_at: CreatedAt;

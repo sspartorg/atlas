@@ -50,7 +50,7 @@ export function useCreateAgentTest(agentId: string) {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (body: {
-            project_id: string;
+            project_id?: string | null;
             repo_id?: string | null;
             name: string;
             item_template: AgentTestItemTemplate;
@@ -90,6 +90,7 @@ export function useRunAgentTest() {
             label,
             project_id,
             repo_id,
+            sandbox,
         }: {
             testId: string;
             n_runs?: number;
@@ -97,12 +98,15 @@ export function useRunAgentTest() {
             /** Migration 021 — a fixture binds to a project when it runs. */
             project_id?: string;
             repo_id?: string | null;
+            /** Run in the Tests sandbox project, whatever the fixture is pinned to. */
+            sandbox?: boolean;
         }) =>
             api.agentTests.run(testId, {
                 ...(n_runs !== undefined ? { n_runs } : {}),
                 ...(label !== undefined ? { label } : {}),
                 ...(project_id !== undefined ? { project_id } : {}),
                 ...(repo_id !== undefined ? { repo_id } : {}),
+                ...(sandbox !== undefined ? { sandbox } : {}),
             }),
         onSuccess: (_r, { testId }) => {
             void qc.invalidateQueries({ queryKey: ['agent-test-batches', testId] });
@@ -157,7 +161,7 @@ export function useAgentQualification(agentId?: string) {
 export function useRunAgentSuite(agentId: string) {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: (body: { n_runs?: number; project_id?: string; repo_id?: string | null }) =>
+        mutationFn: (body: { n_runs?: number; project_id?: string; repo_id?: string | null; sandbox?: boolean }) =>
             api.agentTests.runSuite(agentId, body),
         onSuccess: () => {
             void qc.invalidateQueries({ queryKey: ['agent-tests', agentId] });

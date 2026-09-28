@@ -11,6 +11,8 @@ One sub-task of a Task (ADR 0015). Sub-tasks are never queued for a workflow of 
 - **Populated**: shared `IssueDetailShell`
 
 ## UI elements
+- **Test tag** — a sub-task made by an agent test run (`is_test`) shows a `TEST` pill beside the `+` add-related menu.
+
 **Shell**
 - Breadcrumb: Tasks → parent Task id (→ `/tasks/:taskId`) → sub-task id + `CopyLinkButton`.
 - `EditableTitle` → `PATCH /api/sub-tasks/:id {title}`.

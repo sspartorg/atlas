@@ -31,6 +31,19 @@ describe('MobileTaskList', () => {
         expect(screen.getByText('Alpha')).toBeInTheDocument();
     });
 
+    it('tags an item an agent test run made', () => {
+        renderWithProviders(
+            <MobileTaskList
+                rows={[makeTaskListItem({ id: 'TST-1', title: 'Probe', is_test: true })]}
+                projects={[]}
+                agents={[]}
+                ownerName="O"
+                ownerAccent="#0A0A0A"
+            />
+        );
+        expect(screen.getByRole('img', { name: 'Test item' })).toBeInTheDocument();
+    });
+
     it('shows LiveDot for in_progress task (isLive branch)', () => {
         renderWithProviders(
             <MobileTaskList

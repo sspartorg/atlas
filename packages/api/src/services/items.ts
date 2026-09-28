@@ -33,6 +33,8 @@ export interface IItemRow {
     labels: string[];
     // ADR 0017 — a Task's repos; DB default `[]` (= the primary repo).
     repo_ids: string[];
+    // Migration 016 — made by an agent test run. Absent on rows read before it.
+    is_test?: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -66,6 +68,7 @@ export function rowToTask(r: IItemRow): ITask {
         repo_ids: r.repo_ids ?? [],
         worktree_branch: r.worktree_branch,
         worktree_path: r.worktree_path,
+        is_test: r.is_test === true,
         created_at: r.created_at,
         updated_at: r.updated_at,
     };
@@ -88,6 +91,7 @@ export function rowToSubTask(r: IItemRow): ISubTask {
         started_at: r.started_at,
         /* v8 ignore next */
         labels: r.labels ?? [],
+        is_test: r.is_test === true,
         created_at: r.created_at,
         updated_at: r.updated_at,
     };
@@ -115,11 +119,11 @@ export interface CreateItemInput {
     labels?: string[] | undefined;
     repo_ids?: string[] | undefined;
     /**
-     * Migration 016 — the throwaway item an agent test run acts on.
+     * Migration 016 — the item an agent test run acts on.
      *
      * It is a real item in every way the agent can observe, because a test
-     * against a synthetic one would not measure anything. It is simply kept
-     * out of every list, count, search and aggregate (`items_live`).
+     * against a synthetic one would not measure anything — and, since
+     * migration 002, a visible one: the web tags it "Test" instead of hiding it.
      */
     is_test?: boolean | undefined;
 }

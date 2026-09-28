@@ -263,10 +263,10 @@ function Qualification({
                         <Button
                             size="small"
                             variant="outlined"
-                            disabled={runSuite.isPending || !projectId}
+                            disabled={runSuite.isPending}
                             onClick={() =>
                                 runSuite.mutate(
-                                    { project_id: projectId, repo_id: repoId || null },
+                                    projectId ? { project_id: projectId, repo_id: repoId || null } : { sandbox: true },
                                     {
                                         onSuccess: () => toast.show({ message: `${q.fixtures} tests started` }),
                                         onError: (e) => toast.show({ message: (e as Error).message }),
@@ -400,8 +400,8 @@ function TestCard({
                             {
                                 testId: test.id,
                                 n_runs: samples,
-                                ...(projectId ? { project_id: projectId } : {}),
-                                ...(repoId ? { repo_id: repoId } : {}),
+                                ...(projectId ? { project_id: projectId } : { sandbox: true }),
+                                ...(projectId && repoId ? { repo_id: repoId } : {}),
                             },
                             {
                                 onSuccess: () =>
@@ -538,6 +538,8 @@ function StarterTests({
  * its `project_id` — the column is still there.
  */
 const SUITE_PROJECT_KEY = 'atlas.agent-tests.project';
+/** The empty project choice: the Tests sandbox the API creates on first use. */
+const SANDBOX_LABEL = 'Tests sandbox (default)';
 const SUITE_REPO_KEY = 'atlas.agent-tests.repo';
 
 function remembered(key: string): string {
@@ -658,7 +660,7 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
         }
         createTest.mutate(
             {
-                project_id: projectId,
+                project_id: projectId || null,
                 repo_id: repoId || null,
                 name: name.trim(),
                 item_template: { issue_type: issueType, title: title.trim(), description },
@@ -685,7 +687,7 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
     // refuses to guess, and the failure otherwise lands at dispatch rather than
     // at the form.
     const needsRepo = (repos ?? []).length > 1;
-    const canSubmit = Boolean(name.trim() && title.trim() && projectId && (!needsRepo || repoId));
+    const canSubmit = Boolean(name.trim() && title.trim() && (!needsRepo || repoId));
 
     return (
         // No padding of its own: `AgentDetail` already pads the tab column, and
@@ -709,12 +711,14 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                 <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     {/* Where a run makes its throwaway item. It takes a real
                         issue key from whatever project it lands in, so this is
-                        never defaulted for the Owner. */}
+                        never one of the Owner's projects by default: empty
+                        means the Tests sandbox (ADR 0023 amendment). */}
                     <TextField
                         select
                         size="small"
                         label="Run in"
                         value={suiteProject}
+                        slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
                         onChange={(e) => {
                             setSuiteProject(e.target.value);
                             setSuiteRepo('');
@@ -723,6 +727,7 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                         }}
                         sx={{ minWidth: 180 }}
                     >
+                        <MenuItem value="">{SANDBOX_LABEL}</MenuItem>
                         {(projects ?? []).map((p) => (
                             <MenuItem key={p.id} value={p.id}>
                                 {p.name}
@@ -796,9 +801,14 @@ export function TestsTabContent({ agent }: { agent: IAgent }) {
                         select
                         label="Project"
                         value={projectId}
-                        onChange={(e) => setProjectId(e.target.value)}
-                        helperText="The throwaway item is created in this project."
+                        onChange={(e) => {
+                            setProjectId(e.target.value);
+                            setRepoId('');
+                        }}
+                        slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+                        helperText="Where the test's Task is created. The sandbox keeps test runs out of your real projects."
                     >
+                        <MenuItem value="">{SANDBOX_LABEL}</MenuItem>
                         {(projects ?? []).map((p) => (
                             <MenuItem key={p.id} value={p.id}>
                                 {p.name}

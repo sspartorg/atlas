@@ -354,7 +354,8 @@ describe('TestsTabContent', () => {
             await userEvent.click(await screen.findByRole('button', { name: 'Add' }));
             expect(screen.getByLabelText('Test name')).toHaveValue(starter.name);
             expect(screen.getByLabelText('Item title')).toHaveValue('Add a spinner');
-            expect(screen.getByRole('button', { name: 'Create test' })).toBeDisabled();
+            // No project needed: an unpinned test runs in the Tests sandbox.
+            expect(screen.getByRole('button', { name: 'Create test' })).toBeEnabled();
         });
 
         // The form can only show the outcome. Dropping the rest on adoption
@@ -377,7 +378,7 @@ describe('TestsTabContent', () => {
     });
 
     describe('the create form', () => {
-        it('cannot be submitted until it names a test, an item and a project', async () => {
+        it('cannot be submitted until it names a test and an item', async () => {
             mount();
             await userEvent.click(await screen.findByRole('button', { name: 'New test' }));
             expect(screen.getByRole('button', { name: 'Create test' })).toBeDisabled();
@@ -392,7 +393,9 @@ describe('TestsTabContent', () => {
             await userEvent.click(await screen.findByRole('button', { name: 'New test' }));
             await userEvent.type(screen.getByLabelText('Test name'), 'a test');
             await userEvent.type(screen.getByLabelText('Item title'), 'an item');
-            // Project and repo are still unset, so it stays disabled.
+            await userEvent.click(screen.getByLabelText('Project'));
+            await userEvent.click(await screen.findByRole('option', { name: 'Sandbox' }));
+            // The project has two repos and none is picked, so it stays disabled.
             expect(screen.getByRole('button', { name: 'Create test' })).toBeDisabled();
         });
 
@@ -457,7 +460,7 @@ describe('TestsTabContent', () => {
             expect(await screen.findByRole('button', { name: /Run · ~\$1\.00/ })).toBeInTheDocument();
 
             await userEvent.click(screen.getByRole('button', { name: /^Run/ }));
-            await waitFor(() => expect(writes).toEqual([['run', { id: 't1', body: { n_runs: 5 } }]]));
+            await waitFor(() => expect(writes).toEqual([['run', { id: 't1', body: { n_runs: 5, sandbox: true } }]]));
         });
     });
 
@@ -489,7 +492,7 @@ describe('TestsTabContent', () => {
             mount({ tests: [aTest()], onWrite: (k, p) => writes.push([k, p]) });
             await userEvent.click(await screen.findByRole('button', { name: /^Run/ }));
             await waitFor(() =>
-                expect(writes).toEqual([['run', { id: 't1', body: { n_runs: 1 } }]]),
+                expect(writes).toEqual([['run', { id: 't1', body: { n_runs: 1, sandbox: true } }]]),
             );
         });
 
@@ -601,6 +604,20 @@ describe('TestsTabContent — qualification', () => {
         });
         expect(await screen.findByText('RUNNING…')).toBeInTheDocument();
         expect(screen.queryByText('FAILING')).not.toBeInTheDocument();
+    });
+
+    // ADR 0023 amendment — with nothing picked, a suite runs in the Tests
+    // sandbox, never in one of the Owner's projects.
+    it('runs the whole suite in the Tests sandbox by default', async () => {
+        const writes: Array<{ kind: string; payload: unknown }> = [];
+        mount({
+            tests: [aTest()],
+            qualification: aQualification(),
+            onWrite: (kind, payload) => writes.push({ kind, payload }),
+        });
+        expect((await screen.findAllByText('Tests sandbox (default)')).length).toBeGreaterThan(0);
+        await userEvent.click(await screen.findByRole('button', { name: /^Run all/ }));
+        await waitFor(() => expect(writes).toEqual([{ kind: 'run-suite', payload: { sandbox: true } }]));
     });
 
     it('runs the whole suite in the project the header names', async () => {
