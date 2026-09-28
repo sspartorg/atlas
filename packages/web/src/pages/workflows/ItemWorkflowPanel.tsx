@@ -115,45 +115,59 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
                     </Select>
                 )}
             </InfoRow>
-            {(latest || workflowId) && (
+            {latest && (
                 <InfoRow label="Workflow run">
-                    {latest && (
-                        <Link
-                            component={RouterLink}
-                            to={`/workflows/${latest.workflow_id}/runs/${latest.id}`}
-                            underline="none"
-                            sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.5 }}
+                    <Link
+                        component={RouterLink}
+                        to={`/workflows/${latest.workflow_id}/runs/${latest.id}`}
+                        underline="none"
+                        sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.5 }}
+                    >
+                        <WorkflowRunStatusChip status={latest.status} />
+                        <Typography
+                            component="span"
+                            sx={{
+                                fontSize: 11.5,
+                                color: ATLAS_PALETTE.slate60,
+                                whiteSpace: 'nowrap',
+                            }}
                         >
-                            <WorkflowRunStatusChip status={latest.status} />
-                            <Typography
-                                component="span"
-                                sx={{ fontSize: 11.5, color: ATLAS_PALETTE.slate60 }}
-                            >
-                                {relativeTime(latest.started_at)}
-                            </Typography>
-                        </Link>
-                    )}
-                    {latest?.branch && (
-                        <Link
-                            component={RouterLink}
-                            to={`/workflows/${latest.workflow_id}/runs/${latest.id}#changes`}
-                            sx={{ fontSize: 12 }}
-                        >
-                            Changes
-                        </Link>
-                    )}
-                    {workflowId && !live && (
+                            {relativeTime(latest.started_at)}
+                        </Typography>
+                    </Link>
+                </InfoRow>
+            )}
+            {latest?.branch && (
+                <InfoRow label="Changes">
+                    <Link
+                        component={RouterLink}
+                        to={`/workflows/${latest.workflow_id}/runs/${latest.id}#changes`}
+                        sx={{ fontSize: 12 }}
+                    >
+                        View changes
+                    </Link>
+                </InfoRow>
+            )}
+            {workflowId && (!live || canContinue) && (
+                <InfoRow label="Actions">
+                    {!live && (
                         <Button
                             size="small"
                             variant="outlined"
                             disabled={start.isPending}
                             onClick={() => (restartsReview ? setConfirmRestart(true) : startRun())}
-                            sx={{ textTransform: 'none', fontSize: 12, py: 0, minWidth: 0 }}
+                            sx={{
+                                textTransform: 'none',
+                                fontSize: 12,
+                                py: 0,
+                                minWidth: 0,
+                                whiteSpace: 'nowrap',
+                            }}
                         >
                             {restartsReview ? 'Restart' : 'Start now'}
                         </Button>
                     )}
-                    {workflowId && canContinue && (
+                    {canContinue && (
                         <Tooltip
                             describeChild
                             title="Runs the open sub-tasks on the same branch and updates the pull request"
@@ -174,6 +188,7 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
                                     py: 0,
                                     minWidth: 0,
                                     boxShadow: 'none',
+                                    whiteSpace: 'nowrap',
                                 }}
                             >
                                 Continue · {openSubtasks} open
