@@ -336,7 +336,11 @@ export async function agentsRoutes(app: FastifyInstance) {
     app.get('/api/agents/:id/tests', async (req, reply) => {
         const { id } = req.params as { id: string };
         if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
-        return reply.send(await agentTestsService.list(id));
+        const tests = await agentTestsService.list(id);
+        // Each row's headline verdict, folded in so the tab needs one request
+        // rather than one per test.
+        const latest = await agentTestsService.latestBatches(tests);
+        return reply.send(tests.map((t) => ({ ...t, latest_batch: latest.get(t.id) ?? null })));
     });
 
     /**
@@ -473,7 +477,10 @@ export async function agentsRoutes(app: FastifyInstance) {
     app.get('/api/agent-tests/:testId/batches', async (req, reply) => {
         const { testId } = req.params as { testId: string };
         if (!(await agentTestsService.get(testId))) return reply.status(404).send({ error: 'Agent test not found' });
-        return reply.send(await agentTestsService.listBatches(testId));
+        // `?limit=` newest batches. Omitted, the whole history, as before.
+        const { limit } = req.query as { limit?: string };
+        const batches = limit === undefined ? undefined : Math.min(200, Math.max(1, Number.parseInt(limit, 10) || 1));
+        return reply.send(await agentTestsService.listBatches(testId, { batches }));
     });
 
     app.post('/api/agent-tests/:testId/run', { preHandler: requireMcpToken }, async (req, reply) => {

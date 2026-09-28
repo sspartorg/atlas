@@ -418,6 +418,8 @@ export interface AgentTest {
     expectations: AgentTestExpectations;
     created_at: string;
     updated_at: string;
+    /** The newest batch, folded in by `GET /agents/:id/tests`; null when never run. */
+    latest_batch?: AgentTestBatch | null;
 }
 
 export interface AgentTestRun {

@@ -11,6 +11,18 @@ import { agentTestsService } from './agent-tests.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertProject } from '../../tests/_items.js';
 
+/**
+ * A read judges a finished eval in the background and returns at once (a read
+ * never waits on judging). Read until nothing is pending.
+ */
+async function judgedBatches(testId: string) {
+    await vi.waitFor(async () => {
+        const [batch] = await agentTestsService.listBatches(testId);
+        expect(batch?.running).toBe(0);
+    });
+    return agentTestsService.listBatches(testId);
+}
+
 // Workflow evals (ADR 0023 phase 3, ATL-173). One primitive: the same fixture,
 // run through a whole workflow instead of one agent.
 
@@ -137,7 +149,7 @@ describe('judging a workflow eval', () => {
         const fixture = await makeEval({ expectations });
         await agentTestsService.run(fixture.id);
         await finishWorkflowRun(runOver);
-        const [batch] = await agentTestsService.listBatches(fixture.id);
+        const [batch] = await judgedBatches(fixture.id);
         return batch!.runs[0]!;
     }
 
@@ -187,7 +199,7 @@ describe('judging a workflow eval', () => {
                 } as never)
                 .execute();
         }
-        const [batch] = await agentTestsService.listBatches(fixture.id);
+        const [batch] = await judgedBatches(fixture.id);
         expect(batch?.runs[0]?.cost_usd).toBeCloseTo(3.75);
         // One hour of wall clock, from the run's own timestamps.
         expect(batch?.runs[0]?.duration_s).toBe(3600);
@@ -206,7 +218,7 @@ describe('judging a workflow eval', () => {
                 .values({ id: `g${i}`, workflow_run_id: 'wr-eval', script_id: 'gate-coverage', verdict } as never)
                 .execute();
         }
-        const [batch] = await agentTestsService.listBatches(fixture.id);
+        const [batch] = await judgedBatches(fixture.id);
         expect(batch?.runs[0]?.verdict).toBe('errored');
         expect(batch?.runs[0]?.failures[0]).toContain('nothing was actually checked');
     });
@@ -219,7 +231,7 @@ describe('judging a workflow eval', () => {
             .insertInto('run_gate_results')
             .values({ id: 'g1', workflow_run_id: 'wr-eval', script_id: 'gate-hygiene', verdict: 'fail' } as never)
             .execute();
-        const [batch] = await agentTestsService.listBatches(fixture.id);
+        const [batch] = await judgedBatches(fixture.id);
         expect(batch?.runs[0]?.verdict).toBe('failed');
         expect(batch?.runs[0]?.failures[0]).toContain('1 gate verdict(s) went red');
     });
@@ -233,7 +245,7 @@ describe('what a workflow run actually produced', () => {
         await agentTestsService.run(fixture.id);
         await testDb.updateTable('workflow_runs').set({ item_id: null } as never).where('id', '=', 'wr-eval').execute();
         await finishWorkflowRun();
-        const [batch] = await agentTestsService.listBatches(fixture.id);
+        const [batch] = await judgedBatches(fixture.id);
         expect(batch?.runs[0]?.failures[0]).toContain('expected at least 1 sub-tasks, got 0');
     });
 
@@ -260,7 +272,7 @@ describe('what a workflow run actually produced', () => {
                 .execute();
         }
         await finishWorkflowRun();
-        const [judged] = await agentTestsService.listBatches(fixture.id);
+        const [judged] = await judgedBatches(fixture.id);
         expect(judged?.runs[0]?.verdict).toBe('passed');
     });
 
@@ -270,7 +282,7 @@ describe('what a workflow run actually produced', () => {
         const fixture = await makeEval({ expectations: { requires_pr: true } });
         await agentTestsService.run(fixture.id);
         await finishWorkflowRun({ pr_urls: JSON.stringify([]) });
-        const [batch] = await agentTestsService.listBatches(fixture.id);
+        const [batch] = await judgedBatches(fixture.id);
         expect(batch?.runs[0]?.failures[0]).toContain('none was opened');
     });
 
@@ -280,7 +292,7 @@ describe('what a workflow run actually produced', () => {
         const fixture = await makeEval({ expectations: { terminal_status: ['completed'] } });
         await agentTestsService.run(fixture.id);
         await finishWorkflowRun({ status: 'error' });
-        const [batch] = await agentTestsService.listBatches(fixture.id);
+        const [batch] = await judgedBatches(fixture.id);
         expect(batch?.runs[0]?.verdict).toBe('failed');
     });
 
@@ -290,7 +302,7 @@ describe('what a workflow run actually produced', () => {
         const fixture = await makeEval({ expectations: { terminal_status: ['completed'] } });
         await agentTestsService.run(fixture.id);
         await finishWorkflowRun({ finished_at: null });
-        const [batch] = await agentTestsService.listBatches(fixture.id);
+        const [batch] = await judgedBatches(fixture.id);
         expect(batch?.runs[0]?.duration_s).toBeNull();
     });
 });

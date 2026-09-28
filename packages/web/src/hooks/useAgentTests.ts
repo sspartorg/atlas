@@ -7,13 +7,23 @@ import type { AgentTestExpectations, AgentTestItemTemplate, FleetWindowDays } fr
 // does it on trust, and one they wrote themselves cannot be qualified at all —
 // these are what make "does this agent work?" answerable from the UI.
 
+/**
+ * The agent's tests, each with its newest batch folded in — one request for
+ * the whole tab. Polls only while a batch is still running; the
+ * `agent_test_judged` event usually gets there first.
+ */
 export function useAgentTests(agentId: string) {
     return useQuery({
         queryKey: ['agent-tests', agentId],
         queryFn: () => api.agentTests.list(agentId),
         enabled: Boolean(agentId),
+        refetchInterval: (query) =>
+            (query.state.data ?? []).some((t) => (t.latest_batch?.running ?? 0) > 0) ? 5000 : false,
     });
 }
+
+/** How much history an expanded row shows. The rest is one click away in the API. */
+export const HISTORY_BATCHES = 20;
 
 /**
  * What this is about to cost, shown before the button.
@@ -37,7 +47,7 @@ export function useAgentCostEstimate(agentId: string, nRuns = 1) {
 export function useAgentTestBatches(testId: string, enabled = true) {
     return useQuery({
         queryKey: ['agent-test-batches', testId],
-        queryFn: () => api.agentTests.batches(testId),
+        queryFn: () => api.agentTests.batches(testId, HISTORY_BATCHES),
         enabled: Boolean(testId) && enabled,
         // Dispatches are asynchronous, so an open test polls until every
         // sample of every batch has landed.
@@ -109,6 +119,8 @@ export function useRunAgentTest() {
                 ...(sandbox !== undefined ? { sandbox } : {}),
             }),
         onSuccess: (_r, { testId }) => {
+            // The row's headline lives on the list now, so it starts polling.
+            void qc.invalidateQueries({ queryKey: ['agent-tests'] });
             void qc.invalidateQueries({ queryKey: ['agent-test-batches', testId] });
             void qc.invalidateQueries({ queryKey: ['agent-qualification'] });
         },

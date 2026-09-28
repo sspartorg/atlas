@@ -212,6 +212,30 @@ describe('useSSE', () => {
         expect(keys).toContainEqual(['workflow-queue']);
     });
 
+    // A test run's verdict lands after the run completes (the judge can take
+    // minutes); the Tests tab hears it here rather than on its next poll.
+    it('agent_test_judged refreshes that agent\'s tests, the test\'s history and qualification', async () => {
+        const { result } = renderHook(() => useSSEWithSpy(), { wrapper: makeWrapper() });
+        const spy = result.current;
+
+        act(() => pushSse({ type: 'agent_test_judged', agentId: 'agent-coder', agentTestId: 't1' }));
+        await waitFor(() => expect(spy).toHaveBeenCalled());
+
+        const keys = spy.mock.calls.map((c) => (c[0] as { queryKey?: unknown[] } | undefined)?.queryKey);
+        expect(keys).toContainEqual(['agent-tests', 'agent-coder']);
+        expect(keys).toContainEqual(['agent-test-batches', 't1']);
+        expect(keys).toContainEqual(['agent-qualification']);
+    });
+
+    it('agent_test_judged without ids still refreshes qualification', async () => {
+        const { result } = renderHook(() => useSSEWithSpy(), { wrapper: makeWrapper() });
+        const spy = result.current;
+        act(() => pushSse({ type: 'agent_test_judged' }));
+        await waitFor(() => expect(spy).toHaveBeenCalled());
+        const keys = spy.mock.calls.map((c) => (c[0] as { queryKey?: unknown[] } | undefined)?.queryKey);
+        expect(keys).toEqual([['agent-qualification']]);
+    });
+
     it('workflow_run_updated invalidates the workflow queue', async () => {
         const { result } = renderHook(() => useSSEWithSpy(), { wrapper: makeWrapper() });
         const spy = result.current;
