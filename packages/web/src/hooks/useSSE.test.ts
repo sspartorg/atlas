@@ -212,6 +212,26 @@ describe('useSSE', () => {
         expect(keys).toContainEqual(['workflow-queue']);
     });
 
+    // One agent step emits several events naming the same keys. They go out
+    // once per burst, and a key a shorter pending key already covers is dropped.
+    it('flushes a burst once: each key once, and none a pending prefix covers', async () => {
+        const { result } = renderHook(() => useSSEWithSpy(), { wrapper: makeWrapper() });
+        const spy = result.current;
+
+        act(() => {
+            pushSse({ type: 'counts_changed' });
+            pushSse({ type: 'counts_changed' });
+            pushSse({ type: 'agent_status', agentId: 'agent-coder' });
+        });
+        await waitFor(() => expect(spy).toHaveBeenCalled());
+
+        const keys = spy.mock.calls.map((c) => (c[0] as { queryKey?: unknown[] } | undefined)?.queryKey);
+        expect(keys.filter((k) => JSON.stringify(k) === '["tasks"]')).toHaveLength(1);
+        expect(keys.filter((k) => JSON.stringify(k) === '["agents"]')).toHaveLength(1);
+        // ['agents'] refreshes every agent query, this one included.
+        expect(keys).not.toContainEqual(['agents', 'agent-coder', 'runs']);
+    });
+
     // A test run's verdict lands after the run completes (the judge can take
     // minutes); the Tests tab hears it here rather than on its next poll.
     it('agent_test_judged refreshes that agent\'s tests, the test\'s history and qualification', async () => {

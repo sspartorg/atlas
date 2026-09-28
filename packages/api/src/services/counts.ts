@@ -75,6 +75,23 @@ export interface ProjectCounts {
 }
 
 export const countsService = {
+    /**
+     * Ready + in-progress Tasks and sub-tasks per assignee — the agent page's
+     * "Queue: N items". It used to download every Task and sub-task in the
+     * workspace to count this in the browser (3.5 MB on a large workspace).
+     */
+    async getQueueDepthByAgent(): Promise<Record<string, number>> {
+        const rows = await db
+            .selectFrom('items_live')
+            .select(['assignee_agent_id', (eb) => eb.fn.countAll<string>().as('n')])
+            .where('type', 'in', ['task', 'sub_task'])
+            .where('status', 'in', ['ready', 'in_progress'])
+            .where('assignee_agent_id', 'is not', null)
+            .groupBy('assignee_agent_id')
+            .execute();
+        return Object.fromEntries(rows.map((r) => [r.assignee_agent_id as string, Number(r.n)]));
+    },
+
     async getSidenavCounts(): Promise<SidenavCounts> {
         const [projects, tasks, subTasks, queue, agents, notifications] = await Promise.all([
             db

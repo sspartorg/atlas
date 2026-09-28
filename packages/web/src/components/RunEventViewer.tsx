@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 
 // Master-detail NDJSON viewer used by both the agent-run detail page and
@@ -220,6 +221,9 @@ function eventColor(header: string): string {
 // is hit, the caller can surface a banner via the returned metadata.
 const RUN_EVENT_LINE_CAP = 5_000;
 
+/** Past this many events the section index only mounts the rows in view. */
+const VIRTUALIZE_EVENTS_ABOVE = 200;
+
 interface ParsedEvents {
     events: RunEvent[];
     /** True if the source content had more lines than the cap and the
@@ -330,10 +334,30 @@ export function RunEventViewer({
     const safeSelectedIdx = events.length === 0 ? 0 : Math.min(selectedIdx, events.length - 1);
     const selectedEvent = events[safeSelectedIdx];
 
-    // Auto-scroll the section index to keep the selected row in view.
+    // The section index can hold thousands of events (a long run is capped at
+    // RUN_EVENT_LINE_CAP, not small). Only the rows in view are in the DOM;
+    // before this a 20k-line run drew 25k nodes and every scroll frame janked.
+    // A short run keeps the plain list.
     const indexRef = useRef<HTMLDivElement | null>(null);
     const selectedRowRef = useRef<HTMLButtonElement | null>(null);
+    const virtual = events.length > VIRTUALIZE_EVENTS_ABOVE;
+    const index = useVirtualizer({
+        count: virtual ? events.length : 0,
+        getScrollElement: () => indexRef.current,
+        estimateSize: () => 44,
+        overscan: 12,
+        useFlushSync: false,
+    });
+    const rows = virtual
+        ? index.getVirtualItems()
+        : events.map((_, i) => ({ index: i, key: i as number | string | bigint, start: 0 }));
+
+    // Keep the selected row in view.
     useEffect(() => {
+        if (virtual) {
+            index.scrollToIndex(safeSelectedIdx, { align: 'auto' });
+            return;
+        }
         const row = selectedRowRef.current;
         const container = indexRef.current;
         if (!row || !container) return;
@@ -347,6 +371,8 @@ export function RunEventViewer({
                 behavior: 'smooth',
             });
         }
+        // Only a selection change scrolls; `index` is a stable instance and
+        // `virtual` follows `events`.
     }, [safeSelectedIdx]);
 
     return (
@@ -397,7 +423,12 @@ export function RunEventViewer({
                         }}
                     >
                         {events.length > 0 ? (
-                            events.map((ev, idx) => {
+                            <Box sx={{ position: 'relative', height: virtual ? index.getTotalSize() : 'auto' }}>
+                            {rows.map((vi) => {
+                                const idx = vi.index;
+                                const ev = events[idx];
+                                /* v8 ignore next -- the virtualizer only yields indices within [0, count) */
+                                if (!ev) return null;
                                 const isText = ev.kind === 'text';
                                 const headerLabel = isText
                                     ? ev.tone === 'stderr'
@@ -417,8 +448,16 @@ export function RunEventViewer({
                                 const isSelected = idx === safeSelectedIdx;
                                 return (
                                     <Box
-                                        key={idx}
-                                        ref={isSelected ? selectedRowRef : undefined}
+                                        key={vi.key}
+                                        data-index={idx}
+                                        ref={virtual ? index.measureElement : isSelected ? selectedRowRef : undefined}
+                                        // Inline, not in `sx`: emotion mints a class per distinct
+                                        // offset, i.e. a new stylesheet rule every scroll frame.
+                                        style={
+                                            virtual
+                                                ? { position: 'absolute', top: 0, left: 0, transform: `translateY(${vi.start}px)` }
+                                                : undefined
+                                        }
                                         component="button"
                                         type="button"
                                         onClick={() => setSelectedIdx(idx)}
@@ -502,7 +541,8 @@ export function RunEventViewer({
                                         )}
                                     </Box>
                                 );
-                            })
+                            })}
+                            </Box>
                         ) : (
                             <Box
                                 sx={{

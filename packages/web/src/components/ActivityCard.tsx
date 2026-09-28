@@ -703,6 +703,31 @@ interface ConversationProps extends Props {
     runs?: IAgentRun[] | undefined;
 }
 
+/**
+ * The newest `page` entries of an oldest-first list, and a button for the rest.
+ * A Task with hundreds of comments and events drew every one — 9k DOM nodes
+ * and two seconds of main thread before the page could scroll.
+ */
+const ACTIVITY_PAGE = 50;
+function useNewest<T>(list: T[]): { visible: T[]; earlier: number; showEarlier: () => void } {
+    const [shown, setShown] = useState(ACTIVITY_PAGE);
+    const earlier = Math.max(0, list.length - shown);
+    return {
+        visible: earlier ? list.slice(earlier) : list,
+        earlier,
+        showEarlier: () => setShown((n) => n + ACTIVITY_PAGE * 4),
+    };
+}
+
+function ShowEarlier({ count, onClick }: { count: number; onClick: () => void }) {
+    if (count === 0) return null;
+    return (
+        <Button size="small" onClick={onClick} sx={{ alignSelf: 'flex-start' }}>
+            Show {Math.min(count, ACTIVITY_PAGE * 4)} earlier · {count} hidden
+        </Button>
+    );
+}
+
 export function ConversationCard({
     issueType,
     issueId,
@@ -754,6 +779,7 @@ export function ConversationCard({
             ),
         [items]
     );
+    const commentPage = useNewest(comments);
 
     return (
         <Box sx={cardSx}>
@@ -790,7 +816,8 @@ export function ConversationCard({
                 </Typography>
             ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mb: 4 }}>
-                    {comments.map((it) => (
+                    <ShowEarlier count={commentPage.earlier} onClick={commentPage.showEarlier} />
+                    {commentPage.visible.map((it) => (
                         <CommentRow
                             key={`c-${it.data.id}`}
                             comment={it.data}
@@ -867,6 +894,7 @@ export function ActivityLogCard({
             ),
         [items]
     );
+    const eventPage = useNewest(events);
 
     return (
         <Box sx={cardSx}>
@@ -895,7 +923,8 @@ export function ActivityLogCard({
                 </Typography>
             ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {events.map((it) => (
+                    <ShowEarlier count={eventPage.earlier} onClick={eventPage.showEarlier} />
+                    {eventPage.visible.map((it) => (
                         <EventRow
                             key={`e-${it.data.id}`}
                             event={it.data}

@@ -1,13 +1,14 @@
 import { useMemo } from 'react';
-import { useTasks } from './useTasks.js';
-import { useAllSubTasks } from './useSubTasks.js';
-import { countQueueDepthByAgent } from '../pages/agents/agentViewModel.js';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../api/api.js';
 
+/**
+ * Ready + in-progress items per assignee, counted by the API.
+ *
+ * Keyed under `tasks` so every event that refreshes the task lists refreshes
+ * this too. It used to fetch every Task and sub-task to count them here.
+ */
 export function useQueueDepthByAgent(): Map<string, number> {
-    const { data: tasks } = useTasks();
-    const { data: subTasks } = useAllSubTasks();
-    return useMemo(
-        () => countQueueDepthByAgent([...(tasks ?? []), ...subTasks]),
-        [tasks, subTasks]
-    );
+    const { data } = useQuery({ queryKey: ['tasks', 'queue-depth'], queryFn: () => api.counts.queueByAgent() });
+    return useMemo(() => new Map(Object.entries(data ?? {})), [data]);
 }

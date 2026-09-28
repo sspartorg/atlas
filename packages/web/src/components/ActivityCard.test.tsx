@@ -1874,3 +1874,34 @@ describe('ActivityLogCard — actor resolved from agentsById', () => {
         expect(document.body).toBeTruthy();
     }, 15000);
 });
+
+// A Task with hundreds of comments and events drew every one. The newest 50
+// of each show; the rest are a click away.
+describe('long activity', () => {
+    const many = (n: number): IActivityItem[] => [
+        ...Array.from({ length: n }, (_, i) => ({
+            kind: 'comment' as const,
+            data: makeComment({ id: i + 1, body: `comment ${i + 1}`, created_at: `2026-05-27T09:${String(i % 60).padStart(2, '0')}:00.000Z` }),
+        })),
+        ...Array.from({ length: n }, (_, i) => ({
+            kind: 'event' as const,
+            data: makeEvent({ id: 1000 + i, event_type: 'created' }),
+        })),
+    ];
+
+    it('shows the newest 50 comments and loads earlier ones on request', async () => {
+        server.use(...defaultHandlers, http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(many(60))));
+        renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
+        expect(await screen.findByText('comment 60')).toBeInTheDocument();
+        expect(screen.queryByText('comment 10')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Show 10 earlier · 10 hidden' }));
+        expect(await screen.findByText('comment 10')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /earlier/ })).not.toBeInTheDocument();
+    });
+
+    it('pages the activity log the same way', async () => {
+        server.use(...defaultHandlers, http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(many(55))));
+        renderWithProviders(<ActivityLogCard issueType="task" issueId="S1" />);
+        expect(await screen.findByRole('button', { name: 'Show 5 earlier · 5 hidden' })).toBeInTheDocument();
+    });
+});

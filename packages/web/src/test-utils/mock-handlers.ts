@@ -31,6 +31,7 @@ export const defaultHandlers = [
     http.get(`${BASE}/notifications`, ok<INotification[]>([])),
     http.get(`${BASE}/settings`, ok({ id: 1, owner_name: 'Owner', onboarding_complete: 1 })),
     http.get(`${BASE}/counts`, ok({})),
+    http.get(`${BASE}/counts/queue-by-agent`, ok({})),
     http.get(`${BASE}/dashboard`, ok({})),
     http.get(
         `${BASE}/issues/tree`,

@@ -1,8 +1,7 @@
-import { memo, useCallback, useRef, type ReactNode } from 'react';
+import { memo, useCallback, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
-import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import type { IssueStatus, IssueType, IAgent, SubTaskStatus } from '@atlas/shared';
 import { StatusChip } from './StatusChip.js';
 import { AgentChip } from './AgentChip.js';
@@ -12,6 +11,7 @@ import { SortableHeader, type SortDir } from './filterPrimitives.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { MobileWorkItemList } from './MobileWorkItemList.js';
+import { useShellVirtualizer } from '../hooks/useShellVirtualizer.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
@@ -104,7 +104,9 @@ interface WorkItemRowProps {
     gridTemplate: string;
     // When set, absolutely positions the row at the given `translateY` for
     // the window-virtualiser. Omitted for non-virtualised render paths.
-    style?: React.CSSProperties;
+    /** Set in a virtualised body: the row's Y offset. A number, not a style
+     *  object, so the memo holds while the list scrolls. */
+    offsetY?: number | undefined;
 }
 
 const WorkItemRow = memo(function WorkItemRow({
@@ -118,7 +120,7 @@ const WorkItemRow = memo(function WorkItemRow({
     onClick,
     formatRelative,
     gridTemplate,
-    style,
+    offsetY,
 }: WorkItemRowProps) {
     const isLive = row.status === 'in_progress';
     const isChild = row.isChild === true;
@@ -126,7 +128,11 @@ const WorkItemRow = memo(function WorkItemRow({
         <Box
             role="button"
             onClick={() => onClick(row)}
-            style={style}
+            style={
+                offsetY === undefined
+                    ? undefined
+                    : { position: 'absolute', top: 0, left: 0, right: 0, transform: `translateY(${offsetY}px)` }
+            }
             sx={{
                 display: 'grid',
                 gridTemplateColumns: gridTemplate,
@@ -273,17 +279,10 @@ function VirtualBody({
     formatRelative,
     gridTemplate,
 }: VirtualBodyProps) {
-    const parentRef = useRef<HTMLDivElement | null>(null);
-    const virtualizer = useWindowVirtualizer({
-        count: rows.length,
-        estimateSize: () => ROW_HEIGHT_PX,
-        overscan: 8,
-        scrollMargin: parentRef.current?.offsetTop ?? 0,
-    });
+    const { parentRef, virtualizer, scrollMargin } = useShellVirtualizer(rows.length, ROW_HEIGHT_PX);
 
     const items = virtualizer.getVirtualItems();
     const totalHeight = virtualizer.getTotalSize();
-    const offsetTop = parentRef.current?.offsetTop ?? 0;
 
     return (
         <Box
@@ -296,7 +295,7 @@ function VirtualBody({
         >
             {items.map((vi) => {
                 const row = rows[vi.index];
-                /* v8 ignore next -- useWindowVirtualizer only ever yields indices within [0, count), so rows[vi.index] is always defined; defensive guard against a future virtualizer version changing that invariant. */
+                /* v8 ignore next -- the virtualizer only ever yields indices within [0, count), so rows[vi.index] is always defined; defensive guard against a future virtualizer version changing that invariant. */
                 if (!row) return null;
                 const reporter = row.reporter_agent_id
                     ? (agentsById.get(row.reporter_agent_id) ?? null)
@@ -317,13 +316,7 @@ function VirtualBody({
                         onClick={onRowClick}
                         formatRelative={formatRelative}
                         gridTemplate={gridTemplate}
-                        style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            transform: `translateY(${vi.start - offsetTop}px)`,
-                        }}
+                        offsetY={vi.start - scrollMargin}
                     />
                 );
             })}

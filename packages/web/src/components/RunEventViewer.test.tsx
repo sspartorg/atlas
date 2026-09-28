@@ -564,3 +564,15 @@ describe('RunEventViewer — resetKey', () => {
         expect(screen.getAllByText('result').length).toBeGreaterThan(0);
     });
 });
+
+// A long run's section index held thousands of rows (a 20k-line log drew 25k
+// DOM nodes). Past 200 events only the rows in view are mounted.
+describe('RunEventViewer — long runs', () => {
+    it('does not mount every event of a long run', () => {
+        const lines = Array.from({ length: 300 }, (_, i) =>
+            JSON.stringify({ type: 'system', subtype: `step-${i}` })
+        ).join('\n');
+        renderViewer(lines, 'agent-stream-json');
+        expect(screen.queryAllByText(/^system\/step-/).length).toBeLessThan(300);
+    });
+});

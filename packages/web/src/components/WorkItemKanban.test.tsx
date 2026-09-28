@@ -430,3 +430,27 @@ describe('WorkItemKanban', () => {
         expect(screen.queryByText('No items')).not.toBeInTheDocument();
     });
 });
+
+// A column of hundreds drew every card (24k DOM nodes on a 2,000-Task
+// workspace). It draws 50; the header count still says how many there are.
+describe('WorkItemKanban — long columns', () => {
+    it('draws the first 50 cards of a column and the rest on request', () => {
+        const items = Array.from({ length: 60 }, (_, i) =>
+            makeItem({ id: `ATL-${i}`, shortId: `ATL-${i}`, title: `Card ${i}`, status: 'ready' })
+        );
+        renderWithProviders(
+            <WorkItemKanban
+                items={items}
+                agents={[]}
+                ownerName="Owner"
+                ownerAccent="#0A0A0A"
+                onTransition={vi.fn()}
+                onOpen={vi.fn()}
+            />
+        );
+        expect(screen.getByText('Card 49')).toBeInTheDocument();
+        expect(screen.queryByText('Card 50')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Show 10 more · 10 hidden' }));
+        expect(screen.getByText('Card 59')).toBeInTheDocument();
+    });
+});

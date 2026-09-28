@@ -329,6 +329,7 @@ Registered Croner jobs live in `services/schedule-registry.ts` (boot on startup,
 |---|---|---|
 | GET | `/api/counts` | Sidenav badge counts: `projects`, `tasks`, `sub_tasks`, `queue` (Tasks queued for an `item` workflow — `ready`, `workflow_id` set, no live run — plus top-level Task runs `running` now: the Queue page's queued + running), `agents`, `notifications` (unread) |
 | GET | `/api/dashboard` | KPI strip + awaiting-you + in-motion (route handler at `routes/counts.ts:14`; historical docs called this `/api/counts/dashboard`). `agentStatsByCategory[cat]` is `{ running }` — `in_progress` agent runs by agent category. There is no per-agent `queued`: agents have no queue, Tasks queue for workflows (`GET /api/workflow-queue`). KPI fields `tasks` (all Tasks), `tasksInProgress` (Tasks in `ready`/`in_progress`/`in_review`) and `doneThisWeek` (Tasks) replaced `epics` / `storiesInProgress` (ADR 0015). |
+| GET | `/api/counts/queue-by-agent` | `{ [agentId]: n }` — ready + in-progress Tasks and sub-tasks per assignee (`items_live`). Backs the agent pages' **Queue: N items**, which used to download every Task and sub-task to count them. |
 | GET | `/api/counts/project/:id` | Project Detail Overview tab KPIs: `open_tasks` (not `done`), `tasks_ready`, `tasks_in_flight` (`in_progress` + `in_review`), `tasks_waiting_info`, `costSummary`, `terminalCostSummary` |
 
 ### `routes/reminders.ts` â€” Reminders (A10)

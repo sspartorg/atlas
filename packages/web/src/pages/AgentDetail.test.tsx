@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
-import { makeAgent, makeSubTask } from '../test-utils/factories.js';
+import { makeAgent } from '../test-utils/factories.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { server } from '../test-setup.js';
 import { AgentDetail } from './AgentDetail.js';
@@ -79,17 +79,9 @@ describe('AgentDetail', () => {
         });
 
         it('counts Ready items assigned to the agent in the hero queue, even with no runs', async () => {
-            server.use(
-                http.get(`${BASE}/sub-tasks`, () =>
-                    HttpResponse.json([
-                        makeSubTask({
-                            id: 'SDB-4',
-                            assignee_agent_id: 'agent-coder',
-                            status: 'ready',
-                        }),
-                    ])
-                )
-            );
+            // Counted by the API now (`/counts/queue-by-agent`), not by
+            // downloading every Task and sub-task.
+            server.use(http.get(`${BASE}/counts/queue-by-agent`, () => HttpResponse.json({ 'agent-coder': 1 })));
             renderAgentDetail();
             expect(await screen.findByText(/Queue:/)).toHaveTextContent('Queue: 1 item');
         });
