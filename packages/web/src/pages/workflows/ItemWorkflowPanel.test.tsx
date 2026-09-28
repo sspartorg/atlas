@@ -92,7 +92,7 @@ describe('ItemWorkflowPanel', () => {
         mount({ workflowId: 'wf-1', runs: [summary({ status: 'waiting_for_owner' })] });
         const chip = await screen.findByText('Waiting for you');
         expect(chip.closest('a')).toHaveAttribute('href', '/workflows/wf-1/runs/wfr-1');
-        expect(screen.getByRole('link', { name: 'Changes' })).toHaveAttribute(
+        expect(screen.getByRole('link', { name: 'View changes' })).toHaveAttribute(
             'href',
             '/workflows/wf-1/runs/wfr-1#changes'
         );
