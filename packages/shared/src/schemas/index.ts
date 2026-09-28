@@ -575,10 +575,13 @@ export const CreateProjectRepoSchema = z.discriminatedUnion('mode', [
         .strict(),
 ]);
 
-/** PATCH /api/projects/:id/repos/:repoId — extra repos only; the primary is edited on the project. */
+/** PATCH /api/projects/:id/repos/:repoId — any repo (ADR 0018: none is primary). */
 export const UpdateProjectRepoSchema = z
     .object({
         default_branch: z.string().min(1).optional(),
+        // Swapping the token takes effect on the next fetch/push: auth is
+        // injected per git call, never stored in the clone's remote URL.
+        credential_id: z.string().min(1).optional(),
         setup_sh_body: z.string().optional(),
         setup_ps1_body: z.string().optional(),
         // ADR 0024. One line, because it is executed: a body belongs in the

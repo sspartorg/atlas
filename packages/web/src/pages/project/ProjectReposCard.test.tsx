@@ -278,6 +278,28 @@ describe('ProjectReposCard', () => {
         expect(await screen.findByText('No repos yet')).toBeInTheDocument();
     });
 
+    it('swaps a repo’s git credential from the Edit dialog', async () => {
+        mockRepos([API, WEB]);
+        let body: unknown;
+        server.use(
+            http.patch(`${BASE}/projects/p1/repos/r-web`, async ({ request }) => {
+                body = await request.json();
+                return HttpResponse.json({ ...WEB, credential_id: 'cred-1' });
+            })
+        );
+        renderCard();
+
+        await clickRowAction('web', 'Edit');
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.mouseDown(await within(dialog).findByRole('combobox'));
+        fireEvent.click(await screen.findByRole('option', { name: /My PAT/ }));
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+        await waitFor(() =>
+            expect(body).toEqual({ default_branch: 'develop', credential_id: 'cred-1' })
+        );
+    });
+
     it('saves a repo’s default branch; setup scripts moved to the Setup tab', async () => {
         mockRepos([API, WEB]);
         let body: unknown;

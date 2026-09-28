@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -25,6 +26,7 @@ import {
     useUpdateProjectRepo,
 } from '../../hooks/useProjectRepos.js';
 import { useToast } from '../../hooks/useToast.js';
+import { useCredentials } from '../../hooks/useCredentials.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { CloneStatusChip } from '../../components/CloneStatusChip.js';
 import { ConfirmActionModal } from '../../components/ConfirmActionModal.js';
@@ -32,6 +34,7 @@ import { RowActionMenu } from '../../components/RowActionMenu.js';
 import { RecloneProjectModal } from '../projects/RecloneProjectModal.js';
 import { AutoFetchScheduleModal } from '../projects/AutoFetchScheduleModal.js';
 import { AddRepoDialog } from './AddRepoDialog.js';
+import { CredentialSelect } from '../projects/RepoFormParts.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
@@ -277,10 +280,22 @@ function EditRepoDialog({
 }) {
     const update = useUpdateProjectRepo(projectId);
     const toast = useToast();
+    const navigate = useNavigate();
+    const { data: credentials = [] } = useCredentials();
     const [branch, setBranch] = useState(repo.default_branch);
+    const [credentialId, setCredentialId] = useState(repo.credential_id ?? '');
 
     async function save() {
-        await update.mutateAsync({ repoId: repo.id, data: { default_branch: branch.trim() } });
+        // Send the credential only when it changed, so a branch edit never
+        // trips over a credential that was deleted since.
+        const credentialChanged = credentialId !== '' && credentialId !== repo.credential_id;
+        await update.mutateAsync({
+            repoId: repo.id,
+            data: {
+                default_branch: branch.trim(),
+                ...(credentialChanged ? { credential_id: credentialId } : {}),
+            },
+        });
         toast.show({ message: `Saved ${repo.name}` });
         onClose();
     }
@@ -302,6 +317,17 @@ function EditRepoDialog({
                     onChange={(e) => setBranch(e.target.value)}
                     sx={{ mt: 1 }}
                 />
+                <Box sx={{ mt: 2 }}>
+                    <CredentialSelect
+                        credentials={credentials}
+                        value={credentialId}
+                        onChange={setCredentialId}
+                        onManage={() => {
+                            onClose();
+                            navigate('/settings/credentials');
+                        }}
+                    />
+                </Box>
                 <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate60, mt: 2 }}>
                     This repo&apos;s setup scripts live on the Setup tab.
                 </Typography>
