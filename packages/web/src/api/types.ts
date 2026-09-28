@@ -400,7 +400,8 @@ export interface AgentTest {
     workflow_id: string | null;
     /** A tag, for grouping fixtures into a set. */
     suite: string | null;
-    project_id: string;
+    /** Null since migration 021: a fixture belongs to the agent and binds to a project when it runs. */
+    project_id: string | null;
     repo_id: string | null;
     name: string;
     item_template: AgentTestItemTemplate;

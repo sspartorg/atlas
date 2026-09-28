@@ -118,6 +118,10 @@ describe('agentTestsService', () => {
         const updated = await agentTestsService.update(created.id, { name: 'renamed' });
         expect(updated?.name).toBe('renamed');
 
+        // The patch schema accepted `project_id` but the service dropped it.
+        const moved = await agentTestsService.update(created.id, { project_id: null });
+        expect(moved?.project_id).toBeNull();
+
         await agentTestsService.remove(created.id);
         expect(await agentTestsService.list('agent-coder')).toEqual([]);
     });

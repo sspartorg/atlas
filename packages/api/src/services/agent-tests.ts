@@ -146,6 +146,7 @@ export const agentTestsService = {
     async update(id: string, patch: UpdateAgentTestInput): Promise<AgentTestRow | null> {
         const set: Record<string, unknown> = { updated_at: new Date().toISOString() };
         if (patch.name !== undefined) set['name'] = patch.name;
+        if (patch.project_id !== undefined) set['project_id'] = patch.project_id;
         if (patch.repo_id !== undefined) set['repo_id'] = patch.repo_id;
         if (patch.suite !== undefined) set['suite'] = patch.suite;
         if (patch.item_template !== undefined) set['item_template'] = JSON.stringify(patch.item_template);

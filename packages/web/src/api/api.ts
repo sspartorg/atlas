@@ -1208,6 +1208,16 @@ export const api = {
                 expectations?: AgentTestExpectations;
             },
         ) => post<AgentTest>(`/agents/${agentId}/tests`, body),
+        update: (
+            testId: string,
+            body: {
+                project_id?: string | null;
+                repo_id?: string | null;
+                name?: string;
+                item_template?: AgentTestItemTemplate;
+                expectations?: AgentTestExpectations;
+            },
+        ) => patch<AgentTest>(`/agent-tests/${testId}`, body),
         remove: (testId: string) => del(`/agent-tests/${testId}`),
         run: (
             testId: string,
