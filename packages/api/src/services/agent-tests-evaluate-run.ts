@@ -3,6 +3,7 @@ import type { IRunOutcome, IRunTraceSummary } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
 import type { AgentTestVerdict, JudgeVerdict } from '../db/types.js';
 import { judgeAgentTestRun, type JudgeResult } from './agent-tests-judge.js';
+import { collectTestWorkspace, type AgentTestEvidence } from './agent-test-workspace.js';
 import {
     evaluateAgentTest,
     type AgentTestExpectations,
@@ -259,6 +260,8 @@ export async function judgePendingRun(run: AgentTestRunRow, test: AgentTestRow):
         .executeTakeFirst();
     if (!ar || !TERMINAL.has(ar.status as string)) return run;
 
+    await collectEvidence(run.id);
+
     const outcome: IRunOutcome | null = ar.outcome_kind
         ? ({
               kind: ar.outcome_kind,
@@ -333,6 +336,44 @@ export async function judgePendingRun(run: AgentTestRunRow, test: AgentTestRow):
         judge_reason: judged.result?.reason ?? null,
         judge_cost_usd: judged.result?.cost_usd ?? null,
     };
+}
+
+/**
+ * Keep what the run changed, and delete its checkout (migration 003).
+ *
+ * Claimed first — the completion hook and a read of the Tests tab can both
+ * get here for the same run, and only one of them may collect.
+ */
+export async function collectEvidence(testRunId: string): Promise<AgentTestEvidence | null> {
+    const row = await db
+        .selectFrom('agent_test_runs')
+        .select(['worktree_path', 'evidence'])
+        .where('id', '=', testRunId)
+        .executeTakeFirst();
+    const stored = (row?.evidence as AgentTestEvidence | null) ?? null;
+    if (!row?.worktree_path || !stored) return stored;
+    const claim = await db
+        .updateTable('agent_test_runs')
+        .set({ worktree_path: null })
+        .where('id', '=', testRunId)
+        .where('worktree_path', '=', row.worktree_path)
+        .executeTakeFirst();
+    if (Number(claim.numUpdatedRows) === 0) return stored;
+
+    let evidence: AgentTestEvidence;
+    try {
+        evidence = await collectTestWorkspace(row.worktree_path, stored.base_sha);
+    } catch (err) {
+        // Evidence about the run, not part of it: a failed diff never turns
+        // into a verdict. The checks that need it say so themselves.
+        evidence = { ...stored, collect_error: (err as Error).message };
+    }
+    await db
+        .updateTable('agent_test_runs')
+        .set({ evidence: JSON.stringify(evidence) })
+        .where('id', '=', testRunId)
+        .execute();
+    return evidence;
 }
 
 /** The judge's answer, in the shape the verdict above needs. */

@@ -18,6 +18,7 @@ import { subTasksService } from './sub-tasks.js';
 import { tasksService } from './tasks.js';
 import { projectReposService } from './project-repos.js';
 import { ensureTestProject } from './test-project.js';
+import { collectTestWorkspace, openTestWorkspace } from './agent-test-workspace.js';
 
 // Agent tests as product data (ADR 0023).
 //
@@ -199,8 +200,8 @@ export const agentTestsService = {
      *
      * They run in parallel, which is safe here specifically: an agent test
      * calls `spawnAgentRun` with no workflow run, so each one gets its own
-     * `mkdtemp` directory and never takes the project git lock. A workflow-level
-     * eval would have to serialise.
+     * detached checkout (migration 003) and holds the repo's git lock only
+     * for the `worktree add`. A workflow-level eval would have to serialise.
      */
     async run(testId: string, opts: RunTestOptions = {}): Promise<AgentTestBatch> {
         const test = await this.get(testId);
@@ -408,6 +409,31 @@ export interface ParkedFixture {
 }
 
 /** One sample: its own throwaway item, its own dispatch, its own row. */
+/**
+ * Check out the first repo the Task works in, and record where on the run row.
+ *
+ * Null when the repo has no folder on disk (a clone that never finished): the
+ * run then gets the old empty folder rather than failing to start at all.
+ */
+async function openWorkspace(
+    projectId: string,
+    repoIds: string[],
+    testRunId: string,
+): Promise<{ path: string; base_sha: string } | null> {
+    const [repo] = await projectReposService.forTask({ project_id: projectId, repo_ids: repoIds });
+    if (!repo?.git_path) return null;
+    const workspace = await openTestWorkspace(repo, testRunId);
+    await db
+        .updateTable('agent_test_runs')
+        .set({
+            worktree_path: workspace.path,
+            evidence: JSON.stringify({ base_sha: workspace.base_sha }),
+        } as never)
+        .where('id', '=', testRunId)
+        .execute();
+    return workspace;
+}
+
 async function runOneSample(
     test: AgentTestRow,
     batchId: string,
@@ -418,6 +444,8 @@ async function runOneSample(
     const t = test.item_template;
     const suffix = `[test] ${test.name}`;
     let itemId: string;
+    /** The Task's repos — a sub-task works in its parent's. */
+    let taskRepoIds: string[];
     if (t.issue_type === 'sub_task') {
         // A sub-task needs a parent. The test owns a throwaway Task for it
         // so the agent sees the shape it expects rather than an orphan.
@@ -437,6 +465,7 @@ async function runOneSample(
             is_test: true,
         });
         itemId = sub.id;
+        taskRepoIds = parent.repo_ids;
     } else {
         const task = await tasksService.create({
             project_id: binding.projectId,
@@ -448,6 +477,7 @@ async function runOneSample(
             ...(binding.repoId ? { repo_ids: [binding.repoId] } : {}),
         });
         itemId = task.id;
+        taskRepoIds = task.repo_ids;
     }
 
     const id = randomUUID();
@@ -463,6 +493,7 @@ async function runOneSample(
         } as never)
         .execute();
 
+    let workspace: { path: string; base_sha: string } | null = null;
     try {
         if (test.workflow_id) {
             // The end-to-end eval: the same fixture, through the whole chain.
@@ -473,17 +504,24 @@ async function runOneSample(
                 .where('id', '=', id)
                 .execute();
         } else {
+            // Migration 003 — a real checkout of the Task's repo, so an agent
+            // that edits code has code to edit. Collected (diff kept, folder
+            // deleted) when the run finishes, in `judgePendingRun`.
+            workspace = await openWorkspace(binding.projectId, taskRepoIds, id);
             const runId = await spawnAgentRun({
                 agentId: test.agent_id as string,
                 issueType: t.issue_type,
                 issueId: itemId,
                 projectId: binding.projectId,
+                ...(workspace ? { workingDir: workspace.path } : {}),
             });
             await db.updateTable('agent_test_runs').set({ agent_run_id: runId } as never).where('id', '=', id).execute();
         }
     } catch (err) {
-        // The dispatch never happened — a missing CLI, a bad model. That is
-        // a broken environment, not a failing agent, so it is `errored`.
+        // The dispatch never happened — a missing CLI, a bad model, a repo
+        // that would not check out. That is a broken environment, not a
+        // failing agent, so it is `errored`.
+        if (workspace) await collectTestWorkspace(workspace.path, workspace.base_sha).catch(() => undefined);
         await db
             .updateTable('agent_test_runs')
             .set({

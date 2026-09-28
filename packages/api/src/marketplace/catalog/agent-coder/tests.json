@@ -53,6 +53,7 @@
       "acceptance_criteria": "Given a lowercase sentence, when it is title-cased, then each word starts with a capital."
     },
     "expectations": {
+      "outcome_kind": "done",
       "files_untouched": [
         ".github/",
         "package.json",
