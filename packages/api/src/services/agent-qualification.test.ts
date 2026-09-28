@@ -40,6 +40,7 @@ async function sample(over: {
     effort?: string;
     prompt_version?: number;
     agent?: string;
+    cost?: number;
 }) {
     const runId = `ar-${++seq}`;
     await testDb
@@ -65,6 +66,7 @@ async function sample(over: {
             batch_id: over.batch ?? `b-${over.test}`,
             sample_index: over.index ?? 0,
             created_at: over.at ?? '2026-09-20T10:00:00Z',
+            ...(over.cost !== undefined ? { cost_usd: over.cost, judge_cost_usd: over.cost } : {}),
         } as never)
         .execute();
 }
@@ -107,6 +109,12 @@ describe('suiteVerdict', () => {
         expect(suiteVerdict({ fixtures: 3, never_run: 0, failed: 0, blocked: 0, stale: true })).toBe('stale');
     });
 
+    it('is running — not failing — while a sample is still in flight', () => {
+        expect(
+            suiteVerdict({ fixtures: 3, never_run: 0, failed: 1, blocked: 0, stale: false, running: 1 }),
+        ).toBe('running');
+    });
+
     it('is qualified only when every fixture has run and passed on this configuration', () => {
         expect(suiteVerdict({ fixtures: 3, never_run: 0, failed: 0, blocked: 0, stale: false })).toBe('qualified');
     });
@@ -136,6 +144,26 @@ describe('agentQualification', () => {
         const q = await of();
         expect(q).toMatchObject({ verdict: 'failing', failed: 1 });
         expect(q.per_fixture[0]?.failures).toContain('expected done, got rejected');
+    });
+
+    it('reads a batch still in flight as running, not failing', async () => {
+        const a = await fixture();
+        const b = await fixture({ name: 'second' });
+        await sample({ test: a, verdict: 'running' });
+        await sample({ test: b, verdict: 'failed' });
+        expect(await of()).toMatchObject({ verdict: 'running', running: 1, failed: 1 });
+    });
+
+    it('sums recorded costs as numbers across the whole fleet', async () => {
+        // pg returns `numeric` as a string; the fleet read used to concatenate
+        // them and then throw on `toFixed`, blanking every Untested badge.
+        await insertAgent({ id: 'agent-other' });
+        const a = await fixture();
+        await fixture({ agent: 'agent-other' });
+        await sample({ test: a, verdict: 'passed', cost: 0.12 });
+        const all = await agentQualification();
+        expect(all.find((q) => q.agent_id === 'agent-coder')?.cost_usd).toBe(0.24);
+        expect(all.find((q) => q.agent_id === 'agent-other')?.verdict).toBe('never_run');
     });
 
     it('goes stale — with the field named — when the model changed since the last run', async () => {

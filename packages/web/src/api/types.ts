@@ -618,6 +618,7 @@ export interface StarterTest {
 export type QualificationVerdict =
     | 'no_tests'
     | 'never_run'
+    | 'running'
     | 'failing'
     | 'blocked'
     | 'stale'
@@ -644,6 +645,8 @@ export interface AgentQualification {
     passed_at_1: number;
     passed_at_k: number;
     failed: number;
+    /** Fixtures whose latest batch still has a sample in flight. */
+    running: number;
     flaky: number;
     blocked: number;
     last_run_at: string | null;

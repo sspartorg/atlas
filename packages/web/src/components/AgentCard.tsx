@@ -9,6 +9,7 @@ import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 /** Short enough for a chip; the tooltip carries the sentence. */
 const QUALIFICATION_CHIP: Record<QualificationVerdict, string> = {
     qualified: 'Qualified',
+    running: 'Running',
     failing: 'Failing',
     stale: 'Stale',
     blocked: 'Blocked',
@@ -18,6 +19,7 @@ const QUALIFICATION_CHIP: Record<QualificationVerdict, string> = {
 
 const QUALIFICATION_HINT: Record<QualificationVerdict, string> = {
     qualified: 'Every test passed, on this configuration',
+    running: 'A test run is in progress',
     failing: 'A test failed the last time it ran',
     stale: 'Passing, but on a configuration this agent no longer runs',
     blocked: 'The last run judged nothing — a broken environment, not a wrong answer',

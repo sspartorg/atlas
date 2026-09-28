@@ -274,6 +274,11 @@ describe('AgentCard — qualification chip', () => {
         expect(screen.getByText('Untested')).toBeInTheDocument();
     });
 
+    it('says a suite still in flight is running', () => {
+        renderWithProviders(<AgentCard agent={makeAgent()} qualification="running" />);
+        expect(screen.getByText('Running')).toBeInTheDocument();
+    });
+
     it('flags one whose suite is failing', () => {
         renderWithProviders(<AgentCard agent={makeAgent()} qualification="failing" />);
         expect(screen.getByText('Failing')).toBeInTheDocument();

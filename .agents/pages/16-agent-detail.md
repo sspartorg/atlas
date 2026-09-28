@@ -71,6 +71,7 @@ Tab switching is plain `useTabParam(tabSlug)`. (The legacy `LinearProgress` mid-
 - **The verdict is the batch's, not a sample's.** An agent is stochastic, so a single run printed whichever of "passed" and "failed" the Owner happened to press. The headline reads `2/3 passed · flaky`, over a strip with one segment per sample in the order taken, and the history lists *which* expectation was unstable and in how many runs. A dispatch that never started is reported beside the score (`· 1 could not run`) rather than inside it.
 - **Cost before the click**: the button shows the **total** for the selected sample count (`Run · ~$1.54` for 5× at $0.31), from `GET /api/agents/:id/cost-estimate?n=`. `null` (no history) renders as a plain `Run`, not as free.
 - **History**: `GET /api/agent-tests/:testId/runs`, polled every 5s while any verdict is `running`. A verdict is `passed` / `failed` / `errored`, with the failing expectations listed verbatim. **`errored` is not `failed`** — a dispatch that never started is a broken environment, not a failing agent.
+- **Suite header** (`GET /api/agent-qualification?agent_id=`): `RUNNING…` while any fixture's latest batch has a sample in flight — polled every 5s until it lands, so "Run all" never flashes `FAILING` before the answer is in. "Run all" also refreshes the fleet badges on `/agents`.
 - Evaluation is **lazy**: there is no completion hook on `agent_runs`, so a run is judged the first time the tab reads it.
 
 ### Performance (`PerformanceTabContent`) — ADR 0023 phase 2 / ATL-140

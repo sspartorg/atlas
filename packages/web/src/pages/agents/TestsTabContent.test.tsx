@@ -69,6 +69,7 @@ function aQualification(over: Record<string, unknown> = {}): Record<string, unkn
         passed_at_1: 3,
         passed_at_k: 3,
         failed: 0,
+        running: 0,
         flaky: 0,
         blocked: 0,
         last_run_at: '2026-09-24T00:00:00Z',
@@ -585,6 +586,16 @@ describe('TestsTabContent — qualification', () => {
         });
         expect(await screen.findByText('NEVER RUN')).toBeInTheDocument();
         expect(screen.queryByText('QUALIFIED')).not.toBeInTheDocument();
+    });
+
+    // "Run all" used to flash FAILING while its samples were still in flight.
+    it('says a suite with samples in flight is running, not failing', async () => {
+        mount({
+            tests: [aTest()],
+            qualification: aQualification({ verdict: 'running', running: 1, failed: 0 }),
+        });
+        expect(await screen.findByText('RUNNING…')).toBeInTheDocument();
+        expect(screen.queryByText('FAILING')).not.toBeInTheDocument();
     });
 
     it('runs the whole suite in the project the header names', async () => {
