@@ -135,6 +135,8 @@ export function useAgentQualification(agentId?: string) {
     return useQuery({
         queryKey: ['agent-qualification', agentId ?? 'all'],
         queryFn: () => api.agentTests.qualification(agentId),
+        refetchInterval: (query) =>
+            (query.state.data ?? []).some((q) => q.verdict === 'running') ? 5000 : false,
     });
 }
 
@@ -146,7 +148,8 @@ export function useRunAgentSuite(agentId: string) {
             api.agentTests.runSuite(agentId, body),
         onSuccess: () => {
             void qc.invalidateQueries({ queryKey: ['agent-tests', agentId] });
-            void qc.invalidateQueries({ queryKey: ['agent-qualification', agentId] });
+            // Both keys: this agent's header and the fleet's badges.
+            void qc.invalidateQueries({ queryKey: ['agent-qualification'] });
             void qc.invalidateQueries({ queryKey: ['agent-test-batches'] });
         },
     });

@@ -217,13 +217,14 @@ function expectationSummary(e: AgentTest['expectations']): string[] {
 /**
  * The suite verdict, in the Owner's words.
  *
- * Six states rather than a percentage, because the useful answers are not
+ * Seven states rather than a percentage, because the useful answers are not
  * points on one scale: "never run" is not a low score, and "passing, on a model
  * you have since changed" is not a pass. Deliberately per-agent — ADR 0023
  * forbids ranking agents on pass@1, and nothing here averages across them.
  */
 const VERDICT_LABEL: Record<QualificationVerdict, { label: string; color: string }> = {
     qualified: { label: 'QUALIFIED', color: ATLAS_PALETTE.greenDark },
+    running: { label: 'RUNNING…', color: ATLAS_PALETTE.slate60 },
     failing: { label: 'FAILING', color: ATLAS_PALETTE.red },
     // Amber, not red: nothing is known to be wrong, it is that nothing is known.
     stale: { label: 'STALE', color: ATLAS_PALETTE.amber },

@@ -1,7 +1,7 @@
 import { db } from '../db/kysely-client.js';
 import { toBatches, type AgentTestBatch } from './agent-test-batches.js';
 import { isOwnerEdited } from './agent-starter-tests.js';
-import type { AgentTestRunRow } from './agent-tests-evaluate-run.js';
+import { asRun } from './agent-tests-evaluate-run.js';
 
 // "How do we know ABC Agent does what it is supposed to?"
 //
@@ -33,6 +33,7 @@ import type { AgentTestRunRow } from './agent-tests-evaluate-run.js';
 export type QualificationVerdict =
     | 'no_tests'
     | 'never_run'
+    | 'running'
     | 'failing'
     | 'blocked'
     | 'stale'
@@ -60,6 +61,8 @@ export interface AgentQualification {
     passed_at_1: number;
     passed_at_k: number;
     failed: number;
+    /** Fixtures whose latest batch still has a sample in flight. Counted as neither passed nor failed. */
+    running: number;
     flaky: number;
     /** Latest batch judged nothing at all — a broken environment, not a wrong answer. */
     blocked: number;
@@ -87,9 +90,13 @@ export function suiteVerdict(input: {
     failed: number;
     blocked: number;
     stale: boolean;
+    running?: number;
 }): QualificationVerdict {
     if (input.fixtures === 0) return 'no_tests';
     if (input.never_run === input.fixtures) return 'never_run';
+    // A suite with a sample in flight has not answered yet. Reading its
+    // unfinished batch as `failing` is what made "Run all" flash red.
+    if ((input.running ?? 0) > 0) return 'running';
     if (input.failed > 0) return 'failing';
     if (input.blocked > 0) return 'blocked';
     // A partially-run suite is not qualified either: `never_run > 0` here means
@@ -194,6 +201,7 @@ export async function agentQualification(agentId?: string): Promise<AgentQualifi
         let passed_at_1 = 0;
         let passed_at_k = 0;
         let failed = 0;
+        let running = 0;
         let flaky = 0;
         let blocked = 0;
         let cost = 0;
@@ -203,7 +211,10 @@ export async function agentQualification(agentId?: string): Promise<AgentQualifi
 
         for (const t of mine) {
             const rows = runsByTest.get(t.id) ?? [];
-            const latest: AgentTestBatch | undefined = toBatches(rows as unknown as AgentTestRunRow[])[0];
+            // `asRun` coerces the `numeric` cost columns, which pg returns as
+            // strings — without it the cost sum concatenated and the fleet
+            // read threw on `toFixed` once any run recorded a cost.
+            const latest: AgentTestBatch | undefined = toBatches(rows.map((r) => asRun(r)))[0];
             const provenance: QualificationFixture['provenance'] = !t.source_test_id
                 ? 'owner'
                 : isOwnerEdited({
@@ -234,10 +245,11 @@ export async function agentQualification(agentId?: string): Promise<AgentQualifi
             }
 
             const judged = latest.n_runs - latest.errored;
-            if (judged === 0) blocked += 1;
+            if (latest.running > 0) running += 1;
+            else if (judged === 0) blocked += 1;
             else if (latest.pass_at_1) passed_at_1 += 1;
             if (latest.pass_at_k) passed_at_k += 1;
-            if (judged > 0 && !latest.pass_at_k) failed += 1;
+            if (latest.running === 0 && judged > 0 && !latest.pass_at_k) failed += 1;
             if (latest.flaky) flaky += 1;
             cost += latest.cost_usd + latest.judge_cost_usd;
             if (!last_run_at || latest.created_at > last_run_at) last_run_at = latest.created_at;
@@ -280,6 +292,7 @@ export async function agentQualification(agentId?: string): Promise<AgentQualifi
             failed,
             blocked,
             stale: stale_reason !== null,
+            running,
         });
 
         return {
@@ -290,6 +303,7 @@ export async function agentQualification(agentId?: string): Promise<AgentQualifi
             passed_at_1,
             passed_at_k,
             failed,
+            running,
             flaky,
             blocked,
             last_run_at,
