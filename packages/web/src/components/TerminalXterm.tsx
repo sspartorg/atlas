@@ -30,7 +30,7 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 //   - Container resize -> the GRID never changes. The terminal is pinned
 //     to TERMINAL_COLS x TERMINAL_ROWS (shared constant, matching the PTY
 //     and the server mirror); a pane resize rescales the FONT to fit the
-//     width (fitFontToWidth below). No {cmd:'resize'} is ever sent.
+//     host (fitFontToHost below). No {cmd:'resize'} is ever sent.
 //     History: the grid used to follow the pane via FitAddon + resize
 //     envelopes + a drift watchdog. Every variant of that left windows
 //     where the PTY's believed width and this terminal's width differed,
@@ -69,7 +69,7 @@ const RECONNECT_DELAY_MS = 1_500;
 // the grid never changes — so tracking a divider drag frame-by-frame buys
 // nothing and re-measuring glyph metrics per animation frame is wasted work.
 const FONT_FIT_DEBOUNCE_MS = 100;
-// fitFontToWidth bounds. Below 8px a 120-col grid is unreadable anyway and
+// fitFontToHost bounds. Below 8px a 120-col grid is unreadable anyway and
 // the loop needs a floor; above 24px a huge pane just gets whitespace.
 export const FONT_SIZE_MIN = 8;
 export const FONT_SIZE_MAX = 24;
@@ -119,34 +119,44 @@ export function writeWsFrame(term: Pick<XTerm, 'write' | 'options'>, data: unkno
 }
 
 /**
- * Scale the terminal's FONT so the fixed TERMINAL_COLS-wide grid fits the
- * host's width. This replaces FitAddon: the grid is pinned to match the
- * PTY, so panes adapt by font size (the tmux/asciinema model), never by
- * cols/rows. Strategy: proportional guess from the currently rendered
- * width (integer font sizes only, clamped to [FONT_SIZE_MIN,
- * FONT_SIZE_MAX]), then a rAF-deferred check that steps down 1px at a
- * time if integer cell rounding still overflows — deferred because xterm
- * re-measures glyph metrics asynchronously after an options change.
- * No-ops when either measurement is 0 (detached host, jsdom).
+ * Scale the terminal's FONT so the fixed TERMINAL_COLS x TERMINAL_ROWS grid
+ * fits the host — width AND height. This replaces FitAddon: the grid is
+ * pinned to match the PTY, so panes adapt by font size (the tmux/asciinema
+ * model), never by cols/rows. Fitting width alone let a wide, short pane
+ * grow the font until the bottom rows (the CLI's input box and status line)
+ * fell below the window. Strategy: proportional guess from the currently
+ * rendered size along the tighter axis (integer font sizes only, clamped to
+ * [FONT_SIZE_MIN, FONT_SIZE_MAX]), then a rAF-deferred check that steps down
+ * 1px at a time if integer cell rounding still overflows — deferred because
+ * xterm re-measures glyph metrics asynchronously after an options change.
+ * No-ops when the width measurements are 0 (detached host, jsdom); a host
+ * with no measurable height is fitted by width only.
  */
-export function fitFontToWidth(term: Pick<XTerm, 'options' | 'element'>, host: HTMLElement): void {
+export function fitFontToHost(term: Pick<XTerm, 'options' | 'element'>, host: HTMLElement): void {
     const screen = term.element?.querySelector<HTMLElement>('.xterm-screen');
     if (!screen) return;
     const avail = host.clientWidth;
     const rendered = screen.clientWidth;
     if (avail <= 0 || rendered <= 0) return;
+    const heightRatio =
+        host.clientHeight > 0 && screen.clientHeight > 0
+            ? host.clientHeight / screen.clientHeight
+            : Infinity;
     const current = term.options.fontSize ?? FONT_SIZE_DEFAULT;
     const next = Math.max(
         FONT_SIZE_MIN,
-        Math.min(FONT_SIZE_MAX, Math.floor((current * avail) / rendered))
+        Math.min(FONT_SIZE_MAX, Math.floor(current * Math.min(avail / rendered, heightRatio)))
     );
     if (next !== current) term.options.fontSize = next;
+    const overflows = () =>
+        screen.clientWidth > host.clientWidth ||
+        (host.clientHeight > 0 && screen.clientHeight > host.clientHeight);
     const settle = () => {
         // The deferred pass can land after unmount; a detached screen means
         // the terminal was disposed and its options must not be touched.
         if (!screen.isConnected) return;
         const size = term.options.fontSize ?? next;
-        if (size > FONT_SIZE_MIN && screen.clientWidth > host.clientWidth) {
+        if (size > FONT_SIZE_MIN && overflows()) {
             term.options.fontSize = size - 1;
             requestAnimationFrame(settle);
         }
@@ -252,7 +262,7 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
             });
             term.open(hostRef.current);
 
-            fitFontToWidth(term, hostRef.current);
+            fitFontToHost(term, hostRef.current);
             termRef.current = term;
             createdTerm = term;
             // Re-fit the font after webfonts land — glyph metrics change
@@ -261,7 +271,7 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
             if (typeof document !== 'undefined' && 'fonts' in document) {
                 void document.fonts.ready.then(() => {
                     if (termRef.current !== term || !hostRef.current) return;
-                    fitFontToWidth(term, hostRef.current);
+                    fitFontToHost(term, hostRef.current);
                 });
             }
             createdSub = term.onData((data) => {
@@ -510,7 +520,7 @@ export function TerminalXterm({ sessionId, sessionLive }: Props) {
             if (fontFitTimer) clearTimeout(fontFitTimer);
             fontFitTimer = setTimeout(() => {
                 fontFitTimer = null;
-                if (termRef.current) fitFontToWidth(termRef.current, host);
+                if (termRef.current) fitFontToHost(termRef.current, host);
             }, FONT_FIT_DEBOUNCE_MS);
         });
         ro.observe(host);

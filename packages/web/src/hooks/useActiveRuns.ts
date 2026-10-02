@@ -12,7 +12,12 @@ import { api } from '../api/api.js';
 // the ~6KB GET /api/run?limit=500 fetch on every page despite staleTime.
 // SSE keeps the cache fresh via invalidation on run lifecycle events, so
 // the no-mount-refetch path is safe.
-export function useActiveRuns(): { hasActiveRuns: boolean; count: number } {
+export function useActiveRuns(): {
+    hasActiveRuns: boolean;
+    count: number;
+    /** Agents with a queued or in-progress run. */
+    agentIds: Set<string>;
+} {
     const { data } = useQuery({
         queryKey: ['runs', 'all'],
         queryFn: () => api.run.list({ limit: 500 }),
@@ -22,5 +27,9 @@ export function useActiveRuns(): { hasActiveRuns: boolean; count: number } {
     const active = (data ?? []).filter(
         (r) => r.status === 'queued' || r.status === 'in_progress',
     );
-    return { hasActiveRuns: active.length > 0, count: active.length };
+    return {
+        hasActiveRuns: active.length > 0,
+        count: active.length,
+        agentIds: new Set(active.map((r) => r.agent_id)),
+    };
 }

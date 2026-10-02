@@ -29,6 +29,10 @@ export function QualityChecklistCard({ agentId }: { agentId: string }) {
     const [hydrated, setHydrated] = useState(false);
     const [pendingDeleteIdx, setPendingDeleteIdx] = useState<number | null>(null);
     const [saving, setSaving] = useState(false);
+    // Same rule as Save role: nothing to save until the draft differs.
+    const dirty =
+        JSON.stringify(checks.map((c) => [c.label, c.required])) !==
+        JSON.stringify((checklistsQuery.data ?? []).map((c) => [c.label, c.required]));
     const pendingDeleteCheck =
         pendingDeleteIdx !== null ? (checks[pendingDeleteIdx] ?? null) : null;
 
@@ -162,7 +166,7 @@ export function QualityChecklistCard({ agentId }: { agentId: string }) {
                     variant="contained"
                     size="small"
                     onClick={() => void handleSave()}
-                    disabled={saving || !hydrated}
+                    disabled={saving || !hydrated || !dirty}
                     sx={{
                         textTransform: 'none',
                         bgcolor: ATLAS_PALETTE.green,

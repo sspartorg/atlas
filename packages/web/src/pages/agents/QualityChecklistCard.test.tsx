@@ -21,6 +21,23 @@ describe('QualityChecklistCard', () => {
         expect(screen.getByText(/workflow's fail path/i)).toBeInTheDocument();
     });
 
+    it('keeps Save disabled until the checklist differs from what is saved', async () => {
+        server.use(
+            http.get(`${BASE}/agents/agent-coder/checklists`, () =>
+                HttpResponse.json([
+                    { id: 1, agent_id: 'agent-coder', label: 'Tests pass', sort_order: 0, required: true },
+                ])
+            ),
+            ...defaultHandlers
+        );
+        renderWithProviders(<QualityChecklistCard agentId="agent-coder" />);
+        await waitFor(() => expect(labelInputs().map((i) => i.value)).toEqual(['Tests pass']));
+        expect(screen.getByRole('button', { name: /Save checklist/i })).toBeDisabled();
+
+        await userEvent.type(labelInputs()[0]!, '!');
+        expect(screen.getByRole('button', { name: /Save checklist/i })).toBeEnabled();
+    });
+
     it('hydrates persisted checks, adds, removes via confirm, and saves the result', async () => {
         let saved: unknown = null;
         server.use(

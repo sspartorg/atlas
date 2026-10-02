@@ -63,17 +63,53 @@ function rowToNotification(row: Record<string, unknown>): INotification {
 }
 
 // A completion `needs_you` is a snapshot of "item is waiting on you"; once
-// the item moves on it is stale and must drop out of the feed + badge.
-// Scoped to agent_completed: agent_error / terminal-idle prompts are not
-// derived from item status and must survive whatever state the item is in.
+// the item moves on it is stale and must drop out of the feed + badge. A
+// newer one on the same item supersedes it too: otherwise an answered
+// question resurfaced the moment the item reached in_review for its PR.
+// Scoped to agent_completed and workflow_run — the two producers whose
+// needs_you means "this item is parked on you / its PR is ready" (a workflow
+// run's were never scoped, so they outlived the item). agent_error /
+// terminal-idle prompts are not derived from item status and must survive
+// whatever state the item is in.
+/**
+ * One plain line for a notification. Agents write their reasons in markdown;
+ * the feed row, badge tooltip and external channel all showed it raw
+ * ("## Brainstorm — …`todo count`…"). The comment thread keeps the markdown.
+ */
+export function plainNotice(text: string, max = 240): string {
+    const line = text
+        .replace(/`{1,3}/g, '')
+        .replace(/^\s{0,3}(#{1,6}|[-*+]|\d+\.|>)\s+/gm, '')
+        .replace(/(\*\*|__)(.+?)\1/g, '$2')
+        .replace(/#{1,6}\s+/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line;
+}
+
+const ITEM_STATE_EVENTS = ['agent_completed', 'workflow_run'];
+
 function notStaleNeedsYou(
     eb: ExpressionBuilder<DB & { n: DB['notifications']; i: DB['items'] }, 'n' | 'i'>,
 ) {
     return eb.or([
         eb('n.kind', '!=', 'needs_you'),
-        eb('n.event_type', '!=', 'agent_completed'),
+        eb('n.event_type', 'not in', ITEM_STATE_EVENTS),
         eb('i.id', 'is', null),
-        eb('i.status', 'in', ['waiting_for_info', 'in_review']),
+        eb.and([
+            eb('i.status', 'in', ['waiting_for_info', 'in_review']),
+            eb.not(
+                eb.exists(
+                    eb
+                        .selectFrom('notifications as newer')
+                        .select('newer.id')
+                        .whereRef('newer.item_id', '=', 'n.item_id')
+                        .where('newer.kind', '=', 'needs_you')
+                        .where('newer.event_type', 'in', ITEM_STATE_EVENTS)
+                        .whereRef('newer.id', '>', 'n.id'),
+                ),
+            ),
+        ]),
     ]);
 }
 

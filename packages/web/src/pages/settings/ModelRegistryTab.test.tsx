@@ -29,6 +29,21 @@ const SEED_MODELS = [
 ];
 
 describe('ModelRegistryTab', () => {
+    it('marks a CLI by whether its binary is installed', async () => {
+        server.use(
+            http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json(SEED_MODELS)),
+            http.get('http://localhost:3000/api/cli/availability', () =>
+                HttpResponse.json([
+                    { cli: 'claude', binary: 'claude', available: true, version: '2' },
+                    { cli: 'copilot', binary: 'copilot', available: false, version: null },
+                ]),
+            ),
+        );
+        renderWithProviders(<ModelRegistryTab />);
+        expect(await screen.findByRole('img', { name: 'Installed' })).toBeInTheDocument();
+        expect(screen.getAllByRole('img', { name: 'Not installed' }).length).toBeGreaterThan(0);
+    });
+
     it('mounts without crashing', () => {
         server.use(http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json([])));
         const { container } = renderWithProviders(<ModelRegistryTab />);

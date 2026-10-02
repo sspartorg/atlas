@@ -35,6 +35,21 @@ describe('useActiveRuns', () => {
         expect(result.current.hasActiveRuns).toBe(true);
     });
 
+    it('names the agents with an active run', async () => {
+        server.use(
+            http.get('http://localhost:3000/api/run', () =>
+                HttpResponse.json([
+                    { id: 'r1', agent_id: 'a-coder', status: 'in_progress' },
+                    { id: 'r2', agent_id: 'a-coder', status: 'queued' },
+                    { id: 'r3', agent_id: 'a-review', status: 'completed' },
+                ]),
+            ),
+        );
+        const { result } = renderHook(() => useActiveRuns(), { wrapper: makeWrapper() });
+        await waitFor(() => expect(result.current.count).toBe(2));
+        expect([...result.current.agentIds]).toEqual(['a-coder']);
+    });
+
     it('treats an empty list as no-active', async () => {
         server.use(http.get('http://localhost:3000/api/run', () => HttpResponse.json([])));
         const { result } = renderHook(() => useActiveRuns(), { wrapper: makeWrapper() });

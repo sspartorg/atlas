@@ -33,7 +33,7 @@ import { sql } from 'kysely';
 import { db } from '../db/kysely-client.js';
 import { broadcastSSE } from '../routes/events.js';
 import { eventsLog } from './events-log.js';
-import { notificationsService } from './notifications.js';
+import { notificationsService, plainNotice } from './notifications.js';
 import { sendExternalForNotification } from './external-notifications.js';
 import { externalLinks, parseGithubPrUrl, fetchGithubPrTitle } from './external-links.js';
 import { commentsService } from './comments.js';
@@ -178,13 +178,13 @@ async function notifyOwner(
         const item = run.item_id ? await loadItem(run.item_id) : undefined;
         const notification = await notificationsService.create({
             event_type: 'workflow_run',
-            message,
+            message: plainNotice(message),
             issue_type: (item?.type as IssueType | undefined) ?? null,
             issue_id: run.item_id,
             agent_id: null,
             kind,
         });
-        if (eventKey) await sendExternalForNotification(notification.id, message, eventKey);
+        if (eventKey) await sendExternalForNotification(notification.id, notification.message, eventKey);
     } catch {
         /* notifications are best-effort */
     }

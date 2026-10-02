@@ -287,7 +287,8 @@ export function MarketplaceWorkflowDetail() {
                 >
                     account_tree
                 </Box>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
+                {/* Real basis so the actions wrap below on a phone. */}
+                <Box sx={{ flex: '1 1 240px', minWidth: 0 }}>
                     <Typography
                         variant="h1"
                         sx={{

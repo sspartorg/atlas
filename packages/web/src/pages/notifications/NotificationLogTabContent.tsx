@@ -12,6 +12,7 @@ import { useResendNotification, useCancelNotification } from '../../hooks/useNot
 import { useToast } from '../../hooks/useToast.js';
 import { useIsMobile } from '../../hooks/useIsMobile.js';
 import { api } from '../../api/api.js';
+import { isExternalChannelConnected } from '../../hooks/useSettings.js';
 import { FilterPill } from '../../components/filterPrimitives.js';
 import { HeroEmptyState } from '../../components/HeroEmptyState.js';
 import { KindIcon } from '../../components/KindIcon.js';
@@ -607,6 +608,7 @@ function EmptyState({ settings }: { settings: ISettings | undefined }) {
     const [testing, setTesting] = useState(false);
     const endpointLabel = settings?.external_notification_endpoint_label ?? null;
     const chatId = settings?.external_notification_chat_id ?? null;
+    const connected = isExternalChannelConnected(settings);
 
     async function handleSendTest() {
         setTesting(true);
@@ -627,8 +629,14 @@ function EmptyState({ settings }: { settings: ISettings | undefined }) {
     return (
         <HeroEmptyState
             icon={<SendRounded sx={{ fontSize: 28, color: ATLAS_PALETTE.brandBlue }} />}
-            title="External Channel Is Configured but Quiet"
-            description="No messages have been sent yet. Agents will ping you here when something needs attention."
+            title={
+                connected ? 'External Channel Is Configured but Quiet' : 'No External Channel Yet'
+            }
+            description={
+                connected
+                    ? 'No messages have been sent yet. Agents will ping you here when something needs attention.'
+                    : 'Connect a channel (link above) and agents will ping you there when something needs attention.'
+            }
             primaryAction={
                 <Box
                     sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}

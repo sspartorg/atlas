@@ -5,7 +5,7 @@
  * `gitConfigPath !== null ? { GIT_CONFIG_GLOBAL: path } : {}`.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { gitInvokeEnv } from './git-env.js';
 
 describe('gitInvokeEnv', () => {
@@ -26,5 +26,22 @@ describe('gitInvokeEnv', () => {
         // GCM silencers are still set.
         expect(env['GIT_TERMINAL_PROMPT']).toBe('0');
         expect(env['GIT_CONFIG_NOSYSTEM']).toBe('1');
+    });
+
+    afterEach(() => vi.unstubAllEnvs());
+
+    it("drops a parent Claude Code session's identity so a spawned claude is its own session", () => {
+        // Atlas started from a Claude Code terminal inherits these; a child
+        // claude that sees them skips writing its own transcript.
+        vi.stubEnv('CLAUDECODE', '1');
+        vi.stubEnv('CLAUDE_CODE_SESSION_ID', 'parent');
+        vi.stubEnv('CLAUDE_CODE_CHILD_SESSION', '1');
+        vi.stubEnv('CLAUDE_CONFIG_DIR', '/home/me/.claude-work');
+        const env = gitInvokeEnv(null);
+        expect(env['CLAUDECODE']).toBeUndefined();
+        expect(env['CLAUDE_CODE_SESSION_ID']).toBeUndefined();
+        expect(env['CLAUDE_CODE_CHILD_SESSION']).toBeUndefined();
+        // Owner configuration is not session identity — it stays.
+        expect(env['CLAUDE_CONFIG_DIR']).toBe('/home/me/.claude-work');
     });
 });

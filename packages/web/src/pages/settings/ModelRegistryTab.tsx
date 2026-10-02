@@ -17,26 +17,24 @@ import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { FormHeading } from '../../components/FormHeading.js';
 import { SettingsSection } from './SettingsSection.js';
 import { ModelEditModal } from './ModelEditModal.js';
+import { useCliAvailability } from '../../hooks/useCliAvailability.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
-const CLI_META: Record<AgentCli, { title: string; sub: string; dotColor: string; chip: string }> = {
+const CLI_META: Record<AgentCli, { title: string; sub: string; chip: string }> = {
     claude: {
         title: 'Claude CLI',
-        sub: "Anthropic Claude SDK / claude-ck. Auth comes from your machine's `claude` install.",
-        dotColor: ATLAS_PALETTE.error,
+        sub: "Anthropic Claude Code. Auth comes from your machine's `claude` install.",
         chip: 'cli · claude',
     },
     copilot: {
         title: 'GitHub Copilot CLI',
         sub: 'GitHub Copilot CLI. Auth comes from `gh auth login` on this machine.',
-        dotColor: ATLAS_PALETTE.slate,
         chip: 'cli · copilot',
     },
     ollama: {
         title: 'Ollama',
         sub: 'Claude Code pointed at your local Ollama server — free, no account. Models must be pulled with `ollama pull` first.',
-        dotColor: ATLAS_PALETTE.amber,
         chip: 'cli · ollama',
     },
 };
@@ -85,6 +83,16 @@ export function ModelRegistryTab() {
 
 function CliCard({ cli, models }: { cli: AgentCli; models: ICliModel[] }) {
     const meta = CLI_META[cli];
+    // The dot is install status, not branding: red read as "broken" on a
+    // CLI whose runs were working.
+    const { data: availability } = useCliAvailability();
+    const installed = availability?.find((a) => a.cli === cli)?.available;
+    const dot =
+        installed === undefined
+            ? { color: ATLAS_PALETTE.slate40, label: 'Checking install' }
+            : installed
+              ? { color: ATLAS_PALETTE.success, label: 'Installed' }
+              : { color: ATLAS_PALETTE.error, label: 'Not installed' };
     const toast = useToast();
     const remove = useRemoveCliModel();
     const [modalOpen, setModalOpen] = useState(false);
@@ -133,7 +141,12 @@ function CliCard({ cli, models }: { cli: AgentCli; models: ICliModel[] }) {
                     mb: 3,
                 }}
             >
-                <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: meta.dotColor }} />
+                <Box
+                    role="img"
+                    aria-label={dot.label}
+                    title={dot.label}
+                    sx={{ width: 8, height: 8, borderRadius: '50%', background: dot.color }}
+                />
                 <Typography sx={{ fontSize: 14, fontWeight: 600, color: ATLAS_PALETTE.slate }}>
                     {meta.title}
                 </Typography>

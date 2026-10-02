@@ -360,6 +360,21 @@ describe('promptHits (P14)', () => {
         expect(miss).toEqual([]);
     });
 
+    it('gives sibling agents distinct ids and skips front-matter in the snippet', () => {
+        const writer = makeAgent({
+            id: 'agent-doc-writer',
+            name: 'Doc Writer',
+            prompt_md: '---\ndescription: x\nmodel: y\n---\n\nYou document one sub-task.',
+            prompt_version: 1,
+            status: 'active',
+        });
+        const reviewer = makeAgent({ ...writer, id: 'agent-doc-reviewer', name: 'Doc Reviewer' });
+        const [w, r] = promptHits([writer, reviewer], EMPTY_FILTERS);
+        expect(w?.displayId).toBe('PRM-DOC-WRITER-v1');
+        expect(r?.displayId).toBe('PRM-DOC-REVIEWER-v1');
+        expect(w?.description).toBe('You document one sub-task.');
+    });
+
     it('filters by agent id', () => {
         const match = promptHits([agent], { ...EMPTY_FILTERS, agentIds: ['agent-coder'] });
         expect(match).toHaveLength(1);

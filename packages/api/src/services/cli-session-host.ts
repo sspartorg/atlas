@@ -151,9 +151,9 @@ interface SessionEntry {
     /** Pending typed bytes that arrived while the auto-prompt timer was still
      *  in flight. Flushed verbatim to the PTY after the auto-prompt's CR. */
     pendingInputQueue: string[];
-    /** True while the 1.5 s settle delay before initial_prompt is auto-typed
-     *  is still pending. WS message handler queues user keystrokes in this
-     *  window so they don't interleave with the auto-write. */
+    /** True until initial_prompt has been typed and submitted (1.5 s settle,
+     *  then Enter 0.5 s later). WS message handler queues user keystrokes in
+     *  this window so they don't interleave with the auto-write. */
     autoPromptPending: boolean;
     /** Unix ms of the most recent PTY output OR user keystroke, or null if
      *  the session has produced no PTY bytes yet. The idle detector compares
@@ -674,13 +674,19 @@ export function startSession(input: StartSessionInput): void {
         // so they don't interleave with the auto-write.
         const prompt = input.initialPrompt!;
         setTimeout(() => {
-            if (entry.pty) entry.pty.write(prompt + '\r');
-            entry.autoPromptPending = false;
-            // Flush anything the user typed while the timer was in flight.
-            if (entry.pty) {
-                for (const chunk of entry.pendingInputQueue) entry.pty.write(chunk);
-            }
-            entry.pendingInputQueue.length = 0;
+            if (entry.pty) entry.pty.write(prompt);
+            // Enter as its own write, a beat later: sent with the text, the
+            // CLI reads the burst as a paste and the \r as a newline in it,
+            // so the prompt sat in the input box unsubmitted.
+            setTimeout(() => {
+                if (entry.pty) entry.pty.write('\r');
+                entry.autoPromptPending = false;
+                // Flush anything the user typed while the timers were in flight.
+                if (entry.pty) {
+                    for (const chunk of entry.pendingInputQueue) entry.pty.write(chunk);
+                }
+                entry.pendingInputQueue.length = 0;
+            }, 500);
         }, 1_500);
     }
 }

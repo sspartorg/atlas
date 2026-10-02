@@ -318,10 +318,12 @@ export function Projects() {
                                 <Box
                                     sx={{
                                         display: 'grid',
+                                        // minmax(0, …): a bare 1fr won't shrink below a
+                                        // card's no-wrap repo line, pushing it off a phone.
                                         gridTemplateColumns: {
-                                            xs: '1fr',
-                                            sm: '1fr 1fr',
-                                            lg: 'repeat(3, 1fr)',
+                                            xs: 'minmax(0, 1fr)',
+                                            sm: 'repeat(2, minmax(0, 1fr))',
+                                            lg: 'repeat(3, minmax(0, 1fr))',
                                         },
                                         gap: 6,
                                     }}

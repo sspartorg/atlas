@@ -1510,8 +1510,13 @@ describe('initial-prompt auto-type setTimeout body', () => {
 
         vi.advanceTimersByTime(1_500);
 
-        expect(pty.write).toHaveBeenCalledWith('do something\r');
-        expect(pty.write).toHaveBeenCalledWith('queued input');
+        // Text first, Enter on its own: in one write the CLI reads the \r as
+        // part of a paste and the prompt sits in the input unsubmitted.
+        expect(pty.write).toHaveBeenCalledWith('do something');
+        expect(pty.write).not.toHaveBeenCalledWith('\r');
+        vi.advanceTimersByTime(500);
+        expect(pty.write).toHaveBeenLastCalledWith('queued input');
+        expect(pty.write).toHaveBeenCalledWith('\r');
         expect(__peekSessionStateForTest(id)?.autoPromptPending).toBe(false);
 
         pauseSession(id);
@@ -1527,8 +1532,8 @@ describe('initial-prompt auto-type setTimeout body', () => {
 
         // Advancing time now runs the setTimeout body with entry.pty === null;
         // both `if (entry.pty)` guards should short-circuit without throwing.
-        expect(() => vi.advanceTimersByTime(1_500)).not.toThrow();
-        expect(pty.write).not.toHaveBeenCalledWith('do something\r');
+        expect(() => vi.advanceTimersByTime(2_000)).not.toThrow();
+        expect(pty.write).not.toHaveBeenCalled();
         expect(__peekSessionStateForTest(id)?.autoPromptPending).toBe(false);
 
         pauseSession(id);

@@ -175,7 +175,7 @@ export function WorkflowHeader({
                     · {deliveryLabel(wf)}
                 </Typography>
             </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                 <Button
                     variant="contained"
                     onClick={onSave}

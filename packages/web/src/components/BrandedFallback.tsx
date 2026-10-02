@@ -8,6 +8,7 @@ import { AtlasLogo } from './AtlasLogo.js';
 export function BrandedFallback() {
     return (
         <Box
+            data-testid="route-fallback"
             sx={{
                 display: 'flex',
                 flexDirection: 'column',

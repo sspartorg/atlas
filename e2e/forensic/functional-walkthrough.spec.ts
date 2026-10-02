@@ -110,6 +110,11 @@ async function scanRoute(page: Page, route: string, theme: ThemeMode): Promise<v
 
     try {
         await page.goto(route, { waitUntil: 'load' });
+        // Scan the page, not the route's lazy-load splash.
+        // Shell and route each have a Suspense fallback; wait until neither shows.
+        await page.waitForFunction(() => !document.querySelector('[data-testid="route-fallback"]'), null, {
+            timeout: 30_000,
+        });
         await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => undefined);
 
         buttons = await page.$$eval('button', (els) =>
@@ -198,6 +203,9 @@ async function scanRoute(page: Page, route: string, theme: ThemeMode): Promise<v
         links,
         ...(error ? { error } : {}),
     });
+    // Recorded above for the log, but a route that never loaded is a failure,
+    // not a finding — otherwise a dead server passes every scan.
+    expect(error, `${route} did not load`).toBeUndefined();
 }
 
 test.describe('functional surface walkthrough', () => {

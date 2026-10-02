@@ -129,13 +129,13 @@ describe('Notifications page', () => {
         const recentSentAt = new Date(Date.now() - 5 * 60_000).toISOString(); // 5m ago
         // Put overrides FIRST so they win over defaultHandlers (MSW processes first-registered first)
         server.use(
-            // Override settings to have external_notification_token + chat_id + label
+            // Override settings: token configured (the API masks it to a _set flag) + chat_id + label
             http.get(`${BASE}/settings`, () =>
                 HttpResponse.json({
                     id: 1,
                     owner_name: 'Owner',
                     onboarding_complete: 1,
-                    external_notification_token: 'tok123',
+                    external_notification_token_set: true,
                     external_notification_chat_id: 'chat456',
                     external_notification_endpoint_label: 'Telegram',
                 })
@@ -182,7 +182,7 @@ describe('Notifications page', () => {
                     id: 1,
                     owner_name: 'Owner',
                     onboarding_complete: 1,
-                    external_notification_token: 'tok123',
+                    external_notification_token_set: true,
                     external_notification_chat_id: 'chat456',
                     external_notification_endpoint_label: 'Slack',
                 })
