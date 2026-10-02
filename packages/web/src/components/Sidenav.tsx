@@ -145,7 +145,9 @@ export function Sidenav({ onNavigate }: SidenavProps = {}) {
                 }
             }
         }
-        return bestKey ?? 'dashboard';
+        // No row for an unknown path (the 404 page): lighting Dashboard there
+        // read as "this is the Dashboard".
+        return bestKey;
     })();
 
     return (

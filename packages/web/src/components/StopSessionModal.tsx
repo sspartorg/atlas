@@ -232,8 +232,8 @@ export function StopSessionModal({ open, sessionId, onClose, onClosed }: Props) 
                 ) : unstaged.length === 0 && totalFiles === 0 && !diff.isPending ? (
                     <Box sx={{ p: 3, width: '100%' }}>
                         <Alert severity="info">
-                            No changes to review. The current branch HEAD will be pushed as-is and
-                            the local worktree removed.
+                            No changes to review, so nothing will be pushed. The local worktree
+                            is removed.
                         </Alert>
                     </Box>
                 ) : (

@@ -373,6 +373,8 @@ describe('promptHits (P14)', () => {
         expect(w?.displayId).toBe('PRM-DOC-WRITER-v1');
         expect(r?.displayId).toBe('PRM-DOC-REVIEWER-v1');
         expect(w?.description).toBe('You document one sub-task.');
+        // A live prompt carries no status chip (it used to read "draft").
+        expect(w?.status).toBe('');
     });
 
     it('filters by agent id', () => {

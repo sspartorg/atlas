@@ -5,7 +5,7 @@
     "name": "Names the command that runs this project's suite",
     "item_template": {
       "issue_type": "sub_task",
-      "title": "Decide the the test suite check for this repo",
+      "title": "Decide the test suite check for this repo",
       "description": "Read the repository you are given and decide whether the test suite can be checked here, and with what command.",
       "acceptance_criteria": "Given the repository, when it declares the test suite tooling, then the command that runs it is named."
     },
@@ -26,7 +26,7 @@
     "name": "Says so plainly when the project has no such tooling",
     "item_template": {
       "issue_type": "sub_task",
-      "title": "Decide the the test suite check for this repo",
+      "title": "Decide the test suite check for this repo",
       "description": "Read the repository you are given. If it has no the test suite tooling of its own, say so rather than proposing one.",
       "acceptance_criteria": "Given a repository with no the test suite tooling, when the checker answers, then it reports that the check does not apply and why."
     },
@@ -52,7 +52,7 @@
     "name": "Reads the repo and changes nothing",
     "item_template": {
       "issue_type": "sub_task",
-      "title": "Decide the the test suite check for this repo",
+      "title": "Decide the test suite check for this repo",
       "description": "Read the repository you are given and answer. Do not configure anything.",
       "acceptance_criteria": "Given the repository, when the checker has answered, then the working tree is unchanged."
     },

@@ -6,7 +6,7 @@ import { makeAgent } from '../../test-utils/factories.js';
 import { makeWorkflow, stubReactFlowDom } from '../../test-utils/workflowFixtures.js';
 import { toFlow } from './graph.js';
 import type { ICanvasContext } from './WorkflowNodes.js';
-import { WorkflowCanvas } from './WorkflowCanvas.js';
+import { WorkflowCanvas, openingNodes } from './WorkflowCanvas.js';
 
 beforeAll(stubReactFlowDom);
 
@@ -138,5 +138,23 @@ describe('WorkflowCanvas', () => {
         const node = mount({ readOnly: true }).querySelector('.react-flow__node');
         expect(node).not.toHaveClass('draggable');
         expect(node).not.toHaveClass('selectable');
+    });
+});
+
+describe('openingNodes', () => {
+    it('frames the top of a long flow, not the whole graph', () => {
+        const nodes = Array.from({ length: 40 }, (_, i) => ({
+            id: `n${i}`,
+            type: 'agent',
+            position: { x: 0, y: (39 - i) * 100 },
+            data: {},
+        })) as unknown as Parameters<typeof openingNodes>[0];
+        // Sorted by y, so the last-declared (top-most) nodes come first.
+        expect(openingNodes(nodes).map((n) => n.id)).toEqual(['n39', 'n38', 'n37', 'n36', 'n35']);
+    });
+
+    it('frames everything when the flow is short', () => {
+        const nodes = [{ id: 'a', position: { x: 0, y: 0 } }, { id: 'b', position: { x: 0, y: 50 } }] as unknown as Parameters<typeof openingNodes>[0];
+        expect(openingNodes(nodes)).toEqual([{ id: 'a' }, { id: 'b' }]);
     });
 });

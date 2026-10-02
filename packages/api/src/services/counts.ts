@@ -1,4 +1,6 @@
+import type { ExpressionBuilder } from 'kysely';
 import { db } from '../db/kysely-client.js';
+import type { DB } from '../db/types.js';
 import type { ICostSummary, ITerminalCostSummary } from '@atlas/shared';
 import { notificationsService } from './notifications.js';
 
@@ -72,6 +74,26 @@ export interface ProjectCounts {
     // project. Powers the Project Overview AI Cost tile's combined
     // spend display.
     terminalCostSummary: ITerminalCostSummary;
+}
+
+/**
+ * "Awaiting you": a question is always the Owner's; an in_review item is not
+ * while a running workflow still owns it or its Task — Delivery moves its
+ * sub-tasks through in_review on its own, and listing them made "5 things
+ * need you" while nothing did.
+ */
+function awaitingOwner(eb: ExpressionBuilder<DB & { x: DB['items_live'] }, 'x'>) {
+    const ownedByRunningWorkflow = eb.exists(
+        eb
+            .selectFrom('workflow_runs as wr')
+            .select('wr.id')
+            .where('wr.status', '=', 'running')
+            .where((w) => w.or([w('wr.item_id', '=', w.ref('x.id')), w('wr.item_id', '=', w.ref('x.parent_id'))])),
+    );
+    return eb.or([
+        eb('x.status', '=', 'waiting_for_info'),
+        eb.and([eb('x.status', '=', 'in_review'), eb.not(ownedByRunningWorkflow)]),
+    ]);
 }
 
 export const countsService = {
@@ -219,9 +241,9 @@ export const countsService = {
             // Same predicates as getAwaitingItems / getQueueItems below,
             // minus their display limit.
             db
-                .selectFrom('items_live')
+                .selectFrom('items_live as x')
                 .select(({ fn }) => fn.countAll<string>().as('n'))
-                .where('status', 'in', ['waiting_for_info', 'in_review'])
+                .where(awaitingOwner)
                 .executeTakeFirst(),
             db
                 .selectFrom('items_live')
@@ -468,10 +490,10 @@ export const countsService = {
 
     async getAwaitingItems() {
         const rows = await db
-            .selectFrom('items_live')
-            .select(['type as issue_type', 'id', 'title', 'status', 'updated_at'])
-            .where('status', 'in', ['waiting_for_info', 'in_review'])
-            .orderBy('updated_at', 'asc')
+            .selectFrom('items_live as x')
+            .select(['x.type as issue_type', 'x.id as id', 'x.title as title', 'x.status as status', 'x.updated_at as updated_at'])
+            .where(awaitingOwner)
+            .orderBy('x.updated_at', 'asc')
             .limit(20)
             .execute();
         return rows;

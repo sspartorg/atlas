@@ -159,6 +159,28 @@ describe('countsService', () => {
             expect(list.map((r) => (r as { id: string }).id).sort()).toEqual(['ATL-2', 's2', 'sb1', 'st2']);
             expect(new Set(list.map((r) => r.issue_type))).toEqual(new Set(['task', 'sub_task']));
         });
+
+        it('leaves out items a running workflow still owns — the item itself or its Task', async () => {
+            await testDb.insertInto('workflows').values({ id: 'wf-dev', project_id: 'p1', name: 'Dev' }).execute();
+            const run = (id: string, item_id: string, status: 'running' | 'waiting_for_owner') => ({
+                id,
+                workflow_id: 'wf-dev',
+                item_id,
+                project_id: 'p1',
+                status,
+                graph_snapshot: JSON.stringify({ nodes: [], edges: [] }),
+            });
+            // s1 is mid-Delivery: its in_review sub-task sb1 is the workflow's, not the Owner's,
+            // but st2 is waiting_for_info — a question is the Owner's whatever is running.
+            // s2 runs too, so s2 itself drops. ATL-2's run is parked on the Owner, so it stays.
+            await testDb
+                .insertInto('workflow_runs')
+                .values([run('r1', 's1', 'running'), run('r2', 's2', 'running'), run('r3', 'ATL-2', 'waiting_for_owner')])
+                .execute();
+            const ids = (await countsService.getAwaitingItems()).map((r) => r.id).sort();
+            expect(ids).toEqual(['ATL-2', 'st2']);
+            expect((await countsService.getDashboardKpis()).awaitingTotal).toBe(2);
+        });
     });
 
     describe('getQueueItems', () => {

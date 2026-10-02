@@ -288,6 +288,23 @@ async function commitsAhead(worktreePath: string, branch: string): Promise<numbe
     }
 }
 
+/**
+ * Does HEAD carry commits the repo's base branch lacks? Stop's push gate: a
+ * session that changed nothing used to push an empty atlas/terminal/* branch
+ * to the remote. Errs towards pushing — a wrong "no" would let the worktree
+ * teardown destroy work.
+ */
+async function hasCommitsBeyondBase(worktreePath: string, base: string): Promise<boolean> {
+    try {
+        const res = await exec('git', ['-C', worktreePath, 'rev-list', '--count', `origin/${base}..HEAD`], {
+            timeout: 15_000,
+        });
+        return Number(res.stdout.trim()) !== 0;
+    } catch {
+        return true;
+    }
+}
+
 // ── Route registration ─────────────────────────────────────────────────────
 
 export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
@@ -1097,8 +1114,12 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
                 }
             }
 
-            // Push the branch (no-op when the branch has nothing new to ship).
-            if (stopRepo && stopRepo.git_path) {
+            // Push the branch — but only when there is something to ship.
+            if (
+                stopRepo &&
+                stopRepo.git_path &&
+                (committed || (await hasCommitsBeyondBase(worktreePath, stopRepo.default_branch || 'main')))
+            ) {
                 const pushResult = await pushWorktree(worktreePath, branch, stopRepo.credential_id, stopRepo.id);
             pushed = pushResult.pushed;
             // pushResult.error is non-fatal here -- worktree teardown still runs
