@@ -40,6 +40,7 @@ const settings: ISettings = {
     ai_enabled: 0,
     external_notification_chat_id: '1234',
     external_notification_endpoint_label: 'atlas_bot',
+    external_notification_token_set: true,
     timezone: 'UTC',
     cli_default: 'claude',
     model_default: 'claude-opus-4-7',
@@ -52,6 +53,17 @@ describe('NotificationLogTabContent', () => {
     it('renders the empty state when there are no external-status rows', () => {
         renderWithProviders(<NotificationLogTabContent settings={settings} allRows={[]} />);
         expect(screen.getByText(/External Channel Is Configured but Quiet/i)).toBeInTheDocument();
+    });
+
+    it('does not claim a channel is configured when none is', () => {
+        renderWithProviders(
+            <NotificationLogTabContent
+                settings={{ ...settings, external_notification_token_set: false }}
+                allRows={[]}
+            />
+        );
+        expect(screen.getByText(/No External Channel Yet/i)).toBeInTheDocument();
+        expect(screen.queryByText(/Configured but Quiet/i)).not.toBeInTheDocument();
     });
 
     it('renders rows when external_status is non-none', () => {

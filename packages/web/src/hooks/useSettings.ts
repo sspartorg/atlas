@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { ISettings } from '@atlas/shared';
 import { api } from '../api/api.js';
 
 // Settings is session-stable in MOST fields — owner_name, accent_color,
@@ -19,6 +20,17 @@ import { api } from '../api/api.js';
 // cold-load (`refetchOnMount: false` still de-dupes the 4 mounts that
 // happen during the initial render). Mutations still keep the cache
 // authoritative for the owner-controlled fields.
+/**
+ * Is an outbound channel configured? The API masks the token and webhook URL
+ * to null, so only the `_set` flags can answer this.
+ */
+export function isExternalChannelConnected(settings: ISettings | undefined): boolean {
+    return (
+        !!settings?.external_notification_token_set ||
+        !!settings?.external_notification_webhook_url_set
+    );
+}
+
 export function useSettings() {
     return useQuery({
         queryKey: ['settings'],

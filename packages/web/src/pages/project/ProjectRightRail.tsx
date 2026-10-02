@@ -6,6 +6,7 @@ import type { IAgent } from '@atlas/shared';
 import { InfoPanel, InfoRow, AgentChip } from '../../components/index.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { useProjectHealth } from '../../hooks/useProjects.js';
+import { useActiveRuns } from '../../hooks/useActiveRuns.js';
 import { formatSpan } from '../../utils/time.js';
 
 interface Props {
@@ -84,6 +85,7 @@ export const ProjectRightRail = memo(function ProjectRightRail({
         .join('  ')
         .slice(0, 140);
     const hasGuardrails = guardrailsMd.trim().length > 0;
+    const { agentIds: runningAgentIds } = useActiveRuns();
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -134,12 +136,14 @@ export const ProjectRightRail = memo(function ProjectRightRail({
                                 <Typography
                                     sx={{
                                         fontSize: 11,
-                                        color: ATLAS_PALETTE.slate40,
+                                        color: runningAgentIds.has(w.id)
+                                            ? ATLAS_PALETTE.successFg
+                                            : ATLAS_PALETTE.slate40,
                                         fontFamily: MONO,
                                         flexShrink: 0,
                                     }}
                                 >
-                                    idle
+                                    {runningAgentIds.has(w.id) ? 'running' : 'idle'}
                                 </Typography>
                             </Box>
                         ))}

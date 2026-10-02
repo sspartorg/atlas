@@ -11,7 +11,7 @@ import TuneRounded from '@mui/icons-material/TuneRounded';
 import DoneAllRounded from '@mui/icons-material/DoneAllRounded';
 import SendRounded from '@mui/icons-material/SendRounded';
 import InboxOutlined from '@mui/icons-material/InboxOutlined';
-import { useSettings } from '../hooks/useSettings.js';
+import { useSettings, isExternalChannelConnected } from '../hooks/useSettings.js';
 import { useNotifications, useMarkAllRead } from '../hooks/useNotifications.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useToast } from '../hooks/useToast.js';
@@ -71,9 +71,7 @@ export function Notifications() {
         });
     }
 
-    const externalConnected = Boolean(
-        settings?.external_notification_token && settings?.external_notification_chat_id
-    );
+    const externalConnected = isExternalChannelConnected(settings);
     const endpointLabel = settings?.external_notification_endpoint_label ?? null;
 
     return (

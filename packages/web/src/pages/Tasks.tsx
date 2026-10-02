@@ -145,7 +145,8 @@ export function Tasks() {
                             mt: 2,
                         }}
                     >
-                        {project ? scopedTasks.length : totalTasks} tasks
+                        {project ? scopedTasks.length : totalTasks}{' '}
+                        {(project ? scopedTasks.length : totalTasks) === 1 ? 'task' : 'tasks'}
                         {project ? ` · ${project.name}` : ''}
                         {awaitingPickup > 0 ? ` · ${awaitingPickup} awaiting pickup` : ''}
                     </Typography>

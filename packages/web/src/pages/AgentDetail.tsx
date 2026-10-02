@@ -6,6 +6,7 @@ import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
 import { useQueryClient, useIsFetching } from '@tanstack/react-query';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import {
@@ -131,10 +132,9 @@ export function AgentDetail() {
 
     if (!agent || !view) {
         return (
-            <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-                <Typography sx={{ fontSize: 16, color: ATLAS_PALETTE.slate60 }}>
-                    Agent not found.
-                </Typography>
+            <Box sx={{ px: { xs: 3, md: 8 }, py: 4, textAlign: 'center' }}>
+                <Typography sx={{ color: ATLAS_PALETTE.slate40, mb: 3 }}>Agent not found</Typography>
+                <Button onClick={() => navigate('/agents')}>Back to Agents</Button>
             </Box>
         );
     }

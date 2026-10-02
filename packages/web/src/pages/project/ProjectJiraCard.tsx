@@ -96,8 +96,10 @@ export function ProjectJiraCard({ project }: Props) {
                 p: 4,
             }}
         >
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 3 }}>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+                {/* A 240px basis wraps the buttons below on a phone instead of
+                    crushing this text into a one-word column. */}
+                <Box sx={{ flex: '1 1 240px', minWidth: 0 }}>
                     <Typography
                         sx={{ fontSize: 16, fontWeight: 600, color: ATLAS_PALETTE.slate }}
                     >

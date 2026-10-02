@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterAll, vi } from 'vitest';
 
 vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
 
-import { notificationsService } from './notifications.js';
+import { plainNotice, notificationsService } from './notifications.js';
 import { closeTestDb, truncateAll, testDb } from '../../tests/_pg-db.js';
 import { insertItem, insertProject } from '../../tests/_items.js';
 
@@ -256,6 +256,42 @@ describe('notificationsService', () => {
         it('countUnread excludes the same stale rows', async () => {
             await seed();
             expect(await notificationsService.countUnread()).toBe(4);
+        });
+
+        it('a workflow run needs_you goes stale once its item moves on', async () => {
+            await insertProject('p1');
+            const item = await insertItem({ type: 'task', project_id: 'p1', status: 'waiting_for_info' });
+            await notificationsService.create({ event_type: 'workflow_run', message: 'm', kind: 'needs_you', issue_id: item });
+            await testDb.updateTable('items').set({ status: 'in_progress' }).where('id', '=', item).execute();
+            expect(await notificationsService.countUnread()).toBe(0);
+        });
+
+        it('a newer needs_you on the same item supersedes the older one', async () => {
+            // An answered question must not resurface when the item later
+            // reaches in_review for a different reason (its PR is ready).
+            await insertProject('p1');
+            const item = await insertItem({ type: 'task', project_id: 'p1', status: 'in_review' });
+            // workflow_run: what a Delivery / Quick change run emits.
+            const mk = (message: string) =>
+                notificationsService.create({ event_type: 'workflow_run', message, kind: 'needs_you', issue_id: item });
+            await mk('needs you: open questions');
+            await mk('finished: PR ready');
+            const live = (await notificationsService.list()).filter((r) => r.issue_id === item);
+            expect(live.map((r) => r.message)).toEqual(['finished: PR ready']);
+            expect(await notificationsService.countUnread()).toBe(1);
+        });
+    });
+
+    describe('plainNotice', () => {
+        it('turns an agent markdown reason into one readable line', () => {
+            const md = '## Brainstorm — open questions\n\n`todo count` already **ships**.\n- see `## What`';
+            expect(plainNotice(md)).toBe('Brainstorm — open questions todo count already ships. see What');
+        });
+
+        it('caps a long reason with an ellipsis', () => {
+            const out = plainNotice('word '.repeat(200));
+            expect(out.length).toBeLessThanOrEqual(240);
+            expect(out.endsWith('…')).toBe(true);
         });
     });
 

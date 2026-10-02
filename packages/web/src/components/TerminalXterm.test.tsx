@@ -5,7 +5,7 @@ import { TERMINAL_COLS, TERMINAL_ROWS } from '@atlas/shared';
 import {
     TerminalXterm,
     writeWsFrame,
-    fitFontToWidth,
+    fitFontToHost,
     FONT_SIZE_MIN,
     FONT_SIZE_MAX,
 } from './TerminalXterm.js';
@@ -729,17 +729,24 @@ describe('TerminalXterm — ResizeObserver branches', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// fitFontToWidth — the pinned grid's only adaptation mechanism. Pane resizes
+// fitFontToHost — the pinned grid's only adaptation mechanism. Pane resizes
 // change the FONT size (integer px, clamped) so TERMINAL_COLS columns fit the
 // host width; the grid itself never changes.
 // ─────────────────────────────────────────────────────────────────────────────
-describe('fitFontToWidth', () => {
-    function makeFitTerm(fontSize: number, screenWidthFor: (size: number) => number) {
+describe('fitFontToHost', () => {
+    function makeFitTerm(
+        fontSize: number,
+        screenWidthFor: (size: number) => number,
+        screenHeightFor: (size: number) => number = () => 0
+    ) {
         const options: ITerminalOptions = { fontSize };
         const screenEl = {
             isConnected: true,
             get clientWidth() {
                 return screenWidthFor(options.fontSize!);
+            },
+            get clientHeight() {
+                return screenHeightFor(options.fontSize!);
             },
         };
         return {
@@ -750,37 +757,45 @@ describe('fitFontToWidth', () => {
         };
     }
 
-    function makeHost(width: number): HTMLElement {
-        return { clientWidth: width } as HTMLElement;
+    function makeHost(width: number, height = 0): HTMLElement {
+        return { clientWidth: width, clientHeight: height } as HTMLElement;
     }
 
     it('scales the font down proportionally and clamps at FONT_SIZE_MIN', () => {
         // Rendered grid is twice the pane width — proportional target is 6.5,
         // floored to 6, clamped up to the readable floor.
         const term = makeFitTerm(13, () => 1200);
-        fitFontToWidth(term, makeHost(600));
+        fitFontToHost(term, makeHost(600));
         expect(term.options.fontSize).toBe(FONT_SIZE_MIN);
     });
 
     it('scales the font up proportionally and clamps at FONT_SIZE_MAX', () => {
         const term = makeFitTerm(13, () => 1000);
-        fitFontToWidth(term, makeHost(4000));
+        fitFontToHost(term, makeHost(4000));
         expect(term.options.fontSize).toBe(FONT_SIZE_MAX);
+    });
+
+    it('fits the tighter axis: a wide, short pane is limited by its height', () => {
+        // Width alone would allow 20px (2x); the grid is already as tall as
+        // the pane at 13px, so the font must not grow past it.
+        const term = makeFitTerm(13, () => 800, (size) => size * 40);
+        fitFontToHost(term, makeHost(1600, 520));
+        expect(term.options.fontSize).toBe(13);
     });
 
     it('leaves the font unchanged when the grid already fits exactly', () => {
         const term = makeFitTerm(13, () => 780);
-        fitFontToWidth(term, makeHost(780));
+        fitFontToHost(term, makeHost(780));
         expect(term.options.fontSize).toBe(13);
     });
 
     it('no-ops when the host or grid has no measurable width (jsdom, detached)', () => {
         const term = makeFitTerm(13, () => 0);
-        fitFontToWidth(term, makeHost(0));
+        fitFontToHost(term, makeHost(0));
         expect(term.options.fontSize).toBe(13);
         // element without a screen child (pre-open) is also a no-op
         const bare = { options: { fontSize: 13 } as ITerminalOptions, element: undefined };
-        expect(() => fitFontToWidth(bare, makeHost(500))).not.toThrow();
+        expect(() => fitFontToHost(bare, makeHost(500))).not.toThrow();
     });
 
     it('steps the font down after the rAF settle pass when integer cell rounding overflows', async () => {
@@ -788,7 +803,7 @@ describe('fitFontToWidth', () => {
         // that 700px. Host is 780px: the proportional guess lands on 12
         // (still overflowing); the deferred settle pass must walk it to 11.
         const term = makeFitTerm(13, (size) => (size >= 12 ? 800 : 700));
-        fitFontToWidth(term, makeHost(780));
+        fitFontToHost(term, makeHost(780));
         expect(term.options.fontSize).toBe(12);
         await new Promise<void>((resolve) =>
             requestAnimationFrame(() => requestAnimationFrame(() => resolve()))

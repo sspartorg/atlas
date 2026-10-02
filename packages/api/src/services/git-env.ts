@@ -27,12 +27,37 @@
  * need the credential, but the GCM silencers still matter because some local
  * git operations on Windows still probe the helper chain.
  */
+/**
+ * Variables a running Claude Code session exports to its children. When Atlas
+ * itself is started from a Claude Code terminal, every claude it spawns would
+ * otherwise believe it is a child of that session — and skip writing its own
+ * transcript, which empties the Terminal history. Named one by one: other
+ * CLAUDE_CODE_* vars (USE_BEDROCK, OAUTH_TOKEN, …) are Owner config and stay.
+ */
+const PARENT_CLAUDE_SESSION_VARS = [
+    'CLAUDECODE',
+    'CLAUDE_PID',
+    'CLAUDE_CODE_ENTRYPOINT',
+    'CLAUDE_CODE_SESSION_ID',
+    'CLAUDE_CODE_CHILD_SESSION',
+    'CLAUDE_CODE_SESSION_ATTENDED',
+    'CLAUDE_CODE_MESSAGING_SOCKET',
+    'CLAUDE_CODE_MESSAGING_TOKEN',
+    'CLAUDE_CODE_EXECPATH',
+];
+
+function hostEnv(): NodeJS.ProcessEnv {
+    const env = { ...process.env };
+    for (const key of PARENT_CLAUDE_SESSION_VARS) delete env[key];
+    return env;
+}
+
 export function gitInvokeEnv(
     gitConfigPath: string | null,
     ghToken?: string | null,
 ): NodeJS.ProcessEnv {
     return {
-        ...process.env,
+        ...hostEnv(),
         GIT_TERMINAL_PROMPT: '0',
         GIT_CONFIG_NOSYSTEM: '1',
         GCM_INTERACTIVE: 'Never',

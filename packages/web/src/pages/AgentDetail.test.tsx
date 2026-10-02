@@ -56,7 +56,7 @@ describe('AgentDetail', () => {
     });
 
     describe('agent not found', () => {
-        it('shows "Agent not found." when the API returns 404', async () => {
+        it('shows "Agent not found" with a way back when the API returns 404', async () => {
             server.use(
                 http.get(`${BASE}/agents/agent-notfound`, () =>
                     HttpResponse.json(null, { status: 404 })
@@ -68,7 +68,8 @@ describe('AgentDetail', () => {
             renderAgentDetail('agent-notfound');
 
             await waitFor(() => {
-                expect(screen.getByText('Agent not found.')).toBeInTheDocument();
+                expect(screen.getByText('Agent not found')).toBeInTheDocument();
+                expect(screen.getByRole('button', { name: 'Back to Agents' })).toBeInTheDocument();
             });
         });
     });

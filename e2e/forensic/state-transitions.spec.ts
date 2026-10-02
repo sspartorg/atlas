@@ -314,9 +314,11 @@ test.describe('state transitions — non-destructive', () => {
     // `<a href>`. We navigate directly to a known agent id instead
     // of trying to click a card.
     test('agent detail tabs: click each, record URL update', async ({ page }) => {
-        // Use a known seeded agent id — agent-architect is always
-        // active per the marketplace catalog seed.
-        const href = '/agents/agent-architect';
+        // Any installed agent — no single catalog agent is guaranteed
+        // to be installed (agent-architect wasn't after the v1 reset).
+        const agents = (await (await page.request.get('/api/agents')).json()) as { id: string }[];
+        expect(agents.length, 'no agents installed').toBeGreaterThan(0);
+        const href = `/agents/${agents[0]!.id}`;
         await page.goto(href);
         // The agent-detail page renders a Tabs strip; wait for it.
         await page.waitForSelector('[role="tab"]', { timeout: 10000 }).catch(() => undefined);

@@ -502,12 +502,13 @@ export function promptHits(agents: IAgent[], f: FilterState): SearchHit[] {
     const out: SearchHit[] = [];
     for (const w of agents) {
         if (f.agentIds.length > 0 && !f.agentIds.includes(w.id)) continue;
-        const slug = w.id
-            .replace(/^agent-/, '')
-            .replace(/-/g, '_')
-            .slice(0, 3)
-            .toUpperCase();
-        const description = (w.prompt_md ?? '')
+        // The whole slug: a 3-char prefix made doc-writer and doc-reviewer
+        // both PRM-DOC, and qa-writer PRM-QA_.
+        const slug = w.id.replace(/^agent-/, '').toUpperCase();
+        // Skip a leading YAML front-matter block — the snippet showed
+        // "--- description: …" instead of the prompt.
+        const body = (w.prompt_md ?? '').replace(/^---\n[\s\S]*?\n---\n/, '');
+        const description = body
             .split('\n')
             .filter(Boolean)
             .slice(0, 2)

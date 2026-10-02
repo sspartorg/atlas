@@ -329,7 +329,7 @@ export function StartSessionDialog({
                                 placeholder={
                                     projectId ? 'Search by id or title…' : 'Pick a project first'
                                 }
-                                helperText="Anchors the session to a Atlas item — Atlas writes the item context into `.atlas/current-task.md` (with your initial prompt appended). Sub-tasks created from the CLI nest under this item."
+                                helperText="Anchors the session to an Atlas item — Atlas writes the item context into `.atlas/current-task.md` (with your initial prompt appended). Sub-tasks created from the CLI nest under this item."
                             />
                         )}
                     />

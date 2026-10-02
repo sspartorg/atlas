@@ -71,7 +71,8 @@ export function TasksTabContent({
             </Box>
             <TaskTable
                 rows={tasks}
-                projects={projects}
+                // Every row is this project: its chip would only squeeze the title.
+                projects={[]}
                 agents={agents}
                 ownerName={ownerName}
                 ownerAccent={ownerAccent}

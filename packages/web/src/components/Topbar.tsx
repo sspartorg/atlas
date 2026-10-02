@@ -4,7 +4,7 @@ import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
-import { useSettings } from '../hooks/useSettings.js';
+import { useSettings, isExternalChannelConnected } from '../hooks/useSettings.js';
 import { useAiEnabled } from '../hooks/useAiEnabled.js';
 import { useSSEStatus } from '../hooks/useSSE.js';
 import { NotificationStatusPopover } from './NotificationStatusPopover.js';
@@ -20,9 +20,7 @@ export function Topbar({ onShortcutsOpen, onMenuClick }: Props) {
     const { data: settings } = useSettings();
     const { aiEnabled } = useAiEnabled();
     const sseState = useSSEStatus();
-    const notificationsConnected =
-        !!settings?.external_notification_token_set ||
-        !!settings?.external_notification_webhook_url_set;
+    const notificationsConnected = isExternalChannelConnected(settings);
     const [notificationsAnchor, setNotificationsAnchor] = useState<HTMLElement | null>(null);
 
     // Use semantic tokens (which Mercury preserves) rather than the brand-hue
