@@ -208,9 +208,9 @@ describe('StopSessionModal — nothing to review', () => {
         expect(await screen.findByText(/2 commits ahead of origin/i)).toBeInTheDocument();
     });
 
-    it('explains that the branch is pushed as-is', async () => {
+    it('says nothing will be pushed when there are no changes', async () => {
         renderModal();
-        expect(await screen.findByText(/no changes to review/i)).toBeInTheDocument();
+        expect(await screen.findByText(/no changes to review, so nothing will be pushed/i)).toBeInTheDocument();
     });
 
     it('enables the confirm button once preflight resolves', async () => {

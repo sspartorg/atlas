@@ -180,8 +180,10 @@ const DEFAULT_PORCELAIN = ' M src/a.ts\0?? src/b.ts\0';
 // Mutable so a test can swap in a different `git status --porcelain -z`
 // payload (e.g. the rename layout) without rebuilding the whole mock.
 // Reset to DEFAULT_PORCELAIN in the shared beforeEach.
-const { porcelainFixture } = vi.hoisted(() => ({
+const { porcelainFixture, beyondBaseFixture } = vi.hoisted(() => ({
     porcelainFixture: { value: ' M src/a.ts\0?? src/b.ts\0' },
+    // Commits on HEAD that the repo's base branch lacks (stop's push gate).
+    beyondBaseFixture: { value: '1\n' },
 }));
 
 vi.mock('node:child_process', async () => {
@@ -214,7 +216,14 @@ vi.mock('node:child_process', async () => {
                         return {} as unknown as ReturnType<typeof real.execFile>;
                     }
                     if (cmd === 'git' && args[2] === 'rev-list') {
-                        cb(null, { stdout: '0\n', stderr: '' });
+                        // origin/<session branch> is preflight's question; any
+                        // other ref is stop's "beyond the base branch" check.
+                        const againstBase = !String(args[4]).startsWith('origin/atlas/');
+                        if (againstBase && beyondBaseFixture.value === 'ERR') {
+                            cb(new Error('rev-list failed'), { stdout: '', stderr: '' });
+                        } else {
+                            cb(null, { stdout: againstBase ? beyondBaseFixture.value : '0\n', stderr: '' });
+                        }
                         return {} as unknown as ReturnType<typeof real.execFile>;
                     }
                     // `git add` / `git commit` / any other git invocation -> happy.
@@ -369,6 +378,7 @@ beforeEach(async () => {
         .mockResolvedValue({ currentTaskPath: null, constitutionMarkdown: '' });
     ingestTranscriptMock.mockReset().mockResolvedValue(null);
     porcelainFixture.value = DEFAULT_PORCELAIN;
+    beyondBaseFixture.value = '1\n';
     getSummaryMock.mockReset().mockResolvedValue(DEFAULT_DIFF_SUMMARY);
     getFilePatchMock.mockReset().mockResolvedValue(DEFAULT_FILE_PATCH);
     // The PR-bypass tests override these per-case, so restore the module
@@ -857,6 +867,33 @@ describe('lifecycle: pause / resume / preflight-stop / stop', () => {
         expect(body.finalize_pr_url).toBe('https://github.com/sspartorg/atlas/pull/42');
         // `pushed` still reports what git actually did.
         expect(body.pushed).toBe(false);
+    });
+
+    it('stop pushes nothing when the session made no commits and staged nothing', async () => {
+        beyondBaseFixture.value = '0\n';
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${session.id}/stop`,
+            payload: { files_to_stage: [] },
+        });
+        expect(res.statusCode).toBe(200);
+        // An empty atlas/terminal/* branch on the remote is clutter, not work.
+        expect(vi.mocked(mockPushWorktree)).not.toHaveBeenCalled();
+        expect(vi.mocked(mockOpenPullRequest)).not.toHaveBeenCalled();
+        expect(res.json().pushed).toBe(false);
+    });
+
+    it('stop still pushes when it cannot tell whether there is work (fails safe)', async () => {
+        beyondBaseFixture.value = 'ERR';
+        const session = await createSession();
+        const res = await app.inject({
+            method: 'POST',
+            url: `/api/cli/sessions/${session.id}/stop`,
+            payload: { files_to_stage: [] },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(vi.mocked(mockPushWorktree)).toHaveBeenCalledTimes(1);
     });
 
     it('stop opens no PR when alreadyUpToDate but the bypass is set', async () => {

@@ -34,6 +34,20 @@ interface Props {
 
 const NODE_ORIGIN: [number, number] = [0.5, 0];
 
+/**
+ * The nodes the first view frames: the top of the flow, not all of it.
+ * Fitting a 40-node Delivery graph shrank every card to a few unreadable
+ * pixels; this opens at the start, legible, with zoom and the minimap for
+ * the rest. Tidy up still frames the whole graph — that is its job.
+ */
+const OPENING_NODE_COUNT = 5;
+export function openingNodes(nodes: readonly WfNode[]): { id: string }[] {
+    return [...nodes]
+        .sort((a, b) => a.position.y - b.position.y)
+        .slice(0, OPENING_NODE_COUNT)
+        .map((n) => ({ id: n.id }));
+}
+
 export function WorkflowCanvas({
     nodes,
     edges,
@@ -139,7 +153,7 @@ export function WorkflowCanvas({
                     // cards and pills lines up whatever each node's width.
                     nodeOrigin={NODE_ORIGIN}
                     fitView
-                    fitViewOptions={{ padding: 0.2, maxZoom: 1.1 }}
+                    fitViewOptions={{ padding: 0.2, maxZoom: 1.1, nodes: openingNodes(nodes) }}
                     minZoom={0.2}
                     // Off by default, which draws a selected edge under its neighbours.
                     elevateEdgesOnSelect

@@ -42,6 +42,7 @@ const ProjectGuardrails = lazyNamed(
 const SubTaskDetail = lazyNamed(() => import('./pages/SubTaskDetail.js'), 'SubTaskDetail');
 const Queue = lazyNamed(() => import('./pages/Queue.js'), 'Queue');
 const Search = lazyNamed(() => import('./pages/Search.js'), 'Search');
+const NotFound = lazyNamed(() => import('./pages/NotFound.js'), 'NotFound');
 const Terminal = lazyNamed(() => import('./pages/Terminal.js'), 'Terminal');
 const TerminalSession = lazyNamed(() => import('./pages/TerminalSession.js'), 'TerminalSession');
 const TerminalLayout = lazyNamed(() => import('./pages/TerminalLayout.js'), 'TerminalLayout');
@@ -544,7 +545,14 @@ export function App() {
                                     </Wrap>
                                 }
                             />
-                            <Route path="*" element={<Navigate to="/" replace />} />
+                            <Route
+                                path="*"
+                                element={
+                                    <Wrap name="NotFound">
+                                        <NotFound />
+                                    </Wrap>
+                                }
+                            />
                         </Route>
                     </Route>
                 </Routes>

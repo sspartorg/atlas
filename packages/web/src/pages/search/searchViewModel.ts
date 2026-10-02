@@ -520,7 +520,10 @@ export function promptHits(agents: IAgent[], f: FilterState): SearchHit[] {
             displayId: `PRM-${slug}-v${w.prompt_version}`,
             title: `${w.name} · v${w.prompt_version}`,
             description,
-            status: w.status === 'active' ? 'draft' : 'inactive',
+            // No chip for a live prompt: "draft" here read as unreleased.
+            // Prompt hits never pass a status filter (see above), so this is
+            // display only.
+            status: w.status === 'active' ? '' : 'inactive',
             assignee_agent_id: w.id,
             project_id: null,
             updated_at: w.updated_at,

@@ -101,6 +101,13 @@ describe('Sidenav', () => {
         expect(screen.getByTestId('nav-item-dashboard')).not.toHaveAttribute('aria-current');
     });
 
+    it('marks no row active on an unknown path (the 404 page)', () => {
+        countsMock.mockReturnValue({});
+        server.use(...defaultHandlers);
+        const { container } = renderWithProviders(<Sidenav />, { initialEntries: ['/no-such-page'] });
+        expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(0);
+    });
+
     it('marks exactly one nav row active on a normal route', () => {
         countsMock.mockReturnValue({});
         server.use(...defaultHandlers);
