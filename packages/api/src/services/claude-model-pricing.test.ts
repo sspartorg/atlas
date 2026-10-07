@@ -75,4 +75,20 @@ describe('lookupClaudePrices', () => {
             cache_read: 0.1,
         });
     });
+
+    // Claude Opus 5 sessions priced as null, so every terminal session on it
+    // showed $0.00. The 5.x successors also carry non-0.1x cache reads.
+    it('prices the Claude 5 family at the published rates (CMP-CLAUDE5)', () => {
+        expect(lookupClaudePrices('claude-opus-5')?.input).toBe(5.0);
+        expect(lookupClaudePrices('claude-opus-5-5')).toEqual({
+            input: 4.0,
+            output: 20.0,
+            cache_write_5m: 5.0,
+            cache_write_1h: 8.0,
+            cache_read: 0.2,
+        });
+        expect(lookupClaudePrices('claude-sonnet-5')?.cache_read).toBe(0.2);
+        expect(lookupClaudePrices('claude-fable-5-1')?.cache_read).toBe(0.25);
+        expect(lookupClaudePrices('claude-fable-5')?.cache_read).toBe(1.0);
+    });
 });

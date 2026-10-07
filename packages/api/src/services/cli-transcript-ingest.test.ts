@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi, afterAll, afterEach } from 'vitest';
-import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir, rm, symlink, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type * as NodeOs from 'node:os';
@@ -12,7 +12,7 @@ vi.mock('node:os', async (importOrig) => {
     return { ...orig, homedir: () => fakeHome.current };
 });
 
-import { ingestTranscript, encodeClaudeProjectDir } from './cli-transcript-ingest.js';
+import { ingestTranscript, encodeClaudeProjectDir, claudeRecordedCwd } from './cli-transcript-ingest.js';
 import { testDb, truncateAll, closeTestDb } from '../../tests/_pg-db.js';
 import { insertProject } from '../../tests/_items.js';
 
@@ -111,6 +111,25 @@ describe('encodeClaudeProjectDir', () => {
 // ---------------------------------------------------------------------------
 // ingestTranscript — session not found → null
 // ---------------------------------------------------------------------------
+// Claude files a transcript under its symlink-resolved cwd (macOS /tmp is
+// /private/tmp), so a worktree reached through a symlink was never found.
+describe('claudeRecordedCwd', () => {
+    it('resolves a symlink in the path, keeping a tail that no longer exists', async () => {
+        const real = join(tmpRoot, 'real');
+        await mkdir(real);
+        const link = join(tmpRoot, 'link');
+        await symlink(real, link);
+        expect(claudeRecordedCwd(join(link, 'worktrees', 'gone'))).toBe(
+            join(await realpath(real), 'worktrees', 'gone'),
+        );
+    });
+
+    it('leaves a path with no symlinks unchanged', async () => {
+        const dir = await realpath(tmpRoot);
+        expect(claudeRecordedCwd(join(dir, 'missing'))).toBe(join(dir, 'missing'));
+    });
+});
+
 describe('ingestTranscript — row not found', () => {
     it('returns null when the session row does not exist (CTI-NOFOUND)', async () => {
         const result = await ingestTranscript(`${SESSION_PREFIX}-no-row`);
