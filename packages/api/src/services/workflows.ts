@@ -66,6 +66,7 @@ function asWorkflow(row: Record<string, unknown>): IWorkflow {
         // Filled in by `withUpgradeFlags`; resolving the source's current
         // version needs a lookup the row mapper has no business doing.
         upgrade_available: false,
+        team_managed: Boolean(row['team_managed']),
         created_at: row['created_at'] as string,
         updated_at: new Date(row['updated_at'] as string).toISOString(),
     };

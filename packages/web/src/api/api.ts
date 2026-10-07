@@ -27,6 +27,8 @@ import type {
     IJiraSource,
     IJiraSyncResult,
     IJiraTestResult,
+    ITeamConfig,
+    ITeamConfigHelp,
     ISettings,
     IComment,
     INotification,
@@ -176,6 +178,11 @@ export type JiraConfigUpdate = Partial<
     Pick<IJiraConfig, 'enabled' | 'site_url' | 'email' | 'poll_interval_minutes' | 'extra_fields'>
 > & { api_token?: string };
 
+/** PUT /team-config body: any editable field; the last_sync_* fields are the server's. */
+export type TeamConfigUpdate = Partial<
+    Pick<ITeamConfig, 'role' | 'repo_url' | 'credential_id' | 'branch' | 'interval_minutes'>
+>;
+
 /** A source's editable fields; it belongs to a project, so `project_id` and `id` are the route. */
 export type JiraSourceInput = Pick<IJiraSource, 'jql' | 'workflow_id' | 'repo_ids'>;
 
@@ -308,6 +315,12 @@ export const api = {
             post<IJiraTestResult>('/integrations/jira/test', data),
         sync: () => post<IJiraSyncResult>('/integrations/jira/sync', {}),
         revealToken: () => post<{ value: string }>('/integrations/jira/reveal-token', {}),
+    },
+    teamConfig: {
+        get: () => get<ITeamConfig>('/team-config'),
+        update: (data: TeamConfigUpdate) => put<ITeamConfig>('/team-config', data),
+        sync: () => post<{ message: string; config: ITeamConfig }>('/team-config/sync', {}),
+        help: () => get<ITeamConfigHelp>('/team-config/help'),
     },
     // Migration 010 — sources are a project's query+workflow+repos combos.
     jiraSources: {

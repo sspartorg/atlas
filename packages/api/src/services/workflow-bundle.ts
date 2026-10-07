@@ -29,7 +29,7 @@ import { ModelNotInRegistryError } from './agents.js';
 import { MarketplaceNotFoundError, marketplaceService } from './marketplace.js';
 import { workflowsService } from './workflows.js';
 
-const PortableWorkflowSchema = CreateWorkflowSchema.omit({ project_id: true, status: true }).extend({
+export const PortableWorkflowSchema = CreateWorkflowSchema.omit({ project_id: true, status: true }).extend({
     input_kind: z.enum(WORKFLOW_INPUT_KINDS),
     graph: WorkflowGraphSchema,
 });

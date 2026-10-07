@@ -223,6 +223,8 @@ export interface IAgent {
      * route boundary.
      */
     settings_json: Record<string, unknown>;
+    /** Pulled from the team config repo; the next sync overwrites local edits. */
+    team_managed: boolean;
     /**
      * Marketplace back-link. Set when the agent was forked from a catalog
      * entry (either by the first-run auto-install or an explicit Add).
@@ -326,6 +328,11 @@ export interface IProject {
     // (schedule runs, guardrail edits, Task and sub-task edits).
     // Computed at read time in projectsService.list/get — never persisted.
     last_activity_at: string;
+    /**
+     * On a publisher: this project is published to the team config repo. On a
+     * subscriber: it arrived from there, and the next sync overwrites local edits.
+     */
+    team_managed: boolean;
 }
 
 /**
@@ -935,6 +942,32 @@ export interface IJiraConfig {
     last_sync_at: string | null;
     last_sync_ok: boolean | null;
     last_sync_message: string | null;
+}
+
+export type TeamConfigRole = 'off' | 'publisher' | 'subscriber';
+
+/**
+ * Team config sync (singleton). A publisher pushes its team-managed projects —
+ * with their repos, guardrails, scripts, Jira queries, workflows and the agents
+ * those use — to one git repo; a subscriber pulls them in. Secrets never go
+ * into the repo.
+ */
+export interface ITeamConfig {
+    role: TeamConfigRole;
+    repo_url: string | null;
+    credential_id: string | null;
+    branch: string;
+    interval_minutes: number;
+    last_sync_at: string | null;
+    last_sync_ok: boolean | null;
+    last_sync_message: string | null;
+    last_commit: string | null;
+}
+
+/** Help text from the team config repo: its README and each project's HELP.md. */
+export interface ITeamConfigHelp {
+    readme_md: string;
+    projects: Array<{ issue_key_prefix: string; help_md: string }>;
 }
 
 export interface IJiraTestResult {

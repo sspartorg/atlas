@@ -42,6 +42,7 @@ export function makeWorkflow(overrides: Partial<IWorkflow> = {}): IWorkflow {
         marketplace_pulled_version: null,
         marketplace_pulled_at: null,
         upgrade_available: false,
+        team_managed: false,
         created_at: ISO,
         updated_at: ISO,
         ...overrides,

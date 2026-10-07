@@ -12,6 +12,8 @@ Design one workflow on a ReactFlow canvas (`@xyflow/react`, lazy chunk), list it
 - **Phone (< `sm`)**: info alert "The canvas is read-only on a phone…"; palette and inspector hidden, canvas read-only.
 
 ## UI elements
+**Team-managed warning** — on a subscriber, a workflow pulled from the team config repo shows `TeamManagedAlert` above the header: edits here are overwritten on the next sync. Its active / inactive switch is the exception — that stays local.
+
 **Header** (`WorkflowHeader.tsx`)
 - "Workflows" link → `/workflows`; H2 name; **Active / Inactive** pill; "Unsaved changes" when the draft differs from the saved copy.
 - Metadata: `{project} · {Per Task|Project run|Sub-task workflow} · {trigger} · {delivery}` — delivery is `Push + PR` / `Push branch` / `Push to default branch` / `No delivery`, or `Back to the Task` for a sub-workflow (`deliveryLabel`, `labels.ts`).

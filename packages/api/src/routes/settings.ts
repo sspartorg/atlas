@@ -9,8 +9,10 @@ import {
     UpdateNotificationsSchema,
     UpdateExternalNotificationSchema,
 } from '@atlas/shared';
+import { rm } from 'node:fs/promises';
 import { db } from '../db/kysely-client.js';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
+import { teamConfigDir } from '../services/team-config.js';
 import { isValidLogLevel } from '../server.js';
 
 // Env keys that must NEVER be writable through the /api/settings/env
@@ -232,6 +234,8 @@ export async function settingsRoutes(app: FastifyInstance) {
             // left behind, item-less rows would block those issues from re-importing.
             await trx.deleteFrom('jira_issues').execute();
             await trx.deleteFrom('jira_config').execute();
+            // Left behind, the next tick would pull the team's projects straight back in.
+            await trx.deleteFrom('team_config').execute();
             await trx.deleteFrom('items').execute();
             await trx.deleteFrom('projects').execute();
             await trx.deleteFrom('credentials').execute();
@@ -259,6 +263,7 @@ export async function settingsRoutes(app: FastifyInstance) {
                 .where('id', '=', 1)
                 .execute();
         });
+        await rm(teamConfigDir(), { recursive: true, force: true });
         return reply.status(200).send({ ok: true });
     });
 }

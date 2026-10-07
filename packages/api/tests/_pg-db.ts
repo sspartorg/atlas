@@ -82,6 +82,8 @@ const TRUNCATE_TABLES = [
     // Migration 010 — cascades from projects, but truncate runs before them.
     'jira_sources',
     'jira_config',
+    // Migration 004 — team config sync singleton.
+    'team_config',
     'items',
     // Migration 043 — a project's extra repos (ADR 0017).
     'project_repos',
