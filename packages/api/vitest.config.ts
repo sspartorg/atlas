@@ -244,8 +244,7 @@ export default defineConfig({
             // defensive guards — `if (!row) return`, `?? null`, catch arms that
             // are unreachable in practice. Tests for those assert that nothing
             // happens, cost maintenance forever, and catch nothing; `pnpm e2e`
-            // already walks the real paths. See
-            // docs/campaigns/2026-09-21-confidence-close/task-05-api-coverage-95.md.
+            // already walks the real paths. See ADR 0009.
             thresholds: {
                 lines: 95.5,
                 statements: 95,
