@@ -47,9 +47,17 @@ export const CLAUDE_MODEL_PRICING: Record<string, ClaudeModelPrices> = {
     'claude-sonnet-4-6': { input: 3.0, output: 15.0, cache_write_5m: 3.75, cache_write_1h: 6.0, cache_read: 0.3 },
     // Haiku 4 family.
     'claude-haiku-4-5': { input: 1.0, output: 5.0, cache_write_5m: 1.25, cache_write_1h: 2.0, cache_read: 0.1 },
-    // Fable 5 — Anthropic's experimental release, priced between sonnet
-    // and opus tiers.
+    // Claude 5 family — platform.claude.com/docs/en/about-claude/pricing,
+    // 2026-10-07. Cache reads are NOT uniformly 0.1x here: Opus 5.5 is 0.05x
+    // and Fable 5.1 is 0.025x, so each gets its own row rather than falling
+    // through the prefix scan to its predecessor's (`claude-opus-5-5` would
+    // otherwise price as `claude-opus-5`).
+    'claude-opus-5': { input: 5.0, output: 25.0, cache_write_5m: 6.25, cache_write_1h: 10.0, cache_read: 0.5 },
+    'claude-opus-5-5': { input: 4.0, output: 20.0, cache_write_5m: 5.0, cache_write_1h: 8.0, cache_read: 0.2 },
+    'claude-sonnet-5': { input: 2.0, output: 10.0, cache_write_5m: 2.5, cache_write_1h: 4.0, cache_read: 0.2 },
+    'claude-sonnet-5-5': { input: 2.0, output: 10.0, cache_write_5m: 2.5, cache_write_1h: 4.0, cache_read: 0.2 },
     'claude-fable-5': { input: 10.0, output: 50.0, cache_write_5m: 12.5, cache_write_1h: 20.0, cache_read: 1.0 },
+    'claude-fable-5-1': { input: 10.0, output: 50.0, cache_write_5m: 12.5, cache_write_1h: 20.0, cache_read: 0.25 },
     // Pre-4 fallbacks (sonnet 3.7 + opus 3 + haiku 3) — atlas's terminals
     // shouldn't see these in practice but the lookup helper falls back to
     // them rather than returning null when the model id starts with one

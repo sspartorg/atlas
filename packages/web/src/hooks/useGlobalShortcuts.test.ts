@@ -42,11 +42,11 @@ describe('useGlobalShortcuts', () => {
         });
     }
 
-    it("pressing 'g' then 'd' navigates to /dashboard", () => {
+    it("pressing 'g' then 'd' navigates to the dashboard at /", () => {
         setup();
         fireKey('g');
         fireKey('d');
-        expect(navigateSpy).toHaveBeenCalledWith('/dashboard');
+        expect(navigateSpy).toHaveBeenCalledWith('/');
     });
 
     it("pressing 'g' then 'p' navigates to /projects", () => {

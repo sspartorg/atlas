@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs';
+import { promises as fs, existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -66,6 +66,30 @@ export function encodeClaudeProjectDir(absPath: string): string {
     return absPath.replace(/[^a-zA-Z0-9-]/g, '-');
 }
 
+/**
+ * The cwd as Claude records it. Claude names the project dir after the
+ * symlink-resolved cwd, so a worktree under a symlinked folder (every path
+ * under macOS `/tmp`, which is `/private/tmp`) is filed somewhere the raw
+ * path never encodes to. The worktree itself is often gone by ingest time
+ * (Stop tears it down), so resolve the longest prefix that still exists and
+ * re-attach the rest.
+ */
+export function claudeRecordedCwd(absPath: string): string {
+    if (!path.isAbsolute(absPath)) return absPath;
+    let head = absPath;
+    const tail: string[] = [];
+    while (true) {
+        try {
+            return path.join(realpathSync(head), ...tail);
+        } catch {
+            const parent = path.dirname(head);
+            if (parent === head) return absPath;
+            tail.unshift(path.basename(head));
+            head = parent;
+        }
+    }
+}
+
 interface ResolvedPath {
     path: string | null;
     skipReason?: string;
@@ -84,10 +108,10 @@ function resolveTranscriptPath(row: {
         if (!row.worktree_path) {
             return { path: null, skipReason: 'no worktree_path on row' };
         }
-        const encoded = encodeClaudeProjectDir(row.worktree_path);
-        return {
-            path: path.join(homedir(), '.claude', 'projects', encoded, `${row.claude_session_id}.jsonl`),
-        };
+        const file = (cwd: string) =>
+            path.join(homedir(), '.claude', 'projects', encodeClaudeProjectDir(cwd), `${row.claude_session_id}.jsonl`);
+        const resolved = file(claudeRecordedCwd(row.worktree_path));
+        return { path: existsSync(resolved) ? resolved : file(row.worktree_path) };
     }
     // copilot — dir name is `claude_session_id` (uuid Atlas passed via
     // `--session-id`, which copilot honors). The original bug here was

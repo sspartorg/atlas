@@ -7,7 +7,7 @@ interface IGlobalShortcutOptions {
 }
 
 const GOTO_MAP: Record<string, string> = {
-    d: '/dashboard',
+    d: '/',
     p: '/projects',
     t: '/tasks',
     q: '/queue',
