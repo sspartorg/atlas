@@ -199,6 +199,8 @@ export const UpdateProjectSchema = z
         guardrails_md: z.string().optional(),
         // null clears it. Must name an item-workflow of this project or a global one.
         default_workflow_id: z.string().min(1).nullable().optional(),
+        // Publisher only: include this project in the team config repo.
+        team_managed: z.boolean().optional(),
     })
     .strict();
 
@@ -681,6 +683,18 @@ export const UpdateJiraConfigSchema = z
         api_token: z.string().max(2_000),
         poll_interval_minutes: z.number().int().min(5).max(10_080),
         extra_fields: z.array(z.string().trim().min(1).max(200)).max(50),
+    })
+    .partial()
+    .strict();
+
+/** PUT /api/team-config — partial. */
+export const UpdateTeamConfigSchema = z
+    .object({
+        role: z.enum(['off', 'publisher', 'subscriber']),
+        repo_url: z.string().trim().url().startsWith('https://', 'Use an https:// git URL').nullable(),
+        credential_id: z.string().min(1).nullable(),
+        branch: z.string().trim().min(1).max(200).regex(/^[A-Za-z0-9._/-]+$/, 'Not a valid branch name'),
+        interval_minutes: z.number().int().min(5).max(10_080),
     })
     .partial()
     .strict();

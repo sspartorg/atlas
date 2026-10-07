@@ -37,6 +37,7 @@ import { MarketplaceUpgradeBanner } from './agents/MarketplaceUpgradeBanner.js';
 import { TestsTabContent } from './agents/TestsTabContent.js';
 import { PerformanceTabContent } from './agents/PerformanceTabContent.js';
 import { useSetPageTitle } from '../components/shell/index.js';
+import { TeamManagedAlert } from '../components/TeamManagedAlert.js';
 
 const TAB_KEYS = ['overview', 'prompt', 'tests', 'performance', 'runs', 'memory'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -177,6 +178,7 @@ export function AgentDetail() {
                 />
             </Box>
 
+            <TeamManagedAlert managed={agent.team_managed} noun="agent" sx={{ mb: 2 }} />
             <AgentHero
                 agent={agent}
                 view={view}

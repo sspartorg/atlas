@@ -233,6 +233,13 @@ Fields: `id, item_id, link_kind, url, title, external_ref, created_at, created_b
 - `ci_state` ∈ `'pending' | 'success' | 'failure' | null` (migration 023, CHECK) — CI on an **open** PR's head commit (check runs + legacy statuses, see `ci-routing.ts`). Null = no CI observed (a repo without checks, or never read), not success. `ci_failing_checks` = `ci_summary` jsonb `[{name, detail}]`, `[]` unless failing.
 - DB only: `ci_head_sha`, `ci_checked_at`, `ci_handled_sha` (head commit Atlas already acted on), `ci_fix_attempts` (automatic fix runs started). A Task in review whose PR goes red on a new commit gets a comment + `needs_you` notification and, at most twice per Task and never over a live run, a fix run (a "Fix failing CI" sub-task continued from the Sub-tasks step, else a restart on the same branch) — `ci-follow-through.ts`.
 
+### ITeamConfig / team_managed (migration 004)
+`team_config` is a singleton row (`id = 1`) for team config sync. `ITeamConfig` returns every column:
+- `role` ∈ `off | publisher | subscriber`, `repo_url`, `credential_id` → `credentials` `ON DELETE SET NULL`, `branch` (default `main`), `interval_minutes` (≥ 5, default 60)
+- `last_sync_at`, `last_sync_ok`, `last_sync_message`, `last_commit` (the repo commit last published or pulled)
+
+`team_managed boolean NOT NULL DEFAULT false` on `projects`, `agents`, `workflows` (and on `IProject`, `IAgent`, `IWorkflow`). On a publisher it is the project's "include in team config" switch (`PATCH /api/projects/:id`). On a subscriber it marks rows that came from the repo; the next pull overwrites them. Rows with `false` are never touched by a sync.
+
 ### IJiraConfig / jira_sources / jira_issues (ADR 0016, migrations 042 + 044 + 010)
 `jira_config` is a singleton row holding the Jira bridge config. `IJiraConfig` returns every column except the token, and adds `api_token_set: boolean`:
 - `enabled`, `site_url`, `email`

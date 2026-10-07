@@ -58,6 +58,8 @@ export interface SettingsTable {
 
 export interface AgentsTable {
     id: string;
+    // Migration 004 — row belongs to the team config repo.
+    team_managed: ColumnType<boolean, boolean | undefined, boolean>;
     name: Str;
     category: 'software-dev' | 'marketing' | 'content' | 'design';
     cli: AgentCli;
@@ -273,6 +275,8 @@ export interface ProjectReposTable {
 
 export interface ProjectsTable {
     id: string;
+    // Migration 004 — row belongs to the team config repo.
+    team_managed: ColumnType<boolean, boolean | undefined, boolean>;
     name: string;
     issue_key_prefix: string;
     description: Str;
@@ -497,6 +501,20 @@ export interface JiraConfigTable {
     last_sync_at: TSD;
     last_sync_ok: ColumnType<boolean | null, boolean | null | undefined, boolean | null>;
     last_sync_message: StrN;
+    updated_at: UpdatedAt;
+}
+
+export interface TeamConfigTable {
+    id: Generated<number>;
+    role: ColumnType<'off' | 'publisher' | 'subscriber', 'off' | 'publisher' | 'subscriber' | undefined, 'off' | 'publisher' | 'subscriber'>;
+    repo_url: StrN;
+    credential_id: StrN;
+    branch: Str;
+    interval_minutes: Int;
+    last_sync_at: TSD;
+    last_sync_ok: ColumnType<boolean | null, boolean | null | undefined, boolean | null>;
+    last_sync_message: StrN;
+    last_commit: StrN;
     updated_at: UpdatedAt;
 }
 
@@ -739,6 +757,8 @@ export interface ScratchPadTable {
 // as agent_runs.outcome_checklist).
 export interface WorkflowsTable {
     id: string;
+    // Migration 004 — row belongs to the team config repo.
+    team_managed: ColumnType<boolean, boolean | undefined, boolean>;
     project_id: StrN;
     name: string;
     description: StrN;
@@ -944,6 +964,7 @@ export interface DB {
     item_links: ItemLinksTable;
     item_external_links: ItemExternalLinksTable;
     jira_config: JiraConfigTable;
+    team_config: TeamConfigTable;
     jira_sources: JiraSourcesTable;
     jira_issues: JiraIssuesTable;
     agent_runs: AgentRunsTable;

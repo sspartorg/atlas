@@ -11,6 +11,7 @@ import HubOutlined from '@mui/icons-material/HubOutlined';
 import NotificationsRounded from '@mui/icons-material/NotificationsRounded';
 import HelpOutlineRounded from '@mui/icons-material/HelpOutlineRounded';
 import SyncRounded from '@mui/icons-material/SyncRounded';
+import GroupsOutlined from '@mui/icons-material/GroupsOutlined';
 import { useSettings } from '../hooks/useSettings.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { ProfileTab } from './settings/ProfileTab.js';
@@ -20,6 +21,7 @@ import { ModelRegistryTab } from './settings/ModelRegistryTab.js';
 import { NotificationsTab } from './settings/NotificationsTab.js';
 import { HelpAboutTab } from './settings/HelpAboutTab.js';
 import { JiraTab } from './settings/JiraTab.js';
+import { TeamConfigTab } from './settings/TeamConfigTab.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 
 const TAB_KEYS = [
@@ -29,6 +31,7 @@ const TAB_KEYS = [
     'models',
     'notifications',
     'jira',
+    'team',
     'help',
 ] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -154,6 +157,12 @@ export function Settings() {
                         icon={<SyncRounded sx={{ fontSize: 18 }} />}
                     />
                     <Tab
+                        value="team"
+                        label="Team config"
+                        iconPosition="start"
+                        icon={<GroupsOutlined sx={{ fontSize: 18 }} />}
+                    />
+                    <Tab
                         value="help"
                         label="Help & About"
                         iconPosition="start"
@@ -169,6 +178,7 @@ export function Settings() {
             {tab === 'models' && <ModelRegistryTab />}
             {tab === 'notifications' && <NotificationsTab />}
             {tab === 'jira' && <JiraTab />}
+            {tab === 'team' && <TeamConfigTab />}
             {tab === 'help' && <HelpAboutTab />}
         </Box>
     );

@@ -19,6 +19,11 @@ Single-project workspace. 7 tabs (Overview, Tasks, Guard-rails, Repos, Jira, Set
 - Guard-rails shield indicator (if `project.guardrails_md.trim().length > 0`)
 - **Actions** menu button → `ProjectActionsMenu`
 
+**Team config (`ProjectTeamCard`)** — under the header; hidden while the team config role is Off.
+- Publisher: an **Include in team config** switch → `PATCH /api/projects/:id { team_managed }`. Included projects are published with their repos, guardrails, scripts, Jira queries, workflows and those workflows' agents — never secrets.
+- Subscriber: a warning (`TeamManagedAlert`) on a team-managed project: local edits are overwritten on the next sync.
+- Either role: **Team help for this project**, a collapsed accordion with the repo's `projects/<PREFIX>/HELP.md`, when there is one.
+
 **Project actions menu (`ProjectActionsMenu`)** — most items toast "coming soon":
 - **Rename project** → stub (`stubMessage` line 125)
 - **Edit repository URL** → stub

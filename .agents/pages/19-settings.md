@@ -82,12 +82,22 @@ Configures the Jira bridge. Every field saves on blur (or on change for selects 
   - **Sync now** button → `POST /api/integrations/jira/sync`. It toasts the counts, invalidates every query, and is disabled until a token is stored **and the Import switch is on**. G-014: a manual sync writes comments to live Jira issues, so it honours the same switch the poller does — it used to run from a switched-off bridge, posting one comment and then falling silent because only `tick` checked `enabled`. The API returns 409 `conflict` for the same case; credentials are checked first, so a blank config still gives 400 `credentials_missing`.
 - ~~**Sources**~~ — **moved to the project** (migration 010). A source is one JQL + workflow + repos combo and now lives on Project Detail's **Jira** tab (`ProjectJiraCard`, see [`03-project-detail`](03-project-detail.md)). The Import subtitle points there. Only the connection, the poll interval, the extra fields and **Sync now** remain here, because there is one self-hosted site and one poller. `PUT /api/integrations/jira` no longer accepts `sources` at all — the schema is `.strict()`, so a stale caller gets a 400.
 
-## Tab 6 — Help & About (`HelpAboutTab`)
+## Tab 6 — Team config (`TeamConfigTab`)
+Connects this install to the team's config git repo (`services/team-config.ts`). Every field saves on blur (on change for selects) through `PUT /api/team-config` and toasts.
+- **Role**: Off / Publisher / Subscriber, with a one-line explanation under it. A publisher pushes the projects it includes (Project Detail switch); a subscriber pulls them and keeps them in sync.
+- **Repo URL** (https), **Credential** (my own; also used to clone the team's project repos), **Branch** (a publisher needs push rights there — admin bypass on a protected branch, or a sync branch), **Sync every** N minutes (≥ 5; an invalid value reverts).
+- Status line: last sync time and message, one note per line. Red only when something could not be applied (a skipped project, an unreachable repo, a rejected push); notes such as "left the team config" or "is now team-managed" keep it grey, and **Sync now** → `POST /api/team-config/sync`, which invalidates every query. Disabled while the role is Off or the repo / credential is missing.
+- **Team guide** — the repo's `README.md`, rendered, once synced. Atlas writes a starter README on the first publish (secrets stay out; don't edit managed items; use `currentUser()` in JQL); after that it is the lead's to edit in the repo.
+
+Secrets are not part of the sync. Each person adds their own credentials, Jira token and project `.env` secrets (the existing Export / Import on Project → Manage .env secrets).
+
+## Tab 7 — Help & About (`HelpAboutTab`)
 **About Atlas** — app version + repository link. **Report a bug** — surfaces the current `ATLAS_FEEDBACK_URL` (from `useEnv()`), an **Open GitHub Issues** button (falls back to the hardcoded upstream URL if the env var is blank), and a **Restore recommended URL** button that PATCHes `/api/settings/env` with the default `https://github.com/sspartorg/atlas/issues`.
 
 The same feedback URL powers the **Report a bug** link in the sidenav footer (`packages/web/src/components/ReportBugLink.tsx`), so this tab and the sidenav share one env var.
 
 ## Why these affordances exist
+- **Team config** exists so a new teammate, or the Owner on a new laptop, pulls a team's project setup instead of rebuilding it by hand. Secrets stay per person on purpose.
 - **`onBlur` save on Profile** — Per-field commit feels instantaneous and removes the "remember to click Save" tax common in settings pages.
 - **Workspace folder warning when `projectsCount > 0`** — Moving the workspace abandons cloned repos; the warning forces the Owner to acknowledge the migration cost before submitting.
 - **Restart Server** — Several env vars are read once at boot (DB path, port); without a one-button restart the Owner has to remember a shell command to apply the new value.

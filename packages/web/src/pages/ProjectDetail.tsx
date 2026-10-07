@@ -27,6 +27,7 @@ import { SetupTab } from './project/SetupTab.js';
 import { DefaultWorkflowCard } from './project/DefaultWorkflowCard.js';
 import { ProjectJiraCard } from './project/ProjectJiraCard.js';
 import { ProjectReposCard } from './project/ProjectReposCard.js';
+import { ProjectTeamCard } from './project/ProjectTeamCard.js';
 const DeleteProjectModal = lazyNamed(
     () => import('./projects/DeleteProjectModal.js'),
     'DeleteProjectModal'
@@ -186,6 +187,7 @@ export function ProjectDetail() {
                 // ADR 0018 — the scaffold reads a checkout: it needs at least one.
                 aiScaffoldEnabled={repos.some((r) => r.clone_status === 'ready')}
             />
+            <ProjectTeamCard project={project} />
 
             <Tabs
                 value={currentTab}

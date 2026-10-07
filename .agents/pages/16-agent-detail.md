@@ -29,6 +29,9 @@ Edit an agent's configuration, prompt, quality checklist, procedural memory, and
 - **Prompt version history** — Prompt edits regress agent behavior often; a localStorage trail is the cheapest "undo" pathway, with "Make active" for one-click revert.
 - **Quality checklist** — The agent reports each check in its `atlas-outcome`; a failed required check sends the work down the workflow's fail edge, so the Owner decides what failure means before runs hit it.
 
+## Team-managed warning
+On a subscriber, an agent pulled from the team config repo shows `TeamManagedAlert` above the hero: edits here are overwritten on the next sync.
+
 ## Marketplace upgrade banner
 
 When the agent has a marketplace source and a newer version is available, `MarketplaceUpgradeBanner` (`AgentDetail.tsx:30`) renders above the tabs with an "Upgrade now" CTA that opens a diff modal showing the marketplace catalog version's prompt vs the installed version. Owner-only — silent for agents installed without a marketplace source.

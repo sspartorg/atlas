@@ -103,6 +103,8 @@ export interface IWorkflow {
      * the workflow has no upstream.
      */
     upgrade_available: boolean;
+    /** Pulled from the team config repo; the next sync overwrites local edits. */
+    team_managed: boolean;
     created_at: string;
     updated_at: string;
 }

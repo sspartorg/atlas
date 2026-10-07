@@ -60,6 +60,7 @@ import {
     type WfNode,
 } from './graph.js';
 import { tidyGraph } from './layout.js';
+import { TeamManagedAlert } from '../../components/TeamManagedAlert.js';
 
 const TAB_KEYS = ['builder', 'runs', 'evals'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -327,6 +328,7 @@ function WorkflowEditor({ initial }: { initial: IWorkflow }) {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
+            <TeamManagedAlert managed={draft.team_managed} noun="workflow" sx={{ mb: 2 }} />
             <WorkflowHeader
                 workflow={draft}
                 projectName={projectName}

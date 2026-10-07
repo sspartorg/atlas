@@ -3,6 +3,7 @@ import { remindersService } from './reminders.js';
 import { refreshExpiring as refreshExpiringAppTokens } from './github-app-tokens.js';
 import { externalLinks } from './external-links.js';
 import { jiraSync } from './jira-sync.js';
+import { teamConfig } from './team-config.js';
 import { onStepFinished, reconcileWorkflowRuns, tickWorkflowDispatch } from './workflow-engine.js';
 
 // Single clock-driven poller. One setInterval ticks every minute and runs,
@@ -78,6 +79,13 @@ export async function tickAgentScheduler(): Promise<void> {
         await externalLinks.syncReviewedTaskPrs();
     } catch (err) {
         schedLog(`[pr-state] tick failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // Before Jira, so a pulled query or workflow is used this same tick.
+    try {
+        await teamConfig.tick(now);
+    } catch (err) {
+        schedLog(`[team-config] tick failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     // Before dispatch, so a Task the Jira bridge just queued starts this tick.

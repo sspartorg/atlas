@@ -9,9 +9,10 @@ const KEY_BYTES = 32;
 const IV_BYTES = 12;
 const TAG_BYTES = 16;
 
-function keyPath(): string {
+/** Atlas's per-machine data folder: the workspace key, the team config clone. */
+export function dataDir(): string {
     const override = process.env['ATLAS_DATA_DIR'];
-    const dir =
+    return (
         override ??
         (platform() === 'win32'
             ? join(
@@ -21,8 +22,12 @@ function keyPath(): string {
               )
             : // The non-win32 branch is unreachable on Windows CI where tests run.
               /* v8 ignore next */
-              join(process.env['HOME'] ?? '.', '.config', 'Atlas'));
-    return join(dir, 'workspace.key');
+              join(process.env['HOME'] ?? '.', '.config', 'Atlas'))
+    );
+}
+
+function keyPath(): string {
+    return join(dataDir(), 'workspace.key');
 }
 
 /**

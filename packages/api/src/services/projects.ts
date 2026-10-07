@@ -76,6 +76,7 @@ function projectFromRow(r: Record<string, unknown>): IProject {
         status: r['status'] as string,
         guardrails_md: r['guardrails_md'] as string,
         default_workflow_id: (r['default_workflow_id'] as string | null) ?? null,
+        team_managed: Boolean(r['team_managed']),
         created_at: r['created_at'] as string,
         updated_at: r['updated_at'] as string,
         last_activity_at:
@@ -95,6 +96,7 @@ export const projectsService = {
                 'p.status',
                 'p.guardrails_md',
                 'p.default_workflow_id',
+                'p.team_managed',
                 'p.created_at',
                 'p.updated_at',
                 LAST_ACTIVITY_SQL.as('last_activity_at'),
@@ -126,6 +128,7 @@ export const projectsService = {
                     'p.status',
                     'p.guardrails_md',
                     'p.default_workflow_id',
+                'p.team_managed',
                     'p.created_at',
                     'p.updated_at',
                     LAST_ACTIVITY_SQL.as('last_activity_at'),
@@ -156,6 +159,7 @@ export const projectsService = {
                 'p.status',
                 'p.guardrails_md',
                 'p.default_workflow_id',
+                'p.team_managed',
                 'p.created_at',
                 'p.updated_at',
                 LAST_ACTIVITY_SQL.as('last_activity_at'),
@@ -207,6 +211,7 @@ export const projectsService = {
             status?: string | undefined;
             guardrails_md?: string | undefined;
             default_workflow_id?: string | null | undefined;
+            team_managed?: boolean | undefined;
         },
     ): Promise<IProject> {
         const keys = Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined);

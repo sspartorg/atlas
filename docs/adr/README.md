@@ -28,3 +28,4 @@ Add a new ADR whenever a choice is expensive to undo: a database engine, a query
 | 0018 | Repos Without a Primary | 2026-09-20 | Accepted — every repo in a project is an ordinary `project_repos` row with its own clone, credential, branch and setup scripts; the project keeps no git fields |
 | 0019 | Second Baseline Squash | 2026-09-20 | Superseded by 0025 — migrations 001-045 collapsed into one regenerated baseline; supersedes 0002 |
 | 0025 | Third Baseline Squash and Catalog v1 | 2026-09-28 | Accepted — migrations 001-024 collapsed into one regenerated baseline; every catalog agent and workflow template reset to `version: 1`; supersedes 0019 |
+| 0026 | Team Config Sync Through a Git Repo | 2026-10-07 | Accepted — a publisher pushes its team projects' configuration (never secrets) to a git repo; subscribers pull it, overwriting only rows marked `team_managed` |
