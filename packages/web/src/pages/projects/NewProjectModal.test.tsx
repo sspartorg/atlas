@@ -74,6 +74,29 @@ describe('NewProjectModal', () => {
         expect(onClose).toHaveBeenCalled();
     });
 
+    it('includes a publisher\'s new project in the team config by default', async () => {
+        let patched: unknown;
+        server.use(
+            http.get(`${BASE}/team-config`, () => HttpResponse.json({ role: 'publisher' })),
+            http.post(`${BASE}/projects`, () =>
+                HttpResponse.json({ id: 'p9', name: 'Atlas Web' }, { status: 201 })
+            ),
+            http.patch(`${BASE}/projects/p9`, async ({ request }) => {
+                patched = await request.json();
+                return HttpResponse.json({ id: 'p9' });
+            })
+        );
+        mount();
+
+        await userEvent.type(screen.getByLabelText(/^Name/), 'Atlas Web');
+        await screen.findByText(/Available\./);
+        expect(await screen.findByLabelText(/Include in team config/)).toBeChecked();
+        await userEvent.click(screen.getByRole('button', { name: /Create project/i }));
+
+        await waitFor(() => expect(navigate).toHaveBeenCalledWith('/projects/p9?tab=repos'));
+        expect(patched).toEqual({ team_managed: true });
+    });
+
     it('refuses a prefix another project already holds', async () => {
         server.use(
             http.get(`${BASE}/projects/prefix-available`, () =>

@@ -86,6 +86,7 @@ Configures the Jira bridge. Every field saves on blur (or on change for selects 
 Connects this install to the team's config git repo (`services/team-config.ts`). Every field saves on blur (on change for selects) through `PUT /api/team-config` and toasts.
 - **Role**: Off / Publisher / Subscriber, with a one-line explanation under it. A publisher pushes the projects it includes (Project Detail switch); a subscriber pulls them and keeps them in sync.
 - **Repo URL** (https), **Credential** (my own; also used to clone the team's project repos), **Branch** (a publisher needs push rights there — admin bypass on a protected branch, or a sync branch), **Sync every** N minutes (≥ 5; an invalid value reverts).
+- Publisher only: a notice above the status line counts the projects included (`team_managed`). With none it warns that a sync pushes only the README and points to **Include in team config** on a project page.
 - Status line: last sync time and message, one note per line. Red only when something could not be applied (a skipped project, an unreachable repo, a rejected push); notes such as "left the team config" or "is now team-managed" keep it grey, and **Sync now** → `POST /api/team-config/sync`, which invalidates every query. Disabled while the role is Off or the repo / credential is missing.
 - **Team guide** — the repo's `README.md`, rendered, once synced. Atlas writes a starter README on the first publish (secrets stay out; don't edit managed items; use `currentUser()` in JQL); after that it is the lead's to edit in the repo.
 

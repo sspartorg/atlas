@@ -7,9 +7,12 @@ import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
 import IconButton from '@mui/material/IconButton';
 import Alert from '@mui/material/Alert';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/api.js';
+import { useTeamConfig } from '../../hooks/useTeamConfig.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 
 const MONO = '"JetBrains Mono", monospace';
@@ -38,7 +41,10 @@ export function NewProjectModal({ open, onClose }: Props) {
     const [description, setDescription] = useState('');
     const [issueKeyPrefix, setIssueKeyPrefix] = useState('');
     const [prefixTouched, setPrefixTouched] = useState(false);
+    const [teamManaged, setTeamManaged] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const { data: teamConfig } = useTeamConfig();
+    const isPublisher = teamConfig?.role === 'publisher';
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [prefixStatus, setPrefixStatus] = useState<
         | { kind: 'idle' }
@@ -54,6 +60,7 @@ export function NewProjectModal({ open, onClose }: Props) {
             setDescription('');
             setIssueKeyPrefix('');
             setPrefixTouched(false);
+            setTeamManaged(true);
             setSubmitting(false);
             setSubmitError(null);
             setPrefixStatus({ kind: 'idle' });
@@ -113,6 +120,8 @@ export function NewProjectModal({ open, onClose }: Props) {
                 issue_key_prefix: issueKeyPrefix,
                 ...(description.trim() ? { description: description.trim() } : {}),
             });
+            // Create doesn't take team_managed; the publisher-only flag goes through update.
+            if (isPublisher && teamManaged) await api.projects.update(project.id, { team_managed: true });
             await qc.invalidateQueries({ queryKey: ['projects'] });
             onClose();
             // Straight to Repos: a project with no repo can't run a workflow,
@@ -238,6 +247,24 @@ export function NewProjectModal({ open, onClose }: Props) {
                         multiline
                         minRows={2}
                     />
+                    {isPublisher && (
+                        <FormControlLabel
+                            control={
+                                <Checkbox
+                                    size="small"
+                                    checked={teamManaged}
+                                    onChange={(e) => setTeamManaged(e.target.checked)}
+                                />
+                            }
+                            label={
+                                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
+                                    Include in team config — publishes this project&apos;s repos, guardrails,
+                                    scripts, Jira queries, workflows and their agents to the team repo. Never
+                                    its secrets. You can change this later on the project page.
+                                </Typography>
+                            }
+                        />
+                    )}
                     {submitError && <Alert severity="error">{submitError}</Alert>}
                 </Box>
 

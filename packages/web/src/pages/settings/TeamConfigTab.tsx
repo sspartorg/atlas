@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import MenuItem from '@mui/material/MenuItem';
@@ -9,6 +10,7 @@ import type { TeamConfigUpdate } from '../../api/api.js';
 import { FormRow } from '../../components/FormSection.js';
 import { MarkdownPreview } from '../../components/MarkdownPreview.js';
 import { useCredentials } from '../../hooks/useCredentials.js';
+import { useProjects } from '../../hooks/useProjects.js';
 import {
     useSyncTeamConfig,
     useTeamConfig,
@@ -44,6 +46,7 @@ function TeamConfigForm({ cfg }: { cfg: ITeamConfig }) {
     const toast = useToast();
     const { data: credentials = [] } = useCredentials();
     const { data: help } = useTeamConfigHelp();
+    const { data: projects } = useProjects();
     const [repoUrl, setRepoUrl] = useState(cfg.repo_url ?? '');
     const [branch, setBranch] = useState(cfg.branch);
     const [interval, setIntervalMinutes] = useState(String(cfg.interval_minutes));
@@ -83,6 +86,7 @@ function TeamConfigForm({ cfg }: { cfg: ITeamConfig }) {
     }
 
     const ready = cfg.role !== 'off' && Boolean(cfg.repo_url) && Boolean(cfg.credential_id);
+    const included = projects?.filter((p) => p.team_managed).length;
 
     return (
         <Box>
@@ -160,6 +164,13 @@ function TeamConfigForm({ cfg }: { cfg: ITeamConfig }) {
                         </Typography>
                     </Box>
                 </FormRow>
+                {cfg.role === 'publisher' && included !== undefined ? (
+                    <Alert severity={included === 0 ? 'warning' : 'info'} sx={{ alignItems: 'center' }}>
+                        {included === 0
+                            ? "No projects are included yet, so a sync pushes only the README. Turn on 'Include in team config' on each project's page to publish it."
+                            : `${included} project${included === 1 ? '' : 's'} included. Turn on 'Include in team config' on a project's page to add more.`}
+                    </Alert>
+                ) : null}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pt: 1, flexWrap: 'wrap' }}>
                     <Typography
                         sx={{

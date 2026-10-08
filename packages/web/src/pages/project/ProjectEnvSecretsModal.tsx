@@ -558,6 +558,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                             severity="warning"
                             sx={{
                                 py: 0.5,
+                                alignItems: 'center',
                                 bgcolor: 'rgba(199,83,47,.10)',
                                 color: ATLAS_PALETTE.slate,
                                 border: `1px solid rgba(199,83,47,.20)`,
@@ -574,6 +575,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                             }
                             sx={{
                                 py: 0.5,
+                                alignItems: 'center',
                                 bgcolor: 'rgba(49,171,70,.08)',
                                 color: ATLAS_PALETTE.slate,
                                 border: `1px solid rgba(49,171,70,.18)`,
