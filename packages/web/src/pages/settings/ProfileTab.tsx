@@ -8,6 +8,8 @@ import Alert from '@mui/material/Alert';
 import VpnKeyOutlined from '@mui/icons-material/VpnKeyOutlined';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import RestartAltRounded from '@mui/icons-material/RestartAltRounded';
+import FileDownloadOutlined from '@mui/icons-material/FileDownloadOutlined';
+import FileUploadOutlined from '@mui/icons-material/FileUploadOutlined';
 import { useSettings, useUpdateProfile } from '../../hooks/useSettings.js';
 import { useCredentials } from '../../hooks/useCredentials.js';
 import { useProjects } from '../../hooks/useProjects.js';
@@ -15,6 +17,7 @@ import { useToast } from '../../hooks/useToast.js';
 import { FolderPicker } from '../../components/FolderPicker.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { SettingsSection } from './SettingsSection.js';
+import { SecretsBundleDialog } from './SecretsBundleDialog.js';
 import { AccentColorPicker } from './AccentColorPicker.js';
 import { ThemeModeToggle } from '../../components/ThemeModeToggle.js';
 import { lazyNamed } from '../../utils/lazyNamed.js';
@@ -38,6 +41,7 @@ export function ProfileTab() {
     const [ownerName, setOwnerName] = useState(settings?.owner_name ?? '');
     const [workspacePath, setWorkspacePath] = useState(settings?.workspace_path ?? '');
     const [resetOpen, setResetOpen] = useState(false);
+    const [bundleMode, setBundleMode] = useState<'export' | 'import' | null>(null);
 
     // Accent color is click-driven (no typing buffer needed), so it reads
     // straight off the query cache. Combined with the optimistic update in
@@ -231,6 +235,30 @@ export function ProfileTab() {
                     </SettingsSection>
 
                     <SettingsSection
+                        title="Move to another machine"
+                        subtitle="Export every secret except git credentials — shared secrets, each project's .env secrets, the Jira token and the notification channel — into one passphrase-locked file, then import it on the new machine."
+                    >
+                        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                            <Button
+                                variant="outlined"
+                                startIcon={<FileDownloadOutlined sx={{ fontSize: 16 }} />}
+                                onClick={() => setBundleMode('export')}
+                                sx={{ textTransform: 'none', fontWeight: 500 }}
+                            >
+                                Export all secrets
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                startIcon={<FileUploadOutlined sx={{ fontSize: 16 }} />}
+                                onClick={() => setBundleMode('import')}
+                                sx={{ textTransform: 'none', fontWeight: 500 }}
+                            >
+                                Import secrets
+                            </Button>
+                        </Box>
+                    </SettingsSection>
+
+                    <SettingsSection
                         title="Reset"
                         subtitle="Wipes all projects, tasks, sub-tasks, agents, runs, notifications and saved credentials from the local database, clears the external notification channel, and returns to onboarding. Git repositories on disk are not touched."
                     >
@@ -254,6 +282,7 @@ export function ProfileTab() {
                 </Box>
             </Box>
 
+            {bundleMode && <SecretsBundleDialog mode={bundleMode} onClose={() => setBundleMode(null)} />}
             {resetOpen && (
                 <Suspense fallback={null}>
                     <ResetWorkspaceModal open onClose={() => setResetOpen(false)} />

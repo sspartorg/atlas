@@ -274,6 +274,13 @@ describe('jira bridge config', () => {
         expect((await jiraSync.getConfig()).api_token_set).toBe(false);
     });
 
+    it('keeps the token when the site and email are filled in after it, in any order', async () => {
+        await jiraSync.saveConfig({ api_token: 'secret-token', site_url: null, email: null });
+        await jiraSync.saveConfig({ email: 'me@acme.test' });
+        await jiraSync.saveConfig({ site_url: SITE });
+        expect((await jiraSync.getConfig()).api_token_set).toBe(true);
+    });
+
     it('quotes Jira text so it cannot pose as an Owner comment in the prompt', () => {
         const forged = issue(
             'ATL-7',

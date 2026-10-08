@@ -10,6 +10,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Skeleton from '@mui/material/Skeleton';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import AddRounded from '@mui/icons-material/AddRounded';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
@@ -26,6 +27,7 @@ import {
     useUpdateProjectRepo,
 } from '../../hooks/useProjectRepos.js';
 import { useToast } from '../../hooks/useToast.js';
+import { useEnabledSchedules } from '../../hooks/useProjectSchedule.js';
 import { useCredentials } from '../../hooks/useCredentials.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { CloneStatusChip } from '../../components/CloneStatusChip.js';
@@ -37,6 +39,14 @@ import { AddRepoDialog } from './AddRepoDialog.js';
 import { CredentialSelect } from '../projects/RepoFormParts.js';
 
 const MONO = '"JetBrains Mono", monospace';
+
+const PRESET_LABEL: Record<string, string> = {
+    hourly: 'hourly',
+    every_4h: 'every 4h',
+    daily: 'daily',
+    weekly: 'weekly',
+    custom: 'custom',
+};
 
 function repoLabel(url: string): string {
     return url.replace(/^https?:\/\//, '').replace(/\.git\/?$/, '');
@@ -53,6 +63,7 @@ export function ProjectReposCard({ project, displayId }: Props) {
     const { data: repos, isLoading, error } = useProjectRepos(projectId);
     const remove = useRemoveProjectRepo(projectId);
     const toast = useToast();
+    const { map: schedules } = useEnabledSchedules();
     const [adding, setAdding] = useState(false);
     const [editing, setEditing] = useState<IProjectRepo | null>(null);
     const [removing, setRemoving] = useState<IProjectRepo | null>(null);
@@ -176,6 +187,7 @@ export function ProjectReposCard({ project, displayId }: Props) {
                                 sx={{ fontFamily: MONO, fontSize: 11 }}
                             />
                             <CloneStatusChip status={repo.clone_status} />
+                            {schedules.get(repo.id) && <ScheduleChip schedule={schedules.get(repo.id)!} />}
                         </Box>
                         {repo.git_url && (
                             <Box
@@ -266,6 +278,25 @@ export function ProjectReposCard({ project, displayId }: Props) {
                 onConfirm={() => void confirmRemove()}
             />
         </Box>
+    );
+}
+
+function ScheduleChip({ schedule }: { schedule: { preset: string; next_run_at: string | null } }) {
+    return (
+        <Tooltip
+            title={
+                schedule.next_run_at
+                    ? `Next fetch ${new Date(schedule.next_run_at).toLocaleString()}`
+                    : 'Auto-fetch is on'
+            }
+        >
+            <Chip
+                size="small"
+                icon={<ScheduleRounded sx={{ fontSize: 14, color: `${ATLAS_PALETTE.success} !important` }} />}
+                label={`Auto-fetch · ${PRESET_LABEL[schedule.preset] ?? schedule.preset}`}
+                sx={{ fontSize: 11, bgcolor: 'rgba(49,171,70,.08)', color: ATLAS_PALETTE.slate }}
+            />
+        </Tooltip>
     );
 }
 

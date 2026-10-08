@@ -10,6 +10,7 @@ import websocket from '@fastify/websocket';
 import { settingsRoutes } from './routes/settings.js';
 import { jiraRoutes } from './routes/jira.js';
 import { teamConfigRoutes } from './routes/team-config.js';
+import { secretsBundleRoutes } from './routes/secrets-bundle.js';
 import { agentsRoutes } from './routes/agents.js';
 import { marketplaceRoutes } from './routes/marketplace.js';
 import { rolesRoutes } from './routes/roles.js';
@@ -363,6 +364,7 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
     await server.register(settingsRoutes);
     await server.register(jiraRoutes);
     await server.register(teamConfigRoutes);
+    await server.register(secretsBundleRoutes);
     await server.register(agentsRoutes);
     await server.register(workflowsRoutes);
     await server.register(workflowQueueRoutes);
