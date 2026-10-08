@@ -15,7 +15,7 @@ import FormControl from '@mui/material/FormControl';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import type { IAgent, IAgentRun, AgentCategory, AgentCli } from '@atlas/shared';
-import { BRAND_SECONDARY_ACCENTS } from '@atlas/shared';
+import { BRAND_SECONDARY_ACCENTS, DEFAULT_MODEL_BY_CLI } from '@atlas/shared';
 import { CLI_OPTIONS } from '../utils/cliPresentation.js';
 import { AgentCard, ModelSelect } from '../components/index.js';
 import { AccentColorPicker } from './settings/AccentColorPicker.js';
@@ -134,7 +134,7 @@ export function Agents() {
         name: '',
         category: 'software-dev',
         cli: 'claude',
-        model: 'claude-sonnet-5',
+        model: DEFAULT_MODEL_BY_CLI.claude,
         framework: '',
         accent_color: DEFAULT_ACCENT,
     });
@@ -261,7 +261,7 @@ export function Agents() {
                 name: '',
                 category: 'software-dev',
                 cli: 'claude',
-                model: 'claude-sonnet-5',
+                model: DEFAULT_MODEL_BY_CLI.claude,
                 framework: '',
                 accent_color: DEFAULT_ACCENT,
             });

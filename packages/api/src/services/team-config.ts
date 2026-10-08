@@ -2,9 +2,7 @@
 // lead publishes, so a teammate (or the Owner on a new laptop) pulls it instead
 // of rebuilding it by hand.
 //
-//   README.md                              team help guide (written once, then the lead's)
 //   projects/<PREFIX>/project.json         project, repos, guardrails, scripts, Jira queries
-//   projects/<PREFIX>/HELP.md              per-project help (written once, then the lead's)
 //   projects/<PREFIX>/workflows/<id>.json  each of the project's workflows
 //   agents/<id>/agent.json + prompt.md     every agent those workflows use
 //
@@ -24,7 +22,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { sql } from 'kysely';
 import { z } from 'zod';
-import type { ITeamConfig, ITeamConfigHelp, IWorkflowGraph } from '@atlas/shared';
+import type { ITeamConfig, IWorkflowGraph } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
 import { ApiError } from '../utils/errors.js';
 import { AgentBundleManifestSchema } from './agent-bundle.js';
@@ -116,27 +114,6 @@ const AgentFileSchema = AgentBundleManifestSchema.omit({
     checklists: z.array(z.object({ label: z.string(), sort_order: z.number().int(), required: z.boolean() })),
 });
 type AgentFile = z.infer<typeof AgentFileSchema>;
-
-const DEFAULT_README = `# Team config
-
-Atlas keeps this repo in sync. Each project folder holds what a teammate needs to
-work on it: repos, guardrails, scripts, Jira queries, workflows and agents.
-
-**Not in here:** secrets. Add your own GitHub credential, Jira token and project
-\`.env\` secrets on your machine (Project → Manage .env secrets → Import).
-
-**Don't edit team-managed items in Atlas** — the next sync overwrites them.
-Make your own agents or workflows instead; those are never touched.
-
-**Writing Jira queries:** use \`assignee = currentUser()\`, not a name. Jira
-resolves it against each person's own token, so "assigned to me" means you.
-`;
-
-const defaultHelp = (name: string) => `# ${name}
-
-Notes for teammates: which secrets this project needs, how to get access, anything
-to set up before the first run. Edit this file in the team config repo.
-`;
 
 // ── Config row ──────────────────────────────────────────────────────────────
 
@@ -328,7 +305,7 @@ async function exportAgent(id: string): Promise<{ file: AgentFile; prompt_md: st
     return { file, prompt_md: agent.prompt_md };
 }
 
-/** Rewrites every generated file from the DB. Leaves README.md and HELP.md alone. */
+/** Rewrites every generated file from the DB. */
 async function exportToFiles(): Promise<void> {
     const dir = teamConfigDir();
     const projects = await db.selectFrom('projects').select(['id', 'name', 'issue_key_prefix']).where('team_managed', '=', true).execute();
@@ -339,7 +316,6 @@ async function exportToFiles(): Promise<void> {
         await rm(join(projectsDir, name, ...(keep.has(name) ? ['workflows'] : [])), { recursive: true, force: true });
     }
     await rm(join(dir, 'agents'), { recursive: true, force: true });
-    if (!existsSync(join(dir, 'README.md'))) await writeFile(join(dir, 'README.md'), DEFAULT_README);
 
     const graphs: IWorkflowGraph[] = [];
     for (const p of projects) {
@@ -347,7 +323,6 @@ async function exportToFiles(): Promise<void> {
         const pDir = join(projectsDir, p.issue_key_prefix);
         await mkdir(join(pDir, 'workflows'), { recursive: true });
         await writeFile(join(pDir, 'project.json'), json(file));
-        if (!existsSync(join(pDir, 'HELP.md'))) await writeFile(join(pDir, 'HELP.md'), defaultHelp(p.name));
         for (const w of workflows) {
             await writeFile(join(pDir, 'workflows', `${w.id}.json`), json(w));
             graphs.push(w.graph);
@@ -687,22 +662,11 @@ async function syncNow(): Promise<string> {
     return exclusive(cfg.role === 'publisher' ? publish : pull);
 }
 
-async function help(): Promise<ITeamConfigHelp> {
-    const dir = teamConfigDir();
-    const read = async (p: string) => (existsSync(p) ? readFile(p, 'utf8') : '');
-    const projects = [];
-    for (const prefix of await listDirs(join(dir, 'projects'))) {
-        projects.push({ issue_key_prefix: prefix, help_md: await read(join(dir, 'projects', prefix, 'HELP.md')) });
-    }
-    return { readme_md: await read(join(dir, 'README.md')), projects };
-}
-
 export const teamConfig = {
     getConfig,
     saveConfig,
     syncNow,
     tick,
-    help,
     // Exposed for tests.
     exportToFiles,
     importFromFiles,

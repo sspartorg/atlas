@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import type { IProject, ITeamConfigHelp, TeamConfigRole } from '@atlas/shared';
+import type { IProject, TeamConfigRole } from '@atlas/shared';
 import { server } from '../../test-setup.js';
 import { makeProject } from '../../test-utils/factories.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
@@ -12,20 +12,11 @@ import { ProjectTeamCard } from './ProjectTeamCard.js';
 
 const apiBase = 'http://localhost:3000/api';
 
-const HELP: ITeamConfigHelp = {
-    readme_md: '# Team',
-    projects: [
-        { issue_key_prefix: 'ATL', help_md: '# Atlas\n\nAsk the lead for API_KEY.' },
-        { issue_key_prefix: 'OTH', help_md: 'Other project help' },
-    ],
-};
-
 function serve(role: TeamConfigRole, onPatch: (body: unknown) => void = () => undefined) {
     server.use(
         http.get(`${apiBase}/team-config`, () =>
             HttpResponse.json({ role, repo_url: 'https://github.com/acme/team.git', credential_id: 'c1', branch: 'main', interval_minutes: 60 })
         ),
-        http.get(`${apiBase}/team-config/help`, () => HttpResponse.json(HELP)),
         http.patch(`${apiBase}/projects/:id`, async ({ request }) => {
             const body = (await request.json()) as Partial<IProject>;
             onPatch(body);
@@ -91,22 +82,6 @@ describe('ProjectTeamCard', () => {
         serve('subscriber');
         mount(makeProject({ team_managed: false }));
         await waitFor(() => expect(screen.queryByText(/managed by my team config/)).not.toBeInTheDocument());
-        expect(screen.queryByText('Team help for this project')).not.toBeInTheDocument();
-    });
-
-    it("shows this project's help from the team repo, and only this project's", async () => {
-        serve('subscriber');
-        mount(makeProject({ issue_key_prefix: 'ATL', team_managed: true }));
-        await userEvent.click(await screen.findByText('Team help for this project'));
-        expect(await screen.findByText('Ask the lead for API_KEY.')).toBeInTheDocument();
-        expect(screen.queryByText('Other project help')).not.toBeInTheDocument();
-    });
-
-    it('omits the help section when the project has no HELP.md', async () => {
-        serve('subscriber');
-        mount(makeProject({ issue_key_prefix: 'NEW', team_managed: true }));
-        await screen.findByText(/This project is managed by my team config/);
-        expect(screen.queryByText('Team help for this project')).not.toBeInTheDocument();
     });
 });
 

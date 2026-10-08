@@ -23,6 +23,9 @@
 - **Manage Credentials →** link → `/settings/credentials`
 - Status box: count + first 3 hosts (or "No credentials yet")
 
+**Move to another machine**
+- **Export all secrets** / **Import secrets** → `SecretsBundleDialog`. Export asks for a passphrase (≥ 8 chars, typed twice) and downloads `atlas-secrets-YYYY-MM-DD.json` from `POST /api/secrets-bundle/export`. Import takes that file and the passphrase → `POST /api/secrets-bundle/import`, toasts what it applied and which project prefixes it skipped, and invalidates every query. A wrong passphrase stays in the dialog with the error. Git credentials are never in the file.
+
 **Reset**
 - Subtitle lists everything `POST /api/settings/reset` wipes — projects, tasks, sub-tasks, agents, runs, notifications **and saved credentials** — plus the cleared external notification channel; git repos on disk are untouched.
 - **Reset Workspace** button → opens `ResetWorkspaceModal`
@@ -73,7 +76,7 @@ The card Atlas sends looks like this — paste into [adaptivecards.io/designer](
 ## Tab 5 — Jira (`JiraTab`, ADR 0016)
 Configures the Jira bridge. Every field saves on blur (or on change for selects and switches) through `PUT /api/integrations/jira` and shows a toast.
 - **Jira connection**
-  - Site URL (https; http only on loopback), Email, and API token (a password field). Saving the token also saves the typed site and email in the same request; changing the site or email alone clears the stored token. The token is write-only *over the config read*: once stored, the field is empty with the placeholder "Stored. Type to replace.", and the GET never returns it. An **eye button** in the field (`Show Jira API token` / `Hide Jira API token`) fetches it on demand from `POST /api/integrations/jira/reveal-token`, which is MCP-token gated and writes a `secret_reveal` audit line; the field is read-only while revealed, and the button is disabled when no token is stored. There is deliberately no local unmask mode — every field on this form saves on blur, so clicking the eye commits what you typed first.
+  - Site URL (https; http only on loopback), Email, and API token (a password field). Saving the token also saves the typed site and email in the same request; changing a saved site or email alone clears the stored token; filling in a blank one keeps it, so the three fields can be entered in any order. The token is write-only *over the config read*: once stored, the field is empty with the placeholder "Stored. Type to replace.", and the GET never returns it. An **eye button** in the field (`Show Jira API token` / `Hide Jira API token`) fetches it on demand from `POST /api/integrations/jira/reveal-token`, which is MCP-token gated and writes a `secret_reveal` audit line; the field is read-only while revealed, and the button is disabled when no token is stored. There is deliberately no local unmask mode — every field on this form saves on blur, so clicking the eye commits what you typed first.
   - **Test connection** button → `POST /api/integrations/jira/test`. It toasts "Connected to Jira as <name>" or the error, and is disabled until a token is stored.
 - **Import**
   - Header switch **Jira sync enabled**: the minute tick only syncs while it is on.
@@ -86,9 +89,8 @@ Configures the Jira bridge. Every field saves on blur (or on change for selects 
 Connects this install to the team's config git repo (`services/team-config.ts`). Every field saves on blur (on change for selects) through `PUT /api/team-config` and toasts.
 - **Role**: Off / Publisher / Subscriber, with a one-line explanation under it. A publisher pushes the projects it includes (Project Detail switch); a subscriber pulls them and keeps them in sync.
 - **Repo URL** (https), **Credential** (my own; also used to clone the team's project repos), **Branch** (a publisher needs push rights there — admin bypass on a protected branch, or a sync branch), **Sync every** N minutes (≥ 5; an invalid value reverts).
-- Publisher only: a notice above the status line counts the projects included (`team_managed`). With none it warns that a sync pushes only the README and points to **Include in team config** on a project page.
+- Publisher only: a **Projects** row above the status line counts the projects included (`team_managed`). With none it reads, in the warning colour, that a sync pushes only the README and points to **Include in team config** on a project page.
 - Status line: last sync time and message, one note per line. Red only when something could not be applied (a skipped project, an unreachable repo, a rejected push); notes such as "left the team config" or "is now team-managed" keep it grey, and **Sync now** → `POST /api/team-config/sync`, which invalidates every query. Disabled while the role is Off or the repo / credential is missing.
-- **Team guide** — the repo's `README.md`, rendered, once synced. Atlas writes a starter README on the first publish (secrets stay out; don't edit managed items; use `currentUser()` in JQL); after that it is the lead's to edit in the repo.
 
 Secrets are not part of the sync. Each person adds their own credentials, Jira token and project `.env` secrets (the existing Export / Import on Project → Manage .env secrets).
 

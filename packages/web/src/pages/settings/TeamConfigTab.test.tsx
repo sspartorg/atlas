@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import type { ITeamConfig, ITeamConfigHelp } from '@atlas/shared';
+import type { ITeamConfig } from '@atlas/shared';
 import { server } from '../../test-setup.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { Toast } from '../../components/Toast.js';
@@ -24,7 +24,6 @@ const CONFIG: ITeamConfig = {
 
 interface MountOptions {
     config?: Partial<ITeamConfig>;
-    help?: ITeamConfigHelp;
     putError?: string;
     syncError?: string;
 }
@@ -47,7 +46,6 @@ function mount(onPut: (body: unknown) => void = () => undefined, opts: MountOpti
             current = { ...current, last_sync_at: '2026-10-07T10:00:00.000Z', last_sync_ok: true, last_sync_message: 'Up to date with abc1234' };
             return HttpResponse.json({ message: 'Up to date with abc1234', config: current });
         }),
-        http.get(`${apiBase}/team-config/help`, () => HttpResponse.json(opts.help ?? { readme_md: '', projects: [] })),
         http.get(`${apiBase}/credentials`, () =>
             HttpResponse.json([
                 { id: 'c1', label: 'My GitHub' },
@@ -186,17 +184,5 @@ describe('TeamConfigTab', () => {
     ])('disables Sync now while %s', async (_case, config) => {
         mount(undefined, { config });
         expect(await screen.findByRole('button', { name: 'Sync now' })).toBeDisabled();
-    });
-
-    it('renders the team README once there is one', async () => {
-        mount(undefined, { help: { readme_md: '# Our team\n\nUse currentUser() in JQL.', projects: [] } });
-        expect(await screen.findByText('Team guide')).toBeInTheDocument();
-        expect(screen.getByText('Our team')).toBeInTheDocument();
-    });
-
-    it('hides the guide before the first sync', async () => {
-        mount();
-        await screen.findByDisplayValue('https://github.com/acme/team.git');
-        expect(screen.queryByText('Team guide')).not.toBeInTheDocument();
     });
 });

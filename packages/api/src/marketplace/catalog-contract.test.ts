@@ -293,23 +293,13 @@ describe('workflow templates', () => {
                 expect(missing).toEqual([]);
             });
 
-            // An Owner node on a fail edge holds the run until a human answers.
-            // That is right when the agent is asking a question and wrong when
-            // it is reporting work: the Release Reviewer's `rejected` means "a
-            // performer can close this", and routing it through an Owner made
-            // every cross-cutting nit page the Owner (ADR 0022, amended).
-            // `asked_question` still parks the run — that is engine behaviour,
-            // not an edge, so the Owner stays reachable either way.
-            it('routes a reviewer rejection to a performer, not to the Owner', () => {
-                const ownerIds = new Set(t.graph.nodes.filter((n) => n.type === 'owner').map((n) => n.id));
-                const offenders = t.graph.edges
-                    .filter((e) => e.kind === 'fail' && ownerIds.has(e.target))
-                    .map((e) => e.source)
-                    // PO Writer is the deliberate exception: at that point there
-                    // are no sub-tasks and nothing to hand work to, so its fail
-                    // edge genuinely is a question.
-                    .filter((src) => t.graph.nodes.find((n) => n.id === src)?.agent_id !== 'agent-po-writer');
-                expect(offenders).toEqual([]);
+            // Templates never carry an Owner node. A failure goes to the agent on
+            // the fail edge, or — with no fail edge — parks as Waiting for info;
+            // errors and questions always park. That is engine behaviour, so an
+            // Owner step is only for a user who wants an explicit approval and
+            // adds one themselves.
+            it('has no Owner node', () => {
+                expect(t.graph.nodes.filter((n) => n.type === 'owner').map((n) => n.id)).toEqual([]);
             });
         });
     }

@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL_BY_CLI } from '@atlas/shared';
 import { describe, expect, it, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type * as NodeChildProcess from 'node:child_process';
@@ -433,7 +434,7 @@ describe('POST /api/cli/sessions', () => {
         expect(body.worktree_branch).toMatch(/^atlas\/terminal\//);
         expect(typeof body.claude_session_id).toBe('string');
         expect(body.claude_session_id.length).toBeGreaterThan(0);
-        expect(body.model).toBe('claude-opus-5');
+        expect(body.model).toBe(DEFAULT_MODEL_BY_CLI.claude);
         expect(body.initial_prompt).toBe('hello');
 
         expect(mockPtys).toHaveLength(1);

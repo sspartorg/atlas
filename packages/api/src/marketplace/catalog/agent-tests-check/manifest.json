@@ -3,7 +3,7 @@
   "name": "Tests Check",
   "category": "software-dev",
   "cli": "claude",
-  "model": "haiku",
+  "model": "claude-haiku-5-5",
   "effort": "low",
   "framework": "review",
   "description": "Gate checker. Reads the repo and names the one command that runs this project's own test suite - with coverage when the project declares its own threshold, and without when it does not. Atlas runs that command, routes on its exit code, and keeps it as the repo's pre-push verify command. Invents no coverage floor.",
@@ -17,6 +17,6 @@
   "settings_json": {},
   "memory_cadence": 1,
   "summary": "Finds the command that runs this project's suite, and coverage if it declares a threshold.",
-  "version": 2,
+  "version": 1,
   "published_at": "2026-09-25T00:00:00Z"
 }

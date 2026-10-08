@@ -64,7 +64,7 @@ describe('WorkflowInspector', () => {
             ['agent', 'Agent step'],
             ['owner', 'Owner'],
             ['subtasks', 'Sub-tasks step'],
-            ['gate', 'Gate step'],
+            ['gate', 'Check step'],
             ['end', 'End'],
         ];
         for (const [type, title] of titles) {
@@ -96,10 +96,10 @@ describe('WorkflowInspector', () => {
             node: node('gate', { agent_id: 'agent-tests-check' }),
             agents: [makeAgent({ id: 'agent-tests-check', name: 'Tests Check' })],
         });
-        expect(screen.getByText(/believes the exit code/)).toBeInTheDocument();
-        expect(screen.getByText(/pauses the run and comes back to you/)).toBeInTheDocument();
+        expect(screen.getByText(/You don.t type a command/)).toBeInTheDocument();
+        expect(screen.getByText(/trusts the exit code/)).toBeInTheDocument();
         // The honest half: a project with no such tooling is not a pass.
-        expect(screen.getByText(/recorded as skipped, not as/)).toBeInTheDocument();
+        expect(screen.getByText(/marked skipped/)).toBeInTheDocument();
     });
 
     it('flags a gate pointing at a checker that is not installed', () => {
@@ -115,7 +115,7 @@ describe('WorkflowInspector', () => {
     it('says what a gate does when no checker is picked yet', () => {
         mount({ node: node('gate') });
         expect(
-            screen.getByText('Reads the repo and names the command this project already trusts'),
+            screen.getByText('Reads the repo and picks the command this project already uses'),
         ).toBeInTheDocument();
     });
 

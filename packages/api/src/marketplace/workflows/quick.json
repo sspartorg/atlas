@@ -8,6 +8,7 @@
     "use_worktree": true,
     "push_code": true,
     "raises_pr": true,
+    "max_loops": 8,
     "graph": {
         "nodes": [
             { "id": "start", "type": "start", "position": { "x": 0, "y": 0 } },

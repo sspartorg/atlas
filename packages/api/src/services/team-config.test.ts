@@ -87,10 +87,8 @@ describe('team config export', () => {
         await teamConfig.exportToFiles();
         const first = snapshot();
         expect(Object.keys(first).sort()).toEqual([
-            'README.md',
             'agents/agent-coder/agent.json',
             'agents/agent-coder/prompt.md',
-            'projects/ATL/HELP.md',
             'projects/ATL/project.json',
             `projects/ATL/workflows/${workflowId}.json`,
         ]);
@@ -111,15 +109,6 @@ describe('team config export', () => {
         await teamConfig.exportToFiles();
         const all = Object.values(snapshot()).join('\n');
         expect(all).not.toMatch(/_encrypted|SECRET-CIPHERTEXT|API_KEY|git_path|credential_id/);
-    });
-
-    it('leaves README.md and HELP.md as the lead edited them', async () => {
-        await seedPublisher();
-        await teamConfig.exportToFiles();
-        const { writeFileSync } = await import('node:fs');
-        writeFileSync(join(teamConfigDir(), 'projects/ATL/HELP.md'), 'Ask Sam for VPN access.');
-        await teamConfig.exportToFiles();
-        expect(readFileSync(join(teamConfigDir(), 'projects/ATL/HELP.md'), 'utf8')).toBe('Ask Sam for VPN access.');
     });
 });
 
@@ -236,7 +225,6 @@ describe('team config sync over git', () => {
         expect(await testDb.selectFrom('projects').select(['id', 'team_managed']).execute()).toEqual([{ id: 'p1', team_managed: true }]);
         expect(await workflowsService.get(workflowId)).toMatchObject({ team_managed: true });
         expect((await teamConfig.getConfig()).last_commit).toMatch(/^[0-9a-f]{40}$/);
-        expect((await teamConfig.help()).projects).toEqual([{ issue_key_prefix: 'ATL', help_md: expect.stringContaining('# Atlas') }]);
         rmSync(remote, { recursive: true, force: true });
     });
 });

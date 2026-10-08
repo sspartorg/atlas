@@ -188,7 +188,7 @@ Before the handler, a global `preHandler` (`services/workflow-lock.ts`) returns 
 
 ## Workflow runs (agent kickoff)
 
-Agents never start themselves and never route items (ADR 0014, `docs/adr/0014-workflows-replace-agent-handoffs.md`). A **workflow** (`workflows` row: graph of Start / Agent / Owner / Sub-tasks / End nodes joined by pass and fail connections) starts a **workflow run**, and `services/workflow-engine.ts` drives it. Since ADR 0015 (`docs/adr/0015-one-task-one-pr.md`) the item is a **Task**: its run does everything, including its sub-tasks, in one worktree on one branch, and delivers once.
+Agents never start themselves and never route items (ADR 0014, `docs/adr/0014-workflows-replace-agent-handoffs.md`). A **workflow** (`workflows` row: graph of Start / Agent / Owner / Sub-tasks / Check (`gate`) / End nodes joined by pass and fail connections) starts a **workflow run**, and `services/workflow-engine.ts` drives it. Since ADR 0015 (`docs/adr/0015-one-task-one-pr.md`) the item is a **Task**: its run does everything, including its sub-tasks, in one worktree on one branch, and delivers once.
 
 ```
 start (manual POST /api/workflows/:id/runs, dispatch kick or tick, generate-ai-scaffold)

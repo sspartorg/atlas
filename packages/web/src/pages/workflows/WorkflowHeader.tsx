@@ -80,8 +80,8 @@ export function WorkflowHeader({
             toast.show({
                 message:
                     entry.published_at === entry.updated_at
-                        ? 'Published to the marketplace'
-                        : 'Updated in the marketplace',
+                        ? 'Saved to your marketplace'
+                        : 'Updated in your marketplace',
             });
         } catch (err) {
             toast.show({
@@ -232,7 +232,13 @@ export function WorkflowHeader({
                         </Button>
                     </Box>
                 </Tooltip>
-                <Tooltip title={dirty ? 'Save your changes before publishing' : ''}>
+                <Tooltip
+                    title={
+                        dirty
+                            ? 'Save your changes before publishing'
+                            : 'Lists it in your own marketplace on this Atlas. Nothing leaves this machine.'
+                    }
+                >
                     <Box component="span">
                         <Button
                             variant="outlined"

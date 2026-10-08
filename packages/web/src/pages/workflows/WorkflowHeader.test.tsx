@@ -76,8 +76,8 @@ describe('WorkflowHeader Publish', () => {
     const BASE = 'http://localhost:3000/api';
 
     it.each([
-        ['the first time', '2026-09-14T10:00:00.000Z', 'Published to the marketplace'],
-        ['again', '2026-09-15T08:00:00.000Z', 'Updated in the marketplace'],
+        ['the first time', '2026-09-14T10:00:00.000Z', 'Saved to your marketplace'],
+        ['again', '2026-09-15T08:00:00.000Z', 'Updated in your marketplace'],
     ])('publishes the saved workflow %s', async (_when, updatedAt, toast) => {
         let hit = false;
         server.use(

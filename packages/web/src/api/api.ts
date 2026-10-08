@@ -28,7 +28,6 @@ import type {
     IJiraSyncResult,
     IJiraTestResult,
     ITeamConfig,
-    ITeamConfigHelp,
     ISettings,
     IComment,
     INotification,
@@ -320,7 +319,6 @@ export const api = {
         get: () => get<ITeamConfig>('/team-config'),
         update: (data: TeamConfigUpdate) => put<ITeamConfig>('/team-config', data),
         sync: () => post<{ message: string; config: ITeamConfig }>('/team-config/sync', {}),
-        help: () => get<ITeamConfigHelp>('/team-config/help'),
     },
     // Migration 010 — sources are a project's query+workflow+repos combos.
     jiraSources: {

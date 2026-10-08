@@ -8,7 +8,7 @@ The **autonomous SDLC swarm** is Atlas's long-term fleet vision: one agent per p
 
 | Capability | State |
 |---|---|
-| Building software (engineering chain) | **Template** — `delivery` v4 on a Task: scope → spec → build → test → document → four deterministic gates → release review, one branch and one PR |
+| Building software (engineering chain) | **Template** — `delivery` on a Task: scope → spec → build → test → document → four deterministic gates → release review, one branch and one PR |
 | Reviewing engineering work | **Template** — each performer has a separate paired reviewer agent; a reviewer's fail connection loops back to its writer |
 | Autonomous regression testing | **Template** — `test` sub-workflow (QA Writer ⇄ QA Reviewer → Automation ⇄ Automation Reviewer) runs every `qa` sub-task inside the Task's `delivery` run, after the dev sub-tasks are built on the same branch |
 | Market research | **Catalog, inactive** — Playwright MCP scrape → draft Task; needs a scheduled no-item workflow |
@@ -17,7 +17,7 @@ The **autonomous SDLC swarm** is Atlas's long-term fleet vision: one agent per p
 | External work ingest (Jira) | **Catalog, inactive** — Atlassian MCP poll, dedup via `Source: <KEY>`; needs a scheduled no-item workflow |
 | AI-readiness audit (per-project) | **Template** — `ai-readiness` workflow (one node, no item, push + PR); started by "Generate AI scaffold" |
 | Documentation | **Template** — `docs` sub-workflow runs every `[DOC]` twin inside the Task's run |
-| Performance, tests, hygiene, visual | **Template** — four `gate` steps in `delivery` v5, each dispatching a checker agent that names this project's own command, with a paired fixer and a Fix Reviewer on the fail edge (ADR 0021, 0024) |
+| Performance, tests, hygiene, visual | **Template** — four Check (`gate`) steps in `delivery`, each dispatching a checker agent that names this project's own command, with a paired fixer and a Fix Reviewer on the fail edge (ADR 0021, 0024) |
 | Reading the whole change | **Template** — Release Reviewer, the only step that sees the branch as one change |
 | Exploratory bug-finding | **Disabled** — the `tester` role now has a row (migration 012) and backs the coverage fixer, but no exploratory-testing agent ships |
 | Knowledge base | **Catalog, inactive** — `agent-knowledge-base`, per-project `skills/` folder via PR; needs a no-item workflow |
@@ -33,7 +33,7 @@ Each has `role_id` pointing at a row in [`role-catalog.md`](role-catalog.md). Ag
 
 | Agent | Role | CLI (catalog default) | Starter workflow node |
 |---|---|---|---|
-| `agent-po-writer` | `po` | claude | `delivery` (fail → Owner node → back to PO Writer). Splits the Task into `dev`-labelled sub-tasks, each with a `[QA]` twin labelled `qa` and linked `tested_by` |
+| `agent-po-writer` | `po` | claude | `delivery` (no fail edge: a failure parks as Waiting for info). Splits the Task into `dev`-labelled sub-tasks, each with a `[QA]` twin labelled `qa` and linked `tested_by` |
 | `agent-po-reviewer` | `po` | claude | `delivery` (fail → PO Writer). Checks the sub-tasks + `[QA]` twins; does not assign them |
 | `agent-architect` | `architect` | claude | `delivery`. One spec for the whole Task (`specs/<n>-<slug>/spec.md`, persisted to the Task's `spec_md`), with a file-level change group per `dev` sub-task |
 | `agent-architect-reviewer` | `architect` | claude | `delivery` (fail → Architect) |
@@ -45,13 +45,13 @@ Each has `role_id` pointing at a row in [`role-catalog.md`](role-catalog.md). Ag
 | `agent-automation-reviewer` | `automation` | claude | `test` (fail → Automation) |
 | `agent-doc-writer` | `docs` | claude | `docs` — documents one `[DOC]` sub-task from the branch diff, not the Task description |
 | `agent-doc-reviewer` | `docs` | claude | `docs` (fail → Doc Writer) — checks each claim against the source |
-| `agent-release-reviewer` | `engineer` | claude | `delivery` — reads the whole branch as one change after every gate is green; fail → Owner → back to the build step |
+| `agent-release-reviewer` | `engineer` | claude | `delivery` — reads the whole branch as one change after every gate is green; fail → back to the build step |
 
 ### Starter workflows (`packages/api/src/marketplace/workflows/*.json`)
 
 | Template | Input / trigger | Graph | Delivery |
 |---|---|---|---|
-| `delivery` ("Delivery") v5 | Task (`item`) / `item_ready` | PO Writer ⇄ PO Reviewer → Architect ⇄ Architect Reviewer → **Sub-tasks** (`template:build`, no label — the catch-all) → **Sub-tasks** (`template:test`, `qa`) → **Sub-tasks** (`template:docs`, `doc`) → four **gate** steps (hygiene, tests, perf, visual — each dispatches a checker that names this project's own command, and Atlas runs it), each failing to its fixer → **Fix Reviewer** → back to the gate → Release Reviewer → End. PO Writer fail → Owner → PO Writer. **Release Reviewer fail → the build step directly**: it files a `dev`-labelled fix sub-task per gap, the build step picks it up because it is the only open one, and everything downstream re-verifies — no Owner in the loop. It reaches the Owner only via `asked_question`, which is for decisions rather than work. `max_loops: 12` — one `loop_count` is shared by every fail edge | worktree, push + one PR per Task; the PR body lists every sub-task. Creating it also creates the project's Build / Test sub-task workflows when missing |
+| `delivery` ("Delivery") | Task (`item`) / `item_ready` | PO Writer ⇄ PO Reviewer → Architect ⇄ Architect Reviewer → **Sub-tasks** (`template:build`, no label — the catch-all) → **Sub-tasks** (`template:test`, `qa`) → **Sub-tasks** (`template:docs`, `doc`) → four **gate** steps (hygiene, tests, perf, visual — each dispatches a checker that names this project's own command, and Atlas runs it), each failing to its fixer → **Fix Reviewer** → back to the gate → Release Reviewer → End. PO Writer has no fail edge, so its failure parks as Waiting for info. No starter template has an Owner node (ADR 0027). **Release Reviewer fail → the build step directly**: it files a `dev`-labelled fix sub-task per gap, the build step picks it up because it is the only open one, and everything downstream re-verifies — no Owner in the loop. It reaches the Owner only via `asked_question`, which is for decisions rather than work. `max_loops: 12` — one `loop_count` is shared by every fail edge | worktree, push + one PR per Task; the PR body lists every sub-task. Creating it also creates the project's Build / Test sub-task workflows when missing |
 | `build` ("Build sub-task") | `sub_task` / `manual` | Coder → Code Reviewer → End; reviewer fail → Coder | none of its own — the sub-task goes to `in_review` and the Task run continues |
 | `test` ("Test sub-task") | `sub_task` / `manual` | QA Writer → QA Reviewer → Automation → Automation Reviewer → End; reviewer fails loop back | none of its own |
 | `docs` ("Docs sub-task") | `sub_task` / `manual` | Doc Writer ⇄ Doc Reviewer → End | none of its own |

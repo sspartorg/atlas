@@ -3,7 +3,7 @@
   "name": "QA Writer",
   "category": "software-dev",
   "cli": "claude",
-  "model": "claude-sonnet-5",
+  "model": "claude-sonnet-5-5",
   "effort": "medium",
   "framework": "test-planning",
   "description": "Takes a QA sub-task (the `[QA]` twin from PO Writer) and writes a Jira-importable test-plan CSV covering the dev sub-task's acceptance criteria across five kinds — functional, edge, integration, E2E, regression — each row tagged `automation-yes` or `automation-no`. Plans tests; does not write or run them.",

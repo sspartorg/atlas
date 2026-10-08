@@ -56,6 +56,9 @@ export const CLAUDE_MODEL_PRICING: Record<string, ClaudeModelPrices> = {
     'claude-opus-5-5': { input: 4.0, output: 20.0, cache_write_5m: 5.0, cache_write_1h: 8.0, cache_read: 0.2 },
     'claude-sonnet-5': { input: 2.0, output: 10.0, cache_write_5m: 2.5, cache_write_1h: 4.0, cache_read: 0.2 },
     'claude-sonnet-5-5': { input: 2.0, output: 10.0, cache_write_5m: 2.5, cache_write_1h: 4.0, cache_read: 0.2 },
+    // Haiku 5.5: $0.10/$0.50 up to 100K-token prompts; cache rates assume the
+    // standard 1.25x / 2x / 0.1x multipliers.
+    'claude-haiku-5-5': { input: 0.1, output: 0.5, cache_write_5m: 0.125, cache_write_1h: 0.2, cache_read: 0.01 },
     'claude-fable-5': { input: 10.0, output: 50.0, cache_write_5m: 12.5, cache_write_1h: 20.0, cache_read: 1.0 },
     'claude-fable-5-1': { input: 10.0, output: 50.0, cache_write_5m: 12.5, cache_write_1h: 20.0, cache_read: 0.25 },
     // Pre-4 fallbacks (sonnet 3.7 + opus 3 + haiku 3) — atlas's terminals

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import MenuItem from '@mui/material/MenuItem';
@@ -8,13 +7,11 @@ import Typography from '@mui/material/Typography';
 import type { ITeamConfig, TeamConfigRole } from '@atlas/shared';
 import type { TeamConfigUpdate } from '../../api/api.js';
 import { FormRow } from '../../components/FormSection.js';
-import { MarkdownPreview } from '../../components/MarkdownPreview.js';
 import { useCredentials } from '../../hooks/useCredentials.js';
 import { useProjects } from '../../hooks/useProjects.js';
 import {
     useSyncTeamConfig,
     useTeamConfig,
-    useTeamConfigHelp,
     useUpdateTeamConfig,
 } from '../../hooks/useTeamConfig.js';
 import { useToast } from '../../hooks/useToast.js';
@@ -45,7 +42,6 @@ function TeamConfigForm({ cfg }: { cfg: ITeamConfig }) {
     const sync = useSyncTeamConfig();
     const toast = useToast();
     const { data: credentials = [] } = useCredentials();
-    const { data: help } = useTeamConfigHelp();
     const { data: projects } = useProjects();
     const [repoUrl, setRepoUrl] = useState(cfg.repo_url ?? '');
     const [branch, setBranch] = useState(cfg.branch);
@@ -165,11 +161,18 @@ function TeamConfigForm({ cfg }: { cfg: ITeamConfig }) {
                     </Box>
                 </FormRow>
                 {cfg.role === 'publisher' && included !== undefined ? (
-                    <Alert severity={included === 0 ? 'warning' : 'info'} sx={{ alignItems: 'center' }}>
-                        {included === 0
-                            ? "No projects are included yet, so a sync pushes only the README. Turn on 'Include in team config' on each project's page to publish it."
-                            : `${included} project${included === 1 ? '' : 's'} included. Turn on 'Include in team config' on a project's page to add more.`}
-                    </Alert>
+                    <FormRow label="Projects">
+                        <Typography
+                            sx={{
+                                fontSize: 12.5,
+                                color: included === 0 ? ATLAS_PALETTE.warning : ATLAS_PALETTE.slate60,
+                            }}
+                        >
+                            {included === 0
+                                ? "None included yet, so a sync has nothing to push. Turn on 'Include in team config' on a project's page to publish it."
+                                : `${included} included. Turn on 'Include in team config' on a project's page to add more.`}
+                        </Typography>
+                    </FormRow>
                 ) : null}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pt: 1, flexWrap: 'wrap' }}>
                     <Typography
@@ -198,12 +201,6 @@ function TeamConfigForm({ cfg }: { cfg: ITeamConfig }) {
                     </Button>
                 </Box>
             </SettingsSection>
-
-            {help?.readme_md ? (
-                <SettingsSection title="Team guide" subtitle="The README in the team config repo.">
-                    <MarkdownPreview source={help.readme_md} />
-                </SettingsSection>
-            ) : null}
         </Box>
     );
 }

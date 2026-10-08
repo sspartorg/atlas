@@ -964,12 +964,6 @@ export interface ITeamConfig {
     last_commit: string | null;
 }
 
-/** Help text from the team config repo: its README and each project's HELP.md. */
-export interface ITeamConfigHelp {
-    readme_md: string;
-    projects: Array<{ issue_key_prefix: string; help_md: string }>;
-}
-
 export interface IJiraTestResult {
     ok: boolean;
     /** The Jira account the token belongs to. */
