@@ -280,6 +280,9 @@ async function getConfig(): Promise<IJiraConfig> {
     return rowToConfig(await loadRow());
 }
 
+const moved = (next: string | null | undefined, current: string | null) =>
+    next !== undefined && current !== null && next !== current;
+
 async function saveConfig(patch: ConfigPatch): Promise<IJiraConfig> {
     const current = rowToConfig(await loadRow());
     const values = {
@@ -288,10 +291,10 @@ async function saveConfig(patch: ConfigPatch): Promise<IJiraConfig> {
         ...(patch.email !== undefined ? { email: patch.email } : {}),
         // The token belongs to one site + account: moving either without a new
         // token drops it, so it can't be sent somewhere it wasn't entered for.
+        // Filling in a blank one isn't a move, so the fields can go in any order.
         ...(patch.api_token
             ? { api_token_encrypted: V1_PREFIX + encrypt(patch.api_token) }
-            : (patch.site_url !== undefined && patch.site_url !== current.site_url) ||
-                (patch.email !== undefined && patch.email !== current.email)
+            : moved(patch.site_url, current.site_url) || moved(patch.email, current.email)
               ? { api_token_encrypted: null }
               : {}),
         ...(patch.poll_interval_minutes !== undefined

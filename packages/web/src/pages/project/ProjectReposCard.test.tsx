@@ -119,6 +119,18 @@ describe('ProjectReposCard', () => {
         }
     });
 
+    it('marks the repos that have an auto-fetch schedule', async () => {
+        mockRepos([API, WEB]);
+        server.use(
+            http.get(`${BASE}/schedules`, () =>
+                HttpResponse.json([{ repo_id: API.id, preset: 'daily', next_run_at: null }])
+            )
+        );
+        renderCard();
+        expect(await screen.findByText('Auto-fetch · daily')).toBeInTheDocument();
+        expect(screen.getAllByText(/^Auto-fetch · /)).toHaveLength(1);
+    });
+
     it('shows an empty state when the project has no repos', async () => {
         mockRepos([]);
         renderCard();

@@ -172,6 +172,17 @@ async function requestRaw<T>(
     return { ok: res.ok, status: res.status, body };
 }
 
+/** The sealed file `POST /secrets-bundle/export` returns; opaque to the client. */
+export type SecretsBundle = Record<string, unknown>;
+
+export interface SecretsImportReport {
+    shared: number;
+    projects: Array<{ prefix: string; keys: number }>;
+    skipped_projects: string[];
+    jira: boolean;
+    notification: boolean;
+}
+
 /** PUT /integrations/jira body: any config field; `api_token` is write-only (omit or '' keeps the stored one). */
 export type JiraConfigUpdate = Partial<
     Pick<IJiraConfig, 'enabled' | 'site_url' | 'email' | 'poll_interval_minutes' | 'extra_fields'>
@@ -319,6 +330,12 @@ export const api = {
         get: () => get<ITeamConfig>('/team-config'),
         update: (data: TeamConfigUpdate) => put<ITeamConfig>('/team-config', data),
         sync: () => post<{ message: string; config: ITeamConfig }>('/team-config/sync', {}),
+    },
+    // Every secret but git credentials, sealed with a passphrase for another machine.
+    secretsBundle: {
+        export: (passphrase: string) => post<SecretsBundle>('/secrets-bundle/export', { passphrase }),
+        import: (passphrase: string, bundle: SecretsBundle) =>
+            post<SecretsImportReport>('/secrets-bundle/import', { passphrase, bundle }),
     },
     // Migration 010 — sources are a project's query+workflow+repos combos.
     jiraSources: {
