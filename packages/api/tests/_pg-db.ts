@@ -150,6 +150,12 @@ async function reseedCliModels(): Promise<void> {
             // ModelNotInRegistryError — the exact order-dependent failure the
             // comment above was written about. Adding a migration that touches
             // `cli_models` means adding its rows here too.
+            // Migration 005: the 5.5 generation. It also retires the 4.x rows
+            // below, which stay here only because test fixtures still name them.
+            { id: 'seed-claude-opus-5-5', cli: 'claude', model_name: 'claude-opus-5-5', note: 'Strongest general model.', sort_order: 1 },
+            { id: 'seed-claude-opus-5-5-1m', cli: 'claude', model_name: 'claude-opus-5-5[1m]', note: 'Opus 5.5 with 1M context.', sort_order: 2 },
+            { id: 'seed-claude-sonnet-5-5', cli: 'claude', model_name: 'claude-sonnet-5-5', note: 'Faster and cheaper than Opus.', sort_order: 3 },
+            { id: 'seed-claude-haiku-5-5', cli: 'claude', model_name: 'claude-haiku-5-5', note: 'Cheapest and fastest.', sort_order: 4 },
             { id: 'seed-claude-opus-5', cli: 'claude', model_name: 'claude-opus-5', note: 'Strongest general model.', sort_order: 1 },
             { id: 'seed-claude-opus-5[1m]', cli: 'claude', model_name: 'claude-opus-5[1m]', note: 'Opus 5 with 1M context.', sort_order: 2 },
             { id: 'seed-claude-sonnet-5', cli: 'claude', model_name: 'claude-sonnet-5', note: 'Faster and cheaper than Opus 5.', sort_order: 3 },

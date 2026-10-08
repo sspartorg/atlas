@@ -3,7 +3,7 @@
   "name": "Visual Check",
   "category": "software-dev",
   "cli": "claude",
-  "model": "haiku",
+  "model": "claude-haiku-5-5",
   "effort": "low",
   "framework": "review",
   "description": "Gate checker. Decides whether this project has visual regression tooling of its own - Playwright or Cypress snapshots, Storybook test-runner, Percy, Chromatic, Loki - and names the command that runs it against its committed baselines. Atlas runs it; a real pixel diff routes to the Visual Reviewer, which can look at the images. Atlas ships no screenshot harness of its own.",

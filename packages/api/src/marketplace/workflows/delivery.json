@@ -38,14 +38,6 @@
         }
       },
       {
-        "id": "owner",
-        "type": "owner",
-        "position": {
-          "x": 320,
-          "y": 280
-        }
-      },
-      {
         "id": "architect",
         "type": "agent",
         "agent_id": "agent-architect",
@@ -229,18 +221,6 @@
         "id": "e-po-writer-pass-po-review",
         "source": "po-writer",
         "target": "po-review",
-        "kind": "pass"
-      },
-      {
-        "id": "e-po-writer-fail-owner",
-        "source": "po-writer",
-        "target": "owner",
-        "kind": "fail"
-      },
-      {
-        "id": "e-owner-pass-po-writer",
-        "source": "owner",
-        "target": "po-writer",
         "kind": "pass"
       },
       {

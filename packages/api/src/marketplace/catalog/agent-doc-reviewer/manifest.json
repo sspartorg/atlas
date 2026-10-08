@@ -3,7 +3,7 @@
   "name": "Doc Reviewer",
   "category": "software-dev",
   "cli": "claude",
-  "model": "claude-sonnet-5",
+  "model": "claude-sonnet-5-5",
   "effort": "low",
   "framework": "review",
   "description": "Reviews one `[DOC]` sub-task: confirms everything the branch shipped is documented, checks each factual claim against the source, and rejects a wrong default or a non-existent flag back to Doc Writer.",

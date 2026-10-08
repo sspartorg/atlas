@@ -2,14 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type TeamConfigUpdate } from '../api/api.js';
 
 const KEY = ['team-config'] as const;
-const HELP_KEY = ['team-config', 'help'] as const;
 
 export function useTeamConfig() {
     return useQuery({ queryKey: KEY, queryFn: () => api.teamConfig.get() });
-}
-
-export function useTeamConfigHelp() {
-    return useQuery({ queryKey: HELP_KEY, queryFn: () => api.teamConfig.help() });
 }
 
 export function useUpdateTeamConfig() {

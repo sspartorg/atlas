@@ -455,7 +455,7 @@ function GateNode({ id, data, selected }: NodeProps<WfNode>) {
             />
             <Box sx={{ minWidth: 0, pr: 8 }}>
                 <Title>{agentsById.get(data.agent_id ?? '')?.name ?? data.agent_id ?? 'Choose a checker'}</Title>
-                <Caption>Names the command, Atlas runs it</Caption>
+                <Caption>Runs your repo&apos;s own test/lint command</Caption>
             </Box>
         </NodeShell>
     );

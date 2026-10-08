@@ -3,7 +3,7 @@
   "name": "Coverage Fixer",
   "category": "software-dev",
   "cli": "claude",
-  "model": "claude-sonnet-5",
+  "model": "claude-sonnet-5-5",
   "effort": "high",
   "framework": "tdd-red-green-refactor",
   "description": "Dispatched only when the tests check exits non-zero. Reads the coverage report to find what is genuinely uncovered in the branch's own diff and writes tests that would fail if the behaviour broke - never assertion-free tests, never a lowered threshold.",

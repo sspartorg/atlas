@@ -110,7 +110,7 @@ function GatesSection({ runId }: { runId: string }) {
     return (
         <>
             <Typography variant="overline" sx={{ display: 'block', px: 4, pt: 3, color: ATLAS_PALETTE.slate60 }}>
-                Gates · {gates.length}
+                Checks · {gates.length}
                 {skipped > 0 ? ` · ${skipped} skipped` : ''}
             </Typography>
             {gates.map((g) => (
@@ -522,9 +522,8 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
                                   onOpen={() => navigate(`/agents/${s.agent_id}/runs/${s.id}`)}
                               />
                           ))}
-                    {/* Gate steps spawn no agent, so they never appear above.
-                        Until this section existed the Owner had no way to see
-                        why a gate passed — or that it had skipped. */}
+                    {/* A check's checker step appears above; this section shows
+                        the command Atlas actually ran, its exit code, and skips. */}
                     <GatesSection runId={run.id} />
                     {run.children.length > 0 && (
                         <>

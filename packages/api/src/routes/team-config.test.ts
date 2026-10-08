@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -128,17 +128,6 @@ describe('/api/team-config', () => {
         expect(res.statusCode).toBe(200);
         expect(res.json()).toMatchObject({ message: 'Nothing published yet', config: { role: 'subscriber', last_sync_ok: true } });
         rmSync(remote, { recursive: true, force: true });
-    });
-
-    it('serves the help files from the clone, empty before the first sync', async () => {
-        const empty = await app.inject({ method: 'GET', url: '/api/team-config/help' });
-        expect(empty.json()).toEqual({ readme_md: '', projects: [] });
-
-        mkdirSync(join(teamConfigDir(), 'projects', 'ATL'), { recursive: true });
-        writeFileSync(join(teamConfigDir(), 'README.md'), '# Team');
-        writeFileSync(join(teamConfigDir(), 'projects', 'ATL', 'HELP.md'), 'Ask for VPN.');
-        const res = await app.inject({ method: 'GET', url: '/api/team-config/help' });
-        expect(res.json()).toEqual({ readme_md: '# Team', projects: [{ issue_key_prefix: 'ATL', help_md: 'Ask for VPN.' }] });
     });
 });
 

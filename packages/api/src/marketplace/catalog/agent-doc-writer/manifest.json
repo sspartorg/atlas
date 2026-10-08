@@ -3,7 +3,7 @@
   "name": "Doc Writer",
   "category": "software-dev",
   "cli": "claude",
-  "model": "claude-sonnet-5",
+  "model": "claude-sonnet-5-5",
   "effort": "low",
   "framework": "docs",
   "description": "Documents one `[DOC]` sub-task on the Task's branch: reads the branch diff rather than the Task description, extends the repo's existing documentation instead of creating a parallel copy, and verifies every flag, default and error it writes against the code.",

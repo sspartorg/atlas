@@ -234,7 +234,7 @@ export function MarketplaceWorkflows() {
             </Box>
             <Box component="section" aria-label="Published by you">
                 <Typography component="h2" sx={SECTION_SX}>
-                    Published by you
+                    Published by you · only on this Atlas
                 </Typography>
                 <PublishedWorkflows />
             </Box>

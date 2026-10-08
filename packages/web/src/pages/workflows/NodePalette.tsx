@@ -141,7 +141,7 @@ export function NodePalette({ agents, showSubtasks, onAdd }: PaletteProps) {
             )}
             <PaletteChip
                 item={{ type: 'gate' }}
-                label="Gate"
+                label="Check"
                 icon="verified_user"
                 color={ATLAS_PALETTE.warnFg}
                 onAdd={onAdd}

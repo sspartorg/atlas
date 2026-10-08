@@ -83,7 +83,7 @@ describe('WorkflowCanvas', () => {
         // No agent is installed in this fixture's context, so the node falls
         // back to the id — which is still the honest label.
         expect(within(canvas).getByText('agent-tests-check')).toBeInTheDocument();
-        expect(within(canvas).getByText('Names the command, Atlas runs it')).toBeInTheDocument();
+        expect(within(canvas).getByText("Runs your repo's own test/lint command")).toBeInTheDocument();
     });
 
     it('renders overlay children inside the canvas', () => {

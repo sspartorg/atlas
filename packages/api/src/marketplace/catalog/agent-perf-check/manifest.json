@@ -3,7 +3,7 @@
   "name": "Performance Check",
   "category": "software-dev",
   "cli": "claude",
-  "model": "haiku",
+  "model": "claude-haiku-5-5",
   "effort": "low",
   "framework": "review",
   "description": "Gate checker. Decides whether this project has a performance check of its own - a benchmark suite, a bundle-size budget, a Lighthouse or load script with a declared threshold - and names the command that runs it. Atlas runs it and routes on the exit code. Atlas ships no latency budget of its own, so a project without one is told plainly that nothing was checked.",

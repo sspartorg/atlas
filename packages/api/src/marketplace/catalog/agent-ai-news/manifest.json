@@ -3,7 +3,7 @@
   "name": "AI News Scout",
   "category": "content",
   "cli": "claude",
-  "model": "haiku",
+  "model": "claude-haiku-5-5",
   "effort": "low",
   "framework": "scout",
   "description": "24-hour AI-tooling digest delivered as an external notification. Scrapes via Playwright MCP. Edit the prompt with your curated sources, then run it from a scheduled workflow (e.g. daily at 09:00).",

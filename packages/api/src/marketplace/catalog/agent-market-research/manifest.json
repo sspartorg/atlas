@@ -3,7 +3,7 @@
   "name": "Market Research",
   "category": "content",
   "cli": "claude",
-  "model": "haiku",
+  "model": "claude-haiku-5-5",
   "effort": "low",
   "framework": "competitive-watch",
   "description": "Weekly competitor pricing + positioning watch. Edit the prompt with your Atlas project name + competitor list, then activate.",

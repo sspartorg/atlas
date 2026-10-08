@@ -26,7 +26,7 @@ const TITLES = {
     agent: 'Agent step',
     owner: 'Owner',
     subtasks: 'Sub-tasks step',
-    gate: 'Gate step',
+    gate: 'Check step',
     end: 'End',
 } as const;
 
@@ -149,10 +149,11 @@ function AgentPanel({
                 </Explain>
             )}
             <Explain>
-                The step follows its green <Box component="strong">pass</Box> connection when the
-                agent reports done, and its red <Box component="strong">fail</Box> connection when a
-                reviewer rejects the work. With no fail connection, a failure sends the item back to
-                you.
+                Done takes the green <Box component="strong">pass</Box> connection. A failure — a
+                reviewer rejects the work or a required checklist item is missed — takes the red{' '}
+                <Box component="strong">fail</Box> connection to the agent that fixes it; with no fail
+                connection it comes to you. Errors and questions always come to you as Waiting for
+                info.
             </Explain>
         </Box>
     );
@@ -180,8 +181,8 @@ function GatePanel({
                 onChange={(e) => onNodeData({ agent_id: e.target.value || undefined })}
                 helperText={
                     dangling
-                        ? "This gate points at an agent that isn't installed — pick one."
-                        : 'Reads the repo and names the command this project already trusts'
+                        ? "This check points at an agent that isn't installed — pick one."
+                        : 'Reads the repo and picks the command this project already uses'
                 }
                 fullWidth
             >
@@ -197,14 +198,13 @@ function GatePanel({
                 </Explain>
             )}
             <Explain>
-                The checker looks at this project and answers two things: does this check apply
-                here, and what one command proves it. Atlas then runs that command itself, once per
-                repo, and believes the exit code — an agent cannot report green. Exit 0 takes the
-                pass connection; anything else takes the fail connection, with the command&apos;s own
-                output handed to whatever is on the other end as its brief. A check that cannot run,
-                or a checker that names no command, pauses the run and comes back to you rather than
-                counting as a failure. A project with no such tooling is recorded as skipped, not as
-                a pass.
+                You don&apos;t type a command. The checker agent reads your repo (package.json
+                scripts, Makefile, CI config) and picks the command the project already uses — for
+                example <Box component="code">npm test</Box>. Atlas runs it itself, once per repo, and
+                trusts the exit code, so an agent can&apos;t just report green. Pass takes the green
+                connection; fail takes the red one, with the command&apos;s output handed to the fixer.
+                If the check can&apos;t run, it comes to you as Waiting for info. A repo with no such
+                tooling is marked skipped. The command that ran is shown in the run details.
             </Explain>
         </Box>
     );
@@ -378,9 +378,10 @@ export function WorkflowInspector(props: Props) {
             )}
             {type === 'owner' && (
                 <Explain>
-                    When a step connects here, the run pauses and the item comes back to you as
-                    Waiting for info. Reply on the item and the run continues along this node&apos;s
-                    pass connection.
+                    Optional — add this only when you want to approve before the workflow
+                    continues. When a step connects here, the run pauses and the item comes back to
+                    you as Waiting for info. Reply on the item and the run continues along this
+                    node&apos;s pass connection.
                 </Explain>
             )}
             {type === 'subtasks' && props.node && (

@@ -3,7 +3,7 @@
   "name": "Release Reviewer",
   "category": "software-dev",
   "cli": "claude",
-  "model": "claude-opus-5[1m]",
+  "model": "claude-opus-5-5[1m]",
   "effort": "xhigh",
   "framework": "review",
   "description": "Reads the branch as one change against the Task the Owner filed, after every gate has passed and every sub-task has been built, tested and documented. Checks each acceptance criterion against a commit and a test, reads the seams between sub-tasks, flags scope creep, and rejects anything unsafe regardless of how green the gates are.",

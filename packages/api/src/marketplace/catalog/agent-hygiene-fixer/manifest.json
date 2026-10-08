@@ -3,7 +3,7 @@
   "name": "Hygiene Fixer",
   "category": "software-dev",
   "cli": "claude",
-  "model": "claude-sonnet-5",
+  "model": "claude-sonnet-5-5",
   "effort": "medium",
   "framework": "review",
   "description": "Dispatched only when the hygiene check exits non-zero. Fixes exactly the gaps the project's own lint and typecheck command named, at their cause, never by suppressing the rule, then re-runs the command.",

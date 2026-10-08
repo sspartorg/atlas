@@ -195,13 +195,13 @@ describe('WorkflowRunDetail', () => {
                 { id: '4', node_id: 'gate-hygiene', repo_id: null, repo_name: null, script_id: 'gate-hygiene', verdict: 'pass', exit_code: null, output_tail: null, created_at: '2026-09-24T00:00:04' },
                 { id: '5', node_id: 'gate-coverage', repo_id: null, repo_name: null, script_id: 'gate-coverage', verdict: 'skipped', exit_code: null, output_tail: 'gate-coverage: skipped - no coverage script and no test script declared', created_at: '2026-09-24T00:00:05' },
             ]);
-            expect(await screen.findByText(/Gates · 2 · 1 skipped/)).toBeInTheDocument();
+            expect(await screen.findByText(/Checks · 2 · 1 skipped/)).toBeInTheDocument();
         });
 
         it('renders nothing when the run ran no gates', async () => {
             mount(makeRunDetail({ id: 'r1', workflow_id: 'w1' }), []);
             await screen.findByText(/Steps/);
-            expect(screen.queryByText(/Gates ·/)).not.toBeInTheDocument();
+            expect(screen.queryByText(/Checks ·/)).not.toBeInTheDocument();
         });
     });
 });

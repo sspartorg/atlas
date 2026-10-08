@@ -3,7 +3,7 @@
   "name": "Visual Reviewer",
   "category": "software-dev",
   "cli": "claude",
-  "model": "claude-sonnet-5",
+  "model": "claude-sonnet-5-5",
   "effort": "medium",
   "framework": "review",
   "description": "Dispatched when the project's own visual check does not pass. A plain failure means a real diff against a committed baseline; a failure carrying ATLAS_GATE_NEEDS_REVIEW means the screens were captured but no baseline exists yet, which is the normal state for a new screen. Looks at every capture at every viewport, fixes overflow, clipping, collision and contrast at the cause, and blesses a new baseline only after seeing it.",

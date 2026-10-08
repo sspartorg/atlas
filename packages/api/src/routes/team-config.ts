@@ -3,8 +3,8 @@ import { UpdateTeamConfigSchema } from '@atlas/shared';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
 import { teamConfig } from '../services/team-config.js';
 
-// Team config sync: the connection to the team's config repo, a manual sync,
-// and the help text the repo carries. No route returns a secret.
+// Team config sync: the connection to the team's config repo and a manual
+// sync. No route returns a secret.
 export async function teamConfigRoutes(app: FastifyInstance) {
     app.get('/api/team-config', async (_req, reply) => reply.send(await teamConfig.getConfig()));
 
@@ -17,6 +17,4 @@ export async function teamConfigRoutes(app: FastifyInstance) {
         const message = await teamConfig.syncNow();
         return reply.send({ message, config: await teamConfig.getConfig() });
     });
-
-    app.get('/api/team-config/help', async (_req, reply) => reply.send(await teamConfig.help()));
 }
