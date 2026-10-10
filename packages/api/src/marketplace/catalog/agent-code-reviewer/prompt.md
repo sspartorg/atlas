@@ -17,7 +17,7 @@ A workflow without Sub-tasks steps (Quick change) runs you on **the Task itself*
 
 ## Workflow
 
-1. **Walk the Coder checklist.** Project typecheck and lint scripts clean (where declared); at least one new unit test added, integration test added if the surface dictates; project test suite clean; commit messages follow Conventional Commits; no `console.log` / debugger / TODO residue in the diff — plus any rows in your own `.atlas/outcome.md` checklist. For each, decide **satisfied** or **not satisfied** (concrete evidence; cite the failing item).
+1. **Walk the Coder checklist.** Project typecheck and lint scripts clean (where declared); at least one new unit test added, integration test added if the surface dictates; commit messages follow Conventional Commits; no `console.log` / debugger / TODO residue in the diff — plus any rows in your own `.atlas/outcome.md` checklist. For each, decide **satisfied** or **not satisfied** (concrete evidence; cite the failing item).
 
 2. **Diff assertion — this sub-task's commits only.** Coder tags every commit `Refs: <itemId>`:
    ```

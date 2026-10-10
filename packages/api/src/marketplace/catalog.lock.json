@@ -25,11 +25,11 @@
   },
   "agent-code-reviewer": {
     "version": 1,
-    "hash": "8b75beb5a1fd1bc7"
+    "hash": "231dc122e4345fb6"
   },
   "agent-coder": {
     "version": 1,
-    "hash": "ea849159f375f3ea"
+    "hash": "c68ca20b234a30ec"
   },
   "agent-coverage-fixer": {
     "version": 1,
