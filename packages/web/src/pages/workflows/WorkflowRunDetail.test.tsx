@@ -198,6 +198,17 @@ describe('WorkflowRunDetail', () => {
             expect(await screen.findByText(/Checks · 2 · 1 skipped/)).toBeInTheDocument();
         });
 
+        it('shows the step name, repo, exit code, command and where its full output is', async () => {
+            mount(makeRunDetail({ id: 'r1', workflow_id: 'w1' }), [
+                { id: '6', node_id: 'build', repo_id: 'p1', repo_name: 'api', script_id: 'build', verdict: 'fail', exit_code: 2, command: 'npm run build', output_tail: 'boom', log_path: '/ws/check-logs/r1/1/.atlas/checks/build.log', created_at: '2026-09-24T00:00:06' },
+            ]);
+            expect(await screen.findByText('build')).toBeInTheDocument();
+            expect(screen.getByText('api')).toBeInTheDocument();
+            expect(screen.getByText('exit 2')).toBeInTheDocument();
+            expect(screen.getByText('npm run build')).toBeInTheDocument();
+            expect(screen.getByText(/Full output: \/ws\/check-logs/)).toBeInTheDocument();
+        });
+
         it('renders nothing when the run ran no gates', async () => {
             mount(makeRunDetail({ id: 'r1', workflow_id: 'w1' }), []);
             await screen.findByText(/Steps/);

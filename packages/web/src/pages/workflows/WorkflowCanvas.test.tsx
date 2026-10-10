@@ -85,6 +85,25 @@ describe('WorkflowCanvas', () => {
         expect(within(canvas).getByText('pnpm test')).toBeInTheDocument();
     });
 
+    it('names an unlabelled Script step by default, and says when it still needs a command', () => {
+        const graph = {
+            nodes: [
+                { id: 'start', type: 'start' as const, position: { x: 0, y: 0 } },
+                { id: 'build', type: 'script' as const, command: '', position: { x: 0, y: 130 } },
+                { id: 'end', type: 'end' as const, position: { x: 0, y: 260 } },
+            ],
+            edges: [
+                { id: 'e1', source: 'start', target: 'build', kind: 'pass' as const },
+                { id: 'e2', source: 'build', target: 'end', kind: 'pass' as const },
+            ],
+        };
+        const flow = toFlow(graph);
+        renderWithProviders(<WorkflowCanvas nodes={flow.nodes} edges={flow.edges} context={context()} />);
+        const canvas = screen.getByTestId('workflow-canvas');
+        expect(within(canvas).getByText('Script')).toBeInTheDocument();
+        expect(within(canvas).getByText('Needs a command')).toBeInTheDocument();
+    });
+
     it('renders overlay children inside the canvas', () => {
         // The run view passes its legend in as a child; it has to land inside
         // the ReactFlow viewport so it floats over the graph.
