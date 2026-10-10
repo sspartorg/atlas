@@ -38,7 +38,7 @@ describe('ensureTestProject', () => {
         expect(project).toEqual({ name: 'Tests', issue_key_prefix: 'TST', is_test_sandbox: true });
 
         const [repo] = await projectReposService.list(id);
-        expect(repo).toMatchObject({ name: 'atlas-test-sample', credential_id: null, verify_command: 'npm test' });
+        expect(repo).toMatchObject({ name: 'atlas-test-sample', credential_id: null });
         expect(repo?.git_path).toBe(join(root, 'atlas-test-sample'));
         expect(existsSync(join(root, 'atlas-test-sample', 'src', 'strings.js'))).toBe(true);
         // Committed, on main, with no remote — nothing here can be pushed.

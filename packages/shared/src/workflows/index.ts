@@ -2,14 +2,12 @@ import { z } from 'zod';
 import type { AgentCli, AgentEffort, ITask, RunOutcomeKind, RunStatus, SchedulePreset } from '../types/index.js';
 import { SchedulePresetSchema } from '../schemas/index.js';
 
-// `gate` dispatches a CHECKER agent, then runs the command that agent named
-// and routes on its exit code (ADR 0024). The checker decides whether the
-// concern applies to this project and what command proves it; Atlas decides
-// nothing about anyone's stack, and the agent still cannot type "green" and be
-// believed — the verdict is an exit code from a real process (campaign finding
-// F-012, ADR 0020). A gate's fail edge is where the fixer gets dispatched, with
-// the command's own output as its contract.
-export const WORKFLOW_NODE_TYPES = ['start', 'agent', 'owner', 'subtasks', 'gate', 'end'] as const;
+// `script` runs a command the Owner typed on the step, in every repo the Task
+// touches, with no AI in the loop. Atlas runs it, saves the full output under
+// `.atlas/checks/`, and routes on the exit code: 0 takes the pass edge, anything
+// else takes the fail edge, where a fixer picks the failure up from that log.
+// Atlas decides nothing about the stack; the Owner says what "green" means.
+export const WORKFLOW_NODE_TYPES = ['start', 'agent', 'owner', 'subtasks', 'script', 'end'] as const;
 export type WorkflowNodeType = (typeof WORKFLOW_NODE_TYPES)[number];
 
 export const WORKFLOW_EDGE_KINDS = ['pass', 'fail'] as const;
@@ -33,12 +31,13 @@ export interface IWorkflowNode {
     /** Sub-tasks only: the sub-workflow each matching sub-task runs through. */
     sub_workflow_id?: string | undefined;
     /**
-     * Sub-tasks only: run the Task's open sub-tasks carrying this label.
-     * Unset → the sub-tasks no other Sub-tasks step in the graph claims.
+     * Sub-tasks: run the Task's open sub-tasks carrying this label; unset, the
+     * sub-tasks no other Sub-tasks step in the graph claims. Script: the step's
+     * name, used for its log file and on the run page.
      */
     label?: string | undefined;
-    // A gate carries an `agent_id` like an agent step does: the checker it
-    // dispatches to decide what this project's check actually is.
+    /** Script only: the command Atlas runs, verbatim, in each repo of the Task. */
+    command?: string | undefined;
     position: { x: number; y: number };
 }
 
@@ -154,6 +153,7 @@ export const WorkflowGraphSchema: z.ZodType<IWorkflowGraph> = z.object({
                 id: ID,
                 type: z.enum(WORKFLOW_NODE_TYPES),
                 agent_id: ID.optional(),
+                command: z.string().max(4000).optional(),
                 sub_workflow_id: ID.optional(),
                 label: z.string().trim().min(1).max(40).optional(),
                 position: z.object({ x: z.number(), y: z.number() }),
@@ -420,16 +420,22 @@ export function validateWorkflowGraph(graph: IWorkflowGraph, inputKind?: Workflo
         const out = graph.edges.filter((e) => e.source === n.id);
         const passCount = out.filter((e) => e.kind === 'pass').length;
         const failCount = out.length - passCount;
-        // A gate names an agent too (ADR 0024): its checker.
-        if (n.type !== 'agent' && n.type !== 'gate' && n.agent_id) {
-            errors.push({ node_id: n.id, message: 'Only agent and gate steps reference an agent' });
+        if (n.type !== 'agent' && n.agent_id) {
+            errors.push({ node_id: n.id, message: 'Only agent steps reference an agent' });
         }
         if (n.type === 'agent' && !n.agent_id) errors.push({ node_id: n.id, message: 'Choose an agent for this node' });
-        if (n.type === 'gate' && !n.agent_id) {
-            errors.push({ node_id: n.id, message: 'Choose the checker agent for this gate' });
+        // A script step with no command is legal to save (templates ship with
+        // empty ones); it parks at run time rather than passing silently.
+        if (n.type !== 'script' && n.command !== undefined) {
+            errors.push({ node_id: n.id, message: 'Only Script steps take a command' });
         }
-        if (n.type !== 'subtasks' && (n.sub_workflow_id || n.label)) {
-            errors.push({ node_id: n.id, message: 'Only Sub-tasks steps take a sub-workflow or label' });
+        if (n.type !== 'subtasks' && n.sub_workflow_id) {
+            errors.push({ node_id: n.id, message: 'Only Sub-tasks steps take a sub-workflow' });
+        }
+        // A Sub-tasks label picks sub-tasks; on a Script step it is only the name
+        // its log file and the run page show.
+        if (n.type !== 'subtasks' && n.type !== 'script' && n.label) {
+            errors.push({ node_id: n.id, message: 'Only Sub-tasks and Script steps take a label' });
         }
         if (n.type === 'subtasks') {
             if (!n.sub_workflow_id) errors.push({ node_id: n.id, message: 'Choose the sub-workflow for these sub-tasks' });
@@ -444,14 +450,14 @@ export function validateWorkflowGraph(graph: IWorkflowGraph, inputKind?: Workflo
             if (out.length > 0) errors.push({ node_id: n.id, message: 'End cannot have outgoing connections' });
             continue;
         }
-        // A gate carries a fail edge for the same reason an agent does: it is the
-        // connection the run takes when the step says no. `findPassLoop` only
-        // walks pass edges, so `gate --fail--> fixer --pass--> gate` is a legal
+        // A script carries a fail edge for the same reason an agent does: it is
+        // the connection the run takes when the step says no. `findPassLoop` only
+        // walks pass edges, so `script --fail--> fixer --pass--> script` is a legal
         // cycle and every traversal increments `loop_count`, which `max_loops`
         // still bounds.
-        const canFail = n.type === 'agent' || n.type === 'gate';
+        const canFail = n.type === 'agent' || n.type === 'script';
         if (!canFail && failCount > 0) {
-            errors.push({ node_id: n.id, message: 'Only agent and gate steps can have a fail connection' });
+            errors.push({ node_id: n.id, message: 'Only agent and script steps can have a fail connection' });
         }
         if (passCount !== 1) errors.push({ node_id: n.id, message: 'Needs exactly one pass connection' });
         if (canFail && failCount > 1) errors.push({ node_id: n.id, message: 'At most one fail connection' });

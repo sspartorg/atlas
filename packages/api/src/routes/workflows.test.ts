@@ -173,15 +173,14 @@ describe('workflow CRUD', () => {
     });
 
     // Quick change is the short path: no PO Writer, no spec, no Sub-tasks
-    // steps — the Coder works the Task itself and one gate guards the push.
-    it('creates Quick change as a Task workflow with one tests gate and its fixer trio', async () => {
+    // steps — the Coder works the Task itself and one Script step runs the tests.
+    it('creates Quick change as a Task workflow with one Tests script and its fixer pair', async () => {
         const agents = workflowsService.templateAgentIds('quick');
         expect([...agents].sort()).toEqual([
             'agent-code-reviewer',
             'agent-coder',
             'agent-coverage-fixer',
             'agent-fix-reviewer',
-            'agent-tests-check',
         ]);
         for (const a of agents.filter((x) => x !== 'agent-coder')) await insertAgent({ id: a, status: 'active' });
 
@@ -198,7 +197,10 @@ describe('workflow CRUD', () => {
             marketplace_source_id: 'quick',
         });
         expect(wf.graph.nodes.some((n) => n.type === 'subtasks')).toBe(false);
-        expect(wf.graph.nodes.filter((n) => n.type === 'gate').map((n) => n.agent_id)).toEqual(['agent-tests-check']);
+        // The Owner types the command on the step; the template ships it empty.
+        expect(wf.graph.nodes.filter((n) => n.type === 'script')).toEqual([
+            expect.objectContaining({ label: 'Tests', command: '' }),
+        ]);
         // It creates no sub-workflows: nothing besides itself lands in the project.
         const all = (await app.inject({ method: 'GET', url: '/api/workflows?project_id=p1' })).json() as IWorkflow[];
         expect(all.map((w) => w.name)).toEqual(['Quick change']);
@@ -223,17 +225,15 @@ describe('workflow CRUD', () => {
             expect.objectContaining({ id: 'docs', sub_workflow_id: byName('Docs sub-task')?.id, label: 'doc' }),
         ]);
 
-        // Four gate steps, each naming the checker agent that reads the repo and
-        // decides what this project's check actually is (ADR 0024), and each with
-        // a fixer on its fail edge.
-        const gates = (res.json().graph.nodes as Array<{ type: string; agent_id?: string }>)
-            .filter((n) => n.type === 'gate')
-            .map((n) => n.agent_id);
-        expect(gates).toEqual([
-            'agent-hygiene-check',
-            'agent-tests-check',
-            'agent-perf-check',
-            'agent-visual-check',
+        // Three Script steps, Lint, Build and Tests, each with its command left for
+        // the Owner to type (ADR 0028). None names an agent: Atlas runs them, and
+        // a fixer is dispatched only on a red one.
+        const scripts = (res.json().graph.nodes as Array<{ type: string; label?: string; command?: string; agent_id?: string }>)
+            .filter((n) => n.type === 'script');
+        expect(scripts.map((n) => [n.label, n.command, n.agent_id])).toEqual([
+            ['Lint', '', undefined],
+            ['Build', '', undefined],
+            ['Tests', '', undefined],
         ]);
         expect(res.json().max_loops).toBe(12);
 
@@ -260,26 +260,16 @@ describe('workflow CRUD', () => {
             'agent-doc-reviewer',
             'agent-doc-writer',
             'agent-fix-reviewer',
-            'agent-hygiene-check',
             'agent-hygiene-fixer',
-            'agent-perf-check',
-            'agent-perf-fixer',
             'agent-po-reviewer',
             'agent-po-writer',
             'agent-qa-reviewer',
             'agent-qa-writer',
             'agent-release-reviewer',
-            'agent-tests-check',
-            'agent-visual-check',
-            'agent-visual-reviewer',
         ]);
-        // ADR 0024 — the four `*-check` agents come from the gate nodes, which
-        // carry an `agent_id` like any other step. A gate left out of this roll-up
-        // would install a Delivery whose checks cannot run.
-        //
-        // The parent graph alone names most of those; the rest belong to the
-        // Build, Test and Docs sub-templates. Rolling them up is what stops a
-        // stale sub-workflow leaving its agents uninstalled.
+        // The Script steps name no agent, so the roll-up is the agents the fixers,
+        // reviewers and sub-templates name. The parent graph alone does not carry
+        // all of them; the rest belong to the Build, Test and Docs sub-templates.
         expect(workflowsService.templateAgentIds('build').sort()).toEqual(['agent-code-reviewer', 'agent-coder']);
         // An id that names no template resolves to no agents rather than
         // throwing: callers feed this straight into dependency resolution, and

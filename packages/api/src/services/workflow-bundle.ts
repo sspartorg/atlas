@@ -35,6 +35,24 @@ export const PortableWorkflowSchema = CreateWorkflowSchema.omit({ project_id: tr
 });
 type PortableWorkflow = z.infer<typeof PortableWorkflowSchema>;
 
+/**
+ * A bundle exported before Script steps (ADR 0028) has Check (`gate`) nodes
+ * that name a checker agent. Each becomes an empty Script step, the same
+ * rewrite migration 006 made to saved graphs, so the Owner sees "needs a
+ * command" rather than a bundle that fails to import.
+ */
+function upgradeLegacyWorkflow(raw: unknown): unknown {
+    if (!raw || typeof raw !== 'object' || !('graph' in raw)) return raw;
+    const graph = (raw as { graph?: { nodes?: Array<Record<string, unknown>> } }).graph;
+    if (!graph?.nodes?.some((n) => n['type'] === 'gate')) return raw;
+    const nodes = graph.nodes.map((n) => {
+        if (n['type'] !== 'gate') return n;
+        const { agent_id: _agent, script_id: _script, ...rest } = n;
+        return { ...rest, type: 'script', command: '' };
+    });
+    return { ...raw, graph: { ...graph, nodes } };
+}
+
 export interface WorkflowBundle {
     workflow: PortableWorkflow;
     /** By bundle-local ref. */
@@ -88,7 +106,7 @@ async function pack(
     loadAgent: (id: string) => Promise<AgentBundle>,
 ): Promise<{ filename: string; data: Buffer }> {
     // Parsing strips everything local (id, project, status, timestamps).
-    const workflow = PortableWorkflowSchema.parse(root);
+    const workflow = PortableWorkflowSchema.parse(upgradeLegacyWorkflow(root));
     const zip = new JSZip();
     const refs = new Map<string, string>();
     const taken = new Set<string>();
@@ -96,7 +114,7 @@ async function pack(
     for (const id of subRefs(workflow.graph)) {
         const raw = await loadSub(id);
         if (!raw) throw new ApiError('not_found', `Sub-workflow ${id} does not exist`, 404);
-        const sub = PortableWorkflowSchema.parse(raw);
+        const sub = PortableWorkflowSchema.parse(upgradeLegacyWorkflow(raw));
         const ref = slug(sub.name, taken);
         refs.set(id, ref);
         graphs.push(sub.graph);
@@ -150,7 +168,7 @@ async function readWorkflowJson(zip: JSZip, path: string): Promise<PortableWorkf
     const format = (parsed as { format_version?: unknown } | null)?.format_version ?? 1;
     if (typeof format !== 'number' || !Number.isInteger(format) || format < 1) throw bad(`${path} has an invalid format_version`);
     if (format > WORKFLOW_BUNDLE_FORMAT) throw bad(`made by a newer Atlas (format ${format}); update Atlas to import it`);
-    const result = PortableWorkflowSchema.safeParse(parsed);
+    const result = PortableWorkflowSchema.safeParse(upgradeLegacyWorkflow(parsed));
     if (!result.success) {
         throw bad(`${path} failed validation: ${result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
     }

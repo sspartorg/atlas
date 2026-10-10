@@ -417,13 +417,12 @@ function SubtasksNode({ id, data, selected }: NodeProps<WfNode>) {
     );
 }
 
-function GateNode({ id, data, selected }: NodeProps<WfNode>) {
-    // ADR 0024 — a gate dispatches a checker agent, then runs the command that
-    // agent named and routes on its exit code. It carries a fail handle for the
-    // same reason an agent does: that edge is where the fixer is dispatched,
-    // and it is the whole point of the step.
-    const { agentsById } = useContext(CanvasContext);
+function ScriptNode({ id, data, selected }: NodeProps<WfNode>) {
+    // A Script step runs the command the Owner typed on it, once per repo, with
+    // no AI in the loop, and routes on the exit code. The fail handle is where
+    // the fixer is dispatched with the step's full output.
     const accent = ATLAS_PALETTE.warnFg;
+    const command = (data.command ?? '').trim();
     return (
         <NodeShell
             id={id}
@@ -449,13 +448,13 @@ function GateNode({ id, data, selected }: NodeProps<WfNode>) {
             }
         >
             <Glyph
-                name="verified_user"
+                name="terminal"
                 color={accent}
                 bg={`color-mix(in srgb, ${accent} 14%, transparent)`}
             />
             <Box sx={{ minWidth: 0, pr: 8 }}>
-                <Title>{agentsById.get(data.agent_id ?? '')?.name ?? data.agent_id ?? 'Choose a checker'}</Title>
-                <Caption>Runs your repo&apos;s own test/lint command</Caption>
+                <Title>{data.label?.trim() || 'Script'}</Title>
+                <Caption>{command ? command.split('\n')[0] : 'Needs a command'}</Caption>
             </Box>
         </NodeShell>
     );
@@ -479,6 +478,6 @@ export const NODE_TYPES = {
     agent: AgentNode,
     owner: OwnerNode,
     subtasks: SubtasksNode,
-    gate: GateNode,
+    script: ScriptNode,
     end: EndNode,
 };

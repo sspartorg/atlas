@@ -97,12 +97,11 @@ export function subtasksLabel(label: string | undefined): string {
     return label ? `Labelled “${label}”` : 'All other sub-tasks';
 }
 
-// A gate names its checker agent (ADR 0024), so it counts here too — this
-// feeds the builder's "these agents are not installed" warning, and a gate
-// left out of it would install a workflow whose checks cannot run.
+// Only an agent step names an agent (a Script step names none). This feeds the
+// builder's "these agents are not installed" warning.
 export function graphAgentIds(graph: IWorkflowGraph): string[] {
     return graph.nodes.flatMap((n) =>
-        (n.type === 'agent' || n.type === 'gate') && n.agent_id ? [n.agent_id] : [],
+        n.type === 'agent' && n.agent_id ? [n.agent_id] : [],
     );
 }
 

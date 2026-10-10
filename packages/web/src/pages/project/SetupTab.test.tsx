@@ -93,18 +93,12 @@ describe('SetupTab', () => {
         fireEvent.change(await screen.findByLabelText('Bash setup script'), {
             target: { value: 'echo saved' },
         });
-        // ADR 0024 — the repo's verify command saves with the scripts, from the
-        // same form, because it is the same kind of per-repo execution material.
-        fireEvent.change(screen.getByLabelText('Verify command'), {
-            target: { value: 'pnpm -r test' },
-        });
         const saveBtn = screen.getByRole('button', { name: /Save/i });
         fireEvent.click(saveBtn);
         await waitFor(() => expect(patched).toHaveBeenCalled());
         expect(patched).toHaveBeenCalledWith({
             setup_sh_body: 'echo saved',
             setup_ps1_body: '',
-            verify_command: 'pnpm -r test',
         });
     });
 
@@ -140,7 +134,6 @@ describe('SetupTab', () => {
         expect(patchedBody).toEqual({
             setup_sh_body: 'echo web edited',
             setup_ps1_body: '',
-            verify_command: '',
         });
     });
 

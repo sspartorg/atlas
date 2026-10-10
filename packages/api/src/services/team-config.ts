@@ -67,7 +67,6 @@ const ProjectFileSchema = z.object({
             default_branch: z.string().min(1),
             setup_sh_body: z.string(),
             setup_ps1_body: z.string(),
-            verify_command: z.string(),
             position: z.number().int(),
         })
     ),
@@ -268,7 +267,6 @@ async function exportProject(p: { id: string }): Promise<{ file: ProjectFile; wo
             default_branch: r.default_branch,
             setup_sh_body: r.setup_sh_body,
             setup_ps1_body: r.setup_ps1_body,
-            verify_command: r.verify_command,
             position: r.position,
         })),
         guardrails: guardrails.map((g) => ({
@@ -473,7 +471,6 @@ async function importProject(cfg: ITeamConfig, prefix: string, report: SyncRepor
             default_branch: r.default_branch,
             setup_sh_body: r.setup_sh_body,
             setup_ps1_body: r.setup_ps1_body,
-            verify_command: r.verify_command,
             position: r.position,
         };
         const local = localRepos.find((l) => l.id === r.id);

@@ -57,15 +57,16 @@ describe('WorkflowCanvas', () => {
     });
 
     it('draws a gate step named after its checker agent', () => {
-        // ADR 0024 — a gate dispatches a checker, so it is named after that
-        // agent and the caption says what the step actually does with it.
+        // A Script step is named after the Owner's label, and its caption shows
+        // the command that will run.
         const graph = {
             nodes: [
                 { id: 'start', type: 'start' as const, position: { x: 0, y: 0 } },
                 {
                     id: 'cov',
-                    type: 'gate' as const,
-                    agent_id: 'agent-tests-check',
+                    type: 'script' as const,
+                    label: 'Tests',
+                    command: 'pnpm test',
                     position: { x: 0, y: 130 },
                 },
                 { id: 'end', type: 'end' as const, position: { x: 0, y: 260 } },
@@ -80,10 +81,8 @@ describe('WorkflowCanvas', () => {
             <WorkflowCanvas nodes={flow.nodes} edges={flow.edges} context={context()} />
         );
         const canvas = screen.getByTestId('workflow-canvas');
-        // No agent is installed in this fixture's context, so the node falls
-        // back to the id — which is still the honest label.
-        expect(within(canvas).getByText('agent-tests-check')).toBeInTheDocument();
-        expect(within(canvas).getByText("Runs your repo's own test/lint command")).toBeInTheDocument();
+        expect(within(canvas).getByText('Tests')).toBeInTheDocument();
+        expect(within(canvas).getByText('pnpm test')).toBeInTheDocument();
     });
 
     it('renders overlay children inside the canvas', () => {

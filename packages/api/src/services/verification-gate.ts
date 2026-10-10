@@ -46,6 +46,8 @@ const DEFAULT_TIMEOUT_MS = 600_000; // 10 min
 const MAX_BUFFER = 8 * 1024 * 1024;
 /** Enough of the tail to identify the failure without pasting a whole suite. */
 const MAX_REPORTED_OUTPUT = 4000;
+/** The whole output, kept on disk for a fixer to read. A suite can be long. */
+const MAX_LOG = 1024 * 1024;
 
 /**
  * The child's environment: an allowlist, not `{...process.env}`.
@@ -80,9 +82,15 @@ function gateEnv(): NodeJS.ProcessEnv {
     return env;
 }
 
+/**
+ * `log` is the whole redacted output, up to `MAX_LOG`, for the file the step
+ * leaves under `.atlas/checks/`; `output` is the tail that goes in the item
+ * comment and the run page. Both are withheld together when the secret set
+ * could not be loaded to mask them.
+ */
 export type GateResult =
-    | { kind: 'pass'; output?: string }
-    | { kind: 'fail'; output: string; exitCode?: number }
+    | { kind: 'pass'; output?: string; log?: string }
+    | { kind: 'fail'; output: string; exitCode?: number; log: string }
     /**
      * The script ran and produced output, but has nothing to compare against —
      * the visual gate's answer for a screen with no committed baseline. It is
@@ -90,7 +98,7 @@ export type GateResult =
      * verified), so it gets its own verdict and the run routes to the reviewer
      * that can look at the captures.
      */
-    | { kind: 'needs_review'; output: string; exitCode?: number }
+    | { kind: 'needs_review'; output: string; exitCode?: number; log: string }
     /**
      * Exit 0, and the script said it had nothing to check.
      *
@@ -101,7 +109,7 @@ export type GateResult =
      * `gate-visual` reported a pass on the one fixture built to exercise it.
      * Nothing downstream could tell verified from not-checked.
      */
-    | { kind: 'skipped'; output: string }
+    | { kind: 'skipped'; output: string; log: string }
     | { kind: 'unavailable'; reason: string };
 
 /**
@@ -115,8 +123,14 @@ const SKIPPED_RE = /^[^\n]*:\s*skipped\b/i;
 const NEEDS_REVIEW_SENTINEL = 'ATLAS_GATE_NEEDS_REVIEW';
 const NEEDS_REVIEW_RE = new RegExp(`(^|\\n)\\s*${NEEDS_REVIEW_SENTINEL}\\b`);
 
+const WITHHELD = '(output withheld — the secret set could not be loaded to mask it)';
+
 function tail(text: string): string {
     return text.length <= MAX_REPORTED_OUTPUT ? text : text.slice(-MAX_REPORTED_OUTPUT);
+}
+
+function capLog(text: string): string {
+    return text.length <= MAX_LOG ? text : `[… ${text.length - MAX_LOG} characters cut …]\n${text.slice(-MAX_LOG)}`;
 }
 
 /**
@@ -206,9 +220,15 @@ export async function runNamedCommand(opts: {
         // perf harness in this repo" is the difference between a check that ran
         // and one that had nothing to do). Omitted when empty so a silent pass
         // is exactly `{ kind: 'pass' }`.
-        const said = tail(`${ok.stdout ?? ''}`.trim());
-        if (said && SKIPPED_RE.test(said)) return { kind: 'skipped', output: said };
-        return said ? { kind: 'pass', output: said } : { kind: 'pass' };
+        // Redacted like a failure is: a passing command can print a secret too,
+        // and this text is persisted to the step's log file.
+        const raw = `${ok.stdout ?? ''}`.trim();
+        const masked = secrets ? redactSecretValues(raw, secrets) : null;
+        if (raw && masked === null) return { kind: 'pass', output: WITHHELD, log: WITHHELD };
+        const said = tail(masked ?? '');
+        const log = capLog(masked ?? '');
+        if (said && SKIPPED_RE.test(said)) return { kind: 'skipped', output: said, log };
+        return said ? { kind: 'pass', output: said, log } : { kind: 'pass' };
     } catch (err: unknown) {
         const e = err as {
             code?: number | string;
@@ -229,14 +249,13 @@ export async function runNamedCommand(opts: {
         const stdout = e.stdout instanceof Buffer ? e.stdout.toString('utf8') : (e.stdout ?? '');
         const stderr = e.stderr instanceof Buffer ? e.stderr.toString('utf8') : (e.stderr ?? '');
         const raw = `${stdout}${stderr}`.trim();
-        const output = secrets
-            ? redactSecretValues(raw, secrets)
-            : '(output withheld — the secret set could not be loaded to mask it)';
+        const output = secrets ? redactSecretValues(raw, secrets) : WITHHELD;
         const clipped = tail(output);
+        const log = capLog(output);
         if (NEEDS_REVIEW_RE.test(raw)) {
-            return { kind: 'needs_review', output: clipped, exitCode: e.code };
+            return { kind: 'needs_review', output: clipped, exitCode: e.code, log };
         }
-        return { kind: 'fail', output: clipped, exitCode: e.code };
+        return { kind: 'fail', output: clipped, exitCode: e.code, log };
     } finally {
         // One line of Atlas-written wrapper around a command from an LLM, in a
         // shared tmpdir — remove it even when the run throws.

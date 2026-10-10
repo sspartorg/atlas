@@ -56,7 +56,7 @@ async function seedPublisher(): Promise<{ workflowId: string }> {
     await insertAgent({ id: 'agent-coder', prompt_md: 'Write the code.' });
     await insertProject('p1', 'ATL', { no_repo: true, name: 'Atlas' });
     await testDb.updateTable('projects').set({ team_managed: true, guardrails_md: 'Be careful.' }).where('id', '=', 'p1').execute();
-    const repoId = await insertProjectRepo('p1', { id: 'r1', name: 'web', git_url: 'https://github.com/acme/web.git', verify_command: 'pnpm test' });
+    const repoId = await insertProjectRepo('p1', { id: 'r1', name: 'web', git_url: 'https://github.com/acme/web.git' });
     await testDb.insertInto('project_guardrails').values({ id: 'g1', project_id: 'p1', title: 'No force push', body_md: 'Never.' }).execute();
     await testDb
         .insertInto('project_guardrail_scripts')
@@ -96,7 +96,7 @@ describe('team config export', () => {
         expect(project).toMatchObject({
             id: 'p1',
             guardrails_md: 'Be careful.',
-            repos: [{ id: 'r1', name: 'web', verify_command: 'pnpm test' }],
+            repos: [{ id: 'r1', name: 'web' }],
             jira_sources: [{ jql: 'assignee = currentUser()', workflow_id: workflowId, repo_ids: ['r1'] }],
         });
 
@@ -129,7 +129,7 @@ describe('team config import', () => {
         expect(project).toMatchObject({ issue_key_prefix: 'ATL', guardrails_md: 'Be careful.', team_managed: true });
         const repo = await testDb.selectFrom('project_repos').selectAll().where('id', '=', 'r1').executeTakeFirstOrThrow();
         // No credential to clone with yet, so it waits.
-        expect(repo).toMatchObject({ name: 'web', verify_command: 'pnpm test', clone_status: 'pending', credential_id: null });
+        expect(repo).toMatchObject({ name: 'web', clone_status: 'pending', credential_id: null });
         expect(repo.git_path.startsWith(workspace)).toBe(true);
         const wf = await workflowsService.get(workflowId);
         expect(wf).toMatchObject({ name: 'Delivery', project_id: 'p1', team_managed: true });

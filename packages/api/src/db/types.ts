@@ -267,8 +267,6 @@ export interface ProjectReposTable {
     >;
     setup_sh_body: Str;
     setup_ps1_body: Str;
-    /** ADR 0024 — what the pre-push gate runs here. Empty means not set. */
-    verify_command: Str;
     position: Int;
     created_at: CreatedAt;
 }
@@ -860,6 +858,8 @@ export interface RunGateResultsTable {
      * command is what a fixer loop-back re-runs without a second dispatch.
      */
     command: StrN;
+    /** ADR 0028 — where the step's full output was written, under `.atlas/checks/`. */
+    log_path: StrN;
     created_at: CreatedAt;
 }
 

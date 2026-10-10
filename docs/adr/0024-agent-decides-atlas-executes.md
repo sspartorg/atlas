@@ -1,7 +1,7 @@
 # 0024. The agent decides what to check, Atlas executes it
 
 **Date:** 2026-09-25
-**Status:** Accepted
+**Status:** Accepted — checker-agent half superseded by [ADR 0028](0028-script-steps-no-ai-checks.md)
 **Supersedes parts of:** [0020](0020-atlas-runs-the-verification-gate.md), [0021](0021-gate-nodes-run-deterministic-checks.md), [0022](0022-sdlc-v1-roster-and-delivery-graph.md)
 
 ## Context

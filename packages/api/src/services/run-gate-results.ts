@@ -17,21 +17,20 @@ import type { GateVerdict } from '../db/types.js';
 
 export interface RecordGateResultInput {
     workflow_run_id: string;
-    /** Null for the pre-push verification gate, which belongs to the run, not a node. */
+    /** The Script step this ran for. Null for a run-level check with no step. */
     node_id?: string | null;
     /** Null for a workspace-wide script with no single repo to name. */
     repo_id?: string | null;
-    /** The checker agent for a gate node, or `pre-push`. The scorecard groups on it. */
+    /** The Script step's node id. Kept under the old column name (ADR 0028). */
     script_id: string;
-    /**
-     * ADR 0024 — what Atlas actually ran. Absent when nothing ran (a skip, or a
-     * repo with no verify command). Also the memo a fixer loop-back re-runs.
-     */
+    /** What Atlas actually ran. Absent when nothing ran. */
     command?: string | null;
     verdict: GateVerdict;
     exit_code?: number | null;
     /** Already clipped and secret-redacted by the caller. */
     output_tail?: string | null;
+    /** Relative to the Task's workspace, where the full output was written. */
+    log_path?: string | null;
 }
 
 export async function recordGateResult(input: RecordGateResultInput): Promise<void> {
@@ -48,6 +47,7 @@ export async function recordGateResult(input: RecordGateResultInput): Promise<vo
                 verdict: input.verdict,
                 exit_code: input.exit_code ?? null,
                 output_tail: input.output_tail ?? null,
+                log_path: input.log_path ?? null,
             })
             .execute();
     } catch (err) {
@@ -69,6 +69,8 @@ export interface RunGateResultRow {
     verdict: GateVerdict;
     exit_code: number | null;
     output_tail: string | null;
+    /** Where the full output was written under `.atlas/checks/`. Null when none was. */
+    log_path: string | null;
     created_at: string;
 }
 
@@ -95,6 +97,7 @@ export async function listGateResultsForRun(runId: string): Promise<RunGateResul
             'g.verdict',
             'g.exit_code',
             'g.output_tail',
+            'g.log_path',
             'g.created_at',
         ])
         .where('g.workflow_run_id', '=', runId)
@@ -110,6 +113,7 @@ export async function listGateResultsForRun(runId: string): Promise<RunGateResul
         verdict: r.verdict as GateVerdict,
         exit_code: r.exit_code ?? null,
         output_tail: r.output_tail ?? null,
+        log_path: r.log_path ?? null,
         // pg hands back a Date for timestamptz; the API speaks ISO strings.
         created_at: new Date(r.created_at as unknown as string).toISOString(),
     }));

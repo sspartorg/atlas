@@ -13,10 +13,10 @@ function node(id: string, type: IWorkflowNode['type'] = 'agent'): IWorkflowNode 
 
 const at = (g: IWorkflowGraph, id: string) => g.nodes.find((n) => n.id === id)!.position;
 
-/** Start → coder → gate → end, with the gate failing out to a fixer that loops back. */
+/** Start → coder → script → end, with the script failing out to a fixer that loops back. */
 function repairGraph(): IWorkflowGraph {
     return {
-        nodes: [node('start', 'start'), node('coder'), node('gate', 'gate'), node('fix'), node('end', 'end')],
+        nodes: [node('start', 'start'), node('coder'), node('gate', 'script'), node('fix'), node('end', 'end')],
         edges: [
             { id: 'e1', source: 'start', target: 'coder', kind: 'pass' },
             { id: 'e2', source: 'coder', target: 'gate', kind: 'pass' },
@@ -60,7 +60,7 @@ describe('tidyGraph', () => {
     // pass edge keeps the pair stacked vertically instead.
     it('stacks a fixer’s reviewer under it rather than beside it', () => {
         const g = tidyGraph({
-            nodes: [node('start', 'start'), node('gate', 'gate'), node('fix'), node('review'), node('end', 'end')],
+            nodes: [node('start', 'start'), node('gate', 'script'), node('fix'), node('review'), node('end', 'end')],
             edges: [
                 { id: 'e1', source: 'start', target: 'gate', kind: 'pass' },
                 { id: 'e2', source: 'gate', target: 'end', kind: 'pass' },
@@ -82,7 +82,7 @@ describe('tidyGraph', () => {
     // Two fixers off the same gate land at the same depth and the same row.
     it('separates two nodes that would land in the same cell', () => {
         const g = tidyGraph({
-            nodes: [node('start', 'start'), node('gate', 'gate'), node('fixA'), node('fixB'), node('end', 'end')],
+            nodes: [node('start', 'start'), node('gate', 'script'), node('fixA'), node('fixB'), node('end', 'end')],
             edges: [
                 { id: 'e1', source: 'start', target: 'gate', kind: 'pass' },
                 { id: 'e2', source: 'gate', target: 'end', kind: 'pass' },
@@ -128,7 +128,7 @@ describe('tidyGraph', () => {
             nodes: [
                 node('start', 'start'),
                 node('end', 'end'),
-                ...gates.flatMap((k) => [node(`gate-${k}`, 'gate'), node(`fix-${k}`), node(`review-${k}`)]),
+                ...gates.flatMap((k) => [node(`gate-${k}`, 'script'), node(`fix-${k}`), node(`review-${k}`)]),
             ],
             edges: [
                 { id: 'in', source: 'start', target: 'gate-hygiene', kind: 'pass' },
@@ -198,7 +198,7 @@ describe('tidyGraph', () => {
     // arrival as already-seen rather than descending into it twice.
     it('lays out a graph where two paths meet again', () => {
         const g = tidyGraph({
-            nodes: [node('start', 'start'), node('gate', 'gate'), node('fix'), node('end', 'end')],
+            nodes: [node('start', 'start'), node('gate', 'script'), node('fix'), node('end', 'end')],
             edges: [
                 { id: 'e1', source: 'start', target: 'gate', kind: 'pass' },
                 { id: 'e2', source: 'gate', target: 'fix', kind: 'fail' },
@@ -215,7 +215,7 @@ describe('tidyGraph', () => {
     // Same graph, edges stored in the opposite order: a layout that depended
     // on storage order would tidy the same workflow two different ways.
     it('lays a graph out the same way whichever order its edges are stored', () => {
-        const nodes = [node('start', 'start'), node('gate', 'gate'), node('a'), node('b'), node('end', 'end')];
+        const nodes = [node('start', 'start'), node('gate', 'script'), node('a'), node('b'), node('end', 'end')];
         const edges = [
             { id: 'e1', source: 'start', target: 'gate', kind: 'pass' as const },
             { id: 'e2', source: 'gate', target: 'end', kind: 'pass' as const },

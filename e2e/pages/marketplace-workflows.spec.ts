@@ -61,13 +61,12 @@ test.describe('/agents/marketplace?tab=workflows', () => {
         await expect(canvas.getByText('Build sub-task')).toBeVisible();
         await expect(canvas.getByText('Test sub-task')).toBeVisible();
         await expect(canvas.getByText('Docs sub-task')).toBeVisible();
-        // ADR 0024 — a gate names its CHECKER agent and says what the step does
-        // with it. Scoped by node id: the preview renders an agent by id
-        // because none is installed here to resolve a name from, and the bare
-        // id would also match the palette beside the canvas.
-        const testsGate = canvas.getByTestId('wf-node-gate-tests');
-        await expect(testsGate.getByText('agent-tests-check')).toBeVisible();
-        await expect(testsGate.getByText('Names the command, Atlas runs it')).toBeVisible();
+        // A Script step names no agent: the Owner types its command, and the
+        // template ships it empty, so the builder says it needs one (ADR 0028).
+        // Scoped by node id, for the same reason as the Sub-tasks steps above.
+        const testsScript = canvas.getByTestId('wf-node-check-tests');
+        await expect(testsScript.getByText('Tests')).toBeVisible();
+        await expect(testsScript.getByText('Needs a command')).toBeVisible();
 
         const agents = page.getByRole('list', { name: 'Agents' });
         await expect(agents.getByText('PO Writer')).toBeVisible();

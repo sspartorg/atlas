@@ -7,7 +7,7 @@ import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import Link from '@mui/material/Link';
 import CircularProgress from '@mui/material/CircularProgress';
-import type { IWorkflowRunDetail, IWorkflowRunStep, IWorkflowRunSummary } from '@atlas/shared';
+import type { IWorkflowGraph, IWorkflowRunDetail, IWorkflowRunStep, IWorkflowRunSummary } from '@atlas/shared';
 import {
     useResumeWorkflowRun,
     useStopWorkflowRun,
@@ -48,14 +48,12 @@ const GATE_VERDICT: Record<GateResultRow['verdict'], { label: string; color: str
     needs_review: { label: 'needs review', color: ATLAS_PALETTE.amber },
 };
 
-function GateRow({ gate }: { gate: GateResultRow }) {
+function GateRow({ gate, stepName }: { gate: GateResultRow; stepName: string }) {
     const v = GATE_VERDICT[gate.verdict];
     return (
         <Box sx={{ px: 4, py: 2, borderTop: `1px solid ${ATLAS_PALETTE.slate12}` }}>
             <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }}>
-                <Typography sx={{ fontSize: 13, fontWeight: 600, fontFamily: 'monospace' }}>
-                    {gate.script_id}
-                </Typography>
+                <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{stepName}</Typography>
                 <Typography sx={{ fontSize: 12, fontWeight: 700, color: v.color }}>{v.label}</Typography>
                 {gate.repo_name && (
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>{gate.repo_name}</Typography>
@@ -64,8 +62,7 @@ function GateRow({ gate }: { gate: GateResultRow }) {
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>exit {gate.exit_code}</Typography>
                 )}
             </Box>
-            {/* What Atlas actually ran on the machine. The checker chose it, so
-                "which command was this" is a question the Owner will ask. */}
+            {/* What Atlas actually ran on the machine, as the Owner typed it on the step. */}
             {gate.command && (
                 <Typography
                     sx={{
@@ -79,9 +76,7 @@ function GateRow({ gate }: { gate: GateResultRow }) {
                     {gate.command}
                 </Typography>
             )}
-            {/* The script's own words. For a skip this is the REASON — the
-                difference between a check that ran and one that had nothing to
-                do — which is the whole point of surfacing these. */}
+            {/* The tail of the script's own words. For a skip this is the REASON. */}
             {gate.output_tail && (
                 <Typography
                     component="pre"
@@ -99,13 +94,22 @@ function GateRow({ gate }: { gate: GateResultRow }) {
                     {gate.output_tail}
                 </Typography>
             )}
+            {gate.log_path && (
+                <Typography sx={{ fontSize: 12, fontFamily: 'monospace', color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
+                    Full output: {gate.log_path}
+                </Typography>
+            )}
         </Box>
     );
 }
 
-function GatesSection({ runId }: { runId: string }) {
+function GatesSection({ runId, graph }: { runId: string; graph: IWorkflowGraph }) {
     const { data: gates } = useWorkflowRunGateResults(runId);
     if (!gates || gates.length === 0) return null;
+    const nameOf = (nodeId: string | null) => {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        return node?.label?.trim() || nodeId || 'Script';
+    };
     const skipped = gates.filter((g) => g.verdict === 'skipped').length;
     return (
         <>
@@ -114,7 +118,7 @@ function GatesSection({ runId }: { runId: string }) {
                 {skipped > 0 ? ` · ${skipped} skipped` : ''}
             </Typography>
             {gates.map((g) => (
-                <GateRow key={g.id} gate={g} />
+                <GateRow key={g.id} gate={g} stepName={nameOf(g.node_id)} />
             ))}
         </>
     );
@@ -524,7 +528,7 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
                           ))}
                     {/* A check's checker step appears above; this section shows
                         the command Atlas actually ran, its exit code, and skips. */}
-                    <GatesSection runId={run.id} />
+                    <GatesSection runId={run.id} graph={run.graph_snapshot} />
                     {run.children.length > 0 && (
                         <>
                             <Typography

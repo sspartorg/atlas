@@ -47,13 +47,9 @@
     "version": 1,
     "hash": "dc3a468fb91cdfad"
   },
-  "agent-hygiene-check": {
-    "version": 1,
-    "hash": "b13e31561a348935"
-  },
   "agent-hygiene-fixer": {
     "version": 1,
-    "hash": "7df31aa9a5414b7e"
+    "hash": "2c0ebfcb88c25124"
   },
   "agent-jira-to-epic": {
     "version": 1,
@@ -66,10 +62,6 @@
   "agent-market-research": {
     "version": 1,
     "hash": "b48cec7371ec7017"
-  },
-  "agent-perf-check": {
-    "version": 1,
-    "hash": "4b0d6509b382cb45"
   },
   "agent-perf-fixer": {
     "version": 1,
@@ -99,16 +91,8 @@
     "version": 1,
     "hash": "9e4163c956a7e245"
   },
-  "agent-tests-check": {
-    "version": 1,
-    "hash": "bf8ebae20de6f2d3"
-  },
-  "agent-visual-check": {
-    "version": 1,
-    "hash": "cca7cfb41ef1c40f"
-  },
   "agent-visual-reviewer": {
     "version": 1,
-    "hash": "5ca93e3e8bc57894"
+    "hash": "2c24810463aaef45"
   }
 }
