@@ -18,6 +18,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Cron } from 'croner';
@@ -42,6 +43,7 @@ import { decideRunRouting } from './agent-runner-outcome-routing.js';
 import { runNamedCommand } from './verification-gate.js';
 import { recordGateResult } from './run-gate-results.js';
 import { checkLogPath, writeScriptStepLog } from './script-step-log.js';
+import { settingsService } from './settings.js';
 import { recordRunEvent } from './workflow-run-events.js';
 import {
     WORKTREE_BRANCH_RE,
@@ -455,17 +457,29 @@ async function executeScriptCheck(run: RunRow, node: IWorkflowNode, command: str
 
         // One repo's log goes in the Task's workspace when there is one, so the
         // fixer finds every repo's output under the same folder.
+        // The worktree is removed after delivery, so the copy the run page links to
+        // lives in the workspace folder, keyed by run. The worktree copy is what the
+        // fixer reads while the run is still going.
         let logPath: string | null = null;
         if (result.kind !== 'unavailable') {
-            logPath = await writeScriptStepLog(workspace ?? path, {
+            const entry = {
                 stepId: node.id,
                 stepLabel,
                 repoName: workspace ? repo.name : undefined,
                 command,
                 verdict: result.kind,
                 exitCode: result.kind === 'fail' || result.kind === 'needs_review' ? result.exitCode : undefined,
-                log: result.kind === 'pass' ? (result.log ?? '') : result.log,
-            }).catch(() => null);
+                log: result.log ?? '',
+            };
+            await writeScriptStepLog(workspace ?? path, entry).catch(() => null);
+            // One folder per attempt, so a red run's log survives the green one that
+            // follows it. The path is absolute: the run page opens it directly.
+            const workspacePath = (await settingsService.get()).workspace_path;
+            if (workspacePath) {
+                const attempt = join(workspacePath, 'check-logs', run.id, `${Date.now()}-${node.id}`);
+                const rel = await writeScriptStepLog(attempt, entry).catch(() => null);
+                logPath = rel ? join(attempt, rel) : null;
+            }
         }
 
         await recordGateResult({
