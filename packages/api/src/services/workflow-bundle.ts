@@ -41,7 +41,7 @@ type PortableWorkflow = z.infer<typeof PortableWorkflowSchema>;
  * rewrite migration 006 made to saved graphs, so the Owner sees "needs a
  * command" rather than a bundle that fails to import.
  */
-function upgradeLegacyWorkflow(raw: unknown): unknown {
+export function upgradeLegacyWorkflow(raw: unknown): unknown {
     if (!raw || typeof raw !== 'object' || !('graph' in raw)) return raw;
     const graph = (raw as { graph?: { nodes?: Array<Record<string, unknown>> } }).graph;
     if (!graph?.nodes?.some((n) => n['type'] === 'gate')) return raw;

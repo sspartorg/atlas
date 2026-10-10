@@ -809,6 +809,18 @@ describe('workflow engine — script steps', () => {
         );
     });
 
+    it('keeps a copy of each attempt under the workspace folder, and points the run at it', async () => {
+        await testDb.updateTable('settings').set({ workspace_path: '/tmp/atlas-ws-test' }).where('id', '=', 1).execute();
+        gate.runNamedCommand.mockResolvedValueOnce({ kind: 'pass', log: 'green' } as never);
+        const runId = await startWorkflowRun('wf-script', 'ATL-2');
+        await finishStep('completed', 'done');
+
+        const roots = scriptLog.writeScriptStepLog.mock.calls.map((c) => String(c[0]));
+        expect(roots.some((r) => r.startsWith('/tmp/atlas-ws-test/check-logs/' + runId + '/'))).toBe(true);
+        expect((await buildRows(runId))[0]).toMatchObject({ verdict: 'pass' });
+        await testDb.updateTable('settings').set({ workspace_path: '' }).where('id', '=', 1).execute();
+    });
+
     it('routes a red command down the fail edge to the fixer', async () => {
         gate.runNamedCommand.mockResolvedValueOnce({ kind: 'fail', output: 'red', exitCode: 1, log: 'red' } as never);
         const runId = await startWorkflowRun('wf-script', 'ATL-2');
