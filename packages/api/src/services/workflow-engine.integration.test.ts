@@ -440,7 +440,7 @@ describe('workflow engine — stop, reconcile, dispatch', () => {
         expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner' });
     });
 
-    it('dispatch starts one run per item_ready workflow and a parked run does not hold the queue', async () => {
+    it('dispatch starts one run per item_ready workflow, and a parked run keeps its repo until it is resolved', async () => {
         await testDb.updateTable('workflows').set({ trigger: 'item_ready' }).where('id', '=', 'wf-dev').execute();
         await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'Second', status: 'ready' });
         await testDb.updateTable('items').set({ workflow_id: 'wf-dev' }).where('id', 'in', ['ATL-2', 'ATL-3']).execute();
@@ -448,10 +448,14 @@ describe('workflow engine — stop, reconcile, dispatch', () => {
         expect(await tickWorkflowDispatch()).toBe(1);
         expect(await tickWorkflowDispatch()).toBe(0); // one run at a time
 
-        await finishStep('completed', 'asked_question', 'unclear'); // park the first
+        // Parked (waiting for the Owner) still holds the repo: the second Task
+        // would edit the same checkout, so it waits (ADR 0029).
+        await finishStep('completed', 'asked_question', 'unclear');
+        expect(await tickWorkflowDispatch()).toBe(0);
+        await testDb.updateTable('workflow_runs').set({ status: 'cancelled' }).where('item_id', '=', 'ATL-2').execute();
         expect(await tickWorkflowDispatch()).toBe(1);
         const live = await testDb.selectFrom('workflow_runs').select(['item_id', 'status']).orderBy('started_at').execute();
-        expect(live.map((r) => r.status)).toEqual(['waiting_for_owner', 'running']);
+        expect(live.map((r) => r.status)).toEqual(['cancelled', 'running']);
     });
 
     it('dispatch skips a ready item whose dependency is not done instead of stalling the queue', async () => {
@@ -500,7 +504,8 @@ describe('workflow engine — stop, reconcile, dispatch', () => {
     it('a kick during a pass runs one more pass after it, and kicks before it starts share it', async () => {
         await testDb.updateTable('workflows').set({ trigger: 'item_ready', max_parallel_runs: 2 }).where('id', '=', 'wf-dev').execute();
         await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'Second', status: 'ready' });
-        await testDb.updateTable('items').set({ workflow_id: 'wf-dev' }).where('id', '=', 'ATL-2').execute();
+        await testDb.updateTable('items').set({ workflow_id: 'wf-dev', repo_ids: JSON.stringify(['repo-a']) as never }).where('id', '=', 'ATL-2').execute();
+        await testDb.updateTable('items').set({ workflow_id: 'wf-dev', repo_ids: JSON.stringify(['repo-b']) as never }).where('id', '=', 'ATL-3').execute();
         // Hold the first pass inside its spawn, so the second kick lands mid-pass.
         let release!: () => void;
         const held = new Promise<void>((r) => (release = r));
@@ -718,6 +723,9 @@ describe('workflow engine — delivery modes', () => {
         await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'Second', status: 'ready' });
         await insertItem({ id: 'ATL-4', type: 'task', project_id: 'p1', title: 'Third', status: 'ready' });
         await testDb.updateTable('items').set({ workflow_id: 'wf-dev' }).where('id', 'in', ['ATL-2', 'ATL-3', 'ATL-4']).execute();
+        await testDb.updateTable('items').set({ repo_ids: JSON.stringify(['repo-a']) as never }).where('id', '=', 'ATL-2').execute();
+        await testDb.updateTable('items').set({ repo_ids: JSON.stringify(['repo-b']) as never }).where('id', '=', 'ATL-3').execute();
+        await testDb.updateTable('items').set({ repo_ids: JSON.stringify(['repo-c']) as never }).where('id', '=', 'ATL-4').execute();
 
         expect(await tickWorkflowDispatch()).toBe(2);
         expect(await tickWorkflowDispatch()).toBe(0); // both slots busy
@@ -1214,13 +1222,35 @@ describe('workflow engine — Sub-tasks steps', () => {
         );
     });
 
-    it('dispatch runs up to max_parallel_runs Tasks at once', async () => {
+    it('resuming a run that is already running is not an error; a finished run still refuses', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        await expect(resumeWorkflowRun(runId)).resolves.toBeUndefined();
+        await testDb.updateTable('workflow_runs').set({ status: 'completed' }).where('id', '=', runId).execute();
+        await expect(resumeWorkflowRun(runId)).rejects.toBeInstanceOf(WorkflowStartError);
+    });
+
+    it('dispatch runs up to max_parallel_runs Tasks at once, when they are in different repos', async () => {
         await testDb.updateTable('workflows').set({ trigger: 'item_ready', max_parallel_runs: 2 }).where('id', '=', 'wf-dev').execute();
         await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'Second', status: 'ready' });
         await insertItem({ id: 'ATL-4', type: 'task', project_id: 'p1', title: 'Third', status: 'ready' });
         await testDb.updateTable('items').set({ workflow_id: 'wf-dev' }).where('id', 'in', ['ATL-2', 'ATL-3', 'ATL-4']).execute();
+        await testDb.updateTable('items').set({ repo_ids: JSON.stringify(['repo-a']) as never }).where('id', '=', 'ATL-2').execute();
+        await testDb.updateTable('items').set({ repo_ids: JSON.stringify(['repo-b']) as never }).where('id', '=', 'ATL-3').execute();
+        await testDb.updateTable('items').set({ repo_ids: JSON.stringify(['repo-c']) as never }).where('id', '=', 'ATL-4').execute();
 
         expect(await tickWorkflowDispatch()).toBe(2);
         expect(await tickWorkflowDispatch()).toBe(0);
+    });
+
+    it('one Task at a time per repo: a second Task in the same repo waits until the first is no longer running', async () => {
+        await testDb.updateTable('workflows').set({ trigger: 'item_ready', max_parallel_runs: 2 }).where('id', '=', 'wf-dev').execute();
+        await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'Second', status: 'ready' });
+        await testDb.updateTable('items').set({ workflow_id: 'wf-dev', repo_ids: JSON.stringify(['shared-repo']) as never }).where('id', 'in', ['ATL-2', 'ATL-3']).execute();
+
+        expect(await tickWorkflowDispatch()).toBe(1);
+        expect(await tickWorkflowDispatch()).toBe(0);
+        // The first Task's run finishes: the repo is free and the second starts.
+        await testDb.updateTable('workflow_runs').set({ status: 'completed' }).where('item_id', '=', 'ATL-2').execute();
+        expect(await tickWorkflowDispatch()).toBe(1);
     });
 });

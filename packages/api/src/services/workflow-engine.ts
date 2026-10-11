@@ -879,6 +879,10 @@ export async function resumeWorkflowRun(runId: string): Promise<void> {
         .where('status', '=', 'waiting_for_owner')
         .executeTakeFirst();
     if (Number(updated.numUpdatedRows ?? 0) === 0) {
+        // Already running: a comment on the item may have resumed it a moment
+        // ago. Asking again is harmless, so it is not an error (ADR 0029).
+        const current = await db.selectFrom('workflow_runs').select('status').where('id', '=', runId).executeTakeFirst();
+        if (current?.status === 'running') return;
         throw new WorkflowStartError('conflict', 'Only a run that is waiting for you can be resumed');
     }
     await recordRunEvent(runId, 'resumed');
@@ -1423,6 +1427,16 @@ async function oldestReadyItem(workflowId: string, readyByLastFire: boolean): Pr
                 ),
             ),
         )
+        // One Task at a time per repo (ADR 0029). Two runs in the same checkout
+        // edit the same files, so their pull requests conflict. A repo is busy
+        // while any top-level run on a Task that names it is running or parked.
+        .where(sql<boolean>`not exists (
+            select 1 from workflow_runs busy
+            join items bi on bi.id = busy.item_id
+            where busy.status in ('running', 'waiting_for_owner')
+              and busy.parent_workflow_run_id is null
+              and bi.repo_ids ?| array(select jsonb_array_elements_text(i.repo_ids))
+        )`)
         // Skip items still waiting on a depends_on target, so one blocked
         // item doesn't hold the whole queue (startWorkflowRun would refuse it).
         .where(({ not, exists, selectFrom }) =>
